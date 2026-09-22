@@ -66,7 +66,7 @@ import { Masthead, type JumpTarget } from "./components/Masthead";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
 import { SortableCard } from "./components/SortableCard";
-import { UpNextCard } from "./cards/UpNextCard";
+import { UpNextCard, groupHeadingId } from "./cards/UpNextCard";
 import { CompletedCard } from "./cards/CompletedCard";
 import { InsightCard } from "./cards/InsightCard";
 import { InboxCard } from "./cards/InboxCard";
@@ -488,15 +488,38 @@ const PulseOffice = () => {
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
-  // A count in the masthead's sentence jumps to its card: overdue and today
-  // to Up next, birthdays to Coming up. Prompt 2 retargets the three to the
-  // group headings inside the queue.
+  // A count in the masthead's sentence jumps to its group heading inside
+  // the queue: Overdue, Today or Birthdays. From lg the queue scrolls
+  // inside its card, so the pane scrolls to the heading and the page only
+  // brings the card into view, which keeps the masthead on screen. Below lg
+  // the heading is in the page's own flow. A group that is not there falls
+  // back to its card: Up next, or Coming up for a birthday further out.
   const handleJumpTo = useCallback((target: JumpTarget) => {
-    const el =
+    const behavior: ScrollBehavior = "smooth";
+    const heading = document.getElementById(groupHeadingId(target));
+    if (heading) {
+      const pane = heading.closest<HTMLElement>('[aria-label="Up next items"]');
+      const paneScrolls =
+        pane && /auto|scroll/.test(getComputedStyle(pane).overflowY);
+      if (pane && paneScrolls) {
+        const top =
+          heading.getBoundingClientRect().top -
+          pane.getBoundingClientRect().top +
+          pane.scrollTop;
+        pane.scrollTo?.({ top, behavior });
+        pane
+          .closest("[data-card-id]")
+          ?.scrollIntoView?.({ behavior, block: "nearest" });
+      } else {
+        heading.scrollIntoView?.({ behavior, block: "start" });
+      }
+      return;
+    }
+    const card =
       target === "birthdays"
         ? document.querySelector('[data-card-id="coming-up"]')
         : upNextCardRef.current;
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    card?.scrollIntoView?.({ behavior, block: "start" });
   }, []);
 
   // Render individual cards by cardId

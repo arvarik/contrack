@@ -4,10 +4,14 @@ import confetti from "canvas-confetti";
 import { CardFrame } from "../components/CardFrame";
 import { ActionRow } from "./ActionRow";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { SECTION_HEADING } from "../../../lib/styles";
+import { InfoTip } from "../../../components/ui/InfoTip";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { KBD_SM } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
 import { flyCorvid } from "../../../lib/corvid";
-import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
+import { PULSE_TYPE } from "../lib/pulseStyles";
+import type { UpNextGroup, UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 export interface UpNextCardProps {
   items: UpNextItem[];
@@ -18,6 +22,34 @@ export interface UpNextCardProps {
   onLog: (contactId: string) => void;
   onOpenContact: (contactId: string) => void;
 }
+
+/** The id of a group's heading. The masthead's counts jump to these. */
+export const groupHeadingId = (group: UpNextGroup) => `up-next-${group}`;
+
+/**
+ * A 6 px dot before each group's name, in the tone of its chips, so the eye
+ * finds a group before it reads the word. Decoration: the word is there.
+ */
+const GROUP_DOT: Record<UpNextGroup, string> = {
+  overdue: "bg-error",
+  today: "bg-primary",
+  thisWeek: "bg-outline-variant",
+  birthdays: "bg-warning",
+  "catch-up": "bg-outline-variant",
+};
+
+/** A theme colour for the confetti, read at the moment it fires. */
+const themeColor = (name: string, fallback: string) => {
+  if (typeof document === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+};
+
+const Key = ({ children }: { children: React.ReactNode }) => (
+  <kbd className={cn(KBD_SM, "not-italic")}>{children}</kbd>
+);
 
 export const UpNextCard = ({
   items,
@@ -35,6 +67,8 @@ export const UpNextCard = ({
    * pressed with focus elsewhere only scrolls the row into view.
    */
   const [focusWithin, setFocusWithin] = useState(false);
+  /** Below sm the rows take the phone anatomy. See `ActionRow`. */
+  const compact = !useMediaQuery("(min-width: 640px)");
 
   useEffect(() => {
     if (
@@ -42,12 +76,17 @@ export const UpNextCard = ({
       prevItemCountRef.current > 0 &&
       items.length === 0
     ) {
-      // Fire confetti when last item is cleared!
+      // Fire confetti when the last item is cleared, in the palette's own
+      // colours, so a rose accent gets rose confetti.
       confetti({
         particleCount: 120,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ["#009EDB", "#10B981", "#F59E0B"],
+        colors: [
+          themeColor("--color-primary", "#006a91"),
+          themeColor("--color-success", "#046b4e"),
+          themeColor("--color-warning", "#9a4c08"),
+        ],
       });
       // And the bird takes a lap of honour across the top of the page. The
       // overlay decides whether it actually flies: it runs the swoop only at
@@ -74,46 +113,13 @@ export const UpNextCard = ({
       title="Up next"
       count={items.length}
       headerAction={
-        <>
-          <span className="hidden 2xl:inline-block text-[11px] text-on-surface-variant font-medium tracking-tight">
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              J
-            </kbd>
-            <kbd className="ml-0.5 px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              K
-            </kbd>{" "}
-            walk ·{" "}
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              D
-            </kbd>{" "}
-            done ·{" "}
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              S
-            </kbd>{" "}
-            snooze ·{" "}
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              L
-            </kbd>{" "}
-            note ·{" "}
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              ↵
-            </kbd>{" "}
-            open
-          </span>
-          <span className="hidden xl:inline-block 2xl:hidden text-[11px] text-on-surface-variant font-medium tracking-tight">
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              J
-            </kbd>
-            <kbd className="ml-0.5 px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              K
-            </kbd>{" "}
-            walk ·{" "}
-            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-              D
-            </kbd>{" "}
-            done
-          </span>
-        </>
+        <InfoTip label="Keyboard" align="end" className="hidden sm:inline-flex">
+          <span className="block font-semibold mb-1">Keys</span>
+          <Key>J</Key> <Key>K</Key> walk the rows. <Key>D</Key> done,{" "}
+          <Key>S</Key> snooze a day, <Key>L</Key> log a note. Tab into the list,
+          then <Key>↑</Key> <Key>↓</Key> move, <Key>Enter</Key> opens the
+          contact and <Key>Space</Key> does the row&apos;s action.
+        </InfoTip>
       }
     >
       {items.length === 0 ? (
@@ -121,20 +127,28 @@ export const UpNextCard = ({
           <EmptyState
             level={3}
             icon={PartyPopper}
-            title="No follow-ups"
+            title="Nothing due today"
             body="Log a note to keep the streak."
             action={{
-              label: "Log an interaction",
+              label: "Log a note",
               icon: PenLine,
               onClick: () => openQuickNote(),
             }}
           />
         </div>
       ) : (
+        // The pane. From lg it scrolls inside the card, capped near the
+        // viewport, and the group headings stick to it in the card's own
+        // colour. The gutter is reserved so the rows never shift when the
+        // pane starts to scroll. Below lg it has no cap and the headings
+        // scroll with the page. It is a named group and each section holds
+        // its own list under its heading: a list may own only list items,
+        // so a heading inside one is a structure a screen reader cannot
+        // read, and axe fails it.
         <div
-          role="list"
+          role="group"
           aria-label="Up next items"
-          className="space-y-6"
+          className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 nice-scrollbar"
           onFocus={() => setFocusWithin(true)}
           onBlur={(e) => {
             // Focus moving from one row to another, or to a control inside
@@ -144,44 +158,58 @@ export const UpNextCard = ({
             }
           }}
         >
-          {groups.map((group) => {
-            return (
-              <div key={group.group} className="space-y-2">
-                {/* Group sticky header */}
-                <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-xs py-1 flex items-center justify-between border-b border-outline/10">
-                  <span className={SECTION_HEADING}>{group.label}</span>
-                  {/* "10 of 14" when the server sent its ten and more wait. */}
-                  <span className="text-xs text-on-surface-variant font-bold tabular-nums">
-                    {group.of !== undefined
-                      ? `${group.count} of ${group.of}`
-                      : group.count}
-                  </span>
-                </div>
+          {groups.map((group) => (
+            <section key={group.group} className="flex flex-col gap-1.5">
+              <h3
+                id={groupHeadingId(group.group)}
+                className={cn(
+                  PULSE_TYPE.group,
+                  "flex items-center gap-2 py-1.5 lg:sticky lg:top-0 z-10 bg-surface-container-lowest",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full shrink-0",
+                    GROUP_DOT[group.group],
+                  )}
+                />
+                {group.label}
+                {/* "10 of 14" when the server sent its ten and more wait. */}
+                <span className="ml-auto tabular-nums font-medium">
+                  {group.of !== undefined
+                    ? `${group.count} of ${group.of}`
+                    : group.count}
+                </span>
+              </h3>
 
-                {/* Group rows */}
-                <div className="space-y-2">
-                  {group.items.map((item) => {
-                    const globalIdx = items.findIndex((i) => i.id === item.id);
-                    const isSelected = globalIdx === selectedIndex;
+              <div
+                role="list"
+                aria-label={group.label}
+                className="flex flex-col gap-1.5"
+              >
+                {group.items.map((item) => {
+                  const globalIdx = items.findIndex((i) => i.id === item.id);
+                  const isSelected = globalIdx === selectedIndex;
 
-                    return (
-                      <ActionRow
-                        key={item.id}
-                        item={item}
-                        isSelected={isSelected}
-                        onSelect={() => onSelectIndex(globalIdx)}
-                        onComplete={onComplete}
-                        onLog={onLog}
-                        onOpenContact={onOpenContact}
-                        onMove={(direction) => moveFrom(globalIdx, direction)}
-                        focusOnSelect={focusWithin}
-                      />
-                    );
-                  })}
-                </div>
+                  return (
+                    <ActionRow
+                      key={item.id}
+                      item={item}
+                      isSelected={isSelected}
+                      onSelect={() => onSelectIndex(globalIdx)}
+                      onComplete={onComplete}
+                      onLog={onLog}
+                      onOpenContact={onOpenContact}
+                      onMove={(direction) => moveFrom(globalIdx, direction)}
+                      focusOnSelect={focusWithin}
+                      compact={compact}
+                    />
+                  );
+                })}
               </div>
-            );
-          })}
+            </section>
+          ))}
         </div>
       )}
     </CardFrame>

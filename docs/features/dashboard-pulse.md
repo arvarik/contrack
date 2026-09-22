@@ -26,17 +26,19 @@ Every card is a title and a body: no line between them, no icon, and the count i
 
 ### Up Next Queue
 
-The Up next card aggregates and ranks everything requesting attention into one continuous list:
+The Up next card aggregates and ranks everything requesting attention into one list. From 1024 px the list scrolls inside its card, capped near the viewport height, so the page never grows with the queue. On a phone it has no cap. Each group has a heading that sticks to the pane, with a dot in the group's tone and the count at the right:
 
-- **Overdue**: Past-due follow-ups ordered oldest first, highlighted with error badges.
+- **Overdue**: Past-due follow-ups ordered oldest first. The chip reads "Overdue" or "12 days overdue".
 - **Today**: Follow-up tasks due today.
-- **This week**: Action items scheduled for the next seven days.
-- **Birthdays**: Contacts celebrating birthdays this week, with a one-click action to log a birthday note.
+- **This week**: Action items due in the next seven days. The chip names the day: "Tomorrow", "Wednesday".
+- **Birthdays**: Contacts with a birthday in the next seven days, with a one-click action to log a birthday note.
 - **Catch up**: Tracked contacts past their cadence, the furthest past due first, ten at most. The clock is the last interaction, or the moment of tracking when nothing is logged yet, so a person tracked today at "every month" comes up in a month even with an empty timeline. Each row's chip says how far: "3 weeks past due". The row has a Log button and no check. When more than ten wait, the heading says "Catch up, 10 of 14". A catch-up ranks after a birthday: it is a soft reminder, and a due follow-up is a promise with a date.
 
-The progress mark in the masthead shows how many of today's follow-ups are done.
+A row is two lines: the name and the chip, then the title. Under them, when known, "Last spoke 12 days ago". A click or a tap anywhere on the row opens the contact. The check completes a follow-up, and the Log button on a birthday or a catch-up opens the note composer. **Snooze** is the one action at the right: on a desktop it appears on hover or focus, on a phone it is always visible. It offers Tomorrow, In 3 days, Next week and Next month. A birthday or a catch-up row has no snooze.
 
-When all tasks are cleared, the queue displays an empty state celebrating the milestone with party popper confetti.
+The masthead's counts jump to these group headings. The progress mark in the masthead shows how many of today's follow-ups are done.
+
+When all tasks are cleared, the queue reads "Nothing due today" with one button, Log a note, and celebrates with confetti in the palette's colours.
 
 ### Keyboard Navigation
 
@@ -65,7 +67,7 @@ Enter belongs to the control that has focus. On a button, a link or a menu item 
 
 ### Completed Card
 
-An expandable accordion lists tasks completed today with timestamps and undo options, preserving session context while keeping the primary queue focused.
+One line: "Nothing completed yet." or "3 completed recently". **Show** opens the list under the line, each row with the title struck through, the contact's name as a link and when it was done. **Hide** closes it.
 
 ---
 
@@ -165,5 +167,5 @@ Duplicate review has moved from a tab into its own dedicated view at `/pulse/dup
 | `GET`   | `/api/dashboard/insight`         | Cached daily AI insight                                                                                                                                         |
 | `GET`   | `/api/auth/preferences`          | Account preferences including `pulseLayout`                                                                                                                     |
 | `PATCH` | `/api/auth/preferences`          | Updates account preferences including `pulseLayout`                                                                                                             |
-| `POST`  | `/api/action-items/:id/complete` | Marks an action item complete                                                                                                                                   |
+| `PATCH` | `/api/action-items/:id/complete` | Marks an action item complete                                                                                                                                   |
 | `PATCH` | `/api/action-items/:id`          | Updates an action item (e.g. snooze due date)                                                                                                                   |

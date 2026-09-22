@@ -1,89 +1,94 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { useCompletedActionItems } from "../../../api";
 import { formatWhen } from "../../../lib/datetime";
+import { BTN_QUIET } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
+import { PULSE_TYPE } from "../lib/pulseStyles";
 
+const LIST_ID = "completed-card-content";
+
+/**
+ * Completed: one line, in both states.
+ *
+ * "Nothing completed yet." or "3 completed recently", and a quiet Show that
+ * opens the list under the line: each row on the wash with the title struck
+ * through, the name as a link and when it was done. Nobody reads a framed
+ * box for a number, and the queue above is the card that earns the frame.
+ */
 export const CompletedCard = () => {
   const { data: completedItems = [] } = useCompletedActionItems();
   const [expanded, setExpanded] = useState(false);
-
-  if (completedItems.length === 0) {
-    return (
-      <CardFrame cardId="completed" title="Completed" count={0} compact>
-        <p className="text-xs text-on-surface-variant italic">
-          No completed follow-ups yet.
-        </p>
-      </CardFrame>
-    );
-  }
+  const count = completedItems.length;
+  const open = expanded && count > 0;
 
   return (
-    <CardFrame
-      cardId="completed"
-      title="Completed"
-      count={completedItems.length}
-      compact
-      headerAction={
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="hit-area p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-          aria-label={
-            expanded ? "Collapse completed items" : "Expand completed items"
-          }
-          aria-expanded={expanded}
-          aria-controls="completed-card-content"
-        >
-          {expanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
-        </button>
-      }
-    >
-      {expanded ? (
-        <div
-          id="completed-card-content"
-          className="space-y-2 pt-1 max-h-72 overflow-y-auto nice-scrollbar"
+    <div className="flex flex-col gap-2">
+      <CardFrame
+        cardId="completed"
+        title="Completed"
+        variant="line"
+        headerAction={
+          count > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className={BTN_QUIET}
+              aria-expanded={open}
+              aria-controls={LIST_ID}
+            >
+              {open ? "Hide" : "Show"}
+            </button>
+          )
+        }
+      >
+        {count === 0 ? "Nothing completed yet." : `${count} completed recently`}
+      </CardFrame>
+
+      {open && (
+        <ul
+          id={LIST_ID}
+          aria-label="Completed follow-ups"
+          className="flex flex-col gap-1.5 px-2 max-h-72 overflow-y-auto nice-scrollbar"
         >
           {completedItems.map((item) => (
-            <div
+            <li
               key={item.id}
-              className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest border border-outline/10 text-xs"
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-surface-container-low/70"
             >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0 opacity-70" />
-                <span className="font-medium text-on-surface line-through opacity-70 truncate">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2
+                  aria-hidden="true"
+                  className="w-4 h-4 text-success shrink-0"
+                />
+                <span
+                  className={cn(
+                    PULSE_TYPE.rowTitle,
+                    "line-through text-on-surface-variant truncate",
+                  )}
+                >
                   {item.title}
                 </span>
-                {/* A 16 px name in a row, so `hit-area` gives it the 44 px
-                    tap box. The clip for a long name sits on the inner span,
-                    because an `overflow: hidden` on the link itself would
-                    cut that box away. */}
+                {/* A 14 px name with a 44 px tap box from `hit-area`. */}
                 <Link
                   to={`/contact/${item.contactId}`}
-                  className="hit-area inline-flex min-w-0 text-on-surface-variant hover:text-primary transition-colors"
+                  className={cn(
+                    PULSE_TYPE.name,
+                    "hit-area inline-flex shrink-0 text-on-surface-variant hover:text-primary transition-colors",
+                  )}
                 >
-                  <span className="truncate max-w-[120px]">
-                    ({item.contactName})
-                  </span>
+                  {item.contactName}
                 </Link>
               </div>
-              <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">
+              <span className={cn(PULSE_TYPE.meta, "shrink-0 tabular-nums")}>
                 {item.completedAt ? formatWhen(item.completedAt) : "Done"}
               </span>
-            </div>
+            </li>
           ))}
-        </div>
-      ) : (
-        <p className="text-xs text-on-surface-variant">
-          {completedItems.length}{" "}
-          {completedItems.length === 1 ? "item" : "items"} completed recently.
-        </p>
+        </ul>
       )}
-    </CardFrame>
+    </div>
   );
 };

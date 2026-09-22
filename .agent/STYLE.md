@@ -189,8 +189,8 @@ One look, three components, no native `<select>`:
 - `ContextMenu`: the right-click menu, positioned by the pointer.
 
 A list that none of these can draw (the saved views menu has rename and
-delete buttons in each row, the snooze menus are portals positioned from a
-trigger rect) composes the same constants from `src/lib/styles.ts`:
+delete buttons in each row) composes the same constants from
+`src/lib/styles.ts`:
 `MENU_PANEL`, `MENU_ITEM`, `MENU_ITEM_DANGER`, `MENU_ITEM_SELECTED`,
 `MENU_HEADING`, `MENU_SEPARATOR`, `MENU_HINT`, `MENU_ICON`. Nothing that opens
 under a control uses `glass-panel`, a `border`, or its own row classes.
@@ -695,6 +695,45 @@ would overlap across two wrapped lines. `describeProgress` gives the words
 on the 40 px progress mark: "4 to do", "1 of 4 done", "All done", "Nothing
 due". Log a note is the one `.btn-primary`. New contact and Customize layout
 live in an `ActionMenu` named More.
+
+### The queue: a pane of rows
+
+From `lg` the Up next pane is the scrollport (`lg:max-h-[calc(100dvh-17rem)]
+lg:overflow-y-auto`, the gutter reserved), so the page never grows with the
+queue. Below `lg` it has no cap. The pane is `role="group"` named "Up next
+items". Each group is a `section` with an `h3` whose id is
+`up-next-<group>`, in `PULSE_TYPE.group`, sentence case, with a 6 px dot in
+the group's tone and the count at the right, over its own `role="list"`
+named for the group. A list may own only list items, so the heading sits
+beside the list and never inside it. The heading sticks to the pane in the
+card's own colour.
+
+A row is `rounded-xl px-3 py-2.5` on `bg-surface-container-low/70`, with no
+border. From `sm`, line one is the name (`PULSE_TYPE.name`) and the chip
+(`PULSE_TYPE.chip rounded-md px-2 py-0.5`, a wash and an ink, no border, no
+caps), and it wraps so the name is never cut. Line two is the title
+(`PULSE_TYPE.rowTitle`, one line). Under them, `PULSE_TYPE.meta` for "Last
+spoke 12 days ago". The one action, snooze, is an `ActionMenu` that floats
+over the row's right edge on a wash and shows on hover or focus. Below `sm`
+the row takes the phone anatomy (`compact`): the name on line one with the
+snooze at its end as a 32 px glyph with the 44 px tap box, the title on up
+to two lines, then a meta line with the chip and "Last spoke". A phone row
+has about 220 px for text, and a name, a chip and a button do not share it.
+Selected is `bg-primary/10 ring-1 ring-inset ring-primary/50`, the same
+wash as the Network list's current row. A click on the row opens the
+contact, and a click that starts on a control inside it belongs to that
+control.
+
+`CardFrame` sets one inset, 16 px on a phone and 20 px from `sm`, from its
+header and body padding. The `CARD` surface class carries its own `p-6`,
+and the frame zeroes it: with both, a phone card lost 80 of its 350 px to
+padding.
+
+- ✅ Chips in words: "12 days overdue", "Tomorrow", "Wednesday", "3 weeks
+  past due", from `describeDueChip` and `describePastDue`.
+- ❌ "12D OVERDUE", "IN 2D", "WED". A chip is a fact, and a fact reads.
+- ❌ A hover-only control on a phone. Below `sm` every action is visible at
+  rest and 44 px.
 
 ### Enter belongs to the control that has focus
 
