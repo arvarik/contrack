@@ -593,8 +593,21 @@ Rules that follow from it:
   `ScoreBreakdown` trigger, named "Relationship score 72 out of 100,
   explain". The ring inside it is then `decorative`, so the score is said
   once.
-- **The words.** Track, Tracked, Untrack, Not tracked, cadence. The band
-  words, Strong, Fading and At risk, keep their own meaning and are never
-  used for the flag.
+- **The Track button.** One control sets the flag on a contact page:
+  `TrackButton`, a `<button aria-pressed>` with the `Radar` glyph and one
+  word, Track or Tracked. Off it is `.btn-secondary`. On it takes the
+  primary wash (`bg-primary/10 text-on-primary-wash`) and the glyph takes
+  `text-primary`. Narrow, the glyph alone with the word in the name. The
+  "Contact actions" menu gets no Track item, and no other surface grows a
+  second control for the flag: the `t` key, the palette row and the page
+  toggle all run the same `useTrackToggle`, with the same toast and Undo.
+- **The cadence chip.** Shown only while tracked, beside the button: a
+  quiet `rounded-full` chip that reads the cadence in words ("Every 3
+  months", or "3 mo" narrow) and opens an `ActionMenu` headed "Keep up"
+  with the five `CADENCE_CHOICES` checked. A value off the list shows as a
+  sixth checked item, so the menu never lies.
+- **The words.** Track, Tracked, Untrack, Not tracked, Keeping up, Catch
+  up, cadence. The band words, Strong, Fading and At risk, keep their own
+  meaning and are never used for the flag.
 - ❌ No surface reads `contact.relationshipScore` directly. A raw column
   read is how "Score 50" reached the map for a person nobody had ever met.

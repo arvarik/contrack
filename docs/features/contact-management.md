@@ -72,16 +72,16 @@ The Network view (`/`) has a compact header for search, sort and the contact ope
 ```
 Network                                          [ ▢ ] [ ⭳ ] [ + ]
 [ 🔍 Search...                                        ] [ Sort ▾ ]
-[ All 30 ]  <- only when at least one list exists
+[ All 30 ] [ ◎ Tracked 4 ] [ Investors 6 ] ...   <- then one chip per list
 ```
 
 The three actions are icon buttons at every width. Each has an accessible name and a tooltip, and a 44 px tap box.
 
-1. **Select** (the empty square): enters selection mode. The header then shows the count of selected contacts (for example, "3 selected") with "Select all" and "Done". The floating bulk action toolbar appears at the bottom with archive, delete, add to list, edit fields, colour and CSV export. On a touch screen, a long press on any contact row also enters selection mode.
+1. **Select** (the empty square): enters selection mode. The header then shows the count of selected contacts (for example, "3 selected") with "Select all" and "Done". The floating bulk action toolbar appears at the bottom with track (or untrack), archive, delete, add to list, edit fields, colour and CSV export. On a touch screen, a long press on any contact row also enters selection mode.
 2. **Import** (the upload arrow): opens the contact import dialog.
 3. **+** (named "New"): opens a menu with New contact, Add from text (smart paste) and New list.
 4. **Sort menu**: a menu button whose label is the current sort choice, named "Sort: A to Z" for a screen reader. The list orders by one of two things, each read both ways, which is the whole menu: **A to Z**, **Z to A**, **Newest**, **Oldest**. The active choice carries a check mark. It starts from the `listSort` account preference (Name or Recent), and a choice holds for the browsing session. A fifth choice ordered by the relationship score. It needed a sentence to explain it, the score is already on every row as the ring around the avatar, and Pulse ranks by score for a reader who wants that.
-5. **List filter row**: the horizontal row of filter chips appears only when at least one contact list exists.
+5. **The filter row**: **All**, then **Tracked**, then one chip per list. The Tracked chip carries the count of tracked contacts and keeps the list to them. While it is active, a **Manage** link at the end of the row opens the [Tracked contacts page](#tracking). The Recent row hides under it, as it does under a list. The row shows with no lists at all, because the Tracked chip is the way into tracking.
 
 ### The List
 
@@ -110,14 +110,14 @@ The header names the person and says the facts you need before you talk. It has 
 
 ```
 Wide:
-(avatar 96) Thomas Walker (they/them)                                   ⋮
+(avatar 96) Thomas Walker (they/them)      [◎ Tracked] [Every 3 months ▾] ⋮
             UX Researcher at Umbrella Corp
             Sydney · 2:45 AM · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗
             [tech-lead ×] [advisor ×] [+ tag]
 
 Narrow:
 ← Network
-(avatar 56) Thomas Walker                                               ⋮
+(avatar 56) Thomas Walker                                   [◎] [3 mo ▾] ⋮
             UX Researcher · Umbrella Corp
             Sydney · 2:45 AM · ThomasWalker ↗
 ```
@@ -126,10 +126,11 @@ Narrow:
 2. **The meta line** is plain text: the location, the person's local time, and the weather. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**.
 3. **The weather** makes a request to Open-Meteo with the contact's coordinates. It shows only when it is allowed. When it is not shown, no request is made. The settings revamp adds the switch for it.
 4. **Tags** are chips. **+ tag** adds one. Removing a tag offers **Undo** for 7 seconds. List memberships sit on the same row.
-5. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
-6. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
+5. **Track** is the one button beside the ⋮ menu. It says **Track** when off and **Tracked** when on, and it is a toggle (`aria-pressed`). While the contact is tracked, a chip beside it reads the cadence, **Every 3 months**, and opens the cadence menu. See [Tracking](#tracking). In the narrow header the button is the glyph alone and the chip reads **3 mo**.
+6. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
+7. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
 
-A ghost contact also shows **Promote to contact** beside **Log interaction**. In the narrow header, the button sits under the meta line.
+A ghost contact shows **Promote to contact** and no Track button, because a ghost cannot be tracked. In the narrow header, the button sits under the meta line.
 
 The narrow header is about 140 px tall:
 
@@ -215,6 +216,7 @@ The shortcuts dialog (`?`) lists these under **Contact**. They come from `src/li
 
 | Keys      | What they do                                                   |
 | --------- | -------------------------------------------------------------- |
+| `T`       | Track or untrack this contact, with Undo                       |
 | `Enter`   | Edit the value that has focus                                  |
 | `Esc`     | Cancel the edit                                                |
 | `⌥ ↑`     | Move an address, email or phone up one place                   |
@@ -353,6 +355,44 @@ Open **Contact actions → Change avatar**. There are three ways to set a contac
 3. **Generated** — Automatic fallback using initials on the contact's colour
 
 Uploaded avatars are processed by Sharp (resized, optimized) and stored in `uploads/avatars/`.
+
+---
+
+## Tracking
+
+The relationship score, Pulse and the map's health layer are about the people you chose to keep up with. Tracking is that choice. One word for it everywhere: the action is **Track**, the state is **Tracked**, the reverse is **Untrack**, and everyone else is **Not tracked**. Every contact starts untracked, including everyone from an import or a connector, whatever the preference says.
+
+### Track, on the contact page
+
+- **The Track button** sits beside the ⋮ menu in the header. Press it when off and the contact is tracked, the ring appears around the avatar, and a toast says "Tracking Ada Lovelace, every 3 months" with **Undo**. Press it when on and the ring goes, the toast says "Stopped tracking Ada Lovelace", and **Undo** tracks again with the cadence the contact had.
+- **The cadence chip** shows beside the button while the contact is tracked. It reads the cadence in words and opens a menu, **Keep up**, with five choices: every month, every 2 months, every 3 months, every 6 months, every year. The current one is checked. A cadence set through the API that is not on the list shows as a sixth checked item, "Every 45 days", so the menu never claims a cadence the contact does not have. Choosing writes it and toasts "Ada Lovelace, every month".
+- **The `t` key** does what the button does, toast and Undo included. It is listed under **Contact** in the shortcuts dialog and obeys the single-key shortcuts switch.
+- **The cadence** is set at the moment of tracking: from the request when it names one, else from the **Default cadence** preference. A contact that is not tracked has no cadence anyone can see.
+
+### Track, in bulk
+
+- **The bulk bar** on the Network page and on the map has **Track** as its first button, or **Untrack** when every selected contact is tracked. Track flips only the untracked ones in the selection and leaves a tracked contact's cadence alone. Untrack flips only the tracked ones. The toast names the count, "Tracking 12 contacts", with **Undo**, which flips the same contacts back. An undone untrack tracks them again at the default cadence, and the toast says so.
+- **The Tracked chip** in the filter row keeps the list to tracked contacts and carries their count. While it is active, the bar reads **Untrack** and a **Manage** link at the end of the row opens the page below.
+
+### The Tracked contacts page
+
+`/tracked` is a Network sub-page: the sidebar keeps Network lit. Three doors reach it: the Tracked chip's **Manage** link, the Keeping up card on Pulse, and **Settings → Your data → Tracked contacts**, which steps straight over to it. From the top:
+
+1. The heading and one sentence.
+2. A search box that narrows every group by name, company or role, and the order: **Name**, or **Recently tracked** (by the moment of tracking, newest first).
+3. The groups, each with a heading and a count, in this order: **At risk**, **Fading**, **Strong**, **No interactions yet**, **Not tracked**. The first four are the tracked contacts by their ring state. The last is A to Z. An empty group is left out. The headings carry ids (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`), so a link can land on a group.
+4. A row: the ring, the name as a link, the company, the cadence in words, and how far past it the contact is ("3 weeks past due") when it is. The clock is the last interaction, or the moment of tracking when nothing is logged yet. At the end, a 44 px toggle named "Untrack Ada Lovelace" or "Track Ada Lovelace".
+5. **Select** mode: a **Select all** in each group's heading, **Done**, and a bar with **Track**, **Untrack**, a **Cadence** menu that sets one cadence for the selection, and the count. The same Undo toasts as the Network bar.
+6. Past 200 rows the list is virtualised, the way the Network list is.
+7. When nobody is tracked, the page says "Nobody is tracked yet", and the Not tracked group under it is the way in.
+
+### Settings
+
+**Settings → Network and contacts** has two rows: **Default cadence** (a select with the five choices, the cadence a contact takes when it is tracked) and **Track new contacts** (a switch, off: contacts you add by hand start tracked, and imports and connectors never do).
+
+### The palette and the search
+
+`→` on a result in the command palette opens its actions, where **Track** (or **Untrack**) sits after Add to List on the `T` key. The `tracked:yes` and `tracked:no` facets narrow a search to the people you track, or to everyone else, in the palette and on the map.
 
 ---
 

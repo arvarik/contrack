@@ -1,7 +1,8 @@
 /**
  * NetworkPage — Where Contrack opens, contacts list defaults, and weather.
  *
- * Start page, list sort, recent contacts, cadence, week start, weather, and temperature unit.
+ * Start page, list sort, recent contacts, the default cadence, whether new
+ * contacts start tracked, week start, weather, and temperature unit.
  */
 import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
@@ -10,7 +11,9 @@ import {
   MIN_RECENT_LIMIT,
   MAX_RECENT_LIMIT,
 } from "../../../hooks/useRecentContacts";
+import { CADENCE_CHOICES, isCadenceDays } from "../../../../shared/cadence";
 import { Segmented } from "../../../components/ui/Segmented";
+import { Select } from "../../../components/ui/Select";
 import { Switch } from "../../../components/ui/Switch";
 import { SettingRow } from "../SettingRow";
 import { CARD } from "../../../lib/styles";
@@ -124,22 +127,41 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
+        {/* A Select, not a Segmented: five choices are too many for a
+            trough at phone width. */}
         <SettingRow
           id="cadence"
-          title="Default follow-up cadence"
+          title="Default cadence"
           prefKey="defaultCadenceDays"
-          description="How long a contact can go quiet before its relationship score drops. Applies to contacts with no cadence of their own."
+          description="How often you want to keep up with a contact you track. Each contact can have its own."
         >
-          <Segmented
-            label="Default follow-up cadence"
-            value={preferences.defaultCadenceDays}
-            onChange={(next) => setPreference("defaultCadenceDays", next)}
-            options={[
-              { value: 30, label: "30 days" },
-              { value: 60, label: "60 days" },
-              { value: 90, label: "90 days" },
-              { value: 180, label: "180 days" },
-            ]}
+          <Select
+            label="Default cadence"
+            align="end"
+            wrapperClassName="w-full sm:w-44"
+            value={String(preferences.defaultCadenceDays)}
+            onChange={(next) => {
+              const days = Number(next);
+              if (isCadenceDays(days))
+                setPreference("defaultCadenceDays", days);
+            }}
+            options={CADENCE_CHOICES.map((choice) => ({
+              value: String(choice.days),
+              label: choice.label,
+            }))}
+          />
+        </SettingRow>
+
+        <SettingRow
+          id="track-new"
+          title="Track new contacts"
+          prefKey="trackNewContacts"
+          description="Contacts you add by hand start tracked. Imports and connectors never do."
+        >
+          <Switch
+            label="Track new contacts"
+            checked={preferences.trackNewContacts}
+            onChange={(next) => setPreference("trackNewContacts", next)}
           />
         </SettingRow>
 

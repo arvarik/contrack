@@ -3,7 +3,7 @@
  *
  * Supports GitHub-style faceted filters:
  *   role:founder, company:stripe, location:london, industry:fintech,
- *   tag:investor, score:>80, updated:>6m
+ *   tag:investor, score:>80, updated:>6m, tracked:yes
  *
  * A token becomes "locked" (a pill) when followed by a space.
  * Remaining free-text is forwarded to FTS5/vector search.
@@ -40,6 +40,7 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
   "missing",
   "list",
   "near",
+  "tracked",
 ]);
 
 /**
@@ -48,14 +49,14 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
  * Non-greedy value match stops at whitespace boundary.
  */
 const COMPLETED_FACET_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing|list|near):(\S+)\s/gi;
+  /\b(role|company|location|industry|tag|score|updated|missing|list|near|tracked):(\S+)\s/gi;
 
 /**
  * Regex to detect an in-progress facet at the end of input.
  * e.g., "role:" or "role:eng" (no trailing space).
  */
 const ACTIVE_PREFIX_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing|list|near):(\S*)$/i;
+  /\b(role|company|location|industry|tag|score|updated|missing|list|near|tracked):(\S*)$/i;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

@@ -83,6 +83,14 @@ describe("the shortcuts table", () => {
     expect(bare(["⌘", "K"])).toBe(false);
   });
 
+  it("gives the contact page a bare T that tracks the contact", () => {
+    const track = SHORTCUTS.find((entry) => entry.keys.join("+") === "T");
+    expect(track?.group).toBe("Contact");
+    expect(track?.bareLetter).toBe(true);
+    expect(track?.page).toBe("/contact/:id");
+    expect(track?.description).toBe("Track or untrack this contact");
+  });
+
   it("marks alwaysOn only on bare-letter entries", () => {
     for (const entry of SHORTCUTS) {
       if (entry.alwaysOn) {

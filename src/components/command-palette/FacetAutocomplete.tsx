@@ -53,6 +53,12 @@ const MISSING_PRESETS = [
   { label: "Phone", value: "phone" },
 ];
 
+/** `tracked:yes` for the people a person keeps up with, `tracked:no` for the rest. */
+const TRACKED_PRESETS = [
+  { label: "Yes", value: "yes" },
+  { label: "No", value: "no" },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
@@ -87,6 +93,18 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
       ).map((p) => ({
         label: p.label,
         filter: { field, value: p.value, operator: p.operator } as FacetFilter,
+      }));
+    }
+
+    if (field === "tracked") {
+      return TRACKED_PRESETS.filter(
+        (p) =>
+          !partial ||
+          p.value.includes(partial.toLowerCase()) ||
+          p.label.toLowerCase().includes(partial.toLowerCase()),
+      ).map((p) => ({
+        label: p.label,
+        filter: { field, value: p.value } as FacetFilter,
       }));
     }
 

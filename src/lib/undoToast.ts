@@ -23,9 +23,10 @@ import { toast } from "sonner";
  *
  * Longer than sonner's 4s default: undo is only useful if it is still there
  * when the user realises what they did, and realising takes a beat. Short
- * enough that it does not linger over the next thing they do.
+ * enough that it does not linger over the next thing they do. The track and
+ * untrack toasts keep the same beat.
  */
-const UNDO_DURATION_MS = 10_000;
+export const UNDO_DURATION_MS = 10_000;
 
 export interface UndoableDeleteOptions {
   /** How many contacts went to Trash. */

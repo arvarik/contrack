@@ -211,6 +211,65 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
+  it("puts Track beside the kebab, and the cadence chip only while tracked", () => {
+    const { unmount } = mount(<ProfileHeader {...makeProps()} />);
+    const track = screen.getByRole("button", { name: "Track" });
+    expect(track.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
+    // Track comes before the kebab in the cluster.
+    const kebab = screen.getByRole("button", { name: "Contact actions" });
+    expect(
+      track.compareDocumentPosition(kebab) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    unmount();
+
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({ isTracked: true, cadenceDays: 90 }),
+        })}
+      />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Tracked" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Cadence: every 3 months" }),
+    ).toBeTruthy();
+  });
+
+  it("shows the icon-only Track and the short cadence in the narrow header", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          layout: "narrow",
+          contact: makeContact({ isTracked: true, cadenceDays: 90 }),
+        })}
+      />,
+    );
+    const track = screen.getByRole("button", { name: "Tracked" });
+    expect(track.textContent).toBe("");
+    expect(track.getAttribute("title")).toBe("Tracked");
+    expect(
+      screen.getByRole("button", { name: "Cadence: every 3 months" })
+        .textContent,
+    ).toBe("3 mo");
+  });
+
+  it("offers no Track to a ghost, which cannot be tracked", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({ contact: makeContact({ isGhost: true }) })}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Track/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Promote to contact" }),
+    ).toBeTruthy();
+  });
+
   it("has no top-level colour, archive, avatar or briefing buttons", () => {
     mount(<ProfileHeader {...makeProps()} />);
     for (const name of [/colou?r/i, /archive/i, "Change avatar", /briefing/i]) {

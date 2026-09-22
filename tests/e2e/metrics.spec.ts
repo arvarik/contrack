@@ -55,6 +55,16 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    name: "tracked contacts",
+    path: () => "/tracked",
+    ready: async (page) => {
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
+      ).toBeVisible();
+      await expect(page.getByText("Edsger Dijkstra")).toBeVisible();
+    },
+  },
+  {
     name: "pulse",
     path: () => "/pulse",
     ready: async (page) => {

@@ -3,6 +3,7 @@
  *
  * Manages all bulk mutation side-effects:
  * - Soft delete (with undo toast)
+ * - Track and untrack (with undo toast), and the cadence
  * - Archive
  * - Add to list
  * - Color / vibe update
@@ -12,11 +13,12 @@
  *
  * @module components/bulk/useBulkActions
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { describeCadence } from "../../../shared/cadence";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../lib/clipboard";
-import { toastUndoableDelete } from "../../lib/undoToast";
+import { toastUndoableDelete, UNDO_DURATION_MS } from "../../lib/undoToast";
 import {
   useBulkDeleteContacts,
   useBulkRestoreContacts,
@@ -33,7 +35,17 @@ export interface ContactLike {
   location?: string | null;
   emails?: Array<{ email: string }>;
   phones?: Array<{ phone: string }>;
+  /** A person keeps up with this contact. Absent when the caller cannot say. */
+  isTracked?: boolean;
 }
+
+/**
+ * Whether the selection is tracked: every one, none, or some. The bulk bar
+ * reads Untrack when it is `all` and Track otherwise. With nothing selected
+ * yet, the answer is about the rows on screen, so the bar under the Tracked
+ * chip reads Untrack before the first row is chosen.
+ */
+export type SelectionTracked = "all" | "none" | "mixed";
 
 export interface UseBulkActionsOptions {
   selectedIds: Set<string> | string[];
@@ -84,6 +96,117 @@ export function useBulkActions({
         ),
     });
   }, [getIds, bulkDelete, bulkRestore, onComplete]);
+
+  const say = (count: number) => `${count} contact${count === 1 ? "" : "s"}`;
+  const reason = (err: unknown) =>
+    err instanceof Error ? err.message : String(err);
+
+  /**
+   * The tracked flag by id: from the contacts the caller passed, else from
+   * the contact cache for an id the caller did not describe. The list and
+   * the map both pass the rows on screen, which is where the selection is.
+   */
+  const trackedById = useMemo(() => {
+    const flags = new Map<string, boolean>();
+    for (const c of queryClient.getQueryData<Contact[]>(["contacts"]) ?? []) {
+      flags.set(c.id, c.isTracked);
+    }
+    for (const c of contacts) {
+      if (c.isTracked !== undefined) flags.set(c.id, c.isTracked);
+    }
+    return flags;
+  }, [contacts, queryClient]);
+
+  const selectionTracked = useMemo((): SelectionTracked => {
+    const ids = getIds();
+    const pool = ids.length > 0 ? ids : contacts.map((c) => c.id);
+    let known = 0;
+    let tracked = 0;
+    for (const id of pool) {
+      const flag = trackedById.get(id);
+      if (flag === undefined) continue;
+      known += 1;
+      if (flag) tracked += 1;
+    }
+    if (known === 0 || tracked === 0) return "none";
+    return tracked === known ? "all" : "mixed";
+  }, [getIds, contacts, trackedById]);
+
+  /**
+   * Track (`next: true`) or untrack the selection.
+   *
+   * Only the ids that differ are sent: Track leaves a tracked contact's
+   * cadence alone, and Untrack leaves an untracked one untouched. The toast
+   * names the count that changed and offers Undo, which flips the same ids
+   * back. An undone untrack tracks them again at the default cadence, and
+   * the toast says so, because the cadence each one had is gone.
+   */
+  const handleBulkTrack = useCallback(
+    (next: boolean) => {
+      const ids = getIds().filter((id) => trackedById.get(id) !== next);
+      if (ids.length === 0) return;
+      bulkUpdate.mutate(
+        { ids, data: { isTracked: next } },
+        {
+          onSuccess: ({ count }) => {
+            toast.success(
+              next
+                ? `Tracking ${say(count)}`
+                : `Stopped tracking ${say(count)}`,
+              {
+                duration: UNDO_DURATION_MS,
+                action: {
+                  label: "Undo",
+                  onClick: () =>
+                    bulkUpdate.mutate(
+                      { ids, data: { isTracked: !next } },
+                      {
+                        onSuccess: ({ count: undone }) =>
+                          toast.success(
+                            next
+                              ? `Stopped tracking ${say(undone)}`
+                              : `Tracking ${say(undone)} again, at the default cadence.`,
+                          ),
+                        onError: (err) =>
+                          toast.error(`Could not undo: ${reason(err)}`),
+                      },
+                    ),
+                },
+              },
+            );
+            onComplete?.();
+          },
+          onError: (err) =>
+            toast.error(
+              `${next ? "Tracking" : "Untracking"} failed: ${reason(err)}`,
+            ),
+        },
+      );
+    },
+    [getIds, trackedById, bulkUpdate, onComplete],
+  );
+
+  /** One cadence for every selected contact: "12 contacts, every month". */
+  const handleBulkCadence = useCallback(
+    (days: number) => {
+      const ids = getIds();
+      if (ids.length === 0) return;
+      bulkUpdate.mutate(
+        { ids, data: { cadenceDays: days } },
+        {
+          onSuccess: ({ count }) => {
+            toast.success(
+              `${say(count)}, ${describeCadence(days, { sentence: true })}`,
+            );
+            onComplete?.();
+          },
+          onError: (err) =>
+            toast.error(`Cadence update failed: ${reason(err)}`),
+        },
+      );
+    },
+    [getIds, bulkUpdate, onComplete],
+  );
 
   const handleBulkArchive = useCallback(() => {
     const ids = getIds();
@@ -244,6 +367,9 @@ export function useBulkActions({
     isBulkAddToListPending: bulkAddToList.isPending,
     isBulkEditPending: bulkUpdate.isPending,
 
+    selectionTracked,
+    handleBulkTrack,
+    handleBulkCadence,
     handleBulkDelete,
     handleBulkArchive,
     handleBulkAddToList,

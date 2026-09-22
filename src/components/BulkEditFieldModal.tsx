@@ -50,12 +50,8 @@ const EDITABLE_FIELDS: Field[] = [
     placeholder: "e.g. San Francisco, CA",
     type: "text",
   },
-  {
-    key: "cadenceDays",
-    label: "Cadence (days)",
-    placeholder: "e.g. 30",
-    type: "number",
-  },
+  // No cadence here. It is set when a contact is tracked and changed from
+  // the cadence chip on its page, or in bulk from the Tracked contacts page.
 ];
 
 interface Props {

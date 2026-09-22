@@ -4,7 +4,11 @@
  * Activated by pressing `→` on a focused search result.
  * Provides quick actions without leaving the command palette:
  *   👤 View Profile (Enter), 📝 Log Note (N), 📞 Log Call (C),
- *   ✨ Catch Me Up (B), 📋 Add to List (L)
+ *   ✨ Catch Me Up (B), 📋 Add to List (L), ◎ Track or Untrack (T)
+ *
+ * Track reads the contact's flag from the contact cache, flips it with the
+ * same toast and Undo as the header button, and closes the palette. A
+ * ghost gets no Track row: it cannot be tracked.
  *
  * @module components/command-palette/ActionSubMenu
  */
@@ -23,9 +27,12 @@ import {
   Sparkles,
   ListPlus,
   ArrowLeft,
+  Radar,
 } from "lucide-react";
 import { KBD_SM } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { useContacts } from "../../api/contacts";
+import { useTrackToggle } from "../../hooks/useTrackToggle";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { ListPicker } from "./ListPicker";
 
@@ -65,6 +72,32 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   const [mode, setMode] = useState<SubMenuMode>("actions");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const actionsRef = useRef<HTMLDivElement>(null);
+
+  // ── Track ───────────────────────────────────────────────────────────────
+  // The result row carries the id, the name and the picture. The flag and
+  // the cadence come from the contact cache, which the palette already
+  // holds for its instant results.
+  const { data: contacts } = useContacts();
+  const contact = contacts?.find((c) => c.id === contactId);
+  const isTracked = contact?.isTracked ?? false;
+  const { toggle } = useTrackToggle();
+  const track = useCallback(() => {
+    toggle({
+      id: contactId,
+      name: contactName,
+      isTracked,
+      cadenceDays: contact?.cadenceDays ?? 0,
+    });
+    onClose();
+  }, [
+    toggle,
+    contactId,
+    contactName,
+    isTracked,
+    contact?.cadenceDays,
+    onClose,
+  ]);
+  const canTrack = !contact?.isGhost;
 
   // ── Action items ────────────────────────────────────────────────────────
   // Memoized: this array feeds the keyboard handler's dependency list, and a
@@ -107,8 +140,19 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         shortcut: "L",
         handler: () => setMode("list"),
       },
+      ...(canTrack
+        ? [
+            {
+              id: "track",
+              label: isTracked ? "Untrack" : "Track",
+              icon: <Radar className="w-4 h-4" />,
+              shortcut: "T",
+              handler: track,
+            },
+          ]
+        : []),
     ],
-    [onViewProfile, onCatchMeUp],
+    [onViewProfile, onCatchMeUp, canTrack, isTracked, track],
   );
 
   // ── Keyboard handling ───────────────────────────────────────────────────
@@ -174,9 +218,15 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           e.preventDefault();
           setMode("list");
           break;
+        case "t":
+        case "T":
+          if (!canTrack) break;
+          e.preventDefault();
+          track();
+          break;
       }
     },
-    [mode, selectedIndex, actions, onBack, onCatchMeUp],
+    [mode, selectedIndex, actions, onBack, onCatchMeUp, canTrack, track],
   );
 
   useEffect(() => {

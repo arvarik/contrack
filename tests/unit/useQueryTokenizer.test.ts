@@ -58,4 +58,29 @@ describe("useQueryTokenizer", () => {
 
     expect(result.current.tokenizer.parsed.filters).toEqual([]);
   });
+
+  // `tracked:` is the newest facet. The tokenizer has to know the word in
+  // three places (the field set and both patterns), so one case pins all
+  // three: a locked pill, an active prefix, and the pill again from
+  // addFilter.
+  it("knows the tracked: facet", () => {
+    function useTest() {
+      const [raw, setRaw] = useState("tracked:yes Ada");
+      const tokenizer = useQueryTokenizer(raw, setRaw);
+      return { tokenizer, raw, setRaw };
+    }
+    const { result } = renderHook(() => useTest());
+    expect(result.current.tokenizer.parsed.filters).toEqual([
+      { field: "tracked", value: "yes" },
+    ]);
+    expect(result.current.tokenizer.parsed.freeText).toBe("Ada");
+
+    act(() => {
+      result.current.setRaw("tracked:n");
+    });
+    expect(result.current.tokenizer.parsed.activePrefix).toEqual({
+      field: "tracked",
+      partial: "n",
+    });
+  });
 });

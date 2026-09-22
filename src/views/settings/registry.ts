@@ -7,6 +7,7 @@
  * @module views/settings/registry
  */
 import React from "react";
+import { Navigate } from "react-router-dom";
 import {
   Activity,
   Archive,
@@ -21,6 +22,7 @@ import {
   Mail,
   MailPlus,
   Palette,
+  Radar,
   ScrollText,
   ServerCog,
   Shield,
@@ -81,6 +83,10 @@ export interface SettingsSearchHit {
   label: string;
   path: string;
 }
+
+/** Settings, Data lists the Tracked contacts page and steps over to it. */
+const TrackedRedirect = () =>
+  React.createElement(Navigate, { to: "/tracked", replace: true });
 
 export const SETTINGS_PAGES: SettingsPage[] = [
   // ── YOU ──────────────────────────────────────────────────────────────────
@@ -261,7 +267,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "pinned",
       "cadence",
       "default cadence",
-      "follow-up cadence",
+      "keep up",
+      "track new contacts",
+      "track",
       "week start",
       "week starts on",
       "monday",
@@ -297,13 +305,24 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "cadence",
-        label: "Default follow-up cadence",
+        label: "Default cadence",
         keywords: [
           "cadence",
           "default cadence",
-          "follow-up",
+          "keep up",
           "cadence days",
           "score",
+        ],
+      },
+      {
+        id: "track-new",
+        label: "Track new contacts",
+        keywords: [
+          "track new contacts",
+          "track",
+          "tracked",
+          "keep up",
+          "new contacts",
         ],
       },
       {
@@ -609,6 +628,30 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
     ],
     load: () => import("./pages/ExportPage"),
+  },
+  {
+    // A door, not a page. The Tracked contacts page lives at /tracked,
+    // beside the Network, so this entry puts it in the rail, the phone's
+    // landing list, the settings search and the palette, and its route
+    // steps over to the page. `REDIRECTS` cannot hold it: every target
+    // there must be a settings page.
+    id: "tracked",
+    path: "/settings/tracked",
+    title: NAMES.tracked.title,
+    description: NAMES.tracked.description,
+    icon: Radar,
+    group: "data",
+    keywords: [
+      "tracked",
+      "track",
+      "keep up",
+      "cadence",
+      "score",
+      "at risk",
+      "fading",
+      "strong",
+    ],
+    load: () => Promise.resolve({ default: TrackedRedirect }),
   },
   {
     id: "archived",

@@ -319,6 +319,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
     page: "/map",
   },
 
+  // Track is the one action on a contact with a key of its own. It does
+  // what the header's Track button does, toast and Undo included.
+  {
+    group: "Contact",
+    keys: ["T"],
+    description: "Track or untrack this contact",
+    bareLetter: true,
+    page: "/contact/:id",
+  },
   // A contact's details. Every value edits in place: it is a button at rest
   // and a field once opened. The pencil after a value is the visible sign.
   {
