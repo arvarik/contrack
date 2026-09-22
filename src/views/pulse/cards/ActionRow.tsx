@@ -1,9 +1,23 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import { Link } from "react-router-dom";
-import { Check, HeartPulse, Cake, Clock, ExternalLink } from "lucide-react";
+import {
+  Check,
+  HeartPulse,
+  Cake,
+  Clock,
+  CalendarDays,
+  Calendar,
+} from "lucide-react";
+import { addDays } from "date-fns";
 import { cn } from "../../../lib/utils";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
-import { SnoozeMenu } from "./SnoozeMenu";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../../components/ui/ActionMenu";
+import { useUpdateActionItem } from "../../../api";
+import { formatRelative } from "../../../lib/datetime";
+import { PULSE_TYPE } from "../lib/pulseStyles";
 import type { UpNextItem } from "../lib/upNext";
 
 export interface ActionRowProps {
@@ -25,19 +39,60 @@ export interface ActionRowProps {
    * scrolls into view, so a key press never yanks focus off a control.
    */
   focusOnSelect?: boolean;
+  /**
+   * The phone anatomy, below `sm`. The name takes line one with the snooze
+   * at its end, the title may run to two lines, and the chip moves down to a
+   * meta line beside "Last spoke". On a 390 px phone a row has about 220 px
+   * for text, and a name, a chip and a button do not share that width.
+   */
+  compact?: boolean;
 }
+
+/** The chip's wash and ink, by how soon the row is due. No border, no caps. */
+const CHIP: Record<UpNextItem["dueChip"]["variant"], string> = {
+  urgent: "bg-error/10 text-error",
+  today: "bg-primary/10 text-on-primary-wash",
+  upcoming: "bg-surface-container-high text-on-surface-variant",
+  neutral: "bg-surface-container-high text-on-surface-variant",
+};
+
+/** The snooze choices. Each one moves the due date that many days out. */
+const SNOOZE_PRESETS = [
+  { id: "tomorrow", label: "Tomorrow", days: 1, icon: Clock },
+  { id: "three-days", label: "In 3 days", days: 3, icon: CalendarDays },
+  { id: "next-week", label: "Next week", days: 7, icon: Calendar },
+  { id: "next-month", label: "Next month", days: 30, icon: Calendar },
+] as const;
+
+/** True when the click started on a control inside the row. */
+const onControl = (target: EventTarget | null) =>
+  target instanceof Element &&
+  target.closest("a, button, [role='menu'], [role='menuitem']") !== null;
 
 /**
  * One row of the Up next queue.
  *
+ * Two lines with a free right edge. Line one is the name and the chip, and
+ * it wraps on a phone so the name is never cut. Line two is the title. Under
+ * them, when the row knows it, "Last spoke 12 days ago". A click or a tap
+ * anywhere on the row opens the contact, the same as Enter, so the row does
+ * what a list row does everywhere else in the app and a tap on a phone is
+ * not a dead gesture. A click that starts on a control inside the row (the
+ * check, the Log button, the name, the snooze menu) belongs to that control.
+ *
+ * The one action at the right, snooze, is the shared `ActionMenu`. From `sm`
+ * it floats over the row's right edge on a wash and shows on hover or focus,
+ * so at rest the text has the whole width. Below `sm` there is no hover, so
+ * it sits in the flow at the row's end as a 44 px target. A birthday or a
+ * catch-up row has no snooze: there is no date to move.
+ *
  * The row is the one roving tab stop of the list: `tabIndex` is 0 on the
- * highlighted row and -1 elsewhere, so Tab enters the list once and the
- * arrows move inside it. Enter opens the contact, Space does the row's
- * primary action (complete, or log a note for a birthday or a catch-up),
- * ArrowDown and ArrowUp move the highlight. Each key is claimed only when
- * the event target is the row itself, so a button inside the row keeps its
- * own Enter and Space. The row keeps `role="listitem"`: it is a clickable
- * element with a keyboard equivalent, not a button.
+ * highlighted row and -1 elsewhere. Enter opens the contact, Space does the
+ * row's primary action, ArrowDown and ArrowUp move the highlight. Each key
+ * is claimed only when the event target is the row itself, so a button
+ * inside the row keeps its own Enter and Space. The row keeps
+ * `role="listitem"`: it is a clickable element with a keyboard equivalent,
+ * not a button.
  */
 export const ActionRow = memo(
   ({
@@ -49,15 +104,13 @@ export const ActionRow = memo(
     onOpenContact,
     onMove,
     focusOnSelect = false,
+    compact = false,
   }: ActionRowProps) => {
     const [isCompleting, setIsCompleting] = useState(false);
-    const [showSnooze, setShowSnooze] = useState(false);
-    const [snoozeTriggerRect, setSnoozeTriggerRect] = useState<DOMRect | null>(
-      null,
-    );
     const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rowRef = useRef<HTMLDivElement>(null);
     const wasSelectedRef = useRef(isSelected);
+    const updateAction = useUpdateActionItem();
 
     useEffect(() => {
       return () => {
@@ -100,11 +153,10 @@ export const ActionRow = memo(
       onLog?.(item.contactId);
     };
 
-    const handleOpenSnooze = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      setSnoozeTriggerRect(rect);
-      setShowSnooze((prev) => !prev);
+    const handleRowClick = (e: React.MouseEvent) => {
+      if (onControl(e.target)) return;
+      onSelect?.();
+      onOpenContact?.(item.contactId);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -134,14 +186,56 @@ export const ActionRow = memo(
       }
     };
 
-    const chipStyles = {
-      urgent: "text-error bg-error/10 border-error/20",
-      today: "text-primary bg-primary/10 border-primary/20",
-      upcoming:
-        "text-on-surface-variant bg-surface-container-high border-outline/10",
-      neutral:
-        "text-on-surface-variant bg-surface-container-low border-outline/10",
-    };
+    const snoozeItems: ActionMenuItem[] = SNOOZE_PRESETS.map((preset) => ({
+      id: preset.id,
+      label: preset.label,
+      icon: preset.icon,
+      onSelect: () =>
+        updateAction.mutate({
+          id: item.id,
+          data: { dueAt: addDays(new Date(), preset.days).toISOString() },
+        }),
+    }));
+
+    // A catch-up's chip already says how long it has been, so the row does
+    // not say it twice.
+    const lastSpoke =
+      item.kind !== "catch-up" && item.lastContactedAt
+        ? formatRelative(item.lastContactedAt)
+        : null;
+
+    const chip = (
+      <span
+        className={cn(
+          PULSE_TYPE.chip,
+          "rounded-md px-2 py-0.5 tabular-nums shrink-0",
+          CHIP[item.dueChip.variant],
+        )}
+      >
+        {item.dueChip.text}
+      </span>
+    );
+
+    // The one action. On a phone it ends line one and is always visible.
+    // From sm it floats over the row's right edge and shows on hover or
+    // focus, so at rest the text has the whole width.
+    const snooze = item.hasCheckAction ? (
+      <ActionMenu
+        label="Snooze item"
+        title="Snooze"
+        heading="Snooze until"
+        icon={Clock}
+        iconClassName="w-4 h-4"
+        items={snoozeItems}
+        className={cn(
+          "shrink-0",
+          compact
+            ? "ml-auto"
+            : "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
+        triggerClassName={compact ? undefined : "p-1 rounded-lg"}
+      />
+    ) : null;
 
     return (
       // The row is a list item with a roving tab stop and its own keys, on
@@ -154,16 +248,20 @@ export const ActionRow = memo(
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
-        onClick={onSelect}
+        onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          "w-full rounded-xl border border-outline/15 p-3 sm:p-3.5 flex items-center gap-3 transition-all duration-200 group relative bg-surface-container-lowest hover:bg-surface-container-low cursor-pointer",
-          isSelected &&
-            "ring-2 ring-primary border-primary ring-offset-2 ring-offset-surface scale-[1.005] z-10 bg-surface-container-low",
-          isCompleting && "opacity-50 scale-[0.98]",
+          "group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
+          compact ? "gap-2.5 px-2.5" : "gap-3 px-3",
+          isSelected
+            ? "bg-primary/10 ring-1 ring-inset ring-primary/50"
+            : "bg-surface-container-low/70 hover:bg-surface-container-low",
+          isCompleting && "opacity-50",
         )}
       >
-        {/* Check button (for real action items) OR Log button (for a birthday or a catch-up) */}
+        {/* The primary action: the check for a follow-up, Log for a
+            birthday or a catch-up. The check is faint at rest and full on
+            hover, on focus and while it completes. */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -184,7 +282,7 @@ export const ActionRow = memo(
                 "w-3.5 h-3.5 transition-opacity",
                 isCompleting
                   ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100",
+                  : "opacity-40 group-hover:opacity-100 group-focus-within:opacity-100",
               )}
             />
           </button>
@@ -210,7 +308,6 @@ export const ActionRow = memo(
           </button>
         )}
 
-        {/* 32px ScoreRingAvatar */}
         <div className="shrink-0">
           <ScoreRingAvatar
             contact={{
@@ -220,86 +317,53 @@ export const ActionRow = memo(
               relationshipScore: item.relationshipScore,
               lastContactedAt: item.lastContactedAt,
             }}
-            size={32}
+            size={36}
           />
         </div>
 
-        {/* Main details. The name and the chip wrap, because a catch-up's
-            chip ("10 months past due") is wider than a due date's and used
-            to squeeze the name to one letter in a narrow column. */}
-        <div className="flex flex-col flex-1 min-w-0 pr-2">
+        {/* The text block takes the whole width. From sm, line one is the
+            name and the chip, and it wraps so a long name pushes the chip
+            under it instead of losing its letters. The snooze floats over the
+            row's right edge on a wash and shows on hover or focus. On a phone
+            the snooze ends line one as a 32 px glyph with a 44 px tap box,
+            the title may run to two lines, and the chip joins "Last spoke"
+            on a meta line. */}
+        <div className="flex flex-col flex-1 min-w-0 gap-0.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {/*
-              A 16 px text link with a 44 px tap box. The clip for a long
-              name sits on an inner span so the box is not cut away with it.
-            */}
             <Link
               to={`/contact/${item.contactId}`}
               onClick={(e) => e.stopPropagation()}
-              className="hit-area inline-flex min-w-0 text-xs font-semibold text-on-surface hover:text-primary transition-colors"
-            >
-              <span className="truncate max-w-[180px] sm:max-w-none">
-                {item.contactName}
-              </span>
-            </Link>
-
-            {/* Due chip */}
-            <span
               className={cn(
-                "text-[11px] font-bold px-1.5 py-0.5 rounded border tracking-tight uppercase tabular-nums shrink-0",
-                chipStyles[item.dueChip.variant],
+                PULSE_TYPE.name,
+                "hit-area inline-flex hover:text-primary transition-colors",
               )}
             >
-              {item.dueChip.text}
-            </span>
+              {item.contactName}
+            </Link>
+            {!compact && chip}
+            {snooze}
           </div>
 
           <span
             className={cn(
-              "text-xs sm:text-sm font-medium text-on-surface-variant truncate mt-0.5 transition-all",
+              PULSE_TYPE.rowTitle,
+              compact ? "line-clamp-2" : "line-clamp-1",
+              "transition-all",
               isCompleting && "line-through opacity-50",
             )}
           >
             {item.title}
           </span>
-        </div>
 
-        {/* Hover actions */}
-        <div className="flex items-center gap-1 shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-          {item.hasCheckAction && (
-            <button
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={showSnooze}
-              onClick={handleOpenSnooze}
-              title="Snooze"
-              aria-label="Snooze item"
-              className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-            >
-              <Clock className="w-3.5 h-3.5" />
-            </button>
+          {(compact || lastSpoke) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              {compact && chip}
+              {lastSpoke && (
+                <span className={PULSE_TYPE.meta}>Last spoke {lastSpoke}</span>
+              )}
+            </div>
           )}
-
-          <Link
-            to={`/contact/${item.contactId}`}
-            onClick={(e) => e.stopPropagation()}
-            title="Open contact profile"
-            aria-label={`Open profile for ${item.contactName}`}
-            className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </Link>
         </div>
-
-        {/* Snooze popup menu */}
-        {item.hasCheckAction && (
-          <SnoozeMenu
-            itemId={item.id}
-            isOpen={showSnooze}
-            onClose={() => setShowSnooze(false)}
-            triggerRect={snoozeTriggerRect}
-          />
-        )}
       </div>
     );
   },

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildUpNextQueue,
   computeNextHighlightIndex,
+  describeDueChip,
+  GROUP_LABELS,
 } from "../../src/views/pulse/lib/upNext";
 import type { ActionItem } from "../../src/types";
 import type { UpcomingBirthday } from "../../src/views/pulse/lib/birthdays";
@@ -268,5 +270,121 @@ describe("pulse.upNext", () => {
     expect(
       computeNextHighlightIndex(0, queueLast.items, emptyQueue.items),
     ).toBe(-1);
+  });
+
+  describe("describeDueChip", () => {
+    const weekday = (d: Date) =>
+      d.toLocaleDateString(undefined, { weekday: "long" });
+
+    it("speaks in sentence case: overdue days, today, tomorrow, the weekday, in N days", () => {
+      expect(describeDueChip(-1)).toBe("Overdue");
+      expect(describeDueChip(-12)).toBe("12 days overdue");
+      expect(describeDueChip(0)).toBe("Today");
+      expect(describeDueChip(1)).toBe("Tomorrow");
+      const wednesday = new Date(2026, 8, 23, 15);
+      expect(describeDueChip(2, wednesday)).toBe(weekday(wednesday));
+      expect(describeDueChip(2)).toBe("In 2 days");
+      // A week out is the same weekday as today, so the chip counts instead.
+      expect(describeDueChip(7, new Date(2026, 8, 28))).toBe("In 7 days");
+      expect(describeDueChip(9)).toBe("In 9 days");
+    });
+
+    it("feeds every chip in the queue", () => {
+      const now = new Date(2026, 8, 21, 9); // Monday
+      const wednesday = new Date(2026, 8, 23, 15);
+      const result = buildUpNextQueue({
+        now,
+        overdue: [
+          mockActionItem(
+            "ov-old",
+            "Old",
+            new Date(2026, 8, 9, 10).toISOString(),
+          ),
+          mockActionItem(
+            "ov-new",
+            "New",
+            new Date(2026, 8, 20, 10).toISOString(),
+          ),
+        ],
+        dueToday: [
+          mockActionItem(
+            "td",
+            "Today",
+            new Date(2026, 8, 21, 16).toISOString(),
+          ),
+        ],
+        upcoming: [
+          mockActionItem("tw", "Midweek", wednesday.toISOString()),
+          mockActionItem(
+            "tm",
+            "Tomorrow",
+            new Date(2026, 8, 22, 10).toISOString(),
+          ),
+        ],
+        birthdays: [
+          {
+            contactId: "b1",
+            name: "Ada",
+            avatarUrl: null,
+            themeColor: "#006a91",
+            isTracked: false,
+            lastContactedAt: null,
+            relationshipScore: null,
+            daysUntil: 2,
+            turningAge: 40,
+            nextDate: wednesday,
+            rawBirthday: "1986-09-23",
+          },
+        ],
+        catchUp: [catchUpCard("c9", "Grace", 21)],
+      });
+      const chips = Object.fromEntries(
+        result.items.map((item) => [item.id, item.dueChip.text]),
+      );
+      expect(chips).toEqual({
+        "ov-old": "12 days overdue",
+        "ov-new": "Overdue",
+        td: "Today",
+        tm: "Tomorrow",
+        tw: weekday(wednesday),
+        "bday-b1": weekday(wednesday),
+        "catch-c9": "3 weeks past due",
+      });
+      // Nothing in a chip is shouted.
+      for (const text of Object.values(chips)) {
+        expect(text).not.toMatch(/[A-Z]{2,}/);
+      }
+    });
+  });
+
+  it("names the groups in sentence case", () => {
+    expect(Object.values(GROUP_LABELS)).toEqual([
+      "Overdue",
+      "Today",
+      "This week",
+      "Birthdays",
+      "Catch up",
+    ]);
+  });
+
+  it("keeps a birthday in Up next through the seventh day and not the eighth", () => {
+    const birthday = (contactId: string, daysUntil: number) => ({
+      contactId,
+      name: contactId,
+      avatarUrl: null,
+      themeColor: "#006a91",
+      isTracked: false,
+      lastContactedAt: null,
+      relationshipScore: null,
+      daysUntil,
+      turningAge: null,
+      nextDate: new Date(2026, 8, 21 + daysUntil),
+      rawBirthday: "1990-01-01",
+    });
+    const result = buildUpNextQueue({
+      birthdays: [birthday("seven", 7), birthday("eight", 8)],
+    });
+    expect(result.items.map((i) => i.id)).toEqual(["bday-seven"]);
+    expect(result.counts.birthdays).toBe(1);
   });
 });

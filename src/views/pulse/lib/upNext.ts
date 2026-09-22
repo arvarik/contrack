@@ -12,6 +12,7 @@
  * follow-up is a promise with a date. The server sends ten at most and the
  * group takes every one; the heading says "10 of 14" when there are more.
  */
+import { differenceInCalendarDays } from "date-fns";
 import type { ActionItem } from "../../../types";
 import type { CatchUpCard } from "../../../../shared/pulse";
 import { describePastDue } from "../../../../shared/pastDue";
@@ -100,6 +101,7 @@ export interface BuildUpNextOptions {
   now?: Date;
 }
 
+/** The group headings, in sentence case. */
 export const GROUP_LABELS: Record<UpNextGroup, string> = {
   overdue: "Overdue",
   today: "Today",
@@ -107,6 +109,36 @@ export const GROUP_LABELS: Record<UpNextGroup, string> = {
   birthdays: "Birthdays",
   "catch-up": "Catch up",
 };
+
+/**
+ * The words on a due chip, in sentence case.
+ *
+ * `daysFromNow` is the calendar-day distance to the due date: negative for
+ * a past date. A past date reads "Overdue" for one day and "12 days
+ * overdue" after that. Today and tomorrow are named. Inside the week the
+ * chip says the weekday in full ("Wednesday") when it has the date, and
+ * "In 2 days" when it does not. From a week out it counts days. A catch-up
+ * row does not come here: its chip is `describePastDue`.
+ *
+ * The chips used to read "12D OVERDUE", "IN 2D" and "WED", which a person
+ * has to decode. A chip is a fact, and a fact reads as words.
+ */
+export function describeDueChip(
+  daysFromNow: number,
+  dueDate?: Date | null,
+): string {
+  const days = Math.round(daysFromNow);
+  if (days < 0) {
+    const late = -days;
+    return late === 1 ? "Overdue" : `${late} days overdue`;
+  }
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  if (days < 7 && dueDate) {
+    return dueDate.toLocaleDateString(undefined, { weekday: "long" });
+  }
+  return `In ${days} days`;
+}
 
 /**
  * Build the ranked Up Next queue.
@@ -140,15 +172,11 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       return timeA - timeB; // Oldest dueAt first
     })
     .map((item) => {
-      const diffDays = item.dueAt
-        ? Math.max(
-            1,
-            Math.round(
-              (now.getTime() - new Date(item.dueAt).getTime()) /
-                (1000 * 60 * 60 * 24),
-            ),
-          )
-        : 1;
+      // The server put it in this bucket, so it is at least a day late
+      // whatever the browser's clock says.
+      const daysLate = item.dueAt
+        ? Math.min(-1, differenceInCalendarDays(new Date(item.dueAt), now))
+        : -1;
       return {
         id: item.id,
         kind: "action_item",
@@ -162,7 +190,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
         dueAt: item.dueAt,
         hasCheckAction: true,
         dueChip: {
-          text: diffDays > 1 ? `${diffDays}d overdue` : "Overdue",
+          text: describeDueChip(daysLate),
           variant: "urgent",
         },
         originalActionItem: item,
@@ -182,7 +210,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     dueAt: item.dueAt,
     hasCheckAction: true,
     dueChip: {
-      text: "Today",
+      text: describeDueChip(0),
       variant: "today",
     },
     originalActionItem: item,
@@ -195,15 +223,11 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       return timeA - timeB;
     })
     .map((item) => {
-      let label = "Upcoming";
-      if (item.dueAt) {
-        try {
-          const d = new Date(item.dueAt);
-          label = d.toLocaleDateString(undefined, { weekday: "short" });
-        } catch {
-          label = "Upcoming";
-        }
-      }
+      // In this bucket the date is after today, so at least a day out.
+      const due = item.dueAt ? new Date(item.dueAt) : null;
+      const label = due
+        ? describeDueChip(Math.max(1, differenceInCalendarDays(due, now)), due)
+        : "Upcoming";
       return {
         id: item.id,
         kind: "action_item",
@@ -243,12 +267,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       dueAt: null,
       hasCheckAction: false, // birthday rows have no check action
       dueChip: {
-        text:
-          b.daysUntil === 0
-            ? "Today"
-            : b.daysUntil === 1
-              ? "Tomorrow"
-              : `In ${b.daysUntil}d`,
+        text: describeDueChip(b.daysUntil, b.nextDate),
         variant: b.daysUntil === 0 ? "today" : "neutral",
       },
       turningAge: b.turningAge,

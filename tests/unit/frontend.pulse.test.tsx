@@ -7,7 +7,6 @@ import { PulseView } from "../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../src/views/pulse/components/PulseSkeleton";
 import { DuplicatesPage } from "../../src/views/pulse/pages/DuplicatesPage";
 import { ActionRow } from "../../src/views/pulse/cards/ActionRow";
-import { SnoozeMenu } from "../../src/views/pulse/cards/SnoozeMenu";
 import { ComingUpCard } from "../../src/views/pulse/cards/ComingUpCard";
 import { Masthead } from "../../src/views/pulse/components/Masthead";
 import { CardFrame } from "../../src/views/pulse/components/CardFrame";
@@ -37,6 +36,14 @@ const mockCompleteMutate = vi.fn();
 const mockUpdateMutate = vi.fn();
 const mockSetPreference = vi.fn();
 let mockDashboardData: DashboardPayload | null = null;
+const COMPLETED_ITEM = {
+  id: "done-1",
+  contactId: "c-1",
+  contactName: "Ada Lovelace",
+  title: "Sent follow up email",
+  completedAt: "2026-09-17T14:00:00.000Z",
+};
+let mockCompletedItems: (typeof COMPLETED_ITEM)[] = [COMPLETED_ITEM];
 let mockPreferences: {
   pulseLayout: { hidden: string[]; order: Record<string, string[]> };
   singleKeyShortcuts: boolean;
@@ -77,15 +84,7 @@ vi.mock("../../src/api", () => ({
     ],
   }),
   useCompletedActionItems: () => ({
-    data: [
-      {
-        id: "done-1",
-        contactId: "c-1",
-        contactName: "Ada Lovelace",
-        title: "Sent follow up email",
-        completedAt: "2026-09-17T14:00:00.000Z",
-      },
-    ],
+    data: mockCompletedItems,
   }),
   useCompleteActionItem: () => ({
     mutate: mockCompleteMutate,
@@ -264,6 +263,7 @@ describe("frontend.pulse", () => {
     mockUpdateMutate.mockClear();
     mockSetPreference.mockClear();
     mockDashboardData = createSampleDashboard();
+    mockCompletedItems = [COMPLETED_ITEM];
     mockPreferences = {
       pulseLayout: { hidden: [], order: {} },
       singleKeyShortcuts: true,
@@ -390,6 +390,22 @@ describe("frontend.pulse", () => {
     expect(screen.queryByText("Slipping")).toBeNull();
   });
 
+  it("gives each group an h3 with its id, for the masthead's jumps", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    const ids = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((h) => [h.textContent?.replace(/\d+$/, "").trim(), h.id]);
+    expect(ids).toEqual([
+      ["Overdue", "up-next-overdue"],
+      ["Today", "up-next-today"],
+      ["Catch up", "up-next-catch-up"],
+    ]);
+  });
+
   it("says how many catch-ups wait past the ten the server sent", () => {
     mockDashboardData = createSampleDashboard({
       tracking: {
@@ -480,11 +496,8 @@ describe("frontend.pulse", () => {
     expect(screen.getByRole("link", { name: /Pulse/i })).toBeDefined();
   });
 
-  it("renders ActionRow and interacts with complete, log, and snooze", async () => {
-    const onComplete = vi.fn();
-    const onLog = vi.fn();
-    const onSelect = vi.fn();
-    const item = {
+  describe("ActionRow", () => {
+    const followUp = {
       id: "item-1",
       kind: "action_item" as const,
       group: "overdue" as const,
@@ -492,13 +505,13 @@ describe("frontend.pulse", () => {
       contactName: "Ada Lovelace",
       contactAvatarUrl: null,
       contactThemeColor: "#006a91",
-      isTracked: false,
-      relationshipScore: null,
-      lastContactedAt: null,
+      isTracked: true,
+      relationshipScore: 72,
+      lastContactedAt: "2026-09-16T10:00:00.000Z",
       title: "Call Ada",
       dueAt: "2026-09-10T10:00:00.000Z",
       hasCheckAction: true,
-      dueChip: { text: "Overdue", variant: "urgent" as const },
+      dueChip: { text: "12 days overdue", variant: "urgent" as const },
       originalActionItem: {
         id: "item-1",
         contactId: "c-1",
@@ -509,35 +522,138 @@ describe("frontend.pulse", () => {
         updatedAt: "2026-09-01T00:00:00.000Z",
       },
     };
+    const birthday = {
+      ...followUp,
+      id: "bday-c-2",
+      kind: "birthday" as const,
+      group: "birthdays" as const,
+      contactId: "c-2",
+      contactName: "Grace Hopper",
+      title: "Wish Grace Hopper a happy birthday",
+      dueAt: null,
+      hasCheckAction: false,
+      dueChip: { text: "Wednesday", variant: "neutral" as const },
+      originalActionItem: undefined,
+    };
+    const catchUp = {
+      ...followUp,
+      id: "catch-c-3",
+      kind: "catch-up" as const,
+      group: "catch-up" as const,
+      contactId: "c-3",
+      contactName: "Alan Turing",
+      title: "Check in with Alan Turing",
+      dueAt: null,
+      hasCheckAction: false,
+      dueChip: { text: "3 weeks past due", variant: "neutral" as const },
+      originalActionItem: undefined,
+    };
 
-    const { getByRole, getByLabelText } = render(
-      <MemoryRouter>
-        <ActionRow
-          item={item}
-          isSelected={true}
-          onSelect={onSelect}
-          onComplete={onComplete}
-          onLog={onLog}
-        />
-      </MemoryRouter>,
-    );
+    it("shows the name, the chip words, the title and when you last spoke", () => {
+      vi.setSystemTime(new Date(2026, 8, 21, 9, 0, 0));
+      render(
+        <MemoryRouter>
+          <ActionRow item={followUp} />
+        </MemoryRouter>,
+      );
+      expect(
+        screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href"),
+      ).toBe("/contact/c-1");
+      expect(screen.getByText("12 days overdue")).toBeDefined();
+      expect(screen.getByText("Call Ada")).toBeDefined();
+      expect(screen.getByText("Last spoke 5 days ago")).toBeDefined();
+      // The chip is a fact in words: no border, no caps.
+      const chip = screen.getByText("12 days overdue");
+      expect(chip.className).not.toContain("uppercase");
+      expect(chip.className).not.toContain("border");
+    });
 
-    fireEvent.click(getByRole("button", { name: /done/i }));
-    await new Promise((r) => setTimeout(r, 300));
-    expect(onComplete).toHaveBeenCalledWith("item-1");
+    it("opens the contact from a click on the row, and not from a click on the check", async () => {
+      const onOpenContact = vi.fn();
+      const onComplete = vi.fn();
+      const onSelect = vi.fn();
+      render(
+        <MemoryRouter>
+          <ActionRow
+            item={followUp}
+            onSelect={onSelect}
+            onOpenContact={onOpenContact}
+            onComplete={onComplete}
+          />
+        </MemoryRouter>,
+      );
+      fireEvent.click(screen.getByText("Call Ada"));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onOpenContact).toHaveBeenCalledWith("c-1");
 
-    fireEvent.click(getByLabelText(/snooze/i));
-    expect(screen.getByText("Tomorrow")).toBeDefined();
-    fireEvent.click(screen.getByText("Tomorrow"));
-    expect(mockUpdateMutate).toHaveBeenCalled();
-  });
+      fireEvent.click(screen.getByRole("button", { name: /done/i }));
+      await new Promise((r) => setTimeout(r, 300));
+      expect(onComplete).toHaveBeenCalledWith("item-1");
+      expect(onOpenContact).toHaveBeenCalledTimes(1);
+    });
 
-  it("renders SnoozeMenu and triggers snooze intervals", () => {
-    const onClose = vi.fn();
-    render(<SnoozeMenu itemId="item-1" isOpen={true} onClose={onClose} />);
-    fireEvent.click(screen.getByText("In 3 days"));
-    expect(mockUpdateMutate).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+    it("has no Open profile button, and shows snooze only on a follow-up", () => {
+      const { unmount } = render(
+        <MemoryRouter>
+          <ActionRow item={followUp} />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByRole("link", { name: /Open profile/ })).toBeNull();
+      expect(screen.getByRole("button", { name: "Snooze item" })).toBeDefined();
+      unmount();
+
+      render(
+        <MemoryRouter>
+          <ActionRow item={birthday} />
+          <ActionRow item={catchUp} />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByRole("button", { name: "Snooze item" })).toBeNull();
+      expect(
+        screen.getByRole("button", {
+          name: "Wish Grace Hopper a happy birthday",
+        }),
+      ).toBeDefined();
+      expect(
+        screen.getByRole("button", { name: "Log note for Alan Turing" }),
+      ).toBeDefined();
+      // The birthday row says when you last spoke. The catch-up's chip
+      // already says how long it has been, so its row does not say it twice.
+      expect(screen.getByText("3 weeks past due")).toBeDefined();
+      expect(screen.getAllByText(/^Last spoke /)).toHaveLength(1);
+    });
+
+    it("wears the wash and the inset ring when selected, with no offset or scale", () => {
+      render(
+        <MemoryRouter>
+          <ActionRow item={followUp} isSelected />
+        </MemoryRouter>,
+      );
+      const row = screen.getByRole("listitem");
+      expect(row.className).toContain("ring-inset");
+      expect(row.className).toContain("bg-primary/10");
+      expect(row.className).not.toContain("ring-offset");
+      expect(row.className).not.toContain("scale-");
+      expect(row.className).not.toContain("border-outline");
+    });
+
+    it("snoozes from the menu", () => {
+      render(
+        <MemoryRouter>
+          <ActionRow item={followUp} />
+        </MemoryRouter>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Snooze item" }));
+      expect(screen.getByRole("menuitem", { name: "Tomorrow" })).toBeDefined();
+      expect(
+        screen.getByRole("menuitem", { name: "Next month" }),
+      ).toBeDefined();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Tomorrow" }));
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: "item-1",
+        data: { dueAt: expect.any(String) },
+      });
+    });
   });
 
   it("renders ComingUpCard with birthdays and meetings", () => {
@@ -880,25 +996,45 @@ describe("frontend.pulse", () => {
     });
   });
 
-  it("renders CompletedCard and expands items", () => {
-    render(
-      <MemoryRouter>
-        <CompletedCard />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText(/1 item completed recently/i)).toBeDefined();
-    const expandBtn = screen.getByRole("button", {
-      name: /expand completed items/i,
-    });
-    fireEvent.click(expandBtn);
-    expect(screen.getByText("Sent follow up email")).toBeDefined();
-    expect(screen.getByText("(Ada Lovelace)")).toBeDefined();
+  describe("CompletedCard", () => {
+    it("is one line that says how many, and Show opens the list under it", () => {
+      const { container } = render(
+        <MemoryRouter>
+          <CompletedCard />
+        </MemoryRouter>,
+      );
+      const section = container.querySelector(
+        'section[data-card-id="completed"]',
+      )!;
+      expect(section.className).toContain("flex-wrap");
+      expect(screen.getByText("1 completed recently")).toBeDefined();
+      const show = screen.getByRole("button", { name: "Show" });
+      expect(show.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByText("Sent follow up email")).toBeNull();
 
-    // Collapse
-    fireEvent.click(
-      screen.getByRole("button", { name: /collapse completed items/i }),
-    );
-    expect(screen.getByText(/1 item completed recently/i)).toBeDefined();
+      fireEvent.click(show);
+      const list = screen.getByRole("list", { name: "Completed follow-ups" });
+      expect(list.id).toBe("completed-card-content");
+      expect(screen.getByText("Sent follow up email")).toBeDefined();
+      expect(
+        screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href"),
+      ).toBe("/contact/c-1");
+      const hide = screen.getByRole("button", { name: "Hide" });
+      expect(hide.getAttribute("aria-expanded")).toBe("true");
+      fireEvent.click(hide);
+      expect(screen.queryByText("Sent follow up email")).toBeNull();
+    });
+
+    it("says nothing completed yet, with no Show, when the list is empty", () => {
+      mockCompletedItems = [];
+      render(
+        <MemoryRouter>
+          <CompletedCard />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText("Nothing completed yet.")).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Show" })).toBeNull();
+    });
   });
 
   it("renders NewPeopleCard and opens modal on click", async () => {

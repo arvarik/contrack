@@ -265,8 +265,9 @@ test.describe("Pulse Office", () => {
     await expect(rows.first()).toContainText("Keyboard row one");
     await expect(rows.first()).toHaveAttribute("aria-current", "true");
 
-    // The highlighted row is the list's one tab stop.
-    await page.getByRole("button", { name: "More" }).focus();
+    // The highlighted row is the list's one tab stop. The control before
+    // it in the page is the Keyboard tip in the card's header.
+    await page.getByRole("button", { name: "Keyboard", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(rows.first()).toBeFocused();
 
@@ -286,6 +287,101 @@ test.describe("Pulse Office", () => {
 
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/contact/${grace.id}$`));
+  });
+
+  test("the queue scrolls inside its card at 1440, and the group heading stays put", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const people = [
+      seed.byName("Ada Lovelace"),
+      seed.byName("Grace Hopper"),
+      seed.byName("Katherine Johnson"),
+    ];
+    // Twelve rows: six overdue, three today, three this week.
+    for (let i = 0; i < 12; i++) {
+      const person = people[i % 3];
+      const offset = i < 6 ? -(i + 2) : i < 9 ? 0 : i - 6;
+      await addActionItem(
+        instance,
+        person.id,
+        `Pane row ${i + 1}`,
+        daysFromNow(offset),
+      );
+    }
+
+    await page.goto("/pulse");
+    const list = page.getByRole("group", { name: "Up next items" });
+    await expect(list.getByText("Pane row 12")).toBeAttached();
+    const shape = await list.evaluate((el) => ({
+      overflowY: getComputedStyle(el).overflowY,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(shape.overflowY).toBe("auto");
+    expect(shape.scrollHeight).toBeGreaterThan(shape.clientHeight);
+
+    // The pane scrolls, the page does not grow with it, and Overdue sticks.
+    const pageScroller = page.locator("main .overflow-y-auto").first();
+    const pageHeightBefore = await pageScroller.evaluate(
+      (el) => el.scrollHeight,
+    );
+    await list.evaluate((el) => el.scrollBy(0, 400));
+    const overdue = list.getByRole("heading", { level: 3, name: /^Overdue/ });
+    await expect(overdue).toBeInViewport();
+    const [headingTop, listTop] = await Promise.all([
+      overdue.evaluate((el) => el.getBoundingClientRect().top),
+      list.evaluate((el) => el.getBoundingClientRect().top),
+    ]);
+    expect(Math.abs(headingTop - listTop)).toBeLessThan(2);
+    expect(await pageScroller.evaluate((el) => el.scrollHeight)).toBe(
+      pageHeightBefore,
+    );
+  });
+
+  test("a click on a row opens the contact, and the Completed line shows and expands", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    const grace = seed.byName("Grace Hopper");
+    await addActionItem(instance, ada.id, "Row click item", daysFromNow(-2));
+    const done = await addActionItem(
+      instance,
+      grace.id,
+      "Already done item",
+      daysFromNow(-1),
+    );
+    await instance.api("PATCH", `/action-items/${done.id}/complete`);
+
+    await page.goto("/pulse");
+
+    // Completed is one line with a count and a Show.
+    const completed = page.locator('[data-card-id="completed"]');
+    await expect(completed).toContainText(/\d+ completed recently/);
+    await expect(completed.getByRole("heading", { level: 2 })).toHaveText(
+      /^Completed/,
+    );
+    const show = completed.getByRole("button", { name: "Show" });
+    await expect(show).toHaveAttribute("aria-expanded", "false");
+    await show.click();
+    const list = page.getByRole("list", { name: "Completed follow-ups" });
+    await expect(list.getByText("Already done item")).toBeVisible();
+    await expect(
+      list.getByRole("link", { name: "Grace Hopper" }),
+    ).toHaveAttribute("href", `/contact/${grace.id}`);
+    await completed.getByRole("button", { name: "Hide" }).click();
+    await expect(list).toHaveCount(0);
+
+    // A click on the row's title, not on a control, opens the contact.
+    const row = page
+      .getByRole("listitem")
+      .filter({ hasText: "Row click item" });
+    await row.getByText("Row click item").click();
+    await expect(page).toHaveURL(new RegExp(`/contact/${ada.id}$`));
   });
 
   test("inbox row for stale data navigates to / with updated:>6m in search input", async ({
@@ -450,7 +546,7 @@ test.describe("Pulse Office", () => {
     // Edsger is tracked at every 3 months and 400 days quiet: the one
     // catch-up among the four tracked people. Linus is quiet too, and not
     // tracked, so he is not here.
-    const upNext = page.getByRole("list", { name: "Up next items" });
+    const upNext = page.getByRole("group", { name: "Up next items" });
     await expect(upNext.getByText("Catch up")).toBeVisible();
     await expect(
       upNext.getByText("Check in with Edsger Dijkstra"),
@@ -678,5 +774,71 @@ test.describe("Pulse on a phone", () => {
     await expect(page.getByTestId("hidden-cards-tray")).toHaveCount(0);
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect(page.getByText("Editing layout")).toBeHidden();
+  });
+
+  test("rows keep their words, snooze is a 44 px target at rest, a birthday row has none, and a tap opens the contact", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    const margaret = seed.byName("Margaret Hamilton");
+    await addActionItem(instance, ada.id, "Phone tap item", daysFromNow(-3));
+    const soon = daysFromNow(2);
+    const mm = String(soon.getMonth() + 1).padStart(2, "0");
+    const dd = String(soon.getDate()).padStart(2, "0");
+    await instance.api("PATCH", `/contacts/${margaret.id}`, {
+      birthday: `1992-${mm}-${dd}`,
+    });
+
+    await page.goto("/pulse");
+    const list = page.getByRole("group", { name: "Up next items" });
+
+    // The pane has no cap on a phone.
+    expect(await list.evaluate((el) => getComputedStyle(el).overflowY)).toBe(
+      "visible",
+    );
+
+    // A name is never cut. Edsger is the seeded catch-up.
+    const edsger = list.getByRole("link", { name: "Edsger Dijkstra" });
+    await expect(edsger).toBeVisible();
+    const clipped = await edsger.evaluate(
+      (el) => el.scrollWidth > el.clientWidth + 1,
+    );
+    expect(clipped).toBe(false);
+
+    // Snooze sits in the flow on a follow-up row, visible at rest, with the
+    // 44 px tap box hit-area draws (the same box the metrics fixture reads).
+    const followUp = page
+      .getByRole("listitem")
+      .filter({ hasText: "Phone tap item" });
+    const snooze = followUp.getByRole("button", { name: "Snooze item" });
+    await expect(snooze).toBeVisible();
+    const hit = await snooze.evaluate((el) => {
+      const own = el.getBoundingClientRect();
+      const after = getComputedStyle(el, "::after");
+      return {
+        width: Math.max(own.width, parseFloat(after.width) || 0),
+        height: Math.max(own.height, parseFloat(after.height) || 0),
+        opacity: getComputedStyle(el.parentElement as Element).opacity,
+      };
+    });
+    expect(hit.width).toBeGreaterThanOrEqual(44);
+    expect(hit.height).toBeGreaterThanOrEqual(44);
+    expect(hit.opacity).toBe("1");
+
+    // A birthday row has no button at its right edge, only the wish.
+    const birthdayRow = page
+      .getByRole("listitem")
+      .filter({ hasText: "Wish Margaret Hamilton a happy birthday" });
+    await expect(birthdayRow).toBeVisible();
+    await expect(
+      birthdayRow.getByRole("button", { name: "Snooze item" }),
+    ).toHaveCount(0);
+    await expect(birthdayRow.getByRole("button")).toHaveCount(1);
+
+    // A tap on the row opens the contact.
+    await followUp.getByText("Phone tap item").tap();
+    await expect(page).toHaveURL(new RegExp(`/contact/${ada.id}$`));
   });
 });

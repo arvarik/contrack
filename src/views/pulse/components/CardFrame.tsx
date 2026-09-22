@@ -234,8 +234,11 @@ export const CardFrame = ({
       aria-labelledby={headingId}
       data-card-id={cardId}
       className={cn(
+        // The card surface without its own padding: the header and the body
+        // set the inset (16 px on a phone, 20 px from sm). With both, a
+        // phone card lost 80 of its 350 px to padding.
         compact ? CARD_COMPACT : CARD,
-        "flex flex-col relative overflow-hidden transition-all duration-200",
+        "p-0 flex flex-col relative overflow-hidden transition-all duration-200",
         isCustomizing && "ring-1 ring-primary/20",
         className,
       )}

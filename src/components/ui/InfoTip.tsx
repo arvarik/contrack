@@ -17,12 +17,19 @@ export const InfoTip = ({
   label,
   children,
   className,
+  align = "start",
 }: {
   /** Accessible name for the trigger, e.g. "About the Briefing cache". */
   label: string;
   /** The explanation. Keep it to a sentence or two. */
   children: React.ReactNode;
   className?: string;
+  /**
+   * Which edge of the trigger the panel lines up with. `end` for a trigger
+   * at the right edge of a card, so the panel opens over the card and not
+   * past its edge, where an `overflow-hidden` card would clip it.
+   */
+  align?: "start" | "end";
 }) => {
   const [open, setOpen] = useState(false);
   /** Above or below, chosen from the space actually available. */
@@ -87,7 +94,8 @@ export const InfoTip = ({
           id={panelId}
           role="tooltip"
           className={cn(
-            "absolute z-50 left-0 w-56 max-w-[calc(100vw-2rem)]",
+            "absolute z-50 w-56 max-w-[calc(100vw-2rem)]",
+            align === "end" ? "right-0" : "left-0",
             above ? "bottom-full mb-2" : "top-full mt-2",
             "bg-surface-container-highest text-on-surface",
             "rounded-xl shadow-xl ring-1 ring-black/5 px-3 py-2",
