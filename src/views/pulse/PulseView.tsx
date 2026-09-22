@@ -61,17 +61,18 @@ import {
 } from "./lib/layout";
 import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
 import { getUpcomingBirthdays } from "./lib/birthdays";
+import { jumpToGroup } from "./lib/jumpToGroup";
 import { COLUMN_CLASSES, GRID_CLASSES } from "./lib/pulseStyles";
 import { Masthead, type JumpTarget } from "./components/Masthead";
+import { AskForm } from "./components/AskForm";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
 import { SortableCard } from "./components/SortableCard";
-import { UpNextCard, groupHeadingId } from "./cards/UpNextCard";
+import { UpNextCard } from "./cards/UpNextCard";
 import { CompletedCard } from "./cards/CompletedCard";
 import { InsightCard } from "./cards/InsightCard";
 import { InboxCard } from "./cards/InboxCard";
 import { ComingUpCard } from "./cards/ComingUpCard";
-import { NewPeopleCard } from "./cards/NewPeopleCard";
 import { ActivityCard } from "./cards/ActivityCard";
 import { KeepingUpCard } from "./cards/KeepingUpCard";
 import { CompositionCard } from "./cards/CompositionCard";
@@ -383,6 +384,21 @@ const PulseOffice = () => {
     return getUpcomingBirthdays(contacts, new Date(), 14);
   }, [contacts]);
 
+  // The Inbox's tracking row: the people added in the last 30 days, and how
+  // many of them nobody tracks yet. The total is the server's count and the
+  // untracked count is read off the slim rows, with the same exclusions the
+  // server applies (a ghost is a mention, not a person to track).
+  const newPeople = useMemo(() => {
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let untracked = 0;
+    for (const c of contacts) {
+      if (c.isGhost || c.isTracked || !c.addedAt) continue;
+      const added = new Date(c.addedAt).getTime();
+      if (!Number.isNaN(added) && added >= since) untracked++;
+    }
+    return { total: dashboard?.metrics.newContacts30d ?? 0, untracked };
+  }, [contacts, dashboard?.metrics.newContacts30d]);
+
   // Build the ranked Up Next queue
   const upNext = useMemo(() => {
     if (!dashboard) {
@@ -489,37 +505,16 @@ const PulseOffice = () => {
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
   // A count in the masthead's sentence jumps to its group heading inside
-  // the queue: Overdue, Today or Birthdays. From lg the queue scrolls
-  // inside its card, so the pane scrolls to the heading and the page only
-  // brings the card into view, which keeps the masthead on screen. Below lg
-  // the heading is in the page's own flow. A group that is not there falls
-  // back to its card: Up next, or Coming up for a birthday further out.
+  // the queue: Overdue, Today or Birthdays (`jumpToGroup`). A group that is
+  // not there falls back to its card: Up next, or Coming up for a birthday
+  // further out.
   const handleJumpTo = useCallback((target: JumpTarget) => {
-    const behavior: ScrollBehavior = "smooth";
-    const heading = document.getElementById(groupHeadingId(target));
-    if (heading) {
-      const pane = heading.closest<HTMLElement>('[aria-label="Up next items"]');
-      const paneScrolls =
-        pane && /auto|scroll/.test(getComputedStyle(pane).overflowY);
-      if (pane && paneScrolls) {
-        const top =
-          heading.getBoundingClientRect().top -
-          pane.getBoundingClientRect().top +
-          pane.scrollTop;
-        pane.scrollTo?.({ top, behavior });
-        pane
-          .closest("[data-card-id]")
-          ?.scrollIntoView?.({ behavior, block: "nearest" });
-      } else {
-        heading.scrollIntoView?.({ behavior, block: "start" });
-      }
-      return;
-    }
+    if (jumpToGroup(target)) return;
     const card =
       target === "birthdays"
         ? document.querySelector('[data-card-id="coming-up"]')
         : upNextCardRef.current;
-    card?.scrollIntoView?.({ behavior, block: "start" });
+    card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, []);
 
   // Render individual cards by cardId
@@ -562,6 +557,7 @@ const PulseOffice = () => {
             ghosts={dashboard?.ghosts ?? []}
             hygiene={dashboard?.hygiene}
             correspondents={dashboard?.correspondents ?? 0}
+            newPeople={newPeople}
           />
         );
       case "coming-up":
@@ -570,14 +566,6 @@ const PulseOffice = () => {
             birthdays={upcomingBirthdays}
             meetings={dashboard?.meetings ?? []}
             contactsMap={contactsMap}
-          />
-        );
-      case "new-people":
-        return (
-          <NewPeopleCard
-            newContacts30d={dashboard?.metrics.newContacts30d ?? 0}
-            recentlyAdded={dashboard?.recentlyAdded ?? []}
-            timeline={dashboard?.networkGrowthTimeline30d ?? []}
           />
         );
       default:
@@ -652,7 +640,11 @@ const PulseOffice = () => {
           onToggleCustomize={handleToggleCustomize}
           onJumpTo={handleJumpTo}
           quiet={isZeroContacts}
-        />
+        >
+          {/* Ask about your network: only when AI is allowed and there is a
+              network to ask about. Hidden below sm inside the form. */}
+          {aiAllowed && !isZeroContacts && <AskForm />}
+        </Masthead>
 
         {/* Hidden Cards Tray in Customize Mode, only when a card is hidden */}
         {isEditing && resolvedLayout.hidden.length > 0 && (
@@ -720,7 +712,7 @@ const PulseOffice = () => {
                 }
               />
 
-              {/* Column 2: Intelligence (Insight, Inbox, Coming up, New people) */}
+              {/* Column 2: Intelligence (Insight, Inbox, Coming up, Composition) */}
               <DroppableColumn
                 id="intel"
                 cards={resolvedLayout.visible.intel}
@@ -730,7 +722,7 @@ const PulseOffice = () => {
                 }
               />
 
-              {/* Column 3: Network (Keeping up, Activity, Composition) */}
+              {/* Column 3: Network (Keeping up, Activity) */}
               <DroppableColumn
                 id="network"
                 cards={resolvedLayout.visible.network}

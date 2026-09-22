@@ -35,6 +35,34 @@ export const PULSE_TYPE = {
   chip: "text-xs font-semibold",
   /** A group heading inside the queue. */
   group: "text-[13px] font-semibold text-on-surface-variant",
+  /** The one large figure on a card: "9" of "9 of 10 within cadence". */
+  figure: "text-2xl font-headline font-bold tabular-nums text-on-surface",
+  /** The insight's own text. A paragraph a person reads, so a size up from a row. */
+  insight: "text-[15px] leading-relaxed text-on-surface",
+} as const;
+
+/**
+ * A row on the wash: the shape of every list row on a Pulse card that is
+ * not the queue (Inbox, Coming up). No border, 44 px tall at least, and the
+ * hover is one surface step up.
+ */
+export const PULSE_ROW =
+  "group flex items-center gap-3 min-h-[44px] rounded-xl px-3 py-2.5 bg-surface-container-low/70 hover:bg-surface-container-low transition-colors";
+
+/** A neutral chip: a fact at the right edge of a row, "In 10 days". */
+export const PULSE_CHIP_NEUTRAL =
+  "shrink-0 rounded-md px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-xs font-semibold tabular-nums whitespace-nowrap";
+
+/**
+ * The Composition donut's ramp: one hue at six steps of opacity, the
+ * largest slice darkest, and the neutral track tone for "Other". The AI
+ * colour is not here: it marks AI-derived data, and a count of people by
+ * industry is not that.
+ */
+export const COMPOSITION_RAMP = {
+  color: "var(--color-primary)",
+  opacities: [1, 0.82, 0.64, 0.48, 0.34, 0.22] as readonly number[],
+  other: "var(--color-surface-container-highest)",
 } as const;
 
 /** The three columns. The page, the skeleton and the fallback read these. */

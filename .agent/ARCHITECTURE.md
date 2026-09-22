@@ -292,7 +292,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dedupe/` — Deduplication management (Tinder-style swipe UI)
   - `src/views/search/` — Search result cards
   - `src/views/lists/` — List management (create, detail, members)
-  - `src/views/pulse/` — Pulse: `PulseView.tsx`, `lib/upNext.ts` (the ranked queue, with the Catch up group), `lib/layout.ts` (the card ids and the default columns), `cards/` (one file per card, `KeepingUpCard.tsx` for the people you track and their trend)
+  - `src/views/pulse/` — Pulse: `PulseView.tsx`, `lib/upNext.ts` (the ranked queue, with the Catch up group), `lib/layout.ts` (the eight card ids and the default columns), `lib/jumpToGroup.ts` (the scroll to a queue group, shared by the masthead and Keeping up), `lib/insight.ts` (the first sentence of an insight, for the Ask chip), `components/Masthead.tsx` and `components/AskForm.tsx` (the day, the sentence and the Ask field), `cards/` (one file per card, `KeepingUpCard.tsx` for the people you track and their trend, `Heatmap.tsx` and `Sparkline.tsx` inside Activity, `Donut.tsx` inside Composition). `NetworkCompositionModal.tsx` is the one modal left: the New people card and `NetworkGrowthModal.tsx` folded into an Inbox row.
   - `src/views/ai-search/` — AI-powered semantic search view
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
   - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`

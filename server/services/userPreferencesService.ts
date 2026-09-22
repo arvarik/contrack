@@ -77,7 +77,6 @@ export const PULSE_CARD_IDS = [
   "insight",
   "inbox",
   "coming-up",
-  "new-people",
 ] as const;
 export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
 export const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(

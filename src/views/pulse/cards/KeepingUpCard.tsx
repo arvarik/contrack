@@ -8,11 +8,12 @@
  * 1. The bar: one `role="img"` named "42 tracked: 30 strong, 8 fading, 4
  *    at risk, 0 with no interactions yet", with a legend of links to the
  *    groups on the Tracked contacts page.
- * 2. One line: "31 of 42 within cadence, 11 to catch up". Catch up is on
- *    the same page, so the words are not a link.
- * 3. Rising and Cooling, up to three rows each, or one quiet line before
- *    four snapshot weeks exist.
- * 4. "5 tracked in the last 30 days", when above zero.
+ * 2. The number: "31" large, then "of 42 within cadence", and when anybody
+ *    is past cadence a quiet button, "11 to catch up", that scrolls to the
+ *    Catch up group of the queue on this page.
+ * 3. Rising and Cooling, up to three rows each, once four snapshot weeks
+ *    exist. Before that the card says nothing about them: a line that
+ *    promises a feature in four weeks is not a fact about the network.
  *
  * Empty, when nobody is tracked, it is the upgrade moment: the words and
  * one button to the Tracked contacts page.
@@ -25,6 +26,8 @@ import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { TRACKED_INTRO } from "../../../lib/names";
 import { BTN_QUIET } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { PULSE_TYPE } from "../lib/pulseStyles";
+import { jumpToGroup } from "../lib/jumpToGroup";
 import type { MomentumCard, TrackingSummary } from "../../../../shared/pulse";
 
 export interface KeepingUpCardProps {
@@ -74,14 +77,18 @@ const TrendRow = ({
       />
       <Link
         to={`/contact/${contact.id}`}
-        className="hit-area text-xs font-semibold text-on-surface hover:text-primary truncate transition-colors"
+        className={cn(
+          PULSE_TYPE.name,
+          "hit-area hover:text-primary truncate transition-colors",
+        )}
       >
         {contact.name}
       </Link>
     </div>
     <span
       className={cn(
-        "shrink-0 px-2 py-0.5 rounded-md text-[11px] font-semibold tabular-nums",
+        PULSE_TYPE.chip,
+        "shrink-0 px-2 py-0.5 rounded-md tabular-nums",
         tone === "success"
           ? "bg-success/10 text-success"
           : "bg-error/10 text-error",
@@ -99,15 +106,14 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
     return (
       <CardFrame cardId="keeping-up" title="Keeping up" compact>
         <div className="animate-pulse space-y-3 py-2" aria-busy="true">
-          <div className="h-2 bg-surface-container-high rounded-full" />
-          <div className="h-4 bg-surface-container-high rounded w-2/3" />
+          <div className="h-2.5 bg-surface-container-high rounded-full" />
+          <div className="h-7 bg-surface-container-high rounded w-2/3" />
         </div>
       </CardFrame>
     );
   }
 
-  const { count, bands, catchUpCount, startedLast30d, snapshotWeeks } =
-    tracking;
+  const { count, bands, catchUpCount, snapshotWeeks } = tracking;
 
   if (count === 0) {
     return (
@@ -150,7 +156,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
           <div
             role="img"
             aria-label={barName}
-            className="flex h-2 w-full rounded-full overflow-hidden bg-surface-container-low"
+            className="flex h-2.5 w-full rounded-full overflow-hidden bg-surface-container-low"
           >
             {SEGMENTS.map((s) =>
               bands[s.key] > 0 ? (
@@ -162,13 +168,13 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
               ) : null,
             )}
           </div>
-          <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+          <ul className={cn(PULSE_TYPE.meta, "flex flex-wrap gap-x-3 gap-y-1")}>
             {SEGMENTS.map((s) =>
               bands[s.key] > 0 ? (
                 <li key={s.key}>
                   <Link
                     to={`/tracked#${s.hash}`}
-                    className="hit-area inline-flex items-center gap-1.5 font-medium text-on-surface-variant hover:text-primary transition-colors"
+                    className="hit-area inline-flex items-center gap-1.5 font-medium hover:text-primary transition-colors"
                   >
                     <span
                       aria-hidden="true"
@@ -183,12 +189,25 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
           </ul>
         </div>
 
-        <p className="text-sm text-on-surface tabular-nums">
-          {withinCadence} of {count} within cadence, {catchUpCount} to catch up
-        </p>
+        {/* The number, and the door to the Catch up group of the queue */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="flex items-baseline gap-1.5 min-w-0">
+            <span className={PULSE_TYPE.figure}>{withinCadence}</span>
+            <span className={PULSE_TYPE.meta}>of {count} within cadence</span>
+          </p>
+          {catchUpCount > 0 && (
+            <button
+              type="button"
+              onClick={() => jumpToGroup("catch-up")}
+              className={cn(BTN_QUIET, "ml-auto -mr-2 cursor-pointer")}
+            >
+              {catchUpCount} to catch up
+            </button>
+          )}
+        </div>
 
-        {/* Rising and Cooling, or the four-week line */}
-        {trendReady ? (
+        {/* Rising and Cooling, once four snapshot weeks exist */}
+        {trendReady && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(
               [
@@ -199,7 +218,8 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
               <div key={title} className="flex flex-col gap-1.5 min-w-0">
                 <h3
                   className={cn(
-                    "text-xs font-bold px-0.5",
+                    PULSE_TYPE.group,
+                    "px-0.5",
                     tone === "success" ? "text-success" : "text-error",
                   )}
                 >
@@ -212,23 +232,13 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-on-surface-variant px-0.5">
+                  <p className={cn(PULSE_TYPE.meta, "px-0.5")}>
                     None this month
                   </p>
                 )}
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-xs text-on-surface-variant">
-            Rising and cooling show after four weeks of tracking.
-          </p>
-        )}
-
-        {startedLast30d > 0 && (
-          <p className="text-xs text-on-surface-variant tabular-nums">
-            {startedLast30d} tracked in the last 30 days
-          </p>
         )}
       </div>
     </CardFrame>

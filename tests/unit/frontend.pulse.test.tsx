@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from "@testing-library/react";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { PulseView } from "../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../src/views/pulse/components/PulseSkeleton";
 import { DuplicatesPage } from "../../src/views/pulse/pages/DuplicatesPage";
@@ -12,11 +18,12 @@ import { Masthead } from "../../src/views/pulse/components/Masthead";
 import { CardFrame } from "../../src/views/pulse/components/CardFrame";
 import { CardCustomizeContext } from "../../src/views/pulse/context/CardCustomizeContext";
 import { CompletedCard } from "../../src/views/pulse/cards/CompletedCard";
-import { NewPeopleCard } from "../../src/views/pulse/cards/NewPeopleCard";
 import { InboxCard } from "../../src/views/pulse/cards/InboxCard";
+import { InsightCard } from "../../src/views/pulse/cards/InsightCard";
 import { ActivityCard } from "../../src/views/pulse/cards/ActivityCard";
 import { KeepingUpCard } from "../../src/views/pulse/cards/KeepingUpCard";
 import { CompositionCard } from "../../src/views/pulse/cards/CompositionCard";
+import { AskForm } from "../../src/views/pulse/components/AskForm";
 import type { DashboardPayload } from "../../src/api";
 
 vi.mock("../../src/views/dedupe/components", () => ({
@@ -25,9 +32,6 @@ vi.mock("../../src/views/dedupe/components", () => ({
   ),
 }));
 
-vi.mock("../../src/views/pulse/NetworkGrowthModal", () => ({
-  NetworkGrowthModal: () => <div data-testid="growth-modal" />,
-}));
 vi.mock("../../src/views/pulse/NetworkCompositionModal", () => ({
   NetworkCompositionModal: () => <div data-testid="composition-modal" />,
 }));
@@ -51,6 +55,20 @@ let mockPreferences: {
   pulseLayout: { hidden: [], order: {} },
   singleKeyShortcuts: true,
 };
+let mockAiAllowed = true;
+let mockIsAdmin = true;
+/** The slim rows. Ada is tracked and old, so the Inbox has no New people row. */
+const ADA_ROW = {
+  id: "c-1",
+  name: "Ada Lovelace",
+  avatarUrl: null,
+  themeColor: "#006a91",
+  birthday: "1990-09-19",
+  isTracked: true,
+  isGhost: false,
+  addedAt: "2026-01-05T10:00:00.000Z",
+};
+let mockContacts: Array<Record<string, unknown>> = [ADA_ROW];
 
 vi.mock("../../src/api", () => ({
   useDashboard: () => ({
@@ -73,15 +91,7 @@ vi.mock("../../src/api", () => ({
     },
   }),
   useContacts: () => ({
-    data: [
-      {
-        id: "c-1",
-        name: "Ada Lovelace",
-        avatarUrl: null,
-        themeColor: "#006a91",
-        birthday: "1990-09-19",
-      },
-    ],
+    data: mockContacts,
   }),
   useCompletedActionItems: () => ({
     data: mockCompletedItems,
@@ -124,12 +134,12 @@ vi.mock("../../src/hooks/useSingleKeyShortcuts", () => ({
 }));
 
 vi.mock("../../src/hooks/useAiAllowed", () => ({
-  useAiAllowed: () => true,
+  useAiAllowed: () => mockAiAllowed,
 }));
 
 vi.mock("../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({
-    isAdmin: true,
+    isAdmin: mockIsAdmin,
     user: { id: "u1", name: "Admin" },
   }),
 }));
@@ -268,6 +278,9 @@ describe("frontend.pulse", () => {
       pulseLayout: { hidden: [], order: {} },
       singleKeyShortcuts: true,
     };
+    mockAiAllowed = true;
+    mockIsAdmin = true;
+    mockContacts = [ADA_ROW];
   });
 
   afterEach(() => {
@@ -287,7 +300,7 @@ describe("frontend.pulse", () => {
     expect(heading).toBeDefined();
   });
 
-  it("renders nine cards by default", () => {
+  it("renders eight cards by default", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
@@ -295,7 +308,7 @@ describe("frontend.pulse", () => {
     );
 
     const cards = container.querySelectorAll("[data-card-id]");
-    expect(cards.length).toBe(9);
+    expect(cards.length).toBe(8);
 
     const expectedCardIds = [
       "up-next",
@@ -303,7 +316,6 @@ describe("frontend.pulse", () => {
       "insight",
       "inbox",
       "coming-up",
-      "new-people",
       "keeping-up",
       "activity",
       "composition",
@@ -327,7 +339,7 @@ describe("frontend.pulse", () => {
     );
 
     const cards = container.querySelectorAll("[data-card-id]");
-    expect(cards.length).toBe(8);
+    expect(cards.length).toBe(7);
     expect(container.querySelector('[data-card-id="keeping-up"]')).toBeNull();
     expect(container.querySelector('[data-card-id="up-next"]')).not.toBeNull();
   });
@@ -352,7 +364,7 @@ describe("frontend.pulse", () => {
     expect(mockCompleteMutate).toHaveBeenCalledWith("act-2");
   });
 
-  it("shows 'Inbox zero. Nothing to clean up.' when inbox has no pending items", () => {
+  it("renders Inbox as one line, 'Nothing to clean up.', when there is nothing to do", () => {
     mockDashboardData = createSampleDashboard({
       ghosts: [],
       hygiene: {
@@ -370,7 +382,108 @@ describe("frontend.pulse", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Inbox zero. Nothing to clean up.")).toBeDefined();
+    expect(screen.getByText("Nothing to clean up.")).toBeDefined();
+    // A line: the section has no card surface class.
+    const inbox = document.querySelector('[data-card-id="inbox"]');
+    expect(inbox?.className).not.toContain("bg-surface-container-lowest");
+    expect(screen.queryByText(/new this month/)).toBeNull();
+  });
+
+  it("puts the New people row first in Inbox, from the untracked rows added this month", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 21, 9));
+    mockContacts = [
+      ADA_ROW,
+      // Two new and untracked, one new and tracked, one new ghost, one old.
+      {
+        ...ADA_ROW,
+        id: "n-1",
+        name: "New One",
+        isTracked: false,
+        addedAt: "2026-09-15T10:00:00.000Z",
+      },
+      {
+        ...ADA_ROW,
+        id: "n-2",
+        name: "New Two",
+        isTracked: false,
+        addedAt: "2026-09-20T10:00:00.000Z",
+      },
+      {
+        ...ADA_ROW,
+        id: "n-3",
+        name: "New Three",
+        isTracked: true,
+        addedAt: "2026-09-18T10:00:00.000Z",
+      },
+      {
+        ...ADA_ROW,
+        id: "n-4",
+        name: "Ghost",
+        isTracked: false,
+        isGhost: true,
+        addedAt: "2026-09-18T10:00:00.000Z",
+      },
+      {
+        ...ADA_ROW,
+        id: "n-5",
+        name: "Old",
+        isTracked: false,
+        addedAt: "2026-06-01T10:00:00.000Z",
+      },
+    ];
+    mockDashboardData = createSampleDashboard({
+      metrics: { totalActive: 42, newContacts30d: 3 },
+      hygiene: {
+        missingCompany: 4,
+        missingLocation: 0,
+        missingEmail: 0,
+        stale: 0,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    const inbox = screen.getByRole("region", { name: /^Inbox/ });
+    const rows = inbox.querySelectorAll("li");
+    const first = rows[0].querySelector("a");
+    expect(first?.textContent).toBe("3 new this month, 2 untracked");
+    expect(first?.getAttribute("href")).toBe("/?q=tracked:no");
+    expect(
+      screen.getByRole("link", { name: "4 without a company" }),
+    ).toBeDefined();
+    // The count after the title adds the untracked people to the jobs.
+    expect(
+      screen.getByRole("heading", { level: 2, name: /^Inbox,\s?6$/ }),
+    ).toBeDefined();
+  });
+
+  it("renders the Ask form under the masthead when AI is allowed, and not when it is off", () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    const form = screen.getByRole("search", { name: "Ask about your network" });
+    expect(screen.getByLabelText("Today summary").contains(form)).toBe(true);
+    unmount();
+
+    mockAiAllowed = false;
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.queryByRole("search", { name: "Ask about your network" }),
+    ).toBeNull();
+    expect(
+      screen.getByText("AI is off for your account.", { exact: false }),
+    ).toBeDefined();
   });
 
   it("puts the Catch up group after the birthdays, with the words and the Log button", () => {
@@ -421,28 +534,40 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("1 of 14")).toBeDefined();
   });
 
-  it("shows the Keeping up card on Pulse with the four-week line before four snapshot weeks", () => {
+  it("shows the Keeping up card on Pulse with the bar and the number, and nothing about four weeks or thirty days", () => {
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
       </MemoryRouter>,
     );
 
+    const card = screen.getByRole("region", { name: /^Keeping up/ });
     expect(
       screen.getByRole("img", {
         name: "3 tracked: 1 strong, 1 fading, 1 at risk, 0 with no interactions yet",
       }),
     ).toBeDefined();
-    expect(
-      screen.getByText("2 of 3 within cadence, 1 to catch up"),
-    ).toBeDefined();
-    expect(
-      screen.getByText("Rising and cooling show after four weeks of tracking."),
-    ).toBeDefined();
-    expect(screen.getByText("1 tracked in the last 30 days")).toBeDefined();
+    expect(card.querySelector('[role="img"]')?.className).toContain("h-2.5");
+    expect(within(card).getByText("2")).toBeDefined();
+    expect(within(card).getByText("of 3 within cadence")).toBeDefined();
+    expect(within(card).queryByText(/four weeks/)).toBeNull();
+    expect(within(card).queryByText(/in the last 30 days/)).toBeNull();
     expect(
       screen.getByRole("link", { name: "Manage" }).getAttribute("href"),
     ).toBe("/tracked");
+
+    // "1 to catch up" scrolls the queue to the Catch up heading.
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {
+      scrolled.push(this);
+    };
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "1 to catch up" }));
+      expect(scrolled.map((el) => el.id)).toContain("up-next-catch-up");
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it("renders WelcomeOffice when totalActive is zero", () => {
@@ -656,43 +781,199 @@ describe("frontend.pulse", () => {
     });
   });
 
-  it("renders ComingUpCard with birthdays and meetings", () => {
-    render(
-      <MemoryRouter>
-        <ComingUpCard
-          birthdays={[
-            {
-              contactId: "c-1",
-              name: "Ada Lovelace",
-              avatarUrl: null,
-              themeColor: "#006a91",
-              rawBirthday: "1815-12-10",
-              isTracked: true,
-              lastContactedAt: "2026-09-01T10:00:00.000Z",
-              relationshipScore: 85,
-              nextDate: new Date(),
-              daysUntil: 2,
-              turningAge: 211,
-            },
-          ]}
-          meetings={[
-            {
-              title: "Sprint Planning",
-              startsAt: "2026-09-18T10:00:00.000Z",
-              endsAt: "2026-09-18T11:00:00.000Z",
-              contactIds: ["c-1"],
-            },
-          ]}
-          contactsMap={
-            new Map([
-              ["c-1", { id: "c-1", name: "Ada Lovelace", avatarUrl: null }],
-            ])
-          }
-        />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText("Turning 211")).toBeDefined();
-    expect(screen.getByText("Sprint Planning")).toBeDefined();
+  describe("ComingUpCard", () => {
+    const birthday = (contactId: string, name: string, daysUntil: number) => {
+      const nextDate = new Date(2026, 8, 21 + daysUntil, 9);
+      return {
+        contactId,
+        name,
+        avatarUrl: null,
+        themeColor: "#006a91",
+        rawBirthday: "1990-01-01",
+        isTracked: true,
+        lastContactedAt: "2026-09-01T10:00:00.000Z",
+        relationshipScore: 85,
+        nextDate,
+        daysUntil,
+        turningAge: 36,
+      };
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 21, 9));
+    });
+
+    it("lists days eight to fourteen and the meetings as one dated list, and leaves a birthday in three days to Up next", () => {
+      render(
+        <MemoryRouter>
+          <ComingUpCard
+            birthdays={[
+              birthday("c-1", "Ada Lovelace", 3),
+              birthday("c-2", "Grace Hopper", 10),
+            ]}
+            meetings={[
+              {
+                title: "Sprint planning",
+                startsAt: new Date(2026, 8, 23, 15).toISOString(),
+                endsAt: new Date(2026, 8, 23, 16).toISOString(),
+                contactIds: ["c-1"],
+              },
+            ]}
+            contactsMap={
+              new Map([["c-1", { name: "Ada Lovelace", avatarUrl: null }]])
+            }
+          />
+        </MemoryRouter>,
+      );
+      // The meeting in two days comes before the birthday in ten.
+      const rows = screen
+        .getAllByRole("listitem")
+        .map((li) => li.textContent ?? "");
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toContain("Sprint planning");
+      expect(rows[0]).toContain("Wednesday");
+      expect(rows[1]).toContain("Grace Hopper");
+      expect(rows[1]).toContain("Turns 36");
+      expect(rows[1]).toContain("In 10 days");
+      expect(screen.queryByText("Ada Lovelace")).toBeNull();
+      expect(
+        screen.getByRole("link", { name: /Grace Hopper/ }).getAttribute("href"),
+      ).toBe("/contact/c-2");
+      expect(
+        screen.getByRole("heading", { level: 2, name: /^Coming up,\s?2$/ }),
+      ).toBeDefined();
+      expect(screen.queryByText("Birthdays")).toBeNull();
+      expect(screen.queryByText("Meetings")).toBeNull();
+    });
+
+    it("is one line with the calendar door when nothing is in two weeks", () => {
+      render(
+        <MemoryRouter>
+          <ComingUpCard birthdays={[birthday("c-1", "Ada Lovelace", 3)]} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText(/Nothing in the next two weeks\./)).toBeDefined();
+      expect(
+        screen
+          .getByRole("link", { name: "Connect a calendar" })
+          .getAttribute("href"),
+      ).toBe("/settings/connectors");
+      const card = document.querySelector('[data-card-id="coming-up"]');
+      expect(card?.className).not.toContain("bg-surface-container-lowest");
+    });
+  });
+
+  describe("InsightCard", () => {
+    it("is the paragraph, the category and the Ask chip with the first sentence", () => {
+      render(
+        <MemoryRouter>
+          <InsightCard
+            isLoading={false}
+            insight={{
+              text: "Three people in Berlin went quiet this month. Two of them are founders you met at the summit.",
+              category: "Strategy",
+              generatedAt: "2026-09-21T06:00:00.000Z",
+            }}
+          />
+        </MemoryRouter>,
+      );
+      expect(
+        screen.getByText(/Three people in Berlin went quiet/),
+      ).toBeDefined();
+      expect(screen.getByText("Strategy")).toBeDefined();
+      expect(
+        screen
+          .getByRole("link", { name: "Ask about this insight" })
+          .getAttribute("href"),
+      ).toBe(
+        `/search?q=${encodeURIComponent("Three people in Berlin went quiet this month")}`,
+      );
+      expect(screen.queryByText("Ask a follow-up")).toBeNull();
+    });
+
+    it("tells an admin to add a key, with the door", () => {
+      render(
+        <MemoryRouter>
+          <InsightCard isLoading={false} insight={null} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText(/Add an AI key to get one\./)).toBeDefined();
+      expect(
+        screen
+          .getByRole("link", { name: "Open AI settings" })
+          .getAttribute("href"),
+      ).toBe("/settings/admin/ai");
+      const card = document.querySelector('[data-card-id="insight"]');
+      expect(card?.className).not.toContain("bg-surface-container-lowest");
+    });
+
+    it("tells a member the admin has not added a key, with no door", () => {
+      mockIsAdmin = false;
+      render(
+        <MemoryRouter>
+          <InsightCard isLoading={false} insight={null} />
+        </MemoryRouter>,
+      );
+      expect(
+        screen.getByText("Your admin has not added an AI key yet."),
+      ).toBeDefined();
+      expect(screen.queryByRole("link")).toBeNull();
+    });
+
+    it("says AI is off, with the switch, when the account opted out", () => {
+      render(
+        <MemoryRouter>
+          <InsightCard isLoading={false} insight={null} aiAllowed={false} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText(/AI is off for your account\./)).toBeDefined();
+      expect(
+        screen
+          .getByRole("link", { name: "Turn on in Settings" })
+          .getAttribute("href"),
+      ).toBe("/settings/privacy#ai-assist");
+    });
+  });
+
+  describe("AskForm", () => {
+    const Landing = () => {
+      const location = useLocation();
+      return <div data-testid="search-landing">{location.search}</div>;
+    };
+
+    it("waits for three characters, then sends the question to /search", () => {
+      render(
+        <MemoryRouter initialEntries={["/pulse"]}>
+          <Routes>
+            <Route path="/pulse" element={<AskForm />} />
+            <Route path="/search" element={<Landing />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      const form = screen.getByRole("search", {
+        name: "Ask about your network",
+      });
+      const input = screen.getByRole("searchbox", {
+        name: "Ask about your network",
+      });
+      const ask = screen.getByRole("button", { name: "Ask" });
+      expect(ask.hasAttribute("disabled")).toBe(true);
+
+      fireEvent.change(input, { target: { value: "ab" } });
+      expect(ask.hasAttribute("disabled")).toBe(true);
+      fireEvent.submit(form);
+      expect(screen.queryByTestId("search-landing")).toBeNull();
+
+      fireEvent.change(input, {
+        target: { value: "  who works in Berlin?  " },
+      });
+      expect(ask.hasAttribute("disabled")).toBe(false);
+      fireEvent.submit(form);
+      expect(screen.getByTestId("search-landing").textContent).toBe(
+        "?q=who%20works%20in%20Berlin%3F",
+      );
+    });
   });
 
   describe("Masthead", () => {
@@ -1037,30 +1318,8 @@ describe("frontend.pulse", () => {
     });
   });
 
-  it("renders NewPeopleCard and opens modal on click", async () => {
-    render(
-      <NewPeopleCard
-        newContacts30d={6}
-        recentlyAdded={[
-          {
-            id: "c-1",
-            name: "Ada Lovelace",
-            company: null,
-            avatarUrl: null,
-            themeColor: "#006a91",
-            addedAt: "2026-09-01T00:00:00.000Z",
-          },
-        ]}
-      />,
-    );
-    expect(screen.getByText("6 added")).toBeDefined();
-    expect(screen.getByText("+1")).toBeDefined();
-    fireEvent.click(screen.getByText("Details"));
-    expect(await screen.findByTestId("growth-modal")).toBeDefined();
-  });
-
-  it("renders ActivityCard with heatmap, sparkline, and streak tooltip", () => {
-    const dummyActivity = {
+  describe("ActivityCard", () => {
+    const activity = {
       days: [{ day: "2026-09-17", count: 3, byType: { note: 2, call: 1 } }],
       weekTotals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       prevWeekTotals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -1069,12 +1328,95 @@ describe("frontend.pulse", () => {
       thisWeek: { logged: 12, byType: { note: 8, call: 4 } },
     };
 
-    render(<ActivityCard activity={dummyActivity} />);
-    expect(screen.getByText("Activity")).toBeDefined();
-    expect(screen.getByTitle("Days you logged something")).toBeDefined();
-    expect(screen.getByText(/5 days · best 14/)).toBeDefined();
-    expect(screen.getByText(/8 notes/)).toBeDefined();
-    expect(screen.getByText(/4 calls/)).toBeDefined();
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 21, 9));
+    });
+
+    it("draws the heatmap with month labels and weekday letters, and no streak", () => {
+      const { container } = render(<ActivityCard activity={activity} />);
+      expect(screen.getByText("Activity")).toBeDefined();
+      expect(screen.queryByTitle("Days you logged something")).toBeNull();
+      expect(screen.queryByText(/best 14/)).toBeNull();
+      // Twelve weeks of squares that scale to the card.
+      const svg = container.querySelector('svg[role="img"]');
+      expect(svg?.getAttribute("width")).toBe("100%");
+      expect(svg?.getAttribute("preserveAspectRatio")).toBe("xMinYMin meet");
+      expect(container.querySelectorAll("[data-heatmap-cell]")).toHaveLength(
+        84,
+      );
+      expect(container.querySelectorAll("svg title")).toHaveLength(0);
+      // Monday start: M, W and F on rows 0, 2 and 4.
+      const letters = Array.from(
+        container.querySelectorAll(".grid-rows-7 > span"),
+      ).map((el) => el.textContent);
+      expect(letters).toEqual(["M", "", "W", "", "F", "", ""]);
+      // The current month is labelled, and the one before it.
+      expect(screen.getByText("Sep")).toBeDefined();
+      expect(screen.getByText("Aug")).toBeDefined();
+    });
+
+    it("shows one tooltip with the day's words on hover, and hides it when the pointer leaves", () => {
+      const { container } = render(<ActivityCard activity={activity} />);
+      const cell = container.querySelector('[data-heatmap-cell="2026-09-17"]')!;
+      expect(container.querySelector("[data-heatmap-tooltip]")).toBeNull();
+
+      // React derives onPointerEnter from the over event, so that is the one to fire.
+      fireEvent.pointerOver(cell, { pointerType: "mouse" });
+      const tip = container.querySelector("[data-heatmap-tooltip]");
+      expect(tip?.textContent).toMatch(/Sep 17: 2 notes, 1 call$/);
+      // The same words are in the hidden list.
+      expect(
+        screen.getAllByText(/Sep 17: 2 notes, 1 call$/).length,
+      ).toBeGreaterThanOrEqual(2);
+
+      fireEvent.pointerOut(container.querySelector('svg[role="img"]')!, {
+        pointerType: "mouse",
+        relatedTarget: document.body,
+      });
+      expect(container.querySelector("[data-heatmap-tooltip]")).toBeNull();
+    });
+
+    it("toggles the tooltip with a tap, and a second tap on the same square hides it", () => {
+      const { container } = render(<ActivityCard activity={activity} />);
+      const cell = container.querySelector('[data-heatmap-cell="2026-09-17"]')!;
+      fireEvent.pointerDown(cell, { pointerType: "touch" });
+      expect(container.querySelector("[data-heatmap-tooltip]")).not.toBeNull();
+      fireEvent.pointerDown(cell, { pointerType: "touch" });
+      expect(container.querySelector("[data-heatmap-tooltip]")).toBeNull();
+      // A tap elsewhere hides it too.
+      fireEvent.pointerDown(cell, { pointerType: "touch" });
+      fireEvent.pointerDown(document.body, { pointerType: "touch" });
+      expect(container.querySelector("[data-heatmap-tooltip]")).toBeNull();
+    });
+
+    it("draws the sparkline at its measured width, and says the four weeks and this week", () => {
+      const rect = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockReturnValue({
+          width: 300,
+          height: 40,
+          top: 0,
+          left: 0,
+          right: 300,
+          bottom: 40,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect);
+      const { container } = render(<ActivityCard activity={activity} />);
+      const spark = container.querySelector("svg[data-sparkline]");
+      expect(spark?.getAttribute("viewBox")).toBe("0 0 300 40");
+      expect(spark?.getAttribute("width")).toBe("300");
+      expect(spark?.hasAttribute("preserveAspectRatio")).toBe(false);
+      expect(spark?.querySelector("circle")).not.toBeNull();
+      // 9+10+11+12 = 42 against 5+6+7+8 = 26: +62%.
+      expect(screen.getByText("42")).toBeDefined();
+      expect(screen.getByText(/in the last four weeks/)).toBeDefined();
+      expect(screen.getByText("+62% on the four before")).toBeDefined();
+      expect(screen.getByText("This week: 8 notes, 4 calls")).toBeDefined();
+      rect.mockRestore();
+    });
   });
 
   describe("KeepingUpCard", () => {
@@ -1112,7 +1454,7 @@ describe("frontend.pulse", () => {
       ],
     };
 
-    it("names the bar, links the legend to the groups, and says the two lines", () => {
+    it("names the bar, links the legend to the groups, and says the number", () => {
       render(
         <MemoryRouter>
           <KeepingUpCard tracking={tracking} />
@@ -1138,10 +1480,28 @@ describe("frontend.pulse", () => {
       expect(
         screen.queryByRole("link", { name: /No interactions yet/ }),
       ).toBeNull();
+      expect(screen.getByText("31")).toBeDefined();
+      expect(screen.getByText("of 42 within cadence")).toBeDefined();
       expect(
-        screen.getByText("31 of 42 within cadence, 11 to catch up"),
+        screen.getByRole("button", { name: "11 to catch up" }),
       ).toBeDefined();
-      expect(screen.getByText("5 tracked in the last 30 days")).toBeDefined();
+      expect(screen.queryByText(/in the last 30 days/)).toBeNull();
+    });
+
+    it("hides Rising and Cooling before four snapshot weeks, and the catch-up button at zero", () => {
+      render(
+        <MemoryRouter>
+          <KeepingUpCard
+            tracking={{ ...tracking, snapshotWeeks: 3, catchUpCount: 0 }}
+          />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
+      expect(screen.queryByText(/four weeks/)).toBeNull();
+      expect(screen.queryByRole("button", { name: /to catch up/ })).toBeNull();
+      // Everybody is within cadence: the figure is the count.
+      expect(document.querySelector(".font-headline")?.textContent).toBe("42");
+      expect(screen.getByText("of 42 within cadence")).toBeDefined();
     });
 
     it("shows rising and cooling rows with their deltas, and rings that draw an arc", () => {
@@ -1233,11 +1593,29 @@ describe("frontend.pulse", () => {
 
     expect(screen.getByText("Composition")).toBeDefined();
     expect(screen.getByText("Technology")).toBeDefined();
-    expect(screen.getByText("(15)")).toBeDefined();
+    expect(screen.getByText("15")).toBeDefined();
 
-    // Verify filterPill links have correct query target
-    const techLink = screen.getByRole("link", { name: /Technology/i });
+    // The legend is a list of links to the filtered list, "Technology 15".
+    const techLink = screen.getByRole("link", { name: "Technology 15" });
     expect(techLink.getAttribute("href")).toBe("/?q=industry:Technology");
+    expect(techLink.closest("ul")).not.toBeNull();
+    // One hue: every slice is the primary at a step of opacity.
+    const slices = Array.from(
+      document.querySelectorAll('svg[role="img"] circle'),
+    ).slice(1);
+    expect(slices.map((c) => c.getAttribute("stroke"))).toEqual([
+      "var(--color-primary)",
+      "var(--color-primary)",
+      "var(--color-primary)",
+    ]);
+    expect(slices.map((c) => c.getAttribute("stroke-opacity"))).toEqual([
+      "1",
+      "0.82",
+      "0.64",
+    ]);
+    expect(
+      document.querySelector('svg[role="img"]')?.getAttribute("width"),
+    ).toBe("96");
 
     // Switch Segmented control to Role
     const roleRadio = screen.getByRole("radio", { name: "Role" });
@@ -1270,20 +1648,32 @@ describe("frontend.pulse", () => {
         />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Review 3 possible duplicates/i)).toBeDefined();
-    expect(screen.getByText(/2 contacts have stale data/i)).toBeDefined();
-    expect(screen.getByText(/4 without a company/i)).toBeDefined();
-    expect(screen.getByText(/2 without a location/i)).toBeDefined();
-    expect(screen.getByText(/1 without an email/i)).toBeDefined();
+    const rows = [
+      ["Review 3 possible duplicates", "/pulse/duplicates"],
+      ["2 contacts have stale data", "/?q=updated:>6m"],
+      ["4 without a company", "/?q=missing:company"],
+      ["2 without a location", "/?q=missing:location"],
+      ["1 without an email", "/?q=missing:email"],
+      ["5 people you talk to are not contacts", "/settings/connectors/people"],
+    ] as const;
+    for (const [name, href] of rows) {
+      expect(screen.getByRole("link", { name }).getAttribute("href")).toBe(
+        href,
+      );
+    }
+    // No New people row without the prop, and the rows have no border.
+    expect(screen.queryByText(/new this month/)).toBeNull();
     expect(
-      screen.getByText(/5 people you talk to are not contacts/i),
-    ).toBeDefined();
+      screen.getByRole("link", { name: "4 without a company" }).className,
+    ).not.toMatch(/border-outline/);
 
-    const ghostBtn = screen.getByText(
-      /1 person is mentioned but not in your network/i,
-    );
+    const ghostBtn = screen.getByRole("button", {
+      name: "1 person is mentioned but not in your network",
+    });
+    expect(ghostBtn.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(ghostBtn);
-    expect(screen.getByText("Ghost One")).toBeDefined();
+    expect(ghostBtn.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("link", { name: "Ghost One" })).toBeDefined();
   });
 
   it("toggles customize mode from the More menu and the C key, and shows no tray with nothing hidden", () => {
@@ -1375,8 +1765,8 @@ describe("frontend.pulse", () => {
         hidden: [],
         order: expect.objectContaining({
           focus: ["up-next", "completed"],
-          network: ["keeping-up", "activity", "composition"],
-          intel: ["insight", "inbox", "coming-up", "new-people"],
+          network: ["keeping-up", "activity"],
+          intel: ["insight", "inbox", "coming-up", "composition"],
         }),
       }),
     );
@@ -1422,7 +1812,7 @@ describe("frontend.pulse", () => {
     // Enter customize mode
     openCustomize();
 
-    // Move Activity up (the network column is keeping-up, activity, composition)
+    // Move Activity up (the network column is keeping-up, activity)
     const moveUpBtn = screen.getByRole("button", { name: "Move Activity up" });
     fireEvent.click(moveUpBtn);
 
@@ -1430,7 +1820,7 @@ describe("frontend.pulse", () => {
       "pulseLayout",
       expect.objectContaining({
         order: expect.objectContaining({
-          network: ["activity", "keeping-up", "composition"],
+          network: ["activity", "keeping-up"],
         }),
       }),
     );

@@ -1,13 +1,15 @@
 /**
  * Pulse Office — Playwright e2e spec.
  *
- * Walks the Pulse view, the masthead, Up next keyboard navigation (J/K/D,
- * the arrows and Enter on a focused row), the Enter guard on other controls,
+ * Walks the Pulse view, the masthead and its Ask form, Up next keyboard
+ * navigation (J/K/D, the arrows and Enter on a focused row), the Enter guard
+ * on other controls, the Inbox, Keeping up, Activity and Composition cards,
  * duplicate queue redirection, customize mode, the phone, and accessibility.
  */
 import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
+import { answerPeopleSearch, personMatch } from "./fixtures/search";
 import type { ContrackInstance } from "./fixtures/instance";
 import type { Page } from "@playwright/test";
 
@@ -464,6 +466,192 @@ test.describe("Pulse Office", () => {
     expect(inputValue).toBe("industry:Technology");
   });
 
+  test("the Inbox's New people row counts the untracked people added this month and lands on the list at tracked:no", async ({
+    page,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    const linus = seed.byName("Linus Torvalds");
+    const margaret = seed.byName("Margaret Hamilton");
+
+    await page.goto("/pulse");
+    const inbox = page.locator('[data-card-id="inbox"]');
+    // Six seeded people this month, two of them untracked. Other specs in
+    // the worker add and remove people, so the words are checked by shape.
+    const row = inbox.getByRole("link", {
+      name: /^\d+ new this month, \d+ untracked$/,
+    });
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute("href", "/?q=tracked:no");
+    // The tracking action is the first row.
+    await expect(inbox.getByRole("link").first()).toHaveAttribute(
+      "href",
+      "/?q=tracked:no",
+    );
+
+    await row.click();
+    await expect(page).toHaveURL(/\/\?q=tracked:no/);
+    const searchInput = page.getByRole("textbox", { name: /search/i });
+    await expect(searchInput).toHaveValue("tracked:no");
+    // The list is the untracked people and none of the tracked.
+    await expect(page.locator(`#contact-row-${linus.id}`)).toBeVisible();
+    await expect(page.locator(`#contact-row-${margaret.id}`)).toBeVisible();
+    await expect(page.locator(`#contact-row-${ada.id}`)).toHaveCount(0);
+  });
+
+  test("the Ask form under the masthead sends the question to /search, and the insight is one line with the next step", async ({
+    page,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    await answerPeopleSearch(page, [
+      personMatch(ada, { company: "Babbage & Co" }),
+    ]);
+
+    await page.goto("/pulse");
+    const masthead = page.getByLabel("Today summary");
+    const form = masthead.getByRole("search", {
+      name: "Ask about your network",
+    });
+    await expect(form).toBeVisible();
+    // Under the sentence: the form starts below the date line.
+    const dateBottom = await masthead
+      .locator("p")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().bottom);
+    const formTop = await form.evaluate((el) => el.getBoundingClientRect().top);
+    expect(formTop).toBeGreaterThan(dateBottom);
+
+    // The instance has no AI key, so the insight is a line that names the
+    // next step by role, on the page surface and not in a card.
+    const insight = page.locator('[data-card-id="insight"]');
+    await expect(insight).toHaveText(
+      /Add an AI key to get one\.|Your admin has not added an AI key yet\./,
+    );
+    const insightSurface = await insight.evaluate((el) => el.className);
+    expect(insightSurface).not.toContain("bg-surface-container-lowest");
+
+    const ask = form.getByRole("button", { name: "Ask" });
+    await expect(ask).toBeDisabled();
+    const input = form.getByRole("searchbox", {
+      name: "Ask about your network",
+    });
+    await input.fill("wh");
+    await expect(ask).toBeDisabled();
+    await input.fill("who works in London");
+    await expect(ask).toBeEnabled();
+    await ask.click();
+
+    await expect(page).toHaveURL(/\/search/);
+    await expect(
+      page.getByRole("textbox", { name: "Ask anything about your network" }),
+    ).toHaveValue("who works in London");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  });
+
+  test("the heatmap fills the Activity card with month labels and a tooltip on hover, and the sparkline draws at its width", async ({
+    page,
+  }) => {
+    await page.goto("/pulse");
+    const activity = page.locator('[data-card-id="activity"]');
+    await expect(activity).toBeVisible();
+
+    // The squares scale to the card: the SVG is as wide as its box.
+    const heatmap = activity.locator('svg[role="img"]');
+    const widths = await heatmap.evaluate((el) => ({
+      svg: el.getBoundingClientRect().width,
+      box: (el.parentElement as HTMLElement).getBoundingClientRect().width,
+      scroller: (el.closest(".overflow-x-auto") as HTMLElement).clientWidth,
+    }));
+    expect(widths.svg).toBeGreaterThan(widths.scroller * 0.85);
+    expect(widths.svg).toBeLessThanOrEqual(widths.box + 1);
+    // Twelve weeks: two or three month names, and M, W, F at the left.
+    const months = activity.locator("[data-heatmap-months] span");
+    expect(await months.count()).toBeGreaterThanOrEqual(2);
+    await expect(months.first()).toHaveText(/^[A-Z][a-z]{2}$/);
+    const letters = await activity
+      .locator("[data-heatmap-weekdays] span")
+      .allTextContents();
+    expect(letters.filter(Boolean)).toEqual(["M", "W", "F"]);
+    // The letters are text at the page's size, not squares of the SVG.
+    const letterSize = await activity
+      .locator("[data-heatmap-weekdays]")
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(letterSize).toBe(12);
+    // No native title on a square, one tooltip on hover.
+    await expect(heatmap.locator("title")).toHaveCount(0);
+    const tooltip = activity.locator("[data-heatmap-tooltip]");
+    await expect(tooltip).toHaveCount(0);
+    await heatmap.locator("[data-heatmap-cell]").nth(60).hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(
+      /^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}: (No interactions|\d+ )/,
+    );
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toHaveCount(0);
+
+    // The sparkline is drawn at the width it is shown at, so the stroke is
+    // even: no preserveAspectRatio and a viewBox as wide as the SVG.
+    const spark = activity.locator("svg[data-sparkline]");
+    await expect(spark).toHaveCount(1);
+    const sparkFacts = await spark.evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      viewBox: el.getAttribute("viewBox"),
+      preserve: el.getAttribute("preserveAspectRatio"),
+    }));
+    expect(sparkFacts.preserve).toBeNull();
+    expect(sparkFacts.viewBox).toBe(`0 0 ${Math.round(sparkFacts.width)} 40`);
+    await expect(activity.getByText(/in the last four weeks/)).toBeVisible();
+    await expect(activity.getByText(/^This week: /)).toBeVisible();
+    await expect(activity.getByText(/best \d+/)).toHaveCount(0);
+  });
+
+  test("Composition is the last card, 96 px in one hue, with a text legend", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    // The seed sets no industry. Two of them give the donut two slices.
+    await instance.api("PATCH", `/contacts/${seed.byName("Ada Lovelace").id}`, {
+      industry: "Technology",
+    });
+    await instance.api("PATCH", `/contacts/${seed.byName("Grace Hopper").id}`, {
+      industry: "Defence",
+    });
+
+    await page.goto("/pulse");
+    const composition = page.locator('[data-card-id="composition"]');
+    await expect(composition).toBeVisible();
+
+    // Last in the Intelligence column at 1280 and above.
+    const intelIds = await page
+      .locator('[data-card-id="insight"]')
+      .evaluate((el) =>
+        Array.from(
+          el.parentElement!.parentElement!.querySelectorAll("[data-card-id]"),
+        ).map((card) => card.getAttribute("data-card-id")),
+      );
+    expect(intelIds[intelIds.length - 1]).toBe("composition");
+
+    const donut = composition.locator('svg[role="img"]');
+    await expect(donut).toHaveAttribute("width", "96");
+    const strokes = await donut
+      .locator("circle")
+      .evaluateAll((circles) =>
+        circles.slice(1).map((c) => c.getAttribute("stroke")),
+      );
+    expect(strokes.length).toBeGreaterThan(0);
+    for (const stroke of strokes) {
+      expect(stroke).toMatch(
+        /^var\(--color-(primary|surface-container-highest)\)$/,
+      );
+    }
+    // The legend is a list of links with the count at the right.
+    const legend = composition.locator("ul");
+    await expect(legend).toBeVisible();
+    expect(await legend.getByRole("link").count()).toBeGreaterThan(0);
+  });
+
   test("renders office on phone viewport and verifies heatmap horizontal scroller", async ({
     page,
   }) => {
@@ -558,7 +746,9 @@ test.describe("Pulse Office", () => {
     await expect(upNext.getByText("Check in with Linus Torvalds")).toBeHidden();
     await expect(page.getByText("Slipping")).toBeHidden();
 
-    // The Keeping up card: the bar, the line, the four-week line, Manage.
+    // The Keeping up card: the 10 px bar, the legend, the large number and
+    // the door to the Catch up group, and nothing about four weeks or
+    // thirty days.
     const card = page.locator('[data-card-id="keeping-up"]');
     await expect(
       card.getByRole("heading", { name: "Keeping up" }),
@@ -566,15 +756,16 @@ test.describe("Pulse Office", () => {
     await expect(card.getByRole("img")).toHaveAccessibleName(
       /^4 tracked: \d+ strong, \d+ fading, \d+ at risk, \d+ with no interactions yet$/,
     );
-    await expect(
-      card.getByText(/^\d of 4 within cadence, 1 to catch up$/),
-    ).toBeVisible();
-    await expect(
-      card.getByText("Rising and cooling show after four weeks of tracking."),
-    ).toBeVisible();
-    await expect(card.getByText("4 tracked in the last 30 days")).toBeVisible();
+    await expect(card.getByRole("img")).toHaveCSS("height", "10px");
+    await expect(card.getByText(/^of 4 within cadence$/)).toBeVisible();
+    await expect(card.getByText(/four weeks/)).toHaveCount(0);
+    await expect(card.getByText(/in the last 30 days/)).toHaveCount(0);
     const manage = card.getByRole("link", { name: "Manage" });
     await expect(manage).toHaveAttribute("href", "/tracked");
+
+    // "1 to catch up" scrolls the queue to its Catch up heading.
+    await card.getByRole("button", { name: "1 to catch up" }).click();
+    await expect(page.locator("#up-next-catch-up")).toBeInViewport();
 
     // A legend link lands on its group on the Tracked contacts page.
     await card.getByRole("link", { name: /At risk$/ }).click();
@@ -632,13 +823,9 @@ test.describe("Pulse Office", () => {
         .evaluateAll((cards) =>
           cards
             .map((c) => c.getAttribute("data-card-id"))
-            .filter((id) =>
-              ["keeping-up", "activity", "composition"].includes(id ?? ""),
-            ),
+            .filter((id) => ["keeping-up", "activity"].includes(id ?? "")),
         );
-    await expect
-      .poll(networkOrder)
-      .toEqual(["activity", "keeping-up", "composition"]);
+    await expect.poll(networkOrder).toEqual(["activity", "keeping-up"]);
 
     // Put it back, then Done
     await page.getByRole("button", { name: "Reset layout" }).click();
@@ -840,5 +1027,90 @@ test.describe("Pulse on a phone", () => {
     // A tap on the row opens the contact.
     await followUp.getByText("Phone tap item").tap();
     await expect(page).toHaveURL(new RegExp(`/contact/${ada.id}$`));
+  });
+
+  test("no Ask form, a tap shows a heatmap tooltip and a second tap hides it, the New people row is 44 px, the legend wraps, and the cards come in order", async ({
+    page,
+    seed,
+  }) => {
+    void seed;
+    await page.goto("/pulse");
+    await expect(page.locator('[data-card-id="up-next"]')).toBeVisible();
+
+    // The phone has Ask Contrack in the tab bar, so no form here.
+    await expect(
+      page.getByRole("search", { name: "Ask about your network" }),
+    ).toHaveCount(0);
+
+    // The one-column order: Focus, Network, Intelligence.
+    const order = await page.evaluate(() =>
+      Array.from(document.querySelectorAll(".grid [data-card-id]"))
+        .map((el) => ({
+          id: el.getAttribute("data-card-id"),
+          top: el.getBoundingClientRect().top,
+        }))
+        .sort((a, b) => a.top - b.top)
+        .map((c) => c.id),
+    );
+    expect(order).toEqual([
+      "up-next",
+      "completed",
+      "keeping-up",
+      "activity",
+      "insight",
+      "inbox",
+      "coming-up",
+      "composition",
+    ]);
+
+    // The New people row is a 44 px target.
+    const inbox = page.locator('[data-card-id="inbox"]');
+    const row = inbox.getByRole("link", {
+      name: /^\d+ new this month, \d+ untracked$/,
+    });
+    await expect(row).toBeVisible();
+    const rowBox = await row.boundingBox();
+    expect(rowBox!.height).toBeGreaterThanOrEqual(44);
+
+    // A tap on a square shows its words. A second tap on it hides them.
+    const activity = page.locator('[data-card-id="activity"]');
+    await activity.scrollIntoViewIfNeeded();
+    const cell = activity.locator("[data-heatmap-cell]").nth(60);
+    const tooltip = activity.locator("[data-heatmap-tooltip]");
+    await cell.tap();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(/: (No interactions|\d+ )/);
+    await cell.tap();
+    await expect(tooltip).toHaveCount(0);
+    // The scroller never scrolls: the squares fit the card.
+    const scroller = activity.locator(".overflow-x-auto");
+    expect(
+      await scroller.evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(0);
+
+    // The Composition legend wraps with no sideways scroll.
+    const composition = page.locator('[data-card-id="composition"]');
+    await composition.scrollIntoViewIfNeeded();
+    expect(
+      await composition.evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    const page_ = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(page_.scrollWidth).toBe(page_.innerWidth);
+
+    // The lines wrap and never truncate.
+    for (const id of ["completed", "coming-up", "insight"]) {
+      const line = page.locator(`[data-card-id="${id}"]`);
+      const clipped = await line.evaluate((el) =>
+        Array.from(el.querySelectorAll("*")).some(
+          (node) =>
+            getComputedStyle(node).textOverflow === "ellipsis" &&
+            node.scrollWidth > node.clientWidth + 1,
+        ),
+      );
+      expect(clipped, `${id} truncates`).toBe(false);
+    }
   });
 });
