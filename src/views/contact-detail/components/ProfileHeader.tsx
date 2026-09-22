@@ -28,7 +28,7 @@
  *    delete sit in the kebab. A note starts in the composer under the tabs,
  *    which is the first thing in the Timeline column, so a button for it
  *    here said the same thing twice. Track is the one control beside the
- *    kebab, with the cadence chip while the contact is tracked.
+ *    kebab, and it carries the cadence caret while the contact is tracked.
  * 5. The narrow header keeps to about 140 px. The headline, the summary and
  *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
  *    the weather stays off.
@@ -74,7 +74,6 @@ import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactTags } from "./ContactTags";
 import { TrackButton } from "./TrackButton";
-import { CadenceMenu } from "./CadenceMenu";
 import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
 
@@ -673,15 +672,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   </button>
                 )}
 
-                {/* Track, then the cadence while tracked. A ghost cannot be
-                    tracked: it shows Promote to contact instead. */}
+                {/* Track, with the cadence caret inside it while tracked. A
+                    ghost cannot be tracked: it shows Promote to contact. */}
                 {!contact.isGhost && (
-                  <>
-                    <TrackButton contact={contact} compact={narrow} />
-                    {contact.isTracked && (
-                      <CadenceMenu contact={contact} compact={narrow} />
-                    )}
-                  </>
+                  <TrackButton contact={contact} compact={narrow} />
                 )}
 
                 <ContactActionsMenu

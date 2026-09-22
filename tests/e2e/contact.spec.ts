@@ -475,7 +475,7 @@ test.describe("tracking", () => {
   const toastWith = (page: Page, text: string) =>
     page.locator("[data-sonner-toast]", { hasText: text });
 
-  test("the header button tracks with an Undo, the ring follows, and the cadence chip changes the cadence", async ({
+  test("the header button tracks with an Undo, the ring follows, and the caret changes the cadence", async ({
     page,
     instance,
   }) => {
@@ -485,6 +485,8 @@ test.describe("tracking", () => {
 
     const track = page.getByRole("button", { name: "Track", exact: true });
     await expect(track).toHaveAttribute("aria-pressed", "false");
+    // Where the word sits before the press. Tracking must not move it.
+    const boxBefore = await track.boundingBox();
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
       "data-score-band",
       "untracked",
@@ -508,10 +510,25 @@ test.describe("tracking", () => {
       }),
     ).toBeVisible();
 
-    // The cadence chip, and its menu.
-    const chip = page.getByRole("button", { name: "Cadence: every 3 months" });
-    await expect(chip).toHaveText(/Every 3 months/);
-    await chip.click();
+    /*
+      The word has not moved.
+
+      The cluster in the header is right-aligned, so a control that grows
+      pushes its own label leftward. The caret's slot is held open while
+      untracked and the label is sized to the longer word, which makes both
+      states the same width, so the left edge stays put to the pixel. This is
+      the assertion the shape exists for.
+    */
+    const boxAfter = await tracked.boundingBox();
+    expect(boxBefore).not.toBeNull();
+    expect(boxAfter).not.toBeNull();
+    expect(Math.round(boxAfter!.x)).toBe(Math.round(boxBefore!.x));
+    expect(Math.round(boxAfter!.width)).toBe(Math.round(boxBefore!.width));
+
+    // The caret, which carries no words of its own, and its menu.
+    const caret = page.getByRole("button", { name: "Cadence: every 3 months" });
+    await expect(caret).toHaveText("");
+    await caret.click();
     const menu = page.getByRole("menu", { name: "Cadence: every 3 months" });
     await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
       "Every month",
@@ -962,7 +979,7 @@ test.describe("phone", () => {
     }
   });
 
-  test("the narrow header keeps Track as the glyph alone, with the short cadence", async ({
+  test("the narrow header keeps Track as the glyph alone, with the wordless caret", async ({
     page,
     seed,
   }) => {
@@ -973,9 +990,10 @@ test.describe("phone", () => {
     await expect(tracked).toHaveAttribute("aria-pressed", "true");
     await expect(tracked).toHaveText("");
     await expect(tracked).toHaveAttribute("title", "Tracked");
+    // The caret carries the cadence in its name, not in words on screen.
     await expect(
       page.getByRole("button", { name: "Cadence: every 3 months" }),
-    ).toHaveText(/3 mo/);
+    ).toHaveText("");
   });
 
   test("the browser's Back button returns focus to the row too", async ({

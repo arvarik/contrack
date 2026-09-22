@@ -601,11 +601,19 @@ Rules that follow from it:
   "Contact actions" menu gets no Track item, and no other surface grows a
   second control for the flag: the `t` key, the palette row and the page
   toggle all run the same `useTrackToggle`, with the same toast and Undo.
-- **The cadence chip.** Shown only while tracked, beside the button: a
-  quiet `rounded-full` chip that reads the cadence in words ("Every 3
-  months", or "3 mo" narrow) and opens an `ActionMenu` headed "Keep up"
-  with the five `CADENCE_CHOICES` checked. A value off the list shows as a
-  sixth checked item, so the menu never lies.
+- **The cadence caret.** Shown only while tracked, as the right end of the
+  Track button itself: a caret segment inside the same rounded shell, with
+  a hairline between it and the word. It carries no words, so its
+  accessible name and its tooltip say what it adjusts and what the cadence
+  is now ("Cadence: every 3 months"). It opens an `ActionMenu` headed "Keep
+  up" with the five `CADENCE_CHOICES` checked, and a value off the list
+  shows as a sixth checked item, so the menu never lies.
+- **A control on a right-aligned row does not move its own label.** The
+  header cluster is right-aligned, so a control that grows when it is
+  pressed drags its label out from under the pointer. `TrackButton` holds
+  the caret's slot open while untracked and sizes the label to the longer
+  of its two words, so both states are the same width and the word stays
+  put. Any control that gains a part on press owes the reader the same.
 - **The words.** Track, Tracked, Untrack, Not tracked, Keeping up, Catch
   up, cadence. The band words, Strong, Fading and At risk, keep their own
   meaning and are never used for the flag.

@@ -2,11 +2,19 @@
 // =============================================================================
 // The Track button, the toggle behind it, and the `t` key
 // =============================================================================
-// One control says whether a person keeps up with a contact. It is a toggle
-// button with `aria-pressed` and one word, Track or Tracked. Pressing it
-// writes the flag, toasts with an Undo, and the Undo puts the contact back
-// as it was, cadence included. The `t` key on the contact page does the same
-// through the same hook, so the words and the Undo are tested once here.
+// One control says whether a person keeps up with a contact, and how often.
+// It is a toggle button with `aria-pressed` and one word, Track or Tracked,
+// with a caret at its right end while tracked that opens the cadence menu.
+// Pressing the word writes the flag, toasts with an Undo, and the Undo puts
+// the contact back as it was, cadence included. The `t` key on the contact
+// page does the same through the same hook, so the words and the Undo are
+// tested once here.
+//
+// The word must not move when the state changes. The header cluster is
+// right-aligned, so the control has to be the same width in both states: the
+// caret's slot is held open while untracked, and the label is sized to the
+// longer word. Both are checked here, and measured for real in
+// tests/e2e/contact.spec.ts.
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -123,6 +131,56 @@ describe("TrackButton", () => {
     mount(<TrackButton contact={{ ...ADA, isTracked: true }} />);
     const on = screen.getByRole("button", { name: "Tracked" });
     expect(on.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows the caret only while tracked, and holds its place while not", () => {
+    const { unmount } = mount(<TrackButton contact={ADA} />);
+    // Untracked: the word, and no second control.
+    expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+
+    // The caret's place is held open, hidden, so the word cannot move when
+    // the caret arrives.
+    const shell = screen.getByRole("button", { name: "Track" })
+      .parentElement as HTMLElement;
+    const slot = shell.lastElementChild as HTMLElement;
+    expect(slot.tagName).toBe("SPAN");
+    expect(slot.getAttribute("aria-hidden")).toBe("true");
+    expect(slot.className).toContain("invisible");
+    expect(slot.className).toContain("w-9");
+    unmount();
+    cleanup();
+
+    mount(<TrackButton contact={{ ...ADA, isTracked: true }} />);
+    const caret = screen.getByRole("button", {
+      name: "Cadence: every 2 months",
+    });
+    expect(caret.textContent).toBe("");
+    // The caret takes the width the empty slot was holding.
+    expect(caret.className).toContain("w-9");
+    // One shell holds the word and the caret, in that order.
+    const tracked = screen.getByRole("button", { name: "Tracked" });
+    const shellOn = tracked.parentElement as HTMLElement;
+    expect(shellOn.contains(caret)).toBe(true);
+    expect(
+      tracked.compareDocumentPosition(caret) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("sizes the label to the longer word, so the shorter one cannot shift", () => {
+    // "Track" is drawn over an invisible "Tracked": the text box is the same
+    // width whichever word it is.
+    const { unmount } = mount(<TrackButton contact={ADA} />);
+    expect(screen.getByRole("button", { name: "Track" }).textContent).toBe(
+      "TrackedTrack",
+    );
+    unmount();
+    cleanup();
+
+    mount(<TrackButton contact={{ ...ADA, isTracked: true }} />);
+    expect(screen.getByRole("button", { name: "Tracked" }).textContent).toBe(
+      "TrackedTracked",
+    );
   });
 
   it("keeps the word in the name and the tooltip when compact", () => {
