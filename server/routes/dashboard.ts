@@ -32,18 +32,6 @@ router.get(
 );
 
 router.get(
-  "/dashboard/momentum",
-  asyncHandler(async (req, res) => {
-    const rid = req.requestId;
-
-    const payload = dashboardService.getMomentum(scopeOf(req));
-    log.debug("API", `[${rid}] GET /api/dashboard/momentum`);
-
-    res.json(payload);
-  }),
-);
-
-router.get(
   "/dashboard/insight",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
@@ -79,7 +67,7 @@ router.get(
  * GET /api/command-palette/zero-state
  *
  * Returns deterministic CRM intelligence signals for the Cmd+K zero-state:
- * action items due, at-risk contacts, ghost alerts. Pure SQLite — sub-10ms.
+ * action items due, catch-ups, ghost alerts. Pure SQLite — sub-10ms.
  */
 router.get(
   "/command-palette/zero-state",

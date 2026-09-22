@@ -72,7 +72,7 @@ import { InboxCard } from "./cards/InboxCard";
 import { ComingUpCard } from "./cards/ComingUpCard";
 import { NewPeopleCard } from "./cards/NewPeopleCard";
 import { ActivityCard } from "./cards/ActivityCard";
-import { MomentumCard } from "./cards/MomentumCard";
+import { KeepingUpCard } from "./cards/KeepingUpCard";
 import { CompositionCard } from "./cards/CompositionCard";
 
 const DuplicatesPage = React.lazy(() =>
@@ -388,7 +388,8 @@ const PulseOffice = () => {
       dueToday: dashboard.dueToday,
       upcoming: dashboard.upcoming,
       birthdays: upcomingBirthdays,
-      slipping: dashboard.atRisk,
+      catchUp: dashboard.catchUp,
+      catchUpCount: dashboard.tracking.catchUpCount,
       contactScores,
     });
   }, [dashboard, upcomingBirthdays, contactScores]);
@@ -522,8 +523,8 @@ const PulseOffice = () => {
         return <CompletedCard />;
       case "activity":
         return <ActivityCard activity={activity} />;
-      case "momentum":
-        return <MomentumCard />;
+      case "keeping-up":
+        return <KeepingUpCard tracking={dashboard?.tracking} />;
       case "composition":
         return <CompositionCard dashboard={dashboard} />;
       case "insight":
@@ -716,7 +717,7 @@ const PulseOffice = () => {
                 }
               />
 
-              {/* Column 3: Network (Activity, Momentum, Composition) */}
+              {/* Column 3: Network (Keeping up, Activity, Composition) */}
               <DroppableColumn
                 id="network"
                 cards={resolvedLayout.visible.network}

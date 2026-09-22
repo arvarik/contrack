@@ -33,7 +33,7 @@ All tools translate internal application errors into JSON-RPC error responses wi
 | `get_timeline`      | Retrieve interactions and activity history for a contact.                                                                                                           | `contactId` (UUID), `limit` (optional, 1–50)                                                                                                                                                     |
 | `search_notes`      | Full-text search across interaction notes and logged activity.                                                                                                      | `query` (string), `contactId` (optional UUID), `limit` (optional, 1–50)                                                                                                                          |
 | `list_action_items` | List pending follow-ups filtered by urgency.                                                                                                                        | `contactId` (optional UUID), `due` (optional: overdue, today, week, all)                                                                                                                         |
-| `get_pulse`         | Dashboard metrics: active contacts, at-risk count, and follow-ups.                                                                                                  | None                                                                                                                                                                                             |
+| `get_pulse`         | Dashboard metrics: active contacts, the tracked contacts and their bands, the catch-ups past their cadence, and follow-ups.                                         | None                                                                                                                                                                                             |
 | `list_tags`         | List all tags and contact counts across your network.                                                                                                               | None                                                                                                                                                                                             |
 | `list_lists`        | List all contact lists and member counts.                                                                                                                           | None                                                                                                                                                                                             |
 
@@ -64,7 +64,7 @@ The server exposes read-only MCP resources formatted as JSON text:
 Predefined prompt workflows help AI clients generate structured CRM reviews:
 
 - `catch_me_up`: Prepares a briefing on a specific contact (`contactId`), inlining their profile details and the last 20 timeline interactions.
-- `weekly_review`: Gathers overdue action items, items due this week, and slipping relationships to produce a prioritized weekly CRM agenda.
+- `weekly_review`: Gathers overdue action items, items due this week, the tracked contacts and their bands, and the catch-ups past their cadence to produce a prioritized weekly CRM agenda.
 
 ---
 

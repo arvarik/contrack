@@ -82,7 +82,7 @@ export const ActionRow = memo(
           isCompleting && "opacity-50 scale-[0.98]",
         )}
       >
-        {/* Check button (for real action items) OR Log button (for birthday/slipping) */}
+        {/* Check button (for real action items) OR Log button (for a birthday or a catch-up) */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -143,9 +143,11 @@ export const ActionRow = memo(
           />
         </div>
 
-        {/* Main details */}
+        {/* Main details. The name and the chip wrap, because a catch-up's
+            chip ("10 months past due") is wider than a due date's and used
+            to squeeze the name to one letter in a narrow column. */}
         <div className="flex flex-col flex-1 min-w-0 pr-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {/*
               A 16 px text link with a 44 px tap box. The clip for a long
               name sits on an inner span so the box is not cut away with it.

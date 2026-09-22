@@ -1417,10 +1417,52 @@ curl -X DELETE http://localhost:3210/api/action-items/ai123
 
 ### `GET /api/dashboard`
 
-Fetch the metrics for the Pulse page. Returns action items, ghosts, network metrics, at-risk contacts, recently added contacts, composition breakdowns, 30-day timelines, data hygiene counts (`missingCompany`, `missingLocation`, `missingEmail`, `stale`), upcoming meetings for the next 7 days, and correspondent count.
+Fetch the metrics for the Pulse page. Returns action items (`overdue`, `dueToday`, `upcoming`), ghosts, `metrics` (`totalActive`, `newContacts30d`), the catch-ups, the tracking summary, recently added contacts, composition breakdowns, 30-day timelines, data hygiene counts (`missingCompany`, `missingLocation`, `missingEmail`, `stale`), upcoming meetings for the next 7 days, and correspondent count.
 
 ```bash
 curl http://localhost:3210/api/dashboard
+```
+
+**Tracking on the payload.** `catchUp` lists the tracked contacts past their cadence, the furthest past due first, ten at most. The clock is `lastContactedAt`, or `trackedAt` when nothing is logged. `tracking` is the state of the people the account tracks: `count`, `bands` with the same cuts the avatar ring draws, `catchUpCount` (the catch-up rule without the limit), `startedLast30d` (from `trackedAt`), `snapshotWeeks`, and `rising` and `cooling` (three each, the tracked contacts whose weekly score snapshot moved by three or more over four weeks, empty until four snapshot weeks exist). `GET /api/dashboard/momentum` used to carry rising and cooling and is gone.
+
+```json
+{
+  "catchUp": [
+    {
+      "id": "c2",
+      "name": "Bob Jones",
+      "company": null,
+      "avatarUrl": null,
+      "themeColor": "sky",
+      "relationshipScore": 65,
+      "lastContactedAt": "2026-08-20T10:00:00.000Z",
+      "cadenceDays": 14,
+      "daysSince": 25,
+      "overshootDays": 11
+    }
+  ],
+  "tracking": {
+    "count": 42,
+    "bands": { "strong": 30, "fading": 8, "atRisk": 4, "unscored": 0 },
+    "catchUpCount": 11,
+    "startedLast30d": 5,
+    "snapshotWeeks": 6,
+    "rising": [
+      {
+        "id": "c1",
+        "name": "Jane Smith",
+        "company": "Acme Corp",
+        "avatarUrl": null,
+        "themeColor": "emerald",
+        "relationshipScore": 82,
+        "lastContactedAt": "2026-09-10T10:00:00.000Z",
+        "score": 82,
+        "delta": 14
+      }
+    ],
+    "cooling": []
+  }
+}
 ```
 
 ---
@@ -1463,52 +1505,6 @@ curl http://localhost:3210/api/dashboard/activity
 
 ---
 
-### `GET /api/dashboard/momentum`
-
-Fetch relationship score momentum and cadence monitoring for the logged-in owner. Returns `snapshotWeeks` count, `rising` contacts (score delta >= +3 over 4 weeks), `cooling` contacts (score delta <= -3 over 4 weeks), and `silent` contacts (contacts with an active cadence overdue for contact, excluding contacts already flagged at risk).
-
-Rising and cooling require at least 4 recorded weekly snapshot weeks to evaluate.
-
-```bash
-curl http://localhost:3210/api/dashboard/momentum
-```
-
-**Response shape:**
-
-```json
-{
-  "snapshotWeeks": 6,
-  "rising": [
-    {
-      "id": "c1",
-      "name": "Jane Smith",
-      "company": "Acme Corp",
-      "avatarUrl": null,
-      "themeColor": "emerald",
-      "relationshipScore": 82,
-      "score": 82,
-      "delta": 14
-    }
-  ],
-  "cooling": [],
-  "silent": [
-    {
-      "id": "c2",
-      "name": "Bob Jones",
-      "company": null,
-      "avatarUrl": null,
-      "themeColor": "sky",
-      "relationshipScore": 65,
-      "cadenceDays": 14,
-      "daysSinceContact": 25,
-      "overshootDays": 11
-    }
-  ]
-}
-```
-
----
-
 ### `GET /api/dashboard/insight`
 
 Get AI-generated daily insight about your network.
@@ -1521,7 +1517,7 @@ curl http://localhost:3210/api/dashboard/insight
 
 ### `GET /api/command-palette/zero-state`
 
-CRM intelligence signals for the Command Palette zero-state (action items due, at-risk contacts, ghosts, stale data, dedupe suggestions).
+CRM intelligence signals for the Command Palette zero-state (action items due, the two tracked contacts furthest past their cadence, ghosts, stale data, dedupe suggestions).
 
 ```bash
 curl http://localhost:3210/api/command-palette/zero-state
@@ -1534,10 +1530,11 @@ curl http://localhost:3210/api/command-palette/zero-state
   "insights": [
     { "type": "action_items", "label": "3 action items due today", "count": 3 },
     {
-      "type": "at_risk",
-      "label": "Haven't contacted Sarah Chen in 45 days",
+      "type": "catch_up",
+      "label": "Sarah Chen, 2 weeks past due",
       "contact": { "id": "...", "name": "Sarah Chen" },
-      "daysSince": 45
+      "daysSince": 45,
+      "overshootDays": 15
     },
     {
       "type": "ghost",

@@ -71,8 +71,8 @@ export type PulseColumn = (typeof PULSE_COLUMNS)[number];
 export const PULSE_CARD_IDS = [
   "up-next",
   "completed",
+  "keeping-up",
   "activity",
-  "momentum",
   "composition",
   "insight",
   "inbox",

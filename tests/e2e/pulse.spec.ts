@@ -231,11 +231,11 @@ test.describe("Pulse Office", () => {
     await expect(scroller).toBeVisible();
   });
 
-  test("customize mode: hides Momentum, Done, reload keeps it hidden, Reset brings it back", async ({
+  test("customize mode: hides Keeping up, Done, reload keeps it hidden, Reset brings it back", async ({
     page,
   }) => {
     await page.goto("/pulse");
-    await expect(page.locator('[data-card-id="momentum"]')).toBeVisible();
+    await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
 
     // Click Customize button
     const customizeBtn = page.getByRole("button", { name: "Customize" });
@@ -245,28 +245,30 @@ test.describe("Pulse Office", () => {
     // Verify editing bar and hidden tray are visible
     await expect(page.getByText("Editing layout")).toBeVisible();
 
-    // Find eye toggle button on Momentum card and hide it
-    const hideMomentumBtn = page.getByRole("button", { name: "Hide Momentum" });
-    await expect(hideMomentumBtn).toBeVisible();
-    await hideMomentumBtn.click();
+    // Find eye toggle button on the Keeping up card and hide it
+    const hideKeepingUpBtn = page.getByRole("button", {
+      name: "Hide Keeping up",
+    });
+    await expect(hideKeepingUpBtn).toBeVisible();
+    await hideKeepingUpBtn.click();
 
     // Card is hidden from column, appears in hidden tray
     await expect(
-      page.locator('.grid [data-card-id="momentum"]'),
+      page.locator('.grid [data-card-id="keeping-up"]'),
     ).not.toBeVisible();
     const hiddenTray = page.getByTestId("hidden-cards-tray");
     await expect(hiddenTray).toBeVisible();
-    await expect(hiddenTray.getByText("Momentum")).toBeVisible();
+    await expect(hiddenTray.getByText("Keeping up")).toBeVisible();
 
     // Click Done
     const doneBtn = page.getByRole("button", { name: "Done", exact: true });
     await doneBtn.click();
     await expect(page.getByText("Editing layout")).not.toBeVisible();
 
-    // Reload page, verify Momentum is still hidden
+    // Reload page, verify Keeping up is still hidden
     await page.reload();
     await expect(
-      page.locator('.grid [data-card-id="momentum"]'),
+      page.locator('.grid [data-card-id="keeping-up"]'),
     ).not.toBeVisible();
 
     // Enter customize mode again and Reset layout
@@ -276,12 +278,66 @@ test.describe("Pulse Office", () => {
     const resetBtn = page.getByRole("button", { name: "Reset layout" });
     await resetBtn.click();
 
-    // Momentum card is restored to visible column
-    await expect(page.locator('[data-card-id="momentum"]')).toBeVisible();
+    // The Keeping up card is restored to its column
+    await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
 
     // Click Done to finish
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect(page.getByText("Editing layout")).not.toBeVisible();
+  });
+
+  test("Catch up lists the seeded person past cadence, and Keeping up names its bar", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto("/pulse");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Pulse" }),
+    ).toBeVisible();
+
+    // Edsger is tracked at every 3 months and 400 days quiet: the one
+    // catch-up among the four tracked people. Linus is quiet too, and not
+    // tracked, so he is not here.
+    const upNext = page.getByRole("list", { name: "Up next items" });
+    await expect(upNext.getByText("Catch up")).toBeVisible();
+    await expect(
+      upNext.getByText("Check in with Edsger Dijkstra"),
+    ).toBeVisible();
+    await expect(upNext.getByText("10 months past due")).toBeVisible();
+    await expect(
+      upNext.getByRole("button", { name: "Log note for Edsger Dijkstra" }),
+    ).toBeVisible();
+    await expect(upNext.getByText("Check in with Linus Torvalds")).toBeHidden();
+    await expect(page.getByText("Slipping")).toBeHidden();
+
+    // The Keeping up card: the bar, the line, the four-week line, Manage.
+    const card = page.locator('[data-card-id="keeping-up"]');
+    await expect(
+      card.getByRole("heading", { name: "Keeping up" }),
+    ).toBeVisible();
+    await expect(card.getByRole("img")).toHaveAccessibleName(
+      /^4 tracked: \d+ strong, \d+ fading, \d+ at risk, \d+ with no interactions yet$/,
+    );
+    await expect(
+      card.getByText(/^\d of 4 within cadence, 1 to catch up$/),
+    ).toBeVisible();
+    await expect(
+      card.getByText("Rising and cooling show after four weeks of tracking."),
+    ).toBeVisible();
+    await expect(card.getByText("4 tracked in the last 30 days")).toBeVisible();
+    const manage = card.getByRole("link", { name: "Manage" });
+    await expect(manage).toHaveAttribute("href", "/tracked");
+
+    // A legend link lands on its group on the Tracked contacts page.
+    await card.getByRole("link", { name: /At risk$/ }).click();
+    await expect(page).toHaveURL(/\/tracked#at-risk$/);
+    await expect(
+      page.getByRole("heading", { level: 2, name: /^At risk/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Edsger Dijkstra" }),
+    ).toBeVisible();
+    void seed;
   });
 
   test("customize mode: reorders cards via keyboard", async ({ page }) => {
@@ -294,9 +350,9 @@ test.describe("Pulse Office", () => {
     await page.keyboard.press("c");
     await expect(page.getByText("Editing layout")).toBeVisible();
 
-    // Focus drag handle on Momentum card
-    const momentumCard = page.locator('[data-card-id="momentum"]');
-    const handle = momentumCard.getByRole("button", {
+    // Focus drag handle on the Keeping up card
+    const keepingUpCard = page.locator('[data-card-id="keeping-up"]');
+    const handle = keepingUpCard.getByRole("button", {
       name: /drag.*reorder/i,
     });
     await expect(handle).toBeVisible();
@@ -322,24 +378,25 @@ test.describe("Pulse Office", () => {
     await page.getByRole("button", { name: "Customize" }).click();
     await expect(page.getByText("Editing layout")).toBeVisible();
 
-    // Check Momentum card has Move up and Move down buttons
-    const momentumCard = page.locator('[data-card-id="momentum"]');
-    await expect(momentumCard).toBeVisible();
+    // The Activity card sits second in the Network column, under Keeping
+    // up, so it has a Move up that does something.
+    const activityCard = page.locator('[data-card-id="activity"]');
+    await expect(activityCard).toBeVisible();
 
-    const moveUpBtn = momentumCard.getByRole("button", {
-      name: "Move Momentum up",
+    const moveUpBtn = activityCard.getByRole("button", {
+      name: "Move Activity up",
     });
-    const moveDownBtn = momentumCard.getByRole("button", {
-      name: "Move Momentum down",
+    const moveDownBtn = activityCard.getByRole("button", {
+      name: "Move Activity down",
     });
 
     await expect(moveUpBtn).toBeVisible();
     await expect(moveDownBtn).toBeVisible();
 
-    // Click Move Momentum up
+    // Click Move Activity up
     await moveUpBtn.click();
 
-    // Now Momentum is first in its column, so Move up should be disabled
+    // Now Activity is first in its column, so Move up should be disabled
     await expect(moveUpBtn).toBeDisabled();
 
     // Done

@@ -521,7 +521,7 @@ export type {
 
 /** A single CRM intelligence signal for the Cmd+K zero-state. */
 export interface ZeroStateInsight {
-  type: "action_items" | "at_risk" | "ghost" | "stale_data" | "dedupe";
+  type: "action_items" | "catch_up" | "ghost" | "stale_data" | "dedupe";
   label: string;
   count?: number;
   contact?: {
@@ -529,8 +529,9 @@ export interface ZeroStateInsight {
     name: string;
     avatarUrl: string | null;
   };
+  /** A catch-up: days since the clock, and how far past the cadence. */
   daysSince?: number;
-  score?: number;
+  overshootDays?: number;
   mentionCount?: number;
 }
 

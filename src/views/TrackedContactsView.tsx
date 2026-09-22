@@ -61,7 +61,7 @@ import { useBulkActions } from "../components/bulk/useBulkActions";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useTrackToggle, type TrackableContact } from "../hooks/useTrackToggle";
 import { describePastDue, parseServerTime } from "../lib/datetime";
-import { NAMES } from "../lib/names";
+import { NAMES, TRACKED_INTRO } from "../lib/names";
 import {
   BTN_QUIET,
   CARD,
@@ -104,9 +104,7 @@ const GROUP_ORDER: readonly TrackedGroupId[] = [
   "not-tracked",
 ];
 
-/** The sentence under the heading, and the body of the empty state. */
-export const TRACKED_INTRO =
-  "Track the people you want to keep up with. Their score, their catch-ups and the map's health layer follow.";
+export { TRACKED_INTRO };
 
 /** Past this many rows the list is virtualised. */
 const VIRTUAL_ROWS = 200;

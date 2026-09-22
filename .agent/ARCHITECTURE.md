@@ -234,7 +234,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`, `connectors.ts`
 - `server/connectors/` — Connectors subsystem: `service.ts` (CRUD, secrets, backoff), `scheduler.ts` (polling loop, concurrency), `ingest.ts` (idempotent stream commit, ghost promotion, day roll-up), `matching.ts` (participant contact resolution), `registry.ts` (adapter catalog), `summaries.ts` (prompt-injection shielded AI digests), `email/normalize.ts` (subject & address canonicalization), `adapters/ics.ts` (Calendar), `adapters/imap.ts` (Mailbox via IMAP), `adapters/google.ts` (Google Workspace contacts, mail, calendar via OAuth 2.0)
 - `server/services/` — Heavy business logic:
-  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
+  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
@@ -292,7 +292,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dedupe/` — Deduplication management (Tinder-style swipe UI)
   - `src/views/search/` — Search result cards
   - `src/views/lists/` — List management (create, detail, members)
-  - `src/views/dashboard/` — Pulse dashboard (metrics, action items, insights)
+  - `src/views/pulse/` — Pulse: `PulseView.tsx`, `lib/upNext.ts` (the ranked queue, with the Catch up group), `lib/layout.ts` (the card ids and the default columns), `cards/` (one file per card, `KeepingUpCard.tsx` for the people you track and their trend)
   - `src/views/ai-search/` — AI-powered semantic search view
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
   - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`

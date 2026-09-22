@@ -113,20 +113,8 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * How far past its cadence a tracked contact is: "1 day past due", "12 days
- * past due", "3 weeks past due", "2 months past due".
- *
- * Days up to two weeks, then weeks up to two months, then months. The row on
- * the Tracked contacts page and the Catch up group on Pulse both say it, so
- * a person reads one scale in both places.
+ * How far past its cadence a tracked contact is: "3 weeks past due". The
+ * words live in `shared/pastDue.ts`, because the server's zero state says
+ * them too. Re-exported here so the client keeps one date module.
  */
-export function describePastDue(overshootDays: number): string {
-  const days = Math.max(1, Math.round(overshootDays));
-  if (days < 14) return `${days} day${days === 1 ? "" : "s"} past due`;
-  if (days < 60) {
-    const weeks = Math.round(days / 7);
-    return `${weeks} week${weeks === 1 ? "" : "s"} past due`;
-  }
-  const months = Math.round(days / 30);
-  return `${months} month${months === 1 ? "" : "s"} past due`;
-}
+export { describePastDue } from "../../shared/pastDue";

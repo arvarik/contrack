@@ -59,7 +59,7 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
 
   server.prompt(
     "weekly_review",
-    "Conduct a weekly CRM review of overdue follow-ups, items due this week, and at-risk relationships",
+    "Conduct a weekly CRM review of overdue follow-ups, items due this week, and the tracked contacts to catch up with",
     async () => {
       try {
         const pulse = dashboardService.getDashboardPayload(scope);
@@ -77,7 +77,8 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
                   `Overdue Action Items:\n${JSON.stringify(pulse.overdue, null, 2)}\n\n` +
                   `Action Items Due Today:\n${JSON.stringify(pulse.dueToday, null, 2)}\n\n` +
                   `Action Items Due This Week:\n${JSON.stringify(pulse.upcoming, null, 2)}\n\n` +
-                  `Relationships At Risk:\n${JSON.stringify(pulse.atRisk, null, 2)}\n\n` +
+                  `Tracked Contacts (count, bands, rising, cooling):\n${JSON.stringify(pulse.tracking, null, 2)}\n\n` +
+                  `Catch-ups (tracked contacts past their cadence):\n${JSON.stringify(pulse.catchUp, null, 2)}\n\n` +
                   `Please provide a prioritized action list: who to reach out to first, which follow-ups need immediate attention, and recommended focus areas for this week.`,
               },
             },

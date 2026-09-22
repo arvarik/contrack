@@ -19,9 +19,9 @@
  * `unscored` and `scored`. Nothing on the client reads
  * `contacts.relationshipScore` without going through it.
  *
- * The band words mean one thing each. "Slipping" (a contact past its
- * follow-up cadence) and "rising" and "cooling" (score movement) are other
- * facts, and Pulse names them itself.
+ * The band words mean one thing each. "Catch up" (a tracked contact past
+ * its cadence) and "rising" and "cooling" (score movement) are other facts,
+ * and Pulse names them itself.
  *
  * This file imports nothing, so the server and the client both read it.
  *

@@ -18,8 +18,8 @@ export const PULSE_COLUMNS: readonly PulseColumn[] = [
 export const PULSE_CARD_IDS = [
   "up-next",
   "completed",
+  "keeping-up",
   "activity",
-  "momentum",
   "composition",
   "insight",
   "inbox",
@@ -37,7 +37,11 @@ export const MAX_CARDS_PER_COL = 20;
 
 export const DEFAULT_COLUMN_CARDS: Record<PulseColumn, PulseCardId[]> = {
   focus: ["up-next", "completed"],
-  network: ["activity", "momentum", "composition"],
+  // Keeping up first: the state of the people you track is the Network
+  // column's headline. A stored layout that still names "momentum" drops it
+  // in resolveLayout, and one that does not name "keeping-up" gets the card
+  // back here.
+  network: ["keeping-up", "activity", "composition"],
   intel: ["insight", "inbox", "coming-up", "new-people"],
 };
 
@@ -59,8 +63,8 @@ export const COLUMN_NAMES: Record<PulseColumn, string> = {
 export const CARD_TITLES: Record<PulseCardId, string> = {
   "up-next": "Up next",
   completed: "Completed",
+  "keeping-up": "Keeping up",
   activity: "Activity",
-  momentum: "Momentum",
   composition: "Composition",
   insight: "Daily insight",
   inbox: "Inbox",

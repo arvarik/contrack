@@ -65,7 +65,7 @@ A GitHub-style command center featuring faceted filters (`role:`, `company:`, `t
 
 Your daily relationship office. A responsive three-column workspace (Focus, Network, Intelligence) that organizes your morning workflow.
 
-Features a ranked Up next queue with one-key keyboard shortcuts, a twelve-week activity heatmap with streak tracking, score momentum monitoring, network composition charts, data cleanup inbox, and account-persisted layout customization.
+Features a ranked Up next queue with one-key keyboard shortcuts and a Catch up group for the tracked people past their cadence, a Keeping up card for the state and the trend of the people you track, a twelve-week activity heatmap with streak tracking, network composition charts, data cleanup inbox, and account-persisted layout customization.
 
 </td>
 <td width="70%">

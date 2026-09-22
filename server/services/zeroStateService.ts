@@ -7,15 +7,16 @@
  *
  * @module server/services/zeroStateService
  */
-import { FADING_MIN } from "../../shared/scoreBand.ts";
+import { describePastDue } from "../../shared/pastDue.ts";
 import { sqlite } from "../db.ts";
+import { CATCH_UP_DAYS_SINCE, CATCH_UP_WHERE } from "./catchUp.ts";
 import { log } from "../utils/logger.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ZeroStateInsight {
-  type: "action_items" | "at_risk" | "ghost" | "stale_data" | "dedupe";
+  type: "action_items" | "catch_up" | "ghost" | "stale_data" | "dedupe";
   label: string;
   count?: number;
   contact?: {
@@ -23,8 +24,9 @@ export interface ZeroStateInsight {
     name: string;
     avatarUrl: string | null;
   };
+  /** A catch-up: days since the clock, and how far past the cadence. */
   daysSince?: number;
-  score?: number;
+  overshootDays?: number;
   mentionCount?: number;
 }
 
@@ -38,10 +40,9 @@ export interface ZeroStatePayload {
 // back to contacts, because a suggestion names two contacts and both share the
 // owner by the mismatch trigger.
 //
-// "At risk" is the band under FADING_MIN in shared/scoreBand, the same cut the
-// avatar ring draws. The number goes into the SQL text and not in a bound
-// parameter. It is a constant from code and never input, and the text is the
-// same statement it was with the literal 40, so the plan does not change.
+// A catch-up is a tracked contact past its cadence: the same rule as the
+// Catch up group on Pulse, from `catchUp.ts`, so the two never disagree about
+// who needs a call. The two furthest past due are the palette's signal.
 
 const stmts = {
   urgentCount: sqlite.prepare(`
@@ -54,18 +55,13 @@ const stmts = {
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
   `),
 
-  atRisk: sqlite.prepare(`
-    SELECT c.id, c.name, c.avatarUrl, c.relationshipScore,
-           CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSince
+  catchUp: sqlite.prepare(`
+    SELECT c.id, c.name, c.avatarUrl,
+           ${CATCH_UP_DAYS_SINCE} as daysSince,
+           (${CATCH_UP_DAYS_SINCE} - c.cadenceDays) as overshootDays
     FROM contacts c
-    WHERE c.ownerId = ?
-      AND c.isTracked = 1
-      AND c.isGhost = 0
-      AND (c.isArchived = 0 OR c.isArchived IS NULL)
-      AND c.relationshipScore < ${FADING_MIN}
-      AND c.lastContactedAt IS NOT NULL
-      AND CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) > 30
-    ORDER BY c.relationshipScore ASC
+    WHERE c.ownerId = ? AND ${CATCH_UP_WHERE}
+    ORDER BY overshootDays DESC, c.name ASC
     LIMIT 2
   `),
 
@@ -123,21 +119,21 @@ export const zeroStateService = {
       });
     }
 
-    // 2. At-risk contacts (low score + long silence)
-    const atRiskRows = stmts.atRisk.all(scope.ownerId) as {
+    // 2. Catch-ups: tracked contacts past their cadence, the two furthest
+    const catchUpRows = stmts.catchUp.all(scope.ownerId) as {
       id: string;
       name: string;
       avatarUrl: string | null;
-      relationshipScore: number;
       daysSince: number;
+      overshootDays: number;
     }[];
-    for (const row of atRiskRows) {
+    for (const row of catchUpRows) {
       insights.push({
-        type: "at_risk",
-        label: `${row.name} — ${row.daysSince}d since last contact`,
+        type: "catch_up",
+        label: `${row.name}, ${describePastDue(row.overshootDays)}`,
         contact: { id: row.id, name: row.name, avatarUrl: row.avatarUrl },
         daysSince: row.daysSince,
-        score: row.relationshipScore,
+        overshootDays: row.overshootDays,
       });
     }
 

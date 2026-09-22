@@ -53,7 +53,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     name: "get_pulse",
     description:
-      "Get the dashboard Pulse metrics, at-risk relationships, and upcoming follow-ups.",
+      "Get the dashboard Pulse metrics: the tracked contacts and their bands, the catch-ups past their cadence, and the follow-ups due.",
     readOnly: true,
   },
   {

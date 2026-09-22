@@ -137,7 +137,6 @@ const COVERED = [
   "GET /api/dashboard",
   "GET /api/dashboard/activity",
   "GET /api/dashboard/insight",
-  "GET /api/dashboard/momentum",
   "GET /api/dedupe/active",
   "GET /api/dedupe/embedding-status",
   "GET /api/dedupe/merge-log",
@@ -1442,7 +1441,9 @@ describe("GET /api/dashboard", () => {
     const cards = [
       ...(forB.body.recentlyAdded as { id: string }[]),
       ...(forB.body.networkGrowthTimeline30d as { id: string }[]),
-      ...(forB.body.atRisk as { id: string }[]),
+      ...(forB.body.catchUp as { id: string }[]),
+      ...(forB.body.tracking.rising as { id: string }[]),
+      ...(forB.body.tracking.cooling as { id: string }[]),
       ...(forB.body.ghosts as { id: string }[]),
     ];
     expect(cards.length).toBeGreaterThan(0);
@@ -1458,14 +1459,18 @@ describe("GET /api/dashboard", () => {
     // reach an account that has written nothing.
     const res = await asUser(C)(request(app).get("/api/dashboard"));
     expect(res.status).toBe(200);
-    expect(res.body.metrics).toMatchObject({
-      totalActive: 0,
-      atRiskCount: 0,
-      totalInteractions30d: 0,
-      newContacts30d: 0,
-    });
+    expect(res.body.metrics).toEqual({ totalActive: 0, newContacts30d: 0 });
     expect(res.body.ghosts).toEqual([]);
-    expect(res.body.atRisk).toEqual([]);
+    expect(res.body.catchUp).toEqual([]);
+    expect(res.body.tracking).toEqual({
+      count: 0,
+      bands: { strong: 0, fading: 0, atRisk: 0, unscored: 0 },
+      catchUpCount: 0,
+      startedLast30d: 0,
+      snapshotWeeks: 0,
+      rising: [],
+      cooling: [],
+    });
     expect(res.body.recentlyAdded).toEqual([]);
     expect(res.body.industryComposition).toEqual([]);
     expect(res.body.locationComposition).toEqual([]);
@@ -1557,45 +1562,6 @@ describe("GET /api/dashboard/activity", () => {
     expect(res.body.streak).toEqual({ current: 0, best: 0, lastDay: null });
     expect(res.body.today).toEqual({ logged: 0, completed: 0, due: 0 });
     expect(res.body.thisWeek).toEqual({ logged: 0, byType: {} });
-  });
-});
-
-describe("GET /api/dashboard/momentum", () => {
-  it("names no contact the caller does not own", async () => {
-    const forA = await asUser(A)(request(app).get("/api/dashboard/momentum"));
-    const forB = await asUser(B)(request(app).get("/api/dashboard/momentum"));
-
-    expect(forA.status).toBe(200);
-    expect(forB.status).toBe(200);
-
-    const cardsA = [
-      ...(forA.body.rising as { id: string }[]),
-      ...(forA.body.cooling as { id: string }[]),
-      ...(forA.body.silent as { id: string }[]),
-    ];
-    for (const card of cardsA) {
-      expect(snapshotRow("contacts", card.id)?.ownerId).toBe(A.user.id);
-    }
-
-    const cardsB = [
-      ...(forB.body.rising as { id: string }[]),
-      ...(forB.body.cooling as { id: string }[]),
-      ...(forB.body.silent as { id: string }[]),
-    ];
-    for (const card of cardsB) {
-      expect(snapshotRow("contacts", card.id)?.ownerId).toBe(B.user.id);
-    }
-  });
-
-  it("returns empty momentum lists for an owner with no contacts", async () => {
-    const res = await asUser(C)(request(app).get("/api/dashboard/momentum"));
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({
-      snapshotWeeks: 0,
-      rising: [],
-      cooling: [],
-      silent: [],
-    });
   });
 });
 
@@ -3693,7 +3659,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(43);
+    expect(collections).toHaveLength(42);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

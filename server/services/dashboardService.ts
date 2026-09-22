@@ -1,4 +1,5 @@
-import { FADING_MIN } from "../../shared/scoreBand.ts";
+import { FADING_MIN, STRONG_MIN } from "../../shared/scoreBand.ts";
+import { CATCH_UP_DAYS_SINCE, CATCH_UP_WHERE } from "./catchUp.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { sqlite, tableExists } from "../db.ts";
 import { log } from "../utils/logger.ts";
@@ -15,11 +16,11 @@ import {
   toLocalDay,
   computeStreak,
   type ActivityDay,
+  type CatchUpCard,
   type DashboardActivityResponse,
-  type DashboardMomentumResponse,
   type MomentumCard,
-  type SilentCard,
   type StreakInteraction,
+  type TrackingSummary,
 } from "../../shared/pulse.ts";
 
 export const insightCoalescer = new RequestCoalescer();
@@ -40,21 +41,29 @@ interface ContactCardRow {
 
 interface DashboardMetricsRow {
   totalActive: number;
-  avgDaysSinceInteraction: number | null;
-  atRiskCount: number;
-  totalInteractions30d: number;
   newContacts30d: number;
+}
+
+/** The band counts of the tracked contacts, straight from one aggregate. */
+interface TrackingRow {
+  count: number;
+  strong: number;
+  fading: number;
+  atRisk: number;
+  unscored: number;
+  startedLast30d: number;
 }
 
 export const dashboardService = {
   /**
    * Every number on the dashboard, for one owner.
    *
-   * Nine statements, and each one carries the owner. The contact aggregates
-   * lead with `ownerId` so `idx_contacts_owner_status` and its siblings answer
-   * them. The two interaction aggregates put the predicate on
-   * `interactions.ownerId` rather than reaching through the contact subselect,
-   * which is what `idx_interactions_owner_date` is for.
+   * Each statement carries the owner. The contact aggregates lead with
+   * `ownerId` so `idx_contacts_owner_status` and its siblings answer them,
+   * and the tracked ones lean on `idx_contacts_owner_tracked`. The
+   * interaction aggregates put the predicate on `interactions.ownerId` rather
+   * than reaching through the contact subselect, which is what
+   * `idx_interactions_owner_date` is for.
    */
   getDashboardPayload(scope: Scope) {
     const startMs = Date.now();
@@ -96,62 +105,96 @@ export const dashboardService = {
       )
       .all(scope.ownerId) as (ContactCardRow & { mentionCount: number })[];
 
-    // 3. Metrics
-    //
-    // "At risk" here and in step 4 is the band under FADING_MIN in
-    // shared/scoreBand, the same cut the avatar ring draws. The number goes
-    // into the SQL text and not in a bound parameter. It is a constant from
-    // code and never input, the six owner parameters keep their places, and
-    // the text is the same statement it was with the literal 40.
+    // 3. Metrics. Two numbers: the client reads no other.
     const metrics = sqlite
       .prepare(
         `
       SELECT
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
-        (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
-        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND isTracked = 1 AND relationshipScore < ${FADING_MIN} AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
-        (SELECT COUNT(*) FROM interactions WHERE ownerId = ? AND date >= date('now', '-30 days') AND contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND COALESCE(isArchived, 0) = 0)) as totalInteractions30d,
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
     `,
       )
-      .get(
-        scope.ownerId,
-        scope.ownerId,
-        scope.ownerId,
-        scope.ownerId,
-        scope.ownerId,
-        scope.ownerId,
-      ) as DashboardMetricsRow;
+      .get(scope.ownerId, scope.ownerId) as DashboardMetricsRow;
 
-    if (metrics.avgDaysSinceInteraction === null) {
-      metrics.avgDaysSinceInteraction = 0;
-    }
-
-    // 4. At Risk
-    const atRisk = sqlite
-      .prepare(
-        `
-      SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
-             c.lastContactedAt,
-             CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
-             (SELECT title FROM interactions WHERE contactId = c.id AND ownerId = c.ownerId ORDER BY date DESC LIMIT 1) as lastInteractionTitle
+    // 4. Catch up: tracked contacts past their cadence, the furthest first.
+    // The Up next group on Pulse. The rule is in catchUp.ts, shared with
+    // the count below and the palette's zero state.
+    const catchUp: CatchUpCard[] = (
+      sqlite
+        .prepare(
+          `
+      SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor,
+             c.relationshipScore, c.lastContactedAt, c.cadenceDays,
+             ${CATCH_UP_DAYS_SINCE} as daysSince,
+             (${CATCH_UP_DAYS_SINCE} - c.cadenceDays) as overshootDays
       FROM contacts c
-      WHERE c.ownerId = ? AND c.isTracked = 1
-        AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
-        AND (c.isArchived = 0 OR c.isArchived IS NULL)
-        AND c.relationshipScore < ${FADING_MIN}
-        AND c.lastContactedAt IS NOT NULL
-      ORDER BY c.relationshipScore ASC
+      WHERE c.ownerId = ? AND ${CATCH_UP_WHERE}
+      ORDER BY overshootDays DESC, c.name ASC
       LIMIT 10
     `,
+        )
+        .all(scope.ownerId) as (ContactCardRow & {
+        relationshipScore: number;
+        lastContactedAt: string | null;
+        cadenceDays: number;
+        daysSince: number;
+        overshootDays: number;
+      })[]
+    ).map((row) => ({
+      id: row.id,
+      name: row.name,
+      company: row.company,
+      avatarUrl: row.avatarUrl,
+      themeColor: row.themeColor,
+      relationshipScore: row.relationshipScore,
+      lastContactedAt: row.lastContactedAt,
+      cadenceDays: row.cadenceDays,
+      daysSince: row.daysSince,
+      overshootDays: row.overshootDays,
+    }));
+
+    // 4b. Tracking: the state of the people this owner tracks. The bands
+    // use the same cuts as scoreView, so the bar on Pulse and the rings on
+    // the Tracked contacts page count the same people. The band numbers go
+    // into the SQL text and not in a bound parameter: they are constants
+    // from code and never input.
+    const trackingRow = sqlite
+      .prepare(
+        `
+      SELECT
+        COUNT(*) as count,
+        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore >= ${STRONG_MIN} THEN 1 ELSE 0 END) as strong,
+        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore >= ${FADING_MIN} AND relationshipScore < ${STRONG_MIN} THEN 1 ELSE 0 END) as fading,
+        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore < ${FADING_MIN} THEN 1 ELSE 0 END) as atRisk,
+        SUM(CASE WHEN lastContactedAt IS NULL OR relationshipScore IS NULL THEN 1 ELSE 0 END) as unscored,
+        SUM(CASE WHEN trackedAt >= datetime('now', '-30 days') THEN 1 ELSE 0 END) as startedLast30d
+      FROM contacts
+      WHERE ownerId = ? AND isTracked = 1
+        AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
+        AND (isArchived = 0 OR isArchived IS NULL)
+    `,
       )
-      .all(scope.ownerId) as (ContactCardRow & {
-      relationshipScore: number;
-      /** Never null: the query asks for a contact that has one. */
-      lastContactedAt: string;
-      daysSinceContact: number;
-      lastInteractionTitle: string | null;
-    })[];
+      .get(scope.ownerId) as TrackingRow;
+    const catchUpCount = (
+      sqlite
+        .prepare(
+          `SELECT COUNT(*) as count FROM contacts c WHERE c.ownerId = ? AND ${CATCH_UP_WHERE}`,
+        )
+        .get(scope.ownerId) as { count: number }
+    ).count;
+    const momentum = momentumFor(scope);
+    const tracking: TrackingSummary = {
+      count: trackingRow.count,
+      bands: {
+        strong: trackingRow.strong ?? 0,
+        fading: trackingRow.fading ?? 0,
+        atRisk: trackingRow.atRisk ?? 0,
+        unscored: trackingRow.unscored ?? 0,
+      },
+      catchUpCount,
+      startedLast30d: trackingRow.startedLast30d ?? 0,
+      ...momentum,
+    };
 
     // 5. Recently Added
     const recentlyAdded = sqlite
@@ -347,7 +390,8 @@ export const dashboardService = {
       upcoming,
       ghosts,
       metrics,
-      atRisk,
+      catchUp,
+      tracking,
       recentlyAdded,
       industryComposition,
       locationComposition,
@@ -662,135 +706,88 @@ export const dashboardService = {
       },
     };
   },
-
-  /**
-   * Score momentum for one owner: rising, cooling and silent contacts.
-   */
-  getMomentum(scope: Scope): DashboardMomentumResponse {
-    const startMs = Date.now();
-    const weekRows = sqlite
-      .prepare(
-        `SELECT DISTINCT weekStart FROM score_snapshots
-          WHERE ownerId = ?
-          ORDER BY weekStart DESC`,
-      )
-      .all(scope.ownerId) as { weekStart: string }[];
-
-    const snapshotWeeks = weekRows.length;
-    let rising: MomentumCard[] = [];
-    let cooling: MomentumCard[] = [];
-
-    if (snapshotWeeks >= 4) {
-      const currentWeek = weekRows[0].weekStart;
-      const fourWeeksAgoWeek = isoWeekStart(
-        new Date(Date.now() - 4 * 7 * 86_400_000),
-      );
-      const baselineWeek =
-        weekRows.find((w) => w.weekStart <= fourWeeksAgoWeek)?.weekStart ??
-        weekRows[3].weekStart;
-
-      const diffRows = sqlite
-        .prepare(
-          `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.lastContactedAt,
-                  curr.score as currentScore,
-                  (curr.score - base.score) as delta
-             FROM score_snapshots curr
-             JOIN score_snapshots base ON curr.contactId = base.contactId AND base.weekStart = ? AND base.ownerId = curr.ownerId
-             JOIN contacts c ON c.id = curr.contactId AND c.ownerId = curr.ownerId
-            WHERE curr.ownerId = ? AND curr.weekStart = ?
-              AND c.isTracked = 1
-              AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
-              AND (c.isArchived = 0 OR c.isArchived IS NULL)
-              AND date(c.trackedAt) <= base.weekStart
-              AND abs(curr.score - base.score) >= 3`,
-        )
-        .all(baselineWeek, scope.ownerId, currentWeek) as {
-        id: string;
-        name: string;
-        company: string | null;
-        avatarUrl: string | null;
-        themeColor: string | null;
-        lastContactedAt: string | null;
-        currentScore: number;
-        delta: number;
-      }[];
-
-      const toMomentumCard = (r: (typeof diffRows)[0]): MomentumCard => ({
-        id: r.id,
-        name: r.name,
-        company: r.company,
-        avatarUrl: r.avatarUrl,
-        themeColor: r.themeColor,
-        lastContactedAt: r.lastContactedAt,
-        relationshipScore: r.currentScore,
-        score: r.currentScore,
-        delta: Math.round(r.delta * 10) / 10,
-      });
-
-      rising = diffRows
-        .filter((r) => r.delta >= 3)
-        .sort((a, b) => b.delta - a.delta)
-        .slice(0, 5)
-        .map(toMomentumCard);
-
-      cooling = diffRows
-        .filter((r) => r.delta <= -3)
-        .sort((a, b) => a.delta - b.delta)
-        .slice(0, 5)
-        .map(toMomentumCard);
-    }
-
-    const silentRows = sqlite
-      .prepare(
-        `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
-                c.lastContactedAt, c.cadenceDays,
-                CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
-                (CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) - c.cadenceDays) as overshootDays
-           FROM contacts c
-          WHERE c.ownerId = ? AND c.isTracked = 1
-            AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
-            AND (c.isArchived = 0 OR c.isArchived IS NULL)
-            AND c.cadenceDays IS NOT NULL AND c.cadenceDays > 0
-            AND c.lastContactedAt IS NOT NULL
-            AND c.relationshipScore >= ${FADING_MIN}
-            AND (CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) - c.cadenceDays) > 0
-          ORDER BY overshootDays DESC
-          LIMIT 5`,
-      )
-      .all(scope.ownerId) as {
-      id: string;
-      name: string;
-      company: string | null;
-      avatarUrl: string | null;
-      themeColor: string | null;
-      relationshipScore: number;
-      lastContactedAt: string | null;
-      cadenceDays: number;
-      daysSinceContact: number;
-      overshootDays: number;
-    }[];
-
-    const silent: SilentCard[] = silentRows.map((c) => ({
-      id: c.id,
-      name: c.name,
-      company: c.company,
-      avatarUrl: c.avatarUrl,
-      themeColor: c.themeColor,
-      relationshipScore: c.relationshipScore,
-      lastContactedAt: c.lastContactedAt,
-      cadenceDays: c.cadenceDays,
-      daysSinceContact: c.daysSinceContact,
-      overshootDays: c.overshootDays,
-    }));
-
-    const elapsed = Date.now() - startMs;
-    log.info("Dashboard", `Assembled dashboard momentum in ${elapsed}ms`);
-
-    return {
-      snapshotWeeks,
-      rising,
-      cooling,
-      silent,
-    };
-  },
 };
+
+/**
+ * Rising and cooling, for the Keeping up card: the tracked contacts whose
+ * score moved by three or more over four weeks, three each way.
+ *
+ * Empty until four weekly snapshots exist, and a contact tracked after the
+ * baseline week is neither, so a two-day-old track is never "cooling".
+ */
+function momentumFor(scope: Scope): {
+  snapshotWeeks: number;
+  rising: MomentumCard[];
+  cooling: MomentumCard[];
+} {
+  const weekRows = sqlite
+    .prepare(
+      `SELECT DISTINCT weekStart FROM score_snapshots
+        WHERE ownerId = ?
+        ORDER BY weekStart DESC`,
+    )
+    .all(scope.ownerId) as { weekStart: string }[];
+
+  const snapshotWeeks = weekRows.length;
+  if (snapshotWeeks < 4) return { snapshotWeeks, rising: [], cooling: [] };
+
+  const currentWeek = weekRows[0].weekStart;
+  const fourWeeksAgoWeek = isoWeekStart(
+    new Date(Date.now() - 4 * 7 * 86_400_000),
+  );
+  const baselineWeek =
+    weekRows.find((w) => w.weekStart <= fourWeeksAgoWeek)?.weekStart ??
+    weekRows[3].weekStart;
+
+  const diffRows = sqlite
+    .prepare(
+      `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.lastContactedAt,
+              curr.score as currentScore,
+              (curr.score - base.score) as delta
+         FROM score_snapshots curr
+         JOIN score_snapshots base ON curr.contactId = base.contactId AND base.weekStart = ? AND base.ownerId = curr.ownerId
+         JOIN contacts c ON c.id = curr.contactId AND c.ownerId = curr.ownerId
+        WHERE curr.ownerId = ? AND curr.weekStart = ?
+          AND c.isTracked = 1
+          AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
+          AND (c.isArchived = 0 OR c.isArchived IS NULL)
+          AND date(c.trackedAt) <= base.weekStart
+          AND abs(curr.score - base.score) >= 3`,
+    )
+    .all(baselineWeek, scope.ownerId, currentWeek) as {
+    id: string;
+    name: string;
+    company: string | null;
+    avatarUrl: string | null;
+    themeColor: string | null;
+    lastContactedAt: string | null;
+    currentScore: number;
+    delta: number;
+  }[];
+
+  const toMomentumCard = (r: (typeof diffRows)[0]): MomentumCard => ({
+    id: r.id,
+    name: r.name,
+    company: r.company,
+    avatarUrl: r.avatarUrl,
+    themeColor: r.themeColor,
+    lastContactedAt: r.lastContactedAt,
+    relationshipScore: r.currentScore,
+    score: r.currentScore,
+    delta: Math.round(r.delta * 10) / 10,
+  });
+
+  return {
+    snapshotWeeks,
+    rising: diffRows
+      .filter((r) => r.delta >= 3)
+      .sort((a, b) => b.delta - a.delta)
+      .slice(0, 3)
+      .map(toMomentumCard),
+    cooling: diffRows
+      .filter((r) => r.delta <= -3)
+      .sort((a, b) => a.delta - b.delta)
+      .slice(0, 3)
+      .map(toMomentumCard),
+  };
+}

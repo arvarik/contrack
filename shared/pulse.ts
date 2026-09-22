@@ -53,7 +53,14 @@ export interface CatchUpCard extends ContactCard {
   overshootDays: number;
 }
 
-/** The state of the people an account tracks. */
+/**
+ * The state of the people an account tracks: the Keeping up card.
+ *
+ * `bands` uses the same cuts as `scoreView`, so the bar on Pulse and the
+ * rings on the Tracked contacts page count the same people. `catchUpCount`
+ * is the Catch up list's predicate without its limit. `rising` and `cooling`
+ * hold at most three each, and are empty until four weekly snapshots exist.
+ */
 export interface TrackingSummary {
   count: number;
   bands: { strong: number; fading: number; atRisk: number; unscored: number };
@@ -64,22 +71,10 @@ export interface TrackingSummary {
   cooling: MomentumCard[];
 }
 
+/** A tracked contact whose score moved by three or more over four weeks. */
 export interface MomentumCard extends ContactCard {
   score: number;
   delta: number;
-}
-
-export interface SilentCard extends ContactCard {
-  daysSinceContact: number;
-  cadenceDays: number;
-  overshootDays: number;
-}
-
-export interface DashboardMomentumResponse {
-  snapshotWeeks: number;
-  rising: MomentumCard[];
-  cooling: MomentumCard[];
-  silent: SilentCard[];
 }
 
 export interface StreakInteraction {
