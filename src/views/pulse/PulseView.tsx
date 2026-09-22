@@ -26,7 +26,7 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   arrayMove,
 } from "@dnd-kit/sortable";
@@ -61,7 +61,8 @@ import {
 } from "./lib/layout";
 import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
 import { getUpcomingBirthdays } from "./lib/birthdays";
-import { PulseHeader } from "./components/PulseHeader";
+import { COLUMN_CLASSES, GRID_CLASSES } from "./lib/pulseStyles";
+import { Masthead, type JumpTarget } from "./components/Masthead";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
 import { SortableCard } from "./components/SortableCard";
@@ -82,7 +83,6 @@ const DuplicatesPage = React.lazy(() =>
 interface DroppableColumnProps {
   id: PulseColumn;
   cards: PulseCardId[];
-  className?: string;
   isEditing: boolean;
   renderCard: (
     cardId: PulseCardId,
@@ -91,10 +91,15 @@ interface DroppableColumnProps {
   ) => React.ReactNode;
 }
 
+/**
+ * One column of the grid. Its classes come from `COLUMN_CLASSES`, which the
+ * skeleton and the route fallback read too. The sortable strategy is the
+ * rect one because the Intelligence column is a vertical list at `xl` and a
+ * two-across grid at `lg`, and `rectSortingStrategy` sorts both.
+ */
 const DroppableColumn = ({
   id,
   cards,
-  className,
   isEditing,
   renderCard,
 }: DroppableColumnProps) => {
@@ -109,10 +114,10 @@ const DroppableColumn = ({
       className={cn(
         "flex flex-col gap-6 transition-colors rounded-2xl p-1",
         isOver && "bg-primary/5 ring-2 ring-primary/30",
-        className,
+        COLUMN_CLASSES[id],
       )}
     >
-      <SortableContext items={cards} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cards} strategy={rectSortingStrategy}>
         {cards.map((cardId, index) => renderCard(cardId, index, cards.length))}
         {cards.length === 0 && isEditing && (
           <div className="p-8 rounded-2xl border-2 border-dashed border-outline/20 text-center text-xs text-on-surface-variant font-medium">
@@ -428,22 +433,17 @@ const PulseOffice = () => {
   const itemsCountRef = useRef(upNext.items.length);
   itemsCountRef.current = upNext.items.length;
 
-  // Keyboard navigation (J / K / D / S / L / C / Enter)
+  // Keyboard navigation (J / K / D / S / L / C). Enter is not here: it
+  // belongs to the control that has focus. A focused row opens its contact
+  // from its own handler (ActionRow), and a button, a link or a menu item
+  // keeps its own Enter. A window-level Enter used to open the highlighted
+  // contact from anywhere on the page, the Customize button included.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const item = highlightedItemRef.current;
-
-      // Enter opens contact profile (not a bare letter, always active)
-      if (e.key === "Enter") {
-        if (item) {
-          e.preventDefault();
-          navigate(`/contact/${item.contactId}`);
-        }
-        return;
-      }
 
       // Single-key shortcuts respect preference
       if (!singleKey) return;
@@ -484,23 +484,20 @@ const PulseOffice = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    singleKey,
-    completeAction,
-    updateAction,
-    navigate,
-    handleToggleCustomize,
-  ]);
+  }, [singleKey, completeAction, updateAction, handleToggleCustomize]);
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
-  const scrollToUpNext = () => {
-    upNextCardRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
-  const scrollToComingUp = () => {
-    const el = document.querySelector('[data-card-id="coming-up"]');
-    el?.scrollIntoView({ behavior: "smooth" });
-  };
+  // A count in the masthead's sentence jumps to its card: overdue and today
+  // to Up next, birthdays to Coming up. Prompt 2 retargets the three to the
+  // group headings inside the queue.
+  const handleJumpTo = useCallback((target: JumpTarget) => {
+    const el =
+      target === "birthdays"
+        ? document.querySelector('[data-card-id="coming-up"]')
+        : upNextCardRef.current;
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   // Render individual cards by cardId
   const renderCardContent = (cardId: PulseCardId) => {
@@ -619,41 +616,36 @@ const PulseOffice = () => {
       </div>
 
       <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
-        {/* Header */}
-        <PulseHeader
-          completedToday={activity?.today.completed ?? 0}
-          dueToday={upNext.counts.today}
-          overdueCount={upNext.counts.overdue}
-          birthdayCount={upNext.counts.birthdays}
-          streak={activity?.streak.current ?? 0}
+        {/* The masthead: the day, the sentence, the progress mark, the actions */}
+        <Masthead
+          counts={{
+            overdue: upNext.counts.overdue,
+            dueToday: upNext.counts.today,
+            birthdaysThisWeek: upNext.counts.birthdays,
+            completedToday: activity?.today.completed ?? 0,
+            streak: activity?.streak.current ?? 0,
+          }}
           isEditing={isEditing}
           onToggleCustomize={handleToggleCustomize}
-          onScrollToUpNext={scrollToUpNext}
-          onScrollToComingUp={scrollToComingUp}
+          onJumpTo={handleJumpTo}
+          quiet={isZeroContacts}
         />
 
-        {/* Hidden Cards Tray in Customize Mode */}
-        {isEditing && (
+        {/* Hidden Cards Tray in Customize Mode, only when a card is hidden */}
+        {isEditing && resolvedLayout.hidden.length > 0 && (
           <section
             aria-label="Hidden cards"
             data-testid="hidden-cards-tray"
-            className="rounded-2xl bg-surface-container/60 border border-outline/10 p-4 sm:p-5 flex flex-col gap-3 transition-all"
+            className="rounded-2xl bg-surface-container/60 p-4 sm:p-5 flex flex-col gap-3 transition-all"
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <EyeOff className="w-4 h-4 text-on-surface-variant" />
-                <h2 className="text-sm font-bold text-on-surface">
-                  Hidden cards
-                </h2>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-surface-container-highest text-on-surface-variant tabular-nums">
-                  {resolvedLayout.hidden.length}
-                </span>
-              </div>
-              {resolvedLayout.hidden.length === 0 && (
-                <p className="text-xs text-on-surface-variant italic">
-                  No cards are hidden. Use the eye icon on any card to hide it.
-                </p>
-              )}
+            <div className="flex items-center gap-2">
+              <EyeOff className="w-4 h-4 text-on-surface-variant" />
+              <h2 className="text-sm font-bold text-on-surface">
+                Hidden cards
+              </h2>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-surface-container-highest text-on-surface-variant tabular-nums">
+                {resolvedLayout.hidden.length}
+              </span>
             </div>
 
             {resolvedLayout.hidden.length > 0 && (
@@ -694,12 +686,11 @@ const PulseOffice = () => {
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className={GRID_CLASSES}>
               {/* Column 1: Focus (Up next, Completed) */}
               <DroppableColumn
                 id="focus"
                 cards={resolvedLayout.visible.focus}
-                className="order-1 lg:col-span-5 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "focus")
@@ -710,7 +701,6 @@ const PulseOffice = () => {
               <DroppableColumn
                 id="intel"
                 cards={resolvedLayout.visible.intel}
-                className="order-3 lg:col-span-12 xl:order-2 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "intel")
@@ -721,7 +711,6 @@ const PulseOffice = () => {
               <DroppableColumn
                 id="network"
                 cards={resolvedLayout.visible.network}
-                className="order-2 lg:col-span-7 xl:order-3 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "network")
@@ -736,26 +725,43 @@ const PulseOffice = () => {
           <div
             role="region"
             aria-label="Layout customize actions"
-            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-fit max-w-[calc(100%-2rem)] px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200"
+            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 animate-in fade-in slide-in-from-bottom-4 duration-200"
           >
-            <span className="text-xs sm:text-sm font-semibold text-on-surface">
-              Editing layout
-            </span>
-            <div className="h-4 w-px bg-outline/20" />
-            <button
-              type="button"
-              onClick={handleResetLayout}
-              className="btn-secondary hit-area text-xs sm:text-sm px-3 py-1.5 cursor-pointer"
-            >
-              Reset layout
-            </button>
-            <button
-              type="button"
-              onClick={handleDone}
-              className="btn-primary hit-area text-xs sm:text-sm px-4 py-1.5 cursor-pointer"
-            >
-              Done
-            </button>
+            {/* Anchored on both sides and centred with auto margins, so the
+                bar sizes itself against the whole width. At left 50% a fixed
+                box measures against the half that is left and squeezes its
+                buttons onto two lines on a phone. One sentence that wraps:
+                on a phone it takes the first lines and the two buttons the
+                last. The words follow the controls a person has at that
+                width. */}
+            <p className="text-xs sm:text-sm text-on-surface text-center sm:text-left">
+              <span className="font-semibold">Editing layout</span>
+              <span className="text-on-surface-variant">
+                {" · "}
+                <span className="hidden sm:inline">
+                  Drag a card to move it. Use the eye to hide one.
+                </span>
+                <span className="sm:hidden">
+                  Use the arrows to move a card and the eye to hide one.
+                </span>
+              </span>
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleResetLayout}
+                className="btn-secondary hit-area text-xs sm:text-sm px-3 py-1.5 cursor-pointer"
+              >
+                Reset layout
+              </button>
+              <button
+                type="button"
+                onClick={handleDone}
+                className="btn-primary hit-area text-xs sm:text-sm px-4 py-1.5 cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         )}
       </div>

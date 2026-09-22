@@ -281,6 +281,7 @@ vi.mock("../server/db.ts", () => ({
 | `nlp.distances.test.ts`  | 47    | String distance metrics: Levenshtein, Jaro-Winkler, normalized similarity                                                                                                                                                             |
 | `nlp.phonetics.test.ts`  | 26    | Double Metaphone: phonetic encoding for blocking passes                                                                                                                                                                               |
 | `nlp.company.test.ts`    | 22    | Company name normalization: strip suffixes (Inc, LLC, Corp), abbreviation expansion                                                                                                                                                   |
+| `pulse.dayLine.test.ts`  | ~95   | The Pulse masthead's sentence (`buildDayLine`: order, singulars, the period, the streak from two days, which parts jump) and the progress mark's words (`describeProgress`)                                                           |
 
 #### Integration Tests (`tests/integration/`)
 

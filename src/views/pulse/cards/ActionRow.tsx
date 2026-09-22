@@ -13,8 +13,32 @@ export interface ActionRowProps {
   onComplete?: (id: string) => void;
   onLog?: (contactId: string) => void;
   onOpenContact?: (contactId: string) => void;
+  /**
+   * ArrowDown and ArrowUp on the focused row move the highlight. The card
+   * passes a function that steps the index within bounds.
+   */
+  onMove?: (direction: -1 | 1) => void;
+  /**
+   * True while focus is inside the list. A row that becomes selected while
+   * focus is inside the list takes focus, so the arrows walk the rows. A row
+   * that becomes selected from a bare J or K with focus elsewhere only
+   * scrolls into view, so a key press never yanks focus off a control.
+   */
+  focusOnSelect?: boolean;
 }
 
+/**
+ * One row of the Up next queue.
+ *
+ * The row is the one roving tab stop of the list: `tabIndex` is 0 on the
+ * highlighted row and -1 elsewhere, so Tab enters the list once and the
+ * arrows move inside it. Enter opens the contact, Space does the row's
+ * primary action (complete, or log a note for a birthday or a catch-up),
+ * ArrowDown and ArrowUp move the highlight. Each key is claimed only when
+ * the event target is the row itself, so a button inside the row keeps its
+ * own Enter and Space. The row keeps `role="listitem"`: it is a clickable
+ * element with a keyboard equivalent, not a button.
+ */
 export const ActionRow = memo(
   ({
     item,
@@ -22,7 +46,9 @@ export const ActionRow = memo(
     onSelect,
     onComplete,
     onLog,
-    onOpenContact: _onOpenContact,
+    onOpenContact,
+    onMove,
+    focusOnSelect = false,
   }: ActionRowProps) => {
     const [isCompleting, setIsCompleting] = useState(false);
     const [showSnooze, setShowSnooze] = useState(false);
@@ -30,6 +56,8 @@ export const ActionRow = memo(
       null,
     );
     const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const rowRef = useRef<HTMLDivElement>(null);
+    const wasSelectedRef = useRef(isSelected);
 
     useEffect(() => {
       return () => {
@@ -39,13 +67,32 @@ export const ActionRow = memo(
       };
     }, []);
 
-    const handleComplete = (e: React.MouseEvent) => {
-      e.stopPropagation();
+    // When the highlight arrives on this row, bring it into view. It takes
+    // focus too when focus was already inside the list, so the arrows and
+    // J or K pressed on a row keep walking rows. The first render is not an
+    // arrival: the page must not scroll to the queue on load.
+    useEffect(() => {
+      const arrived = isSelected && !wasSelectedRef.current;
+      wasSelectedRef.current = isSelected;
+      if (!arrived) return;
+      const el = rowRef.current;
+      if (!el) return;
+      // jsdom has no scrollIntoView, so the call is optional.
+      el.scrollIntoView?.({ block: "nearest" });
+      if (focusOnSelect) el.focus({ preventScroll: true });
+    }, [isSelected, focusOnSelect]);
+
+    const complete = () => {
       if (isCompleting) return;
       setIsCompleting(true);
       completeTimerRef.current = setTimeout(() => {
         onComplete?.(item.id);
       }, 280);
+    };
+
+    const handleComplete = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      complete();
     };
 
     const handleLog = (e: React.MouseEvent) => {
@@ -60,6 +107,33 @@ export const ActionRow = memo(
       setShowSnooze((prev) => !prev);
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // A control inside the row keeps its own keys.
+      if (e.target !== e.currentTarget) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key) {
+        case "Enter":
+          e.preventDefault();
+          onOpenContact?.(item.contactId);
+          return;
+        case " ":
+          e.preventDefault();
+          if (item.hasCheckAction) complete();
+          else onLog?.(item.contactId);
+          return;
+        case "ArrowDown":
+          e.preventDefault();
+          onMove?.(1);
+          return;
+        case "ArrowUp":
+          e.preventDefault();
+          onMove?.(-1);
+          return;
+        default:
+          return;
+      }
+    };
+
     const chipStyles = {
       urgent: "text-error bg-error/10 border-error/20",
       today: "text-primary bg-primary/10 border-primary/20",
@@ -70,11 +144,18 @@ export const ActionRow = memo(
     };
 
     return (
-      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+      // The row is a list item with a roving tab stop and its own keys, on
+      // purpose: see the component comment. The two rules disabled here would
+      // ask for role="button", which would take the list semantics away.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
       <div
+        ref={rowRef}
         role="listitem"
         aria-current={isSelected ? "true" : undefined}
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={isSelected ? 0 : -1}
         onClick={onSelect}
+        onKeyDown={handleKeyDown}
         className={cn(
           "w-full rounded-xl border border-outline/15 p-3 sm:p-3.5 flex items-center gap-3 transition-all duration-200 group relative bg-surface-container-lowest hover:bg-surface-container-low cursor-pointer",
           isSelected &&

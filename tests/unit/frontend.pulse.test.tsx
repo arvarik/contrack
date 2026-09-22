@@ -2,14 +2,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { PulseView } from "../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../src/views/pulse/components/PulseSkeleton";
 import { DuplicatesPage } from "../../src/views/pulse/pages/DuplicatesPage";
 import { ActionRow } from "../../src/views/pulse/cards/ActionRow";
 import { SnoozeMenu } from "../../src/views/pulse/cards/SnoozeMenu";
 import { ComingUpCard } from "../../src/views/pulse/cards/ComingUpCard";
-import { PulseHeader } from "../../src/views/pulse/components/PulseHeader";
+import { Masthead } from "../../src/views/pulse/components/Masthead";
+import { CardFrame } from "../../src/views/pulse/components/CardFrame";
+import { CardCustomizeContext } from "../../src/views/pulse/context/CardCustomizeContext";
 import { CompletedCard } from "../../src/views/pulse/cards/CompletedCard";
 import { NewPeopleCard } from "../../src/views/pulse/cards/NewPeopleCard";
 import { InboxCard } from "../../src/views/pulse/cards/InboxCard";
@@ -212,6 +214,50 @@ function createSampleDashboard(
   };
 }
 
+/**
+ * `window.matchMedia` for the masthead, which renders the counts as buttons
+ * from `sm` up and as text below it. jsdom has no matchMedia at all.
+ */
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
+
+/** Customize lives in the More menu. Open it and choose the item. */
+function openCustomize() {
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Customize layout" }));
+}
+
+/**
+ * Pulse with a route that would render if anything navigated to a contact.
+ * The Enter guard and the row keys assert on the marker.
+ */
+function renderPulseWithContactRoute() {
+  return render(
+    <MemoryRouter initialEntries={["/pulse"]}>
+      <Routes>
+        <Route path="/pulse/*" element={<PulseView />} />
+        <Route
+          path="/contact/:id"
+          element={<div data-testid="contact-marker" />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe("frontend.pulse", () => {
   beforeEach(() => {
     mockCompleteMutate.mockClear();
@@ -226,6 +272,8 @@ describe("frontend.pulse", () => {
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("renders the h1 'Pulse'", () => {
@@ -395,7 +443,21 @@ describe("frontend.pulse", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Set up your office")).toBeDefined();
+    expect(screen.getByText("Bring your people in")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Import contacts and log a note. Pulse fills itself from there.",
+      ),
+    ).toBeDefined();
+    // The welcome masthead is quiet: the date and the actions, no sentence.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Pulse" }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Log a note" })).toBeDefined();
+    expect(screen.queryByText(/Nothing due today/)).toBeNull();
+    expect(
+      screen.queryByRole("img", { name: /to do|done|Nothing due/ }),
+    ).toBeNull();
     expect(screen.getByText("Import contacts")).toBeDefined();
     expect(screen.getByText("Log your first note")).toBeDefined();
     expect(screen.getByText("Connect AI")).toBeDefined();
@@ -517,21 +579,305 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("Sprint Planning")).toBeDefined();
   });
 
-  it("interacts with PulseHeader action buttons", () => {
-    render(
-      <MemoryRouter>
-        <PulseHeader
-          completedToday={2}
-          dueToday={3}
-          overdueCount={1}
-          birthdayCount={1}
-          streak={5}
-        />
-      </MemoryRouter>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /log a note/i }));
-    fireEvent.click(screen.getByRole("button", { name: /new contact/i }));
-    expect(screen.getByText(/2 of 6 done today/i)).toBeDefined();
+  describe("Masthead", () => {
+    const counts = {
+      overdue: 2,
+      dueToday: 3,
+      birthdaysThisWeek: 1,
+      completedToday: 2,
+      streak: 5,
+    };
+
+    const renderMasthead = (
+      over: Partial<React.ComponentProps<typeof Masthead>> = {},
+    ) => {
+      const onJumpTo = vi.fn();
+      const onToggleCustomize = vi.fn();
+      render(
+        <MemoryRouter>
+          <Masthead
+            counts={counts}
+            isEditing={false}
+            onToggleCustomize={onToggleCustomize}
+            onJumpTo={onJumpTo}
+            {...over}
+          />
+        </MemoryRouter>,
+      );
+      return { onJumpTo, onToggleCustomize };
+    };
+
+    it("makes the day the headline under the Pulse label, with one sentence and the progress mark", () => {
+      const monday = new Date(2026, 8, 21, 9, 0, 0);
+      vi.setSystemTime(monday);
+      stubMatchMedia(true);
+      renderMasthead();
+
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Pulse" }),
+      ).toBeDefined();
+      const weekday = new Intl.DateTimeFormat(undefined, {
+        weekday: "long",
+      }).format(monday);
+      const header = screen.getByLabelText("Today summary");
+      expect(header.tagName).toBe("HEADER");
+      const dateLine = Array.from(header.querySelectorAll("p")).find((p) =>
+        p.textContent?.includes(weekday),
+      );
+      expect(dateLine).toBeDefined();
+      // The date is a paragraph in the headline face, not the h1.
+      expect(dateLine?.className).toContain("font-headline");
+      expect(header.textContent).toContain(
+        "2 overdue, 3 due today, 1 birthday this week. 5 days in a row.",
+      );
+      expect(screen.getByRole("img", { name: "2 of 7 done" })).toBeDefined();
+      expect(screen.getByText("2 of 7 done")).toBeDefined();
+    });
+
+    it("renders each count as a button that jumps to its card from sm up", () => {
+      stubMatchMedia(true);
+      const { onJumpTo } = renderMasthead();
+
+      fireEvent.click(screen.getByRole("button", { name: "2 overdue" }));
+      expect(onJumpTo).toHaveBeenLastCalledWith("overdue");
+      fireEvent.click(screen.getByRole("button", { name: "3 due today" }));
+      expect(onJumpTo).toHaveBeenLastCalledWith("today");
+      fireEvent.click(
+        screen.getByRole("button", { name: "1 birthday this week" }),
+      );
+      expect(onJumpTo).toHaveBeenLastCalledWith("birthdays");
+      // The period and the streak are not buttons.
+      expect(
+        screen.queryByRole("button", { name: /days in a row/ }),
+      ).toBeNull();
+    });
+
+    it("renders the counts as plain text below sm", () => {
+      stubMatchMedia(false);
+      renderMasthead();
+
+      expect(screen.queryByRole("button", { name: "2 overdue" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "3 due today" })).toBeNull();
+      const header = screen.getByLabelText("Today summary");
+      expect(header.textContent).toContain(
+        "2 overdue, 3 due today, 1 birthday this week.",
+      );
+      // The only buttons are the two actions and the menu trigger.
+      const names = screen
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label") ?? b.textContent?.trim());
+      expect(names).toEqual(["Log a note", "More"]);
+    });
+
+    it("keeps Log a note as the one primary, with New contact and Customize layout in the More menu", () => {
+      stubMatchMedia(true);
+      const { onToggleCustomize } = renderMasthead();
+
+      const logNote = screen.getByRole("button", { name: "Log a note" });
+      expect(logNote.className).toContain("btn-primary");
+      expect(screen.queryByRole("button", { name: "New contact" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Customize/ })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "More" }));
+      expect(
+        screen.getByRole("menuitem", { name: "New contact" }),
+      ).toBeDefined();
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Customize layout" }),
+      );
+      expect(onToggleCustomize).toHaveBeenCalledTimes(1);
+    });
+
+    it("names the customize item for the state while editing", () => {
+      stubMatchMedia(true);
+      renderMasthead({ isEditing: true });
+      fireEvent.click(screen.getByRole("button", { name: "More" }));
+      expect(
+        screen.getByRole("menuitem", { name: "Done editing layout" }),
+      ).toBeDefined();
+    });
+
+    it("leaves the sentence and the progress mark out when quiet", () => {
+      stubMatchMedia(true);
+      renderMasthead({ quiet: true });
+      const header = screen.getByLabelText("Today summary");
+      expect(header.textContent).not.toContain("overdue");
+      expect(screen.queryByRole("img")).toBeNull();
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Pulse" }),
+      ).toBeDefined();
+      expect(screen.getByRole("button", { name: "Log a note" })).toBeDefined();
+    });
+
+    it("renders children under the sentence", () => {
+      stubMatchMedia(true);
+      renderMasthead({ children: <div data-testid="masthead-slot" /> });
+      expect(screen.getByTestId("masthead-slot")).toBeDefined();
+    });
+  });
+
+  describe("Enter belongs to the control that has focus", () => {
+    it("does not open the highlighted contact when Enter lands on a menu item", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      expect(
+        screen.getAllByRole("listitem")[0].getAttribute("aria-current"),
+      ).toBe("true");
+
+      fireEvent.click(screen.getByRole("button", { name: "More" }));
+      const item = screen.getByRole("menuitem", { name: "Customize layout" });
+      item.focus();
+      fireEvent.keyDown(item, { key: "Enter" });
+
+      expect(screen.queryByTestId("contact-marker")).toBeNull();
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Pulse" }),
+      ).toBeDefined();
+    });
+
+    it("does not open the highlighted contact from a bare Enter on the page", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      fireEvent.keyDown(window, { key: "Enter" });
+      expect(screen.queryByTestId("contact-marker")).toBeNull();
+    });
+
+    it("opens the contact from Enter on the focused row", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      expect(rows[0].getAttribute("tabindex")).toBe("0");
+      expect(rows[1].getAttribute("tabindex")).toBe("-1");
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: "Enter" });
+      expect(screen.getByTestId("contact-marker")).toBeDefined();
+    });
+
+    it("moves the highlight with ArrowDown and ArrowUp from a focused row", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: "ArrowDown" });
+      expect(rows[1].getAttribute("aria-current")).toBe("true");
+      expect(rows[0].getAttribute("aria-current")).toBeNull();
+      expect(rows[1].getAttribute("tabindex")).toBe("0");
+      // Focus was inside the list, so the new row takes it.
+      expect(document.activeElement).toBe(rows[1]);
+      fireEvent.keyDown(rows[1], { key: "ArrowUp" });
+      expect(rows[0].getAttribute("aria-current")).toBe("true");
+      // The first row stays put on ArrowUp.
+      fireEvent.keyDown(rows[0], { key: "ArrowUp" });
+      expect(rows[0].getAttribute("aria-current")).toBe("true");
+    });
+
+    it("completes the highlighted follow-up with Space on the row", async () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: " " });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
+      expect(screen.queryByTestId("contact-marker")).toBeNull();
+    });
+
+    it("leaves a key alone when a control inside the row has focus", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      const check = screen.getByRole("button", {
+        name: 'Mark "Send whitepaper" done',
+      });
+      check.focus();
+      fireEvent.keyDown(check, { key: "Enter" });
+      fireEvent.keyDown(check, { key: "ArrowDown" });
+      expect(screen.queryByTestId("contact-marker")).toBeNull();
+      expect(rows[0].getAttribute("aria-current")).toBe("true");
+    });
+  });
+
+  describe("CardFrame", () => {
+    it("renders the count as muted text inside the heading, with no hairline", () => {
+      const { container } = render(
+        <CardFrame cardId="up-next" title="Up next" count={10}>
+          <p>Body</p>
+        </CardFrame>,
+      );
+      // The name is "Up next, 10" in a browser. jsdom's name computation
+      // drops the space inside the inline span, so the match allows both.
+      expect(
+        screen.getByRole("heading", { level: 2, name: /^Up next,\s?10$/ }),
+      ).toBeDefined();
+      const section = container.querySelector('[data-card-id="up-next"]')!;
+      expect(section.getAttribute("aria-labelledby")).toBe(
+        "card-heading-up-next",
+      );
+      expect(section.innerHTML).not.toContain("border-b");
+    });
+
+    it("variant line puts the title, the count and the sentence on one row", () => {
+      const { container } = render(
+        <CardFrame
+          cardId="completed"
+          title="Completed"
+          count={0}
+          variant="line"
+        >
+          Nothing completed yet.
+        </CardFrame>,
+      );
+      const section = container.querySelector(
+        'section[data-card-id="completed"]',
+      )!;
+      expect(section).not.toBeNull();
+      expect(section.className).toContain("flex-wrap");
+      expect(section.className).not.toContain("bg-surface-container-lowest");
+      expect(
+        screen.getByRole("heading", { level: 2, name: /^Completed,\s?0$/ }),
+      ).toBeDefined();
+      const sentence = screen.getByText("Nothing completed yet.");
+      // The heading and the sentence share the row.
+      expect(sentence.parentElement).toBe(section);
+      expect(screen.getByRole("heading", { level: 2 }).parentElement).toBe(
+        section,
+      );
+    });
+
+    it("variant line shows the customize controls when editing", () => {
+      const onHide = vi.fn();
+      const onMoveStep = vi.fn();
+      render(
+        <CardCustomizeContext.Provider
+          value={{
+            isEditing: true,
+            cardId: "completed",
+            column: "focus",
+            index: 0,
+            totalInColumn: 2,
+            onHide,
+            onMoveToColumn: vi.fn(),
+            onMoveStep,
+          }}
+        >
+          <CardFrame cardId="completed" title="Completed" variant="line">
+            Nothing completed yet.
+          </CardFrame>
+        </CardCustomizeContext.Provider>,
+      );
+      expect(
+        screen.getByRole("button", { name: "Drag Completed to reorder" }),
+      ).toBeDefined();
+      expect(
+        screen.getByRole("button", { name: "Move Completed" }),
+      ).toBeDefined();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Move Completed down" }),
+      );
+      expect(onMoveStep).toHaveBeenCalledWith("completed", 1);
+      fireEvent.click(screen.getByRole("button", { name: "Hide Completed" }));
+      expect(onHide).toHaveBeenCalledWith("completed");
+    });
   });
 
   it("renders CompletedCard and expands items", () => {
@@ -804,23 +1150,27 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("Ghost One")).toBeDefined();
   });
 
-  it("toggles customize mode on Customize button click and C key press", () => {
+  it("toggles customize mode from the More menu and the C key, and shows no tray with nothing hidden", () => {
+    stubMatchMedia(true);
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
       </MemoryRouter>,
     );
 
-    // Initial state: Customize button exists and is not active
-    const customizeBtn = screen.getByRole("button", { name: "Customize" });
-    expect(customizeBtn).toBeDefined();
+    // Initial state: no Customize button in the header, nothing editing
+    expect(screen.queryByRole("button", { name: /Customize/ })).toBeNull();
     expect(screen.queryByText("Editing layout")).toBeNull();
 
-    // Click Customize button to enter customize mode
-    fireEvent.click(customizeBtn);
+    // Choose Customize layout from More to enter customize mode
+    openCustomize();
     expect(screen.getByText("Editing layout")).toBeDefined();
     expect(screen.getByText("Layout editing on")).toBeDefined();
-    expect(screen.getByTestId("hidden-cards-tray")).toBeDefined();
+    // The tray waits for a hidden card.
+    expect(screen.queryByTestId("hidden-cards-tray")).toBeNull();
+    expect(
+      screen.getByText("Drag a card to move it. Use the eye to hide one."),
+    ).toBeDefined();
 
     // Press 'c' to toggle customize mode off
     fireEvent.keyDown(window, { key: "c" });
@@ -845,7 +1195,7 @@ describe("frontend.pulse", () => {
     );
 
     // Enter customize mode
-    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+    openCustomize();
 
     // Find eye toggle for the Keeping up card
     const hideKeepingUpBtn = screen.getByRole("button", {
@@ -862,7 +1212,7 @@ describe("frontend.pulse", () => {
     );
   });
 
-  it("resets layout when Reset layout button is clicked", () => {
+  it("resets layout when Reset layout button is clicked, and shows the tray for the hidden cards", () => {
     mockPreferences.pulseLayout = {
       hidden: ["keeping-up", "insight"],
       order: { focus: ["up-next"], network: [], intel: [] },
@@ -875,7 +1225,10 @@ describe("frontend.pulse", () => {
     );
 
     // Enter customize mode
-    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+    openCustomize();
+    const tray = screen.getByTestId("hidden-cards-tray");
+    expect(tray.textContent).toContain("Keeping up");
+    expect(tray.textContent).toContain("Daily insight");
 
     const resetBtn = screen.getByRole("button", { name: "Reset layout" });
     fireEvent.click(resetBtn);
@@ -901,7 +1254,7 @@ describe("frontend.pulse", () => {
     );
 
     // Enter customize mode
-    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+    openCustomize();
 
     // Open ActionMenu on the Keeping up card
     const moveMenuBtn = screen.getByRole("button", { name: "Move Keeping up" });
@@ -931,7 +1284,7 @@ describe("frontend.pulse", () => {
     );
 
     // Enter customize mode
-    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+    openCustomize();
 
     // Move Activity up (the network column is keeping-up, activity, composition)
     const moveUpBtn = screen.getByRole("button", { name: "Move Activity up" });

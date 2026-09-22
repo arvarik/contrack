@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { DailyInsight } from "../../../api";
 
@@ -25,7 +25,6 @@ export const InsightCard = ({
     <CardFrame
       cardId="insight"
       title="Daily insight"
-      icon={Sparkles}
       badge={categoryBadge}
       className="bg-surface-container-low/60 border-primary/20"
     >

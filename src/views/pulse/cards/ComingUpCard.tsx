@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Calendar, Cake, Video } from "lucide-react";
+import { Cake, Video } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { SETTINGS_PAGES } from "../../settings/registry";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
@@ -35,12 +35,7 @@ export const ComingUpCard = ({
   const isEmpty = totalCount === 0;
 
   return (
-    <CardFrame
-      cardId="coming-up"
-      title="Coming up"
-      icon={Calendar}
-      count={totalCount}
-    >
+    <CardFrame cardId="coming-up" title="Coming up" count={totalCount}>
       {isEmpty ? (
         <div className="py-3 text-xs text-on-surface-variant">
           {hasConnectorsPage ? (

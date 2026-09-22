@@ -92,6 +92,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: true,
     page: "/pulse",
   },
+  // The arrows work from a focused row: Tab into the queue, then walk it.
+  {
+    group: NAMES.pulse.label,
+    keys: ["↑", "↓"],
+    description: "Move between items in Up next",
+    bareLetter: false,
+    page: "/pulse",
+  },
   {
     group: NAMES.pulse.label,
     keys: ["D"],
@@ -120,10 +128,12 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: true,
     page: "/pulse",
   },
+  // Enter belongs to the control that has focus. On a focused row it opens
+  // the contact. On a button, a link or a menu item it does what that does.
   {
     group: NAMES.pulse.label,
     keys: ["Enter"],
-    description: "Open contact",
+    description: "Open the highlighted contact",
     bareLetter: false,
     page: "/pulse",
   },

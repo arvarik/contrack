@@ -625,3 +625,84 @@ Rules that follow from it:
   meaning and are never used for the flag.
 - ❌ No surface reads `contact.relationshipScore` directly. A raw column
   read is how "Score 50" reached the map for a person nobody had ever met.
+
+## 8. Pulse: the morning page
+
+Pulse answers three questions in this order: what day is it and how am I
+doing, who do I reach today, what changed in my network. Everything that does
+not answer one of them gets smaller, quieter, or goes. The rules below are
+`src/views/pulse/lib/pulseStyles.ts` in words.
+
+### The type scale
+
+One object, `PULSE_TYPE`, holds every size on the page. Two sizes, 13 and
+15 px, are new on the app's scale and live only there, so no other page picks
+them up by accident. The 11 px floor stands.
+
+| Key         | Size and weight                          | Use                                         |
+| ----------- | ---------------------------------------- | ------------------------------------------- |
+| `label`     | 13 px semibold, variant colour           | The page label, the `h1` "Pulse"            |
+| `date`      | 32 px bold headline face, 24 px on phone | The date line, the largest text on the page |
+| `line`      | 18 px, 16 px on a phone, variant colour  | The sentence under the date                 |
+| `cardTitle` | 15 px bold, tight tracking               | A card's `h2`                               |
+| `cardCount` | 15 px semibold, variant colour, tabular  | The muted count after a card title          |
+| `name`      | 14 px semibold                           | A person's name in a row                    |
+| `rowTitle`  | 14 px                                    | The task or the fact in a row               |
+| `meta`      | 13 px, variant colour                    | Dates, counts, hints, the progress mark     |
+| `chip`      | 12 px semibold                           | A chip's text                               |
+| `group`     | 13 px semibold, variant colour           | A group heading inside the queue            |
+
+- ✅ Read a size from `PULSE_TYPE`. A card title is 15 px everywhere because
+  one constant says so.
+- ❌ A literal `text-[13px]` or `text-[15px]` in a Pulse card. Add a key if
+  a new role needs one.
+- The grid is `GRID_CLASSES` and `COLUMN_CLASSES`: 5, 3 and 4 of twelve at
+  `xl` (Focus, Intelligence, Network), 5 and 7 at `lg` with Intelligence two
+  across underneath, one column below. `PulseView`, `PulseSkeleton` and the
+  `pulse` variant of `RouteFallback` read the same constants, so the three
+  silhouettes cannot disagree.
+
+### A card is a title and a body
+
+`CardFrame` draws no line between its header and its body and carries no
+icon. The `h2` is the title, and the count follows it as muted text inside
+the `h2` after a screen-reader-only comma, so the section is named "Up next,
+10". `badge` and `headerAction` keep their places.
+
+### An empty card is a line
+
+`CardFrame variant="line"` is for a card with nothing to show: the title,
+the count, one sentence in `PULSE_TYPE.meta` and at most one link, on one
+row on the page surface with no card background. In customize mode the same
+controls appear at the row's end, in the same order with the same names as
+on a card, so "Hide Completed" is one locator in both shapes.
+
+- ✅ A line for Completed with nothing completed, Inbox at zero, Coming up
+  with nothing in two weeks, Daily insight without a key.
+- ❌ A framed card whose body is one italic sentence. Nobody reads a box that
+  says nothing.
+
+### The masthead and its sentence
+
+The `h1` stays "Pulse" for the landmark structure and the specs, and the date
+is the display line. One sentence from `buildDayLine` in
+`lib/dayLine.ts` replaces the chips: the counts above zero in the order
+overdue, due today, birthdays this week, joined by commas and closed by a
+period, then the streak from two days. From `sm` up each count is a
+`hit-area` button that jumps to its card. Below `sm` the counts are plain
+text, because the queue starts one flick down and inline 44 px tap boxes
+would overlap across two wrapped lines. `describeProgress` gives the words
+on the 40 px progress mark: "4 to do", "1 of 4 done", "All done", "Nothing
+due". Log a note is the one `.btn-primary`. New contact and Customize layout
+live in an `ActionMenu` named More.
+
+### Enter belongs to the control that has focus
+
+No window-level Enter on Pulse. Each Up next row is a `listitem` with a
+roving `tabIndex` (0 on the highlighted row, -1 elsewhere) and its own
+`onKeyDown`: Enter opens the contact, Space does the row's primary action,
+ArrowDown and ArrowUp move the highlight. A key is claimed only when the
+event target is the row itself, so a button inside the row keeps its own
+Enter and Space. J and K stay as bare letters on the window. The row keeps
+its list role: it is a clickable element with a keyboard equivalent, not a
+button.
