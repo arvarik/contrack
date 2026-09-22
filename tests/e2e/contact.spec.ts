@@ -485,6 +485,11 @@ test.describe("tracking", () => {
 
     const track = page.getByRole("button", { name: "Track", exact: true });
     await expect(track).toHaveAttribute("aria-pressed", "false");
+    // The caret is there before tracking, so the control cannot change
+    // shape when it is pressed.
+    await expect(
+      page.getByRole("button", { name: "Track, and choose how often" }),
+    ).toBeVisible();
     // Where the word sits before the press. Tracking must not move it.
     const boxBefore = await track.boundingBox();
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
@@ -560,6 +565,50 @@ test.describe("tracking", () => {
     await expect(
       page.getByRole("button", { name: "Cadence: every month" }),
     ).toBeVisible();
+  });
+
+  test("the caret tracks at a cadence you pick, in one press", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zane Cadence");
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zane Cadence")).toBeVisible();
+
+    // Untracked, the caret offers the five cadences as actions: none is
+    // checked, because there is no cadence yet.
+    const caret = page.getByRole("button", {
+      name: "Track, and choose how often",
+    });
+    await caret.click();
+    const menu = page.getByRole("menu", {
+      name: "Track, and choose how often",
+    });
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Every month",
+      "Every 2 months",
+      "Every 3 months",
+      "Every 6 months",
+      "Every year",
+    ]);
+    await expect(menu.getByRole("menuitemcheckbox")).toHaveCount(0);
+
+    await menu.getByRole("menuitem", { name: "Every year" }).click();
+
+    // Tracked, at the cadence that was chosen rather than the default.
+    await expect(
+      page.getByRole("button", { name: "Tracked", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      toastWith(page, "Tracking Zane Cadence, every year"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Cadence: every year" }),
+    ).toBeVisible();
+    await expect(headerRing(page, "Zane Cadence")).toHaveAttribute(
+      "data-score-band",
+      "unscored",
+    );
   });
 
   test("t tracks and untracks the open contact", async ({ page, instance }) => {

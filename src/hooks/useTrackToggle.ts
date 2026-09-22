@@ -4,7 +4,8 @@
  * Four controls flip the flag: the Track button in the contact header, the
  * `t` key on the contact page, the palette's action row and the toggle on
  * each row of the Tracked contacts page. They say the same things, so the
- * words live here once.
+ * words live here once. `trackAt` is the fifth door: the cadence menu on
+ * the Track button's caret, which tracks and sets the cadence in one press.
  *
  *   off to on   "Tracking Ada Lovelace, every 3 months"    Undo untracks
  *   on to off   "Stopped tracking Ada Lovelace"            Undo tracks again,
@@ -35,6 +36,22 @@ export function useTrackToggle() {
   const setTracked = useSetTracked();
   const { mutate } = setTracked;
 
+  /** The toast a contact gets when it becomes tracked, with its Undo. */
+  const announceTracked = useCallback(
+    (id: string, name: string, cadenceDays: number) =>
+      toast.success(
+        `Tracking ${name}, ${describeCadence(cadenceDays, { sentence: true })}`,
+        {
+          duration: UNDO_DURATION_MS,
+          action: {
+            label: "Undo",
+            onClick: () => mutate({ id, isTracked: false }),
+          },
+        },
+      ),
+    [mutate],
+  );
+
   const toggle = useCallback(
     (contact: TrackableContact) => {
       const { id, name, isTracked, cadenceDays } = contact;
@@ -57,22 +74,28 @@ export function useTrackToggle() {
       mutate(
         { id, isTracked: true },
         {
-          onSuccess: (saved) =>
-            toast.success(
-              `Tracking ${name}, ${describeCadence(saved.cadenceDays, { sentence: true })}`,
-              {
-                duration: UNDO_DURATION_MS,
-                action: {
-                  label: "Undo",
-                  onClick: () => mutate({ id, isTracked: false }),
-                },
-              },
-            ),
+          onSuccess: (saved) => announceTracked(id, name, saved.cadenceDays),
         },
       );
     },
-    [mutate],
+    [mutate, announceTracked],
   );
 
-  return { toggle, isPending: setTracked.isPending };
+  /**
+   * Track a contact at a cadence the person picked, rather than at the
+   * account's default. The menu on the Track button's caret offers this
+   * while a contact is untracked: one press, tracked and set.
+   */
+  const trackAt = useCallback(
+    (contact: TrackableContact, cadenceDays: number) => {
+      const { id, name } = contact;
+      mutate(
+        { id, isTracked: true, cadenceDays },
+        { onSuccess: (saved) => announceTracked(id, name, saved.cadenceDays) },
+      );
+    },
+    [mutate, announceTracked],
+  );
+
+  return { toggle, trackAt, isPending: setTracked.isPending };
 }

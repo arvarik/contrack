@@ -601,19 +601,25 @@ Rules that follow from it:
   "Contact actions" menu gets no Track item, and no other surface grows a
   second control for the flag: the `t` key, the palette row and the page
   toggle all run the same `useTrackToggle`, with the same toast and Undo.
-- **The cadence caret.** Shown only while tracked, as the right end of the
-  Track button itself: a caret segment inside the same rounded shell, with
-  a hairline between it and the word. It carries no words, so its
-  accessible name and its tooltip say what it adjusts and what the cadence
-  is now ("Cadence: every 3 months"). It opens an `ActionMenu` headed "Keep
-  up" with the five `CADENCE_CHOICES` checked, and a value off the list
-  shows as a sixth checked item, so the menu never lies.
-- **A control on a right-aligned row does not move its own label.** The
-  header cluster is right-aligned, so a control that grows when it is
-  pressed drags its label out from under the pointer. `TrackButton` holds
-  the caret's slot open while untracked and sizes the label to the longer
-  of its two words, so both states are the same width and the word stays
-  put. Any control that gains a part on press owes the reader the same.
+- **Track is a split button.** The word is the action a person takes most,
+  and the caret beside it, behind a hairline in the same rounded shell,
+  holds the close relatives of that action. Both halves are real buttons:
+  the word carries `aria-pressed`, and the caret carries `aria-haspopup`
+  and `aria-expanded` through `ActionMenu`. The caret is there in both
+  states and means one thing in both, "how often": untracked its rows
+  track at the cadence a person picks rather than at the account's
+  default, and tracked they change the cadence, with the current one
+  checked and a value off the list shown as a sixth checked item. It
+  carries no words, so its name and its tooltip say what it does.
+- **A control does not change shape when it is pressed.** A part that
+  appears on press is a part that was not there to be found, and on a
+  right-aligned row it drags the label out from under the pointer as it
+  arrives. Hold no empty slots either: an untracked Track button with a
+  gap where the caret will go looks broken. Give the control every part it
+  will ever have, and let the state change the fill and the word. Where
+  two words share one control, size the label to the longer of them
+  (`TrackButton` draws "Track" over an invisible "Tracked"), so the text
+  starts at the same pixel in both states.
 - **The words.** Track, Tracked, Untrack, Not tracked, Keeping up, Catch
   up, cadence. The band words, Strong, Fading and At risk, keep their own
   meaning and are never used for the flag.

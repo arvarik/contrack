@@ -1,41 +1,56 @@
 /**
- * CadenceMenu: how often a person wants to keep up with this contact.
+ * CadenceMenu: the menu half of the Track split button.
  *
- * The caret at the right end of the Track button, and only while the
- * contact is tracked, because the cadence is the second half of Track:
- * Track says who, the cadence says how often. It was a chip of its own that
- * appeared beside the button, which pushed the word "Track" sideways the
- * moment anybody pressed it.
+ * It is the caret at the right end of the button, in both states, because
+ * the cadence is the second half of Track: Track says who, the cadence says
+ * how often. A split button puts the one action a person takes most on the
+ * left and its close relatives behind the caret, which is exactly the shape
+ * of this pair:
+ *
+ *   untracked   pressing Track tracks at the account's default cadence, and
+ *               the menu tracks at a cadence the person picks instead
+ *   tracked     pressing Tracked stops tracking, and the menu changes the
+ *               cadence
+ *
+ * So the caret is never dead and never appears from nowhere: it means the
+ * same thing before and after, "how often", and the button keeps one shape.
  *
  * The caret carries no words, so its accessible name and its tooltip say
- * both what it adjusts and what the cadence is now: "Cadence: every 3
- * months". The menu lists the five choices with the current one checked. A
- * value off the list, set through the API, shows as a sixth checked item,
- * so the menu never claims a cadence the contact does not have.
- *
- * Choosing writes `cadenceDays` and toasts "Ada Lovelace, every month".
+ * what it does and, once tracked, what the cadence is now. While tracked a
+ * value off the list shows as a sixth checked item, so the menu never
+ * claims a cadence the contact does not have.
  */
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { CADENCE_CHOICES, describeCadence } from "../../../../shared/cadence";
 import { useSetCadence } from "../../../api/contacts";
 import {
+  useTrackToggle,
+  type TrackableContact,
+} from "../../../hooks/useTrackToggle";
+import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
-import { CARET_SLOT } from "./TrackButton";
+import { cn } from "../../../lib/utils";
 
 export interface CadenceMenuProps {
-  contact: { id: string; name: string; cadenceDays: number };
+  contact: TrackableContact;
+  /** The fill of the half beside it, so the two read as one control. */
+  className?: string;
 }
 
-export const CadenceMenu = ({ contact }: CadenceMenuProps) => {
+/** What the caret is for, before the contact is tracked. */
+export const TRACK_AT_LABEL = "Track, and choose how often";
+
+export const CadenceMenu = ({ contact, className }: CadenceMenuProps) => {
   const setCadence = useSetCadence();
-  const { cadenceDays } = contact;
+  const { trackAt } = useTrackToggle();
+  const { cadenceDays, isTracked } = contact;
   const words = describeCadence(cadenceDays);
   const sentence = describeCadence(cadenceDays, { sentence: true });
 
-  const choose = (days: number) => {
+  const change = (days: number) => {
     if (days === cadenceDays) return;
     setCadence.mutate(
       { id: contact.id, cadenceDays: days },
@@ -48,33 +63,42 @@ export const CadenceMenu = ({ contact }: CadenceMenuProps) => {
     );
   };
 
+  // Untracked, the rows are five ways to take the same action, so none of
+  // them is checked: there is no cadence yet to be the current one.
   const items: ActionMenuItem[] = CADENCE_CHOICES.map((choice) => ({
     id: String(choice.days),
     label: choice.label,
-    checked: choice.days === cadenceDays,
-    onSelect: () => choose(choice.days),
+    checked: isTracked ? choice.days === cadenceDays : undefined,
+    onSelect: () =>
+      isTracked ? change(choice.days) : trackAt(contact, choice.days),
   }));
-  if (!CADENCE_CHOICES.some((choice) => choice.days === cadenceDays)) {
+  if (
+    isTracked &&
+    !CADENCE_CHOICES.some((choice) => choice.days === cadenceDays)
+  ) {
     items.push({
       id: String(cadenceDays),
       label: words,
       checked: true,
-      onSelect: () => choose(cadenceDays),
+      onSelect: () => change(cadenceDays),
     });
   }
 
+  const label = isTracked ? `Cadence: ${sentence}` : TRACK_AT_LABEL;
+
   return (
     <ActionMenu
-      label={`Cadence: ${sentence}`}
-      title={`Cadence: ${sentence}`}
+      label={label}
+      title={label}
       heading="Keep up"
       items={items}
       align="end"
       className="items-stretch"
-      triggerClassName={`hit-area ${CARET_SLOT} p-0 flex items-center justify-center rounded-l-none rounded-r-md border-l border-primary/25 bg-primary/10 text-on-primary-wash hover:bg-primary/20 transition-colors`}
-      triggerContent={
-        <ChevronDown className="w-4 h-4 text-primary" aria-hidden="true" />
-      }
+      triggerClassName={cn(
+        "hit-area w-9 p-0 flex items-center justify-center rounded-l-none rounded-r-md border-l",
+        className,
+      )}
+      triggerContent={<ChevronDown className="w-4 h-4" aria-hidden="true" />}
     />
   );
 };

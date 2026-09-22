@@ -2,6 +2,11 @@
 // =============================================================================
 // The cadence caret and its menu
 // =============================================================================
+// The caret is the menu half of the Track split button, and it is there in
+// both states. Tracked, it changes the cadence. Untracked, its rows are five
+// ways to take the same action the word takes: track, at the cadence you
+// pick rather than at the account's default. So the caret means one thing,
+// "how often", before and after, and the control never changes shape.
 // The cadence is the second half of Track: who, then how often. It used to be
 // a chip of words beside the button, which pushed the word "Track" sideways
 // the moment anybody pressed it. It is now the caret at the right end of the
@@ -37,7 +42,12 @@ vi.mock("../../src/api/client", () => ({
 
 import { CadenceMenu } from "../../src/views/contact-detail/components/CadenceMenu";
 
-const ADA = { id: "c1", name: "Ada Lovelace", cadenceDays: 90 };
+const ADA = {
+  id: "c1",
+  name: "Ada Lovelace",
+  cadenceDays: 90,
+  isTracked: true,
+};
 
 function mount(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -152,5 +162,72 @@ describe("CadenceMenu", () => {
     await Promise.resolve();
     expect(api.fetch).not.toHaveBeenCalled();
     expect(toastMock.success).not.toHaveBeenCalled();
+  });
+});
+
+describe("the caret before the contact is tracked", () => {
+  const UNTRACKED = { ...ADA, isTracked: false };
+
+  it("says what it is for, rather than naming a cadence nobody set", () => {
+    mount(<CadenceMenu contact={UNTRACKED} />);
+    const caret = screen.getByRole("button", {
+      name: "Track, and choose how often",
+    });
+    expect(caret.textContent).toBe("");
+    expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
+  });
+
+  it("offers the five cadences as actions, with none of them current", () => {
+    mount(<CadenceMenu contact={UNTRACKED} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Track, and choose how often" }),
+    );
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByText("Keep up")).toBeTruthy();
+    // Plain items, not checkboxes: there is no cadence yet to be checked.
+    expect(within(menu).queryAllByRole("menuitemcheckbox")).toHaveLength(0);
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Every month",
+      "Every 2 months",
+      "Every 3 months",
+      "Every 6 months",
+      "Every year",
+    ]);
+  });
+
+  it("tracks the contact at the cadence that was chosen, in one press", async () => {
+    mount(<CadenceMenu contact={UNTRACKED} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Track, and choose how often" }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Every month" }));
+
+    await waitFor(() => expect(api.fetch).toHaveBeenCalledTimes(1));
+    expect(api.fetch).toHaveBeenCalledWith(
+      "/contacts/c1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ isTracked: true, cadenceDays: 30 }),
+      }),
+    );
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1));
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Tracking Ada Lovelace, every month",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
+  });
+
+  it("shows no sixth item for a stored cadence nobody can see yet", () => {
+    mount(<CadenceMenu contact={{ ...UNTRACKED, cadenceDays: 45 }} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Track, and choose how often" }),
+    );
+    expect(screen.getAllByRole("menuitem")).toHaveLength(5);
   });
 });
