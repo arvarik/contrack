@@ -211,7 +211,7 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("puts Track beside the kebab, and the cadence chip only while tracked", () => {
+  it("puts Track beside the kebab, and the cadence caret only while tracked", () => {
     const { unmount } = mount(<ProfileHeader {...makeProps()} />);
     const track = screen.getByRole("button", { name: "Track" });
     expect(track.getAttribute("aria-pressed")).toBe("false");
@@ -240,7 +240,7 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("shows the icon-only Track and the short cadence in the narrow header", () => {
+  it("shows the icon-only Track and the wordless caret in the narrow header", () => {
     mount(
       <ProfileHeader
         {...makeProps({
@@ -252,10 +252,11 @@ describe("the contact header", () => {
     const track = screen.getByRole("button", { name: "Tracked" });
     expect(track.textContent).toBe("");
     expect(track.getAttribute("title")).toBe("Tracked");
+    // The caret carries the cadence in its name, not in words on screen.
     expect(
       screen.getByRole("button", { name: "Cadence: every 3 months" })
         .textContent,
-    ).toBe("3 mo");
+    ).toBe("");
   });
 
   it("offers no Track to a ghost, which cannot be tracked", () => {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Track is one control, and pressing it moves nothing.** The cadence used to arrive as a separate chip beside the Track button the moment a contact became tracked, which pushed the word "Track" sideways under the reader's pointer. The cadence is now a caret at the right end of the button itself, inside the same rounded shell and behind a hairline, and the button takes the primary wash as before. **The word does not move.** The header cluster is right-aligned, so a control that grows drags its own label along: the caret's place is now held open while the contact is untracked, and the label is sized to the longer of "Track" and "Tracked", which makes both states the same width to the pixel. The caret carries no words, so its accessible name and its tooltip say what it adjusts and what the cadence is now, "Cadence: every 3 months". The narrow header keeps the same shape with the glyph alone. `shortCadence` in `shared/cadence.ts` goes with the chip that used it.
+
 ### Added
 
 - **Keeping up, the one card on Pulse for the people you track.** It takes the Momentum card's place at the top of the Network column and shows the state now and the trend: a bar split by the ring state of every tracked contact, named "42 tracked: 30 strong, 8 fading, 4 at risk, 0 with no interactions yet", with a legend of links to the groups on the Tracked contacts page; one line, "31 of 42 within cadence, 11 to catch up"; Rising and Cooling, three each, with the delta as a chip, or the line "Rising and cooling show after four weeks of tracking" before four snapshot weeks exist; and "5 tracked in the last 30 days". When nobody is tracked, the card says so with one button, Choose people, to the Tracked contacts page. Its **Manage** link is the door from Pulse to that page. The dashboard payload carries it as `tracking`, with `catchUp` beside it.

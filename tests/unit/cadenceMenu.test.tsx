@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 // =============================================================================
-// The cadence chip and its menu
+// The cadence caret and its menu
 // =============================================================================
-// The cadence is the second half of Track: who, then how often. The chip
-// reads the cadence in words and opens the five choices with the current one
-// checked. A value off the list, set through the API, shows as a sixth
-// checked item, so the menu never claims a cadence the contact does not
-// have. Choosing writes `cadenceDays` and toasts the contact and the words.
+// The cadence is the second half of Track: who, then how often. It used to be
+// a chip of words beside the button, which pushed the word "Track" sideways
+// the moment anybody pressed it. It is now the caret at the right end of the
+// Track button, so it carries no words of its own: its accessible name and
+// its tooltip say what it adjusts and what the cadence is now. The menu lists
+// the five choices with the current one checked. A value off the list, set
+// through the API, shows as a sixth checked item, so the menu never claims a
+// cadence the contact does not have. Choosing writes `cadenceDays` and toasts
+// the contact and the words.
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,20 +62,23 @@ afterEach(() => {
 });
 
 describe("CadenceMenu", () => {
-  it("reads the cadence in words, and names itself as the cadence", () => {
+  it("is a caret with no words, named and titled for the cadence it adjusts", () => {
     mount(<CadenceMenu contact={ADA} />);
-    const chip = screen.getByRole("button", {
+    const caret = screen.getByRole("button", {
       name: "Cadence: every 3 months",
     });
-    expect(chip.textContent).toBe("Every 3 months");
+    // No words: the glyph is the whole control, so nothing here can push the
+    // word "Track" along when the contact becomes tracked.
+    expect(caret.textContent).toBe("");
+    expect(caret.getAttribute("title")).toBe("Cadence: every 3 months");
+    expect(caret.getAttribute("aria-haspopup")).toBe("menu");
   });
 
-  it("reads the short form when compact", () => {
-    mount(<CadenceMenu contact={ADA} compact />);
+  it("names itself for a cadence off the list too", () => {
+    mount(<CadenceMenu contact={{ ...ADA, cadenceDays: 45 }} />);
     expect(
-      screen.getByRole("button", { name: "Cadence: every 3 months" })
-        .textContent,
-    ).toBe("3 mo");
+      screen.getByRole("button", { name: "Cadence: every 45 days" }),
+    ).toBeTruthy();
   });
 
   it("lists the five choices under Keep up with the current one checked", () => {

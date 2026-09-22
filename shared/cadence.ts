@@ -61,14 +61,3 @@ export function describeCadence(
     : `Every ${days} day${days === 1 ? "" : "s"}`;
   return sentence ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
-
-/**
- * A cadence in two or three characters, for a chip with no room for words:
- * "1 mo", "3 mo", "1 yr", or "45 d" for a value off the list. The narrow
- * contact header shows this beside an icon-only Track button.
- */
-export function shortCadence(days: number): string {
-  if (days === 365) return "1 yr";
-  if (days >= 30 && days % 30 === 0) return `${days / 30} mo`;
-  return `${days} d`;
-}

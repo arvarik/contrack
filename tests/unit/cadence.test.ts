@@ -12,7 +12,6 @@ import {
   DEFAULT_CADENCE_DAYS,
   describeCadence,
   isCadenceDays,
-  shortCadence,
 } from "../../shared/cadence";
 
 describe("CADENCE_CHOICES", () => {
@@ -50,20 +49,5 @@ describe("describeCadence", () => {
   it("lowercases the first letter for the middle of a sentence", () => {
     expect(describeCadence(90, { sentence: true })).toBe("every 3 months");
     expect(describeCadence(45, { sentence: true })).toBe("every 45 days");
-  });
-});
-
-describe("shortCadence", () => {
-  it("gives a chip two or three characters", () => {
-    expect(shortCadence(30)).toBe("1 mo");
-    expect(shortCadence(60)).toBe("2 mo");
-    expect(shortCadence(90)).toBe("3 mo");
-    expect(shortCadence(180)).toBe("6 mo");
-    expect(shortCadence(365)).toBe("1 yr");
-  });
-
-  it("falls back to days for a value off the list", () => {
-    expect(shortCadence(45)).toBe("45 d");
-    expect(shortCadence(7)).toBe("7 d");
   });
 });
