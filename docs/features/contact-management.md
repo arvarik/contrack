@@ -122,11 +122,18 @@ Narrow:
             Sydney · 2:45 AM · ThomasWalker ↗
 ```
 
+The Track control is a split button, and it is the same shape before and
+after: `[◎ Track │ ▾]` becomes `[◎ Tracked │ ▾]`.
+
+```
+
+```
+
 1. **The name** is the page's `h1`. Opening a contact moves focus to it. The name, the role and the company each edit in place. The ring around the avatar is the relationship score (see [The Score Ring](#the-score-ring)).
 2. **The meta line** is plain text: the location, the person's local time, and the weather. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**.
 3. **The weather** makes a request to Open-Meteo with the contact's coordinates. It shows only when it is allowed. When it is not shown, no request is made. The settings revamp adds the switch for it.
 4. **Tags** are chips. **+ tag** adds one. Removing a tag offers **Undo** for 7 seconds. List memberships sit on the same row.
-5. **Track** is the one button beside the ⋮ menu. It says **Track** when off and **Tracked** when on, and it is a toggle (`aria-pressed`). Tracked, it takes the primary wash and grows a caret at its right end, inside the same shell, which opens the cadence menu. **The word does not move when you press it**: the caret's place is held open while untracked and the label is sized to the longer of the two words, so both states are the same width. See [Tracking](#tracking). In the narrow header the button is the glyph alone, with the same caret.
+5. **Track** is the one control beside the ⋮ menu, and it is a split button: the word on the left, a caret on the right behind a hairline. The word says **Track** when off and **Tracked** when on, and it is a toggle (`aria-pressed`). Tracked, the control takes the primary wash. The caret is there in both states and means the same thing in both, how often. **Pressing it changes nothing about the shape**, and the word does not move: the label is sized to the longer of the two words. See [Tracking](#tracking). In the narrow header the word gives way to the glyph, with the same caret.
 6. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
 7. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
 
@@ -365,7 +372,9 @@ The relationship score, Pulse and the map's health layer are about the people yo
 ### Track, on the contact page
 
 - **The Track button** sits beside the ⋮ menu in the header. Press it when off and the contact is tracked, the ring appears around the avatar, and a toast says "Tracking Ada Lovelace, every 3 months" with **Undo**. Press it when on and the ring goes, the toast says "Stopped tracking Ada Lovelace", and **Undo** tracks again with the cadence the contact had.
-- **The cadence caret** is the right end of the Track button while the contact is tracked, separated from the word by a hairline. It carries no words: its name and its tooltip say what it adjusts and what the cadence is now, "Cadence: every 3 months". It opens a menu, **Keep up**, with five choices: every month, every 2 months, every 3 months, every 6 months, every year. The current one is checked. A cadence set through the API that is not on the list shows as a sixth checked item, "Every 45 days", so the menu never claims a cadence the contact does not have. Choosing writes it and toasts "Ada Lovelace, every month".
+- **The cadence caret** is the right end of the Track button, separated from the word by a hairline, and it is there whether or not the contact is tracked. It carries no words: its name and its tooltip say what it does. It opens a menu, **Keep up**, with five choices: every month, every 2 months, every 3 months, every 6 months, every year.
+  - **Before tracking**, the caret is named "Track, and choose how often", and its rows are five ways to take the same action the word takes: choosing one tracks the contact at that cadence rather than at the **Default cadence**, in one press. None is checked, because there is no cadence yet.
+  - **After tracking**, it is named for the cadence now in force, "Cadence: every 3 months", the current row is checked, and choosing another changes it and toasts "Ada Lovelace, every month". A cadence set through the API that is not on the list shows as a sixth checked item, "Every 45 days", so the menu never claims a cadence the contact does not have.
 - **The `t` key** does what the button does, toast and Undo included. It is listed under **Contact** in the shortcuts dialog and obeys the single-key shortcuts switch.
 - **The cadence** is set at the moment of tracking: from the request when it names one, else from the **Default cadence** preference. A contact that is not tracked has no cadence anyone can see.
 

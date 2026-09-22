@@ -133,38 +133,33 @@ describe("TrackButton", () => {
     expect(on.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("shows the caret only while tracked, and holds its place while not", () => {
+  it("is a split button in both states: the word, then the caret", () => {
     const { unmount } = mount(<TrackButton contact={ADA} />);
-    // Untracked: the word, and no second control.
-    expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-
-    // The caret's place is held open, hidden, so the word cannot move when
-    // the caret arrives.
-    const shell = screen.getByRole("button", { name: "Track" })
-      .parentElement as HTMLElement;
-    const slot = shell.lastElementChild as HTMLElement;
-    expect(slot.tagName).toBe("SPAN");
-    expect(slot.getAttribute("aria-hidden")).toBe("true");
-    expect(slot.className).toContain("invisible");
-    expect(slot.className).toContain("w-9");
+    // Untracked, the caret says what it is for rather than naming a cadence
+    // nobody has set. No empty slot, and no control that arrives on press.
+    const off = screen.getByRole("button", { name: "Track" });
+    const offCaret = screen.getByRole("button", {
+      name: "Track, and choose how often",
+    });
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(offCaret.getAttribute("aria-haspopup")).toBe("menu");
+    expect(offCaret.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      off.compareDocumentPosition(offCaret) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(off.parentElement).toBe(offCaret.closest("div")?.parentElement);
     unmount();
     cleanup();
 
+    // Tracked, the same two halves, and the caret now names the cadence.
     mount(<TrackButton contact={{ ...ADA, isTracked: true }} />);
-    const caret = screen.getByRole("button", {
+    const on = screen.getByRole("button", { name: "Tracked" });
+    const onCaret = screen.getByRole("button", {
       name: "Cadence: every 2 months",
     });
-    expect(caret.textContent).toBe("");
-    // The caret takes the width the empty slot was holding.
-    expect(caret.className).toContain("w-9");
-    // One shell holds the word and the caret, in that order.
-    const tracked = screen.getByRole("button", { name: "Tracked" });
-    const shellOn = tracked.parentElement as HTMLElement;
-    expect(shellOn.contains(caret)).toBe(true);
-    expect(
-      tracked.compareDocumentPosition(caret) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(onCaret.textContent).toBe("");
+    expect(on.parentElement).toBe(onCaret.closest("div")?.parentElement);
   });
 
   it("sizes the label to the longer word, so the shorter one cannot shift", () => {

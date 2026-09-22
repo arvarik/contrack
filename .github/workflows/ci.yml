@@ -24,6 +24,28 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The one network call in `npm ci` that leaves the npm registry.
+#
+# `onnxruntime-node` ships the CPU runtime inside the package for every
+# platform, and its install metadata asks for a download on exactly one:
+# linux/x64, where it fetches the CUDA execution provider from
+# api.nuget.org. Runners are linux/x64, so every run pulled it, and when
+# nuget timed out the install failed before a line of this repo compiled
+# (run 35685137580: `AggregateError [ETIMEDOUT] connect 150.171.109.74:443`
+# in onnxruntime-node's postinstall).
+#
+# Nothing here wants it. The embedding model runs on the CPU worker and no
+# code names an execution provider, so the CUDA binaries were downloaded
+# and never loaded. `skip` makes the install script exit before the
+# download, which removes the dependency on nuget and about 300 MB of
+# transfer from every job.
+#
+# The scripts that read this are `script/install.js` and
+# `script/install-utils.js` in that package, both install-time only, so
+# setting it for the whole workflow cannot reach the tests.
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   build-and-test:
     # Fork pull requests carry untrusted code, so they are pinned to

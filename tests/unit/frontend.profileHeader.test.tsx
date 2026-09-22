@@ -211,10 +211,15 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("puts Track beside the kebab, and the cadence caret only while tracked", () => {
+  it("puts the Track split button beside the kebab, in one shape either way", () => {
     const { unmount } = mount(<ProfileHeader {...makeProps()} />);
     const track = screen.getByRole("button", { name: "Track" });
     expect(track.getAttribute("aria-pressed")).toBe("false");
+    // The caret is there before tracking too, offering the same choice the
+    // word takes by default, so the control never changes shape.
+    expect(
+      screen.getByRole("button", { name: "Track, and choose how often" }),
+    ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
     // Track comes before the kebab in the cluster.
     const kebab = screen.getByRole("button", { name: "Contact actions" });
