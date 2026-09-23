@@ -735,6 +735,15 @@ test.describe("Pulse Office", () => {
           return `${section.getAttribute("data-card-id")} ${Math.round(box.top)} ${Math.round(box.height)}`;
         }),
       );
+    // The insight and the activity arrive after the page, and a card that
+    // is still loading is not the height of the card it becomes. Measure
+    // once both have landed.
+    await expect(
+      page
+        .locator('[data-card-id="insight"]')
+        .getByText("Loading", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     const atRest = await boxes();
 
     // Customize from the More menu

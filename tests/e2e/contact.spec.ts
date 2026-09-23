@@ -998,6 +998,11 @@ test.describe("the composer", () => {
     });
     await expect(picker).toBeFocused();
     await picker.fill("Zach Dia");
+    // Enter picks the highlighted match, so wait for the match: on a slow
+    // machine the contacts can still be loading when the name is typed.
+    await expect(
+      dialog.getByRole("option", { name: /Zach Dialog/ }),
+    ).toBeVisible();
     await page.keyboard.press("Enter");
 
     const editor = dialog.getByRole("textbox", { name: "Note" });
