@@ -423,6 +423,19 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
+  it("names translate, not transform, in a transition list", () => {
+    // Tailwind's `translate-*`, `scale-*` and `rotate-*` set the `translate`,
+    // `scale` and `rotate` properties, not `transform`. A list that names
+    // `transform` animates none of them: the side panel faded in place and
+    // the switch's knob jumped. `transition-transform` names all four.
+    const offenders = everyClassString()
+      .filter(({ text }) =>
+        /(?<![-\w])transition-\[[^\]]*\btransform\b/.test(text),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   it("times transitions with the motion tokens, not a hand-picked duration", () => {
     // The base duration applies to every `transition-*` with no class, and
     // `duration-(--dur-fast)` or `duration-(--dur-slow)` name the other two.
