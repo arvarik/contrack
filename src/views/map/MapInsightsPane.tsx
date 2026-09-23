@@ -1,13 +1,14 @@
 /**
  * MapInsightsPane — who is in view, and what they have in common.
  *
- * From `lg` it is the page's `SidePanel`: the rail's icon at the right edge,
- * and a 320 px panel that slides over the map from under it. The panel
- * carries `data-covers-map="right"` while it is open, so the map keeps its
- * pins, its toolbar and its controls in the part it leaves (`insets.ts`).
- * Below `lg` the same content opens in a bottom sheet from the toolbar's
- * Insights button. The `mapPaneOpen` preference and the I key open and close
- * it on a wide screen.
+ * From `lg` it is the page's `SidePanel`: a square button with the
+ * insights glyph in the map's top-right corner, level with the toolbar, and
+ * a 320 px panel that slides in under it from the window's edge. The panel carries
+ * `data-covers-map="right"` while it is open, so the map keeps its pins, its
+ * toolbar and its controls in the part it leaves (`insets.ts`). Below `lg`
+ * the same content opens in a bottom sheet from the toolbar's Insights
+ * button. The `mapPaneOpen` preference and the I key open and close it on a
+ * wide screen.
  *
  * Two views: a summary of the people in view (their top industries,
  * companies and tags, each a filter to press, and their time zones) and the
@@ -28,7 +29,10 @@ import {
 } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
-import { SidePanel } from "../../components/layout/SidePanel";
+import {
+  SIDE_PANEL_SCROLLER,
+  SidePanel,
+} from "../../components/layout/SidePanel";
 import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Modal } from "../../components/ui/Modal";
@@ -48,7 +52,7 @@ const VIEWS: readonly SegmentedOption<View>[] = [
 ];
 
 /** A scroller that reaches the panel's edges, so its bar sits on the edge. */
-const SCROLLER = "flex-1 min-h-0 overflow-y-auto -mx-4 px-4 -mb-4 pb-4";
+const SCROLLER = SIDE_PANEL_SCROLLER;
 
 /** The small caps heading over each group. */
 const GROUP_HEADING = cn(SECTION_HEADING, "flex items-center gap-1.5 mb-1");
@@ -71,8 +75,24 @@ export const MapInsightsPane = ({
   onSelectContact,
 }: MapInsightsPaneProps) => {
   const isWide = useMediaQuery(WIDE_QUERY);
+  const [view, setView] = useState<View>("summary");
+  // The switch between the two views. In the side panel it sits in the
+  // heading row, where its two words and the content under it say what the
+  // panel is, so the row holds the switch and the title stays for a screen
+  // reader. In the sheet it heads the content, under the sheet's own
+  // title.
+  const viewSwitch = (
+    <Segmented<View>
+      options={VIEWS}
+      value={view}
+      onChange={setView}
+      label="Insights view"
+      className="shrink-0 self-start"
+    />
+  );
   const content = (
     <InsightsContent
+      view={view}
       stats={stats}
       inViewContacts={inViewContacts}
       onApplyFacet={onApplyFacet}
@@ -86,10 +106,12 @@ export const MapInsightsPane = ({
         id="map-insights"
         title={INSIGHTS_TITLE}
         icon={BarChart3}
+        inset="overlay"
         open={isWide && isOpen}
         onOpenChange={onToggle}
         shortcut="I"
-        count={stats.inView}
+        titleHidden
+        lead={isWide && viewSwitch}
         panelProps={{
           "data-covers-map": isWide && isOpen ? "right" : undefined,
         }}
@@ -103,7 +125,10 @@ export const MapInsightsPane = ({
           title={INSIGHTS_TITLE}
           size="md"
         >
-          <div className="flex flex-col h-[70vh] max-h-[500px]">{content}</div>
+          <div className="flex flex-col gap-4 h-[70vh] max-h-[500px]">
+            {viewSwitch}
+            {content}
+          </div>
         </Modal>
       )}
     </>
@@ -111,6 +136,7 @@ export const MapInsightsPane = ({
 };
 
 interface InsightsContentProps {
+  view: View;
   stats: MapStats;
   inViewContacts: MapContact[];
   onApplyFacet: (facetQuery: string) => void;
@@ -118,22 +144,14 @@ interface InsightsContentProps {
 }
 
 const InsightsContent = ({
+  view,
   stats,
   inViewContacts,
   onApplyFacet,
   onSelectContact,
 }: InsightsContentProps) => {
-  const [view, setView] = useState<View>("summary");
-
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <Segmented<View>
-        options={VIEWS}
-        value={view}
-        onChange={setView}
-        label="Insights view"
-        className="shrink-0 self-start"
-      />
+    <div className="flex flex-1 min-h-0 flex-col gap-4">
       {stats.inView === 0 ? (
         <EmptyState
           icon={Users}

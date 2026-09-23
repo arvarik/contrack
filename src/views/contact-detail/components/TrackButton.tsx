@@ -1,135 +1,215 @@
 /**
  * TrackButton: whether a person keeps up with this contact, and how often.
  *
- * A split button. The word is the action a person takes most, and the caret
- * holds its close relatives, which is the shape this pair has wanted since
- * the cadence arrived:
+ * One menu button beside the kebab. The button says the state, and the menu
+ * holds every way to change it:
  *
  * ```
- *   untracked                    tracked
- *   ┌──────────────────┐         ┌──────────────────┐
- *   │ ◎ Track     │ ▾  │         │ ◎ Tracked   │ ▾  │
- *   └──────────────────┘         └──────────────────┘
- *     press: track at the          press: stop tracking
- *     default cadence              caret: change the cadence
- *     caret: track at a
- *     cadence you pick
+ *   untracked                     tracked
+ *   ┌───────────────┐             ┌───────────────┐
+ *   │ ◎ Track     ▾ │             │ ◎ Quarterly ▾ │
+ *   └───────────────┘             └───────────────┘
+ *   KEEP UP                       KEEP UP
+ *     Weekly                        Weekly
+ *     Monthly                       Monthly
+ *     Quarterly       Default       Quarterly           ✓
+ *     Yearly                        Yearly
+ *                                   ───────────────────
+ *                                   ⊘ Stop tracking
  * ```
  *
- * 1. The word is a toggle with `aria-pressed`: Track when off, Tracked when
- *    on. Off it is the container fill, on it is the selected tint that every
- *    toggle wears when it is on, with the Radar glyph in the accent. Both
- *    halves are flat and hover with the one state layer.
- * 2. The caret is `CadenceMenu`, a real button with `aria-haspopup` and
- *    `aria-expanded`, divided from the word by a hairline. It is there in
- *    both states and means the same thing in both: how often.
+ * 1. Untracked, the button reads Track on the container fill. Each row
+ *    tracks the contact at that cadence in one press (`trackAt`), and the
+ *    account's default cadence carries the hint "Default".
+ * 2. Tracked, the button reads the cadence, one word, in the selected tint
+ *    that every toggle wears when it is on, with the Radar glyph in the
+ *    primary. The rows change the cadence (`useSetCadence`) with the current
+ *    one checked, and Stop tracking, under a hairline, untracks with an Undo
+ *    (`useTrackToggle`, the same toast as everywhere else).
+ * 3. A cadence off the four words, 60 or 180 days saved before 2.0 or any
+ *    value the API took, shows as one more checked row in its place in the
+ *    order ("Every 2 months"), and the button says it short: "2 months".
+ *    Untracked, an account default off the list is that extra row.
  *
- * **One shape, and the word does not move.** The caret does not appear on
- * press, so the control never changes shape, and there is no dead space
- * holding a place for it. The label is sized to the longer of the two words
- * with the current one drawn over it, so "Track" and "Tracked" start at the
- * same pixel and the shell keeps one width. That matters because the
- * header's cluster is right-aligned: a control that grows drags its own
- * label out from under the pointer. `tests/e2e/contact.spec.ts` measures
- * the box before and after the press.
+ * It was a split button: the word a toggle, and a caret behind a hairline
+ * that held five cadences in sentences ("Every 3 months"). The owner asked
+ * for something smaller and sleeker, with single words and no line down the
+ * middle. One control does both jobs: the one thing a person does here is
+ * choose how often, and stopping is one of the choices.
  *
- * The narrow header has room for the glyph alone: the word moves into the
- * accessible name and the tooltip, and the caret stays.
+ * **One width, whatever it says.** Every word the button can show from the
+ * menu, the default and the `t` key is drawn in one grid cell, invisibly,
+ * and the current word is drawn over them. The cell is as wide as the
+ * widest word, so choosing a cadence never moves the control's left edge.
+ * That matters because the header's cluster is right-aligned: a control
+ * that grows pulls its own label out from under the pointer.
+ * `tests/e2e/contact.spec.ts` measures the box before and after.
  *
- * Pressing the word runs `useTrackToggle`, which toasts with an Undo. The
- * ring around the avatar appears or goes with the flag, because both read
- * the same contact. The "Contact actions" menu gets no Track item: one
- * control per concept.
+ * **Size.** 32 px tall, the height of `.btn-sm`, with tight sides, 13 px
+ * bold type, a 14 px chevron and the 44 px tap box of `hit-area`. It is flat
+ * and hovers with the one state layer, because it is a toggle's face, not a
+ * call to action. The narrow header has room for the glyph and the chevron:
+ * the word moves into the accessible name and the tooltip.
+ *
+ * The `t` key stays a one-key toggle at the account's default cadence
+ * (`useTrackShortcut`), as the palette's row is. The ring around the avatar
+ * appears or goes with the flag, because both read the same contact. The
+ * "Contact actions" menu gets no Track item: one control per concept.
  */
-import { Radar } from "lucide-react";
-import { cn } from "../../../lib/utils";
-import { SELECTED_TINT } from "../../../lib/styles";
+import { ChevronDown, CircleSlash, Radar } from "lucide-react";
+import { toast } from "sonner";
+import {
+  CADENCE_DAYS,
+  DEFAULT_CADENCE_DAYS,
+  cadenceOptions,
+  describeCadence,
+  shortCadence,
+} from "../../../../shared/cadence";
+import { useSetCadence } from "../../../api/contacts";
 import {
   useTrackToggle,
   type TrackableContact,
 } from "../../../hooks/useTrackToggle";
-import { CadenceMenu } from "./CadenceMenu";
+import { usePreferences } from "../../../contexts/PreferencesContext";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../../components/ui/ActionMenu";
+import { SELECTED_TINT } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 export interface TrackButtonProps {
   contact: TrackableContact;
-  /** The narrow header: the glyph alone, with the word in the name. */
+  /** The narrow header: the glyph and the chevron, with the word in the name. */
   compact?: boolean;
   className?: string;
 }
 
+/** The button's name before the contact is tracked. */
+export const TRACK_LABEL = "Track, choose how often";
+
+/** The button's name while tracked: "Tracking quarterly, change or stop". */
+export const trackingLabel = (cadenceDays: number) =>
+  `Tracking ${describeCadence(cadenceDays, { sentence: true })}, change or stop`;
+
 /**
- * On: the selected tint. The ink stays on hover, so the caret half does not
- * take the menu button's hover ink and read as off.
+ * Every word the button can come to show without a change of contact: Track,
+ * and each accepted cadence. They size the label's cell.
+ */
+const SIZER_WORDS = ["Track", ...CADENCE_DAYS.map(shortCadence)];
+
+/**
+ * The shape: 32 px tall, 4 px corners, 13 px bold. The trigger's own padding
+ * goes, and the sides are set here, a little tighter after the chevron.
+ */
+const SHAPE = "h-8 gap-1.5 p-0 rounded-md text-[13px] leading-none font-bold";
+
+/**
+ * On: the selected tint. The ink stays on hover and while the menu is open,
+ * so the button never reads as off.
  */
 const ON = cn(SELECTED_TINT, "hover:text-on-primary-wash");
 
-/** Off: the container fill. */
-const OFF = "bg-surface-container-high text-on-surface";
+/** Off: the container fill, flat. */
+const OFF = "bg-surface-container-high text-on-surface hover:text-on-surface";
 
 export const TrackButton = ({
   contact,
   compact = false,
   className,
 }: TrackButtonProps) => {
-  const { toggle, isPending } = useTrackToggle();
-  const on = contact.isTracked;
-  const word = on ? "Tracked" : "Track";
-  const half = cn("state-layer transition-colors", on ? ON : OFF);
+  const { toggle, trackAt, isPending } = useTrackToggle();
+  const setCadence = useSetCadence();
+  const { preferences } = usePreferences();
+  const defaultDays = preferences.defaultCadenceDays ?? DEFAULT_CADENCE_DAYS;
+  const { cadenceDays, isTracked: on } = contact;
+  const word = on ? shortCadence(cadenceDays) : "Track";
+  const label = on ? trackingLabel(cadenceDays) : TRACK_LABEL;
+  // A change on its way: the rows wait for it, so two presses cannot race.
+  const busy = isPending || setCadence.isPending;
+
+  const change = (days: number) => {
+    if (days === cadenceDays) return;
+    setCadence.mutate(
+      { id: contact.id, cadenceDays: days },
+      {
+        onSuccess: () =>
+          toast.success(
+            `${contact.name}, ${describeCadence(days, { sentence: true })}`,
+          ),
+      },
+    );
+  };
+
+  // Untracked, the rows are ways to take one action, so none is checked:
+  // there is no cadence yet to be the current one. The contact's stored
+  // cadence is not shown then, because nobody chose it for this contact.
+  const items: ActionMenuItem[] = cadenceOptions(
+    on ? cadenceDays : defaultDays,
+  ).map((days) => ({
+    id: String(days),
+    label: describeCadence(days),
+    checked: on ? days === cadenceDays : undefined,
+    hint: days === defaultDays ? "Default" : undefined,
+    speakHint: true,
+    disabled: busy,
+    onSelect: () => (on ? change(days) : trackAt(contact, days)),
+  }));
+  if (on) {
+    items.push({
+      id: "stop",
+      label: "Stop tracking",
+      icon: CircleSlash,
+      separatorBefore: true,
+      disabled: busy,
+      onSelect: () => toggle(contact),
+    });
+  }
+
+  const sizers = SIZER_WORDS.includes(word)
+    ? SIZER_WORDS
+    : [...SIZER_WORDS, word];
 
   return (
-    <div
-      className={cn(
-        "inline-flex items-stretch rounded-md text-sm font-bold",
-        className,
+    <ActionMenu
+      label={label}
+      title={compact ? label : undefined}
+      heading="Keep up"
+      items={items}
+      align="end"
+      className={className}
+      triggerClassName={cn(
+        SHAPE,
+        compact ? "px-2" : "pl-2.5 pr-2",
+        on ? ON : OFF,
       )}
-    >
-      <button
-        type="button"
-        aria-pressed={on}
-        aria-label={compact ? word : undefined}
-        title={compact ? word : undefined}
-        disabled={isPending}
-        onClick={() => toggle(contact)}
-        className={cn(
-          "hit-area inline-flex items-center justify-start gap-2 rounded-l-md disabled:opacity-50",
-          // Narrow, the control keeps the 32 px height of an icon button and
-          // takes its 44 px tap box from `hit-area`. Forcing the box itself
-          // to 44 px made the header taller and left the company field on
-          // the line below within 20 px of it, which is an axe target-size
-          // failure on a phone (WCAG 2.5.8).
-          compact ? "p-2" : "min-h-[44px] sm:min-h-[40px] py-2 pl-5 pr-3",
-          half,
-        )}
-      >
-        <Radar
-          aria-hidden="true"
-          className={cn("w-4 h-4 shrink-0", on && "text-primary")}
-        />
-        {!compact && (
-          // One cell, two layers: the longer word sets the width and the
-          // current one is drawn over it, so the text starts at the same
-          // place whichever word it is.
-          <span className="grid">
-            <span
-              aria-hidden="true"
-              className="col-start-1 row-start-1 invisible"
-            >
-              Tracked
+      triggerContent={
+        <>
+          <Radar
+            aria-hidden="true"
+            className={cn("w-4 h-4 shrink-0", on && "text-primary")}
+          />
+          {!compact && (
+            // One cell, many layers: the words it may show, invisible, set
+            // the width, and the current word is drawn over them.
+            <span className="grid">
+              {sizers.map((sizer) => (
+                <span
+                  key={sizer}
+                  aria-hidden="true"
+                  className="col-start-1 row-start-1 invisible whitespace-nowrap"
+                >
+                  {sizer}
+                </span>
+              ))}
+              <span className="col-start-1 row-start-1 text-left whitespace-nowrap">
+                {word}
+              </span>
             </span>
-            <span className="col-start-1 row-start-1 text-left">{word}</span>
-          </span>
-        )}
-      </button>
-
-      {/* The hairline between the word and the caret: the primary's own
-          tint while tracked, else the light line token. */}
-      <CadenceMenu
-        contact={contact}
-        className={cn(
-          half,
-          on ? "border-primary/25" : "border-outline-variant",
-        )}
-      />
-    </div>
+          )}
+          <ChevronDown aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+        </>
+      }
+    />
   );
 };

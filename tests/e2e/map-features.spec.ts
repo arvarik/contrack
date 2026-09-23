@@ -76,6 +76,11 @@ test.describe("map features - filters and place search", () => {
     });
 
     await page.goto("/map");
+    // The search needs the map to fly: an Enter pressed before the map is
+    // ready does nothing, and on a slow runner it came first.
+    await expect(
+      page.getByRole("region", { name: "Contact map" }),
+    ).toHaveAttribute("data-map-ready", "true");
 
     // Click Go to button
     const gotoBtn = page.getByRole("button", { name: "Go to place" });
@@ -110,6 +115,9 @@ test.describe("map features - filters and place search", () => {
     });
 
     await page.goto("/map");
+    await expect(
+      page.getByRole("region", { name: "Contact map" }),
+    ).toHaveAttribute("data-map-ready", "true");
 
     await page.getByRole("button", { name: "Go to place" }).click();
     const placeInput = page.getByRole("textbox", { name: "Go to place" });
@@ -168,8 +176,8 @@ test.describe("map features - filters and place search", () => {
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
 
-    // The rail's icon says whether the panel is open. A closed panel stays
-    // in the page, inert, so it is not a count of zero.
+    // The Insights button says whether the panel is open. A closed panel
+    // stays in the page, inert, so it is not a count of zero.
     const icon = page.getByRole("button", {
       name: "Map insights",
       exact: true,

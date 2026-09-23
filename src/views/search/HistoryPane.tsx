@@ -35,6 +35,7 @@ import {
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
 import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../lib/styles";
+import { SIDE_PANEL_SCROLLER } from "../../components/layout/SidePanel";
 import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
@@ -229,9 +230,10 @@ export const HistoryPane = ({
         />
       </div>
 
-      {/* The side room and the foot keep a row's focus ring inside the
-          scroller. */}
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-5 -mx-1 px-1 pb-1">
+      {/* The list scrolls under the filter. The scroller reaches the
+          frame's side edges, so its bar sits on the window's edge in the
+          side panel, and its inset keeps a row's focus ring inside it. */}
+      <div className={cn(SIDE_PANEL_SCROLLER, "space-y-5")}>
         {groups.map((group) => (
           <div key={group.key} className="space-y-1.5">
             <h3 id={`history-group-${group.key}`} className={SECTION_HEADING}>
@@ -307,7 +309,7 @@ export const HistoryPane = ({
     return <>{children({ count: totalCount, actions, body })}</>;
   }
 
-  // The sheet: the side panel's heading row, with an X in place of Hide.
+  // The sheet: the side panel's heading row, with an X that closes it.
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">

@@ -39,6 +39,8 @@ export interface CameraMove {
   zoom?: number;
   padding?: PaddingOptions;
   duration?: number;
+  /** The curve, from 0 to 1 over the duration. MapLibre's own by default. */
+  easing?: (t: number) => number;
 }
 
 /**
@@ -99,12 +101,15 @@ export function flyToContact(
  * Give the map new covers without changing what is centred.
  *
  * The map keeps its centre in the open part, so the view slides by half the
- * difference. Nothing happens when the padding is already this.
+ * difference. Nothing happens when the padding is already this. The move
+ * takes the contact's 400 ms slide by default, and a caller that moves the
+ * map with another cover passes that cover's duration and curve.
  */
 export function settlePadding(
   map: MovableMap,
   padding: PaddingOptions,
-  options: Pick<MoveOptions, "reducedMotion"> = {},
+  options: Pick<MoveOptions, "reducedMotion"> &
+    Pick<CameraMove, "duration" | "easing"> = {},
 ): void {
   if (samePadding(map.getPadding(), padding)) return;
   const reduced = options.reducedMotion ?? prefersReducedMotion();
@@ -112,5 +117,9 @@ export function settlePadding(
     map.jumpTo({ padding });
     return;
   }
-  map.easeTo({ padding, duration: PADDING_DURATION_MS });
+  map.easeTo({
+    padding,
+    duration: options.duration ?? PADDING_DURATION_MS,
+    ...(options.easing && { easing: options.easing }),
+  });
 }

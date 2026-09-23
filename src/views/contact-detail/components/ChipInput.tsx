@@ -24,7 +24,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles, X } from "lucide-react";
 import { cn } from "../../../lib/utils";
-import { ADD_BUTTON } from "../../../lib/styles";
+import { ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
 
 export interface Chip {
   id: string;
@@ -173,9 +173,9 @@ export const ChipInput = ({
             commit();
             setAdding(false);
           }}
-          // A field draws no `::after`, so the 44 px floor on a phone is the
-          // field's own height. 16 px text there stops iOS zooming in.
-          className="min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none"
+          // 44 px tall with 16 px text on a phone (see `ADD_FIELD`). "+ link"
+          // opens the same field.
+          className={ADD_FIELD}
         />
       ) : (
         <button
@@ -183,7 +183,7 @@ export const ChipInput = ({
           type="button"
           aria-label={`Add ${noun}`}
           onClick={() => setAdding(true)}
-          className={cn(ADD_BUTTON, "text-xs px-2 mx-0 py-1")}
+          className={ADD_BUTTON_SMALL}
         >
           <Plus aria-hidden="true" className="w-3.5 h-3.5" />
           {addText}

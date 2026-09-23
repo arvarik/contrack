@@ -549,7 +549,7 @@ test.describe("Tracked contacts", () => {
     ).toBeVisible();
     await expect(
       page.locator("[data-contact-id]", { hasText: "Edsger Dijkstra" }),
-    ).toContainText(/every 3 months.*past due/);
+    ).toContainText(/quarterly.*past due/);
     // Linus and Margaret are not tracked, and neither is the new person.
     const notTracked = page.locator("section", {
       has: page.getByRole("heading", { level: 2, name: /^Not tracked/ }),
@@ -581,7 +581,7 @@ test.describe("Tracked contacts", () => {
     // A row toggle tracks, and the person moves to No interactions yet.
     await page.getByRole("button", { name: "Track Zuri Untracked" }).click();
     await expect(
-      page.getByText("Tracking Zuri Untracked, every 3 months"),
+      page.getByText("Tracking Zuri Untracked, quarterly"),
     ).toBeVisible();
     const unscored = page.locator("section", {
       has: page.getByRole("heading", {
@@ -603,11 +603,11 @@ test.describe("Tracked contacts", () => {
     await unscored.getByRole("button", { name: "Select all" }).click();
     await expect(bar).toContainText("1 selected");
     await bar.getByRole("button", { name: "Cadence" }).click();
-    await page.getByRole("menuitem", { name: "Every year" }).click();
-    await expect(page.getByText("1 contact, every year")).toBeVisible();
+    await page.getByRole("menuitem", { name: "Yearly" }).click();
+    await expect(page.getByText("1 contact, yearly")).toBeVisible();
     await expect(
       page.locator("[data-contact-id]", { hasText: "Zuri Untracked" }),
-    ).toContainText("every year");
+    ).toContainText("yearly");
     await expectPageAccessible(page, testInfo, "tracked-select");
   });
 
@@ -618,24 +618,23 @@ test.describe("Tracked contacts", () => {
     await page.goto("/settings/network");
 
     const cadence = page.getByRole("combobox", { name: "Default cadence" });
-    await expect(cadence).toHaveText(/Every 3 months/);
+    await expect(cadence).toHaveText(/Quarterly/);
     await cadence.click();
     await expect(page.getByRole("option")).toHaveText([
-      "Every month",
-      "Every 2 months",
-      "Every 3 months",
-      "Every 6 months",
-      "Every year",
+      "Weekly",
+      "Monthly",
+      "Quarterly",
+      "Yearly",
     ]);
-    await page.getByRole("option", { name: "Every year" }).click();
+    await page.getByRole("option", { name: "Yearly" }).click();
     touched.push({ instance, key: "defaultCadenceDays" });
-    await expect(cadence).toHaveText(/Every year/);
+    await expect(cadence).toHaveText(/Yearly/);
     // Off its default: the dot and the Reset beside the control.
     await page
       .locator("#cadence")
       .getByRole("button", { name: /^Reset/ })
       .click();
-    await expect(cadence).toHaveText(/Every 3 months/);
+    await expect(cadence).toHaveText(/Quarterly/);
 
     const trackNew = page.getByRole("switch", { name: "Track new contacts" });
     await expect(trackNew).toHaveAttribute("aria-checked", "false");

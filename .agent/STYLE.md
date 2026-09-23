@@ -244,6 +244,10 @@ contact's vibe and the dark palette.
   longer looks like a secondary.
 - ✅ Depth means "this does something". Icon buttons, text buttons, chips,
   rows, tabs and menu items stay flat and take `state-layer`.
+- ✅ `.btn-latch` for a button that opens a panel and stays its one way out
+  (`SidePanel`'s button): while `aria-expanded` is true the face sits on its
+  last pixel of edge, as on press, in the selected tint. It says "open, and
+  pressing me closes it" without a second close button.
 - ❌ A background, text size, padding, height, shadow, ring, hover, active,
   opacity or disabled class on a `.btn-*`. Utilities come after the class, so
   each of them takes the edge or the face away. The scan in
@@ -272,6 +276,9 @@ recipes had grown on three pages.
 
 - ✅ `ICON_BTN`, `BTN_QUIET`, `listRow`, `filterPill`, `navLink`, `IconButton`
   and the `ActionMenu` and `Select` triggers already carry the layer.
+- ✅ A control that floats on a photo, the pencil on a contact's avatar,
+  turns its translucent face solid on hover and focus instead. The layer's
+  6 percent ink on a clear face over a photo reads as a smudge.
 - ❌ `hover:bg-*` or `active:bg-*` on a flat control, beside the layer.
 - ❌ A `shadow-*`, `ring-*`, `scale-*` or `translate-*` hover on a card. The
   card class owns its hover.
@@ -287,10 +294,16 @@ decoration, so the rule is short:
    with space around it) and a press anywhere on it opens or runs one thing.
    A card lifts 2 px (`card-interactive`), and anything smaller lifts 1 px
    (`lift`).
-2. **It never lifts when it is one row in a list of rows** (the contact
-   list, the Up next queue, a menu, the history, the settings rail). Rows
-   touch or nearly touch, and a lift would stack one over its neighbour.
-   They take the state layer.
+2. **It never lifts when it is one row in a list of rows** (the Up next
+   queue, a menu, the history, the settings rail). Rows touch or nearly
+   touch, and a lift would stack one over its neighbour. They take the
+   state layer. **One list is the exception: the Network list**, the one a
+   person scans with the pointer all day. Its rows rise with the pointer's
+   nearness (`useProximityLift`, `.proximity-row`): the row under a mouse up
+   to 2 px with a soft shadow, and the neighbour on the pointer's side more
+   as the pointer nears it, the two lifts always adding up to one. A mouse
+   only, no rise under reduced motion, and a key press lays the rows down.
+   No other list takes it.
 3. **It never lifts when it is a button.** A button has its own edge and
    press (`.btn-*`) or the state layer (`ICON_BTN`, `BTN_QUIET`).
 4. **It never lifts when it is static** (a card that only shows), or when
@@ -310,26 +323,40 @@ scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
 scrolls sideways. The Network list keeps its bar on the left edge
 (`dir="rtl"`), away from the letter rail.
 
-### The right-hand panel: one rail, one panel
+### The right-hand panel: one button, one panel
 
 A page with a side panel (Ask Contrack's history, the map's insights) uses
-`SidePanel` (`src/components/layout/SidePanel.tsx`), the left nav's mirror:
+`SidePanel` (`src/components/layout/SidePanel.tsx`):
 
-- A rail, 64 px, the nav's width and surface, in the layout at the right
-  edge. It holds the panel's icon, a disclosure (`aria-expanded`,
-  `aria-controls`) with a `RailTooltip` that opens to the left.
-- The panel, 320 px, slides out from under the rail over the page (an
-  overlay, with a soft shadow on its open edge, `.side-panel`), so opening
-  it moves nothing on the page. Its heading row: the title, a count, the
-  actions, then Hide (`PanelRightClose`). However it closes (Hide, Escape
-  inside it, the page's own key), a keyboard inside it lands on the rail
-  icon. A closed panel is `inert`.
+- A button in the page's top-right corner, level with the page title
+  (`inset="page"`) or with a toolbar floating over a canvas
+  (`inset="overlay"`). It is a `.btn-secondary btn-icon` with
+  `.btn-latch`: a square with the panel's glyph alone, the insights bars on
+  the map and the clock on Ask, named for the panel, with its key in the
+  tooltip. It is a disclosure (`aria-expanded`, `aria-controls`), and it is
+  the panel's one way out: no Hide button, no X.
+- The panel, 320 px, slides in from the window's edge under the button, over
+  the page (an overlay, with a soft shadow on its open edge,
+  `.side-panel`), so opening it moves nothing on the page and the button
+  never moves. It opens at the slow duration and leaves at the base one, on
+  the app's curve, and its content follows it in a beat behind. A page that moves something with
+  it reads `SIDE_PANEL_OPEN_MS`: the map eases its padding on the same
+  timing and curve.
+- Its heading row starts level with the button and ends with the button's
+  own face drawn invisible, so the title and the actions stop where the
+  button begins at any word length. Under the row the content takes the
+  panel's full width, and a scroller in it (`SIDE_PANEL_SCROLLER`) reaches
+  the window's edge, so its bar sits on the edge. A panel whose content says what it is keeps its heading for a screen reader and gives the row to a control (`titleHidden`, `lead`): the map's Summary and People switch.
+- However it closes (the button, Escape inside it, the page's own key), a
+  keyboard inside it lands on the button. A closed panel is `inert`.
 - The page keeps the panel's 320 px clear of what matters under it where it
   can. Ask Contrack places its column so the open panel never covers the
   search box (`ASK_COLUMN`), and the map fits its pins beside the panel.
-- From `lg`. Below it the page opens the same content in a bottom sheet.
-- ❌ A panel that pushes the page's content aside, a floating button that
-  stands in for the rail, or a second header style for a panel.
+- From `lg`. Below it the page opens the same content in a bottom sheet from
+  a button of the same kind in its header or toolbar.
+- ❌ A panel that pushes the page's content aside, a rail that takes a lane
+  of the layout for one icon, a second close control, or a second header
+  style for a panel.
 
 ### Selected: one look
 
@@ -888,35 +915,36 @@ Rules that follow from it:
   explain". The ring inside it is then `decorative`, so the score is said
   once.
 - **The Track button.** One control sets the flag on a contact page:
-  `TrackButton`, a `<button aria-pressed>` with the `Radar` glyph and one
-  word, Track or Tracked. Off it is `.btn-secondary`. On it takes the
-  primary wash (`bg-primary/10 text-on-primary-wash`) and the glyph takes
-  `text-primary`. Narrow, the glyph alone with the word in the name. The
-  "Contact actions" menu gets no Track item, and no other surface grows a
-  second control for the flag: the `t` key, the palette row and the page
-  toggle all run the same `useTrackToggle`, with the same toast and Undo.
-- **Track is a split button.** The word is the action a person takes most,
-  and the caret beside it, behind a hairline in the same rounded shell,
-  holds the close relatives of that action. Both halves are real buttons:
-  the word carries `aria-pressed`, and the caret carries `aria-haspopup`
-  and `aria-expanded` through `ActionMenu`. The caret is there in both
-  states and means one thing in both, "how often": untracked its rows
-  track at the cadence a person picks rather than at the account's
-  default, and tracked they change the cadence, with the current one
-  checked and a value off the list shown as a sixth checked item. It
-  carries no words, so its name and its tooltip say what it does.
+  `TrackButton`, a menu button (`ActionMenu`) with the `Radar` glyph, one
+  word and a chevron, 32 px tall, flat, with the state layer. Untracked it
+  reads Track on the container fill. Tracked it reads the cadence, one
+  word ("Quarterly", or "2 months" for a value off the list), in the
+  selected tint, with the glyph in `text-primary`. Narrow, the glyph and
+  the chevron, with the words in the name and the tooltip. The "Contact
+  actions" menu gets no Track item, and no other surface grows a second
+  control for the flag: the `t` key, the palette row and the page toggle
+  all run the same `useTrackToggle`, with the same toast and Undo.
+- **One menu says how often, and stopping is one of its rows.** Under the
+  heading "Keep up": Weekly, Monthly, Quarterly and Yearly
+  (`CADENCE_CHOICES`). Untracked, each row tracks at that cadence, and the
+  account's default carries the hint "Default", which a screen reader hears
+  too (`speakHint`). Tracked, the current row is checked, a value off the
+  four shows as one more checked row in its place (`cadenceOptions`), and
+  Stop tracking follows under a hairline (`separatorBefore`). It was a
+  split button, the word a toggle and a caret behind a hairline, which the
+  owner found heavy.
 - **A control does not change shape when it is pressed.** A part that
   appears on press is a part that was not there to be found, and on a
   right-aligned row it drags the label out from under the pointer as it
-  arrives. Hold no empty slots either: an untracked Track button with a
-  gap where the caret will go looks broken. Give the control every part it
-  will ever have, and let the state change the fill and the word. Where
-  two words share one control, size the label to the longer of them
-  (`TrackButton` draws "Track" over an invisible "Tracked"), so the text
-  starts at the same pixel in both states.
-- **The words.** Track, Tracked, Untrack, Not tracked, Keeping up, Catch
-  up, cadence. The band words, Strong, Fading and At risk, keep their own
-  meaning and are never used for the flag.
+  arrives. Give the control every part it will ever have, and let the state
+  change the fill and the word. Where several words share one control, size
+  the label to the widest of them (`TrackButton` draws every word it can
+  show, invisibly, in one grid cell, and the current word over them), so
+  the control keeps one width whatever it says.
+- **The words.** Track, Tracked, Stop tracking, Untrack, Not tracked,
+  Keeping up, Catch up, cadence, and the four cadences, one word each:
+  Weekly, Monthly, Quarterly, Yearly. The band words, Strong, Fading and At
+  risk, keep their own meaning and are never used for the flag.
 - ❌ No surface reads `contact.relationshipScore` directly. A raw column
   read is how "Score 50" reached the map for a person nobody had ever met.
 
@@ -978,15 +1006,18 @@ on a card, so "Hide Completed" is one locator in both shapes.
 - ❌ A framed card whose body is one italic sentence. Nobody reads a box that
   says nothing.
 
-### The masthead and its sentence
+### The masthead and its line
 
 The masthead is `PageHeader` with the title "Pulse", the `h1`, and the day
 as its `suffix`: "Pulse Tuesday, September 22", one line in two tones at the
 size of every page's title. On a phone the day takes its own line under the
-title and the actions. One sentence from `buildDayLine` in `lib/dayLine.ts`
-replaces the chips: the counts above zero in the order
-overdue, due today, birthdays this week, joined by commas and closed by a
-period, then the streak from two days. From `sm` up each count is a
+title and the actions. One line from `buildDayLine` in `lib/dayLine.ts`
+replaces the chips: the counts above zero in the order overdue, due today,
+birthdays this week, joined by the middle dot (`MetaDot` with `pause`, so a
+screen reader hears a comma), with no commas and no closing period. One
+item stands alone, with no dot. Each dot stays with the item after it, so a
+wrapped line never ends on one. The streak, from two days, is one more
+item: "Nothing due today · 12 days in a row". From `sm` up each count is a
 `hit-area` button that jumps to its card. Below `sm` the counts are plain
 text, because the queue starts one flick down and inline 44 px tap boxes
 would overlap across two wrapped lines. Log note is the one `.btn-primary`.
@@ -995,6 +1026,32 @@ Customize layout live in an `ActionMenu` named More.
 
 - ❌ A progress ring or a "3 to do" beside the actions. It repeats the
   sentence's counts in a smaller, vaguer form.
+
+### Customize: moving a card
+
+Customize mode moves a card by its grip, and the drop lands where the
+pointer is, not where the card's box is.
+
+- ✅ The grip (`GripVertical`) on every card at every width. A mouse drags
+  after 4 px. A finger holds for 200 ms first, and the grip keeps
+  `touch-action: manipulation`, so a flick that starts on it still scrolls
+  the page. The grip tints while a hold waits to become a drag.
+- ✅ The pointer picks the column, then the place: before the first card
+  whose middle is below it, in reading order in the two-across grid at
+  `lg`. Each step moves the card in a draft of the layout, and the cards
+  it passes slide with a transform (`lib/flip.ts`). One write, on drop,
+  through `pulseLayoutReducer`. Escape puts the draft back.
+- ✅ The card's slot is a 64 px dashed box, the height of the preview, and
+  the preview under the pointer is a compact card: the title, where it will
+  land ("Intelligence · 3 of 5") and the grip. A tall card at full height
+  opened an 800 px gap and pushed the rest of its column off screen.
+- ✅ A way to move without dragging (WCAG 2.5.7): the Move menu on every
+  card, with Move up, Move down and each other column, and the arrow keys
+  on a focused grip. Announcements name the card, its column and its place.
+- ✅ Reduced motion: nothing slides and the drop does not fly, and the card
+  still lands where the pointer left it.
+- ❌ A `transition-*` class that includes `transform` on a card that drags:
+  it animates the drag itself, and the card trails the pointer.
 
 ### The queue: a pane of rows
 

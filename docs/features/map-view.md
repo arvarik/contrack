@@ -106,17 +106,24 @@ layer, and the time zones are in the insights panel, by name.
 ### Map Insights
 
 From the `lg` breakpoint the insights are the page's side panel
-(`SidePanel`, the same one Ask Contrack's history uses). A 64 px rail at the
-page's right edge holds the insights icon, and the map ends where the rail
-starts. The icon opens a 320 px panel that slides over the map from under
-the rail, so opening it moves nothing on the map. Below `lg` the toolbar's
-**Insights** button opens the same content in a bottom sheet.
+(`SidePanel`, the same one Ask Contrack's history uses). A square button
+with the insights glyph alone sits in the map's top-right corner, level
+with the toolbar, named "Map insights", and the map runs to the window's
+edge. The button opens a
+320 px panel that slides in from the window's edge under it, over the map,
+so opening it moves nothing on the map and the button stays where it is.
+While the panel is open the button stays pressed in. The panel's heading row
+holds the Summary and People switch, and under it the content takes the
+panel's full width, with the scroll bar on the window's edge. The map eases
+its padding on the panel's own timing and curve, so the pins and the panel
+arrive together. Below `lg` the toolbar's **Insights** button opens the same
+content in a bottom sheet.
 
-- **Opening and closing**: the rail's icon (a disclosure, with a tooltip
-  that names the `I` key), Hide in the panel's heading row, Escape inside
-  the panel, and `i` / `I` anywhere on the page. Hide and Escape give focus
-  back to the rail's icon. The open state on a wide screen persists through
-  the `mapPaneOpen` account preference (defaults to `true`).
+- **Opening and closing**: the insights button (a disclosure, with a tooltip
+  that names the `I` key), Escape inside the panel, and `i` / `I` anywhere
+  on the page. There is no second close button. Escape gives focus back to
+  the button. The open state on a wide screen persists through the
+  `mapPaneOpen` account preference (defaults to `true`).
 - **Map insets**: the open panel carries `data-covers-map="right"`, so a
   fly-to centres its pin in the part of the map the panel leaves, and the
   zoom buttons and the credit move clear of it with its slide. A closed
@@ -687,7 +694,7 @@ What makes the map fast to open, in the order a visit meets it:
 - Tab reaches a pin, focus from a keyboard opens its hover card on any
   device, and Enter opens the contact
 - The bottom line is a region named "In view" with a polite live region, so a screen reader hears who is in view after a move. Overdue is a toggle button with `aria-pressed`
-- The insights rail's icon is a disclosure (`aria-expanded`, `aria-controls`). The panel is a landmark named "Map insights", `inert` while closed, and its Summary and People views are a `Segmented` radio group
+- The insights button, the glyph alone, is a disclosure (`aria-expanded`, `aria-controls`) named "Map insights". The panel is a landmark with the same name, `inert` while closed, with its heading kept for a screen reader, and its Summary and People views are a `Segmented` radio group
 - The zoom buttons sit in MapLibre's navigation control
 - In the Adjust pin dialog the pin is a `<button>` that the arrow keys move,
   and the coordinates line is a live region, so the dialog works with no

@@ -24,7 +24,7 @@
  * beside the contact, so its pane is about 600 px wide. Two columns there
  * left the timeline about 160 px.
  */
-import React, { Suspense, useState, useCallback } from "react";
+import React, { Suspense, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
@@ -153,6 +153,8 @@ export const ContactProfile = ({
 
   // ── Local state ───────────────────────────────────────────────────────
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
+  /** The pencil on the avatar, where focus goes back when the picker closes. */
+  const avatarEdit = useRef<HTMLButtonElement>(null);
   const [activeTab, setActiveTab] = useState<Section>("timeline");
 
   // ── Layout ────────────────────────────────────────────────────────────
@@ -316,6 +318,7 @@ export const ContactProfile = ({
             onDelete={handleDeleteContact}
             onClose={onClose}
             onOpenAvatarPicker={() => setIsAvatarPickerOpen(true)}
+            avatarEditRef={avatarEdit}
             showNetworkButton={showNetworkButton}
             layout={wide ? "wide" : "narrow"}
             backLabel={backLabel}
@@ -441,6 +444,7 @@ export const ContactProfile = ({
           isOpen={isAvatarPickerOpen}
           onClose={() => setIsAvatarPickerOpen(false)}
           contactId={id}
+          returnFocusRef={avatarEdit}
         />
       )}
     </>

@@ -1,10 +1,12 @@
 /**
- * RailTooltip: the label beside an icon on a slim rail.
+ * RailTooltip: the label beside an icon on the rail, or beside a button at
+ * the window's right edge.
  *
- * The left nav and the right-hand panel rail are both columns of icons with
- * no text. On hover, after a 250 ms pause, the icon's name (and its key, when
- * it has one) appears beside it, on the side away from the rail's edge: to
- * the right of the left nav, to the left of a right rail.
+ * The left nav is a column of icons with no text, and the right-hand panel's
+ * button (`SidePanel`) sits at the window's right edge. On hover, after a
+ * 250 ms pause, the icon's name (and its key, when it has one) appears
+ * beside it, on the side away from the window's edge: to the right of the
+ * left nav, to the left of the panel's button.
  *
  * It is a hover-rendered `<div>`, so it is worth nothing to a screen reader
  * or to a keyboard user. Every icon it labels carries its own `aria-label`
@@ -39,13 +41,22 @@ export const RailTooltip = ({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const show = useCallback(() => {
+    if (disabled) return;
     timerRef.current = setTimeout(() => setVisible(true), 250);
-  }, []);
+  }, [disabled]);
 
   const hide = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setVisible(false);
   }, []);
+
+  // While disabled it forgets the hover. The panel's button is disabled
+  // while its panel is open, and the pointer that closes the panel rests on
+  // it: the label waits for the pointer to come back, and does not appear
+  // under a pointer that has just used the button.
+  useEffect(() => {
+    if (disabled) hide();
+  }, [disabled, hide]);
 
   useEffect(
     () => () => {

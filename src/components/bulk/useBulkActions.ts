@@ -3,7 +3,8 @@
  *
  * Manages all bulk mutation side-effects:
  * - Soft delete (with undo toast)
- * - Track and untrack (with undo toast), and the cadence
+ * - Track and untrack (with undo toast), and the cadence, in the words
+ *   `describeCadence` gives it ("3 contacts, quarterly")
  * - Archive
  * - Add to list
  * - Color / vibe update
@@ -186,7 +187,10 @@ export function useBulkActions({
     [getIds, trackedById, bulkUpdate, onComplete],
   );
 
-  /** One cadence for every selected contact: "12 contacts, every month". */
+  /**
+   * One cadence for every selected contact: "12 contacts, monthly", or
+   * "12 contacts, every 2 months" for a value off the four words.
+   */
   const handleBulkCadence = useCallback(
     (days: number) => {
       const ids = getIds();

@@ -247,10 +247,10 @@ export const RouteFallback = ({
     // Ask Contrack: the title with the mode switch, and History below `lg`
     // (the pair fills its own row on a phone), the search box, then "Try
     // asking" and its chips, in the page's column and with the scroller's
-    // bar lane. From `lg` the history rail is at the right edge. Its panel
-    // opens over the page, so the column is where it lands either way.
+    // bar lane. From `lg` the History button is in the top-right corner. Its
+    // panel opens over the page, so the column is where it lands either way.
     return (
-      <div className="h-full flex overflow-hidden bg-surface">
+      <div className="relative h-full flex overflow-hidden bg-surface">
         <div className="flex-1 min-w-0 overflow-hidden [scrollbar-gutter:stable]">
           <div
             className={cn(
@@ -286,7 +286,7 @@ export const RouteFallback = ({
             </div>
           </div>
         </div>
-        <div className="hidden lg:block w-16 shrink-0 bg-surface-container-low" />
+        <Block className="hidden lg:block absolute right-4 top-8 w-10 h-10 rounded-md" />
       </div>
     );
   }

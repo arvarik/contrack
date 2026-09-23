@@ -502,3 +502,23 @@ export const FORM_INPUT =
  */
 export const formInputHighlight = (hasValue: boolean) =>
   hasValue ? "bg-ai/10 ring-1 ring-inset ring-ai/40" : "";
+
+// ─── Contact header ──────────────────────────────────────────────────────────
+//
+// The small "+ Add" and its field, shared by "+ tag" (`ChipInput`, in the
+// header and in the Details card) and "+ link" (`AddLink`, at the end of the
+// header's meta line), so the two look and behave as one control.
+
+/**
+ * The small "+ Add" after a row of chips or links: "+ tag", "+ link". The
+ * "+ Add" look (`ADD_BUTTON`) at 12 px, with its own sides.
+ */
+export const ADD_BUTTON_SMALL = cn(ADD_BUTTON, "text-xs px-2 mx-0 py-1");
+
+/**
+ * The field "+ Add" opens in its place. A field draws no `::after`, so the
+ * 44 px floor on a phone is the field's own height, and 16 px text there
+ * stops iOS zooming in. From `sm` it is 32 px tall with 12 px text.
+ */
+export const ADD_FIELD =
+  "min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none";

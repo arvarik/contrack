@@ -251,6 +251,39 @@ function openCustomize() {
   fireEvent.click(screen.getByRole("menuitem", { name: "Customize layout" }));
 }
 
+/** The masthead's line under the title: the paragraph with the counts. */
+function mastheadLine() {
+  const header = screen.getByLabelText("Today summary");
+  const line = Array.from(header.querySelectorAll("p")).find((p) =>
+    /overdue|caught up|Nothing due/.test(p.textContent ?? ""),
+  );
+  expect(line).toBeDefined();
+  return line!;
+}
+
+/** A line as a sighted reader sees it: the screen-reader-only words left out. */
+function visibleText(el: Element) {
+  const clone = el.cloneNode(true) as Element;
+  clone.querySelectorAll(".sr-only").forEach((node) => node.remove());
+  return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** The same line as a screen reader reads it: the decoration left out. */
+function spokenText(el: Element) {
+  const clone = el.cloneNode(true) as Element;
+  clone
+    .querySelectorAll('[aria-hidden="true"]')
+    .forEach((node) => node.remove());
+  return (clone.textContent ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/ ,/g, ",")
+    .trim();
+}
+
+/** Let dnd-kit's keyboard sensor arm its key listener, which waits a tick. */
+const tick = () =>
+  act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
 /**
  * Pulse with a route that would render if anything navigated to a contact.
  * The Enter guard and the row keys assert on the marker.
@@ -1055,7 +1088,7 @@ describe("frontend.pulse", () => {
       return { onJumpTo, onToggleCustomize };
     };
 
-    it("titles the page Pulse with the day beside it, and one sentence", () => {
+    it("titles the page Pulse with the day beside it, and one line of facts", () => {
       const monday = new Date(2026, 8, 21, 9, 0, 0);
       vi.setSystemTime(monday);
       stubMatchMedia(true);
@@ -1076,10 +1109,15 @@ describe("frontend.pulse", () => {
       // ink. It is a paragraph, not part of the h1.
       expect(dateLine?.className).toContain(PAGE_TITLE_SUFFIX);
       expect(heading.contains(dateLine!)).toBe(false);
-      expect(header.textContent).toContain(
-        "2 overdue, 3 due today, 1 birthday this week. 5 days in a row.",
+      // One line of facts, joined by middle dots, with no commas and no
+      // closing period. A screen reader hears a comma where each dot is.
+      expect(visibleText(mastheadLine())).toBe(
+        "2 overdue · 3 due today · 1 birthday this week · 5 days in a row",
       );
-      // No progress ring: the sentence already says the counts.
+      expect(spokenText(mastheadLine())).toBe(
+        "2 overdue, 3 due today, 1 birthday this week, 5 days in a row",
+      );
+      // No progress ring: the line already says the counts.
       expect(screen.queryByRole("img")).toBeNull();
     });
 
@@ -1095,10 +1133,64 @@ describe("frontend.pulse", () => {
         screen.getByRole("button", { name: "1 birthday this week" }),
       );
       expect(onJumpTo).toHaveBeenLastCalledWith("birthdays");
-      // The period and the streak are not buttons.
+      // The streak is a fact, not a button.
       expect(
         screen.queryByRole("button", { name: /days in a row/ }),
       ).toBeNull();
+    });
+
+    it("keeps each dot with the item after it, so a wrapped line never ends on a dot", () => {
+      stubMatchMedia(true);
+      renderMasthead();
+      const line = mastheadLine();
+      const dots = Array.from(line.querySelectorAll('[aria-hidden="true"]'));
+      // Three dots between four items, none before the first.
+      expect(dots.map((dot) => dot.textContent)).toEqual(["·", "·", "·"]);
+      expect(line.firstChild?.textContent).toBe("2 overdue");
+      for (const dot of dots) {
+        // The dot and the item after it share one span that does not wrap.
+        const pair = dot.parentElement!;
+        expect(pair.className).toContain("whitespace-nowrap");
+        expect(visibleText(pair)).toMatch(/^· \S/);
+      }
+      expect(visibleText(dots[0].parentElement!)).toBe("· 3 due today");
+      expect(
+        within(dots[1].parentElement! as HTMLElement).getByRole("button", {
+          name: "1 birthday this week",
+        }),
+      ).toBeDefined();
+    });
+
+    it("shows one item alone, with no dot", () => {
+      stubMatchMedia(true);
+      renderMasthead({
+        counts: {
+          overdue: 0,
+          dueToday: 0,
+          birthdaysThisWeek: 0,
+          queued: 0,
+          streak: 1,
+        },
+      });
+      expect(visibleText(mastheadLine())).toBe("All caught up");
+      expect(mastheadLine().textContent).not.toContain("·");
+      expect(mastheadLine().textContent).not.toContain(".");
+    });
+
+    it("joins Nothing due today and the streak with one dot", () => {
+      stubMatchMedia(true);
+      renderMasthead({
+        counts: {
+          overdue: 0,
+          dueToday: 0,
+          birthdaysThisWeek: 0,
+          queued: 4,
+          streak: 12,
+        },
+      });
+      expect(visibleText(mastheadLine())).toBe(
+        "Nothing due today · 12 days in a row",
+      );
     });
 
     it("renders the counts as plain text below sm", () => {
@@ -1107,9 +1199,8 @@ describe("frontend.pulse", () => {
 
       expect(screen.queryByRole("button", { name: "2 overdue" })).toBeNull();
       expect(screen.queryByRole("button", { name: "3 due today" })).toBeNull();
-      const header = screen.getByLabelText("Today summary");
-      expect(header.textContent).toContain(
-        "2 overdue, 3 due today, 1 birthday this week.",
+      expect(visibleText(mastheadLine())).toBe(
+        "2 overdue · 3 due today · 1 birthday this week · 5 days in a row",
       );
       // The only buttons are the two actions and the menu trigger.
       const names = screen
@@ -1432,15 +1523,20 @@ describe("frontend.pulse", () => {
           </CardFrame>
         </CardCustomizeContext.Provider>,
       );
+      // The grip shows at every width: a phone drags too, with a hold.
+      const grip = screen.getByRole("button", {
+        name: "Drag Completed to reorder",
+      });
+      expect(grip.className).not.toMatch(/(^|\s)hidden(\s|$)/);
+      expect(grip.className).toContain("touch-manipulation");
+      // The phone's up and down arrows are gone: the Move menu holds the
+      // steps at every width, and the first card has no Move up.
       expect(
-        screen.getByRole("button", { name: "Drag Completed to reorder" }),
-      ).toBeDefined();
-      expect(
-        screen.getByRole("button", { name: "Move Completed" }),
-      ).toBeDefined();
-      fireEvent.click(
-        screen.getByRole("button", { name: "Move Completed down" }),
-      );
+        screen.queryByRole("button", { name: "Move Completed down" }),
+      ).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Move Completed" }));
+      expect(screen.queryByRole("menuitem", { name: "Move up" })).toBeNull();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
       expect(onMoveStep).toHaveBeenCalledWith("completed", 1);
       fireEvent.click(screen.getByRole("button", { name: "Hide Completed" }));
       expect(onHide).toHaveBeenCalledWith("completed");
@@ -1904,7 +2000,15 @@ describe("frontend.pulse", () => {
     // The tray waits for a hidden card.
     expect(screen.queryByTestId("hidden-cards-tray")).toBeNull();
     expect(
-      screen.getByText("Drag a card to move it. Use the eye to hide one."),
+      screen.getByText(
+        "Drag a card by its handle to move it. Use the eye to hide one.",
+      ),
+    ).toBeDefined();
+    // A phone holds the handle before the card lifts, and the words say so.
+    expect(
+      screen.getByText(
+        "Hold a card's handle, then drag it. Use the eye to hide one.",
+      ),
     ).toBeDefined();
 
     // Press 'c' to toggle customize mode off
@@ -2011,19 +2115,20 @@ describe("frontend.pulse", () => {
     );
   });
 
-  it("moves card up and down via mobile arrow buttons", () => {
+  it("moves a card one place up with the Move menu, at every width", () => {
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
       </MemoryRouter>,
     );
 
-    // Enter customize mode
     openCustomize();
 
-    // Move Activity up (the network column is keeping-up, activity)
-    const moveUpBtn = screen.getByRole("button", { name: "Move Activity up" });
-    fireEvent.click(moveUpBtn);
+    // Activity is last in Network (Keeping up, Activity): Move up, no Move
+    // down.
+    fireEvent.click(screen.getByRole("button", { name: "Move Activity" }));
+    expect(screen.queryByRole("menuitem", { name: "Move down" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
 
     expect(mockSetPreference).toHaveBeenCalledWith(
       "pulseLayout",
@@ -2033,5 +2138,137 @@ describe("frontend.pulse", () => {
         }),
       }),
     );
+  });
+
+  describe("dragging a card with the keyboard", () => {
+    /** Pulse in customize mode, and the live region of the drag. */
+    function renderCustomize() {
+      render(
+        <MemoryRouter initialEntries={["/pulse"]}>
+          <PulseView />
+        </MemoryRouter>,
+      );
+      openCustomize();
+      return () =>
+        document.querySelector('[id^="DndLiveRegion"]')?.textContent ?? "";
+    }
+
+    /** The cards of a column, in order, as the grid draws them. */
+    const columnOrder = (column: string) =>
+      Array.from(
+        document.querySelectorAll(
+          `[data-pulse-column="${column}"] > [data-flip-id]`,
+        ),
+      ).map((node) => node.getAttribute("data-flip-id"));
+
+    it("picks a card up with Space, moves it with the arrows, and saves once on the drop", async () => {
+      const live = renderCustomize();
+      const grip = screen.getByRole("button", {
+        name: "Drag Keeping up to reorder",
+      });
+      grip.focus();
+      fireEvent.keyDown(grip, { code: "Space", key: " " });
+      await tick();
+      expect(live()).toBe(
+        "Picked up Keeping up. It is in Network, position 1 of 2.",
+      );
+      // The card folds to a dashed slot, and the preview names its place.
+      const slot = document.querySelector('[data-flip-id="keeping-up"]')!;
+      expect(slot.className).toContain("border-dashed");
+      expect(slot.querySelector("section")).toBeNull();
+      expect(
+        document.querySelector("[data-drag-preview]")?.textContent,
+      ).toContain("Network · 1 of 2");
+
+      fireEvent.keyDown(document, { code: "ArrowDown", key: "ArrowDown" });
+      await tick();
+      expect(columnOrder("network")).toEqual(["activity", "keeping-up"]);
+      expect(live()).toBe("Keeping up moves to Network, position 2 of 2.");
+      // Nothing is saved while the card is in the air.
+      expect(mockSetPreference).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(document, { code: "Space", key: " " });
+      await tick();
+      expect(mockSetPreference).toHaveBeenCalledTimes(1);
+      expect(mockSetPreference).toHaveBeenCalledWith(
+        "pulseLayout",
+        expect.objectContaining({
+          order: expect.objectContaining({
+            network: ["activity", "keeping-up"],
+          }),
+        }),
+      );
+      expect(live()).toBe("Dropped Keeping up in Network, position 2 of 2.");
+      // The card is back as a card, in its new place.
+      expect(
+        document.querySelector('[data-flip-id="keeping-up"] section'),
+      ).not.toBeNull();
+    });
+
+    it("moves a card to the column beside it with Arrow Left", async () => {
+      const live = renderCustomize();
+      const grip = screen.getByRole("button", {
+        name: "Drag Inbox to reorder",
+      });
+      grip.focus();
+      fireEvent.keyDown(grip, { code: "Space", key: " " });
+      await tick();
+      // With no layout in the test, the columns read in source order:
+      // Focus, Network, Intelligence. Inbox is second in Intelligence, so
+      // Arrow Left takes it to Network, at the same place.
+      fireEvent.keyDown(document, { code: "ArrowLeft", key: "ArrowLeft" });
+      await tick();
+      expect(columnOrder("network")).toEqual([
+        "keeping-up",
+        "inbox",
+        "activity",
+      ]);
+      expect(live()).toBe("Inbox moves to Network, position 2 of 3.");
+      fireEvent.keyDown(document, { code: "Enter", key: "Enter" });
+      await tick();
+      expect(mockSetPreference).toHaveBeenCalledWith(
+        "pulseLayout",
+        expect.objectContaining({
+          order: expect.objectContaining({
+            network: ["keeping-up", "inbox", "activity"],
+            intel: ["insight", "coming-up", "composition"],
+          }),
+        }),
+      );
+    });
+
+    it("puts the card back and saves nothing on Escape", async () => {
+      const live = renderCustomize();
+      const grip = screen.getByRole("button", {
+        name: "Drag Keeping up to reorder",
+      });
+      grip.focus();
+      fireEvent.keyDown(grip, { code: "Space", key: " " });
+      await tick();
+      fireEvent.keyDown(document, { code: "ArrowDown", key: "ArrowDown" });
+      await tick();
+      expect(columnOrder("network")).toEqual(["activity", "keeping-up"]);
+      fireEvent.keyDown(document, { code: "Escape", key: "Escape" });
+      await tick();
+      expect(columnOrder("network")).toEqual(["keeping-up", "activity"]);
+      expect(mockSetPreference).not.toHaveBeenCalled();
+      expect(live()).toBe(
+        "Cancelled. Keeping up stays in Network, position 1 of 2.",
+      );
+    });
+
+    it("leaves customize mode alone when C is pressed with a card in the air", async () => {
+      renderCustomize();
+      const grip = screen.getByRole("button", {
+        name: "Drag Keeping up to reorder",
+      });
+      grip.focus();
+      fireEvent.keyDown(grip, { code: "Space", key: " " });
+      await tick();
+      fireEvent.keyDown(window, { key: "c", code: "KeyC" });
+      expect(screen.getByText("Editing layout")).toBeDefined();
+      fireEvent.keyDown(document, { code: "Escape", key: "Escape" });
+      await tick();
+    });
   });
 });

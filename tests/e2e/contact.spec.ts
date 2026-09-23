@@ -546,9 +546,11 @@ test.describe("the contact header", () => {
     await expect(kebab).toHaveAttribute("aria-haspopup", "menu");
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
+    // Change avatar left for the pencil on the avatar, and Enrich contact
+    // follows the colour: an AI action about this contact.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
-      "Change avatar",
+      "Enrich contact",
       "Copy basic details",
       "Copy full details",
       "Archive",
@@ -611,6 +613,155 @@ test.describe("the contact header", () => {
     ).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Note" })).toBeVisible();
   });
+
+  test("the pencil on the avatar opens the picker, and focus comes back to it", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zelda Pencil");
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zelda Pencil")).toBeVisible();
+
+    const pencil = page.getByRole("button", { name: "Change avatar" });
+    await expect(pencil).toHaveAttribute("title", "Change avatar");
+    // On the ring's lower right: its box ends where the avatar's does.
+    const ring = page
+      .locator("section", { has: contactHeading(page, "Zelda Pencil") })
+      .locator("[data-score-band]")
+      .first();
+    const [p, a] = [await pencil.boundingBox(), await ring.boundingBox()];
+    expect(Math.round(p!.x + p!.width)).toBe(Math.round(a!.x + a!.width));
+    expect(Math.round(p!.y + p!.height)).toBe(Math.round(a!.y + a!.height));
+
+    // From the keyboard: the picker opens, and Escape hands focus back.
+    await pencil.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Edit avatar" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(pencil).toBeFocused();
+    // The app's one ring: the pencil's own shadow is always there, so the
+    // outline is what says it has focus.
+    await expect(pencil).toHaveCSS("outline-style", "solid");
+  });
+
+  test("+ link adds a link after the others, labelled by its host", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zoe Links");
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zoe Links")).toBeVisible();
+
+    const add = page.getByRole("button", { name: "Add link" });
+    await add.click();
+    const field = page.getByRole("textbox", { name: "New link" });
+    await expect(field).toBeFocused();
+
+    // Not a web address: said beside the field, which stays open.
+    await field.fill("zoe");
+    await field.press("Enter");
+    await expect(page.getByRole("alert")).toHaveText(
+      "That is not a web address.",
+    );
+    await expect(field).toBeVisible();
+
+    // A host that ends in "x.com" is not X: the link is "other", named by
+    // the end of its path with its site's icon, and focus goes back to
+    // "+ link".
+    await field.fill("www.dropbox.com/s/zoe");
+    await field.press("Enter");
+    await expect(
+      page.getByRole("link", { name: /^zoe \(opens in a new tab\)$/ }),
+    ).toBeVisible();
+    await expect(add).toBeFocused();
+
+    // The same link in another spelling is refused.
+    await add.click();
+    await field.fill("https://dropbox.com/s/zoe/");
+    await field.press("Enter");
+    await expect(page.getByRole("alert")).toHaveText(
+      "This contact already has that link.",
+    );
+    await field.press("Escape");
+    await expect(add).toBeFocused();
+
+    // A YouTube link takes the platform, from the server.
+    await add.click();
+    await field.fill("youtu.be/zoe");
+    await field.press("Enter");
+    await expect(add).toBeFocused();
+    await expect
+      .poll(async () => {
+        const contact = await instance.api<{
+          socialLinks: { url: string; platform: string }[];
+        }>("GET", `/contacts/${id}`);
+        return contact.socialLinks.map((l) => [l.url, l.platform]);
+      })
+      .toEqual([
+        ["https://www.dropbox.com/s/zoe", "other"],
+        ["https://youtu.be/zoe", "youtube"],
+      ]);
+  });
+
+  test("Enrich contact starts a run for this one contact, and waits while it runs", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zion Enrich");
+    // No real run: the start and its status are answered here.
+    let started: string[] | null = null;
+    await page.route("**/api/ai-search", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      started = (route.request().postDataJSON() as { contactIds: string[] })
+        .contactIds;
+      await route.fulfill({ json: { batchId: "e2e-batch", jobCount: 1 } });
+    });
+    await page.route("**/api/ai-search/status**", (route) =>
+      route.fulfill({
+        json: {
+          id: "e2e-batch",
+          strategy: "grounded",
+          createdAt: new Date().toISOString(),
+          status: "processing",
+          totalTokens: 0,
+          jobs: [
+            {
+              id: "job-1",
+              contactId: id,
+              contactName: "Zion Enrich",
+              status: "searching",
+              fieldsUpdated: 0,
+            },
+          ],
+        },
+      }),
+    );
+    await page.route("**/api/ai-search/stream**", (route) => route.abort());
+
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zion Enrich")).toBeVisible();
+    const kebab = page.getByRole("button", { name: "Contact actions" });
+    await kebab.click();
+    await page.getByRole("menuitem", { name: "Enrich contact" }).click();
+
+    // No confirmation for one contact: the toast, and the panel.
+    await expect(
+      page.getByText("Enrichment started for 1 contact"),
+    ).toBeVisible();
+    expect(started).toEqual([id]);
+    await expect(
+      page.getByText("Contact enrichment", { exact: true }),
+    ).toBeVisible();
+
+    // While the run has this contact, the item says so and waits.
+    await kebab.click();
+    await expect(
+      page.getByRole("menuitem", { name: "Enriching…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    await page.keyboard.press("Escape");
+  });
 });
 
 /**
@@ -628,7 +779,7 @@ test.describe("tracking", () => {
   const toastWith = (page: Page, text: string) =>
     page.locator("[data-sonner-toast]", { hasText: text });
 
-  test("the header button tracks with an Undo, the ring follows, and the caret changes the cadence", async ({
+  test("the Track menu tracks with an Undo, the ring follows, the cadence changes, and the box never moves", async ({
     page,
     instance,
   }) => {
@@ -636,31 +787,46 @@ test.describe("tracking", () => {
     await page.goto(`/contact/${id}`);
     await expect(contactHeading(page, "Zara Tracked")).toBeVisible();
 
-    const track = page.getByRole("button", { name: "Track", exact: true });
-    await expect(track).toHaveAttribute("aria-pressed", "false");
-    // The caret is there before tracking, so the control cannot change
-    // shape when it is pressed.
-    await expect(
-      page.getByRole("button", { name: "Track, and choose how often" }),
-    ).toBeVisible();
-    // Where the word sits before the press. Tracking must not move it.
+    // One control: a menu button, no toggle beside a caret.
+    const track = page.getByRole("button", { name: "Track, choose how often" });
+    await expect(track).toHaveAttribute("aria-haspopup", "menu");
+    await expect(page.getByRole("button", { name: /^Cadence:/ })).toHaveCount(
+      0,
+    );
+    // Where the control sits before any choice. No choice may move it.
     const boxBefore = await track.boundingBox();
+    expect(Math.round(boxBefore!.height)).toBe(32);
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
       "data-score-band",
       "untracked",
     );
-    await expect(page.getByRole("button", { name: /^Cadence:/ })).toBeHidden();
 
+    // Untracked, the rows are four ways to track, none checked, and the
+    // account's default wears its hint.
     await track.click();
-    const tracked = page.getByRole("button", { name: "Tracked", exact: true });
-    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    let menu = page.getByRole("menu", { name: "Track, choose how often" });
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Weekly",
+      "Monthly",
+      // The hint is spoken too: "Quarterly, Default".
+      /^Quarterly,?\s*Default$/,
+      "Yearly",
+    ]);
+    await expect(menu.getByRole("menuitemcheckbox")).toHaveCount(0);
+    await menu.getByRole("menuitem", { name: /^Quarterly/ }).click();
+
+    const tracked = page.getByRole("button", {
+      name: "Tracking quarterly, change or stop",
+    });
+    await expect(tracked).toBeVisible();
+    await expect(tracked).toContainText("Quarterly");
     // Tracked with nothing logged: the empty track.
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
       "data-score-band",
       "unscored",
     );
     await expect(
-      toastWith(page, "Tracking Zara Tracked, every 3 months"),
+      toastWith(page, "Tracking Zara Tracked, quarterly"),
     ).toBeVisible();
     await expect(
       toastWith(page, "Tracking Zara Tracked").getByRole("button", {
@@ -669,99 +835,99 @@ test.describe("tracking", () => {
     ).toBeVisible();
 
     /*
-      The word has not moved.
+      The control has not moved.
 
       The cluster in the header is right-aligned, so a control that grows
-      pushes its own label leftward. The caret's slot is held open while
-      untracked and the label is sized to the longer word, which makes both
-      states the same width, so the left edge stays put to the pixel. This is
-      the assertion the shape exists for.
+      pulls its own left edge sideways. Every word the button can show sizes
+      its label, so "Track" and "Quarterly" take one width, and the left edge
+      stays put to the pixel. This is the assertion the shape exists for.
     */
     const boxAfter = await tracked.boundingBox();
-    expect(boxBefore).not.toBeNull();
-    expect(boxAfter).not.toBeNull();
     expect(Math.round(boxAfter!.x)).toBe(Math.round(boxBefore!.x));
     expect(Math.round(boxAfter!.width)).toBe(Math.round(boxBefore!.width));
 
-    // The caret, which carries no words of its own, and its menu.
-    const caret = page.getByRole("button", { name: "Cadence: every 3 months" });
-    await expect(caret).toHaveText("");
-    await caret.click();
-    const menu = page.getByRole("menu", { name: "Cadence: every 3 months" });
+    // Tracked, the same rows with the current one checked, then Stop
+    // tracking.
+    await tracked.click();
+    menu = page.getByRole("menu", {
+      name: "Tracking quarterly, change or stop",
+    });
     await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
-      "Every month",
-      "Every 2 months",
-      "Every 3 months",
-      "Every 6 months",
-      "Every year",
+      "Weekly",
+      "Monthly",
+      "Quarterly",
+      "Yearly",
     ]);
     await expect(
-      menu.getByRole("menuitemcheckbox", { name: "Every 3 months" }),
+      menu.getByRole("menuitemcheckbox", { name: "Quarterly" }),
     ).toHaveAttribute("aria-checked", "true");
-    await menu.getByRole("menuitemcheckbox", { name: "Every month" }).click();
-    await expect(
-      page.getByRole("button", { name: "Cadence: every month" }),
-    ).toBeVisible();
-    await expect(toastWith(page, "Zara Tracked, every month")).toBeVisible();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Stop tracking"]);
+    await menu.getByRole("menuitemcheckbox", { name: "Monthly" }).click();
+    const monthly = page.getByRole("button", {
+      name: "Tracking monthly, change or stop",
+    });
+    await expect(monthly).toBeVisible();
+    await expect(toastWith(page, "Zara Tracked, monthly")).toBeVisible();
+    const boxMonthly = await monthly.boundingBox();
+    expect(Math.round(boxMonthly!.x)).toBe(Math.round(boxBefore!.x));
+    expect(Math.round(boxMonthly!.width)).toBe(Math.round(boxBefore!.width));
 
-    // Untrack, then Undo: the contact comes back with the cadence it had.
-    await tracked.click();
-    await expect(track).toHaveAttribute("aria-pressed", "false");
+    // Stop tracking, then Undo: the contact comes back with the cadence it
+    // had.
+    await monthly.click();
+    await page.getByRole("menuitem", { name: "Stop tracking" }).click();
+    await expect(track).toBeVisible();
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
       "data-score-band",
       "untracked",
     );
+    const boxStopped = await track.boundingBox();
+    expect(Math.round(boxStopped!.x)).toBe(Math.round(boxBefore!.x));
     await toastWith(page, "Stopped tracking Zara Tracked")
       .getByRole("button", { name: "Undo" })
       .click();
-    await expect(tracked).toHaveAttribute("aria-pressed", "true");
-    await expect(
-      page.getByRole("button", { name: "Cadence: every month" }),
-    ).toBeVisible();
+    await expect(monthly).toBeVisible();
   });
 
-  test("the caret tracks at a cadence you pick, in one press", async ({
+  test("a cadence saved before 2.0 stays, as one more checked row", async ({
     page,
     instance,
   }) => {
     const id = await ownContact(instance, "Zane Cadence");
+    // Every 2 months was a choice before 2.0. The API still takes it.
+    await instance.api("PATCH", `/contacts/${id}`, {
+      isTracked: true,
+      cadenceDays: 60,
+    });
     await page.goto(`/contact/${id}`);
     await expect(contactHeading(page, "Zane Cadence")).toBeVisible();
 
-    // Untracked, the caret offers the five cadences as actions: none is
-    // checked, because there is no cadence yet.
-    const caret = page.getByRole("button", {
-      name: "Track, and choose how often",
+    const track = page.getByRole("button", {
+      name: "Tracking every 2 months, change or stop",
     });
-    await caret.click();
+    await expect(track).toContainText("2 months");
+    await track.click();
     const menu = page.getByRole("menu", {
-      name: "Track, and choose how often",
+      name: "Tracking every 2 months, change or stop",
     });
-    await expect(menu.getByRole("menuitem")).toHaveText([
-      "Every month",
+    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+      "Weekly",
+      "Monthly",
       "Every 2 months",
-      "Every 3 months",
-      "Every 6 months",
-      "Every year",
+      // The hint is spoken too: "Quarterly, Default".
+      /^Quarterly,?\s*Default$/,
+      "Yearly",
     ]);
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveCount(0);
+    await expect(
+      menu.getByRole("menuitemcheckbox", { name: "Every 2 months" }),
+    ).toHaveAttribute("aria-checked", "true");
 
-    await menu.getByRole("menuitem", { name: "Every year" }).click();
-
-    // Tracked, at the cadence that was chosen rather than the default.
+    // Yearly, and the toast says it in a sentence.
+    await menu.getByRole("menuitemcheckbox", { name: "Yearly" }).click();
     await expect(
-      page.getByRole("button", { name: "Tracked", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await expect(
-      toastWith(page, "Tracking Zane Cadence, every year"),
+      page.getByRole("button", { name: "Tracking yearly, change or stop" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Cadence: every year" }),
-    ).toBeVisible();
-    await expect(headerRing(page, "Zane Cadence")).toHaveAttribute(
-      "data-score-band",
-      "unscored",
-    );
+    await expect(toastWith(page, "Zane Cadence, yearly")).toBeVisible();
   });
 
   test("t tracks and untracks the open contact", async ({ page, instance }) => {
@@ -769,26 +935,27 @@ test.describe("tracking", () => {
     await page.goto(`/contact/${id}`);
     await expect(contactHeading(page, "Zed Keyed")).toBeVisible();
 
+    // One key, the account's default cadence, as before.
     await page.keyboard.press("t");
     await expect(
-      page.getByRole("button", { name: "Tracked", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+      page.getByRole("button", { name: "Tracking quarterly, change or stop" }),
+    ).toBeVisible();
     await expect(
-      toastWith(page, "Tracking Zed Keyed, every 3 months"),
+      toastWith(page, "Tracking Zed Keyed, quarterly"),
     ).toBeVisible();
 
     await page.keyboard.press("t");
     await expect(
-      page.getByRole("button", { name: "Track", exact: true }),
-    ).toHaveAttribute("aria-pressed", "false");
+      page.getByRole("button", { name: "Track, choose how often" }),
+    ).toBeVisible();
     await expect(toastWith(page, "Stopped tracking Zed Keyed")).toBeVisible();
 
     // Not while typing: the name field keeps its letters.
     await contactHeading(page, "Zed Keyed").getByRole("button").click();
     await page.keyboard.type("t");
     await expect(
-      page.getByRole("button", { name: "Track", exact: true }),
-    ).toHaveAttribute("aria-pressed", "false");
+      page.getByRole("button", { name: "Track, choose how often" }),
+    ).toBeVisible();
     await page.keyboard.press("Escape");
   });
 
@@ -1223,21 +1390,33 @@ test.describe("phone", () => {
     }
   });
 
-  test("the narrow header keeps Track as the glyph alone, with the wordless caret", async ({
+  test("the narrow header keeps Track as the glyph and the chevron, with the words in the name", async ({
     page,
     seed,
   }) => {
     await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
     await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
 
-    const tracked = page.getByRole("button", { name: "Tracked", exact: true });
-    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    // The cadence is in the name and the tooltip, not in words on screen.
+    const tracked = page.getByRole("button", {
+      name: "Tracking quarterly, change or stop",
+    });
     await expect(tracked).toHaveText("");
-    await expect(tracked).toHaveAttribute("title", "Tracked");
-    // The caret carries the cadence in its name, not in words on screen.
-    await expect(
-      page.getByRole("button", { name: "Cadence: every 3 months" }),
-    ).toHaveText("");
+    await expect(tracked).toHaveAttribute(
+      "title",
+      "Tracking quarterly, change or stop",
+    );
+    await expect(tracked).toHaveAttribute("aria-haspopup", "menu");
+
+    // "+ link" is the plus alone here, as each link is its icon alone.
+    const add = page.getByRole("button", { name: "Add link" });
+    await expect(add).toHaveText("");
+    await expect(add).toHaveAttribute("title", "Add link");
+    // The pencil is 24 px on the 56 px avatar.
+    const pencil = await page
+      .getByRole("button", { name: "Change avatar" })
+      .boundingBox();
+    expect(Math.round(pencil!.width)).toBe(24);
   });
 
   test("the browser's Back button returns focus to the row too", async ({

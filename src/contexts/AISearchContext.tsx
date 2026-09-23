@@ -2,7 +2,9 @@
  * AISearchContext — Global state for AI Search overlay.
  *
  * Provides:
- * - startSearch(contactIds): kicks off a batch and opens the overlay
+ * - startSearch(contactIds, options?): kicks off a batch and opens the
+ *   overlay. Two callers: the Enrichment settings page, for many contacts,
+ *   and "Enrich contact" in a contact's actions menu, for one.
  * - batch: current batch state (live-updated via SSE)
  * - isVisible: whether the overlay is showing
  * - dismiss(): close the overlay entirely
@@ -30,8 +32,22 @@ import { rateLimitMessage } from "../lib/rateLimitMessage";
 import type { AISearchBatch } from "../types";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
+/** How one call to `startSearch` reports a limit. */
+export interface StartSearchOptions {
+  /**
+   * Where a limit is said: a cooldown, or the enrichment lock held by
+   * another account. `"page"`, the default, keeps it in `limitMessage` and
+   * shows no toast, for a page that prints the message itself, as the
+   * Enrichment settings page does. `"toast"` says it in a toast as well, for
+   * a control with no page of its own to print it on: "Enrich contact" in
+   * the contact actions menu closes as it is chosen, and without the toast
+   * a refused start said nothing at all.
+   */
+  limitAs?: "page" | "toast";
+}
+
 interface AISearchContextValue {
-  startSearch: (contactIds: string[]) => void;
+  startSearch: (contactIds: string[], options?: StartSearchOptions) => void;
   batch: AISearchBatch | null;
   isVisible: boolean;
   dismiss: () => void;
@@ -66,7 +82,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const limitTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(limitTimer.current), []);
-  const startMutation = useStartAISearch();
+  // `mutate` is the one stable part of a mutation: the object around it is
+  // new on every render, and a callback that closed over it changed with it.
+  const { mutate: startMutate, isPending: isStarting } = useStartAISearch();
 
   // SSE stream hook — updates batch state in real-time
   const handleUpdate = useCallback((updatedBatch: AISearchBatch) => {
@@ -93,8 +111,8 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startSearch = useCallback(
-    (contactIds: string[]) => {
-      startMutation.mutate(contactIds, {
+    (contactIds: string[], { limitAs = "page" }: StartSearchOptions = {}) => {
+      startMutate(contactIds, {
         onSuccess: (result) => {
           setBatch(null);
           setBatchId(result.batchId);
@@ -112,6 +130,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           const limited = rateLimitMessage(err, "enrichment");
           if (limited) {
             setLimitMessage(limited);
+            // A caller with no page to print the message on asks for it in a
+            // toast. An info toast, not an error: a wait is not a failure.
+            if (limitAs === "toast") toast.info(limited);
             // The message names a wait, and the provider outlives the view
             // that shows it: the AI Search page unmounts on navigation, this
             // does not. Without an expiry, coming back an hour later reads a
@@ -130,7 +151,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
         },
       });
     },
-    [startMutation],
+    [startMutate],
   );
 
   const clearLimit = useCallback(() => {
@@ -146,14 +167,15 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   // Memoize the provider value so an outer-tree re-render does NOT recreate
   // the object and force every `useAISearch()` consumer to re-render. The
   // identity of `value` now only changes when one of its observable fields
-  // actually changes.
+  // actually changes. `startSearch` keeps one identity for the provider's
+  // life, because the only thing it closes over is the stable `mutate`.
   const value = useMemo(
     () => ({
       startSearch,
       batch,
       isVisible,
       dismiss,
-      isStarting: startMutation.isPending,
+      isStarting,
       limitMessage,
       clearLimit,
     }),
@@ -162,7 +184,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       batch,
       isVisible,
       dismiss,
-      startMutation.isPending,
+      isStarting,
       limitMessage,
       clearLimit,
     ],

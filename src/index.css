@@ -719,10 +719,20 @@
     font-size: 0.8125rem;
     line-height: 1.125rem;
   }
-  /* An icon with no label: a square face. With `.btn-sm` and a 20 px glyph
-     it is 32 px each way, the height of the small button. */
+  /* An icon with no label: a square face at every size, as wide as the
+     button is tall. 44 px on a phone and 40 px from `sm`, the height of the
+     button, and 32 px with `.btn-sm`. The glyph is 20 px. */
   .btn-icon {
-    padding: 0.375rem;
+    padding: 0;
+    min-width: 44px;
+  }
+  @media (width >= 40rem) {
+    .btn-icon {
+      min-width: 40px;
+    }
+  }
+  .btn-sm.btn-icon {
+    min-width: 32px;
   }
   .btn-sm::after {
     content: "";
@@ -731,6 +741,33 @@
     width: max(100%, 44px);
     height: max(100%, 44px);
     transform: translate(-50%, -50%);
+  }
+
+  /* A button that opens a panel stays pressed in while the panel is open,
+     like a key that latches: the face sits on its last pixel of edge, as
+     on press, and takes the selected tint and its ink. A pointer over it
+     raises it one pixel, to say it can be released. `SidePanel`'s button
+     is the one that uses it. */
+  .btn-latch[aria-expanded="true"] {
+    --btn-face: color-mix(
+      in oklab,
+      var(--color-primary) 10%,
+      var(--color-surface-container-lowest)
+    );
+    --btn-border: color-mix(
+      in oklab,
+      var(--color-primary) 35%,
+      var(--color-outline-variant)
+    );
+    color: var(--color-on-primary-wash);
+    transform: translateY(calc(var(--btn-lift) - 1px));
+    box-shadow: 0 1px 0 0 var(--btn-edge);
+  }
+  @media (hover: hover) {
+    .btn-latch[aria-expanded="true"]:hover:not(:disabled) {
+      transform: translateY(calc(var(--btn-lift) - 2px));
+      box-shadow: 0 2px 0 0 var(--btn-edge);
+    }
   }
 
   /* ── Hover: one layer for every flat control ────────────────────────
@@ -808,11 +845,76 @@
   }
 
   /* ── The right-hand panel's open edge ───────────────────────────────
-   * `SidePanel` slides over the page. This shadow on its left edge is what
-   * sets it above the page, with no hairline between the two surfaces. */
+   * `SidePanel` slides in from the window's edge, over the page. This
+   * shadow on its left edge is what sets it above the page, with no
+   * hairline between the two surfaces. */
   .side-panel {
     box-shadow: -18px 0 36px -28px rgb(0 0 0 / 0.4);
   }
+
+  /* ── Proximity lift: rows that rise toward the pointer ──────────────
+   * The Network list's rows (`useProximityLift`). The hook writes `--p`,
+   * from 0 to 1, on the row under the pointer and on the neighbour it is
+   * nearing, and this turns it into a rise of up to 2 px and a soft shadow.
+   * The rise is `translate`, which adds to the virtual list's own
+   * `transform` on the row's wrapper instead of replacing it. The shadow is
+   * a pseudo-element whose opacity follows `--p`, so the browser fades one
+   * layer and never repaints a shadow per frame. The row names `translate`
+   * in its transition classes. The one exception to "a row in a list never
+   * lifts" (STYLE.md, "Elevation"). */
+  .proximity-row {
+    translate: 0 calc(var(--p) * -2px);
+    /* Its own layer, so the pseudo-element below sits between the row's
+       face and its content. */
+    isolation: isolate;
+  }
+  .proximity-row::before {
+    --p: inherit;
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--p);
+    box-shadow:
+      0 6px 14px -8px rgb(0 0 0 / 0.26),
+      0 1px 3px -1px rgb(0 0 0 / 0.08);
+    background-color: var(--lift-glow, transparent);
+    transition: opacity var(--dur-base) var(--ease);
+  }
+}
+
+/* The lift is a number, so it transitions like one and stays on the row it
+   is written on: registered, and not inherited by the row's text and
+   glyphs, which would each restyle on every frame. */
+@property --p {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* A shadow does not read on the dark page, where the page is the darkest
+   thing on screen. A dark palette raises a surface by lightening it, so a
+   lifted row there takes a faint light wash with its shadow. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .proximity-row {
+    --lift-glow: rgb(255 255 255 / 0.045);
+  }
+}
+:root[data-theme="dark"] .proximity-row {
+  --lift-glow: rgb(255 255 255 / 0.045);
+}
+
+/* With less motion asked for, the rows do not rise. The shadow still says
+   where the pointer is, and it is a fade, not a movement. */
+@media (prefers-reduced-motion: reduce) {
+  .proximity-row {
+    translate: none;
+  }
+}
+:root[data-motion="reduced"] .proximity-row {
+  translate: none;
 }
 
 /* =====================================================================

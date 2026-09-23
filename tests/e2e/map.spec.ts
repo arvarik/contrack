@@ -177,33 +177,44 @@ test.describe("map", () => {
     // Everyone the geocoder places by the same city gets the same point, so
     // past the cluster zoom their pins would sit on top of each other.
     // Tokyo, where the seed has nobody, so this is the only pair on the map.
-    for (const name of ["Alan Turing", "Barbara Liskov"]) {
-      await instance.api("POST", "/contacts", {
-        name,
-        company: "Same Place Ltd",
-        location: "Tokyo, Japan",
-        lat: 35.6762,
-        lng: 139.6503,
+    // The two are deleted after the test: the worker's instance is shared,
+    // and left behind they sort between the seeded Ada and Edsger, so the
+    // keyboard journey's ArrowDown from Ada landed on Alan Turing.
+    const ids: string[] = [];
+    try {
+      for (const name of ["Alan Turing", "Barbara Liskov"]) {
+        const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+          name,
+          company: "Same Place Ltd",
+          location: "Tokyo, Japan",
+          lat: 35.6762,
+          lng: 139.6503,
+        });
+        ids.push(id);
+      }
+      await stubBasemap(page);
+      await page.goto("/map");
+
+      // Close the insights, so the Tokyo cluster at the right edge is clear.
+      const insights = page.getByRole("button", {
+        name: "Map insights",
+        exact: true,
       });
+      await insights.click();
+      await expect(insights).toHaveAttribute("aria-expanded", "false");
+
+      await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
+      const list = page.getByRole("list", { name: "People at this place" });
+      await expect(list.getByRole("button")).toHaveCount(2);
+      await list
+        .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
+        .click();
+      await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+      // Restore pane preference for subsequent tests
+      await page.keyboard.press("i");
+    } finally {
+      for (const id of ids) await instance.api("DELETE", `/contacts/${id}`);
     }
-    await stubBasemap(page);
-    await page.goto("/map");
-
-    // Hide the insights, so the Tokyo cluster at the right edge is clear.
-    await page.getByRole("button", { name: "Hide map insights" }).click();
-    await expect(
-      page.getByRole("button", { name: "Map insights", exact: true }),
-    ).toHaveAttribute("aria-expanded", "false");
-
-    await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
-    const list = page.getByRole("list", { name: "People at this place" });
-    await expect(list.getByRole("button")).toHaveCount(2);
-    await list
-      .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
-      .click();
-    await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
-    // Restore pane preference for subsequent tests
-    await page.keyboard.press("i");
   });
 
   test("opens the map from a contact, on that contact", async ({
@@ -656,11 +667,12 @@ test.describe("map", () => {
     }
   });
 
-  test("keeps the insights on a rail beside the map, and its panel over it", async ({
+  test("keeps the insights behind one button in the map's corner, and its panel over it", async ({
     page,
   }) => {
-    // The panel pushed nothing aside, and a floating Insights button stood
-    // in for a way to open it. The rail's icon opens and closes it now.
+    // The insights button in the map's top-right corner, the glyph alone,
+    // opens and closes the panel, and stays where it is while the panel
+    // slides in under it.
     await stubBasemap(page);
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
@@ -673,10 +685,15 @@ test.describe("map", () => {
     await expect(icon).toHaveAttribute("aria-expanded", "true");
     await expect(panel).toHaveAttribute("data-covers-map", "right");
 
-    // The map ends at the rail, and MapLibre drew its canvas to fit.
+    // The map runs to the window's edge, and MapLibre drew its canvas to
+    // fit. The panel is over the map, not beside it.
     const width = page.viewportSize()!.width;
     const mapBox = (await map.boundingBox())!;
-    expect(Math.round(mapBox.x + mapBox.width)).toBe(width - 64);
+    expect(Math.round(mapBox.x + mapBox.width)).toBe(width);
+    // A square with the glyph alone, like Ask's History button.
+    await expect(icon).toHaveText("");
+    const face = (await icon.boundingBox())!;
+    expect(Math.round(face.width)).toBe(Math.round(face.height));
     const canvas = (await map.locator("canvas").first().boundingBox())!;
     expect(Math.round(canvas.width)).toBe(Math.round(mapBox.width));
     // The zoom buttons keep clear of the open panel.
@@ -687,9 +704,19 @@ test.describe("map", () => {
       (await panel.boundingBox())!.x,
     );
 
-    await page.getByRole("button", { name: "Hide map insights" }).click();
+    // The one button closes it: the panel has no Hide button of its own.
+    await expect(
+      page.getByRole("button", { name: /^Hide map insights/ }),
+    ).toHaveCount(0);
+    const iconOpen = (await icon.boundingBox())!;
+    await icon.click();
     await expect(icon).toHaveAttribute("aria-expanded", "false");
     await expect(icon).toBeFocused();
+    // Open, the button is latched, pressed in by 2 px. Closed, it rises
+    // 1 px under the pointer that pressed it. It does not move.
+    const iconClosed = (await icon.boundingBox())!;
+    expect(iconClosed.x).toBe(iconOpen.x);
+    expect(Math.abs(iconClosed.y - iconOpen.y)).toBeLessThanOrEqual(3);
     await expect(panel).not.toHaveAttribute("data-covers-map", "right");
     // It slid over the map, so the map kept its width.
     expect(Math.round((await map.boundingBox())!.width)).toBe(

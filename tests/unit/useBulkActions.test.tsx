@@ -351,7 +351,7 @@ describe("useBulkActions", () => {
       act(() => {
         mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 3 });
       });
-      expect(toastMock.success).toHaveBeenCalledWith("3 contacts, every month");
+      expect(toastMock.success).toHaveBeenCalledWith("3 contacts, monthly");
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
   });

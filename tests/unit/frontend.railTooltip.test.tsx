@@ -90,4 +90,30 @@ describe("RailTooltip", () => {
     act(() => vi.advanceTimersByTime(300));
     expect(screen.queryByText("H")).toBeNull();
   });
+
+  it("waits for a fresh hover once enabled, not for the pointer that closed the panel", () => {
+    // The panel's button is disabled while its panel is open. The pointer
+    // that closes the panel rests on the button, and the label must not
+    // appear under it the moment the panel shuts.
+    const Tip = ({ disabled }: { disabled: boolean }) => (
+      <RailTooltip label="History" shortcut="H" side="left" disabled={disabled}>
+        <button type="button" aria-label="History" />
+      </RailTooltip>
+    );
+    const { rerender } = render(<Tip disabled />);
+    const anchor = screen.getByRole("button", {
+      name: "History",
+    }).parentElement!;
+    fireEvent.mouseEnter(anchor);
+    act(() => vi.advanceTimersByTime(300));
+    rerender(<Tip disabled={false} />);
+    act(() => vi.advanceTimersByTime(300));
+    expect(screen.queryByText("H")).toBeNull();
+
+    // A pointer that leaves and comes back shows it as usual.
+    fireEvent.mouseLeave(anchor);
+    fireEvent.mouseEnter(anchor);
+    act(() => vi.advanceTimersByTime(260));
+    expect(screen.getByText("H")).toBeTruthy();
+  });
 });

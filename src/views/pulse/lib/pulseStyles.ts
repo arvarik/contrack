@@ -131,3 +131,45 @@ export const COLUMN_CLASSES: Record<PulseColumn, string> = {
   intel:
     "order-3 lg:col-span-12 lg:grid lg:grid-cols-2 xl:flex xl:flex-col xl:order-2 xl:col-span-1",
 };
+
+// ─── Customize: a card in the air ────────────────────────────────────────────
+//
+// A card that is being moved folds to its title. Its place in the column
+// becomes a slot as tall as the preview under the pointer, so the gap that
+// opens in the target column is the size of the thing in the hand. Up next
+// can be 800 px tall: a slot of its full height pushed the rest of a column
+// off the screen, and the pointer had to travel 400 px to pass it.
+
+/** The height of a card in the air, in px: its slot and its preview. */
+export const DRAG_SLOT_HEIGHT = 64;
+
+/**
+ * The widest and the narrowest the preview gets, in px. Between the two it
+ * takes the room from the card's left edge to the grip (`PulseGrid`).
+ */
+export const DRAG_PREVIEW_MAX_WIDTH = 320;
+export const DRAG_PREVIEW_MIN_WIDTH = 200;
+
+/**
+ * The middle of the preview's grip, from its top right corner: the 16 px
+ * inset and half of the 32 px glyph box across, half of the 64 px preview
+ * down. The preview is placed so the grip sits under the pointer that
+ * picked the card up.
+ */
+export const DRAG_GRIP_OFFSET = { right: 32, top: 32 } as const;
+
+/**
+ * The slot a card leaves in its column while it moves: a dashed primary
+ * outline on the primary wash, as tall as the preview. A dashed edge is the
+ * one line the style guide allows for drag and drop.
+ */
+export const DRAG_SLOT =
+  "h-16 rounded-2xl border-2 border-dashed border-primary/50 bg-primary/5";
+
+/**
+ * The preview under the pointer: the card's face, lifted. A primary hairline
+ * and a deep soft shadow set it above the page in both palettes. It never
+ * turns or scales: a turned card blurs its words.
+ */
+export const DRAG_PREVIEW =
+  "flex items-center gap-3 h-16 pl-4 pr-4 rounded-2xl bg-surface-container-lowest cursor-grabbing select-none shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_40%,transparent),0_18px_36px_-12px_rgb(0_0_0/0.35),0_6px_12px_-6px_rgb(0_0_0/0.16)]";

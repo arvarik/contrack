@@ -114,12 +114,19 @@ describe("MapInsightsPane", () => {
     const { rerender } = renderPane();
     const panel = screen.getByRole("complementary", { name: "Map insights" });
     expect(panel.getAttribute("data-covers-map")).toBe("right");
-    // The rail's icon discloses it, and its heading counts who is in view.
-    const icon = screen.getByRole("button", { name: "Map insights" });
-    expect(icon.getAttribute("aria-expanded")).toBe("true");
-    expect(icon.getAttribute("aria-controls")).toBe(panel.id);
+    // The insights button, the glyph alone, discloses it. The heading row
+    // holds the view switch, and the heading stays for a screen reader.
+    const button = screen.getByRole("button", { name: "Map insights" });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(button.getAttribute("aria-controls")).toBe(panel.id);
+    expect(button.textContent).toBe("");
     const heading = screen.getByRole("heading", { name: "Map insights" });
-    expect(heading.nextElementSibling?.textContent).toBe("2");
+    expect(heading.className).toContain("sr-only");
+    expect(
+      heading.parentElement?.contains(
+        screen.getByRole("radiogroup", { name: "Insights view" }),
+      ),
+    ).toBe(true);
 
     rerender(
       <MapInsightsPane
@@ -136,10 +143,11 @@ describe("MapInsightsPane", () => {
     expect(panel.hasAttribute("data-covers-map")).toBe(false);
   });
 
-  it("hides from its heading row and opens from the rail", () => {
+  it("closes and opens from the one insights button", () => {
     const onToggle = vi.fn();
     const { unmount } = renderPane({ onToggle });
-    fireEvent.click(screen.getByRole("button", { name: "Hide map insights" }));
+    expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Map insights" }));
     expect(onToggle).toHaveBeenLastCalledWith(false);
     unmount();
     renderPane({ onToggle, isOpen: false });

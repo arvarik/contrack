@@ -15,22 +15,6 @@ import {
 import { addDays } from "date-fns";
 import { HeartPulse, Eye, EyeOff } from "lucide-react";
 import {
-  DndContext,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  useDroppable,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import {
   useDashboard,
   useDailyInsight,
   useDashboardActivity,
@@ -59,15 +43,15 @@ import {
   getDefaultColumnForCard,
   type PulseColumn,
   type PulseCardId,
+  type PulseLayoutAction,
 } from "./lib/layout";
 import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
 import { getUpcomingBirthdays } from "./lib/birthdays";
 import { jumpToGroup } from "./lib/jumpToGroup";
-import { COLUMN_CLASSES, GRID_CLASSES } from "./lib/pulseStyles";
 import { Masthead, type JumpTarget } from "./components/Masthead";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
-import { SortableCard } from "./components/SortableCard";
+import { PulseGrid } from "./components/PulseGrid";
 import { UpNextCard } from "./cards/UpNextCard";
 import { CompletedCard } from "./cards/CompletedCard";
 import { InsightCard } from "./cards/InsightCard";
@@ -84,54 +68,8 @@ const DuplicatesPage = React.lazy(() =>
 /** The single keys that walk or act on the selected Up next row. */
 const QUEUE_KEYS = new Set(["j", "k", "d", "s", "l"]);
 
-interface DroppableColumnProps {
-  id: PulseColumn;
-  cards: PulseCardId[];
-  isEditing: boolean;
-  renderCard: (
-    cardId: PulseCardId,
-    index: number,
-    total: number,
-  ) => React.ReactNode;
-}
-
-/**
- * One column of the grid. Its classes come from `COLUMN_CLASSES`, which the
- * skeleton and the route fallback read too. The sortable strategy is the
- * rect one because the Intelligence column is a vertical list at `xl` and a
- * two-across grid at `lg`, and `rectSortingStrategy` sorts both.
- */
-const DroppableColumn = ({
-  id,
-  cards,
-  isEditing,
-  renderCard,
-}: DroppableColumnProps) => {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `column-${id}`,
-    disabled: !isEditing,
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex flex-col gap-6 transition-colors rounded-2xl p-1",
-        isOver && "bg-primary/5 ring-2 ring-primary/30",
-        COLUMN_CLASSES[id],
-      )}
-    >
-      <SortableContext items={cards} strategy={rectSortingStrategy}>
-        {cards.map((cardId, index) => renderCard(cardId, index, cards.length))}
-        {cards.length === 0 && isEditing && (
-          <div className="p-8 rounded-2xl border-2 border-dashed border-outline-variant text-center text-xs text-on-surface-variant font-medium">
-            Drop cards here
-          </div>
-        )}
-      </SortableContext>
-    </div>
-  );
-};
+/** Log a note on a contact from a queue row. */
+const logNote = (contactId: string) => openQuickNote(contactId);
 
 const PulseOffice = () => {
   const mountStart = useRef(performance.now());
@@ -172,6 +110,12 @@ const PulseOffice = () => {
   // Customize mode state
   const [isEditing, setIsEditing] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  // True while a card is in the air (set by `PulseGrid`). The letter keys
+  // wait: C would end customize mode under a keyboard drag.
+  const draggingRef = useRef(false);
+  // The card a Move menu item just sent to another column. The card mounts
+  // again there, and its Move button takes focus back (see below).
+  const refocusRef = useRef<PulseCardId | null>(null);
 
   const handleToggleCustomize = useCallback(() => {
     setIsEditing((prev) => {
@@ -222,6 +166,7 @@ const PulseOffice = () => {
         targetColumn,
       });
       setPreference("pulseLayout", next);
+      refocusRef.current = cardId as PulseCardId;
       const title = CARD_TITLES[cardId as PulseCardId] || cardId;
       setAnnouncement(`Moved ${title} to ${COLUMN_NAMES[targetColumn]}`);
     },
@@ -264,86 +209,30 @@ const PulseOffice = () => {
     setAnnouncement("Layout reset to default");
   }, [preferences?.pulseLayout, setPreference]);
 
-  // @dnd-kit sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const activeId = String(active.id);
-      const overId = String(over.id);
-
+  // A drag's drop, as the one reducer action `PulseGrid` worked out from its
+  // draft: one write per drag. The drag's own live region says where the
+  // card landed, so the page's region says nothing more.
+  const handleDrop = useCallback(
+    (action: PulseLayoutAction) => {
       const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
-      const resolved = resolveLayout(raw);
-
-      // Find source column
-      let sourceCol: PulseColumn | null = null;
-      for (const col of PULSE_COLUMNS) {
-        if (resolved.visible[col].includes(activeId as PulseCardId)) {
-          sourceCol = col;
-          break;
-        }
-      }
-      if (!sourceCol) return;
-
-      // Find target column and target index
-      let targetCol: PulseColumn | null = null;
-      let targetIndex = 0;
-
-      if (overId.startsWith("column-")) {
-        targetCol = overId.replace("column-", "") as PulseColumn;
-        targetIndex = resolved.visible[targetCol].length;
-      } else {
-        for (const col of PULSE_COLUMNS) {
-          const idx = resolved.visible[col].indexOf(overId as PulseCardId);
-          if (idx !== -1) {
-            targetCol = col;
-            targetIndex = idx;
-            break;
-          }
-        }
-      }
-
-      if (!targetCol) return;
-
-      if (sourceCol === targetCol) {
-        const colCards = [...resolved.visible[sourceCol]];
-        const fromIdx = colCards.indexOf(activeId as PulseCardId);
-        const toIdx = targetIndex;
-        if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
-          const reordered = arrayMove(colCards, fromIdx, toIdx);
-          const next = pulseLayoutReducer(raw, {
-            type: "reorder",
-            column: sourceCol,
-            cardIds: reordered,
-          });
-          setPreference("pulseLayout", next);
-          const title = CARD_TITLES[activeId as PulseCardId] || activeId;
-          setAnnouncement(`Moved ${title} to position ${toIdx + 1}`);
-        }
-      } else {
-        const next = pulseLayoutReducer(raw, {
-          type: "move",
-          cardId: activeId,
-          targetColumn: targetCol,
-          targetIndex,
-        });
-        setPreference("pulseLayout", next);
-        const title = CARD_TITLES[activeId as PulseCardId] || activeId;
-        setAnnouncement(`Moved ${title} to ${COLUMN_NAMES[targetCol]}`);
-      }
+      setPreference("pulseLayout", pulseLayoutReducer(raw, action));
     },
     [preferences?.pulseLayout, setPreference],
   );
+
+  // A card that the Move menu sent to another column mounts again there,
+  // and the focus that was on its Move button fell to the page. Put it on
+  // the same button in the card's new place, so a keyboard keeps its place.
+  useEffect(() => {
+    const cardId = refocusRef.current;
+    if (!cardId) return;
+    refocusRef.current = null;
+    document
+      .querySelector<HTMLElement>(
+        `[data-flip-id="${cardId}"] [aria-label="Move ${CARD_TITLES[cardId]}"]`,
+      )
+      ?.focus();
+  }, [resolvedLayout]);
 
   // Map of contacts for fast lookup (e.g. meeting attendee avatars)
   const contactsMap = useMemo(() => {
@@ -466,6 +355,8 @@ const PulseOffice = () => {
       // the Log note dialog would complete the queue's row behind it.
       if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
         return;
+      // A card in the air owns the keyboard until it lands.
+      if (draggingRef.current) return;
 
       const item = highlightedItemRef.current;
 
@@ -521,7 +412,7 @@ const PulseOffice = () => {
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
-  // A count in the masthead's sentence jumps to its group heading inside
+  // A count in the masthead's line jumps to its group heading inside
   // the queue: Overdue, Today or Birthdays (`jumpToGroup`). A group that is
   // not there falls back to its card: Up next, or Coming up for a birthday
   // further out.
@@ -534,86 +425,119 @@ const PulseOffice = () => {
     card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, []);
 
-  // Render individual cards by cardId
-  const renderCardContent = (cardId: PulseCardId) => {
-    switch (cardId) {
-      case "up-next":
-        return (
-          <div ref={upNextCardRef}>
-            <UpNextCard
-              items={upNext.items}
-              groups={upNext.groups}
-              selectedIndex={selectedIndex}
-              onSelectIndex={setSelectedIndex}
-              selectionShown={selectionShown}
-              onSelectionShownChange={setSelectionShown}
-              onComplete={(id) => completeAction.mutate(id)}
-              onLog={(cid) => openQuickNote(cid)}
-              onOpenContact={(cid) => navigate(`/contact/${cid}`)}
-            />
-          </div>
-        );
-      case "completed":
-        return <CompletedCard />;
-      case "activity":
-        return <ActivityCard activity={activity} />;
-      case "keeping-up":
-        return <KeepingUpCard tracking={dashboard?.tracking} />;
-      case "composition":
-        return <CompositionCard dashboard={dashboard} />;
-      case "insight":
-        return (
-          <InsightCard
-            insight={insight}
-            isLoading={isInsightLoading}
-            aiAllowed={aiAllowed}
-          />
-        );
-      case "inbox":
-        return (
-          <InboxCard
-            pendingDuplicates={pendingSuggestions}
-            ghosts={dashboard?.ghosts ?? []}
-            hygiene={dashboard?.hygiene}
-            correspondents={dashboard?.correspondents ?? 0}
-            newPeople={newPeople}
-          />
-        );
-      case "coming-up":
-        return (
-          <ComingUpCard
-            birthdays={upcomingBirthdays}
-            meetings={dashboard?.meetings ?? []}
-            contactsMap={contactsMap}
-          />
-        );
-      default:
-        return null;
-    }
-  };
+  // The queue's handlers, stable, so the card's element below survives a
+  // render that changed nothing it shows.
+  const completeMutate = completeAction.mutate;
+  const handleComplete = useCallback(
+    (id: string) => completeMutate(id),
+    [completeMutate],
+  );
+  const handleOpenContact = useCallback(
+    (contactId: string) => navigate(`/contact/${contactId}`),
+    [navigate],
+  );
 
-  const renderSortableCard = (
-    cardId: PulseCardId,
-    index: number,
-    total: number,
-    column: PulseColumn,
-  ) => {
-    return (
-      <SortableCard
-        key={cardId}
-        cardId={cardId}
-        column={column}
-        index={index}
-        totalInColumn={total}
-        isEditing={isEditing}
-        onHide={handleHideCard}
-        onMoveToColumn={handleMoveToColumn}
-        onMoveStep={handleMoveStep}
-      >
-        {renderCardContent(cardId)}
-      </SortableCard>
-    );
-  };
+  // Each card's element, built once per change of the data it shows. The
+  // grid hands these to its cards as children, so opening customize mode or
+  // a step of a drag renders the grid and leaves the queue, the heatmap and
+  // the charts alone: an element React has seen before is skipped.
+  const upNextCard = useMemo(
+    () => (
+      <div ref={upNextCardRef}>
+        <UpNextCard
+          items={upNext.items}
+          groups={upNext.groups}
+          selectedIndex={selectedIndex}
+          onSelectIndex={setSelectedIndex}
+          selectionShown={selectionShown}
+          onSelectionShownChange={setSelectionShown}
+          onComplete={handleComplete}
+          onLog={logNote}
+          onOpenContact={handleOpenContact}
+        />
+      </div>
+    ),
+    [
+      upNext.items,
+      upNext.groups,
+      selectedIndex,
+      selectionShown,
+      handleComplete,
+      handleOpenContact,
+    ],
+  );
+  const completedCard = useMemo(() => <CompletedCard />, []);
+  const activityCard = useMemo(
+    () => <ActivityCard activity={activity} />,
+    [activity],
+  );
+  const tracking = dashboard?.tracking;
+  const keepingUpCard = useMemo(
+    () => <KeepingUpCard tracking={tracking} />,
+    [tracking],
+  );
+  const compositionCard = useMemo(
+    () => <CompositionCard dashboard={dashboard} />,
+    [dashboard],
+  );
+  const insightCard = useMemo(
+    () => (
+      <InsightCard
+        insight={insight}
+        isLoading={isInsightLoading}
+        aiAllowed={aiAllowed}
+      />
+    ),
+    [insight, isInsightLoading, aiAllowed],
+  );
+  const ghosts = dashboard?.ghosts;
+  const hygiene = dashboard?.hygiene;
+  const correspondents = dashboard?.correspondents ?? 0;
+  const inboxCard = useMemo(
+    () => (
+      <InboxCard
+        pendingDuplicates={pendingSuggestions}
+        ghosts={ghosts ?? []}
+        hygiene={hygiene}
+        correspondents={correspondents}
+        newPeople={newPeople}
+      />
+    ),
+    [pendingSuggestions, ghosts, hygiene, correspondents, newPeople],
+  );
+  const meetings = dashboard?.meetings;
+  const comingUpCard = useMemo(
+    () => (
+      <ComingUpCard
+        birthdays={upcomingBirthdays}
+        meetings={meetings ?? []}
+        contactsMap={contactsMap}
+      />
+    ),
+    [upcomingBirthdays, meetings, contactsMap],
+  );
+  const cardElements = useMemo<Record<PulseCardId, React.ReactNode>>(
+    () => ({
+      "up-next": upNextCard,
+      completed: completedCard,
+      activity: activityCard,
+      "keeping-up": keepingUpCard,
+      composition: compositionCard,
+      insight: insightCard,
+      inbox: inboxCard,
+      "coming-up": comingUpCard,
+    }),
+    [
+      upNextCard,
+      completedCard,
+      activityCard,
+      keepingUpCard,
+      compositionCard,
+      insightCard,
+      inboxCard,
+      comingUpCard,
+    ],
+  );
 
   if (isError) {
     return (
@@ -661,7 +585,7 @@ const PulseOffice = () => {
           PAGE_TOP,
         )}
       >
-        {/* The masthead: the title and the day, the sentence, the actions */}
+        {/* The masthead: the title and the day, the line of facts, the actions */}
         <Masthead
           counts={{
             overdue: upNext.counts.overdue,
@@ -720,47 +644,20 @@ const PulseOffice = () => {
           </section>
         )}
 
-        {/* Content: Welcome Office if 0 contacts, else 3-column Grid with DndContext */}
+        {/* Content: Welcome Office if 0 contacts, else the three columns */}
         {isZeroContacts ? (
           <WelcomeOffice />
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <div className={GRID_CLASSES}>
-              {/* Column 1: Focus (Up next, Completed) */}
-              <DroppableColumn
-                id="focus"
-                cards={resolvedLayout.visible.focus}
-                isEditing={isEditing}
-                renderCard={(cardId, index, total) =>
-                  renderSortableCard(cardId, index, total, "focus")
-                }
-              />
-
-              {/* Column 2: Intelligence (Insight, Inbox, Coming up, Composition) */}
-              <DroppableColumn
-                id="intel"
-                cards={resolvedLayout.visible.intel}
-                isEditing={isEditing}
-                renderCard={(cardId, index, total) =>
-                  renderSortableCard(cardId, index, total, "intel")
-                }
-              />
-
-              {/* Column 3: Network (Keeping up, Activity) */}
-              <DroppableColumn
-                id="network"
-                cards={resolvedLayout.visible.network}
-                isEditing={isEditing}
-                renderCard={(cardId, index, total) =>
-                  renderSortableCard(cardId, index, total, "network")
-                }
-              />
-            </div>
-          </DndContext>
+          <PulseGrid
+            layout={resolvedLayout.visible}
+            isEditing={isEditing}
+            cards={cardElements}
+            onHide={handleHideCard}
+            onMoveToColumn={handleMoveToColumn}
+            onMoveStep={handleMoveStep}
+            onDrop={handleDrop}
+            draggingRef={draggingRef}
+          />
         )}
 
         {/* Floating Bottom Bar in Customize Mode */}
@@ -775,17 +672,19 @@ const PulseOffice = () => {
                 box measures against the half that is left and squeezes its
                 buttons onto two lines on a phone. One sentence that wraps:
                 on a phone it takes the first lines and the two buttons the
-                last. The words follow the controls a person has at that
-                width. */}
+                last. The words follow the gesture at that width: a finger
+                holds the handle before the card lifts, a mouse drags it at
+                once. */}
             <p className="text-xs sm:text-sm text-on-surface text-center sm:text-left">
               <span className="font-semibold">Editing layout</span>
               <span className="text-on-surface-variant">
                 {" · "}
                 <span className="hidden sm:inline">
-                  Drag a card to move it. Use the eye to hide one.
+                  Drag a card by its handle to move it. Use the eye to hide one.
                 </span>
                 <span className="sm:hidden">
-                  Use the arrows to move a card and the eye to hide one.
+                  Hold a card&apos;s handle, then drag it. Use the eye to hide
+                  one.
                 </span>
               </span>
             </p>

@@ -22,6 +22,30 @@ every time, on an instance with no AI key at all.
 
 A result opens the note on its contact's timeline, scrolled to and expanded.
 
+## The page
+
+Notes mode has the shape of People mode. The same search box leads, with a
+note glyph where People has the sparkles, Clear, and the magnifying glass
+that searches. Enter or the button runs the search: the words reach the
+address when they are searched, not while they are typed. The filters under
+the box apply the moment they change.
+
+- **The filters are one row of chips.** The kind comes first, a chip that
+  reads **All kinds** and opens a list: notes, calls, meetings, emails,
+  messages. A chosen kind shows its glyph and its name ("Calls") in the
+  selected tint. The period chips follow. On a phone the periods fold into
+  one chip of the same kind, **Any time**, so both filters fit on one row.
+- **Searching.** An answer that takes longer than a moment shows the
+  "Searching…" line and three shimmer cards, as People does. A fast answer
+  never flashes them, and once shown they stay long enough to read.
+- **Results.** The header reads "Search results" with the count in a pill,
+  the period the words set, and the order and word-matching switches.
+- **Nothing found.** "No notes match", with a hint. With a kind chosen, one
+  press on **Search all kinds** widens the search again.
+- **Clear** and Escape empty the box and every filter, and the notes they
+  found go with them.
+- There are no suggested questions before a search.
+
 ## What a question can say
 
 The words are matched against note titles and bodies. Matching is by stem,

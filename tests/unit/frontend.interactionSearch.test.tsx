@@ -75,13 +75,17 @@ function answer(overrides: Partial<InteractionSearchResult> = {}) {
   });
 }
 
-/** Stub `fetch`, answer every request the same way, and keep every URL. */
+/**
+ * Stub `fetch`, answer every request the same way, and keep the URL of every
+ * note search. The question a search records in the history is a request
+ * too, and it is left out of the list.
+ */
 function stubFetch(reply: () => Response = answer) {
   const urls: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
-      urls.push(url);
+      if (url.includes("/search/interactions")) urls.push(url);
       return Promise.resolve(reply());
     }),
   );
@@ -107,12 +111,27 @@ function mount(initialUrl = "/search?mode=notes") {
 const params = (url: string) => new URL(url, "http://localhost").searchParams;
 
 describe("InteractionSearchPanel", () => {
-  it("sends the question, the reader's zone and the page size", async () => {
+  it("searches when Search is pressed, not while the words are typed", async () => {
     const urls = stubFetch();
     mount();
     fireEvent.change(screen.getByLabelText("Search your notes"), {
-      target: { value: "hiring last month" },
+      target: { value: "hiring" },
     });
+    // Typing alone sends nothing: the box searches on Enter or Search, as
+    // People's does.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(urls).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(urls).toHaveLength(1));
+    expect(params(urls[0]).get("q")).toBe("hiring");
+  });
+
+  it("sends the question, the reader's zone and the page size", async () => {
+    const urls = stubFetch();
+    mount();
+    const box = screen.getByLabelText("Search your notes");
+    fireEvent.change(box, { target: { value: "hiring last month" } });
+    fireEvent.keyDown(box, { key: "Enter" });
     await waitFor(() => expect(urls.length).toBeGreaterThan(0));
     const sent = params(urls[0]);
     expect(urls[0]).toContain("/api/search/interactions?");
@@ -149,6 +168,7 @@ describe("InteractionSearchPanel", () => {
     const mark = document.querySelector("mark");
     expect(mark?.textContent).toBe("hiring");
     expect(screen.getByText("1 note")).toBeTruthy();
+    expect(screen.getByText("Search results")).toBeTruthy();
     expect(screen.getByText(/“last month” →/)).toBeTruthy();
     // The phrase set the range, so "Any time" does not show pressed beside it.
     expect(
@@ -239,24 +259,54 @@ describe("InteractionSearchPanel", () => {
     expect(screen.queryByRole("button", { name: "Best match" })).toBeNull();
   });
 
-  it("suggests questions as plain words, and a press searches for one", async () => {
-    const urls = stubFetch();
+  it("starts with the box and the filters, and no suggested questions", () => {
+    stubFetch();
     mount();
-    const list = await screen.findByRole("list", { name: "Try asking" });
-    const suggestion = within(list).getByRole("button", {
-      name: "coffee in the last 30 days",
-    });
-    expect(suggestion.textContent).toBe("coffee in the last 30 days");
-    fireEvent.click(suggestion);
-    await waitFor(() =>
-      expect(
-        urls.some((u) => params(u).get("q") === "coffee in the last 30 days"),
-      ).toBe(true),
-    );
+    expect(screen.queryByRole("list", { name: "Try asking" })).toBeNull();
+    expect(screen.queryByText("Try asking")).toBeNull();
+  });
+
+  it("puts the kind first among the filters, a chip with no Kind label beside it", () => {
+    stubFetch();
+    mount();
+    const kind = screen.getByRole("combobox", { name: "Kind of note" });
+    const anyTime = screen.getByRole("button", { name: "Any time" });
+    expect(
+      kind.compareDocumentPosition(anyTime) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(kind.textContent).toContain("All kinds");
+    expect(screen.queryByText("Kind")).toBeNull();
+  });
+
+  it("empties the results along with the search", async () => {
+    stubFetch();
+    mount("/search?mode=notes&q=hiring");
+    await screen.findByText("Sam Rivera");
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    await waitFor(() => expect(screen.queryByText("Sam Rivera")).toBeNull());
     expect(screen.getByLabelText("Search your notes")).toHaveProperty(
       "value",
-      "coffee in the last 30 days",
+      "",
     );
+    expect(screen.queryByText("1 note")).toBeNull();
+  });
+
+  it("says it is searching while a slow answer is on its way", async () => {
+    let release: () => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            release = () => resolve(answer());
+          }),
+      ),
+    );
+    mount("/search?mode=notes&q=hiring");
+    expect(await screen.findByText("Searching…")).toBeTruthy();
+    release();
+    await screen.findByText("Sam Rivera");
+    expect(screen.queryByText("Searching…")).toBeNull();
   });
 
   it("announces a failure as an alert with the reason", async () => {

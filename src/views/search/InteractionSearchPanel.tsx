@@ -6,15 +6,20 @@
  * local: the server runs FTS5 over the note index and no model is called, so
  * the same question over the same notes gives the same page every time.
  *
+ * The page has People's shape and feel: the same search box with the same
+ * search button, the same "Searching…" line and shimmer while an answer is
+ * on its way, and the same results header. Enter or the button searches, as
+ * on People. The box used to search as the words were typed, with no button
+ * to press, which People had.
+ *
  * The state lives in the URL (`q`, `from`, `to`, `type`), so Back returns to
  * the same search and a link to it can be shared. The input is the one thing
- * kept locally, debounced into `q`, so typing does not rewrite the address
- * bar on every keystroke.
+ * kept locally, and it reaches `q` when it is searched. The filters under the
+ * box, the kind and the period, apply the moment they change.
  */
 import React, {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -32,24 +37,19 @@ import {
   Mail,
   MessageSquare,
   Phone,
-  Search,
   SearchX,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useInteractionSearch } from "../../api/search";
 import { useRecordSearch } from "../../api/searchHistory";
-import { useDebounce } from "../../hooks/useDebounce";
+import { useLoadingShown } from "../../hooks/useLoadingShown";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { isTypingTarget } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
 import {
-  CARD,
   CARD_INTERACTIVE,
-  ICON_BTN,
   SECTION_HEADING,
-  SUGGESTION_CHIP,
   filterPill,
 } from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
@@ -57,33 +57,12 @@ import { cn } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { IconButton } from "../../components/ui/IconButton";
-import { Select } from "../../components/ui/Select";
+import { Select, type SelectOption } from "../../components/ui/Select";
 import type { HighlightRange, InteractionSearchHit } from "../../types";
+import { AskSearchBox } from "./AskSearchBox";
+import { ShimmerCard } from "./SearchResultCards";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/**
- * Searches a person could type, each with a date phrase the search reads:
- * "last month", "this year", "in the last 30 days", "since March". The
- * words are ones notes tend to hold (a meeting, a call, coffee, an intro),
- * so a press finds notes. Three of the four old examples, such as
- * "fundraising this year", found none on a real network.
- */
-const EXAMPLE_QUESTIONS = [
-  "meeting last month",
-  "calls this year",
-  "coffee in the last 30 days",
-  "intro since March",
-];
-
-const TYPES: { value: string; label: string }[] = [
-  { value: "", label: "All kinds" },
-  { value: "note", label: "Notes" },
-  { value: "call", label: "Calls" },
-  { value: "meeting", label: "Meetings" },
-  { value: "email", label: "Emails" },
-  { value: "message", label: "Messages" },
-];
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
   note: FileText,
@@ -93,6 +72,19 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   message: MessageSquare,
   sms: MessageSquare,
 };
+
+/**
+ * The kinds of note, for the first chip under the box. Each names its
+ * choice with its glyph, so the chip reads "Calls" with a phone once chosen.
+ */
+const TYPES: SelectOption[] = [
+  { value: "", label: "All kinds" },
+  { value: "note", label: "Notes", icon: TYPE_ICONS.note },
+  { value: "call", label: "Calls", icon: TYPE_ICONS.call },
+  { value: "meeting", label: "Meetings", icon: TYPE_ICONS.meeting },
+  { value: "email", label: "Emails", icon: TYPE_ICONS.email },
+  { value: "message", label: "Messages", icon: TYPE_ICONS.message },
+];
 
 const PAGE_SIZE = 20;
 
@@ -104,6 +96,12 @@ const PERIODS: { value: Exclude<Period, "custom">; label: string }[] = [
   { value: "30d", label: "Last 30 days" },
   { value: "month", label: "Last month" },
   { value: "year", label: "This year" },
+];
+
+/** The periods as one chip's list, for a phone, where six chips took three rows. */
+const PERIOD_OPTIONS: SelectOption<Period>[] = [
+  ...PERIODS,
+  { value: "custom", label: "Custom" },
 ];
 
 // ─── Dates ────────────────────────────────────────────────────────────────────
@@ -281,8 +279,6 @@ export const InteractionSearchPanel = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
-  /** Names the list of suggested questions after its heading. */
-  const suggestionsId = useId();
 
   const q = searchParams.get("q") ?? "";
   const from = searchParams.get("from") ?? "";
@@ -299,7 +295,6 @@ export const InteractionSearchPanel = () => {
    * a reader who has just typed the last day of last month into them.
    */
   const [customOpen, setCustomOpen] = useState(false);
-  const debounced = useDebounce(text.trim(), 250);
 
   /** Write one or more fields to the URL, dropping the ones set to "". */
   const update = useCallback(
@@ -319,7 +314,8 @@ export const InteractionSearchPanel = () => {
     [setSearchParams],
   );
 
-  // Keep text in sync if q changes from external navigation (e.g. clicking history item)
+  // The box follows a question that arrives from elsewhere: a history entry,
+  // or Back to a search.
   const prevQRef = useRef(q);
   useEffect(() => {
     if (q !== prevQRef.current) {
@@ -327,20 +323,6 @@ export const InteractionSearchPanel = () => {
       setText(q);
     }
   }, [q]);
-
-  /*
-   * The debounced input becomes the question in the URL, when the typing
-   * settles and only then. This ran on every change of `q` too, so a
-   * question that arrived from elsewhere (a suggestion, a history entry) was
-   * overwritten at once by the debounced text from before it, which had not
-   * caught up yet, and the press undid itself.
-   */
-  const settledRef = useRef(debounced);
-  useEffect(() => {
-    if (debounced === settledRef.current) return;
-    settledRef.current = debounced;
-    if (debounced !== q) update({ q: debounced });
-  }, [debounced, q, update]);
 
   // A new question or filter starts from the first page.
   useEffect(() => {
@@ -401,29 +383,46 @@ export const InteractionSearchPanel = () => {
   const hasSearch = Boolean(q || from || to || type);
   const showModeToggle = (result?.query.tokens.length ?? 0) >= 2;
 
+  /**
+   * The results on screen belong to an earlier search while this one
+   * loads: the query keeps them (`keepPreviousData`) so a filter change
+   * does not blank the page. Past a short wait the page says it is
+   * searching instead, the way People does, and never for an answer fast
+   * enough to flash.
+   */
+  const pending =
+    hasSearch && search.isFetching && (search.isPlaceholderData || !result);
+  const searching = useLoadingShown(pending);
+
   const recordSearch = useRecordSearch();
   const lastRecordedNotesQueryRef = useRef<string | null>(null);
 
-  // Record Notes search once per settled term of at least 2 characters that resolved with data
-  // (settles for 1.5s to avoid recording per keystroke)
+  // Record each question once, when its own answer arrives: not the answer
+  // to the question before it, which the query shows while this one loads.
   useEffect(() => {
     const trimmed = q.trim();
     if (trimmed.length < 2) return;
-    if (!search.isSuccess || !result) return;
+    if (!search.isSuccess || search.isPlaceholderData || !result) return;
     if (lastRecordedNotesQueryRef.current === trimmed) return;
+    lastRecordedNotesQueryRef.current = trimmed;
+    recordSearch.mutate({
+      query: trimmed,
+      mode: "notes",
+      resultCount: result.total,
+      resultIds: (result.hits ?? []).slice(0, 30).map((h) => h.contactId),
+    });
+  }, [q, search.isSuccess, search.isPlaceholderData, result, recordSearch]);
 
-    const timer = setTimeout(() => {
-      lastRecordedNotesQueryRef.current = trimmed;
-      recordSearch.mutate({
-        query: trimmed,
-        mode: "notes",
-        resultCount: result.total,
-        resultIds: (result.hits ?? []).slice(0, 30).map((h) => h.contactId),
-      });
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [q, search.isSuccess, result, recordSearch]);
+  /**
+   * Search for the words in the box. The words go to the URL, which is what
+   * the query reads, so Back returns to them. The same words again search
+   * again.
+   */
+  const submit = () => {
+    const words = text.trim();
+    if (words === q) void search.refetch();
+    else update({ q: words });
+  };
 
   const choosePeriod = (next: Period) => {
     setCustomOpen(next === "custom");
@@ -434,6 +433,7 @@ export const InteractionSearchPanel = () => {
     } else update(presetRange(next));
   };
 
+  /** Empty the box and every filter, and with them what they found. */
   const clear = () => {
     setText("");
     setCustomOpen(false);
@@ -447,11 +447,12 @@ export const InteractionSearchPanel = () => {
 
   const first = total === 0 ? 0 : offset + 1;
   const last = Math.min(offset + hits.length, total);
+  const showResults = !searching && hasSearch && hits.length > 0;
 
   /**
-   * The one sentence a screen reader hears about this search. The spinner
-   * and the count over the results are what a sighted person sees. See
-   * lib/searchAnnouncements for the wording.
+   * The one sentence a screen reader hears about this search. The loading
+   * state and the count over the results are what a sighted person sees.
+   * See lib/searchAnnouncements for the wording.
    */
   const status = noteSearchStatus({
     isFetching: search.isFetching,
@@ -467,307 +468,315 @@ export const InteractionSearchPanel = () => {
       <LiveStatus message={status} label="Search status" />
 
       {/*
-        Question. One field: the glyph, the input and Clear in one card,
-        which draws the focus ring while the input has focus. The same box as
-        the People mode's, 80 px tall from `sm` with the same padding, so
-        switching modes moves nothing.
+        The box and, under it, what narrows the search: the kind of note,
+        then the period. The same box as People's, so switching modes moves
+        nothing. A spinner takes the note's place while a search runs, not
+        the thinking bird: no model reads the notes, the server matches
+        words.
       */}
-      <div
-        className={cn(
-          CARD,
-          "focus-frame flex items-center gap-3 px-4 sm:px-6 py-2 sm:py-5",
-        )}
-      >
-        {/*
-          A spinner, not the thinking bird: no model reads the notes. The
-          server matches words, so nothing is thinking.
-        */}
-        {search.isFetching ? (
-          <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
-        ) : (
-          <Search className="w-5 h-5 text-primary shrink-0" />
-        )}
-        <input
-          ref={inputRef}
+      <div className="space-y-3">
+        <AskSearchBox
+          inputRef={inputRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              clear();
-            }
-          }}
+          onChange={setText}
+          onSubmit={submit}
+          onClear={clear}
+          canClear={text.length > 0 || hasSearch}
+          canSubmit={text.trim().length > 0}
+          icon={FileText}
+          busyMark={
+            search.isFetching ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : undefined
+          }
           placeholder="Search your notes…"
-          aria-label="Search your notes"
-          className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+          label="Search your notes"
         />
-        <button
-          type="button"
-          aria-label="Clear search"
-          onClick={clear}
-          tabIndex={hasSearch ? 0 : -1}
-          aria-hidden={!hasSearch}
-          className={cn(
-            ICON_BTN,
-            "p-1.5 shrink-0 transition-opacity",
-            !hasSearch && "opacity-0 pointer-events-none",
-          )}
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
 
-      {/* Period and kind */}
-      <div className="flex flex-wrap items-center gap-2">
-        <CalendarDays
-          className="w-4 h-4 text-on-surface-variant shrink-0"
-          aria-hidden
-        />
-        {PERIODS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => choosePeriod(p.value)}
-            className={cn(
-              filterPill(shownPeriod === p.value),
-              "min-h-[44px] sm:min-h-[36px]",
-            )}
-            aria-pressed={shownPeriod === p.value}
-          >
-            {p.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => choosePeriod("custom")}
-          className={cn(
-            filterPill(period === "custom"),
-            "min-h-[44px] sm:min-h-[36px]",
-          )}
-          aria-pressed={period === "custom"}
-        >
-          Custom
-        </button>
-        <div className="ml-auto flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-          <span className="sr-only sm:not-sr-only">Kind</span>
+        {/*
+          The filters, as one row of chips. The kind comes first, a chip that
+          opens a list and names its choice, the way Gmail and Drive put
+          "Type" first under their search boxes: what, then when. A kind
+          other than all takes the chip's selected tint, like a pressed
+          period. On a phone the six periods fold into one chip of the same
+          kind, so the two filters share one row: six chips took three.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             variant="ghost"
             label="Kind of note"
-            align="end"
             value={type}
             onChange={(next) => update({ type: next })}
             options={TYPES}
+            className={cn(
+              filterPill(type !== ""),
+              "hit-area min-h-[44px] sm:min-h-[36px]",
+            )}
           />
-        </div>
-      </div>
-
-      {period === "custom" && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-            From
-            <input
-              type="date"
-              value={from}
-              max={to || undefined}
-              onChange={(e) => update({ from: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-            To
-            <input
-              type="date"
-              value={to}
-              min={from || undefined}
-              onChange={(e) => update({ to: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
-            />
-          </label>
-        </div>
-      )}
-
-      {/* Before the first search: suggested questions, which show by
-          example that dates in a question are understood. A press fills the
-          box and searches. */}
-      {!hasSearch && (
-        <div className="space-y-3">
-          <h2 id={suggestionsId} className={SECTION_HEADING}>
-            Try asking
-          </h2>
-          <ul aria-labelledby={suggestionsId} className="flex flex-wrap gap-2">
-            {EXAMPLE_QUESTIONS.map((question) => (
-              <li key={question} className="tile-enter">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setText(question);
-                    update({ q: question });
-                  }}
-                  className={SUGGESTION_CHIP}
-                >
-                  {question}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* What the server understood. With no notes found, only what still
-          helps stays: the date range it read, and the way back from "All
-          words" a person chose. The count, the any-word notice and the
-          order would describe a list that is not there. */}
-      {hasSearch &&
-        result &&
-        (total > 0 ||
-          result.query.range ||
-          (showModeToggle && mode === "all")) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-            {/* A label in the muted ink, like "Try asking" above it: blue
-              would read as a link. */}
-            {total > 0 && (
-              <span className={SECTION_HEADING}>
-                {total} note{total === 1 ? "" : "s"}
-              </span>
+          <span aria-hidden="true" className="w-1 shrink-0" />
+          <Select<Period>
+            variant="ghost"
+            label="Period"
+            value={shownPeriod ?? "any"}
+            onChange={choosePeriod}
+            options={PERIOD_OPTIONS}
+            wrapperClassName="sm:hidden"
+            className={cn(
+              filterPill(shownPeriod !== null && shownPeriod !== "any"),
+              "hit-area min-h-[44px]",
             )}
-            {result.query.range && (
-              <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
-                <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
-                {result.query.phrase && result.query.range.source === "phrase"
-                  ? `“${result.query.phrase}” → `
-                  : ""}
-                {describeRange(result.query.range.from, result.query.range.to)}
-              </span>
-            )}
-            {total > 0 &&
-              result.query.mode === "any" &&
-              showModeToggle &&
-              mode === "auto" && (
-                <span className="inline-flex items-center gap-1 text-warning">
-                  <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
-                  No note has every word, showing notes with any of them
-                </span>
-              )}
-            {showModeToggle && (total > 0 || mode === "all") && (
-              <div
-                className="inline-flex items-center gap-1 ml-auto"
-                role="group"
-                aria-label="How to match the words"
-              >
-                <button
-                  type="button"
-                  onClick={() => setMode(mode === "all" ? "auto" : "all")}
-                  className={cn(
-                    filterPill(result.query.mode === "all"),
-                    "min-h-[44px] sm:min-h-[36px]",
-                  )}
-                  aria-pressed={result.query.mode === "all"}
-                >
-                  All words
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode(mode === "any" ? "auto" : "any")}
-                  className={cn(
-                    filterPill(result.query.mode === "any"),
-                    "min-h-[44px] sm:min-h-[36px]",
-                  )}
-                  aria-pressed={result.query.mode === "any"}
-                >
-                  Any word
-                </button>
-              </div>
-            )}
-            {total > 0 && result.query.mode !== "none" && (
-              <div
+          />
+          <div className="hidden sm:contents">
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => choosePeriod(p.value)}
                 className={cn(
-                  "inline-flex items-center gap-1",
-                  !showModeToggle && "ml-auto",
+                  filterPill(shownPeriod === p.value),
+                  "min-h-[36px]",
                 )}
-                role="group"
-                aria-label="Order"
+                aria-pressed={shownPeriod === p.value}
               >
-                <button
-                  type="button"
-                  onClick={() => setSort("relevance")}
-                  className={cn(
-                    filterPill(sort === "relevance"),
-                    "min-h-[44px] sm:min-h-[36px]",
-                  )}
-                  aria-pressed={sort === "relevance"}
-                >
-                  Best match
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSort("date")}
-                  className={cn(
-                    filterPill(sort === "date"),
-                    "min-h-[44px] sm:min-h-[36px]",
-                  )}
-                  aria-pressed={sort === "date"}
-                >
-                  Newest
-                </button>
-              </div>
-            )}
+                {p.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => choosePeriod("custom")}
+              className={cn(filterPill(period === "custom"), "min-h-[36px]")}
+              aria-pressed={period === "custom"}
+            >
+              Custom
+            </button>
+          </div>
+        </div>
+
+        {period === "custom" && (
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
+              From
+              <input
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={(e) => update({ from: e.target.value })}
+                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
+              To
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={(e) => update({ to: e.target.value })}
+                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
+              />
+            </label>
           </div>
         )}
+      </div>
 
-      {/* Results */}
-      {hits.length > 0 && (
-        <div
-          key={`${q}|${from}|${to}|${type}|${offset}`}
-          className={cn(
-            "fade-enter space-y-2 transition-opacity",
-            search.isPlaceholderData && "opacity-70",
-          )}
-        >
-          {hits.map((hit, i) => (
-            <HitCard key={hit.id} hit={hit} index={i} onOpen={open} />
-          ))}
-        </div>
-      )}
-
-      {/* Pages */}
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-xs text-on-surface-variant">
-          <span>
-            Showing {first}–{last} of {total}
-          </span>
-          <div className="flex items-center gap-1">
-            <IconButton
-              aria-label="Previous page"
-              tone="subtle"
-              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              disabled={offset === 0}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              aria-label="Next page"
-              tone="subtle"
-              onClick={() => setOffset(offset + PAGE_SIZE)}
-              disabled={offset + PAGE_SIZE >= total}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </IconButton>
+      {/*
+        Searching, past a short wait: the line and the shimmer that People
+        shows, in one keyed slot with the results, so one swaps for the
+        other in a single commit.
+      */}
+      {searching ? (
+        <div key="shimmer" className="fade-enter space-y-3">
+          <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
+            {/* Decorative: the word beside it says the same thing. */}
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            Searching…
           </div>
+          <ShimmerCard delay={0} />
+          <ShimmerCard delay={0.08} />
+          <ShimmerCard delay={0.16} />
         </div>
-      )}
+      ) : (
+        <>
+          {/* What the server understood, in the results' header: the count
+              in the pill People uses, the date range it read, and the ways
+              to match and order. With no notes found, only what still
+              helps stays: the range it read, and the way back from "All
+              words" a person chose. */}
+          {hasSearch &&
+            result &&
+            (total > 0 ||
+              result.query.range ||
+              (showModeToggle && mode === "all")) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+                {total > 0 && (
+                  <div className="flex items-center gap-2">
+                    {/* A label in the muted ink, as on People: blue would
+                        read as a link. */}
+                    <span className={SECTION_HEADING}>Search results</span>
+                    <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
+                      {total} note{total === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                )}
+                {result.query.range && (
+                  <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
+                    <CalendarDays
+                      className="w-3 h-3 text-primary"
+                      aria-hidden
+                    />
+                    {result.query.phrase &&
+                    result.query.range.source === "phrase"
+                      ? `“${result.query.phrase}” → `
+                      : ""}
+                    {describeRange(
+                      result.query.range.from,
+                      result.query.range.to,
+                    )}
+                  </span>
+                )}
+                {total > 0 &&
+                  result.query.mode === "any" &&
+                  showModeToggle &&
+                  mode === "auto" && (
+                    <span className="inline-flex items-center gap-1 text-warning">
+                      <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
+                      No note has every word, showing notes with any of them
+                    </span>
+                  )}
+                {showModeToggle && (total > 0 || mode === "all") && (
+                  <div
+                    className="inline-flex items-center gap-1 ml-auto"
+                    role="group"
+                    aria-label="How to match the words"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setMode(mode === "all" ? "auto" : "all")}
+                      className={cn(
+                        filterPill(result.query.mode === "all"),
+                        "min-h-[44px] sm:min-h-[36px]",
+                      )}
+                      aria-pressed={result.query.mode === "all"}
+                    >
+                      All words
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode(mode === "any" ? "auto" : "any")}
+                      className={cn(
+                        filterPill(result.query.mode === "any"),
+                        "min-h-[44px] sm:min-h-[36px]",
+                      )}
+                      aria-pressed={result.query.mode === "any"}
+                    >
+                      Any word
+                    </button>
+                  </div>
+                )}
+                {total > 0 && result.query.mode !== "none" && (
+                  <div
+                    className={cn(
+                      "inline-flex items-center gap-1",
+                      !showModeToggle && "ml-auto",
+                    )}
+                    role="group"
+                    aria-label="Order"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSort("relevance")}
+                      className={cn(
+                        filterPill(sort === "relevance"),
+                        "min-h-[44px] sm:min-h-[36px]",
+                      )}
+                      aria-pressed={sort === "relevance"}
+                    >
+                      Best match
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSort("date")}
+                      className={cn(
+                        filterPill(sort === "date"),
+                        "min-h-[44px] sm:min-h-[36px]",
+                      )}
+                      aria-pressed={sort === "date"}
+                    >
+                      Newest
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
-      {/* Nothing */}
-      {hasSearch && search.isSuccess && total === 0 && (
-        <EmptyState
-          icon={SearchX}
-          title="No notes match"
-          body={
-            result?.query.range
-              ? "Try a wider period, or fewer words."
-              : "Try fewer words, or a stem such as hire for hiring."
-          }
-          className="tile-enter"
-        />
+          {/* Results */}
+          {showResults && (
+            <div
+              key={`${q}|${from}|${to}|${type}|${offset}`}
+              className={cn(
+                "fade-enter space-y-2 transition-opacity",
+                search.isPlaceholderData && "opacity-70",
+              )}
+            >
+              {hits.map((hit, i) => (
+                <HitCard key={hit.id} hit={hit} index={i} onOpen={open} />
+              ))}
+            </div>
+          )}
+
+          {/* Pages */}
+          {showResults && total > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-xs text-on-surface-variant">
+              <span>
+                Showing {first}–{last} of {total}
+              </span>
+              <div className="flex items-center gap-1">
+                <IconButton
+                  aria-label="Previous page"
+                  tone="subtle"
+                  onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                  disabled={offset === 0}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </IconButton>
+                <IconButton
+                  aria-label="Next page"
+                  tone="subtle"
+                  onClick={() => setOffset(offset + PAGE_SIZE)}
+                  disabled={offset + PAGE_SIZE >= total}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </IconButton>
+              </div>
+            </div>
+          )}
+
+          {/* Nothing */}
+          {hasSearch &&
+            search.isSuccess &&
+            !search.isPlaceholderData &&
+            total === 0 && (
+              <EmptyState
+                icon={SearchX}
+                title="No notes match"
+                body={
+                  result?.query.range
+                    ? "Try a wider period, or fewer words."
+                    : "Try fewer words, or a stem such as hire for hiring."
+                }
+                // A chosen kind is the narrowest filter, and the one a
+                // person forgets they set. One press widens it again.
+                action={
+                  type
+                    ? {
+                        label: "Search all kinds",
+                        onClick: () => update({ type: "" }),
+                      }
+                    : undefined
+                }
+                className="tile-enter"
+              />
+            )}
+        </>
       )}
 
       {/*

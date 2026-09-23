@@ -138,6 +138,68 @@ describe("PATCH /api/contacts/:id", () => {
   });
 });
 
+/**
+ * A link saved with a URL and nothing else takes its platform from its host.
+ * "+ link" on the contact page sends exactly that, through the update, and a
+ * new contact can carry links too, so both paths are checked. The server used
+ * to match the text of the URL, and dropbox.com came back as "twitter".
+ */
+describe("social links saved without a platform", () => {
+  const platforms = (body: {
+    socialLinks: { url: string; platform: string }[];
+  }) => Object.fromEntries(body.socialLinks.map((l) => [l.url, l.platform]));
+
+  it("are labelled by their host when a contact is created", async () => {
+    const res = await request(app)
+      .post("/api/contacts")
+      .send({
+        name: "Link Creator",
+        socialLinks: [
+          { url: "https://www.dropbox.com/s/abc" },
+          { url: "https://youtu.be/dQw4w9WgXcQ" },
+          { url: "https://www.linkedin.com/in/linkcreator" },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(platforms(res.body)).toEqual({
+      "https://www.dropbox.com/s/abc": "other",
+      "https://youtu.be/dQw4w9WgXcQ": "youtube",
+      "https://www.linkedin.com/in/linkcreator": "linkedin",
+    });
+  });
+
+  it("are labelled by their host when a contact is updated, and keep a platform that was sent", async () => {
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Link Updater" });
+    const res = await request(app)
+      .put(`/api/contacts/${created.body.id}`)
+      .send({
+        socialLinks: [
+          // What the header sends back for a link it already had.
+          {
+            url: "https://github.com/linkupdater",
+            platform: "github",
+            handle: "linkupdater",
+          },
+          // What "+ link" adds.
+          { url: "https://www.netflix.com/title/1" },
+          { url: "https://x.com/linkupdater" },
+        ],
+      });
+    expect(res.status).toBe(200);
+    expect(platforms(res.body)).toEqual({
+      "https://github.com/linkupdater": "github",
+      "https://www.netflix.com/title/1": "other",
+      "https://x.com/linkupdater": "twitter",
+    });
+    const x = res.body.socialLinks.find(
+      (l: { url: string }) => l.url === "https://x.com/linkupdater",
+    );
+    expect(x.handle).toBe("linkupdater");
+  });
+});
+
 describe("FTS search pipeline (triggers + index)", () => {
   it("finds a contact by name immediately after creation", async () => {
     await request(app)

@@ -256,9 +256,14 @@ test("the shortcuts dialog lists t under Contact", async ({ page, seed }) => {
  * separator that resizes the list. It sits between the list and the
  * contact, and the arrow keys that move it need it in the Tab order. It is
  * there only from `lg`, where the two panes share the screen.
+ *
+ * The contact budget went up by one again when Change avatar left the
+ * actions menu for a pencil on the avatar itself. It sits on the picture,
+ * left of the name, so it comes before the name in the Tab order as it does
+ * on the screen.
  */
 test.describe("Tab budget", () => {
-  test("a contact's name is within 19 Tabs of the top of the page", async ({
+  test("a contact's name is within 20 Tabs of the top of the page", async ({
     page,
     seed,
   }) => {
@@ -268,8 +273,8 @@ test.describe("Tab budget", () => {
     ).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, "#contact-heading", 19);
-    expect(presses).toBeLessThanOrEqual(19);
+    const presses = await tabsToReach(page, "#contact-heading", 20);
+    expect(presses).toBeLessThanOrEqual(20);
   });
 
   test("the first row on Network is within 17 Tabs, and the list is one stop", async ({
