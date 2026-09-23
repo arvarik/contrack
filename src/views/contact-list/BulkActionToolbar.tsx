@@ -150,7 +150,7 @@ export const BulkActionToolbar = ({
       >
         {selectedCount !== undefined && <SelectedCount count={selectedCount} />}
         {/* Action buttons. Track first: it is the one that decides who the
-            score, Pulse and the map's health layer are about. */}
+            score and Pulse are about. */}
         <BulkActionBtn
           icon={<Radar className="w-4 h-4" />}
           label={selectionTracked === "all" ? "Untrack" : "Track"}

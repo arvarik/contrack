@@ -532,7 +532,7 @@ describe("Frontend Connectors Components", () => {
 
       // Change ghost threshold
       const ghostThresholdInput = screen.getByLabelText(
-        "Ghost contact threshold",
+        "Suggest a new person after",
       );
       fireEvent.change(ghostThresholdInput, { target: { value: "7" } });
 
@@ -613,8 +613,8 @@ describe("Frontend Connectors Components", () => {
           onShowRuns={vi.fn()}
         />,
       );
-      expect(screen.getByText("Needs reauth")).toBeTruthy();
-      expect(screen.getByText("Authentication expired")).toBeTruthy();
+      expect(screen.getByText("Signed out")).toBeTruthy();
+      expect(screen.getByText("Sign-in expired")).toBeTruthy();
       expect(screen.getByText("Session expired")).toBeTruthy();
     });
 
@@ -918,7 +918,7 @@ describe("Frontend Connectors Components", () => {
       );
 
       expect(
-        screen.getByText("5 meetings · 2 new ghosts · 1 error"),
+        screen.getByText("Last sync: 5 meetings · 2 new people seen · 1 error"),
       ).toBeTruthy();
     });
 
@@ -941,7 +941,7 @@ describe("Frontend Connectors Components", () => {
       );
 
       expect(
-        screen.getByText("1 meeting · 1 new ghost · 1 error"),
+        screen.getByText("Last sync: 1 meeting · 1 new person seen · 1 error"),
       ).toBeTruthy();
     });
 
@@ -963,8 +963,8 @@ describe("Frontend Connectors Components", () => {
         />,
       );
 
-      expect(screen.getByText("Needs reauth")).toBeTruthy();
-      expect(screen.getByText("Authentication expired")).toBeTruthy();
+      expect(screen.getByText("Signed out")).toBeTruthy();
+      expect(screen.getByText("Sign-in expired")).toBeTruthy();
       expect(
         screen.getByText("Invalid credentials or feed token revoked"),
       ).toBeTruthy();
@@ -1066,11 +1066,9 @@ describe("Frontend Connectors Components", () => {
         />,
       );
 
-      expect(screen.getByText("No sync runs recorded")).toBeTruthy();
+      expect(screen.getByText("No syncs yet")).toBeTruthy();
       expect(
-        screen.getByText(
-          "Sync history will appear here once the connector runs.",
-        ),
+        screen.getByText("Each sync shows up here once the connector runs."),
       ).toBeTruthy();
     });
 
@@ -1122,7 +1120,7 @@ describe("Frontend Connectors Components", () => {
       );
 
       // Verify modal title
-      expect(screen.getByText("History Cal — Run history")).toBeTruthy();
+      expect(screen.getByText("Run history for History Cal")).toBeTruthy();
 
       // Verify statuses
       expect(screen.getByText("ok")).toBeTruthy();
@@ -1134,7 +1132,7 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getAllByText("schedule run").length).toBe(2);
 
       // Verify stats
-      expect(screen.getByText("12 meetings · 3 new ghosts")).toBeTruthy();
+      expect(screen.getByText("12 meetings · 3 new people seen")).toBeTruthy();
       expect(screen.getByText("1 error")).toBeTruthy();
       expect(screen.getByText("No items processed")).toBeTruthy();
 
@@ -1286,7 +1284,7 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      expect(screen.getByText("Loading connectors…")).toBeTruthy();
+      expect(screen.getByLabelText("Loading connectors")).toBeTruthy();
     });
 
     it("renders empty gallery when no connectors exist", () => {
@@ -1299,7 +1297,9 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      expect(screen.getByText("Get started with connectors")).toBeTruthy();
+      expect(
+        screen.getByRole("heading", { name: "Add a connector" }),
+      ).toBeTruthy();
       expect(
         screen.getByText(/Contrack learns who you talk to from your calendar/i),
       ).toBeTruthy();
@@ -1322,8 +1322,7 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      const connectBtns = screen.getAllByRole("button", { name: "Connect" });
-      fireEvent.click(connectBtns[0]);
+      fireEvent.click(screen.getByRole("button", { name: "Connect Calendar" }));
 
       expect(
         screen.getByRole("heading", { name: "Connect calendar" }),
@@ -1465,7 +1464,7 @@ describe("Frontend Connectors Components", () => {
 
       expect(
         screen.getByRole("heading", {
-          name: "Personal iCloud — Run history",
+          name: "Run history for Personal iCloud",
         }),
       ).toBeTruthy();
     });
@@ -1481,8 +1480,8 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      expect(screen.getByText("Failed to load connectors")).toBeTruthy();
-      const retryBtn = screen.getByRole("button", { name: "Retry" });
+      expect(screen.getByText("Connectors did not load")).toBeTruthy();
+      const retryBtn = screen.getByRole("button", { name: "Try again" });
       fireEvent.click(retryBtn);
 
       expect(refetchMock).toHaveBeenCalledTimes(1);
@@ -1523,11 +1522,11 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(menuTrigger);
       fireEvent.click(screen.getByRole("menuitem", { name: "Run history" }));
       expect(
-        screen.getByRole("heading", { name: "Cal 1 — Run history" }),
+        screen.getByRole("heading", { name: "Run history for Cal 1" }),
       ).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
       expect(
-        screen.queryByRole("heading", { name: "Cal 1 — Run history" }),
+        screen.queryByRole("heading", { name: "Run history for Cal 1" }),
       ).toBeNull();
     });
   });

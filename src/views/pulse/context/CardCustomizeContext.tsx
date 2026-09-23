@@ -5,7 +5,6 @@ import type { PulseColumn } from "../lib/layout";
 
 export interface CardCustomizeContextValue {
   isEditing: boolean;
-  cardId?: string;
   column?: PulseColumn;
   index?: number;
   totalInColumn?: number;

@@ -117,13 +117,6 @@ export interface CreatedApiToken {
   expiresAt: string | null;
 }
 
-export interface SessionPolicy {
-  sessionTtlDays: number;
-  min: number;
-  max: number;
-  default: number;
-}
-
 export interface SessionSummary {
   id: string;
   createdAt: string;
@@ -294,27 +287,6 @@ export function fetchSessions(): Promise<{ sessions: SessionSummary[] }> {
 /** Sign out every other device, keeping this one. */
 export function revokeOtherSessions(): Promise<{ revoked: number }> {
   return apiJson("/auth/sessions", { method: "DELETE" });
-}
-
-/** How long new sessions last, plus the supported range. */
-export function fetchSessionPolicy(): Promise<SessionPolicy> {
-  return apiJson("/auth/session-policy");
-}
-
-/**
- * Change the session lifetime. Applies to sessions created from now on.
- *
- * Deprecated in 2.0 and removed in 3.0: the instance settings endpoint writes
- * the same value. The admin Instance view calls that one; this stays because
- * scripts use it.
- */
-export function updateSessionPolicy(
-  sessionTtlDays: number,
-): Promise<{ sessionTtlDays: number }> {
-  return apiJson("/auth/session-policy", {
-    method: "PUT",
-    ...jsonBody({ sessionTtlDays }),
-  });
 }
 
 // ---------------------------------------------------------------------------

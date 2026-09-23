@@ -46,6 +46,7 @@ import React, {
 import { Link } from "react-router-dom";
 import { MoreVertical, Check, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { focusOnPointer } from "../../lib/a11y";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { usePanelPlacement } from "../../hooks/usePanelPlacement";
 import {
@@ -311,6 +312,7 @@ export const ActionMenu = ({
           aria-checked={isCheckable ? isChecked : undefined}
           tabIndex={-1}
           className={classes}
+          onPointerMove={focusOnPointer}
           onClick={() => {
             close();
             item.onSelect?.();
@@ -328,6 +330,7 @@ export const ActionMenu = ({
         aria-checked={isCheckable ? isChecked : undefined}
         tabIndex={-1}
         aria-disabled={item.disabled || undefined}
+        onPointerMove={focusOnPointer}
         className={classes}
         onClick={() => choose(item)}
       >

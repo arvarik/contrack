@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   COVERS_MAP_ATTR,
   MIN_OPEN_PX,
+  clearBounds,
   insetsFor,
   measureInsets,
   measureOpenWidth,
@@ -228,6 +229,66 @@ describe("measureInsets", () => {
   });
 });
 
+describe("a map beside the insights rail", () => {
+  // From lg the map ends at the insights rail, 64 px short of the window,
+  // and the contact runs to the window's edge, over the rail. Its width
+  // covered 64 px of map that is not there, and the pin sat left of centre.
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const layout = () => {
+    const app = sized(document.createElement("div"), {
+      x: 0,
+      y: 0,
+      width: 1440,
+      height: 900,
+    });
+    const map = sized(document.createElement("div"), {
+      x: 64,
+      y: 0,
+      width: 1312,
+      height: 900,
+    });
+    const contact = document.createElement("section");
+    contact.setAttribute(COVERS_MAP_ATTR, "right");
+    // Mid-slide: the rect is off to the right, the layout box is not.
+    sized(
+      contact,
+      { x: 1400, y: 0, width: 860, height: 900 },
+      { width: 860, height: 900 },
+    );
+    Object.defineProperty(contact, "offsetParent", { value: app });
+    Object.defineProperty(contact, "offsetLeft", { value: 580 });
+    app.append(map, contact);
+    document.body.append(app);
+    return { app, map };
+  };
+
+  it("counts the part of the contact over the map", () => {
+    const { map } = layout();
+    expect(measureInsets(map, { contactOpen: true }).right).toBe(796);
+    expect(measureOpenWidth(map)).toBe(516);
+  });
+
+  it("counts the insights panel only while it is open", () => {
+    const { app, map } = layout();
+    const panel = document.createElement("aside");
+    panel.setAttribute("aria-label", "Map insights");
+    sized(panel, { x: 1056, y: 0, width: 320, height: 900 });
+    Object.defineProperty(panel, "offsetParent", { value: app });
+    Object.defineProperty(panel, "offsetLeft", { value: 1056 });
+    app.append(panel);
+    // Closed, it carries no cover and the map keeps its width.
+    expect(measureInsets(map, { contactOpen: false }).right).toBe(0);
+    panel.setAttribute(COVERS_MAP_ATTR, "right");
+    expect(measureInsets(map, { contactOpen: false }).right).toBe(320);
+    // It is not a contact: the toolbar keeps the whole map.
+    app.querySelector("section")?.remove();
+    expect(measureOpenWidth(map)).toBeNull();
+  });
+});
+
 describe("measureOpenWidth", () => {
   // The map's toolbar and its bottom-left corner keep to the map an open
   // contact leaves. The contact started at x 580 at 1440 px and covered the
@@ -276,5 +337,53 @@ describe("measureOpenWidth", () => {
     document.body.append(narrow, cover(860));
     expect(measureOpenWidth(narrow)).toBe(100);
     expect(measureOpenWidth(narrow)!).toBeLessThan(MIN_OPEN_PX);
+  });
+});
+
+describe("clearBounds", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** A map that unprojects a pixel linearly: 1 px is 0.25 degree. */
+  const fakeMap = (container: HTMLElement) => ({
+    getContainer: () => container,
+    unproject: ([x, y]: [number, number]) => ({
+      lng: -180 + x * 0.25,
+      lat: 90 - y * 0.25,
+    }),
+  });
+
+  const mapOf = (width: number, height: number) => {
+    const el = sized(document.createElement("div"), {
+      x: 64,
+      y: 0,
+      width,
+      height,
+    });
+    Object.defineProperty(el, "clientWidth", { value: width });
+    Object.defineProperty(el, "clientHeight", { value: height });
+    return el;
+  };
+
+  it("leaves the open insights panel's part of the map out of view", () => {
+    const map = mapOf(1312, 720);
+    const panel = document.createElement("aside");
+    panel.setAttribute(COVERS_MAP_ATTR, "right");
+    panel.setAttribute("aria-label", "Map insights");
+    sized(panel, { x: 1056, y: 0, width: 320, height: 720 });
+    document.body.append(map, panel);
+    // 1312 - 320 = 992 px clear: 248 degrees from the west edge.
+    expect(clearBounds(fakeMap(map), { contactOpen: false })).toEqual([
+      -180, -90, 68, 90,
+    ]);
+  });
+
+  it("is the whole map when nothing covers it", () => {
+    const map = mapOf(1312, 720);
+    document.body.append(map);
+    expect(clearBounds(fakeMap(map), { contactOpen: false })).toEqual([
+      -180, -90, 148, 90,
+    ]);
   });
 });

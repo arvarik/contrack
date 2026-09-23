@@ -60,7 +60,6 @@ export const AlphabetRail = ({
   activeBucket,
   onJump,
 }: AlphabetRailProps) => {
-  const railRef = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const lastJumped = useRef<string | null>(null);
 
@@ -183,7 +182,6 @@ export const AlphabetRail = ({
 
   return (
     <div
-      ref={railRef}
       role="group"
       aria-label="Jump to letter"
       onPointerDown={handlePointerDown}
@@ -223,12 +221,15 @@ export const AlphabetRail = ({
           // letter anyway (jumpToPointer), so an overlap costs nothing.
           // The focus ring is drawn inside the letter: the rail sits flush
           // against the pane's clipped edge, which would cut an outside one.
-          className="hit-area flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full focus-visible:-outline-offset-2"
+          // The letter sits 2 px in from the rail's centre, away from the
+          // pane's edge, and its tap box (`after:`) moves back, so a thumb
+          // on a phone lands where it always did.
+          className="hit-area flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full focus-visible:-outline-offset-2 -translate-x-0.5 after:translate-x-0.5"
         >
           {/*
             The active letter wears a filled circle.
 
-            A colour change alone is easy to miss at 9px on a strip this
+            A colour change alone is easy to miss at 11 px on a strip this
             narrow, which is why a floating letter marker was tried over the
             list first. That marker covered contact names and the "Recent"
             heading, so the indicator belongs on the rail itself, where it

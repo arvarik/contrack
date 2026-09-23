@@ -216,18 +216,3 @@ export const useDeleteEndpoint = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-settings"] }),
   });
 };
-
-export const useSetSearxng = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (url: string) => {
-      const res = await apiFetch("/settings/ai/searxng", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      return res.json();
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-settings"] }),
-  });
-};

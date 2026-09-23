@@ -9,7 +9,7 @@ import {
   cleanup,
   within,
 } from "@testing-library/react";
-import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { PulseView } from "../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../src/views/pulse/components/PulseSkeleton";
 import { DuplicatesPage } from "../../src/views/pulse/pages/DuplicatesPage";
@@ -24,7 +24,6 @@ import { InsightCard } from "../../src/views/pulse/cards/InsightCard";
 import { ActivityCard } from "../../src/views/pulse/cards/ActivityCard";
 import { KeepingUpCard } from "../../src/views/pulse/cards/KeepingUpCard";
 import { CompositionCard } from "../../src/views/pulse/cards/CompositionCard";
-import { AskForm } from "../../src/views/pulse/components/AskForm";
 import type { DashboardPayload } from "../../src/api";
 import { PAGE_TITLE, PAGE_TITLE_SUFFIX } from "../../src/lib/styles";
 import { CHECK_RING_REST } from "../../src/views/pulse/lib/pulseStyles";
@@ -489,25 +488,13 @@ describe("frontend.pulse", () => {
     ).toBeDefined();
   });
 
-  it("renders the Ask form under the masthead when AI is allowed, and not when it is off", () => {
-    const { unmount } = render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-    const form = screen.getByRole("search", { name: "Ask about your network" });
-    expect(screen.getByLabelText("Today summary").contains(form)).toBe(true);
-    unmount();
-
+  it("tells the insight card when AI is off for the account", () => {
     mockAiAllowed = false;
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
       </MemoryRouter>,
     );
-    expect(
-      screen.queryByRole("search", { name: "Ask about your network" }),
-    ).toBeNull();
     expect(
       screen.getByText("AI is off for your account.", { exact: false }),
     ).toBeDefined();
@@ -703,23 +690,12 @@ describe("frontend.pulse", () => {
       contactId: "c-1",
       contactName: "Ada Lovelace",
       contactAvatarUrl: null,
-      contactThemeColor: "#006a91",
       isTracked: true,
       relationshipScore: 72,
       lastContactedAt: "2026-09-16T10:00:00.000Z",
       title: "Call Ada",
-      dueAt: "2026-09-10T10:00:00.000Z",
       hasCheckAction: true,
       dueChip: { text: "12 days overdue", variant: "urgent" as const },
-      originalActionItem: {
-        id: "item-1",
-        contactId: "c-1",
-        title: "Call Ada",
-        dueAt: "2026-09-10T10:00:00.000Z",
-        completedAt: null,
-        createdAt: "2026-09-01T00:00:00.000Z",
-        updatedAt: "2026-09-01T00:00:00.000Z",
-      },
     };
     const birthday = {
       ...followUp,
@@ -729,10 +705,8 @@ describe("frontend.pulse", () => {
       contactId: "c-2",
       contactName: "Grace Hopper",
       title: "Wish Grace Hopper a happy birthday",
-      dueAt: null,
       hasCheckAction: false,
       dueChip: { text: "Wednesday", variant: "neutral" as const },
-      originalActionItem: undefined,
     };
     const catchUp = {
       ...followUp,
@@ -742,10 +716,8 @@ describe("frontend.pulse", () => {
       contactId: "c-3",
       contactName: "Alan Turing",
       title: "Check in with Alan Turing",
-      dueAt: null,
       hasCheckAction: false,
       dueChip: { text: "3 weeks past due", variant: "neutral" as const },
-      originalActionItem: undefined,
     };
 
     it("shows the name, the chip words, the title and when you last spoke", () => {
@@ -896,8 +868,6 @@ describe("frontend.pulse", () => {
         contactId,
         name,
         avatarUrl: null,
-        themeColor: "#006a91",
-        rawBirthday: "1990-01-01",
         isTracked: true,
         lastContactedAt: "2026-09-01T10:00:00.000Z",
         relationshipScore: 85,
@@ -973,7 +943,7 @@ describe("frontend.pulse", () => {
   });
 
   describe("InsightCard", () => {
-    it("is the paragraph, the category and the Ask chip with the first sentence", () => {
+    it("is the paragraph and the category, with no link", () => {
       render(
         <MemoryRouter>
           <InsightCard
@@ -995,14 +965,7 @@ describe("frontend.pulse", () => {
       expect(
         screen.getByRole("heading", { level: 2 }).parentElement!.textContent,
       ).toBe("Daily insight");
-      expect(
-        screen
-          .getByRole("link", { name: "Ask about this insight" })
-          .getAttribute("href"),
-      ).toBe(
-        `/search?q=${encodeURIComponent("Three people in Berlin went quiet this month")}`,
-      );
-      expect(screen.queryByText("Ask a follow-up")).toBeNull();
+      expect(screen.queryByRole("link")).toBeNull();
     });
 
     it("tells an admin to add a key, with the door", () => {
@@ -1061,46 +1024,6 @@ describe("frontend.pulse", () => {
           .getByRole("link", { name: "Turn on in Settings" })
           .getAttribute("href"),
       ).toBe("/settings/privacy#ai-assist");
-    });
-  });
-
-  describe("AskForm", () => {
-    const Landing = () => {
-      const location = useLocation();
-      return <div data-testid="search-landing">{location.search}</div>;
-    };
-
-    it("waits for three characters, then sends the question to /search", () => {
-      render(
-        <MemoryRouter initialEntries={["/pulse"]}>
-          <Routes>
-            <Route path="/pulse" element={<AskForm />} />
-            <Route path="/search" element={<Landing />} />
-          </Routes>
-        </MemoryRouter>,
-      );
-      const form = screen.getByRole("search", {
-        name: "Ask about your network",
-      });
-      const input = screen.getByRole("searchbox", {
-        name: "Ask about your network",
-      });
-      const ask = screen.getByRole("button", { name: "Ask" });
-      expect(ask.hasAttribute("disabled")).toBe(true);
-
-      fireEvent.change(input, { target: { value: "ab" } });
-      expect(ask.hasAttribute("disabled")).toBe(true);
-      fireEvent.submit(form);
-      expect(screen.queryByTestId("search-landing")).toBeNull();
-
-      fireEvent.change(input, {
-        target: { value: "  who works in Berlin?  " },
-      });
-      expect(ask.hasAttribute("disabled")).toBe(false);
-      fireEvent.submit(form);
-      expect(screen.getByTestId("search-landing").textContent).toBe(
-        "?q=who%20works%20in%20Berlin%3F",
-      );
     });
   });
 
@@ -1237,12 +1160,6 @@ describe("frontend.pulse", () => {
         screen.getByRole("heading", { level: 1, name: "Pulse" }),
       ).toBeDefined();
       expect(screen.getByRole("button", { name: "Log note" })).toBeDefined();
-    });
-
-    it("renders children under the sentence", () => {
-      stubMatchMedia(true);
-      renderMasthead({ children: <div data-testid="masthead-slot" /> });
-      expect(screen.getByTestId("masthead-slot")).toBeDefined();
     });
   });
 
@@ -1502,7 +1419,6 @@ describe("frontend.pulse", () => {
         <CardCustomizeContext.Provider
           value={{
             isEditing: true,
-            cardId: "completed",
             column: "focus",
             index: 0,
             totalInColumn: 2,
@@ -1545,7 +1461,6 @@ describe("frontend.pulse", () => {
         <CardCustomizeContext.Provider
           value={{
             isEditing: true,
-            cardId: "inbox",
             column: "intel",
             index: 0,
             totalInColumn: 2,

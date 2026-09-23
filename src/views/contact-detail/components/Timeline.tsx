@@ -474,7 +474,7 @@ const TimelineEntry = React.memo(
                   <a
                     href={safeHref(item.fileUrl)}
                     download
-                    className="state-layer flex items-center gap-3 p-3 rounded-xl bg-surface-container-low transition-colors w-fit max-w-full overflow-hidden"
+                    className="state-layer lift flex items-center gap-3 p-3 rounded-xl bg-surface-container-low w-fit max-w-full overflow-hidden"
                   >
                     <File
                       aria-hidden="true"

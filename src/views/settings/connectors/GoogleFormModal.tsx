@@ -10,7 +10,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, ExternalLink, Globe, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Globe, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
@@ -146,7 +146,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
     >
       <div className="space-y-4 pt-2">
         {/* Privacy line */}
-        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant border border-surface-container-high/40 leading-relaxed">
+        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Contrack connects directly to Google
             Workspace to sync contacts, email headers, and calendar events.
@@ -170,12 +170,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-on-surface">
-                  Google OAuth client not configured
+                  Google sign-in is not set up yet
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth client ID and secret in Administration settings before connecting Google accounts."
-                    : "Ask your administrator to add a Google OAuth client in Settings → General."}
+                    ? "Add a Google OAuth client ID and secret under Integrations in General first."
+                    : "Ask an administrator to add a Google OAuth client under Integrations in General."}
                 </p>
               </div>
             </div>
@@ -189,8 +189,8 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 }}
                 className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
               >
-                <span>Configure in Settings → General</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Integrations in General</span>
+                <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -203,11 +203,11 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-error">
-                  Authentication expired or revoked
+                  Sign-in expired
                 </p>
                 <p className="text-xs text-on-surface-variant mt-0.5">
                   {connector?.lastError ||
-                    "Google returned invalid_grant. Please reconnect your account."}
+                    "Google no longer accepts this connection. Connect your account again."}
                 </p>
               </div>
             </div>
@@ -224,12 +224,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
         {/* State 3: Creating new Google connector (OAuth redirect flow) */}
         {!isEditing && isConfiguredOnInstance && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container border border-surface-container-high/40">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
               <div>
                 <span className="text-xs font-semibold text-on-surface block">
                   Generate AI summaries
                 </span>
-                <span className="text-[11px] text-on-surface-variant block mt-0.5">
+                <span className="text-xs text-on-surface-variant block mt-0.5">
                   Summaries require reading email message bodies (gmail.readonly
                   scope). Without summaries, only message metadata headers are
                   requested.
@@ -314,12 +314,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             </div>
 
             {/* AI summaries */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container border border-surface-container-high/40">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
               <div>
                 <span className="text-xs font-semibold text-on-surface block">
                   AI message summaries
                 </span>
-                <span className="text-[11px] text-on-surface-variant block mt-0.5">
+                <span className="text-xs text-on-surface-variant block mt-0.5">
                   Extracts brief notes from messages exchanged with known
                   contacts.
                 </span>
@@ -352,10 +352,10 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             {/* Lookback period */}
             <div>
               <span className="block text-xs font-semibold text-on-surface mb-1">
-                Initial lookback period
+                First sync goes back
               </span>
               <Segmented<number>
-                label="Initial lookback period"
+                label="First sync goes back"
                 value={lookbackDays}
                 onChange={setLookbackDays}
                 options={[
@@ -367,12 +367,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             </div>
 
             {/* Rollup toggle */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container border border-surface-container-high/40">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
               <div>
                 <span className="text-xs font-semibold text-on-surface block">
                   Roll up emails per contact per day
                 </span>
-                <span className="text-[11px] text-on-surface-variant block mt-0.5">
+                <span className="text-xs text-on-surface-variant block mt-0.5">
                   Consolidates daily emails with a contact into a single
                   timeline row.
                 </span>
@@ -390,7 +390,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 htmlFor="google-ghost-threshold"
                 className="block text-xs font-semibold text-on-surface mb-1"
               >
-                Ghost contact threshold
+                Suggest a new person after
               </label>
               <div className="flex items-center gap-3">
                 <input
@@ -407,13 +407,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                   className={cn(FORM_INPUT, "w-20")}
                 />
                 <span className="text-xs text-on-surface-variant">
-                  messages or meetings before suggesting an unknown
-                  correspondent as a contact
+                  messages or meetings
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-surface-container-high/40">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="btn-secondary">
                 Cancel
               </button>

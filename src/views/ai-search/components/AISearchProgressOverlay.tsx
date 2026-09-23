@@ -184,7 +184,7 @@ export function AISearchProgressOverlay({
           </div>
         )}
         {/* Job list */}
-        <div className="max-h-64 overflow-y-auto nice-scrollbar">
+        <div className="max-h-64 overflow-y-auto">
           {batch.jobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}

@@ -11,20 +11,26 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Cable, Loader2, Users } from "lucide-react";
+import { AlertCircle, Calendar, Loader2, Plus, Users } from "lucide-react";
 import {
   useConnectors,
   useConnectorKinds,
   useCorrespondents,
 } from "../../../api/connectors";
 import { ConnectorCard } from "./ConnectorCard";
-import { AddConnectorSheet } from "./AddConnectorSheet";
+import { AddConnectorSheet, KIND_ICONS } from "./AddConnectorSheet";
 import { CalendarFormModal } from "./CalendarFormModal";
 import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
-import { SETTINGS_PAGE } from "../layout";
-import { CARD, TONE_WASH } from "../../../lib/styles";
+import { SettingsHeaderActions } from "../SettingsHeader";
+import { EmptyState } from "../../../components/ui/EmptyState";
+import {
+  SETTINGS_CARD,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
+import { TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import type {
   ConnectorKind,
@@ -52,7 +58,7 @@ export const ConnectorsView: React.FC = () => {
     const connected = searchParams.get("connected");
     const error = searchParams.get("error");
     if (connected === "google") {
-      toast.success("Google Workspace connected successfully!");
+      toast.success("Google Workspace connected");
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -107,72 +113,67 @@ export const ConnectorsView: React.FC = () => {
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-on-surface-variant text-pretty">
-            Calendar, mailbox, Google, messages. Sync who you talk to.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link to="/settings/connectors/people" className="btn-secondary">
-            <Users
-              className="w-4 h-4 text-on-surface-variant"
-              aria-hidden="true"
-            />
-            <span>Correspondents</span>
-            {correspondentCount > 0 && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-primary text-on-primary">
-                {correspondentCount}
-              </span>
-            )}
-          </Link>
-
-          {hasConnectors && (
-            <button
-              type="button"
-              onClick={() => setAddSheetOpen(true)}
-              className="btn-primary"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              <span>Add connector</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-16 text-on-surface-variant">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" aria-hidden="true" />
-          <span className="text-sm">Loading connectors…</span>
-        </div>
-      )}
-
-      {/* Error state */}
-      {isError && (
-        <div
-          role="alert"
-          className={cn(
-            "rounded-2xl p-6 text-center space-y-3",
-            TONE_WASH.error,
-          )}
+      <SettingsHeaderActions>
+        {/* On a phone the word gives way to the glyph on a square face, so
+            the title's description keeps the width of the screen. */}
+        <Link
+          to="/settings/connectors/people"
+          aria-label={
+            correspondentCount > 0
+              ? `Correspondents, ${correspondentCount} to review`
+              : "Correspondents"
+          }
+          className="btn-secondary btn-icon sm:hidden"
         >
-          <p className="text-sm font-semibold text-error">
-            Failed to load connectors
-          </p>
+          <Users className="w-4 h-4" aria-hidden="true" />
+        </Link>
+        <Link
+          to="/settings/connectors/people"
+          className="btn-secondary hidden sm:inline-flex"
+        >
+          <Users
+            className="w-4 h-4 text-on-surface-variant"
+            aria-hidden="true"
+          />
+          Correspondents
+          {correspondentCount > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash tabular-nums">
+              {correspondentCount}
+            </span>
+          )}
+        </Link>
+        {hasConnectors && (
           <button
             type="button"
-            onClick={() => void refetch()}
-            className="btn-secondary btn-sm"
+            onClick={() => setAddSheetOpen(true)}
+            className="btn-primary"
           >
-            Retry
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span className="sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add connector</span>
           </button>
+        )}
+      </SettingsHeaderActions>
+
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <Loader2
+            aria-label="Loading connectors"
+            className="w-6 h-6 animate-spin text-primary"
+          />
         </div>
       )}
 
-      {/* Populated list */}
+      {isError && (
+        <EmptyState
+          icon={AlertCircle}
+          tone="error"
+          title="Connectors did not load"
+          body="Nothing has changed. Try again in a moment."
+          action={{ label: "Try again", onClick: () => void refetch() }}
+        />
+      )}
+
       {!isLoading && !isError && hasConnectors && (
         <div className="grid gap-3">
           {connectors.map((connector) => (
@@ -186,59 +187,57 @@ export const ConnectorsView: React.FC = () => {
         </div>
       )}
 
-      {/* Empty state: show gallery directly with intro */}
+      {/* Nothing connected yet: the choices, on the page. */}
       {!isLoading && !isError && !hasConnectors && (
-        <div className={cn(CARD, "space-y-6")}>
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                  TONE_WASH.primary,
-                )}
-              >
-                <Cable className="w-5 h-5" aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-on-surface">
-                  Get started with connectors
-                </h2>
-                <p className="text-xs text-on-surface-variant">
-                  Contrack learns who you talk to from your calendar and email.
-                  Nothing leaves this server unless you turn on AI summaries.
-                </p>
-              </div>
-            </div>
+        <section aria-labelledby="add-connector">
+          <h2 id="add-connector" className={SETTINGS_SECTION_HEADING}>
+            Add a connector
+          </h2>
+          <div className={cn(SETTINGS_CARD, "space-y-4")}>
+            <p className="text-sm text-on-surface-variant text-pretty">
+              Contrack learns who you talk to from your calendar and your mail.
+              Nothing leaves this server unless you turn on AI summaries.
+            </p>
+            {/* A row for each kind, with its own Connect: three equal
+                choices, so none of them is the page's one primary. */}
+            <ul className="grid gap-2">
+              {(kinds ?? []).map((k) => {
+                const Icon = KIND_ICONS[k.kind] ?? Calendar;
+                return (
+                  <li
+                    key={k.kind}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-low"
+                  >
+                    <span
+                      className={cn(
+                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                        TONE_WASH.primary,
+                      )}
+                    >
+                      <Icon className="w-5 h-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold text-on-surface">
+                        {k.label}
+                      </h3>
+                      <p className="text-xs text-on-surface-variant mt-0.5 text-pretty">
+                        {k.description}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectKind(k.kind)}
+                      aria-label={`Connect ${k.label}`}
+                      className="btn-secondary btn-sm shrink-0"
+                    >
+                      Connect
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-
-          <div className="grid gap-3 pt-2">
-            {(kinds ?? []).map((k) => (
-              <div
-                key={k.kind}
-                className="flex items-start justify-between gap-4 p-4 rounded-xl bg-surface-container-low"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-on-surface">
-                      {k.label}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    {k.description}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectKind(k.kind)}
-                  className="btn-primary btn-sm shrink-0"
-                >
-                  Connect
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       )}
 
       {/* Add connector sheet */}

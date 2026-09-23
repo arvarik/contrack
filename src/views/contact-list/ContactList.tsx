@@ -42,12 +42,11 @@ import {
   useCreateList,
   useReorderLists,
   useArchiveContact,
-  useBulkUpdateContacts,
 } from "../../api";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetRail, bucketFor } from "./AlphabetRail";
-import type { Contact, ContactUpdateData } from "../../types";
+import type { Contact } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -86,14 +85,9 @@ import { useMultiSelect } from "./hooks/useMultiSelect";
 import { useContactListKeyboard } from "./hooks/useContactListKeyboard";
 import { useRovingList, type RovingItemProps } from "./useRovingList";
 import { useRecent } from "../../contexts/SessionContext";
-import { NAMES } from "../../lib/names";
+import { NAMES, TRACKED_INTRO } from "../../lib/names";
 import { ActionMenu } from "../../components/ui/ActionMenu";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
-import {
-  OPEN_IMPORT_EVENT,
-  OPEN_NEW_CONTACT_EVENT,
-  OPEN_SMART_PASTE_EVENT,
-} from "../../lib/appEvents";
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -272,7 +266,6 @@ export const ContactList = () => {
   // ── Extracted hooks ─────────────────────────────────────────────────
   const filters = useContactListFilters(contacts);
   const multiSelect = useMultiSelect(filters.filteredContacts);
-  const bulkUpdate = useBulkUpdateContacts();
 
   // ── UX hooks ────────────────────────────────────────────────────────
   usePageTitle(NAMES.network.title);
@@ -325,32 +318,36 @@ export const ContactList = () => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
   const [isCreateListOpen, setIsCreateListOpen] = useState(false);
-  const [isAddToListOpen, setIsAddToListOpen] = useState(false);
-  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
 
   const createList = useCreateList();
   const reorderLists = useReorderLists();
 
-  // Listen to window events from StartPanel or other components
-  useEffect(() => {
-    const onOpenNew = () => setIsModalOpen(true);
-    const onOpenImport = () => setIsImportOpen(true);
-    const onOpenSmartPaste = () => setIsSmartPasteOpen(true);
-    window.addEventListener(OPEN_NEW_CONTACT_EVENT, onOpenNew);
-    window.addEventListener(OPEN_IMPORT_EVENT, onOpenImport);
-    window.addEventListener(OPEN_SMART_PASTE_EVENT, onOpenSmartPaste);
-    return () => {
-      window.removeEventListener(OPEN_NEW_CONTACT_EVENT, onOpenNew);
-      window.removeEventListener(OPEN_IMPORT_EVENT, onOpenImport);
-      window.removeEventListener(OPEN_SMART_PASTE_EVENT, onOpenSmartPaste);
-    };
+  /**
+   * The control that opened New contact or Add from text: the New button,
+   * or whatever had focus for the N and V keys. Both dialogs give focus
+   * back to it, and so does the form that a successful extraction opens,
+   * where the dialog's own memory held the gone Extract button.
+   */
+  const createOpener = useRef<HTMLElement | null>(null);
+  const openCreate = useCallback((open: (value: boolean) => void) => {
+    const focused = document.activeElement;
+    createOpener.current = focused instanceof HTMLElement ? focused : null;
+    open(true);
   }, []);
+  const openNewContact = useCallback(
+    () => openCreate(setIsModalOpen),
+    [openCreate],
+  );
+  const openSmartPaste = useCallback(
+    () => openCreate(setIsSmartPasteOpen),
+    [openCreate],
+  );
 
   // Support ?new=1 query param (e.g. from Pulse "New contact" button)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("new") === "1") {
-      setIsModalOpen(true);
+      openNewContact();
       params.delete("new");
       const newSearch = params.toString();
       navigate(
@@ -361,7 +358,7 @@ export const ContactList = () => {
         { replace: true },
       );
     }
-  }, [location.search, location.pathname, navigate]);
+  }, [location.search, location.pathname, navigate, openNewContact]);
 
   // ── Keyboard navigation ─────────────────────────────────────────────
   useContactListKeyboard({
@@ -369,10 +366,10 @@ export const ContactList = () => {
     currentId: id,
     isSelectMode: multiSelect.isSelectMode,
     exitSelectMode: multiSelect.exitSelectMode,
-    navigate: (path: string) => navigate(path),
+    navigate,
     locationSearch: location.search,
-    onNewContact: () => setIsModalOpen(true),
-    onSmartPaste: () => setIsSmartPasteOpen(true),
+    onNewContact: openNewContact,
+    onSmartPaste: openSmartPaste,
   });
 
   // ── Drag-to-reorder lists ───────────────────────────────────────────
@@ -444,13 +441,13 @@ export const ContactList = () => {
         id: "new-contact",
         label: "New contact",
         icon: UserPlus,
-        onSelect: () => setIsModalOpen(true),
+        onSelect: openNewContact,
       },
       {
         id: "add-from-text",
         label: "Add from text",
         icon: FileText,
-        onSelect: () => setIsSmartPasteOpen(true),
+        onSelect: openSmartPaste,
       },
       {
         id: "new-list",
@@ -459,7 +456,7 @@ export const ContactList = () => {
         onSelect: () => setIsCreateListOpen(true),
       },
     ],
-    [],
+    [openNewContact, openSmartPaste],
   );
 
   /**
@@ -990,7 +987,7 @@ export const ContactList = () => {
           dir="rtl"
           {...roving.containerProps}
           className={cn(
-            "h-full overflow-y-auto nice-scrollbar px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
+            "h-full overflow-y-auto px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
             showAlphabetRail && "pr-8",
           )}
           style={
@@ -1074,7 +1071,7 @@ export const ContactList = () => {
                 <EmptyState
                   icon={Radar}
                   title="Nobody is tracked yet"
-                  body="Track the people you want to keep up with. Their score, their catch-ups and the map's health layer follow."
+                  body={TRACKED_INTRO}
                   action={{
                     label: "Choose people",
                     onClick: () => navigate("/tracked"),
@@ -1205,8 +1202,8 @@ export const ContactList = () => {
             onTrack={multiSelect.handleBulkTrack}
             selectionTracked={multiSelect.selectionTracked}
             onArchive={multiSelect.handleBulkArchive}
-            onAddToList={() => setIsAddToListOpen(true)}
-            onEditField={() => setIsBulkEditOpen(true)}
+            onAddToList={() => multiSelect.setIsAddToListOpen(true)}
+            onEditField={() => multiSelect.setIsBulkEditOpen(true)}
             onColorChange={multiSelect.handleBulkColorChange}
             onExportCSV={multiSelect.handleExportCSV}
             onDelete={multiSelect.handleBulkDelete}
@@ -1216,36 +1213,16 @@ export const ContactList = () => {
       {/* ── All Modals ───────────────────────────────────────────────── */}
       <ContactListModals
         selectedCount={selectedCount}
-        isAddToListOpen={isAddToListOpen}
-        onCloseAddToList={() => setIsAddToListOpen(false)}
+        isAddToListOpen={multiSelect.isAddToListOpen}
+        onCloseAddToList={() => multiSelect.setIsAddToListOpen(false)}
         lists={lists}
-        onBulkAddToList={(listId) => {
-          multiSelect.handleBulkAddToList(listId);
-          setIsAddToListOpen(false);
-        }}
+        onBulkAddToList={multiSelect.handleBulkAddToList}
         isBulkAddToListPending={multiSelect.isBulkAddToListPending}
-        isBulkEditOpen={isBulkEditOpen}
-        onCloseBulkEdit={() => setIsBulkEditOpen(false)}
-        onBulkEditApply={(field, value) => {
-          const ids = Array.from(selectedIds) as string[];
-          bulkUpdate.mutate(
-            { ids, data: { [field]: value } as ContactUpdateData },
-            {
-              onSuccess: ({ count }) => {
-                toast.success(
-                  `Updated ${count} contact${count !== 1 ? "s" : ""}`,
-                );
-                setIsBulkEditOpen(false);
-                exitSelectMode();
-              },
-              onError: (err) =>
-                toast.error(
-                  `Update failed: ${err instanceof Error ? err.message : String(err)}`,
-                ),
-            },
-          );
-        }}
-        isBulkEditPending={bulkUpdate.isPending}
+        isBulkEditOpen={multiSelect.isBulkEditOpen}
+        onCloseBulkEdit={() => multiSelect.setIsBulkEditOpen(false)}
+        onBulkEditApply={multiSelect.handleBulkEditApply}
+        isBulkEditPending={multiSelect.isBulkEditPending}
+        returnFocusRef={createOpener}
         isModalOpen={isModalOpen}
         onCloseModal={() => setIsModalOpen(false)}
         onContactCreated={(newId) => {
@@ -1253,10 +1230,11 @@ export const ContactList = () => {
           setTimeout(() => setFlashId(null), 2000);
         }}
         isSmartPasteOpen={isSmartPasteOpen}
-        onCloseSmartPaste={() => {
+        // Closing "Add from text" only closes it. The form opens when the
+        // text was read, filled in with what it found.
+        onCloseSmartPaste={() => setIsSmartPasteOpen(false)}
+        onSmartPasteExtracted={() => {
           setIsSmartPasteOpen(false);
-          // NOTE: After smart paste extracts data, the modal component internally
-          // opens the New Contact modal via its shared parsedData state.
           setIsModalOpen(true);
         }}
         isCreateListOpen={isCreateListOpen}

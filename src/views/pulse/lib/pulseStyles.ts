@@ -45,10 +45,14 @@ export const PULSE_ROW_STATIC =
   "flex items-center gap-3 min-h-[44px] rounded-xl px-3 py-2.5 bg-surface-container-low/70";
 
 /**
- * A row that goes somewhere. The hover is the state layer over the wash, so
- * the row reads the same on a card, on the page and in both palettes.
+ * A row that goes somewhere. It has its own face and space around it, and a
+ * press anywhere on it opens one thing, so it lifts on hover (`lift`, 1 px
+ * and a soft shadow) and its face takes the state layer. `lift` carries its
+ * own transition: no `transition-*` class goes on the same element. An Up
+ * next row is one row of the queue, so it takes the state layer alone
+ * (STYLE.md, "Elevation").
  */
-export const PULSE_ROW = `state-layer group ${PULSE_ROW_STATIC}`;
+export const PULSE_ROW = `state-layer lift group ${PULSE_ROW_STATIC}`;
 
 /**
  * A chip: a fact at the right edge of a row, "In 10 days", "+12". No border
@@ -98,20 +102,32 @@ export const COMPOSITION_RAMP = {
   other: "var(--color-surface-container-highest)",
 } as const;
 
-/** The three columns. The page, the skeleton and the fallback read these. */
+/**
+ * The three columns. The page, the skeleton and the fallback read these.
+ * Each column pads its cards by 4 px (`p-1`), room for the drop ring in
+ * Customize and for a lifted card's shadow. The grid's `-m-1` takes that
+ * back, so a card's edge lines up with the title's. Its 16 px gap and the
+ * two paddings make 24 px between cards in neighbouring columns, the same
+ * as between cards in one column: at 1024 px the rows had 32 and 24.
+ *
+ * From `xl` the columns are 5, 3 and 4 parts, and the middle one is never
+ * narrower than 19rem. Three twelfths was 257 px at 1280: Coming up cut
+ * names to "Mary …", and the Composition switch spilled out of its card.
+ */
 export const GRID_CLASSES =
-  "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start";
+  "grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-[minmax(0,5fr)_minmax(19rem,3fr)_minmax(0,4fr)] gap-4 items-start -m-1";
 
 /**
  * One class string per column. The visual order is Focus, Network,
  * Intelligence on a phone and at `lg`, and Focus, Intelligence, Network at
- * `xl` and above. Spans at `xl` are 5, 3, 4: Up next is the job, so it takes
- * the widest column. At `lg` the Intelligence column runs under the other
- * two and lays its cards out two across instead of four full-width boxes.
+ * `xl` and above, where each takes one of the grid's three tracks. Up next
+ * is the job, so it has the widest. At `lg` the Intelligence column runs
+ * under the other two and lays its cards out two across instead of four
+ * full-width boxes.
  */
 export const COLUMN_CLASSES: Record<PulseColumn, string> = {
-  focus: "order-1 lg:col-span-5",
-  network: "order-2 lg:col-span-7 xl:order-3 xl:col-span-4",
+  focus: "order-1 lg:col-span-5 xl:col-span-1",
+  network: "order-2 lg:col-span-7 xl:order-3 xl:col-span-1",
   intel:
-    "order-3 lg:col-span-12 lg:grid lg:grid-cols-2 xl:flex xl:flex-col xl:order-2 xl:col-span-3",
+    "order-3 lg:col-span-12 lg:grid lg:grid-cols-2 xl:flex xl:flex-col xl:order-2 xl:col-span-1",
 };

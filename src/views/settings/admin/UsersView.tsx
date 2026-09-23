@@ -32,6 +32,7 @@ import {
   UserPlus,
   UserRoundCheck,
   UserRoundX,
+  Users,
 } from "lucide-react";
 import {
   downloadUserExport,
@@ -65,6 +66,8 @@ import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { SELECTED_TINT } from "../../../lib/styles";
 import { RadioDot } from "../../../components/ui/RadioDot";
 import { cn } from "../../../lib/utils";
+import { radioKeys } from "../../../lib/a11y";
+import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
   AdminButton,
   AdminCell,
@@ -72,6 +75,49 @@ import {
   AdminPage,
   AdminRow,
 } from "./AdminShell";
+
+/**
+ * One option in a radio group: the selected tint, or the hover layer, with a
+ * `RadioDot` before its label, so "chosen" is a shape as well as a hue.
+ */
+const RadioOption = ({
+  checked,
+  onSelect,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  label: string;
+  hint: string;
+}) => (
+  <button
+    type="button"
+    role="radio"
+    aria-checked={checked}
+    // Each group here always has a choice, so the checked option is its
+    // one Tab stop, and the arrows move the choice.
+    tabIndex={checked ? 0 : -1}
+    onKeyDown={radioKeys}
+    onClick={onSelect}
+    className={cn(
+      "flex w-full items-start gap-3 text-left px-4 py-3 rounded-xl transition-colors",
+      checked ? SELECTED_TINT : "state-layer bg-surface-container-highest",
+    )}
+  >
+    <RadioDot checked={checked} className="mt-0.5" />
+    <span className="min-w-0">
+      <span
+        className={cn("block text-sm font-bold", !checked && "text-on-surface")}
+      >
+        {label}
+      </span>
+      <span className="block text-xs text-on-surface-variant mt-0.5">
+        {hint}
+      </span>
+    </span>
+  </button>
+);
 
 /** Name, role, holdings, last seen, and the row menu. */
 const COLUMNS =
@@ -150,10 +196,12 @@ const RowMenu = ({
   }
 
   return (
+    // On a phone the row is a stacked card, and its menu sits in the card's
+    // top right corner, beside the name, not under the last cell.
     <ActionMenu
       label={`Actions for ${user.username}`}
       items={items}
-      className="sm:justify-self-end"
+      className="absolute top-2 right-2 sm:static sm:justify-self-end"
       triggerClassName="min-w-[44px] min-h-[44px]"
     />
   );
@@ -184,41 +232,17 @@ const RolePicker = ({
   onChange: (next: UserRole) => void;
 }) => (
   <div className="space-y-1.5">
-    <span className="block text-xs font-bold text-on-surface">Role</span>
+    <span className={SETTINGS_LABEL}>Role</span>
     <div role="radiogroup" aria-label="Role" className="grid gap-2">
-      {ROLE_OPTIONS.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "flex items-start gap-3 text-left px-4 py-3 rounded-xl transition-colors",
-              active
-                ? SELECTED_TINT
-                : "state-layer bg-surface-container-highest",
-            )}
-          >
-            <RadioDot checked={active} className="mt-0.5" />
-            <span className="min-w-0">
-              <span
-                className={cn(
-                  "block text-sm font-bold",
-                  !active && "text-on-surface",
-                )}
-              >
-                {option.label}
-              </span>
-              <span className="block text-xs text-on-surface-variant mt-0.5">
-                {option.hint}
-              </span>
-            </span>
-          </button>
-        );
-      })}
+      {ROLE_OPTIONS.map((option) => (
+        <RadioOption
+          key={option.value}
+          checked={option.value === value}
+          onSelect={() => onChange(option.value)}
+          label={option.label}
+          hint={option.hint}
+        />
+      ))}
     </div>
   </div>
 );
@@ -234,13 +258,13 @@ const AdminField = ({
   hint?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) => (
   <div className="space-y-1.5">
-    <label htmlFor={id} className="block text-xs font-bold text-on-surface">
+    <label htmlFor={id} className={SETTINGS_LABEL}>
       {label}
     </label>
     <input
       id={id}
       aria-describedby={hint ? `${id}-hint` : undefined}
-      className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm"
+      className={SETTINGS_INPUT}
       {...props}
     />
     {hint && (
@@ -353,7 +377,7 @@ const CreateUserModal = ({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            hint="Used to sign in. Contrack never sends mail."
+            hint="Used to sign in."
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
@@ -658,7 +682,6 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
 
   return (
     <AdminPage
-      lead="Everyone with an account on this Contrack. Each account holds its own contacts; nobody sees anybody else's."
       actions={
         <>
           <AdminButton
@@ -672,7 +695,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
             icon={<UserPlus className="w-4 h-4" />}
             onClick={() => navigate("/settings/admin/users/new")}
           >
-            Create user
+            Create account
           </AdminButton>
         </>
       }
@@ -682,7 +705,11 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         isError={isError}
         onRetry={() => void refetch()}
         isEmpty={!isLoading && !isError && (users?.length ?? 0) === 0}
-        empty="No accounts yet."
+        empty={{
+          icon: Users,
+          title: "No accounts yet",
+          body: "Create one, or send an invitation.",
+        }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
             <span>Account</span>
@@ -694,12 +721,12 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         }
       >
         {users?.map((user) => (
-          <AdminRow key={user.id} columns={COLUMNS}>
-            <div className="flex items-center gap-3 min-w-0">
+          <AdminRow key={user.id} columns={COLUMNS} className="relative">
+            <div className="flex items-center gap-3 min-w-0 pr-12 sm:pr-0">
               <AccountAvatar user={user} size={36} />
               <div className="min-w-0">
-                <p className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-bold text-on-surface truncate">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                  <span className="text-sm font-bold text-on-surface truncate max-w-full">
                     {user.displayName || user.username}
                   </span>
                   {user.isSelf && <Badge tone="primary">You</Badge>}
@@ -833,53 +860,23 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               working. Choose how to deliver the new password.
             </p>
 
-            <div className="space-y-2">
-              <div className="state-layer flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 cursor-pointer transition-colors">
-                <input
-                  id="reset-method-email"
-                  type="radio"
-                  name="resetMethod"
-                  value="email"
-                  checked={resetMethod === "email"}
-                  onChange={() => setResetMethod("email")}
-                  className="mt-0.5 w-4 h-4 accent-primary"
-                />
-                <label
-                  htmlFor="reset-method-email"
-                  className="text-sm cursor-pointer select-none"
-                >
-                  <span className="font-bold text-on-surface block">
-                    Email a reset link
-                  </span>
-                  <span className="text-xs text-on-surface-variant block mt-0.5">
-                    Sends a one-time link to {resetting?.email}. Works for 24
-                    hours.
-                  </span>
-                </label>
-              </div>
-
-              <div className="state-layer flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 cursor-pointer transition-colors">
-                <input
-                  id="reset-method-temporary"
-                  type="radio"
-                  name="resetMethod"
-                  value="temporary"
-                  checked={resetMethod === "temporary"}
-                  onChange={() => setResetMethod("temporary")}
-                  className="mt-0.5 w-4 h-4 accent-primary"
-                />
-                <label
-                  htmlFor="reset-method-temporary"
-                  className="text-sm cursor-pointer select-none"
-                >
-                  <span className="font-bold text-on-surface block">
-                    Show a temporary password
-                  </span>
-                  <span className="text-xs text-on-surface-variant block mt-0.5">
-                    Displays a password once to copy and hand over directly.
-                  </span>
-                </label>
-              </div>
+            <div
+              role="radiogroup"
+              aria-label="How to deliver the new password"
+              className="grid gap-2"
+            >
+              <RadioOption
+                checked={resetMethod === "email"}
+                onSelect={() => setResetMethod("email")}
+                label="Email a reset link"
+                hint={`Sends a one-time link to ${resetting?.email ?? "their email"}. It works for 24 hours.`}
+              />
+              <RadioOption
+                checked={resetMethod === "temporary"}
+                onSelect={() => setResetMethod("temporary")}
+                label="Show a temporary password"
+                hint="Shows a password once, for you to hand over."
+              />
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">

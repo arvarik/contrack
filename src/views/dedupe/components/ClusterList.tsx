@@ -27,7 +27,7 @@ import { DURATION, EASE } from "../../../lib/motion";
 import { toast } from "sonner";
 import { useMergeCluster, useMergeClusters } from "../../../api";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
-import { activateOnKey } from "../../../lib/a11y";
+import { activateOnKey, radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { roomAtTop } from "../utils/stickyRoom";
 
@@ -432,8 +432,8 @@ export const ClusterList = ({
                           aria-label="Select primary contact"
                         >
                           <div className={LABEL}>Select primary</div>
-                          <div className="flex gap-2 overflow-x-auto pb-1 nice-scrollbar">
-                            {cluster.contacts.map((contact) => (
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {cluster.contacts.map((contact, index) => (
                               <button
                                 key={contact.id}
                                 onClick={() =>
@@ -441,6 +441,14 @@ export const ClusterList = ({
                                 }
                                 role="radio"
                                 aria-checked={contact.id === primaryId}
+                                tabIndex={radioTabIndex(
+                                  contact.id === primaryId,
+                                  index,
+                                  cluster.contacts.some(
+                                    (c) => c.id === primaryId,
+                                  ),
+                                )}
+                                onKeyDown={radioKeys}
                                 aria-label={`Set ${contact.name} as primary`}
                                 className={cn(
                                   "shrink-0 flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl transition-colors text-xs",

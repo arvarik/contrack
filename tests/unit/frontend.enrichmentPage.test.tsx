@@ -69,7 +69,7 @@ describe("EnrichmentPage", () => {
       </QueryClientProvider>,
     );
 
-  it("renders never-enriched banner and clicking Enrich them selects those contacts", () => {
+  it("renders never-enriched banner and clicking Select them selects those contacts", () => {
     vi.mocked(api.useContacts).mockReturnValue({
       data: [
         {
@@ -98,9 +98,9 @@ describe("EnrichmentPage", () => {
 
     renderComponent();
     expect(
-      screen.getByText("2 contacts have never been enriched."),
+      screen.getByText("2 contacts have never been enriched"),
     ).toBeTruthy();
-    const enrichBtn = screen.getByRole("button", { name: /Enrich them/i });
+    const enrichBtn = screen.getByRole("button", { name: /Select them/i });
     expect(enrichBtn).toBeTruthy();
 
     fireEvent.click(enrichBtn);
@@ -114,7 +114,8 @@ describe("EnrichmentPage", () => {
 
     renderComponent();
     expect(screen.getByText("Enrich new contacts automatically")).toBeTruthy();
-    expect(screen.getByText("Grounding today: 12 of 100 used")).toBeTruthy();
+    expect(screen.getByText("Web searches today")).toBeTruthy();
+    expect(screen.getByText("12 of 100")).toBeTruthy();
 
     const autoEnrichSwitch = screen.getByRole("switch", {
       name: "Enrich new contacts automatically",
@@ -133,6 +134,6 @@ describe("EnrichmentPage", () => {
     } as unknown as ReturnType<typeof api.useContacts>);
 
     renderComponent();
-    expect(screen.queryByText(/Grounding today/i)).toBeNull();
+    expect(screen.queryByText(/Web searches today/i)).toBeNull();
   });
 });

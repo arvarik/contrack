@@ -144,11 +144,25 @@ export const CARD_INTERACTIVE = "card card-interactive";
 
 /**
  * A suggested question on Ask Contrack, in both modes: a flat chip on the
- * card face with the state layer, so the search box above stays the one
- * raised surface on the page. A click fills the box and runs the search.
+ * card face, so the search box above stays the one raised surface on the
+ * page at rest. A click fills the box and runs the search, so the chip is a
+ * control as a whole and lifts on hover (`lift`, "Elevation" in STYLE.md).
  */
 export const SUGGESTION_CHIP =
-  "hit-area state-layer rounded-md bg-surface-container-lowest px-3 py-2 text-left text-sm text-on-surface-variant hover:text-on-surface transition-colors";
+  "hit-area state-layer lift rounded-md bg-surface-container-lowest px-3 py-2 text-left text-sm text-on-surface-variant hover:text-on-surface";
+
+/**
+ * Ask Contrack's column. The history panel opens over the page, so opening
+ * it moves nothing, and the column sits where the open panel never covers
+ * it. From `lg` it is `clamp(34rem, 100% - 40rem, 48rem)` wide, and centred
+ * when that leaves the panel's 20rem free on its right. On a narrower window
+ * (below about 1360 px) it sits only as far left as it must to leave them,
+ * so at 1024 px the search box ends 32 px short of the open panel instead of
+ * under it. The place depends on the window alone, never on the panel. The
+ * page and its route fallback read it.
+ */
+export const ASK_COLUMN =
+  "max-w-3xl mx-auto lg:max-w-none lg:w-[clamp(34rem,100%_-_40rem,48rem)] lg:mr-auto lg:ml-[max(0px,min((100%_-_clamp(34rem,100%_-_40rem,48rem))/2,100%_-_20rem_-_clamp(34rem,100%_-_40rem,48rem)))]";
 
 /** Section background — the mid-tone layer for headers / sidebars */
 export const SECTION_BG = "bg-surface-container-low";
@@ -419,7 +433,7 @@ export const EMPTY_HERO =
  * than the window.
  */
 export const MENU_PANEL =
-  "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto nice-scrollbar";
+  "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto";
 
 /**
  * One row. 44 px tall on a phone, 36 px from `sm`. The keyboard ring is

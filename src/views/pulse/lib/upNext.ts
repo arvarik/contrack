@@ -45,21 +45,16 @@ export interface UpNextItem {
   contactId: string;
   contactName: string;
   contactAvatarUrl: string | null;
-  contactThemeColor: string;
   /** A person tracks this contact, so its ring means something. */
   isTracked: boolean;
   relationshipScore: number | null;
   lastContactedAt: string | null;
   title: string;
-  dueAt: string | null;
   hasCheckAction: boolean;
   dueChip: {
     text: string;
     variant: "urgent" | "today" | "upcoming" | "neutral";
   };
-  turningAge?: number | null;
-  daysSinceContact?: number | null;
-  originalActionItem?: ActionItem;
 }
 
 export interface UpNextGroupMeta {
@@ -191,16 +186,13 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
         contactId: item.contactId,
         contactName: item.contactName ?? "",
         contactAvatarUrl: item.contactAvatarUrl ?? null,
-        contactThemeColor: item.contactThemeColor ?? "#006a91",
         ...ringOf(item.contactId),
         title: item.title,
-        dueAt: item.dueAt,
         hasCheckAction: true,
         dueChip: {
           text: describeDueChip(daysLate),
           variant: "urgent",
         },
-        originalActionItem: item,
       };
     });
 
@@ -211,16 +203,13 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     contactId: item.contactId,
     contactName: item.contactName ?? "",
     contactAvatarUrl: item.contactAvatarUrl ?? null,
-    contactThemeColor: item.contactThemeColor ?? "#006a91",
     ...ringOf(item.contactId),
     title: item.title,
-    dueAt: item.dueAt,
     hasCheckAction: true,
     dueChip: {
       text: describeDueChip(0),
       variant: "today",
     },
-    originalActionItem: item,
   }));
 
   const thisWeekItems: UpNextItem[] = [...upcoming]
@@ -242,16 +231,13 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
         contactId: item.contactId,
         contactName: item.contactName ?? "",
         contactAvatarUrl: item.contactAvatarUrl ?? null,
-        contactThemeColor: item.contactThemeColor ?? "#006a91",
         ...ringOf(item.contactId),
         title: item.title,
-        dueAt: item.dueAt,
         hasCheckAction: true,
         dueChip: {
           text: label,
           variant: "upcoming",
         },
-        originalActionItem: item,
       };
     });
 
@@ -266,18 +252,15 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       contactId: b.contactId,
       contactName: b.name,
       contactAvatarUrl: b.avatarUrl,
-      contactThemeColor: b.themeColor,
       isTracked: b.isTracked,
       relationshipScore: b.relationshipScore,
       lastContactedAt: b.lastContactedAt,
       title: `Wish ${b.name} a happy birthday`,
-      dueAt: null,
       hasCheckAction: false, // birthday rows have no check action
       dueChip: {
         text: describeDueChip(b.daysUntil, b.nextDate),
         variant: b.daysUntil === 0 ? "today" : "neutral",
       },
-      turningAge: b.turningAge,
     }));
 
   // Every row the server sent, in its order: the furthest past due first.
@@ -288,19 +271,16 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     contactId: contact.id,
     contactName: contact.name,
     contactAvatarUrl: contact.avatarUrl ?? null,
-    contactThemeColor: contact.themeColor ?? "#006a91",
     // Every contact on this list is tracked: that is the rule that put it here.
     isTracked: true,
     relationshipScore: contact.relationshipScore,
     lastContactedAt: contact.lastContactedAt ?? null,
     title: `Check in with ${contact.name}`,
-    dueAt: null,
     hasCheckAction: false, // a catch-up has a Log button, not a check
     dueChip: {
       text: describePastDue(contact.overshootDays),
       variant: "neutral",
     },
-    daysSinceContact: contact.daysSince,
   }));
 
   const allItems = [

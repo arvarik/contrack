@@ -9,8 +9,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
-import { useState } from "react";
-import { useElementWidth } from "../../src/hooks/useElementWidth";
+import { useCallback, useState } from "react";
+import {
+  useElementWidth,
+  useElementWidthAtLeast,
+} from "../../src/hooks/useElementWidth";
 import { useFitsHeight } from "../../src/hooks/useFitsHeight";
 
 /** Every observer made during a test, so a test can call it. */
@@ -107,6 +110,48 @@ describe("useElementWidth", () => {
     vi.stubGlobal("ResizeObserver", undefined);
     const { getByTestId } = render(<Probe width={900} />);
     expect(getByTestId("probe").textContent).toBe("900");
+  });
+});
+
+describe("useElementWidthAtLeast", () => {
+  let renders = 0;
+  const Probe = ({ width }: { width: number }) => {
+    const [el, setEl] = useState<HTMLDivElement | null>(null);
+    const wide = useElementWidthAtLeast(el, 768);
+    renders += 1;
+    // A stable ref, so a render does not detach and attach the element,
+    // which would add a render of its own to the count.
+    const measure = useCallback(
+      (node: HTMLDivElement | null) => {
+        if (node) sized(node, width, 10);
+        setEl(node);
+      },
+      [width],
+    );
+    return (
+      <div ref={measure} data-testid="probe">
+        {wide === null ? "none" : String(wide)}
+      </div>
+    );
+  };
+
+  it("renders again only when the width crosses the line", () => {
+    renders = 0;
+    const { getByTestId } = render(<Probe width={900} />);
+    expect(getByTestId("probe").textContent).toBe("true");
+    const beforeDrag = renders;
+
+    // A drag: five widths on the same side of 768 px. A kept width rendered
+    // five times. React may call the component once to see that nothing
+    // changed, and then it skips it and its children.
+    for (const width of [880, 850, 820, 790, 768]) resize(width);
+    expect(getByTestId("probe").textContent).toBe("true");
+    expect(renders - beforeDrag).toBeLessThanOrEqual(1);
+
+    const beforeCrossing = renders;
+    resize(767);
+    expect(getByTestId("probe").textContent).toBe("false");
+    expect(renders).toBe(beforeCrossing + 1);
   });
 });
 

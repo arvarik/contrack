@@ -865,7 +865,7 @@ export const DedupeView = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-6 pb-8 nice-scrollbar">
+              <div className="flex-1 overflow-y-auto px-6 pb-8">
                 <ActivityFeed />
               </div>
             </motion.div>

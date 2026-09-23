@@ -21,7 +21,12 @@ import { Toaster } from "sonner";
 import { CorvidFlight } from "./components/brand/CorvidFlight";
 import React, { useState, useEffect, Suspense } from "react";
 
-import { ContactList } from "./views/contact-list";
+import {
+  ContactList,
+  LIST_WIDTH,
+  LIST_WIDTH_KEY,
+  LIST_WIDTH_PROPERTY,
+} from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
 import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
@@ -61,6 +66,7 @@ const TrackedContactsView = React.lazy(() =>
 );
 
 import { Sidebar } from "./components/layout/Sidebar";
+import { ResizeHandle } from "./components/layout/ResizeHandle";
 import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
 import { RouteFallback } from "./components/layout/RouteFallback";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
@@ -351,7 +357,9 @@ const ResponsiveLayout = () => {
 
         Below `lg` the list fills the row beside the sidebar rail (`flex-1`).
         It was `w-full`, the whole row, so from 768 px it ran 64 px past the
-        window and cut off Import, New and the sort menu.
+        window and cut off Import, New and the sort menu. From `lg` its width
+        is `--list-width`, which the handle after it sets before the first
+        paint and on each frame of a drag (`LIST_WIDTH` has the bounds).
       */}
       <section
         id={
@@ -371,7 +379,7 @@ const ResponsiveLayout = () => {
         tabIndex={-1}
         className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
-        ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-[350px] bg-surface-container-lowest z-10"}
+        ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--list-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
       >
@@ -405,6 +413,22 @@ const ResponsiveLayout = () => {
             }
           />
         </Routes>
+
+        {/* The list's right edge, from `lg`, where the list and the contact
+            sit side by side. Below it the list fills the row. Inside the
+            list's landmark, on its edge. From `lg` the list sits a layer
+            over the contact (15 over 10), so the grip past the seam paints
+            and takes the pointer, and under the sidebar (20), whose Account
+            menu opens across the list. */}
+        {!isMapActive && (
+          <ResizeHandle
+            property={LIST_WIDTH_PROPERTY}
+            storageKey={LIST_WIDTH_KEY}
+            label="Resize the contact list"
+            className="hidden lg:block absolute inset-y-0 right-0"
+            {...LIST_WIDTH}
+          />
+        )}
       </section>
 
       {/* Right Pane: Standard Detail View */}

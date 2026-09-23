@@ -251,9 +251,14 @@ test("the shortcuts dialog lists t under Contact", async ({ page, seed }) => {
  * with no lists: the All chip and the Tracked chip stand in front of the
  * list. The Tracked chip is the way into tracking, and a row that shows
  * only once a list exists would hide it from the people it is for.
+ *
+ * The contact budget went up by one when the list's edge became a
+ * separator that resizes the list. It sits between the list and the
+ * contact, and the arrow keys that move it need it in the Tab order. It is
+ * there only from `lg`, where the two panes share the screen.
  */
 test.describe("Tab budget", () => {
-  test("a contact's name is within 18 Tabs of the top of the page", async ({
+  test("a contact's name is within 19 Tabs of the top of the page", async ({
     page,
     seed,
   }) => {
@@ -263,8 +268,8 @@ test.describe("Tab budget", () => {
     ).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, "#contact-heading", 18);
-    expect(presses).toBeLessThanOrEqual(18);
+    const presses = await tabsToReach(page, "#contact-heading", 19);
+    expect(presses).toBeLessThanOrEqual(19);
   });
 
   test("the first row on Network is within 17 Tabs, and the list is one stop", async ({

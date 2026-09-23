@@ -157,3 +157,39 @@ export function boundsOf(
 
   return [west, south, east, north];
 }
+
+/**
+ * The box around the most points that fit in `span` degrees of longitude,
+ * or null for none. Ties go to the western window.
+ *
+ * "Fit all" asks for it when everyone cannot fit. On a phone the world at
+ * the lowest zoom is about twice the screen, and the middle of a network
+ * that spans the globe is often an ocean, or Europe with four of thirty
+ * people. The stretch that holds the most people is the better picture.
+ */
+export function densestSpan(
+  points: Point[],
+  span: number,
+): [west: number, south: number, east: number, north: number] | null {
+  if (points.length === 0) return null;
+  const sorted = points.map(getLngLat).sort((a, b) => a[0] - b[0]);
+  let bestStart = 0;
+  let bestEnd = 0;
+  let start = 0;
+  for (let end = 0; end < sorted.length; end++) {
+    while (sorted[end][0] - sorted[start][0] > span) start++;
+    if (end - start > bestEnd - bestStart) {
+      bestStart = start;
+      bestEnd = end;
+    }
+  }
+  return boundsOf(sorted.slice(bestStart, bestEnd + 1));
+}
+
+/**
+ * How many degrees of longitude `width` px shows at `zoom`, on MapLibre's
+ * 512 px tiles.
+ */
+export function degreesAcross(width: number, zoom: number): number {
+  return (width / (TILE_SIZE * 2 ** zoom)) * 360;
+}

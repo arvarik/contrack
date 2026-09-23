@@ -23,6 +23,7 @@ import type { Contact, DedupeCluster, ClusterPair } from "../../../types";
 import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
+import { radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { CARD, LABEL, SELECTED_TINT, TONE_WASH } from "../../../lib/styles";
 import { DURATION, EASE } from "../../../lib/motion";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
@@ -174,7 +175,12 @@ export const ClusterSwipeCard = ({
     <div className="relative">
       {/* Background card peek */}
       {hasNext && (
-        <div className={cn(CARD, "absolute inset-0 card-stack-behind")} />
+        <div
+          className={cn(
+            CARD,
+            "absolute inset-0 scale-96 translate-y-2.5 opacity-60 pointer-events-none",
+          )}
+        />
       )}
 
       {/* Main draggable card */}
@@ -193,7 +199,7 @@ export const ClusterSwipeCard = ({
       >
         {/* Swipe overlays */}
         <motion.div
-          className="absolute inset-0 rounded-2xl swipe-approve-overlay z-10 pointer-events-none flex items-center justify-center"
+          className="absolute inset-0 rounded-2xl bg-linear-135 from-success/15 to-success/5 z-10 pointer-events-none flex items-center justify-center"
           style={{ opacity: approveOpacity }}
         >
           <div className="p-4 bg-success/20 rounded-full">
@@ -201,7 +207,7 @@ export const ClusterSwipeCard = ({
           </div>
         </motion.div>
         <motion.div
-          className="absolute inset-0 rounded-2xl swipe-reject-overlay z-10 pointer-events-none flex items-center justify-center"
+          className="absolute inset-0 rounded-2xl bg-linear-135 from-error/15 to-error/5 z-10 pointer-events-none flex items-center justify-center"
           style={{ opacity: rejectOpacity }}
         >
           <div className="p-4 bg-error/20 rounded-full">
@@ -280,8 +286,8 @@ export const ClusterSwipeCard = ({
             aria-label="Select primary contact"
           >
             <div className={cn(LABEL, "px-1")}>Select primary contact</div>
-            <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
-              {cluster.contacts.map((contact) => {
+            <div className="flex gap-2 overflow-x-auto p-1">
+              {cluster.contacts.map((contact, index) => {
                 const isSelectedPrimary = contact.id === selectedPrimaryId;
                 return (
                   <button
@@ -289,6 +295,12 @@ export const ClusterSwipeCard = ({
                     onClick={() => setSelectedPrimaryId(contact.id)}
                     role="radio"
                     aria-checked={isSelectedPrimary}
+                    tabIndex={radioTabIndex(
+                      isSelectedPrimary,
+                      index,
+                      cluster.contacts.some((c) => c.id === selectedPrimaryId),
+                    )}
+                    onKeyDown={radioKeys}
                     aria-label={`Set ${contact.name} as primary contact`}
                     className={cn(
                       "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors min-w-0",

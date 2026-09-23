@@ -232,7 +232,7 @@ export const AuditView = () => {
   const entries = query.data?.pages.flatMap((page) => page.entries) ?? [];
 
   return (
-    <AdminPage lead="Every administrative action, and every sign-in, newest first. Passwords, tokens and invitation secrets are never recorded.">
+    <AdminPage>
       <div
         role="group"
         aria-label="Filter by what happened"
@@ -264,11 +264,11 @@ export const AuditView = () => {
         isError={query.isError}
         onRetry={() => void query.refetch()}
         isEmpty={!query.isLoading && !query.isError && entries.length === 0}
-        empty={
-          group
-            ? "Nothing of this kind has happened yet."
-            : "Nothing has been recorded yet."
-        }
+        empty={{
+          icon: ScrollText,
+          title: group ? "Nothing of this kind yet" : "Nothing recorded yet",
+          body: "Administrative actions and sign-ins show up here as they happen.",
+        }}
         footer={
           query.hasNextPage ? (
             <AdminButton
@@ -282,8 +282,7 @@ export const AuditView = () => {
             </AdminButton>
           ) : entries.length > 0 ? (
             <p className="text-xs text-on-surface-variant">
-              That is the whole log. Entries older than ninety days are removed
-              by the daily sweep.
+              That is the whole log.
             </p>
           ) : undefined
         }
@@ -292,6 +291,11 @@ export const AuditView = () => {
           <EntryRow key={entry.id} entry={entry} />
         ))}
       </AdminList>
+
+      <p className="text-xs text-on-surface-variant px-1 text-pretty">
+        Passwords, tokens and invitation secrets are never written here.
+        Contrack deletes an entry after 90 days.
+      </p>
     </AdminPage>
   );
 };

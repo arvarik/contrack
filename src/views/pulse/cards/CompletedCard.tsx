@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
@@ -54,7 +54,7 @@ export const CompletedCard = () => {
         <ul
           id={LIST_ID}
           aria-label="Completed follow-ups"
-          className="flex flex-col gap-1.5 px-4 sm:px-5 lg:max-h-72 lg:overflow-y-auto nice-scrollbar"
+          className="flex flex-col gap-1.5 px-4 sm:px-5 lg:max-h-72 lg:overflow-y-auto"
         >
           {completedItems.map((item) => (
             // On a phone the date takes a line of its own under the title:

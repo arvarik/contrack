@@ -73,14 +73,12 @@ describe("pulse.upNext", () => {
       contactId: "c-bday",
       name: "Ada Lovelace",
       avatarUrl: null,
-      themeColor: "#10b981",
       isTracked: true,
       lastContactedAt: "2026-09-01T10:00:00.000Z",
       relationshipScore: 85,
       daysUntil: 2,
       turningAge: 36,
       nextDate: new Date("2026-09-19"),
-      rawBirthday: "1990-09-19",
     };
 
     const catchUp = catchUpCard("c-catch", "Bob Stone", 15);
@@ -136,7 +134,6 @@ describe("pulse.upNext", () => {
       isTracked: true,
       relationshipScore: 35,
       lastContactedAt: "2026-08-01T10:00:00.000Z",
-      daysSinceContact: 31,
     });
     expect(rows[0].dueChip.variant).toBe("neutral");
     expect(res.groups[0].label).toBe("Catch up");
@@ -147,14 +144,12 @@ describe("pulse.upNext", () => {
       contactId: "c-bday",
       name: "Grace Hopper",
       avatarUrl: null,
-      themeColor: "#3b82f6",
       isTracked: true,
       lastContactedAt: "2026-09-01T10:00:00.000Z",
       relationshipScore: 90,
       daysUntil: 1,
       turningAge: null,
       nextDate: new Date("2026-09-18"),
-      rawBirthday: "09-18",
     };
 
     const res = buildUpNextQueue({
@@ -204,14 +199,12 @@ describe("pulse.upNext", () => {
           contactId: "b1",
           name: "B",
           avatarUrl: null,
-          themeColor: "#000",
           isTracked: false,
           lastContactedAt: null,
           relationshipScore: null,
           daysUntil: 3,
           turningAge: null,
           nextDate: new Date(),
-          rawBirthday: "10-10",
         },
       ],
       catchUp: [catchUpCard("s1", "S", 30)],
@@ -328,14 +321,12 @@ describe("pulse.upNext", () => {
             contactId: "b1",
             name: "Ada",
             avatarUrl: null,
-            themeColor: "#006a91",
             isTracked: false,
             lastContactedAt: null,
             relationshipScore: null,
             daysUntil: 2,
             turningAge: 40,
             nextDate: wednesday,
-            rawBirthday: "1986-09-23",
           },
         ],
         catchUp: [catchUpCard("c9", "Grace", 21)],
@@ -374,14 +365,12 @@ describe("pulse.upNext", () => {
       contactId,
       name: contactId,
       avatarUrl: null,
-      themeColor: "#006a91",
       isTracked: false,
       lastContactedAt: null,
       relationshipScore: null,
       daysUntil,
       turningAge: null,
       nextDate: new Date(2026, 8, 21 + daysUntil),
-      rawBirthday: "1990-01-01",
     });
     const result = buildUpNextQueue({
       birthdays: [birthday("seven", 7), birthday("eight", 8)],

@@ -4,6 +4,8 @@ import {
   boundsContain,
   pointInPolygon,
   boundsOf,
+  degreesAcross,
+  densestSpan,
 } from "../../src/views/map/mapMath";
 
 describe("mapMath", () => {
@@ -161,5 +163,56 @@ describe("mapMath", () => {
       // Returns wide box: minLng is -179, maxLng is 179
       expect(boundsOf(points)).toEqual([-179, 0, 179, 10]);
     });
+  });
+});
+
+describe("densestSpan", () => {
+  // A network across the globe: sixteen in North America, four in Europe,
+  // eight in Asia and Australia, as the demo data has it.
+  const americas = Array.from({ length: 16 }, (_, i) => ({
+    lng: -122 + i * 3,
+    lat: 30 + (i % 5),
+  }));
+  const europe = [
+    { lng: 2, lat: 48 },
+    { lng: 4, lat: 51 },
+    { lng: 13, lat: 52 },
+    { lng: 12, lat: 41 },
+  ];
+  const asia = [
+    { lng: 139, lat: 35 },
+    { lng: 140, lat: 36 },
+    { lng: 121, lat: 31 },
+    { lng: 103, lat: 1 },
+    { lng: 151, lat: -33 },
+    { lng: 150, lat: -34 },
+    { lng: 144, lat: -37 },
+    { lng: 145, lat: -38 },
+  ];
+
+  it("picks the stretch of longitude that holds the most people", () => {
+    const everyone = [...europe, ...asia, ...americas];
+    // 150 degrees reaches from California to Berlin: twenty people, and not
+    // the middle of the box, which is over Africa.
+    expect(densestSpan(everyone, 150)).toEqual([-122, 30, 13, 52]);
+    // 60 degrees: the Americas alone, sixteen, over Asia's eight.
+    expect(densestSpan(everyone, 60)).toEqual([-122, 30, -77, 34]);
+  });
+
+  it("takes everybody when they all fit", () => {
+    expect(densestSpan(europe, 20)).toEqual([2, 41, 13, 52]);
+  });
+
+  it("answers null for nobody, and one person for one", () => {
+    expect(densestSpan([], 90)).toBeNull();
+    expect(densestSpan([{ lng: 10, lat: 20 }], 90)).toEqual([10, 20, 10, 20]);
+  });
+});
+
+describe("degreesAcross", () => {
+  it("measures the longitude a width shows at a zoom", () => {
+    // 512 px tiles: one tile shows the whole world at zoom 0.
+    expect(degreesAcross(512, 0)).toBe(360);
+    expect(degreesAcross(390, 1)).toBeCloseTo(137.1, 1);
   });
 });

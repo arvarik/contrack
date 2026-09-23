@@ -2,10 +2,8 @@ import React, { useState, useCallback } from "react";
 import {
   Archive,
   ArchiveRestore,
-  User,
-  Square,
-  CheckSquare,
   CheckCheck,
+  Loader2,
   Trash2,
 } from "lucide-react";
 import {
@@ -23,12 +21,10 @@ import { toastUndoableDelete } from "../lib/undoToast";
 import {
   BAR_BUTTON,
   BAR_LABEL,
+  BTN_QUIET,
   CARD,
-  ICON_BTN,
   SECTION_HEADING,
   SELECTED_ROW,
-  SELECTED_TINT,
-  TONE_WASH,
 } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -39,6 +35,11 @@ import { SETTINGS_PAGE } from "./settings/layout";
 
 // ---------------------------------------------------------------------------
 // ArchivedContactsView — lists archived contacts with individual + bulk restore
+//
+// One card: a strip that counts the contacts and holds Select, then a row for
+// each contact with Restore. The page's header above says what the page is
+// for. A row opens the contact's card; its name is the button a keyboard
+// reaches, since the row itself is not one.
 // ---------------------------------------------------------------------------
 
 export const ArchivedContactsView = () => {
@@ -138,52 +139,13 @@ export const ArchivedContactsView = () => {
   return (
     // The bottom padding stays tall at every width: the bulk bar floats over
     // the end of the list.
-    <div className={cn(SETTINGS_PAGE, "space-y-6 md:pb-28")}>
-      {/*
-        Description and actions only — the Settings shell above already
-        renders the "Archived contacts" heading, and printing it again here
-        stacked two headers with the same words.
-      */}
-      <div className="flex items-start gap-3 mb-2">
-        <p className="flex-1 min-w-0 text-sm text-on-surface-variant">
-          Archived contacts are hidden from your Network and Map, but remain
-          accessible here and via Ask Contrack.
-        </p>
-
-        {/* Multi-select toggle */}
-        {contacts.length > 0 && (
-          <button
-            onClick={isSelectMode ? exitSelectMode : enterSelectMode}
-            className={cn(ICON_BTN, isSelectMode && SELECTED_TINT)}
-            title={isSelectMode ? "Exit select mode" : "Multi-select"}
-            aria-label={isSelectMode ? "Exit select mode" : "Multi-select"}
-          >
-            {isSelectMode ? (
-              <CheckSquare className="w-5 h-5" />
-            ) : (
-              <Square className="w-5 h-5" />
-            )}
-          </button>
-        )}
-
-        {/* Select All / Deselect All */}
-        {isSelectMode && (
-          <button
-            onClick={
-              selectedCount === contacts.length
-                ? () => setSelectedIds(new Set())
-                : selectAll
-            }
-            className="hit-area state-layer text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 transition-colors whitespace-nowrap"
-          >
-            {selectedCount === contacts.length ? "Deselect all" : "Select all"}
-          </button>
-        )}
-      </div>
-
+    <div className={cn(SETTINGS_PAGE, "md:pb-28")}>
       {isLoading && (
-        <div className="flex justify-center p-12">
-          <div className="animate-pulse w-6 h-6 rounded-full bg-warning/20" />
+        <div className="flex justify-center py-12">
+          <Loader2
+            aria-label="Loading archived contacts"
+            className="w-6 h-6 animate-spin text-primary"
+          />
         </div>
       )}
 
@@ -196,13 +158,35 @@ export const ArchivedContactsView = () => {
       )}
 
       {!isLoading && contacts.length > 0 && (
-        <div className={cn(CARD, "p-0 overflow-hidden")}>
-          <div className="px-6 py-4 bg-surface-container-low">
-            <span className={cn(SECTION_HEADING, "flex items-center gap-2")}>
-              <User className="w-3.5 h-3.5" />
-              {contacts.length} contact{contacts.length !== 1 ? "s" : ""}{" "}
+        <div className={cn(CARD, "p-0")}>
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-2 min-h-[48px] bg-surface-container-low rounded-t-2xl">
+            <span className={cn(SECTION_HEADING, "flex-1 min-w-0")}>
+              {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}{" "}
               archived
             </span>
+            {isSelectMode && (
+              <button
+                type="button"
+                onClick={
+                  selectedCount === contacts.length
+                    ? () => setSelectedIds(new Set())
+                    : selectAll
+                }
+                className={BTN_QUIET}
+              >
+                {selectedCount === contacts.length
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={isSelectMode ? exitSelectMode : enterSelectMode}
+              aria-pressed={isSelectMode}
+              className={BTN_QUIET}
+            >
+              {isSelectMode ? "Done" : "Select"}
+            </button>
           </div>
           <AnimatePresence initial={false}>
             {contacts.map((contact, i) => {
@@ -230,7 +214,7 @@ export const ArchivedContactsView = () => {
                     setFloatingContactId(contact.id);
                   }}
                   className={cn(
-                    "state-layer flex items-center gap-4 px-6 py-4 transition-colors group cursor-pointer",
+                    "state-layer flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 transition-colors cursor-pointer",
                     isSelectMode && isSelected && SELECTED_ROW,
                   )}
                 >
@@ -273,9 +257,15 @@ export const ArchivedContactsView = () => {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-sm text-on-surface truncate block text-left">
+                    {/* The row takes a pointer anywhere; the name is the
+                        control a keyboard reaches. Its click is the row's. */}
+                    <button
+                      type="button"
+                      aria-pressed={isSelectMode ? isSelected : undefined}
+                      className="font-semibold text-sm text-on-surface truncate block max-w-full text-left rounded-md"
+                    >
                       {contact.name}
-                    </span>
+                    </button>
                     {(contact.role || contact.company) && (
                       <p className="text-xs text-on-surface-variant mt-0.5 truncate">
                         {[contact.role, contact.company]
@@ -286,25 +276,26 @@ export const ArchivedContactsView = () => {
                   </div>
 
                   {/* Archived date */}
-                  <span className="text-[11px] text-on-surface-variant opacity-50 hidden sm:block shrink-0">
+                  <span className="text-xs text-on-surface-variant hidden sm:block shrink-0">
                     {formatDay(contact.updatedAt, "")}
                   </span>
 
                   {/* Individual restore button (hidden in select mode) */}
                   {!isSelectMode && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleUnarchive(contact.id, contact.name);
                       }}
                       disabled={unarchive.isPending}
-                      title="Restore to Network"
-                      className={cn(
-                        "hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 shrink-0 disabled:opacity-50",
-                        TONE_WASH.warning,
-                      )}
+                      aria-label={`Restore ${contact.name}`}
+                      className="btn-secondary btn-sm shrink-0"
                     >
-                      <ArchiveRestore className="w-3.5 h-3.5" />
+                      <ArchiveRestore
+                        aria-hidden="true"
+                        className="w-3.5 h-3.5"
+                      />
                       Restore
                     </button>
                   )}
@@ -323,7 +314,9 @@ export const ArchivedContactsView = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 300 }}
-            className="fixed bottom-6 left-0 right-0 z-40 px-6 max-w-4xl mx-auto"
+            // Sticks to the bottom of the page's scroller, above the phone's
+            // tab bar, in the page's own column.
+            className="sticky bottom-24 md:bottom-6 z-40 mt-6"
           >
             <div className="glass-panel rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-2">
               {/* Selected count */}

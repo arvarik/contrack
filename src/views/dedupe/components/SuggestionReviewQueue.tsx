@@ -45,7 +45,7 @@ import {
 import { DURATION, EASE } from "../../../lib/motion";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import type { Contact, PersistedDedupeSuggestion } from "../../../types";
-import { activateOnKey } from "../../../lib/a11y";
+import { activateOnKey, radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { EmptyState } from "../../../components/ui/EmptyState";
 
 // =============================================================================
@@ -937,7 +937,7 @@ function ClusterCard({
         {/* The chips wrap. A strip that scrolled sideways was a second
             scroller inside the page, and on a phone it caught the flick. */}
         <div className="flex flex-wrap gap-2 p-1">
-          {cluster.contacts.map((contact) => {
+          {cluster.contacts.map((contact, index) => {
             const isContactSelected = contact.id === selectedPrimaryId;
             return (
               <button
@@ -945,6 +945,12 @@ function ClusterCard({
                 onClick={() => setSelectedPrimaryId(contact.id)}
                 role="radio"
                 aria-checked={isContactSelected}
+                tabIndex={radioTabIndex(
+                  isContactSelected,
+                  index,
+                  cluster.contacts.some((c) => c.id === selectedPrimaryId),
+                )}
+                onKeyDown={radioKeys}
                 className={cn(
                   "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors min-w-0",
                   isContactSelected

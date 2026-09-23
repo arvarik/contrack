@@ -54,7 +54,7 @@ import {
   Segmented,
   type SegmentedOption,
 } from "../../../components/ui/Segmented";
-import { useElementWidth } from "../../../hooks/useElementWidth";
+import { useElementWidthAtLeast } from "../../../hooks/useElementWidth";
 import { useFitsHeight } from "../../../hooks/useFitsHeight";
 import { ContactIntro, ProfileHeader } from "./ProfileHeader";
 import { useTrackShortcut } from "./useTrackShortcut";
@@ -161,8 +161,9 @@ export const ContactProfile = ({
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [details, setDetails] = useState<HTMLDivElement | null>(null);
-  const width = useElementWidth(root);
-  const wide = (width ?? 0) >= WIDE_CONTACT_MIN_PX;
+  // Only the answer, not the width: a drag of the list's edge resizes this
+  // pane on every frame, and the page renders again only when it crosses.
+  const wide = useElementWidthAtLeast(root, WIDE_CONTACT_MIN_PX) ?? false;
   // 16 px above the column and 32 px under it.
   const detailsFit = useFitsHeight(details, scroller, 48);
   /**

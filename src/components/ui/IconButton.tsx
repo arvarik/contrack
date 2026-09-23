@@ -16,9 +16,8 @@
  */
 import { forwardRef, ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/utils";
-import { SELECTED_TINT } from "../../lib/styles";
 
-type Tone = "ghost" | "subtle" | "primary" | "danger";
+type Tone = "ghost" | "subtle" | "danger";
 type Size = "sm" | "md" | "lg";
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -32,15 +31,10 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
 }
 
-/**
- * Every tone hovers with the one state layer (`.state-layer` in index.css).
- * `primary` is a toggle that is on, such as the history pane's button while
- * the pane is open: the selected tint, the way a selected pill looks.
- */
+/** Every tone hovers with the one state layer (`.state-layer` in index.css). */
 const toneClasses: Record<Tone, string> = {
   ghost: "text-on-surface",
   subtle: "text-on-surface-variant hover:text-on-surface",
-  primary: SELECTED_TINT,
   danger: "text-error",
 };
 

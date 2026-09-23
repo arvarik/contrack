@@ -32,9 +32,6 @@ export interface UpNextCardProps {
   onOpenContact: (contactId: string) => void;
 }
 
-/** The id of a group's heading, from `lib/jumpToGroup`. Re-exported for the tests. */
-export { groupHeadingId };
-
 /** A theme colour for the confetti, read at the moment it fires. */
 const themeColor = (name: string, fallback: string) => {
   if (typeof document === "undefined") return fallback;
@@ -170,7 +167,7 @@ export const UpNextCard = ({
           ref={paneRef}
           role="group"
           aria-label="Up next items"
-          className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 lg:-ml-1 lg:pl-1 nice-scrollbar"
+          className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 lg:-ml-1 lg:pl-1"
           onFocus={(e) => {
             setFocusWithin(true);
             // The row that focus enters is the current row by now (see

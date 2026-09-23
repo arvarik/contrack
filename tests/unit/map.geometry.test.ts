@@ -130,16 +130,13 @@ describe("toFeatureCollection", () => {
   });
 
   it("leaves an empty field out rather than sending null", () => {
-    // The fixture has no interaction, so it has no score either. The key is
-    // absent, which is how the worker reads "nothing here".
+    // The key is absent, which is how the worker reads "nothing here".
     const [feature] = toFeatureCollection([
       person({ company: null, avatarUrl: null, location: null }),
     ]).features;
     expect(feature.properties).toEqual({
       id: "c1",
       name: "Ada Lovelace",
-      atRisk: 0,
-      overdue: 0,
       weight: 0,
     });
   });
@@ -154,63 +151,28 @@ describe("toFeatureCollection", () => {
       company: "Babbage & Co",
       avatarUrl: "/api/avatar/avataaars?seed=ada",
       location: "London, UK",
-      atRisk: 0,
-      overdue: 0,
       weight: 0,
     });
   });
 
-  it("computes score, atRisk, overdue and weight properties", () => {
-    // Overdue by the calendar day: a follow-up due yesterday is late, and
-    // one due earlier today is not, as the contact page's banner says.
-    const now = new Date(2026, 8, 22, 12, 0);
-    const [late, today] = toFeatureCollection(
-      [
-        person({
-          id: "late",
-          relationshipScore: 85,
-          lastContactedAt: "2026-09-01T10:00:00.000Z",
-          interactionCount: 7,
-          nextFollowUpAt: new Date(2026, 8, 21, 17, 0).toISOString(),
-        }),
-        person({
-          id: "today",
-          nextFollowUpAt: new Date(2026, 8, 22, 9, 0).toISOString(),
-        }),
-      ],
-      now,
-    ).features;
-    expect(late.properties.score).toBe(85);
-    expect(late.properties.atRisk).toBe(0);
-    expect(late.properties.overdue).toBe(1);
-    expect(late.properties.weight).toBe(7);
-    expect(today.properties.overdue).toBe(0);
-  });
-
-  it("gives a contact nobody tracks no score, and never calls it at risk", () => {
-    // The column holds 12, which would have painted the pin red and counted
-    // it in the cluster's At risk share. Nobody chose to keep up with this
-    // contact, so there is no score to paint.
-    const [feature] = toFeatureCollection([
-      person({
-        isTracked: false,
-        relationshipScore: 12,
-        lastContactedAt: "2026-09-01T10:00:00.000Z",
-      }),
-    ]).features;
-    expect(feature.properties.score).toBeUndefined();
-    expect(feature.properties.atRisk).toBe(0);
-  });
-
-  it("counts a tracked contact under the band as at risk", () => {
+  it("weighs a contact by its interactions, for the heat", () => {
+    // The pins draw the same for everybody: a score, a band or a late
+    // follow-up is not a map property since the health layer went.
     const [feature] = toFeatureCollection([
       person({
         relationshipScore: 12,
         lastContactedAt: "2026-09-01T10:00:00.000Z",
+        interactionCount: 7,
+        nextFollowUpAt: "2026-09-01",
       }),
     ]).features;
-    expect(feature.properties.score).toBe(12);
-    expect(feature.properties.atRisk).toBe(1);
+    expect(feature.properties).toEqual({
+      id: "c1",
+      name: "Ada Lovelace",
+      company: "Babbage & Co",
+      location: "London, UK",
+      weight: 7,
+    });
   });
 });
 
@@ -219,21 +181,12 @@ describe("toVisibleFeatures", () => {
     geometry: { type: "Point", coordinates: [lng, lat] },
     properties: { id },
   });
-  const clusterFeature = (
-    clusterId: number,
-    count: number,
-    atRisk = 0,
-    overdue = 0,
-    scoreSum = 0,
-  ) => ({
+  const clusterFeature = (clusterId: number, count: number) => ({
     geometry: { type: "Point", coordinates: [1, 2] },
     properties: {
       cluster: true,
       cluster_id: clusterId,
       point_count: count,
-      atRisk,
-      overdue,
-      scoreSum,
     },
   });
 
@@ -241,7 +194,7 @@ describe("toVisibleFeatures", () => {
     expect(
       toVisibleFeatures([
         pointFeature("c1", -0.12, 51.5),
-        clusterFeature(7, 12, 1, 2, 85),
+        clusterFeature(7, 12),
       ]),
     ).toEqual([
       {
@@ -256,9 +209,6 @@ describe("toVisibleFeatures", () => {
         key: "cluster:7",
         clusterId: 7,
         count: 12,
-        atRisk: 1,
-        overdue: 2,
-        scoreSum: 85,
         longitude: 1,
         latitude: 2,
       },

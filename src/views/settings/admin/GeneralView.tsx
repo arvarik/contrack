@@ -9,10 +9,10 @@
  *   5. Backups (interval and keep count)
  *   6. Integrations (SearXNG search URL and Google OAuth client)
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Archive,
   Check,
   Copy,
   DoorOpen,
@@ -21,9 +21,6 @@ import {
   Globe,
   Key,
   Mail,
-  Tag,
-  Timer,
-  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import {
@@ -32,24 +29,41 @@ import {
   useIntegrations,
   useUpdateIntegrations,
 } from "../../../api/admin";
-import {
-  CARD,
-  SECTION_HEADING,
-  SELECTED_TINT,
-  TONE_WASH,
-} from "../../../lib/styles";
+import { SELECTED_ROW, SELECTED_TINT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { radioKeys, radioTabIndex } from "../../../lib/a11y";
+import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { Switch } from "../../../components/ui/Switch";
 import { RadioDot } from "../../../components/ui/RadioDot";
-import { tileDelay } from "../../../lib/motion";
-import { SETTINGS_PAGE } from "../layout";
-
-const GroupHeading = ({ children }: { children: React.ReactNode }) => (
-  <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
-);
+import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
+import { SettingRow, useHashTarget } from "../SettingRow";
+import {
+  SETTINGS_CARD,
+  SETTINGS_INPUT,
+  SETTINGS_LABEL,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
 
 /** The card each setting sits on, with this page's padding. */
-const PANEL = cn(CARD, "p-4 sm:p-6");
+const PANEL = SETTINGS_CARD;
+
+/**
+ * A card a search result links to (`#name`, `#trash`): scrolled to, focused
+ * for a screen reader, and flashed with the selected tint.
+ */
+function useCardTarget<T extends HTMLElement = HTMLDivElement>(id: string) {
+  const { ref, flashing } = useHashTarget<T>(id);
+  return {
+    id,
+    ref,
+    tabIndex: -1,
+    flash: cn(
+      "scroll-mt-20 outline-none transition-colors duration-(--dur-slow)",
+      flashing && SELECTED_ROW,
+    ),
+  };
+}
 
 /**
  * One preset in a radio group: the selected tint on the current value, the
@@ -68,8 +82,7 @@ const presetLabel = (active: boolean) =>
   cn("block text-sm font-bold", !active && "text-on-surface");
 
 /** A key or a URL in the Integrations card. */
-const KEY_INPUT =
-  "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono";
+const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
 
 /** The "Configured" chip beside an integration's name. */
 const CONFIGURED_CHIP = cn(
@@ -105,14 +118,18 @@ export const InstanceNameCard = () => {
     if (draft === null && data) setDraft(data.instanceName);
   }, [data, draft]);
 
+  const target = useCardTarget<HTMLFormElement>("name");
+
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   const dirty = value.trim() !== stored;
 
   return (
     <form
-      id="name"
-      className={cn(PANEL, "space-y-4 scroll-mt-20")}
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, "space-y-4", target.flash)}
       onSubmit={(event) => {
         event.preventDefault();
         if (!dirty) return;
@@ -132,14 +149,14 @@ export const InstanceNameCard = () => {
         );
       }}
     >
-      <div className="space-y-1.5">
+      <div className="space-y-0.5">
         <label
           htmlFor="instance-name"
           className="block text-sm font-bold text-on-surface"
         >
           Instance name
         </label>
-        <p className="text-sm text-on-surface-variant text-pretty">
+        <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
           Shown on the sign-in and join screens, in the account menu, and in the
           browser tab. Leave it empty to show the product name.
         </p>
@@ -154,11 +171,7 @@ export const InstanceNameCard = () => {
         onChange={(event) => setDraft(event.target.value)}
         placeholder="Contrack"
         autoComplete="off"
-        className={cn(
-          "w-full px-4 rounded-xl min-h-[44px]",
-          "bg-surface-container-high text-on-surface text-base sm:text-sm",
-          "disabled:opacity-50",
-        )}
+        className={SETTINGS_INPUT}
       />
 
       <div className="flex items-center justify-between gap-4">
@@ -170,7 +183,6 @@ export const InstanceNameCard = () => {
           disabled={!dirty || save.isPending}
           className="btn-primary"
         >
-          <Tag className="w-4 h-4" />
           {save.isPending ? "Saving…" : "Save"}
         </button>
       </div>
@@ -193,21 +205,28 @@ export const RegistrationCard = () => {
   const magicLink = data?.magicLinkSignIn === true;
   const mailReady = data?.mailConfigured === true;
 
+  const target = useCardTarget("registration");
+
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="registration" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
-      {/* Open registration switch */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-bold text-sm text-on-surface">
-            Anyone can create an account
-          </h3>
-          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+    <div
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, target.flash)}
+    >
+      <SettingRow
+        id="open-registration"
+        title="Anyone can create an account"
+        description={
+          <>
             Adds a &ldquo;Create one&rdquo; link to the sign-in screen. New
             accounts are always members and start empty.
-          </p>
-        </div>
+          </>
+        }
+        inline
+      >
         <Switch
           checked={open}
           label="Anyone can create an account"
@@ -227,7 +246,7 @@ export const RegistrationCard = () => {
             )
           }
         />
-      </div>
+      </SettingRow>
 
       {open && (
         <p className="flex items-start gap-2 rounded-xl bg-warning/10 p-3 text-xs text-on-surface text-pretty">
@@ -238,46 +257,48 @@ export const RegistrationCard = () => {
         </p>
       )}
 
-      <div className="border-t border-outline-variant/30 pt-4">
-        {/* Magic link switch */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="font-bold text-sm text-on-surface">
-              Sign in by emailed link
-            </h3>
-            <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-              Allow members to sign in with a single-use magic link sent to
-              their email address.
-            </p>
-          </div>
-          <Switch
-            checked={magicLink}
-            label="Sign in by emailed link"
-            disabled={isLoading || save.isPending || !data || !mailReady}
-            onChange={() =>
-              save.mutate(
-                { magicLinkSignIn: !magicLink },
-                {
-                  onSuccess: (settings) =>
-                    toast.success(
-                      settings.magicLinkSignIn
-                        ? "Sign in by emailed link enabled"
-                        : "Sign in by emailed link disabled",
-                    ),
-                  onError: (error: Error) => toast.error(error.message),
-                },
-              )
-            }
-          />
-        </div>
+      <SettingRow
+        id="magic-link"
+        title="Sign in by emailed link"
+        description="Members can sign in with a link, sent to their email, that works once."
+        inline
+      >
+        <Switch
+          checked={magicLink}
+          label="Sign in by emailed link"
+          disabled={isLoading || save.isPending || !data || !mailReady}
+          onChange={() =>
+            save.mutate(
+              { magicLinkSignIn: !magicLink },
+              {
+                onSuccess: (settings) =>
+                  toast.success(
+                    settings.magicLinkSignIn
+                      ? "Sign in by emailed link is on"
+                      : "Sign in by emailed link is off",
+                  ),
+                onError: (error: Error) => toast.error(error.message),
+              },
+            )
+          }
+        />
+      </SettingRow>
 
-        {!mailReady && (
-          <p className="flex items-start gap-2 rounded-xl bg-surface-container-high/60 p-3 text-xs text-on-surface-variant mt-3 text-pretty">
-            <Mail className="w-4 h-4 shrink-0 mt-0.5" />
-            Outgoing mail must be configured before enabling magic links.
-          </p>
-        )}
-      </div>
+      {!mailReady && (
+        <p className="flex items-start gap-2 rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant text-pretty">
+          <Mail className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            The link goes by email, so set up{" "}
+            <Link
+              to="/settings/admin/mail"
+              className="font-semibold text-primary underline underline-offset-2"
+            >
+              outgoing mail
+            </Link>{" "}
+            first.
+          </span>
+        </p>
+      )}
     </div>
   );
 };
@@ -297,13 +318,20 @@ export const SessionLengthCard = () => {
   const current = data?.sessionTtlDays ?? 30;
   const isCustom = !TTL_PRESETS.some((preset) => preset.days === current);
 
+  const target = useCardTarget("session-length");
+
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="session-length" className={cn(PANEL, "space-y-4 scroll-mt-20")}>
+    <div
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, "space-y-4", target.flash)}
+    >
       <p className="text-sm text-on-surface-variant text-pretty">
-        How long a sign-in lasts on this instance before Contrack asks for a
-        password again. It applies to every account.
+        How long a sign-in lasts before Contrack asks for a password again. It
+        applies to every account.
       </p>
 
       {isLoading ? (
@@ -314,7 +342,7 @@ export const SessionLengthCard = () => {
           aria-label="Session length"
           className="grid grid-cols-1 sm:grid-cols-2 gap-2"
         >
-          {TTL_PRESETS.map((preset) => {
+          {TTL_PRESETS.map((preset, index) => {
             const active = preset.days === current;
             return (
               <button
@@ -322,7 +350,12 @@ export const SessionLengthCard = () => {
                 type="button"
                 role="radio"
                 aria-checked={active}
-                tabIndex={active ? 0 : -1}
+                tabIndex={radioTabIndex(
+                  active,
+                  index,
+                  TTL_PRESETS.some((p) => p.days === current),
+                )}
+                onKeyDown={radioKeys}
                 disabled={save.isPending}
                 onClick={() =>
                   !active &&
@@ -358,8 +391,7 @@ export const SessionLengthCard = () => {
 
       {isCustom && !isLoading && (
         <p className="text-xs text-on-surface-variant">
-          Currently set to {current} days, which isn&rsquo;t one of the presets.
-          Choosing one above will replace it.
+          It is set to {current} days now. Choosing one above replaces it.
         </p>
       )}
 
@@ -375,10 +407,10 @@ export const SessionLengthCard = () => {
 // ─── 4. Trash Retention ──────────────────────────────────────────────────────
 
 const TRASH_PRESETS = [
-  { days: 7, label: "7 days", hint: "Frequent purge" },
+  { days: 7, label: "7 days", hint: "Empties every week" },
   { days: 30, label: "30 days", hint: "Default" },
-  { days: 90, label: "90 days", hint: "Quarterly" },
-  { days: 365, label: "1 year", hint: "Long retention" },
+  { days: 90, label: "90 days", hint: "About a season" },
+  { days: 365, label: "1 year", hint: "The longest" },
 ] as const;
 
 export const TrashCard = () => {
@@ -388,17 +420,24 @@ export const TrashCard = () => {
   const isEnv = data?.trashRetentionDaysSource === "env";
   const isCustom = !TRASH_PRESETS.some((preset) => preset.days === current);
 
+  const target = useCardTarget("trash");
+
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="trash" className={cn(PANEL, "space-y-4 scroll-mt-20")}>
+    <div
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, "space-y-4", target.flash)}
+    >
       <p className="text-sm text-on-surface-variant text-pretty">
-        How long deleted contacts stay restorable in Trash before permanent
-        purge.
+        How long a deleted contact stays in Trash, where it can be restored,
+        before it is deleted for good.
       </p>
 
       {isEnv && (
-        <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+        <p className="text-xs rounded-xl bg-surface-container-low p-3 text-on-surface-variant">
           Set by TRASH_RETENTION_DAYS in the environment.
         </p>
       )}
@@ -411,7 +450,7 @@ export const TrashCard = () => {
           aria-label="Trash retention"
           className="grid grid-cols-1 sm:grid-cols-2 gap-2"
         >
-          {TRASH_PRESETS.map((preset) => {
+          {TRASH_PRESETS.map((preset, index) => {
             const active = preset.days === current;
             return (
               <button
@@ -419,7 +458,12 @@ export const TrashCard = () => {
                 type="button"
                 role="radio"
                 aria-checked={active}
-                tabIndex={active ? 0 : -1}
+                tabIndex={radioTabIndex(
+                  active,
+                  index,
+                  TRASH_PRESETS.some((p) => p.days === current),
+                )}
+                onKeyDown={radioKeys}
                 disabled={isEnv || save.isPending}
                 onClick={() =>
                   !active &&
@@ -452,13 +496,13 @@ export const TrashCard = () => {
 
       {isCustom && !isLoading && (
         <p className="text-xs text-on-surface-variant">
-          Currently set to {current} days. Choosing a preset above will replace
-          it.
+          It is set to {current} days now. Choosing one above replaces it.
         </p>
       )}
 
       <p className="text-xs text-on-surface-variant text-pretty">
-        Lowering retention purges expired contacts on the next daily sweep.
+        A shorter time deletes the older contacts in Trash at the next daily
+        cleanup.
       </p>
     </div>
   );
@@ -467,18 +511,18 @@ export const TrashCard = () => {
 // ─── 5. Backup Schedule ──────────────────────────────────────────────────────
 
 const BACKUP_INTERVAL_PRESETS = [
-  { hours: 0, label: "Off", hint: "Manual only" },
-  { hours: 6, label: "6 hours", hint: "High-churn instances" },
-  { hours: 12, label: "12 hours", hint: "Twice daily" },
-  { hours: 24, label: "24 hours", hint: "Default (daily)" },
-  { hours: 168, label: "7 days", hint: "Weekly" },
+  { hours: 0, label: "Off", hint: "Only when you take one" },
+  { hours: 6, label: "6 hours", hint: "Many changes each day" },
+  { hours: 12, label: "12 hours", hint: "Twice a day" },
+  { hours: 24, label: "24 hours", hint: "Default, once a day" },
+  { hours: 168, label: "7 days", hint: "Once a week" },
 ] as const;
 
 const BACKUP_KEEP_PRESETS = [
-  { count: 3, label: "3 snapshots", hint: "Minimal storage" },
+  { count: 3, label: "3 snapshots", hint: "The least space" },
   { count: 7, label: "7 snapshots", hint: "Default" },
-  { count: 14, label: "14 snapshots", hint: "Two weeks" },
-  { count: 30, label: "30 snapshots", hint: "One month" },
+  { count: 14, label: "14 snapshots", hint: "Two weeks of daily ones" },
+  { count: 30, label: "30 snapshots", hint: "A month of daily ones" },
 ] as const;
 
 export const BackupScheduleCard = () => {
@@ -491,19 +535,28 @@ export const BackupScheduleCard = () => {
   const keepCurrent = data?.backupKeep ?? 7;
   const isKeepEnv = data?.backupKeepSource === "env";
 
+  const target = useCardTarget("backups");
+
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="backups" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
+    <div
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, "space-y-8", target.flash)}
+    >
       {/* Interval section */}
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-on-surface">Snapshot interval</h3>
-        <p className="text-sm text-on-surface-variant text-pretty">
-          How frequently Contrack takes an automatic SQLite snapshot.
-        </p>
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-bold text-on-surface">How often</h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+            How often Contrack takes a snapshot of the database by itself.
+          </p>
+        </div>
 
         {isIntervalEnv && (
-          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+          <p className="text-xs rounded-xl bg-surface-container-low p-3 text-on-surface-variant">
             Set by BACKUP_INTERVAL_HOURS in the environment.
           </p>
         )}
@@ -516,7 +569,7 @@ export const BackupScheduleCard = () => {
             aria-label="Backup interval"
             className="grid grid-cols-1 sm:grid-cols-3 gap-2"
           >
-            {BACKUP_INTERVAL_PRESETS.map((preset) => {
+            {BACKUP_INTERVAL_PRESETS.map((preset, index) => {
               const active = preset.hours === intervalCurrent;
               return (
                 <button
@@ -524,7 +577,14 @@ export const BackupScheduleCard = () => {
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  tabIndex={active ? 0 : -1}
+                  tabIndex={radioTabIndex(
+                    active,
+                    index,
+                    BACKUP_INTERVAL_PRESETS.some(
+                      (p) => p.hours === intervalCurrent,
+                    ),
+                  )}
+                  onKeyDown={radioKeys}
                   disabled={isIntervalEnv || save.isPending}
                   onClick={() =>
                     !active &&
@@ -558,15 +618,19 @@ export const BackupScheduleCard = () => {
         )}
       </div>
 
-      {/* Keep count section */}
-      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
-        <h3 className="text-sm font-bold text-on-surface">Retention count</h3>
-        <p className="text-sm text-on-surface-variant text-pretty">
-          How many recent snapshots to retain before older ones are rotated out.
-        </p>
+      {/* Keep count section. Space sets it apart, not a line. */}
+      <div className="space-y-3">
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-bold text-on-surface">
+            How many to keep
+          </h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+            When there are more, Contrack deletes the oldest.
+          </p>
+        </div>
 
         {isKeepEnv && (
-          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+          <p className="text-xs rounded-xl bg-surface-container-low p-3 text-on-surface-variant">
             Set by BACKUP_KEEP in the environment.
           </p>
         )}
@@ -579,7 +643,7 @@ export const BackupScheduleCard = () => {
             aria-label="Backup retention count"
             className="grid grid-cols-1 sm:grid-cols-2 gap-2"
           >
-            {BACKUP_KEEP_PRESETS.map((preset) => {
+            {BACKUP_KEEP_PRESETS.map((preset, index) => {
               const active = preset.count === keepCurrent;
               return (
                 <button
@@ -587,7 +651,12 @@ export const BackupScheduleCard = () => {
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  tabIndex={active ? 0 : -1}
+                  tabIndex={radioTabIndex(
+                    active,
+                    index,
+                    BACKUP_KEEP_PRESETS.some((p) => p.count === keepCurrent),
+                  )}
+                  onKeyDown={radioKeys}
                   disabled={isKeepEnv || save.isPending}
                   onClick={() =>
                     !active &&
@@ -633,6 +702,26 @@ export const IntegrationsCard = () => {
   const [googleClientSecret, setGoogleClientSecret] = useState("");
   const [showGoogleSecret, setShowGoogleSecret] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
+  const [confirmRemoveGoogle, setConfirmRemoveGoogle] = useState(false);
+  const clientIdInput = useRef<HTMLInputElement>(null);
+
+  // Removing the client takes its Remove button away, and with it the
+  // focus the dialog handed back. The keyboard lands on the empty client
+  // ID field instead, where a new client starts.
+  const googleConfigured = data?.googleOAuth?.configured === true;
+  const wasConfigured = useRef(googleConfigured);
+  useEffect(() => {
+    if (
+      wasConfigured.current &&
+      !googleConfigured &&
+      document.activeElement === document.body
+    ) {
+      clientIdInput.current?.focus();
+    }
+    wasConfigured.current = googleConfigured;
+  }, [googleConfigured]);
+
+  const target = useCardTarget("integrations");
 
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
@@ -647,7 +736,12 @@ export const IntegrationsCard = () => {
   const redirectUri = `${typeof window !== "undefined" ? window.location.origin : ""}/api/connectors/google/callback`;
 
   return (
-    <div id="integrations" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
+    <div
+      id={target.id}
+      ref={target.ref}
+      tabIndex={target.tabIndex}
+      className={cn(PANEL, "space-y-8", target.flash)}
+    >
       {/* SearXNG */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -664,7 +758,7 @@ export const IntegrationsCard = () => {
         </p>
 
         {isSearxngEnv ? (
-          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+          <p className="text-xs rounded-xl bg-surface-container-low p-3 text-on-surface-variant">
             Set by SEARXNG_URL in the environment.
           </p>
         ) : (
@@ -732,7 +826,7 @@ export const IntegrationsCard = () => {
 
       {/* Google OAuth. Space sets it apart from SearXNG: a line between
           sections is a failure of hierarchy (STYLE.md). */}
-      <div className="pt-4 space-y-3">
+      <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Key className="w-5 h-5 text-primary" />
@@ -755,18 +849,20 @@ export const IntegrationsCard = () => {
 
         {/* Redirect URI copy box */}
         <div className="space-y-1.5">
-          <span className="text-xs font-semibold text-on-surface block">
-            Authorized redirect URI
-          </span>
+          <span className={SETTINGS_LABEL}>Authorized redirect URI</span>
           <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
             <span className="flex-1 min-w-0">{redirectUri}</span>
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(redirectUri);
-                setCopiedRedirect(true);
-                toast.success("Redirect URI copied to clipboard");
-                setTimeout(() => setCopiedRedirect(false), 2000);
+              onClick={async () => {
+                try {
+                  await copyToClipboard(redirectUri);
+                  setCopiedRedirect(true);
+                  toast.success("Redirect URI copied");
+                  setTimeout(() => setCopiedRedirect(false), 2000);
+                } catch {
+                  toast.error(CLIPBOARD_DENIED);
+                }
               }}
               className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
               title="Copy redirect URI"
@@ -779,21 +875,21 @@ export const IntegrationsCard = () => {
               )}
             </button>
           </div>
-          <p className="text-[11px] text-on-surface-variant">
-            Paste this exact URI into your Google Cloud Console under Authorized
+          <p className="text-xs text-on-surface-variant text-pretty">
+            Paste this exact URI into Google Cloud Console, under Authorized
             redirect URIs.
           </p>
         </div>
 
         {isGoogleEnv ? (
-          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+          <p className="text-xs rounded-xl bg-surface-container-low p-3 text-on-surface-variant">
             Set by GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in the
             environment.
           </p>
         ) : (
           <div className="space-y-3">
             {isGoogleConfigured && (
-              <div className="text-xs text-on-surface-variant bg-surface-container-high/40 p-3 rounded-xl space-y-1">
+              <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1">
                 <p>
                   <strong>Client ID:</strong>{" "}
                   <span className="font-mono text-on-surface">
@@ -813,11 +909,12 @@ export const IntegrationsCard = () => {
               <div>
                 <label
                   htmlFor="google-client-id"
-                  className="block text-xs font-semibold text-on-surface mb-1"
+                  className={cn(SETTINGS_LABEL, "mb-1.5")}
                 >
                   Client ID
                 </label>
                 <input
+                  ref={clientIdInput}
                   id="google-client-id"
                   type="text"
                   aria-label="Google OAuth client ID"
@@ -836,7 +933,7 @@ export const IntegrationsCard = () => {
               <div>
                 <label
                   htmlFor="google-client-secret"
-                  className="block text-xs font-semibold text-on-surface mb-1"
+                  className={cn(SETTINGS_LABEL, "mb-1.5")}
                 >
                   Client secret
                 </label>
@@ -873,7 +970,18 @@ export const IntegrationsCard = () => {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                {isGoogleConfigured && (
+                  <button
+                    type="button"
+                    disabled={update.isPending}
+                    onClick={() => setConfirmRemoveGoogle(true)}
+                    className="btn-secondary shrink-0 text-error mr-auto"
+                  >
+                    Remove
+                  </button>
+                )}
+
                 <button
                   type="button"
                   disabled={
@@ -903,37 +1011,14 @@ export const IntegrationsCard = () => {
                 >
                   Save
                 </button>
-
-                {isGoogleConfigured && (
-                  <button
-                    type="button"
-                    disabled={update.isPending}
-                    onClick={() =>
-                      update.mutate(
-                        { googleOAuth: null },
-                        {
-                          onSuccess: () => {
-                            setGoogleClientId("");
-                            setGoogleClientSecret("");
-                            toast.success("Google OAuth credentials removed");
-                          },
-                          onError: (err: Error) => toast.error(err.message),
-                        },
-                      )
-                    }
-                    className="btn-secondary shrink-0 text-error"
-                  >
-                    Remove
-                  </button>
-                )}
               </div>
             </div>
           </div>
         )}
 
-        <div className="rounded-xl bg-surface-container-high/30 p-3 text-xs text-on-surface-variant space-y-1">
+        <div className="rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant space-y-1">
           <p className="font-semibold text-on-surface">
-            Publishing status in Google Cloud:
+            Publishing status in Google Cloud
           </p>
           <p>
             • <strong>Google Workspace domains:</strong> Create an{" "}
@@ -947,68 +1032,72 @@ export const IntegrationsCard = () => {
           </p>
         </div>
       </div>
+
+      {/* Every member's Google connectors stop with the client, so the
+          removal asks first, with the red button and the verb repeated. */}
+      <ConfirmDialog
+        isOpen={confirmRemoveGoogle}
+        onClose={() => setConfirmRemoveGoogle(false)}
+        onConfirm={() =>
+          update.mutate(
+            { googleOAuth: null },
+            {
+              onSuccess: () => {
+                setConfirmRemoveGoogle(false);
+                setGoogleClientId("");
+                setGoogleClientSecret("");
+                toast.success("Google OAuth client removed");
+              },
+              onError: (err: Error) => toast.error(err.message),
+            },
+          )
+        }
+        title="Remove the Google OAuth client?"
+        description="Every Google Workspace connector on this instance stops syncing until someone adds a client again."
+        confirmLabel="Remove client"
+        tone="danger"
+        busy={update.isPending}
+      />
     </div>
   );
 };
 
 // ─── Main View ───────────────────────────────────────────────────────────────
 
+/** One section: a heading over its card. */
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <section>
+    <h2 className={SETTINGS_SECTION_HEADING}>{title}</h2>
+    {children}
+  </section>
+);
+
 export const GeneralView = () => (
   <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-    <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
-      <GroupHeading>
-        <span className="inline-flex items-center gap-1.5">
-          <Tag className="w-3.5 h-3.5" />
-          Name
-        </span>
-      </GroupHeading>
+    <Section title="Name">
       <InstanceNameCard />
-    </section>
-
-    <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
-      <GroupHeading>Who can join</GroupHeading>
+    </Section>
+    <Section title="Who can join">
       <RegistrationCard />
-    </section>
-
-    <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
-      <GroupHeading>
-        <span className="inline-flex items-center gap-1.5">
-          <Timer className="w-3.5 h-3.5" />
-          Session length
-        </span>
-      </GroupHeading>
+    </Section>
+    <Section title="Session length">
       <SessionLengthCard />
-    </section>
-
-    <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
-      <GroupHeading>
-        <span className="inline-flex items-center gap-1.5">
-          <Trash2 className="w-3.5 h-3.5" />
-          Trash
-        </span>
-      </GroupHeading>
+    </Section>
+    <Section title="Trash">
       <TrashCard />
-    </section>
-
-    <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
-      <GroupHeading>
-        <span className="inline-flex items-center gap-1.5">
-          <Archive className="w-3.5 h-3.5" />
-          Backups
-        </span>
-      </GroupHeading>
+    </Section>
+    <Section title="Backups">
       <BackupScheduleCard />
-    </section>
-
-    <section className="tile-enter" style={{ animationDelay: tileDelay(5) }}>
-      <GroupHeading>
-        <span className="inline-flex items-center gap-1.5">
-          <Globe className="w-3.5 h-3.5" />
-          Integrations
-        </span>
-      </GroupHeading>
+    </Section>
+    <Section title="Integrations">
       <IntegrationsCard />
-    </section>
+    </Section>
   </div>
 );
 

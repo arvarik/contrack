@@ -22,99 +22,53 @@ describe("computeMapStats", () => {
     lists: [],
   };
 
-  it("returns zeros and null avgScore when contacts list is empty", () => {
+  it("returns zeros when the contacts list is empty", () => {
     const stats = computeMapStats([]);
     expect(stats.inView).toBe(0);
     expect(stats.matching).toBe(0);
-    expect(stats.total).toBe(0);
-    expect(stats.atRisk).toBe(0);
     expect(stats.overdue).toBe(0);
-    expect(stats.neverContacted).toBe(0);
-    expect(stats.avgScore).toBeNull();
     expect(stats.topIndustries).toEqual([]);
     expect(stats.topCompanies).toEqual([]);
     expect(stats.topTags).toEqual([]);
     expect(stats.timeZones).toEqual([]);
   });
 
-  it("returns zeros and null avgScore when no contacts are inside bounds", () => {
+  it("counts nobody in view when no contacts are inside bounds", () => {
     const contacts: MapContact[] = [baseContact];
     // Bounds far away (e.g. Sydney, Australia)
     const bounds: [number, number, number, number] = [150, -35, 152, -33];
-    const stats = computeMapStats(contacts, bounds, new Date(), 10);
+    const stats = computeMapStats(contacts, bounds, new Date());
     expect(stats.inView).toBe(0);
     expect(stats.matching).toBe(1);
-    expect(stats.total).toBe(10);
-    expect(stats.avgScore).toBeNull();
   });
 
-  it("counts inView, atRisk, overdue, and neverContacted accurately", () => {
+  it("counts who is in view and who is overdue", () => {
     const now = new Date("2026-09-18T12:00:00Z");
     const contacts: MapContact[] = [
       {
         ...baseContact,
         id: "1",
-        relationshipScore: 80, // Strong
         nextFollowUpAt: "2026-09-20T00:00:00Z", // Not overdue
       },
       {
         ...baseContact,
         id: "2",
         name: "Alan Turing",
-        relationshipScore: 30, // At-risk (<40)
         nextFollowUpAt: "2026-09-10T00:00:00Z", // Overdue
       },
       {
         ...baseContact,
         id: "3",
         name: "Charles Babbage",
-        relationshipScore: 20, // At-risk (<40)
-        lastContactedAt: null,
-        interactionCount: 0, // Never contacted
         nextFollowUpAt: null,
       },
-      {
-        ...baseContact,
-        id: "4",
-        name: "Grace Hopper",
-        relationshipScore: 60, // Fading
-        nextFollowUpAt: null,
-      },
+      { ...baseContact, id: "4", name: "Grace Hopper", nextFollowUpAt: null },
     ];
 
-    const stats = computeMapStats(contacts, null, now, 10);
+    const stats = computeMapStats(contacts, null, now);
     expect(stats.inView).toBe(4);
     expect(stats.matching).toBe(4);
-    expect(stats.total).toBe(10);
-    // ID 3 was never contacted, so its stored 20 is not a score and the pin
-    // is not At risk. It used to be counted, which read as a failing
-    // relationship with somebody nobody had met.
-    expect(stats.atRisk).toBe(1); // ID 2
     expect(stats.overdue).toBe(1); // ID 2
-    expect(stats.neverContacted).toBe(1); // ID 3
-    // avgScore: (80 + 30 + 60) / 3 = 170 / 3 = 56.67 -> 57
-    expect(stats.avgScore).toBe(57);
-  });
-
-  it("leaves a contact nobody tracks out of At risk and out of the average", () => {
-    const now = new Date("2026-09-15T00:00:00Z");
-    const stats = computeMapStats(
-      [
-        { ...baseContact, id: "1", relationshipScore: 80 },
-        {
-          ...baseContact,
-          id: "2",
-          isTracked: false,
-          relationshipScore: 10,
-        },
-      ],
-      null,
-      now,
-      2,
-    );
-    expect(stats.inView).toBe(2);
-    expect(stats.atRisk).toBe(0);
-    expect(stats.avgScore).toBe(80);
   });
 
   it("sorts top lists by count descending then name ascending and caps at five", () => {

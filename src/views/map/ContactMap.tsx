@@ -41,9 +41,7 @@ import {
   type ViewStateChangeEvent,
 } from "@vis.gl/react-maplibre";
 import type {
-  ExpressionSpecification,
   GeoJSONSource,
-  HeatmapLayerSpecification,
   Map as MapLibreMap,
   PaddingOptions,
   StyleSpecification,
@@ -62,8 +60,19 @@ import { STACK_LIMIT, StackPopup, type ContactStack } from "./ContactPopup";
 import { prefersReducedMotion } from "./flyTo";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";
+import {
+  HEAT_END_ZOOM,
+  HEAT_LAYER_ID,
+  HEAT_PINS_ZOOM,
+  HEAT_SOURCE_ID,
+  heatIntensity,
+  heatPaint,
+  useHeatStops,
+  useHeatUnderLabels,
+  useZoomAtLeast,
+} from "./heat";
 import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
-import { heatRamp, registerPmtilesProtocol, styleFor } from "./mapStyles";
+import { registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
 import { useClusterFeatures, type ClusterFeature } from "./useClusterFeatures";
 
@@ -94,27 +103,6 @@ const PRESENCE_LAYER: LayerProps = {
     "circle-stroke-opacity": 0,
   },
 };
-
-/**
- * The heat layer's paint, less its colours. The colours are the accent's,
- * read off the page when the layer is on (`heatRamp`).
- */
-const HEATMAP_PAINT = {
-  "heatmap-weight": [
-    "interpolate",
-    ["linear"],
-    ["get", "weight"],
-    0,
-    0,
-    1,
-    1,
-    10,
-    2,
-  ],
-  "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3],
-  "heatmap-radius": 30,
-  "heatmap-opacity": 0.85,
-} satisfies HeatmapLayerSpecification["paint"];
 
 /**
  * What the map draws when the basemap style fails to load. A map with no
@@ -218,10 +206,9 @@ export const ContactMap = ({
   layer = "pins",
   children,
 }: ContactMapProps) => {
-  const { mode, preferences } = usePreferences();
+  const { mode } = usePreferences();
   const { mapStyles } = useAuth();
   const styleUrl = styleFor(mode, mapStyles);
-  const accent = preferences.accent;
 
   // Read once, before the map exists, so the remembered view is a creation
   // prop like every other part of the first frame.
@@ -251,30 +238,21 @@ export const ContactMap = ({
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useKeepWorldCovering(map, wrapperRef, minZoomFromViewport);
 
-  // The heat ramp, in the accent's tokens as the page computes them, read
-  // again when the palette or the accent changes. A frame late, because the
-  // provider paints a new palette in its own effect, after this one.
-  const [heatColor, setHeatColor] = useState<ExpressionSpecification | null>(
-    null,
+  // The heat, in the accent as the page paints it, scaled to the contacts
+  // shown (see `heat.ts`). Its pins come back as it fades.
+  const heatOn = layer === "heat";
+  const heatStops = useHeatStops(heatOn);
+  const heatScale = useMemo(
+    () => (heatOn ? heatIntensity(contacts) : 0),
+    [heatOn, contacts],
   );
-  useEffect(() => {
-    const el = wrapperRef.current;
-    if (layer !== "heat" || !el) return;
-    const frame = requestAnimationFrame(() => {
-      const css = getComputedStyle(el);
-      setHeatColor(
-        heatRamp(
-          css.getPropertyValue("--color-primary"),
-          css.getPropertyValue("--color-primary-container"),
-        ),
-      );
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [layer, mode, accent]);
-  const heatPaint = useMemo(
-    () => heatColor && { ...HEATMAP_PAINT, "heatmap-color": heatColor },
-    [heatColor],
+  const heat = useMemo(
+    () => heatStops && heatPaint(heatScale, heatStops),
+    [heatStops, heatScale],
   );
+  useHeatUnderLabels(map, heat !== null);
+  const pinsOverHeat = useZoomAtLeast(map, HEAT_PINS_ZOOM, heatOn);
+  const drawPins = !heatOn || pinsOverHeat;
 
   /**
    * MapLibre's own chrome is hidden until the map has loaded.
@@ -414,6 +392,12 @@ export const ContactMap = ({
   // A stack lists who was in the cluster when it opened. New data, or a
   // zoom that dissolves the cluster, makes that list stale.
   useEffect(() => setStack(null), [contacts]);
+  // A card or a stack belongs to a pin, and the heat takes the pins away.
+  useEffect(() => {
+    if (drawPins) return;
+    setStack(null);
+    handleCloseCard();
+  }, [drawPins, handleCloseCard]);
   useEffect(() => {
     if (
       stack &&
@@ -577,23 +561,25 @@ export const ContactMap = ({
             cluster
             clusterRadius={CLUSTER_RADIUS}
             clusterMaxZoom={CLUSTER_MAX_ZOOM}
-            clusterProperties={{
-              atRisk: ["+", ["get", "atRisk"]],
-              overdue: ["+", ["get", "overdue"]],
-              scoreSum: ["+", ["coalesce", ["get", "score"], 0]],
-            }}
           >
             <Layer {...PRESENCE_LAYER} />
-            {layer === "heat" && heatPaint && (
-              <Layer id="contacts-heatmap" type="heatmap" paint={heatPaint} />
-            )}
           </Source>
+          {heat && (
+            <Source id={HEAT_SOURCE_ID} type="geojson" data={collection}>
+              <Layer
+                id={HEAT_LAYER_ID}
+                type="heatmap"
+                maxzoom={HEAT_END_ZOOM}
+                paint={heat}
+              />
+            </Source>
+          )}
           {interactive && (
             <NavigationControl position="bottom-right" showCompass={false} />
           )}
-          {/* The heat layer draws no pins. Below zoom 9 they used to stay,
-              over the heat they stood for, so Heat looked like Pins. */}
-          {layer !== "heat" &&
+          {/* Over the heat the pins wait until it fades: drawn over the heat
+              they stood for, Heat looked like Pins. */}
+          {drawPins &&
             features.map((feature) => {
               if (feature.kind === "cluster") {
                 const leaves = clusterLeaves.get(feature.clusterId) || [];
@@ -620,7 +606,6 @@ export const ContactMap = ({
                   multiSelected={
                     selectedIds ? selectedIds.has(contact.id) : false
                   }
-                  layer={layer}
                   onSelect={onSelect}
                   onPreview={hoverCard ? handlePreview : noPreview}
                   onPinCard={handlePinCard}

@@ -10,7 +10,7 @@
  * With nothing in two weeks the card is one line, and the line offers the
  * one thing that would fill it: a calendar.
  */
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Cake, Video } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
@@ -39,10 +39,7 @@ export interface MeetingItem {
 export interface ComingUpCardProps {
   birthdays?: UpcomingBirthday[];
   meetings?: MeetingItem[];
-  contactsMap?: Map<
-    string,
-    { name: string; avatarUrl?: string | null; themeColor?: string }
-  >;
+  contactsMap?: Map<string, { name: string; avatarUrl?: string | null }>;
 }
 
 /** Up next owns birthdays through day seven. This card starts at day eight. */

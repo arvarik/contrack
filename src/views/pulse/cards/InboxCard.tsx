@@ -32,7 +32,7 @@ import { CardFrame } from "../components/CardFrame";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { TONE_TEXT, TONE_WASH, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { PULSE_ROW, PULSE_TYPE } from "../lib/pulseStyles";
+import { PULSE_ROW, PULSE_ROW_STATIC, PULSE_TYPE } from "../lib/pulseStyles";
 
 export interface InboxCardProps {
   pendingDuplicates?: number;
@@ -181,7 +181,12 @@ export const InboxCard = ({
               aria-expanded={ghostsExpanded}
               aria-controls="ghosts-list"
               className={cn(
-                PULSE_ROW,
+                // Closed, the row is a tile like the others and lifts. Open,
+                // the item's face holds the names too, so the button is one
+                // part of it and takes the state layer alone.
+                ghostsExpanded
+                  ? `state-layer group ${PULSE_ROW_STATIC}`
+                  : PULSE_ROW,
                 // The item carries the wash, so the open list sits on it too.
                 "w-full text-left cursor-pointer bg-transparent",
               )}
@@ -219,7 +224,9 @@ export const InboxCard = ({
                   <Link
                     key={g.id}
                     to={`/contact/${g.id}`}
-                    className="hit-area state-layer inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container text-xs font-medium text-on-surface"
+                    // A chip that opens a contact: a control as a whole, so
+                    // it lifts.
+                    className="hit-area state-layer lift inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container text-xs font-medium text-on-surface"
                   >
                     <img
                       src={g.avatarUrl || fallbackAvatarUrl(g.name)}

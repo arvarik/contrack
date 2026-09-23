@@ -182,12 +182,13 @@ From the search results view or Command Palette, click **"✨ Synthesize"** to g
 
 ---
 
-## History Pane
+## History
 
-The Ask Contrack page retains search questions across sessions so frequent questions can be re-run, pinned, and organized:
+The Ask Contrack page keeps the questions you ask across sessions. You can run a question again, pin it, or delete it:
 
-- **Layout:** Displays as a fixed 320px right-hand side pane on desktop screens (`lg` and wider). On smaller viewports, it opens as a mobile bottom sheet modal from the History button in the header.
-- **Hide and show:** The pane closes from the **Hide history** button at the right end of its own header, and the **History** button in the page header opens it again. Both save the `askHistoryOpen` preference to the account. The page header's button keeps the name "History" in both states and is pressed while the pane is open. Pressing `h` anywhere on the page (when not typing in an input and single-key shortcuts are enabled) also toggles the pane, and both buttons show the key in their tooltip.
+- **Layout:** From `lg` the history is the page's right-hand panel (`SidePanel`). A 64 px rail at the right edge holds the History icon. The 320 px panel slides out from under the rail, over the page, so opening or closing it moves nothing in the column. The panel's heading row holds the title, the count, **Clear** and **Hide history**. Below `lg` there is no rail. The **History** button in the page header opens the same list in a bottom sheet, which has its own heading row and a **Close history** button.
+- **Hide and show:** The rail icon opens and closes the panel. **Hide history** and Escape close it and put the keyboard focus on the rail icon. When the filter holds words, the first Escape clears them. Each of these saves the `askHistoryOpen` preference to the account. When single-key shortcuts are on, `h` outside a text field toggles the panel. With focus inside the panel, `h` closes the panel and focuses the rail icon. Below `lg`, `h` opens the sheet.
+- **Column width:** From `lg` the page column keeps the panel's width free on both sides. The open panel does not cover the search box or a result from about 1250 px up. The column is 48rem wide from about 1550 px, narrower below that, and 34rem from 1320 px down.
 - **Groupings:** Questions are automatically organized into chronological groups:
   1. **Pinned** (pinned rows stay at the top and do not repeat in date groups)
   2. **Today**
@@ -196,8 +197,8 @@ The Ask Contrack page retains search questions across sessions so frequent quest
   5. **Months** (e.g. "August 2026")
 - **Row actions & re-running:** Clicking any question entry fills the search box and immediately re-runs the search. Hovering or focusing a row reveals Pin/Unpin and Delete actions. Deleting triggers an undo toast notification before sending a hard delete request.
 - **Filtering & modes:** A quick search filter debounced at 200ms narrows questions in real time. A Segmented control filters between All, People, and Notes questions.
-- **Palette unification:** Command palette searches read from and write to the same history. AI queries asked in the command palette (`? question`) appear in the Ask Contrack pane with their prefix stripped, and Ask Contrack questions appear under Recent Searches in the palette zero state.
-- **Clear history:** A "Clear" action in the pane header and a "Clear history" button under **Settings → Privacy and AI** allow deleting all recorded history behind a confirmation dialog.
+- **Palette unification:** Command palette searches read from and write to the same history. AI queries asked in the command palette (`? question`) appear in the Ask Contrack history with their prefix stripped, and Ask Contrack questions appear under Recent Searches in the palette zero state.
+- **Clear history:** A "Clear" action in the history heading row and a "Clear history" button under **Settings → Privacy and AI** allow deleting all recorded history behind a confirmation dialog.
 
 ---
 
@@ -216,7 +217,7 @@ When AI is turned off for an account:
 
 ## Indexing Coverage and Empty State
 
-The page leads with the search box. The header is the title, the People and Notes switch and the History button, with no line of description.
+The page leads with the search box. The header is the title and the People and Notes switch, with no line of description. Below `lg` a History button sits beside the switch.
 
 - **One status line:** In People mode, while contacts are missing from the index, indexing runs, or a contact failed, one line sits under the search box: a thin progress bar, the words ("12 of 30 contacts indexed", or "Indexing 12 of 30…" while it runs) and quiet text buttons for **Index missing**, **Inspect failed** and **Retry failed**. The line is a region named "Semantic search coverage". It hides at 100 percent with nothing running. The paid-provider confirmation and the failed-contacts dialog open from its buttons.
 - **Try asking:** Before a search, the page shows suggested questions as flat chips. A click fills the box and runs the search. In People mode the first three come from your own network, its most common industry, city and company ("Who works in Music Streaming?", "Who do I know in Sydney?", "Who works at TechNova?"), so a press always finds someone. Fixed examples fill the rest. People search reads profiles, not dates, so no suggestion asks about when you last spoke. Notes mode shows its own suggestions, which also show the date phrases it understands.

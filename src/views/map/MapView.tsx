@@ -25,7 +25,7 @@ import {
 } from "react";
 import { useMatch, useNavigate, useSearchParams } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { BarChart3, CalendarPlus, ZoomIn, X } from "lucide-react";
+import { CalendarPlus, ZoomIn, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMapContacts, useBulkAddToList } from "../../api";
 import {
@@ -39,8 +39,15 @@ import {
 } from "../../api/mapViews";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
+import { SIDE_PANEL_WIDTH } from "../../components/layout/SidePanel";
 import { ContactMap } from "./ContactMap";
 import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
+import {
+  HEAT_END_ZOOM,
+  HEAT_FADE_ZOOM,
+  useHeatStops,
+  useZoomAtLeast,
+} from "./heat";
 import {
   MIN_OPEN_PX,
   measureInsets,
@@ -52,7 +59,6 @@ import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
 import { MapInsightsPane } from "./MapInsightsPane";
-import { HealthLegend } from "./HealthLegend";
 import { SaveViewModal } from "./SaveViewModal";
 import { RenameViewModal } from "./RenameViewModal";
 import { useMapStats } from "./useMapStats";
@@ -69,7 +75,16 @@ import { FollowUpModal } from "./FollowUpModal";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { QuickInteractionModal } from "../../components/QuickInteractionModal";
 import { LiveStatus } from "../../components/ui/LiveStatus";
-import { boundsOf } from "./mapMath";
+import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
+import { cn } from "../../lib/utils";
+
+/** The box around the placed contacts among `people`, or null for none. */
+const placedBounds = (people: readonly MapContact[]) =>
+  boundsOf(
+    people
+      .filter((c) => isValidLatLng(c.lat, c.lng))
+      .map((c) => ({ lat: c.lat, lng: c.lng })),
+  );
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
@@ -77,11 +92,15 @@ export const MapView = () => {
   const { preferences, setPreference } = usePreferences();
 
   const urlViewId = searchParams.get("view");
-  const urlLayer = searchParams.get("layer") as MapLayer | null;
-  const initialLayer: MapLayer =
-    urlLayer && ["pins", "heat", "health"].includes(urlLayer)
-      ? urlLayer
-      : (preferences.mapLayer ?? "pins");
+  // Health was a layer until v2, and an old link to it opens on Pins.
+  const layerParam = searchParams.get("layer");
+  const urlLayer: MapLayer | null =
+    layerParam === "heat"
+      ? "heat"
+      : layerParam === "pins" || layerParam === "health"
+        ? "pins"
+        : null;
+  const initialLayer: MapLayer = urlLayer ?? preferences.mapLayer ?? "pins";
 
   const [layer, setLayerState] = useState<MapLayer>(initialLayer);
 
@@ -137,39 +156,49 @@ export const MapView = () => {
     [setPreference, setSearchParams],
   );
 
+  /**
+   * Fit the map to a box clear of what covers it, or fly to it when the box
+   * is one point. Reduced motion jumps.
+   */
+  const fitTo = useCallback(
+    (bounds: MapBounds, pointZoom: number) => {
+      if (!map) return;
+      const [west, south, east, north] = bounds;
+      const padding = paddingFor(
+        measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+      );
+      const reduced = prefersReducedMotion();
+      if (west === east && south === north) {
+        const point = { center: [west, south] as [number, number], padding };
+        if (reduced) map.jumpTo({ ...point, zoom: pointZoom });
+        else map.flyTo({ ...point, zoom: pointZoom });
+        return;
+      }
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding, maxZoom: 14, duration: reduced ? 0 : 800 },
+      );
+    },
+    [map, openId],
+  );
+
   const handleSelectView = useCallback(
     (view: MapViewType) => {
+      // A view is a query and a layer, and the overdue filter is neither.
+      // Cleared first: it clears the active view, which is set next.
+      filter.setOverdueOnly(false);
       setActiveViewId(view.id);
       filter.setRawInput(view.query, { syncUrl: false });
       setLayerState(view.layer);
       setPreference("mapLayer", view.layer);
 
       setSearchParams({ view: view.id }, { replace: true });
-
-      if (map) {
-        const [west, south, east, north] = view.bounds;
-        const padding = paddingFor(
-          measureInsets(map.getContainer(), { contactOpen: openId !== null }),
-        );
-        const reduced = prefersReducedMotion();
-        if (west === east && south === north) {
-          if (reduced) {
-            map.jumpTo({ center: [west, south], zoom: 10, padding });
-          } else {
-            map.flyTo({ center: [west, south], zoom: 10, padding });
-          }
-        } else {
-          map.fitBounds(
-            [
-              [west, south],
-              [east, north],
-            ],
-            { padding, maxZoom: 14, duration: reduced ? 0 : 800 },
-          );
-        }
-      }
+      fitTo(view.bounds, 10);
     },
-    [filter, map, openId, setPreference, setSearchParams],
+    [filter, fitTo, setPreference, setSearchParams],
   );
 
   // Initial load ?view= resolution:
@@ -277,11 +306,25 @@ export const MapView = () => {
     [deleteMapView, activeViewId, setSearchParams, filter.rawInput, layer],
   );
 
+  // "In view" is what a person can see: the map less the open insights
+  // panel and the open contact.
   const { stats, inViewContacts } = useMapStats({
     contacts: filter.filteredContacts,
     map,
-    totalCount: contacts.length,
+    contactOpen: openId !== null,
+    covers: `${isPaneOpen}:${openId ?? ""}`,
   });
+
+  // The heat's legend reads the ramp the map paints, and gives way to a
+  // button back out once the map is zoomed in past the heat.
+  const heatStops = useHeatStops(layer === "heat");
+  const pastHeat = useZoomAtLeast(map, HEAT_END_ZOOM, layer === "heat");
+  const zoomToHeat = useCallback(() => {
+    map?.easeTo({
+      zoom: HEAT_FADE_ZOOM - 0.5,
+      duration: prefersReducedMotion() ? 0 : 800,
+    });
+  }, [map]);
 
   const selection = useMapSelection({
     contacts,
@@ -313,6 +356,23 @@ export const MapView = () => {
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  /**
+   * The bottom line's height. On a phone MapLibre's zoom buttons and credit
+   * sit over it, lifted by this much (index.css), and a line that wraps
+   * would otherwise run under them. While the line steps aside they keep
+   * its last height, so they do not drop under the bulk bar.
+   */
+  const [lineHeight, setLineHeight] = useState(0);
+  const measureLine = useCallback((corner: HTMLDivElement | null) => {
+    if (!corner) return;
+    const measure = () => setLineHeight(corner.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(corner);
     return () => observer.disconnect();
   }, []);
 
@@ -364,36 +424,11 @@ export const MapView = () => {
   }, [singleFollowUpContactId, selection.selectedIds]);
 
   const handleZoomToSelection = useCallback(() => {
-    if (!map || selection.selectedIds.size === 0) return;
-    const selectedContacts = contacts.filter((c) =>
-      selection.selectedIds.has(c.id),
+    const bounds = placedBounds(
+      contacts.filter((c) => selection.selectedIds.has(c.id)),
     );
-    const points = selectedContacts
-      .filter((c) => isValidLatLng(c.lat, c.lng))
-      .map((c) => ({ lat: c.lat as number, lng: c.lng as number }));
-    const bounds = boundsOf(points);
-    if (!bounds) return;
-    const [west, south, east, north] = bounds;
-    const padding = paddingFor(
-      measureInsets(map.getContainer(), { contactOpen: openId !== null }),
-    );
-    const reduced = prefersReducedMotion();
-    if (west === east && south === north) {
-      if (reduced) {
-        map.jumpTo({ center: [west, south], zoom: 12, padding });
-      } else {
-        map.flyTo({ center: [west, south], zoom: 12, padding });
-      }
-    } else {
-      map.fitBounds(
-        [
-          [west, south],
-          [east, north],
-        ],
-        { padding, maxZoom: 14, duration: reduced ? 0 : 800 },
-      );
-    }
-  }, [map, selection.selectedIds, contacts, openId]);
+    if (bounds) fitTo(bounds, 12);
+  }, [fitTo, selection.selectedIds, contacts]);
 
   usePageTitle(NAMES.map.title);
 
@@ -421,43 +456,30 @@ export const MapView = () => {
   );
 
   const handleFitAll = useCallback(() => {
-    if (!map || filter.filteredContacts.length === 0) return;
-    const valid = filter.filteredContacts.filter((c) =>
-      isValidLatLng(c.lat, c.lng),
+    const placed = filter.filteredContacts
+      .filter((c) => isValidLatLng(c.lat, c.lng))
+      .map((c) => ({ lat: c.lat, lng: c.lng }));
+    const bounds = boundsOf(placed);
+    if (!bounds || !map) return;
+    // At the lowest zoom the map shows so many degrees of the part nothing
+    // covers. A network wider than that cannot fit, and the middle of it
+    // can be an ocean: show the stretch that holds the most people.
+    const container = map.getContainer();
+    const { right } = measureInsets(container, {
+      contactOpen: openId !== null,
+    });
+    const across = degreesAcross(
+      container.clientWidth - right,
+      map.getMinZoom(),
     );
-    if (valid.length === 0) return;
-    let west = 180;
-    let south = 90;
-    let east = -180;
-    let north = -90;
-    for (const c of valid) {
-      const lat = c.lat as number;
-      const lng = c.lng as number;
-      if (lng < west) west = lng;
-      if (lng > east) east = lng;
-      if (lat < south) south = lat;
-      if (lat > north) north = lat;
-    }
-    const padding = paddingFor(
-      measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+    const [west, , east] = bounds;
+    fitTo(
+      east - west > across
+        ? (densestSpan(placed, across * 0.9) ?? bounds)
+        : bounds,
+      10,
     );
-    const reduced = prefersReducedMotion();
-    if (west === east && south === north) {
-      if (reduced) {
-        map.jumpTo({ center: [west, south], zoom: 10, padding });
-      } else {
-        map.flyTo({ center: [west, south], zoom: 10, padding });
-      }
-    } else {
-      map.fitBounds(
-        [
-          [west, south],
-          [east, north],
-        ],
-        { padding, maxZoom: 14, duration: reduced ? 0 : 1000 },
-      );
-    }
-  }, [map, filter.filteredContacts, openId]);
+  }, [fitTo, filter.filteredContacts, map, openId]);
 
   const handleSelectContactFromPane = useCallback(
     (contact: MapContact) => {
@@ -478,7 +500,7 @@ export const MapView = () => {
    * What covers the map at mount, measured before the map exists.
    */
   const initialInsets = useMemo<Insets>(() => {
-    const right = isWide && isDesktopPaneOpen ? 320 : 0;
+    const right = isWide && isDesktopPaneOpen ? SIDE_PANEL_WIDTH : 0;
     return { right, bottom: 0 };
   }, [isWide, isDesktopPaneOpen]);
 
@@ -593,95 +615,240 @@ export const MapView = () => {
   }, [singleKeyShortcuts, handleFitAll, toggleInsightsPane]);
 
   return (
-    // On a phone the stats strip spans the map above the tab bar, where
-    // MapLibre's zoom buttons, and the credit on top of them, also start
-    // (index.css). The last class lifts those one strip higher, so they are
-    // never under the strip and the credit opens above it. `translate`,
-    // because index.css sets the corner's `bottom` and MapLibre's own sheet
-    // outranks a utility on it. With a contact open, `--map-open` and
-    // `data-cramped` keep the credit and the zoom buttons in the map the
+    // The map, and beside it from `lg` the insights rail: the rail is in the
+    // layout, so the map ends where it starts, and the panel slides over the
+    // map from under it.
+    //
+    // On a phone the bottom line spans the map above the tab bar, where
+    // MapLibre's zoom buttons, and the credit on top of them, also start.
+    // `--map-line`, its height, lifts those over it, so they are never under
+    // it and the credit opens above it. With a contact open, `--map-open`
+    // and `data-cramped` keep the credit and the zoom buttons in the map the
     // contact leaves (index.css).
     <div
-      ref={pageRef}
-      className="map-page w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden max-md:[&_.maplibregl-ctrl-bottom-right]:-translate-y-8"
+      className="map-page flex w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden"
       data-cramped={cramped || undefined}
       style={
-        room !== null
-          ? ({ "--map-open": `${room}px` } as CSSProperties)
-          : undefined
+        {
+          "--map-line": `${lineHeight}px`,
+          "--map-open": room !== null ? `${room}px` : undefined,
+        } as CSSProperties
       }
     >
-      <h1 className="sr-only">{NAMES.map.label}</h1>
-      <LiveStatus label="Map selection" message={selection.announcement} />
-      <SelectionOverlay
-        map={map}
-        containerRef={pageRef}
-        onSelectBox={(bounds) =>
-          selection.selectBox(bounds, filter.filteredContacts)
-        }
-        onSelectLasso={(ring) =>
-          selection.selectLasso(ring, filter.filteredContacts)
-        }
-        isLassoMode={isLassoMode}
-        onExitLassoMode={() => setIsLassoMode(false)}
-      />
-      <MapToolbar
-        contacts={contacts}
-        map={map}
-        rawInput={filter.rawInput}
-        setRawInput={filter.setRawInput}
-        tokenizer={filter.tokenizer}
-        effectiveFilters={filter.effectiveFilters}
-        filteredContacts={filter.filteredContacts}
-        totalCount={filter.totalCount}
-        matchCount={filter.matchCount}
-        hasActiveFilter={filter.hasActiveFilter}
-        resolveNearFilters={filter.resolveNearFilters}
-        clearFilters={filter.clearFilters}
-        layer={layer}
-        onLayerChange={handleLayerChange}
-        views={mapViews}
-        activeViewId={activeViewId}
-        onSelectView={handleSelectView}
-        onOpenSaveModal={() => setIsSaveModalOpen(true)}
-        onStartRename={(v) => setRenameTargetView(v)}
-        onDeleteView={handleDeleteView}
-        inputRef={inputRef}
-        room={room}
-        onFitAll={handleFitAll}
-        onToggleInsights={() => toggleInsightsPane(true)}
-        onSelectInView={() =>
-          selection.selectInView(map, filter.filteredContacts)
-        }
-        onStartLasso={() => setIsLassoMode(true)}
-        isLassoActive={isLassoMode}
-      />
-      {/*
-        The bottom-left corner: the health legend over the stats strip, 12 px
-        over the tab bar on a phone. `z-[3]` puts it over every pin, the
-        selected one (z 2) too, which used to paint over the strip. The pin
-        cards are z 3 as well and come later in the page, so a card still
-        draws over the corner. MapLibre's credit and zoom buttons stay in the
-        opposite corner, the credit on top of the zoom buttons (index.css),
-        so the two corners never meet. With a contact open the corner keeps
-        to the map it leaves, or steps aside. It steps aside while contacts
-        are selected too: the bulk bar spans the map's bottom edge and
-        covered the strip at every width, and the legend on a phone.
-      */}
-      {!cramped && selection.selectedCount === 0 && (
-        <div
-          className="absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex flex-col items-start gap-2 max-w-[calc(100%-2rem)] pointer-events-none"
-          style={room !== null ? { maxWidth: room - 32 } : undefined}
-        >
-          {layer === "health" && <HealthLegend />}
-          <StatsStrip
-            className="pointer-events-auto"
-            stats={stats}
-            onApplyFacet={handleApplyFacet}
-            onFitAll={handleFitAll}
-          />
-        </div>
-      )}
+      <div
+        ref={pageRef}
+        className="relative flex-1 min-w-0 h-full overflow-hidden"
+      >
+        <h1 className="sr-only">{NAMES.map.label}</h1>
+        <LiveStatus label="Map selection" message={selection.announcement} />
+        <SelectionOverlay
+          map={map}
+          containerRef={pageRef}
+          onSelectBox={(bounds) =>
+            selection.selectBox(bounds, filter.filteredContacts)
+          }
+          onSelectLasso={(ring) =>
+            selection.selectLasso(ring, filter.filteredContacts)
+          }
+          isLassoMode={isLassoMode}
+          onExitLassoMode={() => setIsLassoMode(false)}
+        />
+        <MapToolbar
+          map={map}
+          rawInput={filter.rawInput}
+          setRawInput={filter.setRawInput}
+          tokenizer={filter.tokenizer}
+          effectiveFilters={filter.effectiveFilters}
+          totalCount={filter.totalCount}
+          matchCount={filter.matchCount}
+          hasActiveFilter={filter.hasActiveFilter}
+          resolveNearFilters={filter.resolveNearFilters}
+          clearFilters={filter.clearFilters}
+          layer={layer}
+          onLayerChange={handleLayerChange}
+          views={mapViews}
+          activeViewId={activeViewId}
+          onSelectView={handleSelectView}
+          onOpenSaveModal={() => setIsSaveModalOpen(true)}
+          onStartRename={(v) => setRenameTargetView(v)}
+          onDeleteView={handleDeleteView}
+          inputRef={inputRef}
+          room={room}
+          onFitAll={handleFitAll}
+          onToggleInsights={() => toggleInsightsPane(true)}
+          onSelectInView={() =>
+            selection.selectInView(map, filter.filteredContacts)
+          }
+          onStartLasso={() => setIsLassoMode(true)}
+          isLassoActive={isLassoMode}
+        />
+        {/*
+          The bottom-left corner: the bottom line, 12 px over the tab bar on
+          a phone. `z-[3]` puts it over every pin, the selected one (z 2)
+          too. The pin cards are z 3 as well and come later in the page, so
+          a card still draws over the corner. MapLibre's credit and zoom
+          buttons stay in the opposite corner, the credit on top of the zoom
+          buttons (index.css), so the two corners never meet. It keeps clear
+          of the open insights panel. With a contact open the corner keeps
+          to the map it leaves, or steps aside. It steps aside while
+          contacts are selected too: the bulk bar spans the map's bottom
+          edge.
+        */}
+        {!cramped && selection.selectedCount === 0 && (
+          <div
+            ref={measureLine}
+            className={cn(
+              "absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex items-start max-w-[calc(100%-2rem)] pointer-events-none",
+              isPaneOpen && "lg:max-w-[calc(100%-22rem)]",
+            )}
+            style={room !== null ? { maxWidth: room - 32 } : undefined}
+          >
+            <StatsStrip
+              className="pointer-events-auto"
+              stats={stats}
+              overdueOnly={filter.overdueOnly}
+              onOverdueOnlyChange={filter.setOverdueOnly}
+              onFitAll={handleFitAll}
+              heat={heatStops}
+              heatFaded={pastHeat}
+              onZoomToHeat={zoomToHeat}
+            />
+          </div>
+        )}
+        <ContactMap
+          contacts={filter.filteredContacts}
+          loading={isLoading}
+          selectedId={openId}
+          selectedIds={selection.selectedIds}
+          onSelect={openContact}
+          onMapClick={closeContact}
+          onMapReady={setMap}
+          initialPadding={initialInsets ? paddingFor(initialInsets) : undefined}
+          rememberView={!urlViewId}
+          reuse
+          layer={layer}
+          onLogNote={(id) => setQuickNoteContactId(id)}
+          onAddToList={(id) => {
+            setSingleListContactId(id);
+            setIsSingleAddToListOpen(true);
+          }}
+          onFollowUp={(id) => {
+            setSingleFollowUpContactId(id);
+            setIsFollowUpOpen(true);
+          }}
+        />
+
+        {/* Map selection floating toolbars */}
+        {selection.selectedCount > 0 && (
+          <>
+            <div
+              role="toolbar"
+              aria-label="Map selection actions"
+              className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
+              style={{ bottom: bulkRoom + 8 }}
+            >
+              <span className="font-bold text-xs text-on-surface whitespace-nowrap pl-1">
+                {selection.selectedCount} selected
+                {selection.hiddenCount > 0 && (
+                  <span className="text-[11px] text-on-surface-variant font-normal ml-1">
+                    ({selection.hiddenCount} hidden by filter)
+                  </span>
+                )}
+              </span>
+              <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
+              <button
+                type="button"
+                onClick={() => {
+                  setSingleFollowUpContactId(null);
+                  setIsFollowUpOpen(true);
+                }}
+                className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary cursor-pointer shrink-0"
+              >
+                <CalendarPlus className="w-3.5 h-3.5" />
+                <span>Add follow-up</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomToSelection}
+                className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface cursor-pointer shrink-0"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+                <span>Zoom to selection</span>
+              </button>
+              <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
+              <button
+                type="button"
+                onClick={selection.clear}
+                aria-label="Clear selection"
+                title="Clear selection (Escape)"
+                className="hit-area state-layer p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <BulkActionToolbar
+              ref={measureBulkBar}
+              isPending={bulkActions.isPending}
+              onTrack={bulkActions.handleBulkTrack}
+              selectionTracked={bulkActions.selectionTracked}
+              onArchive={bulkActions.handleBulkArchive}
+              onAddToList={bulkActions.openAddToList}
+              onEditField={bulkActions.openBulkEdit}
+              onColorChange={bulkActions.handleBulkColorChange}
+              onExportCSV={bulkActions.handleExportCSV}
+              onDelete={bulkActions.handleBulkDelete}
+            />
+          </>
+        )}
+
+        {/* Bulk & single modals */}
+        <BulkModals
+          selectedCount={isSingleAddToListOpen ? 1 : selection.selectedCount}
+          isAddToListOpen={isSingleAddToListOpen || bulkActions.isAddToListOpen}
+          onCloseAddToList={() => {
+            setIsSingleAddToListOpen(false);
+            setSingleListContactId(null);
+            bulkActions.closeAddToList();
+          }}
+          onBulkAddToList={handleAddToListSubmit}
+          isBulkAddToListPending={bulkActions.isBulkAddToListPending}
+          isBulkEditOpen={bulkActions.isBulkEditOpen}
+          onCloseBulkEdit={bulkActions.closeBulkEdit}
+          onBulkEditApply={bulkActions.handleBulkEditApply}
+          isBulkEditPending={bulkActions.isBulkEditPending}
+        />
+
+        <FollowUpModal
+          isOpen={isFollowUpOpen}
+          onClose={() => {
+            setIsFollowUpOpen(false);
+            setSingleFollowUpContactId(null);
+          }}
+          contactIds={followUpIds}
+        />
+
+        <QuickInteractionModal
+          isOpen={quickNoteContactId !== null}
+          onClose={() => setQuickNoteContactId(null)}
+          initialContactId={quickNoteContactId ?? undefined}
+        />
+
+        <SaveViewModal
+          isOpen={isSaveModalOpen}
+          onClose={() => setIsSaveModalOpen(false)}
+          onSave={handleSaveView}
+          currentQuery={filter.rawInput}
+          currentLayer={layer}
+        />
+
+        <RenameViewModal
+          view={renameTargetView}
+          isOpen={renameTargetView !== null}
+          onClose={() => setRenameTargetView(null)}
+          onRename={handleRenameView}
+        />
+      </div>
       <MapInsightsPane
         isOpen={isPaneOpen}
         onToggle={toggleInsightsPane}
@@ -689,154 +856,6 @@ export const MapView = () => {
         inViewContacts={inViewContacts}
         onApplyFacet={handleApplyFacet}
         onSelectContact={handleSelectContactFromPane}
-      />
-      {/* Desktop floating button to reopen insights pane when closed. It
-          is on the map already, so its word is "Insights". index.css moves
-          the zoom buttons clear of the open pane, the `aside` named "Map
-          insights". */}
-      {!isPaneOpen && (
-        <button
-          type="button"
-          onClick={() => toggleInsightsPane(true)}
-          aria-expanded={false}
-          className="state-layer hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30 hit-area"
-        >
-          <BarChart3 className="w-4 h-4 text-primary" />
-          <span>Insights</span>
-        </button>
-      )}
-      <ContactMap
-        contacts={filter.filteredContacts}
-        loading={isLoading}
-        selectedId={openId}
-        selectedIds={selection.selectedIds}
-        onSelect={openContact}
-        onMapClick={closeContact}
-        onMapReady={setMap}
-        initialPadding={initialInsets ? paddingFor(initialInsets) : undefined}
-        rememberView={!urlViewId}
-        reuse
-        layer={layer}
-        onLogNote={(id) => setQuickNoteContactId(id)}
-        onAddToList={(id) => {
-          setSingleListContactId(id);
-          setIsSingleAddToListOpen(true);
-        }}
-        onFollowUp={(id) => {
-          setSingleFollowUpContactId(id);
-          setIsFollowUpOpen(true);
-        }}
-      />
-
-      {/* Map selection floating toolbars */}
-      {selection.selectedCount > 0 && (
-        <>
-          <div
-            role="toolbar"
-            aria-label="Map selection actions"
-            className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
-            style={{ bottom: bulkRoom + 8 }}
-          >
-            <span className="font-bold text-xs text-on-surface whitespace-nowrap pl-1">
-              {selection.selectedCount} selected
-              {selection.hiddenCount > 0 && (
-                <span className="text-[11px] text-on-surface-variant font-normal ml-1">
-                  ({selection.hiddenCount} hidden by filter)
-                </span>
-              )}
-            </span>
-            <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
-            <button
-              type="button"
-              onClick={() => {
-                setSingleFollowUpContactId(null);
-                setIsFollowUpOpen(true);
-              }}
-              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary cursor-pointer shrink-0"
-            >
-              <CalendarPlus className="w-3.5 h-3.5" />
-              <span>Add follow-up</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleZoomToSelection}
-              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface cursor-pointer shrink-0"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-              <span>Zoom to selection</span>
-            </button>
-            <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
-            <button
-              type="button"
-              onClick={selection.clear}
-              aria-label="Clear selection"
-              title="Clear selection (Escape)"
-              className="hit-area state-layer p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <BulkActionToolbar
-            ref={measureBulkBar}
-            isPending={bulkActions.isPending}
-            onTrack={bulkActions.handleBulkTrack}
-            selectionTracked={bulkActions.selectionTracked}
-            onArchive={bulkActions.handleBulkArchive}
-            onAddToList={bulkActions.openAddToList}
-            onEditField={bulkActions.openBulkEdit}
-            onColorChange={bulkActions.handleBulkColorChange}
-            onExportCSV={bulkActions.handleExportCSV}
-            onDelete={bulkActions.handleBulkDelete}
-          />
-        </>
-      )}
-
-      {/* Bulk & single modals */}
-      <BulkModals
-        selectedCount={isSingleAddToListOpen ? 1 : selection.selectedCount}
-        isAddToListOpen={isSingleAddToListOpen || bulkActions.isAddToListOpen}
-        onCloseAddToList={() => {
-          setIsSingleAddToListOpen(false);
-          setSingleListContactId(null);
-          bulkActions.closeAddToList();
-        }}
-        onBulkAddToList={handleAddToListSubmit}
-        isBulkAddToListPending={bulkActions.isBulkAddToListPending}
-        isBulkEditOpen={bulkActions.isBulkEditOpen}
-        onCloseBulkEdit={bulkActions.closeBulkEdit}
-        onBulkEditApply={bulkActions.handleBulkEditApply}
-        isBulkEditPending={bulkActions.isBulkEditPending}
-      />
-
-      <FollowUpModal
-        isOpen={isFollowUpOpen}
-        onClose={() => {
-          setIsFollowUpOpen(false);
-          setSingleFollowUpContactId(null);
-        }}
-        contactIds={followUpIds}
-      />
-
-      <QuickInteractionModal
-        isOpen={quickNoteContactId !== null}
-        onClose={() => setQuickNoteContactId(null)}
-        initialContactId={quickNoteContactId ?? undefined}
-      />
-
-      <SaveViewModal
-        isOpen={isSaveModalOpen}
-        onClose={() => setIsSaveModalOpen(false)}
-        onSave={handleSaveView}
-        currentQuery={filter.rawInput}
-        currentLayer={layer}
-      />
-
-      <RenameViewModal
-        view={renameTargetView}
-        isOpen={renameTargetView !== null}
-        onClose={() => setRenameTargetView(null)}
-        onRename={handleRenameView}
       />
     </div>
   );

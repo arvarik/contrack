@@ -11,85 +11,90 @@
  * is class `instance-read` and a member may call it; what they get back is
  * which capability is served and by whom, which is the part that explains the
  * behaviour they can see.
+ *
+ * The list sits in the Privacy page's "AI on this instance" card. The names
+ * are the ones the AI providers page uses, so an admin and a member call each
+ * kind of work by the same name.
  */
-import { Brain, Check, Minus } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import { useAISettings, type AICapability } from "../../api/aiSettings";
-import { CARD, SECTION_HEADING, TONE_WASH } from "../../lib/styles";
-import { cn } from "../../lib/utils";
 
 const CAPABILITIES: { key: AICapability; label: string; does: string }[] = [
-  { key: "quick", label: "Quick", does: "Parsing, summaries, short answers." },
+  {
+    key: "quick",
+    label: "Quick tasks",
+    does: "Reading a signature, summaries, short answers.",
+  },
   {
     key: "deep",
-    label: "Deep",
-    does: "Duplicate judgement, longer reasoning.",
+    label: "Deep tasks",
+    does: "Judging duplicates, and longer reasoning.",
   },
-  { key: "research", label: "Research", does: "Enrichment from the live web." },
+  { key: "research", label: "Web research", does: "Enrichment from the web." },
   {
     key: "embeddings",
     label: "Embeddings",
-    does: "Semantic search and duplicate matching.",
+    does: "Search by meaning, and matching duplicates.",
   },
 ];
 
-export const AiCapabilitiesCard = () => {
+/** One row per kind of AI work: served, and by whom, or not set up. */
+export const AiCapabilitiesList = () => {
   const { data: settings, isLoading } = useAISettings();
 
-  return (
-    <div className={cn(CARD, "p-4 sm:p-5 space-y-3")}>
-      <div className="flex items-start gap-3">
-        <span
-          className={cn(
-            "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
-            TONE_WASH.primary,
-          )}
-        >
-          <Brain className="w-[18px] h-[18px]" />
-        </span>
-        <div className="min-w-0">
-          <h3 className={cn(SECTION_HEADING, "text-xs")}>
-            Available AI capabilities
-          </h3>
-          <p className="text-xs text-on-surface-variant mt-0.5 text-pretty">
-            Set by an administrator for the whole instance.
-          </p>
-        </div>
-      </div>
+  if (isLoading || !settings) {
+    return (
+      <ul
+        aria-busy="true"
+        aria-label="Loading AI capabilities"
+        className="space-y-2"
+      >
+        {CAPABILITIES.map((capability) => (
+          <li
+            key={capability.key}
+            className="h-14 rounded-xl bg-surface-container-low animate-pulse"
+          />
+        ))}
+      </ul>
+    );
+  }
 
-      {isLoading || !settings ? (
-        <p className="text-sm text-on-surface-variant">Loading…</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {CAPABILITIES.map((capability) => {
-            const resolved = settings.capabilities[capability.key]?.resolved;
-            return (
-              <li
-                key={capability.key}
-                className="flex items-start gap-2.5 rounded-xl bg-surface-container-low px-3 py-2"
-              >
-                {resolved ? (
-                  <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                ) : (
-                  <Minus className="w-4 h-4 text-on-surface-variant shrink-0 mt-0.5" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-on-surface">
-                    {capability.label}
-                    <span className="ml-2 text-xs font-normal text-on-surface-variant">
-                      {resolved
-                        ? (resolved.providerLabel ?? resolved.label ?? "on")
-                        : "not configured"}
-                    </span>
-                  </p>
-                  <p className="text-xs text-on-surface-variant text-pretty">
-                    {capability.does}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+  return (
+    <ul className="space-y-2">
+      {CAPABILITIES.map((capability) => {
+        const resolved = settings.capabilities[capability.key]?.resolved;
+        return (
+          <li
+            key={capability.key}
+            className="flex items-start gap-2.5 rounded-xl bg-surface-container-low px-3 py-2.5"
+          >
+            {resolved ? (
+              <Check
+                aria-hidden="true"
+                className="w-4 h-4 text-success shrink-0 mt-0.5"
+              />
+            ) : (
+              <Minus
+                aria-hidden="true"
+                className="w-4 h-4 text-on-surface-variant shrink-0 mt-0.5"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-on-surface">
+                {capability.label}
+                <span className="ml-2 text-xs font-normal text-on-surface-variant">
+                  {resolved
+                    ? (resolved.providerLabel ?? resolved.label ?? "On")
+                    : "Not set up"}
+                </span>
+              </p>
+              <p className="text-xs text-on-surface-variant text-pretty">
+                {capability.does}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 };

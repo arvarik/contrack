@@ -7,17 +7,22 @@
  * @module views/settings/pages/DuplicatesPage
  */
 import React from "react";
-import { ArrowRight, Copy } from "lucide-react";
+import { ArrowRight, Copy, History } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
 import { SettingRow } from "../SettingRow";
+import { SettingsHeaderActions } from "../SettingsHeader";
+import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
 import { usePreferences } from "../../../contexts/PreferencesContext";
+import { useDedupeOptional } from "../../../contexts/DedupeContext";
 import { useDedupeCount } from "../../../api";
-import { CARD, PAGE_X, TONE_WASH } from "../../../lib/styles";
+import { PAGE_X } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { SETTINGS_CARD } from "../layout";
+import { SettingsCallout } from "../SettingsCallout";
 
 const DEDUPE_PRESET_COPY = {
   conservative:
@@ -46,53 +51,50 @@ const COLUMN = "max-w-4xl w-full mx-auto";
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
   const { preferences, setPreference } = usePreferences();
+  const dedupe = useDedupeOptional();
   const { data: dedupeData } = useDedupeCount();
   const dedupeCount =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
 
   return (
-    <div className="h-full overflow-y-auto nice-scrollbar">
+    // The scroller keeps its bar's lane, as the shell's does, so the cards
+    // sit under the title whether or not the page scrolls.
+    <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
+      {/* Below sm the tool's Merge activity button gives way to this menu
+          in the header, beside the title. */}
+      <SettingsHeaderActions>
+        <div className="sm:hidden">
+          <ActionMenu
+            label="Duplicates actions"
+            items={[
+              {
+                id: "merge-activity",
+                label: "Merge activity",
+                icon: History,
+                onSelect: () => dedupe?.setShowActivity(true),
+              },
+            ]}
+          />
+        </div>
+      </SettingsHeaderActions>
+
       <div className={cn(PAGE_X, COLUMN, "pt-4 pb-4")}>
         {/* Review strip */}
         {dedupeCount > 0 && (
-          <div
-            className={cn(
-              CARD,
-              "p-4 mb-4 flex items-center justify-between gap-4 bg-primary/10",
-            )}
+          <SettingsCallout
+            icon={Copy}
+            title={`${dedupeCount} possible duplicate${dedupeCount === 1 ? "" : "s"}`}
+            body="Pairs that may be the same person, waiting for you to decide."
+            className="mb-4"
           >
-            <div className="flex items-center gap-3">
-              <span
-                className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}
-              >
-                <Copy className="w-5 h-5" />
-              </span>
-              <div>
-                <p className="text-sm font-bold text-on-surface">
-                  {dedupeCount} possible duplicate{dedupeCount === 1 ? "" : "s"}
-                </p>
-                <p className="text-xs text-on-surface-variant">
-                  Matches found across your contacts that need your
-                  confirmation.
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/pulse/duplicates"
-              className="btn-primary btn-sm shrink-0"
-            >
+            <Link to="/pulse/duplicates" className="btn-primary btn-sm">
               Review them
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
-          </div>
+          </SettingsCallout>
         )}
 
-        <div
-          className={cn(
-            CARD,
-            "p-4 sm:p-5 divide-y divide-surface-container-high",
-          )}
-        >
+        <div className={SETTINGS_CARD}>
           <SettingRow
             id="sensitivity"
             title="Auto-merge sensitivity"
@@ -124,6 +126,7 @@ export const DuplicatesPage = () => {
             title="Check new contacts automatically"
             prefKey="dedupeOnCreate"
             description="Runs a few seconds after you add one."
+            inline
           >
             <Switch
               label="Check new contacts automatically"
@@ -137,6 +140,7 @@ export const DuplicatesPage = () => {
             title="Check imports automatically"
             prefKey="dedupeOnImport"
             description="Scans every import when it finishes."
+            inline
           >
             <Switch
               label="Check imports automatically"

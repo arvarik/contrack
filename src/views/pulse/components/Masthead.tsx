@@ -18,7 +18,6 @@
  * with "3 to do" used to sit beside Log note. It repeated the sentence's
  * counts in a smaller, vaguer form, and it is gone.
  *
- * `children` renders under the sentence: the page puts the Ask form there.
  * `quiet` is the welcome state: the sentence is left out, and the title, the
  * day and the actions stay.
  */
@@ -43,8 +42,6 @@ export interface MastheadProps {
   isEditing: boolean;
   onToggleCustomize: () => void;
   onJumpTo: (target: JumpTarget) => void;
-  /** Rendered under the sentence. The page puts the Ask form here. */
-  children?: React.ReactNode;
   /** The welcome state: the sentence is left out. */
   quiet?: boolean;
 }
@@ -57,7 +54,6 @@ export const Masthead = ({
   isEditing,
   onToggleCustomize,
   onJumpTo,
-  children,
   quiet = false,
 }: MastheadProps) => {
   const navigate = useNavigate();
@@ -120,8 +116,6 @@ export const Masthead = ({
           />
         </>
       }
-    >
-      {children}
-    </PageHeader>
+    />
   );
 };

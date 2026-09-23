@@ -1,8 +1,9 @@
 /**
  * InvitationsView — links that create an account.
  *
- * Contrack sends no mail, so an invitation is a link the admin copies and
- * hands over however they already talk to the person. The database holds only
+ * An invitation is a link the admin copies and hands over however they
+ * already talk to the person, or, when outgoing mail is set up, sends by
+ * email as well. The database holds only
  * the SHA-256 of the secret inside it, which is why the link is shown once,
  * at the moment it is made, and never again. A lost link is replaced, not
  * recovered.
@@ -31,7 +32,9 @@ import { formatDay, formatWhen } from "../../../lib/datetime";
 import { SELECTED_TINT } from "../../../lib/styles";
 import { RadioDot } from "../../../components/ui/RadioDot";
 import { cn } from "../../../lib/utils";
+import { radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { Switch } from "../../../components/ui/Switch";
+import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
   AdminButton,
   AdminCell,
@@ -161,10 +164,7 @@ const NewInvitationModal = ({
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <label
-              htmlFor="invite-email"
-              className="block text-xs font-bold text-on-surface"
-            >
+            <label htmlFor="invite-email" className={SETTINGS_LABEL}>
               Email
             </label>
             <input
@@ -173,7 +173,7 @@ const NewInvitationModal = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               aria-describedby="invite-email-hint"
-              className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm"
+              className={SETTINGS_INPUT}
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
@@ -214,44 +214,53 @@ const NewInvitationModal = ({
           )}
 
           <div className="space-y-1.5">
-            <span className="block text-xs font-bold text-on-surface">
-              Role
-            </span>
+            <span className={SETTINGS_LABEL}>Role</span>
             <div role="radiogroup" aria-label="Role" className="flex gap-2">
-              {(["member", "admin"] as const).map((option) => (
+              {(
+                [
+                  { value: "member", label: "Member" },
+                  { value: "admin", label: "Admin" },
+                ] as const
+              ).map((option) => (
                 <button
-                  key={option}
+                  key={option.value}
                   type="button"
                   role="radio"
-                  aria-checked={role === option}
-                  onClick={() => setRole(option)}
+                  aria-checked={role === option.value}
+                  tabIndex={role === option.value ? 0 : -1}
+                  onKeyDown={radioKeys}
+                  onClick={() => setRole(option.value)}
                   className={cn(
-                    "flex-1 px-4 capitalize",
-                    choiceClass(role === option),
+                    "flex-1 px-4",
+                    choiceClass(role === option.value),
                   )}
                 >
-                  <RadioDot checked={role === option} />
-                  {option}
+                  <RadioDot checked={role === option.value} />
+                  {option.label}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <span className="block text-xs font-bold text-on-surface">
-              Expires
-            </span>
+            <span className={SETTINGS_LABEL}>Expires</span>
             <div
               role="radiogroup"
               aria-label="Expires"
               className="grid grid-cols-3 gap-2"
             >
-              {EXPIRY_PRESETS.map((preset) => (
+              {EXPIRY_PRESETS.map((preset, index) => (
                 <button
                   key={preset.days}
                   type="button"
                   role="radio"
                   aria-checked={expiresInDays === preset.days}
+                  tabIndex={radioTabIndex(
+                    expiresInDays === preset.days,
+                    index,
+                    EXPIRY_PRESETS.some((p) => p.days === expiresInDays),
+                  )}
+                  onKeyDown={radioKeys}
                   onClick={() => setExpiresInDays(preset.days)}
                   className={cn(
                     "px-3",
@@ -300,7 +309,6 @@ export const InvitationsView = () => {
 
   return (
     <AdminPage
-      lead="An invitation is a link you send. Contrack has no mail, so the link travels however you already talk to the person, and it works exactly once."
       actions={
         <AdminButton
           icon={<MailPlus className="w-4 h-4" />}
@@ -315,7 +323,11 @@ export const InvitationsView = () => {
         isError={isError}
         onRetry={() => void refetch()}
         isEmpty={!isLoading && !isError && sorted.length === 0}
-        empty="No invitations yet. Create one to add somebody without setting their password yourself."
+        empty={{
+          icon: MailPlus,
+          title: "No invitations yet",
+          body: "Create one to add someone without setting their password yourself.",
+        }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
             <span>For</span>

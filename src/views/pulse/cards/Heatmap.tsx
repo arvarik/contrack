@@ -231,7 +231,7 @@ export const Heatmap = ({
     <div ref={wrapperRef} className="relative flex flex-col gap-1.5 w-full">
       {/* The wrapper keeps its class for the phone test. The SVG scales, so
           it never scrolls. */}
-      <div className="overflow-x-auto nice-scrollbar">
+      <div className="overflow-x-auto">
         <div className="grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] gap-x-1.5 gap-y-1">
           <div aria-hidden="true" />
           <div

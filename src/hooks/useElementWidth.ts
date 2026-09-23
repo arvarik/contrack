@@ -14,22 +14,50 @@
  *
  * Returns null until there is an element to measure.
  */
-import { useLayoutEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 
-export function useElementWidth(element: HTMLElement | null): number | null {
-  const [width, setWidth] = useState<number | null>(null);
+/**
+ * Follow an element's width and keep only what `read` makes of it. React
+ * skips the render when `read` gives the value it already has.
+ */
+function useWidthReading<T>(
+  element: HTMLElement | null,
+  read: (width: number) => T,
+): T | null {
+  const [value, setValue] = useState<T | null>(null);
 
   useLayoutEffect(() => {
     if (!element) return;
-    setWidth(element.getBoundingClientRect().width);
+    setValue(read(element.getBoundingClientRect().width));
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[entries.length - 1];
-      if (entry) setWidth(entry.contentRect.width);
+      if (entry) setValue(read(entry.contentRect.width));
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [element]);
+  }, [element, read]);
 
-  return width;
+  return value;
+}
+
+const asIs = (width: number) => width;
+
+export function useElementWidth(element: HTMLElement | null): number | null {
+  return useWidthReading(element, asIs);
+}
+
+/**
+ * Whether the element is at least `min` px wide, or null before it is
+ * measured. It keeps the answer and not the width, so the component renders
+ * again only when the width crosses `min`. Dragging the Network list's edge
+ * resizes the contact's pane on every frame, and a kept width rendered the
+ * whole contact page again each time.
+ */
+export function useElementWidthAtLeast(
+  element: HTMLElement | null,
+  min: number,
+): boolean | null {
+  const atLeast = useCallback((width: number) => width >= min, [min]);
+  return useWidthReading(element, atLeast);
 }

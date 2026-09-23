@@ -15,11 +15,14 @@
  * knows how to save a file the server names, and the session cookie travels
  * with a navigation. Building a blob would mean holding a whole export in
  * memory to hand it to the same download the anchor performs.
+ *
+ * Each format is a tile that downloads its file as a whole, so it lifts on
+ * hover (`lift`, "Elevation" in `.agent/STYLE.md`).
  */
-import { Download, FileJson, FileSpreadsheet, Contact } from "lucide-react";
+import { FileJson, FileSpreadsheet, Contact } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { CARD, TONE_WASH } from "../../lib/styles";
+import { SETTINGS_CARD } from "./layout";
 
 const FORMATS: {
   href: string;
@@ -50,46 +53,30 @@ const FORMATS: {
   },
 ];
 
-export const ExportCard = ({ show = true }: { show?: boolean }) =>
-  !show ? null : (
-    <div className={cn(CARD, "p-4 sm:p-6")}>
-      <div className="flex items-start gap-3.5">
-        <span
-          className={cn(
-            "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
-            TONE_WASH.primary,
-          )}
-        >
-          <Download className="w-[18px] h-[18px]" />
-        </span>
-        <div className="min-w-0">
-          <h3 className="font-bold text-sm text-on-surface">
-            Export your contacts
-          </h3>
-          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-            Your data is yours. Every format below downloads only your own
-            contacts, never anyone else&rsquo;s on this instance.
-          </p>
-        </div>
-      </div>
+export const ExportCard = () => (
+  <div className={cn(SETTINGS_CARD, "space-y-4")}>
+    <p className="text-sm text-on-surface-variant text-pretty">
+      Your data is yours. Each file holds your own contacts only, never anyone
+      else&rsquo;s on this instance.
+    </p>
 
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
-        {FORMATS.map(({ href, icon: Icon, title, description }) => (
-          <a
-            key={href}
-            href={href}
-            download
-            className="state-layer flex flex-col gap-1.5 p-3 rounded-xl bg-surface-container-low transition-colors"
-          >
-            <span className="flex items-center gap-2 font-bold text-sm text-on-surface">
-              <Icon className="w-4 h-4 text-primary shrink-0" aria-hidden />
-              {title}
-            </span>
-            <span className="text-xs text-on-surface-variant text-pretty">
-              {description}
-            </span>
-          </a>
-        ))}
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {FORMATS.map(({ href, icon: Icon, title, description }) => (
+        <a
+          key={href}
+          href={href}
+          download
+          className="lift state-layer flex flex-col gap-1.5 p-3.5 rounded-xl bg-surface-container-low"
+        >
+          <span className="flex items-center gap-2 font-bold text-sm text-on-surface">
+            <Icon className="w-4 h-4 text-primary shrink-0" aria-hidden />
+            {title}
+          </span>
+          <span className="text-xs text-on-surface-variant text-pretty">
+            {description}
+          </span>
+        </a>
+      ))}
     </div>
-  );
+  </div>
+);

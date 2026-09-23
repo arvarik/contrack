@@ -176,7 +176,7 @@ export const InteractionDetailModal = ({
               </div>
 
               {/* Feed Content */}
-              <div className="p-6 sm:p-8 overflow-y-auto nice-scrollbar bg-surface-container-lowest relative flex flex-col gap-8">
+              <div className="p-6 sm:p-8 overflow-y-auto bg-surface-container-lowest relative flex flex-col gap-8">
                 {/* Content */}
                 <div>
                   <span className={cn(SECTION_HEADING, "mb-3 block")}>

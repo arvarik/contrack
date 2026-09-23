@@ -219,18 +219,6 @@ describe("useContactListFilters", () => {
     expect(result.current.sortBy).toBe("name");
     expect(result.current.sortDir).toBe("asc");
     expect(result.current.currentSort.label).toBe("A to Z");
-
-    act(() => {
-      result.current.setSort("date");
-    });
-    expect(result.current.sortBy).toBe("date");
-    expect(result.current.sortDir).toBe("desc");
-
-    act(() => {
-      result.current.setSort("name", "desc");
-    });
-    expect(result.current.sortBy).toBe("name");
-    expect(result.current.sortDir).toBe("desc");
   });
 
   it("persists sort choice across hook remounts within the same session", () => {

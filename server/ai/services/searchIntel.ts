@@ -427,6 +427,7 @@ export async function synthesizeSearchResults(
     name: string;
     role?: string;
     company?: string;
+    industry?: string;
     location?: string;
     aiReason?: string;
   }[],
@@ -478,13 +479,15 @@ export async function synthesizeSearchResults(
     return `No contacts matched "${query}". Try rephrasing or broadening the search.`;
   }
 
-  // Render contacts with location explicitly so the LLM can ground geographic
-  // claims against literal field values rather than vibes.
+  // Render industry and location as labelled fields so the LLM can ground
+  // an industry or a geographic claim against the literal value. The plan's
+  // requested filters below name industries, so the facts must carry them.
   const contactSummaries = contacts
     .map((c) => {
       const parts = [c.name];
       if (c.role) parts.push(c.role);
       if (c.company) parts.push(`at ${c.company}`);
+      if (c.industry) parts.push(`[industry: ${c.industry}]`);
       if (c.location) parts.push(`[location: ${c.location}]`);
       if (c.aiReason) parts.push(`— ${c.aiReason}`);
       return parts.join(", ");

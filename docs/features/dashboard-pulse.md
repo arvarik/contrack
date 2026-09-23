@@ -10,8 +10,6 @@ Access Pulse via the navigation bar or `Cmd+Shift+P`.
 
 The page opens with a masthead. The title "Pulse" is the `h1`, at the size of every page's title, and the day continues the line in a softer ink: "Pulse Tuesday, September 22" (30 px, 24 px on a phone, where the day takes its own line under the title and the buttons). Under it, one sentence says what the day holds: "2 overdue, 2 due today, 3 birthdays this week. 12 days in a row." Each count above zero is a button that jumps to its group in the queue on wide screens, and plain text on a phone. **Log note** is the one primary action. **More** opens a menu with **New contact** and **Customize layout**.
 
-Under the sentence, when AI is allowed for the account and there is a network to ask about, one field reads **Ask about your network**. It sends its question to the Ask page (`/search?q=`), where the People search runs it. The **Ask** button waits for three characters, the shortest question the search accepts. The form renders from 640 px up only: on a phone the tab bar has Ask Contrack one tap away, and the masthead must not push the queue off the first screen.
-
 On wide screens (1280 px and wider), Pulse organizes work into three columns, five, three and four twelfths wide:
 
 1. **Focus** (five columns): The ranked Up next queue and the Completed line.
@@ -20,7 +18,7 @@ On wide screens (1280 px and wider), Pulse organizes work into three columns, fi
 
 Between 1024 and 1279 px, Focus and Network share the first row, and the Intelligence cards run two across underneath. On phones and narrower viewports, Pulse stacks the cards in one column in the order Focus, Network, Intelligence. The masthead stays under 180 px before the first card, and nothing on the page scrolls sideways.
 
-Every card is a title and a body: no line between them, no icon, and the count in muted text after the title. A card with nothing to show renders as one line on the page surface instead of a framed box: Completed with nothing completed, Inbox with nothing to clean up, Coming up with nothing in two weeks, and Daily insight without a key. Rows on Inbox and Coming up sit on the wash with no border and are links.
+Every card is a title and a body: no line between them, no icon, and the count in muted text after the title. A card with nothing to show renders as one line on the page surface instead of a framed box: Completed with nothing completed, Inbox with nothing to clean up, Coming up with nothing in two weeks, and Daily insight without a key. Rows on Inbox and Coming up sit on the wash with no border and are links, and a row rises a pixel under the pointer.
 
 ---
 
@@ -106,7 +104,7 @@ The card absorbed the old Momentum card. Rising and cooling are the trend of the
 
 ### Daily Insight
 
-With an insight, the card is the paragraph at 15 px, the category as a quiet badge after the title, and one chip, **Ask about this insight**, which sends the insight's first sentence (cut at 120 characters) to the Ask page. Without one the card is a line that names the next step by role: an admin reads "Add an AI key to get one." with a link to the AI settings, a member reads "Your admin has not added an AI key yet.", and an account with AI off reads "AI is off for your account." with a link to the switch in Settings.
+With an insight, the card is the paragraph at 15 px, with the category on a quiet line over it. Without one the card is a line that names the next step by role: an admin reads "Add an AI key to get one." with a link to the AI settings, a member reads "Your admin has not added an AI key yet.", and an account with AI off reads "AI is off for your account." with a link to the switch in Settings.
 
 ### Inbox Card
 

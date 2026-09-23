@@ -56,12 +56,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
     }
   };
 
-  const layerLabel =
-    currentLayer === "heat"
-      ? "Heat"
-      : currentLayer === "health"
-        ? "Health"
-        : "Pins";
+  const layerLabel = currentLayer === "heat" ? "Heat" : "Pins";
 
   return (
     <Modal

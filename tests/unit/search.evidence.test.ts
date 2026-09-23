@@ -173,4 +173,17 @@ describe("AI search synthesis safety", () => {
     expect(prompt).toContain('<untrusted_data label="query">');
     expect(prompt).toContain('<untrusted_data label="requested filters">');
   });
+
+  it("gives the model each contact's industry, so an industry question is answered from the field", async () => {
+    vi.mocked(generateFor).mockResolvedValue({
+      text: "Alice works in software.",
+      latencyMs: 1,
+      model: "mock",
+    });
+    await synthesizeSearchResults(scope, "software people", [contact]);
+    const prompt = vi.mocked(generateFor).mock.calls.at(-1)![1].prompt;
+    expect(prompt).toContain(
+      "Alice, Engineer, [industry: Software], [location: Paris]",
+    );
+  });
 });

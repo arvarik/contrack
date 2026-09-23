@@ -7,14 +7,15 @@
  */
 import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { GripVertical, Plus, List, Users, ArrowLeft } from "lucide-react";
+import { GripVertical, Plus, List, Users, ChevronLeft } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLists, useReorderLists, useCreateList } from "../../api";
 
 import { ListIcon, CreateListModal } from "../contact-list/CreateListModal";
 import { ListDetailPanel } from "./ListDetailPanel";
 import { cn } from "../../lib/utils";
-import { PAGE_X, SELECTED_ROW } from "../../lib/styles";
+import { CARD, SELECTED_ROW } from "../../lib/styles";
+import { SETTINGS_BOX } from "../settings/layout";
 import { toast } from "sonner";
 import { activateOnKey } from "../../lib/a11y";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -84,24 +85,21 @@ export const ListManagerView = () => {
     <div className="h-full flex flex-col overflow-hidden">
       {/* The count and New list, on the pane's own surface. No band and no
           title of its own: the shell's header above already says "Lists".
-          While the pane is the whole page it takes the page's gutters, so it
-          lines up with the title. Beside an open list it is a narrow column
-          with its own. With no list yet the empty state says it and offers
-          New list, so this row said "0 lists" over a second New list. It
-          shows while the lists load, without its count, so the rows arrive
-          where the skeleton was instead of 68 px lower. */}
+          On a phone the pane is the page and takes its gutter, so it lines
+          up with the title. From `md` it is a card, and a row's text lines
+          up with this line's. With no list yet the empty state says it and
+          offers New list, so this row said "0 lists" over a second New list.
+          It shows while the lists load, without its count, so the rows
+          arrive where the skeleton was instead of 68 px lower. */}
       {(isLoading || lists.length > 0) && (
-        <div
-          className={cn(
-            "pt-5 pb-4 shrink-0 flex items-center gap-3",
-            selectedListId ? "px-4" : PAGE_X,
-          )}
-        >
+        <div className="pt-5 pb-4 px-4 md:px-5 shrink-0 flex items-center gap-3">
           <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
             {!isLoading && (
               <>
                 {lists.length} {lists.length === 1 ? "list" : "lists"}
-                {lists.length > 1 && " · drag to reorder"}
+                {/* Beside an open list the column is narrow, and the grips
+                    say it alone. */}
+                {lists.length > 1 && !selectedListId && " · drag to reorder"}
               </>
             )}
           </p>
@@ -118,12 +116,7 @@ export const ListManagerView = () => {
       )}
 
       {/* List rows */}
-      <div
-        className={cn(
-          "flex-1 overflow-y-auto py-3 space-y-1.5 nice-scrollbar",
-          selectedListId ? "px-3" : PAGE_X,
-        )}
-      >
+      <div className="flex-1 overflow-y-auto py-3 px-4 md:px-2 space-y-1.5">
         {isLoading ? (
           <div className="space-y-2 p-1">
             {[1, 2, 3].map((i) => (
@@ -250,38 +243,47 @@ export const ListManagerView = () => {
 
   return (
     <>
-      {/* ── DESKTOP layout: side-by-side ───────────────────────────────────── */}
-      <div className="hidden md:flex h-full overflow-hidden">
-        {/* Left panel — fixed width when detail open, full width otherwise */}
-        <div
-          className={cn(
-            "h-full flex flex-col overflow-hidden transition-all duration-(--dur-slow) bg-surface-container-lowest",
-            selectedListId ? "w-80 shrink-0" : "flex-1",
-          )}
-        >
-          {ListPanel}
-        </div>
+      {/* ── From md: the lists and the open list, two cards side by side in
+          the settings box, like every other settings page. The box sits in
+          a scrollbar's lane, as the shell's header does, so its edges line
+          up with the title's. ── */}
+      <div className="hidden md:block h-full overflow-hidden [scrollbar-gutter:stable]">
+        <div className={cn(SETTINGS_BOX, "flex gap-4 h-full pt-4 pb-10")}>
+          {/* The lists: the whole box, or a column beside the open list. */}
+          <div
+            className={cn(
+              CARD,
+              "p-0 h-full flex flex-col overflow-hidden transition-all duration-(--dur-slow)",
+              selectedListId ? "w-64 xl:w-80 shrink-0" : "flex-1 min-w-0",
+            )}
+          >
+            {ListPanel}
+          </div>
 
-        {/* Right detail panel */}
-        <AnimatePresence>
-          {selectedList && (
-            <motion.div
-              key={selectedList.id}
-              initial={{ opacity: 0, x: 32 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 32 }}
-              transition={{ type: "spring", stiffness: 380, damping: 32 }}
-              className="flex-1 h-full overflow-hidden bg-surface"
-            >
-              <ListDetailPanel
-                list={selectedList}
-                onClose={() => setSelectedListId(null)}
-                onDeleted={() => handleListDeleted(selectedList.id)}
-                onViewInNetwork={() => navigate(`/?list=${selectedList.id}`)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Right detail panel */}
+          <AnimatePresence>
+            {selectedList && (
+              <motion.div
+                key={selectedList.id}
+                initial={{ opacity: 0, x: 32 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 32 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                className={cn(
+                  CARD,
+                  "p-0 flex-1 min-w-0 h-full overflow-hidden",
+                )}
+              >
+                <ListDetailPanel
+                  list={selectedList}
+                  onClose={() => setSelectedListId(null)}
+                  onDeleted={() => handleListDeleted(selectedList.id)}
+                  onViewInNetwork={() => navigate(`/?list=${selectedList.id}`)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* ── MOBILE layout: full-screen stack ──────────────────────────────── */}
@@ -307,16 +309,19 @@ export const ListManagerView = () => {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="absolute inset-0 bg-surface"
+              className="absolute inset-0 bg-surface-container-lowest"
             >
               {/* Mobile back button row */}
               <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedListId(null)}
+                  aria-label="Back to all lists"
                   className="hit-area state-layer flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  {/* The chevron of every back link, "‹ Settings" above it
+                      included. */}
+                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                   All lists
                 </button>
               </div>

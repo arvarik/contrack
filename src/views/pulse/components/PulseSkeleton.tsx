@@ -69,10 +69,10 @@ const TYPICAL_INSIGHT =
   "Most of the people you added this month have no follow-up yet, and your time goes to the same few names while three of your strongest ties, all founders you met at the spring summit, have been quiet for more than two months. A short note to each of them this week would keep those ties warm before they fade.";
 
 /**
- * The body of the insight card before its words arrive: the category, the
- * paragraph and the Ask chip, in the loaded card's own layout and type, as
- * bars. The skeleton and the card's loading state draw it, so the card lands
- * at about the height it will have.
+ * The body of the insight card before its words arrive: the category and the
+ * paragraph, in the loaded card's own layout and type, as bars. The skeleton
+ * and the card's loading state draw it, so the card lands at about the
+ * height it will have.
  *
  * @param text the insight's words once they are back, for the exact height.
  */
@@ -81,24 +81,13 @@ export const InsightPlaceholder = ({
 }: {
   text?: string;
 }) => (
-  <div className="flex flex-col gap-4">
-    <div className="flex flex-col gap-1.5">
-      <p className={PULSE_TYPE.meta}>
-        <SkeletonWords>Relationship maintenance</SkeletonWords>
-      </p>
-      <p className={cn(PULSE_TYPE.insight, "text-pretty")}>
-        <SkeletonWords>{text}</SkeletonWords>
-      </p>
-    </div>
-    <div>
-      <span
-        aria-hidden="true"
-        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-transparent select-none bg-surface-container-highest/60 animate-pulse"
-      >
-        <span className="w-3.5 h-3.5" />
-        Ask about this insight
-      </span>
-    </div>
+  <div className="flex flex-col gap-1.5">
+    <p className={PULSE_TYPE.meta}>
+      <SkeletonWords>Relationship maintenance</SkeletonWords>
+    </p>
+    <p className={cn(PULSE_TYPE.insight, "text-pretty")}>
+      <SkeletonWords>{text}</SkeletonWords>
+    </p>
   </div>
 );
 
@@ -108,19 +97,12 @@ export const InsightPlaceholder = ({
  * route fallback's masthead, so the header and the columns land once at
  * every width.
  *
- * @param ask whether the masthead will hold the Ask form: AI is allowed.
  * @param insight what the page knows of the day's insight: its words once
  *   they are back, `null` when there is none to draw (AI is off, or it came
  *   back empty), and nothing while it is on its way. With AI on an insight
  *   is the likely answer, so only `null` draws the line.
  */
-export const PulseSkeleton = ({
-  ask = true,
-  insight,
-}: {
-  ask?: boolean;
-  insight?: string | null;
-}) => {
+export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
   return (
     <div
       aria-busy="true"
@@ -131,7 +113,7 @@ export const PulseSkeleton = ({
         PAGE_TOP,
       )}
     >
-      <PulseHeaderSkeleton ask={ask} />
+      <PulseHeaderSkeleton />
 
       {/* 3-Column Grid Skeleton */}
       <div className={GRID_CLASSES}>

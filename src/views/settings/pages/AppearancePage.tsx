@@ -1,7 +1,7 @@
 /**
  * AppearancePage — How Contrack looks on this account.
  *
- * Theme, accent colour, and list density.
+ * Theme, accent colour, text size, motion, the corvid, and list density.
  */
 import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
@@ -10,9 +10,7 @@ import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { Segmented } from "../../../components/ui/Segmented";
 import { AccentPicker } from "../../../components/ui/AccentPicker";
 import { SettingRow } from "../SettingRow";
-import { SETTINGS_PAGE } from "../layout";
-import { CARD } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 
 /** The OS switch. It wins over both rows below, so both rows say so. */
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
@@ -28,14 +26,8 @@ export const AppearancePage = () => {
   const motionIsReduced = osReducesMotion || preferences.motion === "reduced";
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          How Contrack looks on this account.
-        </p>
-      </div>
-
-      <div className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}>
+    <div className={SETTINGS_PAGE}>
+      <div className={SETTINGS_CARD}>
         <SettingRow
           id="theme"
           title="Theme"
@@ -62,7 +54,7 @@ export const AppearancePage = () => {
           id="accent"
           title="Accent colour"
           prefKey="accent"
-          description="The colour of links, buttons, and anything the app wants you to notice. Every shade is adjusted until it is readable on both palettes."
+          description="The colour of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark."
         >
           <AccentPicker
             value={preferences.accent}
@@ -77,8 +69,8 @@ export const AppearancePage = () => {
           prefKey="textScale"
           description={
             preferences.textScale === "large"
-              ? "Large (17 px root) for easier reading across the app."
-              : "Default (16 px root font size)."
+              ? "One step larger everywhere, for easier reading."
+              : "The standard size."
           }
         >
           <Segmented
@@ -98,8 +90,8 @@ export const AppearancePage = () => {
           prefKey="motion"
           description={
             preferences.motion === "reduced"
-              ? "Minimizes animations and transitions across the app."
-              : "Follows your operating system's reduced motion setting."
+              ? "Keeps animation to a minimum across the app."
+              : "Follows this device's reduced motion setting."
           }
         >
           <Segmented
@@ -149,8 +141,8 @@ export const AppearancePage = () => {
           prefKey="listDensity"
           description={
             density === "compact"
-              ? "Compact — more contacts per screen, same details."
-              : "Comfortable — roomier rows, easier to scan."
+              ? "More contacts on a screen, with the same details."
+              : "Roomier rows that are easier to scan."
           }
         >
           <Segmented

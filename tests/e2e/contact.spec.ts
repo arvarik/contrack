@@ -378,6 +378,83 @@ test.describe("the Network header and start panel", () => {
 });
 
 /**
+ * The list's edge.
+ *
+ * From `lg` the list and the contact share the screen, and the seam between
+ * them is a separator. A drag or the arrow keys set the list's width between
+ * 300 and 480 px, and the width outlasts a reload on this device. A narrow
+ * window holds the list in so the contact keeps 560 px, and a wider one
+ * gives the chosen width back.
+ */
+test.describe("the list's width", () => {
+  const edge = (page: Page) =>
+    page.getByRole("separator", { name: "Resize the contact list" });
+  const width = (page: Page, selector: string) =>
+    page
+      .locator(selector)
+      .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+
+  test("a drag and the arrow keys resize the list, and a reload keeps the width", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+    await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "350");
+    await expect(edge(page)).toHaveAttribute("aria-orientation", "vertical");
+
+    const seam = (await edge(page).boundingBox())!;
+    const x = seam.x + seam.width / 2;
+    await page.mouse.move(x, 400);
+    await page.mouse.down();
+    await page.mouse.move(x + 60, 400, { steps: 6 });
+    await page.mouse.up();
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "410");
+    await expect.poll(() => width(page, '[data-pane="list"]')).toBe(410);
+
+    await edge(page).focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "394");
+    await page.keyboard.press("End");
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "480");
+
+    await page.reload();
+    await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "480");
+    await expect.poll(() => width(page, '[data-pane="list"]')).toBe(480);
+
+    // A double click puts the default back.
+    const moved = (await edge(page).boundingBox())!;
+    await page.mouse.dblclick(moved.x + moved.width / 2, 400);
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "350");
+  });
+
+  test("a narrow window holds the list in so the contact keeps 560 px", async ({
+    page,
+    seed,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+    await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
+    await edge(page).focus();
+    await page.keyboard.press("End");
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "480");
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(edge(page)).toHaveAttribute("aria-valuemax", "400");
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "400");
+    await expect.poll(() => width(page, "#main-content")).toBe(560);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(edge(page)).toHaveAttribute("aria-valuenow", "480");
+
+    // Below `lg` the list and the contact take turns, and there is no edge.
+    await page.setViewportSize({ width: 800, height: 900 });
+    await expect(edge(page)).toBeHidden();
+  });
+});
+
+/**
  * The header's menu.
  *
  * The header used to show a palette icon and an archive icon at the same rank
@@ -921,6 +998,11 @@ test.describe("the composer", () => {
     });
     await expect(picker).toBeFocused();
     await picker.fill("Zach Dia");
+    // Enter picks the highlighted match, so wait for the match: on a slow
+    // machine the contacts can still be loading when the name is typed.
+    await expect(
+      dialog.getByRole("option", { name: /Zach Dialog/ }),
+    ).toBeVisible();
     await page.keyboard.press("Enter");
 
     const editor = dialog.getByRole("textbox", { name: "Note" });

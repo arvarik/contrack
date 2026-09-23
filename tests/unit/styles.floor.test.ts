@@ -397,6 +397,45 @@ describe("the one look", () => {
     expect(css).not.toMatch(/box-shadow:\s*inset\s+\d+px\s+0\s+0/);
   });
 
+  it("lifts only through the two lift classes", () => {
+    // A tile rises with `lift`, a card with `card-interactive` (STYLE.md,
+    // "Elevation"). A hand-rolled translate or shadow on hover is a third
+    // recipe. A map pin hops, the one exception: it is a marker on a map,
+    // not a surface on the page.
+    const handRolled = /(?<![-\w])hover:(?:-translate-y-|shadow-)/;
+    const pins = /(?:^|\/)views\/map\/(?:Contact|Cluster)Marker\.tsx$/;
+    const offenders = everyClassString()
+      .filter(({ file, text }) => !pins.test(file) && handRolled.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("lets a lift carry its own transition", () => {
+    // `lift` transitions its transform and shadow. A `transition-*` class
+    // beside it replaces that list, and the rise snaps.
+    const offenders = everyClassString()
+      .filter(
+        ({ text }) =>
+          /(?<![-\w])lift(?![-\w])/.test(text) &&
+          /(?<![-\w])transition(?:-[a-z]+)?(?![-\w])/.test(text),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("names translate, not transform, in a transition list", () => {
+    // Tailwind's `translate-*`, `scale-*` and `rotate-*` set the `translate`,
+    // `scale` and `rotate` properties, not `transform`. A list that names
+    // `transform` animates none of them: the side panel faded in place and
+    // the switch's knob jumped. `transition-transform` names all four.
+    const offenders = everyClassString()
+      .filter(({ text }) =>
+        /(?<![-\w])transition-\[[^\]]*\btransform\b/.test(text),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   it("times transitions with the motion tokens, not a hand-picked duration", () => {
     // The base duration applies to every `transition-*` with no class, and
     // `duration-(--dur-fast)` or `duration-(--dur-slow)` name the other two.

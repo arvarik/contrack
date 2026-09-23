@@ -121,32 +121,46 @@ test.describe("map features - filters and place search", () => {
     );
   });
 
-  test("at-risk stats chip applies score:<40 and shows pill", async ({
+  test("the overdue count filters the map to the overdue, and back", async ({
     page,
+    instance,
+    seed,
   }) => {
-    await page.goto("/map");
-    const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
-
-    // The at-risk chip is in the stats strip
-    const statsStrip = page.getByRole("region", {
-      name: "Map viewport statistics",
+    // No facet filters by follow-up, so overdue is a filter of its own on
+    // the bottom line. Linus's follow-up is three days late for this test.
+    const linus = seed.byName("Linus Torvalds");
+    const late = new Date(Date.now() - 3 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await instance.api("PATCH", `/contacts/${linus.id}`, {
+      nextFollowUpAt: late,
     });
-    const atRiskChip = statsStrip.getByRole("button", { name: /at risk/i });
-    await expect(atRiskChip).toBeVisible();
-    await atRiskChip.click();
+    try {
+      await page.goto("/map");
+      const map = page.getByRole("region", { name: "Contact map" });
+      const overdue = page
+        .getByRole("region", { name: "In view" })
+        .getByRole("button", { name: /overdue$/ });
+      await expect(overdue).toHaveAttribute("aria-pressed", "false");
 
-    // Filter pill appears for score:<40
-    const scorePill = page.getByRole("button", { name: /score.*40/i });
-    await expect(scorePill).toBeVisible();
+      await overdue.click();
+      await expect(overdue).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        map.getByRole("button", { name: "Linus Torvalds, Linux Foundation" }),
+      ).toBeVisible();
+      await expect(
+        map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toHaveCount(0);
 
-    // Map now shows only the at-risk contact (Edsger Dijkstra)
-    await expect(
-      map.getByRole("button", { name: "Edsger Dijkstra, UT Austin" }),
-    ).toBeVisible();
-    await expect(
-      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
-    ).toHaveCount(0);
+      await overdue.click();
+      await expect(
+        map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toBeVisible();
+    } finally {
+      await instance.api("PATCH", `/contacts/${linus.id}`, {
+        nextFollowUpAt: null,
+      });
+    }
   });
 
   test("pane toggle with i persists across reload", async ({ page }) => {
@@ -154,21 +168,26 @@ test.describe("map features - filters and place search", () => {
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
 
-    const pane = page.getByRole("complementary", { name: "Map insights" });
-    await expect(pane).toBeVisible();
+    // The rail's icon says whether the panel is open. A closed panel stays
+    // in the page, inert, so it is not a count of zero.
+    const icon = page.getByRole("button", {
+      name: "Map insights",
+      exact: true,
+    });
+    await expect(icon).toHaveAttribute("aria-expanded", "true");
 
     // Press "i" to close
     await page.keyboard.press("i");
-    await expect(pane).toHaveCount(0);
+    await expect(icon).toHaveAttribute("aria-expanded", "false");
 
     // Reload and verify pane remains closed
     await page.reload();
     await expect(map).toBeVisible();
-    await expect(pane).toHaveCount(0);
+    await expect(icon).toHaveAttribute("aria-expanded", "false");
 
     // Press "i" to reopen
     await page.keyboard.press("i");
-    await expect(pane).toBeVisible();
+    await expect(icon).toHaveAttribute("aria-expanded", "true");
   });
 
   test("is accessible on desktop with toolbar and insights pane open", async ({
@@ -178,8 +197,8 @@ test.describe("map features - filters and place search", () => {
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
     await expect(
-      page.getByRole("complementary", { name: "Map insights" }),
-    ).toBeVisible();
+      page.getByRole("button", { name: "Map insights", exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
     await expectPageAccessible(page, testInfo, "map-toolbar-desktop");
   });
 
@@ -194,14 +213,14 @@ test.describe("map features - filters and place search", () => {
 
     // Zoom into the East Coast cluster (3 contacts) to reveal Margaret and the 2-contact Virginia cluster
     const cluster3 = page.getByRole("button", {
-      name: "3 contacts, 0 at risk, zoom in",
+      name: "3 contacts, zoom in",
     });
     await expect(cluster3).toBeVisible();
     await cluster3.click();
 
     // Zoom into the 2-contact Virginia cluster to split Grace Hopper and Katherine Johnson
     const cluster2 = page.getByRole("button", {
-      name: "2 contacts, 0 at risk, zoom in",
+      name: "2 contacts, zoom in",
     });
     await expect(cluster2).toBeVisible();
     await cluster2.click();
@@ -379,62 +398,41 @@ test.describe("map features - filters and place search", () => {
     await expectPageAccessible(page, testInfo, "map-followup-modal");
   });
 
-  test("layer Health shows the legend and ?layer=health reloads with it on", async ({
+  test("switches to Heat across a reload, and opens an old Health link on Pins", async ({
     page,
   }) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
+    const line = page.getByRole("region", { name: "In view" });
+    await expect(line).not.toContainText("Fewer");
+    // Two layers. Health went in v2.
+    await expect(page.getByRole("radio", { name: "Health" })).toHaveCount(0);
 
-    // Health legend is not visible initially
-    await expect(
-      page.getByRole("group", { name: "Health legend" }),
-    ).toHaveCount(0);
+    await page.getByRole("radio", { name: "Heat" }).click();
+    await expect(page).toHaveURL(/layer=heat/);
+    await expect(line).toContainText("FewerMore");
 
-    // Switch to Health layer
-    const healthRadio = page.getByRole("radio", { name: "Health" });
-    await expect(healthRadio).toBeVisible();
-    await healthRadio.click();
-
-    // Health legend is now visible
-    const legend = page.getByRole("group", { name: "Health legend" });
-    await expect(legend).toBeVisible();
-    await expect(legend.getByText("Strong")).toBeVisible();
-    await expect(legend.getByText("Fading")).toBeVisible();
-    await expect(legend.getByText("At risk")).toBeVisible();
-    // The fourth swatch: a pin with no score takes the neutral ring.
-    await expect(legend.getByText("Not tracked")).toBeVisible();
-    // It sits over the stats strip at the left. At the bottom right it was
-    // under the insights pane, which is open at this width.
-    const legendBox = await legend.boundingBox();
-    const paneBox = await page
-      .getByRole("complementary", { name: "Map insights" })
-      .boundingBox();
-    const stripBox = await page
-      .getByRole("region", { name: "Map viewport statistics" })
-      .boundingBox();
-    expect(legendBox!.x + legendBox!.width).toBeLessThanOrEqual(paneBox!.x);
-    expect(legendBox!.y + legendBox!.height).toBeLessThanOrEqual(stripBox!.y);
-
-    // URL contains ?layer=health
-    await expect(page).toHaveURL(/layer=health/);
-
-    // Reloading preserves the health layer and legend
     await page.reload();
-    await expect(map).toBeVisible();
-    await expect(
-      page.getByRole("group", { name: "Health legend" }),
-    ).toBeVisible();
-    await expect(page).toHaveURL(/layer=health/);
+    await expect(page.getByRole("radio", { name: "Heat" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(line).toContainText("FewerMore");
 
-    // Switch back to Pins
-    const pinsRadio = page.getByRole("radio", { name: "Pins" });
-    await expect(pinsRadio).toBeVisible();
-    await pinsRadio.click();
-    await expect(
-      page.getByRole("group", { name: "Health legend" }),
-    ).toHaveCount(0);
+    await page.getByRole("radio", { name: "Pins" }).click();
     await expect(page).not.toHaveURL(/layer=/);
+    await expect(line).not.toContainText("Fewer");
+
+    // A link from before v2 opens on Pins, and nothing fails to load.
+    await page.goto("/map?layer=health");
+    await expect(page.getByRole("radio", { name: "Pins" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
   });
 
   test("saves a view named Virginia, reloads, and choosing it restores filter and updates URL", async ({

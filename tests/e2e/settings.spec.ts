@@ -19,7 +19,7 @@ import type { ContrackInstance } from "./fixtures/instance";
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
 test.describe("Settings — Desktop", () => {
-  test("shows 240px navigation rail and active page with 'Back to Network'", async ({
+  test("shows the 240px rail, no back link, and the active page", async ({
     page,
   }) => {
     await page.goto("/settings");
@@ -31,12 +31,9 @@ test.describe("Settings — Desktop", () => {
     expect(box).not.toBeNull();
     expect(Math.abs(box!.width - 240)).toBeLessThan(2);
 
-    // On wide screens, the header's back link goes to "/" and is named
-    // "Back to Network", so it is not a second bare "Network" beside the
-    // sidebar's.
-    const backLink = page.getByRole("link", { name: "Back to Network" });
-    await expect(backLink).toBeVisible();
-    await expect(backLink).toHaveAttribute("href", "/");
+    // From lg the rail and the sidebar are on screen, so no page draws a
+    // back link above its title.
+    await expect(page.getByRole("link", { name: /^Back to/ })).toHaveCount(0);
 
     // Clicking Appearance navigates and marks aria-current="page"
     const appearanceLink = rail.getByRole("link", { name: "Appearance" });
@@ -44,9 +41,45 @@ test.describe("Settings — Desktop", () => {
     await expect(page).toHaveURL(/\/settings\/appearance/);
     await expect(appearanceLink).toHaveAttribute("aria-current", "page");
 
-    // Heading for Appearance is rendered
+    // Heading for Appearance is rendered, with the page's one line under it,
+    // and still no back link.
+    const heading = page.getByRole("heading", { name: "Appearance", level: 1 });
+    await expect(heading).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Appearance", level: 1 }),
+      page.getByText("How Contrack looks on this account."),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Back to/ })).toHaveCount(0);
+
+    // Every page's title starts at the same height: a settings page's and
+    // Pulse's.
+    const settingsTop = (await heading.boundingBox())!.y;
+    await page.goto("/pulse");
+    const pulseTop = (await page
+      .getByRole("heading", { level: 1, name: "Pulse" })
+      .boundingBox())!.y;
+    expect(Math.abs(settingsTop - pulseTop)).toBeLessThan(1);
+  });
+
+  test("one rail row is lit: Correspondents does not light Connectors", async ({
+    page,
+  }) => {
+    await page.goto("/settings/connectors/people");
+    const rail = page.getByRole("navigation", { name: "Settings" });
+    await expect(rail.locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(
+      rail.getByRole("link", { name: "Correspondents" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("a page's actions sit in its header, beside the title", async ({
+    page,
+  }) => {
+    await page.goto("/settings/admin/backups");
+    const header = page.locator("header").filter({
+      has: page.getByRole("heading", { level: 1, name: "Backups" }),
+    });
+    await expect(
+      header.getByRole("button", { name: "Snapshot now" }),
     ).toBeVisible();
   });
 
@@ -97,11 +130,12 @@ test.describe("Settings — Desktop", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/settings\/network#temp-unit/);
 
-    // Row is focused and flashed
+    // Row is focused and flashed: the selected tint, with no ring
     const tempUnitRow = page.locator("#temp-unit");
     await expect(tempUnitRow).toBeVisible();
     await expect(tempUnitRow).toBeFocused();
-    await expect(tempUnitRow).toHaveClass(/ring-2/);
+    await expect(tempUnitRow).toHaveClass(/flash/);
+    await expect(tempUnitRow).not.toHaveClass(/ring-2/);
   });
 
   test("SettingRow shows modified dot and reset button when preference is stored", async ({
@@ -156,9 +190,34 @@ test.describe("Settings — Desktop", () => {
 test.describe("Settings — Phone", () => {
   test.use({ ...PHONE });
 
+  /**
+   * Every value `data-settings-slide` takes on the root, in order. An init
+   * script runs before the document has its root element, so the watch
+   * starts once it has one, and `__slides` is an empty list from then on.
+   */
+  const recordSlides = () => {
+    const watch = () => {
+      const seen: string[] = [];
+      (window as { __slides?: string[] }).__slides = seen;
+      new MutationObserver(() => {
+        const value = document.documentElement.dataset.settingsSlide;
+        if (value) seen.push(value);
+      }).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-settings-slide"],
+      });
+    };
+    if (document.documentElement) watch();
+    else document.addEventListener("DOMContentLoaded", watch, { once: true });
+  };
+
   test("renders list on phone, opens page with back link, back returns to list", async ({
     page,
   }) => {
+    // The suite reduces motion for every test, and a reduced-motion page
+    // does not slide. This one checks the slide, so it asks for motion.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.addInitScript(recordSlides);
     await page.goto("/settings");
 
     // Heading for Settings is visible
@@ -183,10 +242,43 @@ test.describe("Settings — Phone", () => {
     // On subpages, the back link is visible and labeled "Back to Settings"
     const subpageBack = page.getByRole("link", { name: "Back to Settings" });
     await expect(subpageBack).toBeVisible();
+    await expect(subpageBack).toHaveAttribute("href", "/settings");
 
     // Follow it back to the list
     await subpageBack.click();
     await expect(page).toHaveURL(/\/settings$/);
+
+    // The page slid in, and slid back out: the root said which way each
+    // time, and says nothing once the slide is over.
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as { __slides?: string[] }).__slides),
+      )
+      .toEqual(["forward", "back"]);
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.dataset.settingsSlide),
+      )
+      .toBeUndefined();
+  });
+
+  test("reduced motion opens a page at once, with no slide", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addInitScript(recordSlides);
+    await page.goto("/settings");
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: /Appearance/ })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/appearance/);
+    await page.getByRole("link", { name: "Back to Settings" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    // The watch ran, and saw no slide.
+    expect(
+      await page.evaluate(() => (window as { __slides?: string[] }).__slides),
+    ).toEqual([]);
   });
 });
 

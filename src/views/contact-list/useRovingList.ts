@@ -77,8 +77,6 @@ export interface RovingItemProps {
 }
 
 export interface RovingList {
-  /** The row that owns the Tab stop, or -1 for an empty list. */
-  activeIndex: number;
   /** Move the Tab stop to a row, scroll it into view and focus it. */
   focusIndex: (index: number) => void;
   /** Spread on each row. */
@@ -261,7 +259,6 @@ export function useRovingList(options: RovingListOptions): RovingList {
     activeIndex >= 0 && isRendered !== undefined && !isRendered(activeIndex);
 
   return {
-    activeIndex,
     focusIndex,
     getItemProps,
     containerProps: {

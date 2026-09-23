@@ -8,7 +8,7 @@
  *    Uses `useDeferredValue` so the expensive scoring pass never blocks the input.
  * 2. **List filter** — URL-persisted via `?list=` param. The value `tracked`
  *    is not a list: it keeps the contacts a person tracks (the Tracked chip).
- * 3. **Sort** — Client-only state cycling through name↑ → name↓ → date↓ → date↑.
+ * 3. **Sort** — One of the sort menu's four choices, kept for the session.
  *
  * @returns Filtered, sorted contacts + all state setters for the UI to wire up.
  */
@@ -220,15 +220,6 @@ export function useContactListFilters(contacts: Contact[]) {
     setSortDir(choice.dir);
   }, []);
 
-  const setSort = useCallback((field: SortField, dir?: SortDir) => {
-    userHasChangedSort.current = true;
-    const resolvedDir = dir ?? (field === "name" ? "asc" : "desc");
-    const choice = getSortChoice(field, resolvedDir);
-    saveSessionSort(choice.id);
-    setSortBy(field);
-    setSortDir(resolvedDir);
-  }, []);
-
   // ── Filtered + sorted contacts ────────────────────────────────────────
   const filteredContacts = useMemo(() => {
     let result = contacts.filter(
@@ -298,7 +289,6 @@ export function useContactListFilters(contacts: Contact[]) {
     sortBy,
     sortDir,
     currentSort: getSortChoice(sortBy, sortDir),
-    setSort,
     setSortOption,
     // Results
     filteredContacts,

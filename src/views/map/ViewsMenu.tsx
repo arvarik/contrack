@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { MapView } from "../../api/mapViews";
 import { cn } from "../../lib/utils";
+import { focusOnPointer } from "../../lib/a11y";
 import {
   MENU_HEADING,
   MENU_ICON,
@@ -135,7 +136,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
             Saved views
           </div>
 
-          <div className="max-h-60 overflow-y-auto nice-scrollbar">
+          <div className="max-h-60 overflow-y-auto">
             {views.length === 0 ? (
               <div className="px-2.5 py-2 text-sm text-on-surface-variant">
                 No saved views yet
@@ -154,6 +155,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                     <button
                       type="button"
                       role="menuitem"
+                      onPointerMove={focusOnPointer}
                       onClick={() => {
                         onSelectView(view);
                         setIsOpen(false);
@@ -185,6 +187,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                       <button
                         type="button"
                         role="menuitem"
+                        onPointerMove={focusOnPointer}
                         tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -200,6 +203,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                       <button
                         type="button"
                         role="menuitem"
+                        onPointerMove={focusOnPointer}
                         tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -223,6 +227,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
           <button
             type="button"
             role="menuitem"
+            onPointerMove={focusOnPointer}
             onClick={() => {
               setIsOpen(false);
               onOpenSaveModal();

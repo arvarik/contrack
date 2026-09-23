@@ -1,9 +1,27 @@
 import crypto from "crypto";
+import { z } from "zod";
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 
-export type MapLayer = "pins" | "heat" | "health";
+const MAP_LAYERS = ["pins", "heat"] as const;
+export type MapLayer = (typeof MAP_LAYERS)[number];
+
+/**
+ * A view's layer. Health was a third layer until v2: a view saved with it,
+ * and a save from a page loaded before v2, open on Pins rather than fail.
+ */
+const layerSchema = z.preprocess(
+  (value) => (value === "health" ? "pins" : value),
+  z.enum(MAP_LAYERS),
+);
+
+function readLayer(value: unknown): MapLayer {
+  const parsed = layerSchema.safeParse(value);
+  if (!parsed.success) throw new ValidationError("Layer must be pins or heat");
+  return parsed.data;
+}
+
 export type MapBounds = [
   west: number,
   south: number,
@@ -16,7 +34,8 @@ export interface MapViewRow {
   ownerId: string;
   name: string;
   query: string;
-  layer: MapLayer;
+  /** As stored, which may be a layer this version no longer draws. */
+  layer: string;
   bounds: string;
   sortOrder: number;
   createdAt: string;
@@ -76,7 +95,7 @@ function parseRow(row: MapViewRow): MapView {
     id: row.id,
     name: row.name,
     query: row.query,
-    layer: row.layer,
+    layer: layerSchema.safeParse(row.layer).data ?? "pins",
     bounds,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt,
@@ -132,10 +151,7 @@ export const mapViewService = {
       throw new ValidationError("Query cannot exceed 200 characters");
     }
 
-    const layer = (input.layer ?? "pins") as MapLayer;
-    if (!["pins", "heat", "health"].includes(layer)) {
-      throw new ValidationError("Layer must be pins, heat, or health");
-    }
+    const layer = readLayer(input.layer ?? "pins");
 
     validateBounds(input.bounds);
 
@@ -194,12 +210,8 @@ export const mapViewService = {
     }
 
     if (patch.layer !== undefined) {
-      const layer = patch.layer as MapLayer;
-      if (!["pins", "heat", "health"].includes(layer)) {
-        throw new ValidationError("Layer must be pins, heat, or health");
-      }
       updates.push("layer = ?");
-      values.push(layer);
+      values.push(readLayer(patch.layer));
     }
 
     if (patch.bounds !== undefined) {

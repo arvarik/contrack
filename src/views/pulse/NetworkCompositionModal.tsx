@@ -1,4 +1,3 @@
-import React from "react";
 import { X, PieChart, MapPin, Briefcase } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";

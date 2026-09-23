@@ -2,8 +2,8 @@
  * CardFrame: a title and a body, in one of two shapes.
  *
  * `card` is the section every Pulse card sits in: the card surface, a header
- * row with the `h2`, the muted count after it, a badge and a header action,
- * and the body under it. There is no line between the header and the body.
+ * row with the `h2`, the muted count after it and a header action, and the
+ * body under it. There is no line between the header and the body.
  * The header used to draw a hairline and an icon, and with nine cards that
  * read as nine identical kits. A card is a title and a body.
  *
@@ -35,14 +35,11 @@ import {
 export type CardFrameVariant = "card" | "line";
 
 export interface CardFrameProps {
-  id?: string;
   cardId?: string;
   title: string;
   count?: number;
-  badge?: React.ReactNode;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
-  className?: string;
   /** `card` (default) is the framed section. `line` is one row on the page surface. */
   variant?: CardFrameVariant;
 }
@@ -172,18 +169,15 @@ const CustomizeControls = ({
 };
 
 export const CardFrame = ({
-  id,
   cardId,
   title,
   count,
-  badge,
   headerAction,
   children,
-  className,
   variant = "card",
 }: CardFrameProps) => {
   const customize = useCardCustomize();
-  const headingId = id || (cardId ? `card-heading-${cardId}` : undefined);
+  const headingId = cardId ? `card-heading-${cardId}` : undefined;
 
   // Check if customize mode is active for this card
   const isCustomizing = customize.isEditing && Boolean(cardId);
@@ -210,11 +204,9 @@ export const CardFrame = ({
           // edge as the titles of the cards above and below it.
           "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-all",
           isCustomizing && "ring-1 ring-primary/20",
-          className,
         )}
       >
         {heading}
-        {badge}
         {/* In customize mode the words after the title step aside and keep
             their place, and the controls sit over the end of the title's
             row, so the line keeps its height. In the flow the controls
@@ -258,7 +250,6 @@ export const CardFrame = ({
         CARD,
         "p-0 flex flex-col relative overflow-hidden transition-all",
         isCustomizing && "ring-1 ring-primary/20",
-        className,
       )}
     >
       {/* The header's 16 px under the title is the one gap between header
@@ -269,10 +260,7 @@ export const CardFrame = ({
         {/* The header's row is 24 px on every card, the height of a header
             action such as Manage, so a card with an action and a card
             without one have the same header. */}
-        <div className="flex items-center gap-2.5 min-w-0 min-h-6">
-          {heading}
-          {badge}
-        </div>
+        <div className="flex items-center min-w-0 min-h-6">{heading}</div>
 
         {isCustomizing && cardId ? (
           <CustomizeControls

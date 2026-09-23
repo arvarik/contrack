@@ -239,7 +239,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         {/* Privacy line */}
-        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant border border-surface-container-high/40 leading-relaxed">
+        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Headers only by default (From, To, Cc,
             Date, Subject). Bodies are read only to generate summaries for
@@ -363,7 +363,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
               )}
             </button>
           </div>
-          <p className="text-[11px] text-on-surface-variant mt-1">
+          <p className="text-xs text-on-surface-variant mt-1">
             Generate an app-specific password in your mail provider settings
             (Gmail, iCloud, Fastmail, etc.).
           </p>
@@ -385,7 +385,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             placeholder="INBOX, Sent"
             className={FORM_INPUT}
           />
-          <p className="text-[11px] text-on-surface-variant mt-1">
+          <p className="text-xs text-on-surface-variant mt-1">
             Comma-separated list of mailboxes to scan (e.g. INBOX, Sent).
           </p>
         </div>
@@ -406,7 +406,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             placeholder="alias@company.com, old@example.org"
             className={FORM_INPUT}
           />
-          <p className="text-[11px] text-on-surface-variant mt-1">
+          <p className="text-xs text-on-surface-variant mt-1">
             Outgoing mail from these aliases will be counted as sent by you.
           </p>
         </div>
@@ -432,10 +432,10 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         {/* Lookback period */}
         <div>
           <span className="block text-xs font-semibold text-on-surface mb-1">
-            First-run lookback
+            First sync goes back
           </span>
           <Segmented<number>
-            label="First-run lookback"
+            label="First sync goes back"
             value={lookbackDays}
             onChange={setLookbackDays}
             options={[
@@ -447,12 +447,12 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         </div>
 
         {/* Rollup toggle */}
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container border border-surface-container-high/40">
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
           <div>
             <span className="text-xs font-semibold text-on-surface block">
               Roll up emails per contact per day
             </span>
-            <span className="text-[11px] text-on-surface-variant block mt-0.5">
+            <span className="text-xs text-on-surface-variant block mt-0.5">
               Consolidates multiple daily emails with the same person into one
               timeline entry.
             </span>
@@ -465,12 +465,12 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         </div>
 
         {/* AI summaries */}
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container border border-surface-container-high/40">
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
           <div>
             <span className="text-xs font-semibold text-on-surface block">
               Generate AI summaries
             </span>
-            <span className="text-[11px] text-on-surface-variant block mt-0.5">
+            <span className="text-xs text-on-surface-variant block mt-0.5">
               Fetches email bodies for matched contacts to generate concise
               interaction notes.
             </span>
@@ -488,7 +488,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             htmlFor="imap-ghost-threshold"
             className="block text-xs font-semibold text-on-surface mb-1"
           >
-            Ghost contact threshold
+            Suggest a new person after
           </label>
           <div className="flex items-center gap-3">
             <input
@@ -504,10 +504,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
               }
               className={cn(FORM_INPUT, "w-20")}
             />
-            <span className="text-xs text-on-surface-variant">
-              interactions before suggesting an unknown correspondent as a
-              contact
-            </span>
+            <span className="text-xs text-on-surface-variant">messages</span>
           </div>
         </div>
 
@@ -524,7 +521,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-surface-container-high/40">
+        <div className="flex items-center justify-between pt-2">
           <button
             type="button"
             onClick={handleTest}
