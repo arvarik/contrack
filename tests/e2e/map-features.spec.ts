@@ -76,6 +76,11 @@ test.describe("map features - filters and place search", () => {
     });
 
     await page.goto("/map");
+    // The search needs the map to fly: an Enter pressed before the map is
+    // ready does nothing, and on a slow runner it came first.
+    await expect(
+      page.getByRole("region", { name: "Contact map" }),
+    ).toHaveAttribute("data-map-ready", "true");
 
     // Click Go to button
     const gotoBtn = page.getByRole("button", { name: "Go to place" });
@@ -110,6 +115,9 @@ test.describe("map features - filters and place search", () => {
     });
 
     await page.goto("/map");
+    await expect(
+      page.getByRole("region", { name: "Contact map" }),
+    ).toHaveAttribute("data-map-ready", "true");
 
     await page.getByRole("button", { name: "Go to place" }).click();
     const placeInput = page.getByRole("textbox", { name: "Go to place" });
