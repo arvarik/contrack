@@ -114,13 +114,12 @@ describe("MapInsightsPane", () => {
     const { rerender } = renderPane();
     const panel = screen.getByRole("complementary", { name: "Map insights" });
     expect(panel.getAttribute("data-covers-map")).toBe("right");
-    // The Insights button discloses it and says its word. The button names
-    // the panel, so the heading row holds the view switch, and the heading
-    // stays for a screen reader.
+    // The insights button, the glyph alone, discloses it. The heading row
+    // holds the view switch, and the heading stays for a screen reader.
     const button = screen.getByRole("button", { name: "Map insights" });
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(button.getAttribute("aria-controls")).toBe(panel.id);
-    expect(button.textContent).toBe("Insights");
+    expect(button.textContent).toBe("");
     const heading = screen.getByRole("heading", { name: "Map insights" });
     expect(heading.className).toContain("sr-only");
     expect(
@@ -144,7 +143,7 @@ describe("MapInsightsPane", () => {
     expect(panel.hasAttribute("data-covers-map")).toBe(false);
   });
 
-  it("closes and opens from the one Insights button", () => {
+  it("closes and opens from the one insights button", () => {
     const onToggle = vi.fn();
     const { unmount } = renderPane({ onToggle });
     expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();

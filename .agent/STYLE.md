@@ -330,11 +330,11 @@ A page with a side panel (Ask Contrack's history, the map's insights) uses
 
 - A button in the page's top-right corner, level with the page title
   (`inset="page"`) or with a toolbar floating over a canvas
-  (`inset="overlay"`). It is a `.btn-secondary` with `.btn-latch`: the
-  panel's glyph, and its word where the page has room for one ("Insights"),
-  a square with the glyph alone where it has not (History). It is a
-  disclosure (`aria-expanded`, `aria-controls`), and it is the panel's one
-  way out: no Hide button, no X.
+  (`inset="overlay"`). It is a `.btn-secondary btn-icon` with
+  `.btn-latch`: a square with the panel's glyph alone, the insights bars on
+  the map and the clock on Ask, named for the panel, with its key in the
+  tooltip. It is a disclosure (`aria-expanded`, `aria-controls`), and it is
+  the panel's one way out: no Hide button, no X.
 - The panel, 320 px, slides in from the window's edge under the button, over
   the page (an overlay, with a soft shadow on its open edge,
   `.side-panel`), so opening it moves nothing on the page and the button
@@ -346,9 +346,7 @@ A page with a side panel (Ask Contrack's history, the map's insights) uses
   own face drawn invisible, so the title and the actions stop where the
   button begins at any word length. Under the row the content takes the
   panel's full width, and a scroller in it (`SIDE_PANEL_SCROLLER`) reaches
-  the window's edge, so its bar sits on the edge. A panel whose button names
-  it in words keeps its heading for a screen reader and gives the row to a
-  control (`titleHidden`, `lead`): the map's Summary and People switch.
+  the window's edge, so its bar sits on the edge. A panel whose content says what it is keeps its heading for a screen reader and gives the row to a control (`titleHidden`, `lead`): the map's Summary and People switch.
 - However it closes (the button, Escape inside it, the page's own key), a
   keyboard inside it lands on the button. A closed panel is `inert`.
 - The page keeps the panel's 320 px clear of what matters under it where it

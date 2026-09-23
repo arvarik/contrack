@@ -14,18 +14,20 @@
  *   └──────────────────────────┘         └──────────────┴───────────┘
  *
  *   - The button is a pressable `.btn-secondary`, the family of the page's
- *     call to action, with the panel's glyph and, on the map, its word. It
- *     is a disclosure (`aria-expanded`, `aria-controls`), named for the
- *     panel, and while the panel is open it stays pressed in
- *     (`.btn-latch`), so the one control that opened the panel reads as
- *     the one that closes it. There is no second close button.
+ *     call to action: a square with the panel's glyph, named for the panel
+ *     and titled with its key by `RailTooltip`. It is a disclosure
+ *     (`aria-expanded`, `aria-controls`), and while the panel is open it
+ *     stays pressed in (`.btn-latch`), so the one control that opened the
+ *     panel reads as the one that closes it. There is no second close
+ *     button.
  *   - The panel, 320 px, wears the left nav's surface and a soft shadow on
  *     its open edge. Its heading row starts level with the button and
- *     keeps the button's box free at its end. A panel whose button names it
- *     in words can keep its heading for a screen reader and put a control
- *     in the row instead (`titleHidden`, `lead`). Under the heading row the
- *     content takes the panel's full width, and a scroller in it runs to
- *     the window's edge, so its bar sits on the edge (`SIDE_PANEL_SCROLLER`).
+ *     keeps the button's box free at its end. A panel whose content says
+ *     what it is can keep its heading for a screen reader and give the row
+ *     to a control instead (`titleHidden`, `lead`). Under the heading row
+ *     the content takes the panel's full width, and a scroller in it runs
+ *     to the window's edge, so its bar sits on the edge
+ *     (`SIDE_PANEL_SCROLLER`).
  *
  * However the panel closes (the button, Escape inside it, a page's own
  * shortcut), a keyboard inside it lands on the button. A closed panel is
@@ -82,11 +84,6 @@ export interface SidePanelProps {
   title: string;
   /** The button's glyph. */
   icon: LucideIcon;
-  /**
-   * A word beside the glyph, such as "Insights". Without one the button is
-   * a square with the glyph alone.
-   */
-  label?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The key that toggles the panel, named in the button's tooltip. */
@@ -94,8 +91,9 @@ export interface SidePanelProps {
   /** A count after the heading. */
   count?: number;
   /**
-   * The heading is for a screen reader alone. For a panel whose button
-   * already names it in words, where the heading row can hold `lead`.
+   * The heading is for a screen reader alone, and the row gives its room to
+   * `lead`: the map's Summary and People switch, whose words and content
+   * already say what the panel is.
    */
   titleHidden?: boolean;
   /** Content at the start of the heading row, after the heading: a switch. */
@@ -115,14 +113,12 @@ export interface SidePanelProps {
 }
 
 /** The button's face. The heading row reserves the same box with it. */
-const buttonFace = (label: string | undefined) =>
-  cn("btn-secondary btn-latch", !label && "btn-icon");
+const BUTTON_FACE = "btn-secondary btn-latch btn-icon";
 
 export const SidePanel = ({
   id,
   title,
   icon: Icon,
-  label,
   open,
   onOpenChange,
   shortcut,
@@ -147,12 +143,7 @@ export const SidePanel = ({
     }
   }, [open]);
 
-  const face = (
-    <>
-      <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
-      {label && <span>{label}</span>}
-    </>
-  );
+  const face = <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />;
 
   return (
     <div
@@ -175,7 +166,7 @@ export const SidePanel = ({
           aria-expanded={open}
           aria-controls={id}
           onClick={() => onOpenChange(!open)}
-          className={buttonFace(label)}
+          className={BUTTON_FACE}
         >
           {face}
         </button>
@@ -232,10 +223,7 @@ export const SidePanel = ({
             {lead}
           </div>
           {actions}
-          <span
-            aria-hidden="true"
-            className={cn(buttonFace(label), "invisible")}
-          >
+          <span aria-hidden="true" className={cn(BUTTON_FACE, "invisible")}>
             {face}
           </span>
         </div>

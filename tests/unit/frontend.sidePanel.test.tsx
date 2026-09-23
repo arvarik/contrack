@@ -135,13 +135,12 @@ describe("SidePanel", () => {
     expect(document.activeElement).toBe(search);
   });
 
-  it("shows a word beside the glyph, and can hand its heading row to a switch", () => {
+  it("is a square with the glyph alone, and can hand its heading row to a switch", () => {
     render(
       <SidePanel
         id="test-panel"
         title="Map insights"
         icon={BarChart3}
-        label="Insights"
         inset="overlay"
         open
         onOpenChange={() => {}}
@@ -151,8 +150,11 @@ describe("SidePanel", () => {
         <p>Body</p>
       </SidePanel>,
     );
+    // The glyph alone: the name is for a screen reader, the tooltip for a
+    // pointer, and the square is `.btn-icon`.
     const button = screen.getByRole("button", { name: "Map insights" });
-    expect(button.textContent).toBe("Insights");
+    expect(button.textContent).toBe("");
+    expect(button.className).toContain("btn-icon");
     // The heading is still the panel's name for a screen reader.
     const heading = screen.getByRole("heading", {
       level: 2,

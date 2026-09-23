@@ -670,8 +670,9 @@ test.describe("map", () => {
   test("keeps the insights behind one button in the map's corner, and its panel over it", async ({
     page,
   }) => {
-    // The Insights button in the map's top-right corner opens and closes
-    // the panel, and stays where it is while the panel slides in under it.
+    // The insights button in the map's top-right corner, the glyph alone,
+    // opens and closes the panel, and stays where it is while the panel
+    // slides in under it.
     await stubBasemap(page);
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
@@ -689,7 +690,10 @@ test.describe("map", () => {
     const width = page.viewportSize()!.width;
     const mapBox = (await map.boundingBox())!;
     expect(Math.round(mapBox.x + mapBox.width)).toBe(width);
-    await expect(icon).toHaveText("Insights");
+    // A square with the glyph alone, like Ask's History button.
+    await expect(icon).toHaveText("");
+    const face = (await icon.boundingBox())!;
+    expect(Math.round(face.width)).toBe(Math.round(face.height));
     const canvas = (await map.locator("canvas").first().boundingBox())!;
     expect(Math.round(canvas.width)).toBe(Math.round(mapBox.width));
     // The zoom buttons keep clear of the open panel.

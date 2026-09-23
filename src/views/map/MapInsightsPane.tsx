@@ -1,9 +1,9 @@
 /**
  * MapInsightsPane — who is in view, and what they have in common.
  *
- * From `lg` it is the page's `SidePanel`: an Insights button in the map's
- * top-right corner, level with the toolbar, and a 320 px panel that slides
- * in under it from the window's edge. The panel carries
+ * From `lg` it is the page's `SidePanel`: a square button with the
+ * insights glyph in the map's top-right corner, level with the toolbar, and
+ * a 320 px panel that slides in under it from the window's edge. The panel carries
  * `data-covers-map="right"` while it is open, so the map keeps its pins, its
  * toolbar and its controls in the part it leaves (`insets.ts`). Below `lg`
  * the same content opens in a bottom sheet from the toolbar's Insights
@@ -77,9 +77,10 @@ export const MapInsightsPane = ({
   const isWide = useMediaQuery(WIDE_QUERY);
   const [view, setView] = useState<View>("summary");
   // The switch between the two views. In the side panel it sits in the
-  // heading row, where the Insights button beside it names the panel, so
-  // the row holds the switch and not the title a second time. In the sheet
-  // it heads the content, under the sheet's own title.
+  // heading row, where its two words and the content under it say what the
+  // panel is, so the row holds the switch and the title stays for a screen
+  // reader. In the sheet it heads the content, under the sheet's own
+  // title.
   const viewSwitch = (
     <Segmented<View>
       options={VIEWS}
@@ -105,7 +106,6 @@ export const MapInsightsPane = ({
         id="map-insights"
         title={INSIGHTS_TITLE}
         icon={BarChart3}
-        label="Insights"
         inset="overlay"
         open={isWide && isOpen}
         onOpenChange={onToggle}
