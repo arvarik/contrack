@@ -1,4 +1,12 @@
-import React, { useState, useCallback } from "react";
+/**
+ * AvatarPickerModal: a new picture for a contact, a cartoon from the grid or
+ * a photo of the person's own.
+ *
+ * The pencil on the contact's avatar opens it (`ProfileHeader`), and focus
+ * goes back to the pencil when it closes, by Apply, Cancel, Escape or the
+ * close button (`returnFocusRef`).
+ */
+import React, { useState, useCallback, type RefObject } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Check, RefreshCw } from "lucide-react";
@@ -91,9 +99,21 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   contactId: string;
+  /**
+   * The control that opened the picker: the pencil on the contact's avatar.
+   * Focus goes back to it when the picker closes, however it closes. Without
+   * it, `Modal` returns focus to wherever it was on open, and Safari does not
+   * focus a button it clicks, so that could be the page.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
+export const AvatarPickerModal = ({
+  isOpen,
+  onClose,
+  contactId,
+  returnFocusRef,
+}: Props) => {
   // The grid draws its wash for the palette on screen. `undefined` under the
   // default `system` theme, where the image answers `prefers-color-scheme`
   // itself and needs no parameter.
@@ -173,7 +193,12 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
     (tab === "upload" && !!uploadPreview);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Edit avatar">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Edit avatar"
+      returnFocusRef={returnFocusRef}
+    >
       <div className="space-y-4 pt-1">
         {/* Tab switcher */}
         <div className={TAB_CONTAINER}>

@@ -365,6 +365,10 @@ export const useInteractionSearch = (
       return res.json();
     },
     enabled: active,
-    placeholderData: keepPreviousData,
+    // The last answer stays on screen while the next one loads, so a new
+    // filter does not blank the page. With nothing to search for there is
+    // no next answer: the old one would stay on screen for good, and a
+    // cleared search showed the notes it had found.
+    placeholderData: (previous) => (active ? previous : undefined),
   });
 };

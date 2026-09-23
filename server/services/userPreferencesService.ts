@@ -24,6 +24,7 @@
 
 import { z } from "zod";
 import { sqlite } from "../db.ts";
+import { CADENCE_DAYS } from "../../shared/cadence.ts";
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -130,13 +131,12 @@ export const preferenceSchemas = {
   ),
   startPage: z.enum(["network", "pulse"]),
   listSort: z.enum(["name", "recent"]),
-  defaultCadenceDays: z.union([
-    z.literal(30),
-    z.literal(60),
-    z.literal(90),
-    z.literal(180),
-    z.literal(365),
-  ]),
+  /**
+   * The accepted days, not only the four the menus offer: 60 and 180 were
+   * choices before 2.0, and a row saved at either must still parse, or the
+   * account would lose its default and fall back to 90 without a word.
+   */
+  defaultCadenceDays: z.literal(CADENCE_DAYS),
   /**
    * Contacts a person creates by hand start tracked. Imports and connectors
    * never do, whatever this says.

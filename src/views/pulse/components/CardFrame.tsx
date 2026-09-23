@@ -21,7 +21,7 @@
 import React from "react";
 import { cn } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
-import { GripVertical, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
+import { GripVertical, EyeOff } from "lucide-react";
 import {
   ActionMenu,
   type ActionMenuItem,
@@ -49,9 +49,22 @@ const CONTROL_BTN =
   "hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors";
 
 /**
- * The customize controls: the phone arrows, the drag handle, the eye and
- * the Move to menu. Rendered by both variants in this order, with these
- * names.
+ * The drag handle, at every width. A mouse picks the card up once the
+ * pointer moves a few pixels. A finger holds it for a moment first (the
+ * touch sensor's delay in `PulseGrid`), so a flick that starts on the handle
+ * still scrolls the page: `touch-manipulation` leaves the browser its pan,
+ * where `touch-none` took it away. The handle takes the primary tint while a
+ * press waits to become a drag, and it never opens the text callout.
+ */
+const GRIP_BTN =
+  "inline-flex items-center justify-center cursor-grab active:cursor-grabbing touch-manipulation select-none [-webkit-touch-callout:none]";
+
+/**
+ * The customize controls: the drag handle, the eye and the Move menu.
+ * Rendered by both variants in this order, with these names. The Move menu
+ * is the way to move a card without dragging, at every width: one place up
+ * or down, or to another column. The phone's up and down arrows used to do
+ * the first, on phones only, and the handle was hidden there.
  */
 const CustomizeControls = ({
   title,
@@ -65,6 +78,26 @@ const CustomizeControls = ({
   className?: string;
 }) => {
   const moveActions: ActionMenuItem[] = [];
+  const index = customize.index ?? 0;
+  const total = customize.totalInColumn ?? 1;
+  if (customize.onMoveStep) {
+    // A place that does not exist is left out, as the card's own column is
+    // below: the first card has no Move up.
+    if (index > 0) {
+      moveActions.push({
+        id: "move-up",
+        label: "Move up",
+        onSelect: () => customize.onMoveStep?.(cardId, -1),
+      });
+    }
+    if (index < total - 1) {
+      moveActions.push({
+        id: "move-down",
+        label: "Move down",
+        onSelect: () => customize.onMoveStep?.(cardId, 1),
+      });
+    }
+  }
   if (customize.column && customize.onMoveToColumn) {
     if (customize.column !== "focus") {
       moveActions.push({
@@ -89,63 +122,30 @@ const CustomizeControls = ({
     }
   }
 
-  const atTop = customize.index === 0;
-  const atBottom = customize.index === (customize.totalInColumn ?? 1) - 1;
-
   return (
+    // 12 px between the controls on a phone, so their 44 px tap boxes
+    // (`hit-area`) do not overlap under a thumb.
     <div
-      className={cn("flex items-center gap-1 sm:gap-1.5 shrink-0", className)}
+      className={cn("flex items-center gap-3 sm:gap-1.5 shrink-0", className)}
     >
-      {/* Phone Move Up & Move Down */}
-      <div className="flex sm:hidden items-center gap-0.5">
-        <button
-          type="button"
-          aria-disabled={atTop}
-          onClick={() => !atTop && customize.onMoveStep?.(cardId, -1)}
-          aria-label={`Move ${title} up`}
-          title={atTop ? `${title} is already at the top` : `Move ${title} up`}
-          className={cn(
-            CONTROL_BTN,
-            atTop ? "opacity-30 cursor-not-allowed" : "cursor-pointer",
-          )}
-        >
-          <ChevronUp className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          aria-disabled={atBottom}
-          onClick={() => !atBottom && customize.onMoveStep?.(cardId, 1)}
-          aria-label={`Move ${title} down`}
-          title={
-            atBottom
-              ? `${title} is already at the bottom`
-              : `Move ${title} down`
-          }
-          className={cn(
-            CONTROL_BTN,
-            atBottom ? "opacity-30 cursor-not-allowed" : "cursor-pointer",
-          )}
-        >
-          <ChevronDown className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Desktop Drag Handle */}
       <button
         type="button"
+        ref={customize.setActivatorNodeRef}
         aria-label={`Drag ${title} to reorder`}
         title={`Drag ${title} to reorder`}
+        data-pending={customize.isPending || undefined}
         className={cn(
           CONTROL_BTN,
-          "hidden sm:inline-flex items-center justify-center cursor-grab active:cursor-grabbing touch-none",
+          GRIP_BTN,
+          customize.isPending && "bg-primary/10 text-primary",
         )}
         {...customize.attributes}
         {...customize.listeners}
       >
-        <GripVertical className="w-4 h-4" />
+        <GripVertical className="w-4 h-4" aria-hidden="true" />
       </button>
 
-      {/* Eye toggle to hide */}
+      {/* The eye hides the card. The tray above the grid brings it back. */}
       <button
         type="button"
         onClick={() => customize.onHide?.(cardId)}
@@ -156,7 +156,7 @@ const CustomizeControls = ({
         <EyeOff className="w-4 h-4" />
       </button>
 
-      {/* Column ActionMenu */}
+      {/* The Move menu: up, down, or to another column, without a drag. */}
       {moveActions.length > 0 && (
         <ActionMenu
           label={`Move ${title}`}
@@ -202,7 +202,7 @@ export const CardFrame = ({
         className={cn(
           // The card's own side inset, so a line's title starts on the same
           // edge as the titles of the cards above and below it.
-          "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-all",
+          "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-shadow",
           isCustomizing && "ring-1 ring-primary/20",
         )}
       >
@@ -248,7 +248,7 @@ export const CardFrame = ({
         // set the inset (16 px on a phone, 20 px from sm). With both, a
         // phone card lost 80 of its 350 px to padding.
         CARD,
-        "p-0 flex flex-col relative overflow-hidden transition-all",
+        "p-0 flex flex-col relative overflow-hidden transition-shadow",
         isCustomizing && "ring-1 ring-primary/20",
       )}
     >

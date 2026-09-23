@@ -28,16 +28,21 @@ describe("RouteFallback", () => {
     expect(container.querySelector(".animate-pulse")).toBeTruthy();
   });
 
-  it("draws Ask Contrack in the page's column, with the history rail and not a pane", () => {
+  it("draws Ask Contrack in the page's column, with the History button in the corner and no rail", () => {
     const { container } = render(<RouteFallback variant="search" />);
     const column = container.querySelector(".mx-auto")!;
     for (const name of ASK_COLUMN.split(" ")) {
       expect(column.classList.contains(name)).toBe(true);
     }
-    // The 64 px rail from lg. The 320 px pane it replaced pushed the column.
-    expect(container.querySelector(".lg\\:block.w-16")).toBeTruthy();
+    // From lg the History button's square sits in the top-right corner,
+    // over the page. No rail takes a lane of the layout, and no pane
+    // pushes the column.
+    expect(
+      container.querySelector(".lg\\:block.absolute.right-4.w-10"),
+    ).toBeTruthy();
+    expect(container.querySelector(".lg\\:block.w-16")).toBeNull();
     expect(container.querySelector('[class*="w-[320px]"]')).toBeNull();
-    // History is a header button below lg only: from lg the rail holds it.
+    // Below lg History is a header button.
     expect(container.querySelector(".lg\\:hidden")).toBeTruthy();
   });
 

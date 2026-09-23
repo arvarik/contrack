@@ -81,8 +81,11 @@ export function getDefaultColumnForCard(cardId: string): PulseColumn {
   return "focus";
 }
 
+/** Each column's visible cards, in order. */
+export type VisibleColumns = Record<PulseColumn, PulseCardId[]>;
+
 export interface ResolvedLayout {
-  visible: Record<PulseColumn, PulseCardId[]>;
+  visible: VisibleColumns;
   hidden: PulseCardId[];
 }
 
@@ -298,4 +301,94 @@ export function pulseLayoutReducer(
     default:
       return state;
   }
+}
+
+// ─── The drag's draft ────────────────────────────────────────────────────────
+//
+// A drag in customize mode moves a card through a local copy of the visible
+// columns, one step each time the drop target changes, so the target column
+// opens a gap while the card is still in the air. Nothing is saved until the
+// drop, and then once: `dropAction` turns the draft into one reducer action,
+// and `pulseLayoutReducer` applies it to the stored preference. Escape
+// throws the draft away.
+
+/** The column that holds a card, or null when no visible column does. */
+export function columnOf(
+  visible: VisibleColumns,
+  cardId: string,
+): PulseColumn | null {
+  for (const col of PULSE_COLUMNS) {
+    if ((visible[col] as readonly string[]).includes(cardId)) return col;
+  }
+  return null;
+}
+
+/**
+ * The columns with one card moved. The card leaves the column it is in and
+ * goes into `targetColumn` at `targetIndex`. The index counts the target
+ * column's other cards, without the card itself, and is clamped to them, so
+ * 0 is the top and the column's length is the end. Pure: the other columns
+ * come back as they were, in new arrays.
+ */
+export function moveCard(
+  visible: VisibleColumns,
+  cardId: PulseCardId,
+  targetColumn: PulseColumn,
+  targetIndex: number,
+): VisibleColumns {
+  const next: VisibleColumns = {
+    focus: visible.focus.filter((id) => id !== cardId),
+    network: visible.network.filter((id) => id !== cardId),
+    intel: visible.intel.filter((id) => id !== cardId),
+  };
+  const list = next[targetColumn];
+  const index = Math.max(
+    0,
+    Math.min(
+      Number.isFinite(targetIndex) ? Math.floor(targetIndex) : 0,
+      list.length,
+    ),
+  );
+  list.splice(index, 0, cardId);
+  return next;
+}
+
+/** Whether two sets of columns hold the same cards in the same order. */
+export function sameColumns(a: VisibleColumns, b: VisibleColumns): boolean {
+  return PULSE_COLUMNS.every(
+    (col) =>
+      a[col].length === b[col].length &&
+      a[col].every((id, index) => id === b[col][index]),
+  );
+}
+
+/**
+ * The one reducer action that turns `before` into `after` once a drag has
+ * moved `cardId`, or null when the card landed where it started. A card
+ * that stayed in its column is a `reorder` of that column, and a card that
+ * changed column is a `move` to its place there. The drop saves the result
+ * of `pulseLayoutReducer` with this action, so a drag is one write.
+ */
+export function dropAction(
+  before: VisibleColumns,
+  after: VisibleColumns,
+  cardId: PulseCardId,
+): PulseLayoutAction | null {
+  const from = columnOf(before, cardId);
+  const to = columnOf(after, cardId);
+  if (!to) return null;
+  if (from === to) {
+    const same =
+      before[to].length === after[to].length &&
+      before[to].every((id, index) => id === after[to][index]);
+    return same
+      ? null
+      : { type: "reorder", column: to, cardIds: [...after[to]] };
+  }
+  return {
+    type: "move",
+    cardId,
+    targetColumn: to,
+    targetIndex: after[to].indexOf(cardId),
+  };
 }

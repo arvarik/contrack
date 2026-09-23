@@ -19,11 +19,13 @@
  *    `#not-tracked`) for the Keeping up card's links. An empty group is
  *    left out.
  * 4. A row: the ring, the name as a link, the company, the cadence in words
+ *    ("quarterly", or "every 2 months" for a cadence off the four words)
  *    and "3 weeks past due" when it is, and a 44 px toggle named "Untrack
  *    Ada Lovelace" or "Track Ada Lovelace".
  * 5. Select mode, as on the Archived page: Select, Select all in each
  *    group's heading, Done, and a bar with Track, Untrack, a Cadence menu
- *    and the count. The same Undo toasts as the Network bar.
+ *    (the four cadences the app offers: Weekly, Monthly, Quarterly and
+ *    Yearly) and the count. The same Undo toasts as the Network bar.
  * 6. Past 200 rows the list is virtualised, the way the Network list is:
  *    the groups flatten into one list of headings and rows.
  * 7. When nobody is tracked, an `EmptyState` says so, and the Not tracked
@@ -455,6 +457,9 @@ export const TrackedContactsView = () => {
   /** Nobody picked, or a change on its way: the bar's buttons wait. */
   const nothingToAct = bulk.isPending || selectedCount === 0;
 
+  // The four cadences, one word each. A cadence off the list (60 or 180
+  // days, saved before 2.0) stays on the rows that have it, and is not
+  // offered here: one choice for many people is one of the four.
   const cadenceItems = useMemo(
     () =>
       CADENCE_CHOICES.map((choice) => ({

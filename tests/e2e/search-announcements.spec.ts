@@ -155,16 +155,18 @@ test.describe("notes", () => {
     const region = status(page);
     await expect(region).toHaveText("");
 
-    await page
-      .getByRole("textbox", { name: "Search your notes" })
-      .fill("hiring");
+    // The box searches on Enter, as People's does.
+    const box = page.getByRole("textbox", { name: "Search your notes" });
+    await box.fill("hiring");
+    await box.press("Enter");
     await expect(region).toHaveText("3 notes for “hiring”.");
     await expect(page.getByText("3 notes", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Last 30 days" }).click();
     await expect(region).toHaveText("2 notes for “hiring”.");
 
-    await page.getByRole("textbox", { name: "Search your notes" }).fill("zzqx");
+    await box.fill("zzqx");
+    await box.press("Enter");
     await expect(region).toHaveText("No notes match for “zzqx”.");
     await expect(
       page.getByText("No notes match", { exact: true }),
@@ -182,9 +184,9 @@ test.describe("notes", () => {
       }),
     );
     await page.goto("/search?mode=notes");
-    await page
-      .getByRole("textbox", { name: "Search your notes" })
-      .fill("hiring");
+    const box = page.getByRole("textbox", { name: "Search your notes" });
+    await box.fill("hiring");
+    await box.press("Enter");
 
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("Search failed");

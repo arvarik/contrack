@@ -3,7 +3,7 @@
  *
  * Each nav item wraps with a `RailTooltip` that appears to the right of the
  * icon after a 250 ms hover delay, in place of the browser's `title`
- * tooltip. The right-hand panel rail (`SidePanel`) uses the same one,
+ * tooltip. The right-hand panel's button (`SidePanel`) uses the same one,
  * opening to the left.
  *
  * That tooltip is a hover-rendered <div>, so it is worth nothing to a screen
@@ -254,18 +254,20 @@ export const Sidebar = () => {
       <div className="flex-1" />
 
       {/*
-        Utility group. The bottom corner used to hold a lone gear with nothing
-        marking it as a different kind of thing from the four destinations
-        above it. It is now a labelled group, separated by a background shift
-        rather than a rule (the design system's no-line rule), holding the two
-        actions that are *about* the app rather than about your contacts.
+        The utility group: the two actions that are about the app rather than
+        about your contacts, and who is signed in. It sits at the rail's foot,
+        on the rail's own surface, with the same glyphs and the same hover as
+        the destinations above. Its place and its tighter spacing are what
+        set it apart. It used to sit in a box of its own, a shade darker with
+        rounded top corners, which read as a separate panel docked under the
+        nav.
 
         Keyboard shortcuts previously had no visible entry point at all — the
         overlay existed but you had to already know to press `?`. Discoverable
         shortcuts are the difference between a keyboard-first app and an app
         with keyboard shortcuts.
       */}
-      <div className="flex flex-col items-center gap-2 w-full pt-3 pb-1 bg-surface-container/40 rounded-t-2xl">
+      <div className="flex flex-col items-center gap-2 w-full">
         <RailTooltip label="Keyboard shortcuts" shortcut="?">
           <button
             type="button"

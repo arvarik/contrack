@@ -44,13 +44,50 @@ export const RELATION_REGISTRY = {
 // URL Utilities (used by social link insertion)
 // =============================================================================
 
-function detectPlatformFromUrl(url: string): string {
-  const l = url.toLowerCase();
-  if (l.includes("linkedin.com")) return "linkedin";
-  if (l.includes("facebook.com") || l.includes("fb.com")) return "facebook";
-  if (l.includes("twitter.com") || l.includes("x.com")) return "twitter";
-  if (l.includes("github.com")) return "github";
-  if (l.includes("instagram.com")) return "instagram";
+/**
+ * The domains each known platform answers on. A link's host is one of these
+ * or a subdomain of one ("uk.linkedin.com", "m.facebook.com").
+ */
+const PLATFORM_DOMAINS: readonly (readonly [string, readonly string[]])[] = [
+  ["linkedin", ["linkedin.com"]],
+  ["facebook", ["facebook.com", "fb.com"]],
+  ["twitter", ["twitter.com", "x.com"]],
+  ["github", ["github.com"]],
+  ["instagram", ["instagram.com"]],
+  ["youtube", ["youtube.com", "youtu.be"]],
+];
+
+/**
+ * The platform a social link belongs to, from its host: "linkedin",
+ * "twitter", "youtube", or "other".
+ *
+ * It matched on the text of the whole URL, so `includes("x.com")` labelled
+ * dropbox.com and netflix.com "twitter", and a LinkedIn URL anywhere in a
+ * query string made any link "linkedin". It reads the host now: `www.` off,
+ * then the domain itself or a subdomain of it, so "netflix.com" is not
+ * "x.com" and "notgithub.com" is not "github.com". A link with no scheme
+ * ("www.linkedin.com/in/ada", as a vCard or a CSV often has it) is read as
+ * https, the way a person types it, so an import keeps its platforms. Text
+ * that is not a URL at all is "other".
+ *
+ * Exported for `tests/unit/detectPlatform.test.ts`.
+ */
+export function detectPlatformFromUrl(url: string): string {
+  const text = url.trim();
+  // A scheme is letters before the first colon, with no dot: "example.com:8080"
+  // is a host and a port.
+  const withScheme = /^[a-z][a-z\d+-]*:/i.test(text) ? text : `https://${text}`;
+  let host: string;
+  try {
+    host = new URL(withScheme).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "other";
+  }
+  for (const [platform, domains] of PLATFORM_DOMAINS) {
+    if (domains.some((d) => host === d || host.endsWith(`.${d}`))) {
+      return platform;
+    }
+  }
   return "other";
 }
 

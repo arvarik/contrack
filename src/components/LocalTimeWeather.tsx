@@ -1,9 +1,17 @@
 /**
  * LocalTimeWeather: the time where a contact is, and the weather there.
  *
- * Both are facts on the contact's meta line ("Sydney · 2:45 AM · 13°C"), so
- * they render as plain text. They used to wear grey pills, the same pills as
- * the social links, and a fact looked like something to press.
+ * Both are facts on the contact's meta line ("Sydney · 2:45 AM AEST ·
+ * 13°C"), so they render as plain text. They used to wear grey pills, the
+ * same pills as the social links, and a fact looked like something to press.
+ *
+ * The time carries its zone, short: "2:13 PM EDT". A time alone does not say
+ * whether it is ahead of the reader or behind. The zone is the abbreviation
+ * people write when there is one (EDT, BST, CEST, AEST, IST, JST), and the
+ * offset when there is none (GMT+4). A screen reader hears the long name
+ * instead, "2:13 PM, local time, Eastern Daylight Time", because letters
+ * read one by one say nothing, and a pointer that rests on the abbreviation
+ * shows the long name too. `zoneName` below works the name out.
  *
  * The component renders a fragment, so each part is its own item in the
  * caller's flex row: the time, then a middle dot and the weather.
@@ -28,6 +36,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { usePreferences } from "../contexts/PreferencesContext";
+import { MetaDot } from "./ui/MetaDot";
 
 interface LocalTimeWeatherProps {
   lat: number | null;
@@ -71,43 +80,176 @@ const getWeatherIcon = (code: number, isDay: boolean) => {
   return <Cloud className="w-4 h-4 text-on-surface-variant" />;
 };
 
-const formatLocalTime = (timezone: string, now: Date) => {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+// ═══════════════════════════════════════════════════════════════════════════
+// The zone's name
+// ═══════════════════════════════════════════════════════════════════════════
 
-  // Extract hour to determine day/night accurately for the icon mapping
-  const hourFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "numeric",
-    hour12: false,
-  });
+/**
+ * The locales asked for a zone's short name, in this order. The first answer
+ * that is an abbreviation wins.
+ *
+ * No one locale knows them all. "en-US" answers EST and PDT but "GMT+10"
+ * for Sydney, where "en-AU" answers AEST. "en-GB" knows BST, CET and CEST,
+ * "en-IN" knows IST for India and "en-IE" knows IST for Ireland, "en-ZA"
+ * SAST and "en-SG" SGT, "en-CA" Newfoundland's NST, and "en-HK" HKT. Japan's
+ * JST is known only to "ja-JP", which is why one locale here is not English:
+ * it comes last, so it can only fill a gap. Checked in Node 22 against every
+ * IANA zone, in January and in July: the list names about half of them, the
+ * populous half. The rest, such as Seoul, Shanghai, São Paulo and Moscow,
+ * keep the offset.
+ */
+const ZONE_LOCALES = [
+  "en-US",
+  "en-GB",
+  "en-AU",
+  "en-IN",
+  "en-NZ",
+  "en-CA",
+  "en-IE",
+  "en-ZA",
+  "en-SG",
+  "en-HK",
+  "ja-JP",
+] as const;
 
-  const currentHour = parseInt(hourFormatter.format(now), 10);
-  const isDay = currentHour >= 6 && currentHour < 18;
+/**
+ * An abbreviation: two to five capital letters, "GMT" and "UTC" included.
+ * Not an offset ("GMT+9", "GMT-3:30") and not a name in another script.
+ */
+const ABBREVIATION = /^[A-Z]{2,5}$/;
 
-  const abbrFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    timeZoneName: "short",
-  });
+/** A zone's name, short for the screen and long for a screen reader. */
+export interface ZoneName {
+  /** "EDT", "AEST", or the offset when there is no abbreviation: "GMT+4". */
+  short: string;
+  /** "Eastern Daylight Time", "Gulf Standard Time". */
+  long: string;
+}
 
-  let timeZoneName =
-    abbrFormatter.formatToParts(now).find((p) => p.type === "timeZoneName")
-      ?.value || "";
-  if (timeZoneName.startsWith("GMT")) {
-    const city = timezone.split("/").pop()?.replace(/_/g, " ") || "";
-    timeZoneName = city ? `${city} Time` : timeZoneName;
+/** The formatters for one zone, made once and kept. */
+interface ZoneFormatters {
+  time: Intl.DateTimeFormat;
+  hour: Intl.DateTimeFormat;
+  long: Intl.DateTimeFormat;
+  /** One per `ZONE_LOCALES` entry, each made the first time it is asked. */
+  short: (Intl.DateTimeFormat | undefined)[];
+}
+
+/**
+ * The formatters, by zone. A formatter costs far more to make than to use,
+ * and the clock asks every minute, so each zone's are made once. A page
+ * meets a handful of zones, so the map stays small.
+ */
+const formattersByZone = new Map<string, ZoneFormatters>();
+
+/**
+ * The names, by zone and by what "en-US" calls it at that moment. The
+ * "en-US" name changes with daylight saving ("EST" to "EDT", "GMT+10" to
+ * "GMT+11"), so it tells one half of the year from the other, and the walk
+ * down `ZONE_LOCALES` runs once for each.
+ */
+const namesByZone = new Map<string, ZoneName>();
+
+function formattersFor(timeZone: string): ZoneFormatters {
+  let formatters = formattersByZone.get(timeZone);
+  if (!formatters) {
+    formatters = {
+      time: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+      // For day or night. `h23` counts midnight as 0: with `hour12: false`
+      // an engine may say "24".
+      hour: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "numeric",
+        hourCycle: "h23",
+      }),
+      long: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        timeZoneName: "long",
+      }),
+      short: [],
+    };
+    formattersByZone.set(timeZone, formatters);
   }
+  return formatters;
+}
 
-  return {
-    timeString: formatter.format(now),
-    timeZoneName,
-    isDay,
+/** The zone name part of a formatted date. */
+const zonePart = (formatter: Intl.DateTimeFormat, now: Date): string =>
+  formatter.formatToParts(now).find((part) => part.type === "timeZoneName")
+    ?.value ?? "";
+
+/** What `ZONE_LOCALES[index]` calls the zone at this moment. */
+function shortName(
+  formatters: ZoneFormatters,
+  timeZone: string,
+  index: number,
+  now: Date,
+): string {
+  let formatter = formatters.short[index];
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(ZONE_LOCALES[index], {
+      timeZone,
+      timeZoneName: "short",
+    });
+    formatters.short[index] = formatter;
+  }
+  return zonePart(formatter, now);
+}
+
+/**
+ * A time zone's name at a moment: "EDT" and "Eastern Daylight Time" for New
+ * York in July, and "GMT-3" and "Brasilia Standard Time" for São Paulo,
+ * where no locale in `ZONE_LOCALES` has an abbreviation.
+ *
+ * It used to turn every "GMT+X" into "<City> Time", from the last part of
+ * the zone's id, so a reader got "Sao Paulo Time" and no way to tell how far
+ * behind São Paulo is. An offset says that.
+ *
+ * `timeZone` is an IANA id, as `timeZoneAt` returns it.
+ */
+export function zoneName(timeZone: string, now: Date = new Date()): ZoneName {
+  const formatters = formattersFor(timeZone);
+  // "en-US" first: its answer is the key, and it is the offset when no
+  // locale has an abbreviation.
+  const first = shortName(formatters, timeZone, 0, now);
+  const key = `${timeZone} ${first}`;
+  const known = namesByZone.get(key);
+  if (known) return known;
+
+  let short = ABBREVIATION.test(first) ? first : null;
+  for (let index = 1; short === null && index < ZONE_LOCALES.length; index++) {
+    const candidate = shortName(formatters, timeZone, index, now);
+    if (ABBREVIATION.test(candidate)) short = candidate;
+  }
+  const name: ZoneName = {
+    short: short ?? first,
+    long: zonePart(formatters.long, now) || (short ?? first),
   };
-};
+  namesByZone.set(key, name);
+  return name;
+}
+
+/**
+ * The time where a contact is, the zone's name, and whether it is day there
+ * (6 AM to 6 PM), which picks the sun or the moon for the weather glyph.
+ */
+export function describeLocalTime(
+  timeZone: string,
+  now: Date = new Date(),
+): { time: string; zone: ZoneName; isDay: boolean } {
+  const formatters = formattersFor(timeZone);
+  const hour = Number(formatters.hour.format(now));
+  return {
+    time: formatters.time.format(now),
+    zone: zoneName(timeZone, now),
+    isDay: hour >= 6 && hour < 18,
+  };
+}
 
 /**
  * The IANA time zone at a point, or null when there is none.
@@ -179,7 +321,7 @@ const Weather = ({
 
   return (
     <>
-      <span aria-hidden="true">·</span>
+      <MetaDot />
       <motion.span
         // The temperature arrives at its full colour and grows into
         // place. Text faded in from nothing is text below its
@@ -212,17 +354,27 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
 
   if (lat === null || lng === null || !timezone) return null;
 
-  const { timeString, timeZoneName, isDay } = formatLocalTime(timezone, now);
+  const { time, zone, isDay } = describeLocalTime(timezone, now);
 
   return (
     <>
       {/*
-        Short on screen. The zone name is there for a screen reader, which
-        has no location beside it to read the time against.
+        "2:13 PM EDT" on screen. A screen reader skips the abbreviation and
+        hears "2:13 PM, local time, Eastern Daylight Time": it has no place
+        beside it to read the time against, and "E D T" read letter by
+        letter says nothing. A no-break space keeps the zone on the time's
+        line when the meta line wraps. Tabular digits hold the width from one
+        minute to the next ("3:09" was wider than "3:10"), so the items after
+        the time do not shift, and a full line does not wrap and unwrap as
+        the clock moves.
       */}
-      <span>
-        {timeString}
-        <span className="sr-only">, local time ({timeZoneName})</span>
+      <span className="tabular-nums">
+        {time}
+        <span aria-hidden="true" title={zone.long}>
+          {"\u00a0"}
+          {zone.short}
+        </span>
+        <span className="sr-only">, local time, {zone.long}</span>
       </span>
       {showWeather && <Weather lat={lat} lng={lng} isDay={isDay} />}
     </>

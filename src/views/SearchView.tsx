@@ -10,8 +10,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
 import {
   Sparkles,
-  Search,
-  X,
   AlertTriangle,
   HistoryIcon,
   RefreshCw,
@@ -27,8 +25,6 @@ import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
 import {
   ASK_COLUMN,
   BTN_QUIET,
-  CARD,
-  ICON_BTN,
   PAGE_TOP,
   SECTION_HEADING,
   SUGGESTION_CHIP,
@@ -45,9 +41,9 @@ import { NAMES } from "../lib/names";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
+import { AskSearchBox } from "./search/AskSearchBox";
 import { suggestedQuestions } from "./search/suggestions";
 import { Segmented } from "../components/ui/Segmented";
-import { IconButton } from "../components/ui/IconButton";
 import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -260,19 +256,6 @@ export const SearchView = () => {
     inputRef.current?.focus();
   }, [reset, setLastAISearchQuery]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleSearch();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        handleClear();
-      }
-    },
-    [handleSearch, handleClear],
-  );
-
   // Global keydown for focusing search and toggling history
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -298,8 +281,8 @@ export const SearchView = () => {
           setSheetOpen(true);
           return;
         }
-        // With focus inside the panel, H is its Hide button: `SidePanel`
-        // moves the keyboard to the rail icon that brings it back.
+        // With focus inside the panel, H closes it too: `SidePanel` moves
+        // the keyboard to the History button that brings it back.
         setHistoryOpen(!askHistoryOpen);
       }
     };
@@ -357,7 +340,7 @@ export const SearchView = () => {
     mode === "notes" ? (searchParams.get("q") ?? "") : answeredQuery || query;
 
   return (
-    <div className="h-full flex overflow-hidden bg-surface">
+    <div className="relative h-full flex overflow-hidden bg-surface">
       {/*
         The page scrolls as one column: the header, then the search and its
         results, in one box with one pair of gutters, so the title's left
@@ -392,11 +375,13 @@ export const SearchView = () => {
                   label="What to search"
                   className="max-sm:w-auto max-sm:flex-1"
                 />
-                {/* From `lg` the rail's icon opens the history. Below it
-                    there is no rail, and this opens the sheet. */}
+                {/* From `lg` the History button sits in the page's
+                    top-right corner and opens the side panel. Below it
+                    this one, the same square, opens the sheet. */}
                 {!isWide && (
-                  <IconButton
+                  <button
                     ref={historyButtonRef}
+                    type="button"
                     aria-label="History"
                     title={
                       historyShortcut
@@ -406,9 +391,10 @@ export const SearchView = () => {
                     aria-haspopup="dialog"
                     aria-expanded={sheetOpen}
                     onClick={() => setSheetOpen(true)}
+                    className="btn-secondary btn-icon shrink-0"
                   >
                     <HistoryIcon className="w-5 h-5" aria-hidden="true" />
-                  </IconButton>
+                  </button>
                 )}
               </>
             }
@@ -424,73 +410,28 @@ export const SearchView = () => {
                 People search cannot read the whole network yet.
               */}
               <div className="space-y-3">
-                {/*
-                  The search box is one field: the glyph, the input, Clear
-                  and Search in one card. The card draws the focus ring
-                  while the input has focus (`focus-frame`). The button
-                  drops below the field on phones, with the card's side
-                  padding under it. It is the one raised surface on the
-                  page, and 80 px tall from `sm`, the same as the Notes
-                  box, so switching modes moves nothing.
-                */}
-                <div
-                  className={cn(
-                    CARD,
-                    "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-6 pt-2 pb-4 sm:py-5",
-                  )}
-                >
-                  {isLoading ? (
-                    // Decorative: the "Searching…" line under the box says
-                    // the same thing in words, and the status region reads it.
-                    <CorvidThinking
-                      decorative
-                      size={20}
-                      className="text-primary shrink-0"
-                    />
-                  ) : (
-                    <Sparkles className="w-5 h-5 text-primary shrink-0" />
-                  )}
-                  <input
-                    ref={inputRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    // Short enough to survive a 390px viewport without the
-                    // placeholder being clipped mid-word.
-                    placeholder="Ask about your network…"
-                    aria-label="Ask anything about your network"
-                    // 44px tall on a phone, the touch floor, and the Search
-                    // button's 40 px from `sm`.
-                    className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
-                  />
-                  {/*
-                    Reserved slot, not an AnimatePresence exit. Mounting and
-                    unmounting the clear button changed the row's width
-                    mid-typing and nudged the caret; now the space is always
-                    there and only the button's opacity changes.
-                  */}
-                  <button
-                    onClick={handleClear}
-                    tabIndex={query.length > 0 ? 0 : -1}
-                    aria-hidden={query.length === 0}
-                    className={cn(
-                      ICON_BTN,
-                      "p-1.5 shrink-0 transition-opacity",
-                      query.length === 0 && "opacity-0 pointer-events-none",
-                    )}
-                    aria-label="Clear search"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => handleSearch()}
-                    disabled={query.trim().length < 3 || isLoading}
-                    className="btn-primary w-full sm:w-auto shrink-0"
-                  >
-                    <Search className="w-4 h-4" />
-                    Search
-                  </button>
-                </div>
+                {/* The search box, the one raised surface on the page. The
+                    thinking bird takes the glyph's place while the answer
+                    is on its way: the "Searching…" line under the box says
+                    the same in words, and the status region reads it. The
+                    placeholder is short enough for a 390 px window. */}
+                <AskSearchBox
+                  inputRef={inputRef}
+                  value={query}
+                  onChange={setQuery}
+                  onSubmit={() => handleSearch()}
+                  onClear={handleClear}
+                  canClear={query.length > 0}
+                  canSubmit={query.trim().length >= 3 && !isLoading}
+                  icon={Sparkles}
+                  busyMark={
+                    isLoading ? (
+                      <CorvidThinking decorative size={20} />
+                    ) : undefined
+                  }
+                  placeholder="Ask about your network…"
+                  label="Ask anything about your network"
+                />
                 <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
               </div>
 
@@ -679,9 +620,9 @@ export const SearchView = () => {
         </div>
       </div>
 
-      {/* The history. From `lg`, the rail at the right edge and the panel it
-          opens over the page, which moves nothing in the column. Below it,
-          a sheet. */}
+      {/* The history. From `lg`, the History button in the top-right
+          corner and the panel it opens over the page, which moves nothing
+          in the column. Below it, a sheet. */}
       {isWide ? (
         <HistoryPane
           currentQuery={historyQuery}

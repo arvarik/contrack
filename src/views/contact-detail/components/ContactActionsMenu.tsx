@@ -7,10 +7,25 @@
  * every visit, so they all live here now, in one menu built on `ActionMenu`:
  *
  * 1. Change colour, which opens the colour picker under this button.
- * 2. Change avatar.
+ * 2. Enrich contact, which researches this one contact on the web.
  * 3. Copy basic details and Copy full details.
  * 4. Archive or Unarchive.
  * 5. Delete, last and on its own surface tone.
+ *
+ * Enrich contact starts the same background run as the Enrichment settings
+ * page, for one contact (`startSearch` in `AISearchContext`). It asks for
+ * no confirmation, because one contact is one request: the start toasts,
+ * the progress panel opens at the bottom right, and the person keeps
+ * working. The item is not there when AI assistance is off or for a ghost,
+ * which has nothing yet to search from. While a start is on its way, or
+ * while the running batch still has a job for this contact, it reads
+ * "Enriching…" and is disabled, so a second press cannot queue the same
+ * contact twice. A limit (a cooldown, or the lock another account holds)
+ * comes back as a toast, since the menu has closed and has no page to say
+ * it on.
+ *
+ * Change avatar was here. It is the pencil on the avatar now, beside the
+ * thing it changes (`ProfileHeader`).
  *
  * The colour picker renders in the same positioned wrapper as the button, so
  * it opens under it and Escape can hand focus back to it.
@@ -20,17 +35,19 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
-  ImageIcon,
   Palette,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Contact } from "../../../types";
+import type { AISearchJobStatus, Contact } from "../../../types";
 import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { useAISearch } from "../../../contexts/AISearchContext";
+import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
 
@@ -64,11 +81,17 @@ export function fullDetailsText(contact: Contact): string {
   return textChunks.join("\n");
 }
 
+/** A job that has not finished yet: waiting, searching, or merging. */
+const UNFINISHED: ReadonlySet<AISearchJobStatus> = new Set([
+  "queued",
+  "searching",
+  "merging",
+]);
+
 type ContactActionsMenuProps = Pick<
   ProfileHeaderProps,
   | "contact"
   | "onDelete"
-  | "onOpenAvatarPicker"
   | "archiveContact"
   | "unarchiveContact"
   | "updateContact"
@@ -77,7 +100,6 @@ type ContactActionsMenuProps = Pick<
 export const ContactActionsMenu = ({
   contact,
   onDelete,
-  onOpenAvatarPicker,
   archiveContact,
   unarchiveContact,
   updateContact,
@@ -85,6 +107,17 @@ export const ContactActionsMenu = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const closePicker = useCallback(() => setPickerOpen(false), []);
+  const aiAllowed = useAiAllowed();
+  const { startSearch, isStarting, batch } = useAISearch();
+
+  // This contact is being enriched: a start is on its way, or the running
+  // batch still has an unfinished job for it.
+  const enriching =
+    isStarting ||
+    (batch?.status === "processing" &&
+      batch.jobs.some(
+        (job) => job.contactId === contact.id && UNFINISHED.has(job.status),
+      ));
 
   const copy = (text: string, success: string) => {
     copyToClipboard(text).then(
@@ -117,12 +150,19 @@ export const ContactActionsMenu = ({
       icon: Palette,
       onSelect: () => setPickerOpen(true),
     },
-    {
-      id: "avatar",
-      label: "Change avatar",
-      icon: ImageIcon,
-      onSelect: onOpenAvatarPicker,
-    },
+    // An AI action about this contact, so it follows the contact's own look
+    // and comes before the copies.
+    ...(aiAllowed && !contact.isGhost
+      ? [
+          {
+            id: "enrich",
+            label: enriching ? "Enriching…" : "Enrich contact",
+            icon: Sparkles,
+            disabled: enriching,
+            onSelect: () => startSearch([contact.id], { limitAs: "toast" }),
+          },
+        ]
+      : []),
     {
       id: "copy-basic",
       label: "Copy basic details",

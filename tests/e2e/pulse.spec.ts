@@ -192,7 +192,7 @@ test.describe("Pulse Office", () => {
     await expect(page).toHaveURL(/\/tracked$/);
   });
 
-  test("the masthead reads the day: one sentence names each count, and a count jumps to its card", async ({
+  test("the masthead reads the day: one line of facts joined by dots, and a count jumps to its card", async ({
     page,
     instance,
     seed,
@@ -244,8 +244,17 @@ test.describe("Pulse Office", () => {
     });
     expect(largest).toBe(30);
 
-    await expect(masthead).toContainText(
-      "1 overdue, 1 due today, 1 birthday this week.",
+    // One line of facts: the items joined by middle dots, with no commas
+    // and no closing period. The streak, if the seed has one, is one more
+    // item after a dot.
+    const line = masthead.locator("p", { hasText: "overdue" });
+    const visible = await line.evaluate((el) => {
+      const copy = el.cloneNode(true) as Element;
+      copy.querySelectorAll(".sr-only").forEach((node) => node.remove());
+      return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+    });
+    expect(visible).toMatch(
+      /^1 overdue · 1 due today · 1 birthday this week( · \d+ days in a row)?$/,
     );
 
     // Each count is a button that jumps to its card.
@@ -873,18 +882,33 @@ test.describe("Pulse Office", () => {
     // drop). The sensor arms its key listener in a timer queued by the Space
     // keydown, so an arrow pressed in the same few milliseconds scrolls the
     // page instead and the drop lands on the card itself. A timer queued
-    // after the sensor's runs after it, and the move is announced before
-    // the drop, so the journey waits for both.
+    // after the sensor's runs after it, and each step is announced, so the
+    // journey waits for both. The card folds to its slot while it is in the
+    // air, grip and all, so the journey reads the live region, not the grip.
     await page.keyboard.press("Space");
-    await expect(handle).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByText(
+        "Picked up Keeping up. It is in Network, position 1 of 2.",
+      ),
+    ).toBeAttached();
+    await expect(page.locator('[data-flip-id="keeping-up"]')).toHaveClass(
+      /border-dashed/,
+    );
     await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
     await page.keyboard.press("ArrowDown");
     await expect(
-      page.getByText(
-        "Draggable item keeping-up was moved over droppable area activity.",
-      ),
+      page.getByText("Keeping up moves to Network, position 2 of 2."),
     ).toBeAttached();
     await page.keyboard.press("Space");
+    await expect(
+      page.getByText("Dropped Keeping up in Network, position 2 of 2."),
+    ).toBeAttached();
+    // Focus comes back to the grip, in the card's new place.
+    await expect(
+      page
+        .locator('[data-flip-id="keeping-up"]')
+        .getByRole("button", { name: "Drag Keeping up to reorder" }),
+    ).toBeFocused();
 
     // Keeping up moved down one place: Activity is now first in Network.
     // The order arrives with the preference round trip, so poll for it.
@@ -904,7 +928,7 @@ test.describe("Pulse Office", () => {
     await expect(page.getByText("Editing layout")).not.toBeVisible();
   });
 
-  test("customize mode on phone offers Move up and Move down", async ({
+  test("customize mode on a phone width shows the grip and moves a card with the Move menu", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -913,29 +937,120 @@ test.describe("Pulse Office", () => {
     await openCustomize(page);
 
     // The Activity card sits second in the Network column, under Keeping
-    // up, so it has a Move up that does something.
+    // up, so its Move menu has a Move up and no Move down.
     const activityCard = page.locator('[data-card-id="activity"]');
     await expect(activityCard).toBeVisible();
+    // The grip shows on a phone too: a hold on it picks the card up.
+    await expect(
+      activityCard.getByRole("button", { name: "Drag Activity to reorder" }),
+    ).toBeVisible();
 
-    const moveUpBtn = activityCard.getByRole("button", {
-      name: "Move Activity up",
+    const moveMenu = activityCard.getByRole("button", {
+      name: "Move Activity",
     });
-    const moveDownBtn = activityCard.getByRole("button", {
-      name: "Move Activity down",
-    });
+    await moveMenu.click();
+    await expect(page.getByRole("menuitem", { name: "Move down" })).toHaveCount(
+      0,
+    );
+    await page.getByRole("menuitem", { name: "Move up" }).click();
 
-    await expect(moveUpBtn).toBeVisible();
-    await expect(moveDownBtn).toBeVisible();
-
-    // Click Move Activity up
-    await moveUpBtn.click();
-
-    // Now Activity is first in its column, so Move up should be disabled
-    await expect(moveUpBtn).toBeDisabled();
+    // Activity is first in its column now: the menu offers Move down, and
+    // no Move up.
+    const networkOrder = () =>
+      page
+        .locator('[data-pulse-column="network"] > [data-flip-id]')
+        .evaluateAll((cards) =>
+          cards.map((c) => c.getAttribute("data-flip-id")),
+        );
+    await expect.poll(networkOrder).toEqual(["activity", "keeping-up"]);
+    await moveMenu.click();
+    await expect(page.getByRole("menuitem", { name: "Move up" })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("menuitem", { name: "Move down" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
 
     // Put it back, then Done
     await page.getByRole("button", { name: "Reset layout" }).click();
     await page.getByRole("button", { name: "Done", exact: true }).click();
+  });
+
+  test("customize mode: a mouse drag carries a card into another column, opens the gap there, and saves once", async ({
+    page,
+    instance,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/pulse");
+    await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    await openCustomize(page);
+
+    const grip = page
+      .locator('[data-flip-id="keeping-up"]')
+      .getByRole("button", { name: "Drag Keeping up to reorder" });
+    const gripBox = (await grip.boundingBox())!;
+    const start = {
+      x: gripBox.x + gripBox.width / 2,
+      y: gripBox.y + gripBox.height / 2,
+    };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x, start.y + 10, { steps: 4 });
+
+    // The card folds to a dashed slot, and its preview follows the pointer.
+    await expect(page.locator('[data-flip-id="keeping-up"]')).toHaveClass(
+      /border-dashed/,
+    );
+    const preview = page.locator("[data-drag-preview]");
+    await expect(preview).toContainText("Keeping up");
+    await expect(preview).toContainText("Network · 1 of 2");
+
+    // Into Intelligence, over the top of Coming up: the gap opens there,
+    // before Coming up, while the card is still in the air.
+    const comingUp = (await page
+      .locator('section[data-card-id="coming-up"]')
+      .boundingBox())!;
+    await page.mouse.move(comingUp.x + comingUp.width / 2, comingUp.y + 12, {
+      steps: 30,
+    });
+    const intelOrder = () =>
+      page
+        .locator('[data-pulse-column="intel"] > [data-flip-id]')
+        .evaluateAll((cards) =>
+          cards.map((c) => c.getAttribute("data-flip-id")),
+        );
+    await expect
+      .poll(async () => {
+        const order = await intelOrder();
+        return order.indexOf("coming-up") - order.indexOf("keeping-up");
+      })
+      .toBe(1);
+    const order = await intelOrder();
+    await expect(preview).toContainText(
+      `Intelligence · ${order.indexOf("keeping-up") + 1} of ${order.length}`,
+    );
+    await page.mouse.up();
+
+    // One write, with the order the person saw.
+    await expect
+      .poll(
+        async () =>
+          (
+            await instance.api<{
+              preferences: {
+                pulseLayout: { order: Record<string, string[]> };
+              };
+            }>("GET", "/auth/preferences")
+          ).preferences.pulseLayout.order.intel,
+      )
+      .toEqual(order);
+
+    // Put the layout back.
+    await page.getByRole("button", { name: "Reset layout" }).click();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(page.getByText("Editing layout")).not.toBeVisible();
   });
 
   test("page passes automated accessibility scans in light, dark, and customize mode", async ({
@@ -1034,7 +1149,9 @@ test.describe("Pulse on a phone", () => {
     await openCustomize(page);
     await expect(page.getByTestId("hidden-cards-tray")).toHaveCount(0);
     await expect(
-      page.getByText("Use the arrows to move a card and the eye to hide one."),
+      page.getByText(
+        "Hold a card's handle, then drag it. Use the eye to hide one.",
+      ),
     ).toBeVisible();
     await page.getByRole("button", { name: "Hide Keeping up" }).click();
     await expect(page.getByTestId("hidden-cards-tray")).toBeVisible();

@@ -105,7 +105,7 @@ describe("the Track row", () => {
     expect(lastBody()).toEqual({ isTracked: true });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1));
     expect(toastMock.success.mock.calls[0][0]).toBe(
-      "Tracking Ada Lovelace, every 3 months",
+      "Tracking Ada Lovelace, quarterly",
     );
   });
 

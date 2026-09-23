@@ -168,8 +168,8 @@ test.describe("map features - filters and place search", () => {
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
 
-    // The rail's icon says whether the panel is open. A closed panel stays
-    // in the page, inert, so it is not a count of zero.
+    // The Insights button says whether the panel is open. A closed panel
+    // stays in the page, inert, so it is not a count of zero.
     const icon = page.getByRole("button", {
       name: "Map insights",
       exact: true,

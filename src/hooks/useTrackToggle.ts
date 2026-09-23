@@ -1,13 +1,14 @@
 /**
  * useTrackToggle: track or untrack one contact, with the toast and the Undo.
  *
- * Four controls flip the flag: the Track button in the contact header, the
- * `t` key on the contact page, the palette's action row and the toggle on
- * each row of the Tracked contacts page. They say the same things, so the
- * words live here once. `trackAt` is the fifth door: the cadence menu on
- * the Track button's caret, which tracks and sets the cadence in one press.
+ * Four controls flip the flag: Stop tracking in the Track button's menu in
+ * the contact header, the `t` key on the contact page, the palette's action
+ * row and the toggle on each row of the Tracked contacts page. They say the
+ * same things, so the words live here once. `trackAt` is the fifth door: a
+ * cadence row in the Track button's menu while the contact is untracked,
+ * which tracks and sets the cadence in one press.
  *
- *   off to on   "Tracking Ada Lovelace, every 3 months"    Undo untracks
+ *   off to on   "Tracking Ada Lovelace, quarterly"         Undo untracks
  *   on to off   "Stopped tracking Ada Lovelace"            Undo tracks again,
  *                                                          with the cadence
  *                                                          the contact had
@@ -82,9 +83,9 @@ export function useTrackToggle() {
   );
 
   /**
-   * Track a contact at a cadence the person picked, rather than at the
-   * account's default. The menu on the Track button's caret offers this
-   * while a contact is untracked: one press, tracked and set.
+   * Track a contact at a cadence the person picked. The Track button's menu
+   * offers this while a contact is untracked, the account's default among
+   * the rows: one press, tracked and set.
    */
   const trackAt = useCallback(
     (contact: TrackableContact, cadenceDays: number) => {

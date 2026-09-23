@@ -4,9 +4,9 @@
  * Wide (the contact pane is 768 px or more):
  *
  * ```
- * (avatar 96) Thomas Walker (they/them)                              ⋮
- *             UX Researcher at Umbrella Corp
- *             Sydney · 2:45 AM · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗
+ * (avatar 96) Thomas Walker (they/them)                  ◎ Quarterly ▾  ⋮
+ *          ✎  UX Researcher at Umbrella Corp
+ *             Sydney · 2:45 AM AEST · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗  + link
  *             [tech-lead ×] [advisor ×] [+ tag]
  * ```
  *
@@ -14,21 +14,25 @@
  *
  * ```
  * ← Network
- * (avatar 56) Thomas Walker                                  ⋮
- *             UX Researcher · Umbrella Corp
- *             Sydney · 2:45 AM · in ThomasWalker ↗
+ * (avatar 56) Thomas Walker                                  ◎ ▾  ⋮
+ *          ✎  UX Researcher · Umbrella Corp
+ *             Sydney · 2:45 AM AEST · in ↗  +
  * ```
  *
  * 1. The name is the page's h1 and takes focus when a contact opens.
  * 2. The ring around the avatar is the relationship score (ScoreRingAvatar).
- *    The contact's own colour is the page accent, not the ring.
- * 3. The meta line is text. Facts (place, local time, weather) are plain,
- *    and links look like links, with ↗ because they open a new tab.
- * 4. The header has no primary button. Colour, avatar, copy, archive and
- *    delete sit in the kebab. A note starts in the composer under the tabs,
- *    which is the first thing in the Timeline column, so a button for it
- *    here said the same thing twice. Track is the one control beside the
- *    kebab, and it carries the cadence caret while the contact is tracked.
+ *    The contact's own colour is the page accent, not the ring. The pencil
+ *    on the ring's lower right changes the picture (`AvatarEditButton`).
+ * 3. The meta line is text. Facts (place, local time with its zone, weather)
+ *    are plain, and links look like links, with ↗ because they open a new
+ *    tab. "+ link" ends the line with no dot before it, because it is an
+ *    action and not a fact (`AddLink`).
+ * 4. The header has no primary button. Colour, enrichment, copy, archive and
+ *    delete sit in the kebab, and the pencil on the avatar changes the
+ *    avatar. A note starts in the composer under the tabs, which is the
+ *    first thing in the Timeline column, so a button for it here said the
+ *    same thing twice. Track is the one control beside the kebab: a menu
+ *    that says the cadence while the contact is tracked (`TrackButton`).
  * 5. The narrow header keeps to about 140 px. The headline, the summary and
  *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
  *    the weather stays off.
@@ -44,6 +48,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   Copy,
+  Pencil,
   Trash2,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -64,12 +69,14 @@ import {
 } from "../../../components/LocalTimeWeather";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
+import { MetaDot } from "../../../components/ui/MetaDot";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
 import { scoreView } from "../../../../shared/scoreBand";
 
 import { EditableField } from "./EditableField";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
+import { AddLink } from "./AddLink";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactTags } from "./ContactTags";
 import { TrackButton } from "./TrackButton";
@@ -89,7 +96,14 @@ export interface ProfileHeaderProps {
   onUpdate: (field: string, val: string) => void;
   onDelete: () => void;
   onClose?: () => void;
+  /** Opens the avatar picker. The pencil on the avatar calls it. */
   onOpenAvatarPicker: () => void;
+  /**
+   * Receives the pencil, so the avatar picker can hand focus back to it when
+   * it closes. Safari does not focus a button it clicks, so "wherever focus
+   * was" could be the page.
+   */
+  avatarEditRef?: React.Ref<HTMLButtonElement>;
   showNetworkButton?: boolean;
   /** Which form to draw. Defaults to wide. */
   layout?: ContactLayout;
@@ -171,6 +185,9 @@ function socialLinkName(sl: ContactSocialLink): string {
   return displayName;
 }
 
+/** One item on the meta line, with the dot before it. */
+const META_ITEM = "inline-flex items-center gap-x-2 min-w-0 max-w-full";
+
 /** The host of a website, without "www.". */
 function websiteName(url: string): string {
   try {
@@ -180,8 +197,75 @@ function websiteName(url: string): string {
   }
 }
 
-/** The middle dot between two facts. Decoration: a screen reader skips it. */
-const MetaDot = () => <span aria-hidden="true">·</span>;
+// ═══════════════════════════════════════════════════════════════════════════
+// AvatarEditButton: the pencil on the avatar
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The pencil on the avatar, "Change avatar", which opens the avatar picker.
+ *
+ * It was an item in the kebab, one of six, far from the picture it changes.
+ * The products people know put the control on the picture: GitHub an Edit
+ * button with a pencil over its corner, Google a pen on the picture in the
+ * account menu, Discord's app a pencil on the avatar. Slack and Discord's
+ * desktop put a labelled button beside it, which this header has no room
+ * for, and Notion and LinkedIn make the picture itself the button, which
+ * this one cannot be: a scored ring is already the button that explains the
+ * score. A layer that shows on hover over the picture would never show on a
+ * phone, and it would promise that a click on the picture edits it.
+ *
+ * So it is a small round badge of its own, a sibling of the score button and
+ * never inside it, on the ring's lower right, where the corner of the box
+ * puts its centre on the circle:
+ *
+ * 1. 28 px on the 96 px avatar and 24 px on the narrow header's 56 px one,
+ *    each with the 44 px tap box of `hit-area`. The box sits 10 px out from
+ *    the badge's centre, towards the empty corner: centred, on the 56 px
+ *    avatar it reached past the avatar's middle, and a tap on the face,
+ *    which asks for the score, opened the picker. The pencil still wins the
+ *    taps where the two boxes meet, as the later control.
+ * 2. At rest it is lightly clear: the card face at 85 percent with a blur,
+ *    a hairline edge and a 2 px ring in the page's colour that cuts it out
+ *    of the score ring, and the pencil in the variant ink. It shows at rest
+ *    on every screen, so a phone, which has no hover, always has it.
+ * 3. On hover and on focus the face turns solid and the pencil takes the
+ *    full ink. The face is what changes, not a layer over it: over a photo,
+ *    the state layer's 6 percent ink on a clear face reads as a smudge. On
+ *    press it sinks to 95 percent, which a glyph with no text may do.
+ * 4. Its name and its tooltip are "Change avatar". Focus draws the app's one
+ *    ring, which nothing here clips, and comes back to the pencil when the
+ *    picker closes (`avatarEditRef`, passed to the picker's `Modal`).
+ */
+const AvatarEditButton = ({
+  narrow,
+  onClick,
+  buttonRef,
+}: {
+  narrow: boolean;
+  onClick: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+}) => (
+  <button
+    ref={buttonRef}
+    type="button"
+    onClick={onClick}
+    aria-label="Change avatar"
+    title="Change avatar"
+    className={cn(
+      "hit-area absolute right-0 bottom-0 z-10 flex items-center justify-center rounded-full",
+      // The tap box, moved out towards the corner (see 1 above).
+      "after:translate-x-2.5 after:translate-y-2.5",
+      narrow ? "size-6" : "size-7",
+      "bg-surface-container-lowest/85 backdrop-blur-sm border border-outline-variant/70 ring-2 ring-surface shadow-sm",
+      "text-on-surface-variant transition duration-(--dur-fast)",
+      "hover:bg-surface-container-lowest hover:text-on-surface",
+      "focus-visible:bg-surface-container-lowest focus-visible:text-on-surface",
+      "active:scale-95",
+    )}
+  >
+    <Pencil aria-hidden="true" className={narrow ? "w-3 h-3" : "w-3.5 h-3.5"} />
+  </button>
+);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SocialLink: a text link on the meta line, with its own small actions menu
@@ -344,6 +428,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   onDelete,
   onClose,
   onOpenAvatarPicker,
+  avatarEditRef,
   showNetworkButton = false,
   layout = "wide",
   backLabel,
@@ -393,18 +478,33 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   );
 
   // ── Social links ──────────────────────────────────────────────────────
+  /** The links as the update takes them: what each is, not its row id. */
+  const linkPayload = (links: ContactSocialLink[]) =>
+    links.map((s) => ({
+      platform: s.platform,
+      url: s.url,
+      handle: s.handle,
+    }));
+
+  /**
+   * "+ link": the links the contact has, and the new one with its URL alone.
+   * The server works out its platform and handle from the host.
+   */
+  const addSocialLink = (url: string) => {
+    updateContact.mutate({
+      id: contact.id,
+      data: {
+        socialLinks: [...linkPayload(contact.socialLinks || []), { url }],
+      },
+    });
+  };
+
   const removeSocialLink = (id: string) => {
     const before = contact.socialLinks || [];
     const after = before.filter((s) => s.id !== id);
-    const payload = (links: ContactSocialLink[]) =>
-      links.map((s) => ({
-        platform: s.platform,
-        url: s.url,
-        handle: s.handle,
-      }));
     updateContact.mutate({
       id: contact.id,
-      data: { socialLinks: payload(after) },
+      data: { socialLinks: linkPayload(after) },
     });
     toast("Link removed", {
       duration: 7000,
@@ -413,7 +513,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         onClick: () =>
           updateContact.mutate({
             id: contact.id,
-            data: { socialLinks: payload(before) },
+            data: { socialLinks: linkPayload(before) },
           }),
       },
     });
@@ -421,7 +521,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
   // ── Meta line ─────────────────────────────────────────────────────────
   // Each item is one fact or one link. The dots go between items, so the
-  // line never starts or ends with one.
+  // line never starts or ends with one. "+ link" follows the last item with
+  // no dot: it is an action, not a fact.
   const metaItems: { key: string; node: React.ReactNode }[] = [];
   const place =
     shortPlace(contact.addresses?.[0]?.address) ?? shortPlace(contact.location);
@@ -488,6 +589,11 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       ),
     });
   }
+  // What a new link must not repeat: the links, and the website beside them.
+  const knownLinks = [
+    ...(contact.socialLinks || []).map((sl) => sl.url),
+    ...(contact.website ? [contact.website] : []),
+  ];
 
   const avatarSize = narrow ? 56 : 96;
   const followUp = describeFollowUp(contact.nextFollowUpAt);
@@ -552,15 +658,18 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             narrow ? "gap-4" : "gap-6",
           )}
         >
-          {/* Avatar in the score ring. "Change avatar" is in the contact
-              actions menu.
+          {/* Avatar in the score ring, with the pencil that changes it.
 
               A scored ring is the button that explains the score. The
               breakdown used to be reachable only from the map's hover card,
               which is the one place a person is not reading about this
               contact. The ring is then decorative, because the button around
-              it carries the name. */}
-          <div className="relative shrink-0">
+              it carries the name.
+
+              `flex`, so the box is the avatar's own size: as a block around
+              an inline button it ran 6 px under the ring, and everything
+              placed on its edge sat 6 px low. */}
+          <div className="relative shrink-0 flex">
             {headerScore === null ? (
               <ScoreRingAvatar
                 contact={contact}
@@ -577,11 +686,29 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 />
               </ScoreBreakdown>
             )}
-            {/* The warning ink on the card face, lifted off the avatar by its
-                shadow. White on a raw amber measured about 2 to 1. */}
+            <AvatarEditButton
+              narrow={narrow}
+              onClick={onOpenAvatarPicker}
+              buttonRef={avatarEditRef}
+            />
+            {/* The warning ink on the card face, lifted off the page by its
+                shadow. White on a raw amber measured about 2 to 1. It sits
+                just under the avatar, centred: over the ring's bottom edge,
+                where it sat before the pencil came, it ran into the pencil
+                at both sizes. The narrow header drops the glyph and some
+                padding: at 95 px the chip was wider than the 56 px avatar
+                and its gap, and ran off the phone's edge and into the meta
+                line. The word says it alone. */}
             {!!contact.isArchived && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-surface-container-lowest text-warning text-[11px] font-bold uppercase tracking-[0.08em] px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap z-20">
-                <Archive aria-hidden="true" className="w-2.5 h-2.5" />
+              <div
+                className={cn(
+                  "absolute top-full mt-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-surface-container-lowest text-warning text-[11px] font-bold uppercase tracking-[0.08em] py-0.5 rounded-md shadow-sm whitespace-nowrap z-20",
+                  narrow ? "px-1.5" : "px-2",
+                )}
+              >
+                {!narrow && (
+                  <Archive aria-hidden="true" className="w-2.5 h-2.5" />
+                )}
                 Archived
               </div>
             )}
@@ -679,7 +806,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   </button>
                 )}
 
-                {/* Track, with the cadence caret inside it while tracked. A
+                {/* Track: a menu that says the cadence while tracked. A
                     ghost cannot be tracked: it shows Promote to contact. */}
                 {!contact.isGhost && (
                   <TrackButton contact={contact} compact={narrow} />
@@ -688,7 +815,6 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 <ContactActionsMenu
                   contact={contact}
                   onDelete={onDelete}
-                  onOpenAvatarPicker={onOpenAvatarPicker}
                   archiveContact={archiveContact}
                   unarchiveContact={unarchiveContact}
                   updateContact={updateContact}
@@ -724,22 +850,36 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             )}
 
-            {/* Meta line: facts as text, links as links */}
-            {metaItems.length > 0 && (
-              <div className={cn(META_LINE, narrow ? "mt-1" : "mt-3")}>
-                {/* Each dot stays with the item after it, so a line that
-                    wraps never ends on a dot. */}
-                {metaItems.map((item, index) => (
-                  <span
-                    key={item.key}
-                    className="inline-flex items-center gap-x-2 min-w-0 max-w-full"
-                  >
-                    {index > 0 && <MetaDot />}
-                    {item.node}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Meta line: facts as text, links as links, and "+ link" at
+                the end. The line always shows, so "+ link" is always there,
+                even for a contact with no facts yet. */}
+            <div className={cn(META_LINE, narrow ? "mt-1" : "mt-3")}>
+              {/* Each dot stays with the item after it, so a line that
+                  wraps never ends on a dot. */}
+              {metaItems.slice(0, -1).map((item, index) => (
+                <span key={item.key} className={META_ITEM}>
+                  {index > 0 && <MetaDot />}
+                  {item.node}
+                </span>
+              ))}
+              {/*
+                The last item and "+ link" wrap as one: on a phone the plus
+                on a line of its own read as a stray bullet. No dot before
+                it: an action, not a fact. The pair is one element whatever
+                the last item is, so "+ link" is the same element after a
+                save, and focus stays on it while the new link arrives in
+                front of it.
+              */}
+              <span key="last" className={META_ITEM}>
+                {metaItems.length > 1 && <MetaDot />}
+                {metaItems.at(-1)?.node}
+                <AddLink
+                  links={knownLinks}
+                  onAdd={addSocialLink}
+                  iconOnly={narrow}
+                />
+              </span>
+            </div>
 
             {/* Tags, then lists. Narrow, they open the Details tab. */}
             {!narrow && (

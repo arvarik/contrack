@@ -79,10 +79,10 @@ const INSIGHTS_LABEL = "Map insights";
  *
  * The cover is placed by its layout box, `offsetLeft` from its offset
  * parent, which a transform does not move: the contact slides in and out
- * and is measured mid-slide. The contact runs to the window's edge, past the
- * insights rail, so its width is more than it covers. With no offset parent
- * (a document with no layout) it is taken to sit flush with the map's right
- * edge.
+ * and is measured mid-slide. What it covers is the part of its box over
+ * the map, which is its whole width while both run to the window's edge.
+ * With no offset parent (a document with no layout) it is taken to sit
+ * flush with the map's right edge.
  */
 function coveredWidth(panel: HTMLElement, map: DOMRect): number {
   const width = panel.offsetWidth;

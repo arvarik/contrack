@@ -11,7 +11,11 @@ import {
   MIN_RECENT_LIMIT,
   MAX_RECENT_LIMIT,
 } from "../../../hooks/useRecentContacts";
-import { CADENCE_CHOICES, isCadenceDays } from "../../../../shared/cadence";
+import {
+  cadenceOptions,
+  describeCadence,
+  isCadenceDays,
+} from "../../../../shared/cadence";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Select } from "../../../components/ui/Select";
 import { Switch } from "../../../components/ui/Switch";
@@ -121,8 +125,11 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        {/* A Select, not a Segmented: five choices are too many for a
-            trough at phone width. */}
+        {/* The four cadences, and the stored one when it is off the list:
+            every 2 months or every 6 months, saved before 2.0, shows as a
+            fifth option in its place in the order, so the select never
+            names a default the account does not have. A Select, not a
+            Segmented: five words do not fit a trough at phone width. */}
         <SettingRow
           id="cadence"
           title="Default cadence"
@@ -139,10 +146,12 @@ export const NetworkPage = () => {
               if (isCadenceDays(days))
                 setPreference("defaultCadenceDays", days);
             }}
-            options={CADENCE_CHOICES.map((choice) => ({
-              value: String(choice.days),
-              label: choice.label,
-            }))}
+            options={cadenceOptions(preferences.defaultCadenceDays).map(
+              (days) => ({
+                value: String(days),
+                label: describeCadence(days),
+              }),
+            )}
           />
         </SettingRow>
 

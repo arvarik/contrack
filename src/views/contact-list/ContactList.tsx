@@ -71,6 +71,9 @@ import {
   useRecentContactsLimit,
 } from "../../hooks/useRecentContacts";
 import { useLongPress } from "../../hooks/useLongPress";
+import { useProximityLift } from "../../hooks/useProximityLift";
+import { useDebounce } from "../../hooks/useDebounce";
+import { LiveStatus } from "../../components/ui/LiveStatus";
 
 import { ContactListItem } from "./ContactListItem";
 import { BulkActionToolbar } from "./BulkActionToolbar";
@@ -285,6 +288,8 @@ export const ContactList = () => {
     },
     { disabled: typeof window !== "undefined" && window.innerWidth >= 768 },
   );
+  // The rows rise toward the pointer. Nothing renders while it moves.
+  useProximityLift(scrollRef);
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const archiveContact = useArchiveContact();
   const { recentIds, recordVisit } = useRecentContacts();
@@ -544,6 +549,29 @@ export const ContactList = () => {
   // ── Density ─────────────────────────────────────────────────────────
   const { density, metrics } = useListDensity();
 
+  // ── The search's count ──────────────────────────────────────────────
+  /**
+   * How many rows a search leaves, said where the results start: in the
+   * slot the Recent strip and "All contacts" take while nobody searches,
+   * in the same small label, "12 matches". The eye goes from the box to the
+   * first row, and the count sits between them. Inside the box it cost the
+   * query its room in a narrow pane, and "3/12" there reads as a find bar
+   * that Enter steps through. With no match, the empty state says so.
+   *
+   * A screen reader hears the count once the typing pauses, not on every
+   * letter: the status waits a second (WCAG 4.1.3, status messages).
+   */
+  const matchCount = filteredContacts.length;
+  const showMatchCount = !isLoading && Boolean(searchQuery) && matchCount > 0;
+  const searchAnnouncement = useDebounce(
+    searchQuery && !isLoading
+      ? matchCount === 0
+        ? "No contacts found"
+        : `${matchCount} ${matchCount === 1 ? "contact" : "contacts"} found`
+      : "",
+    1000,
+  );
+
   // ── Virtualization ──────────────────────────────────────────────────
   /**
    * How far the virtual list starts below the top of the scroll container.
@@ -596,6 +624,7 @@ export const ContactList = () => {
     recentLimit,
     density,
     searchQuery,
+    showMatchCount,
     filterMode,
     isLoading,
     pullDistance,
@@ -827,6 +856,7 @@ export const ContactList = () => {
           )
         }
       >
+        <LiveStatus label="Contact search" message={searchAnnouncement} />
         <div className="flex gap-1.5 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
@@ -1086,6 +1116,19 @@ export const ContactList = () => {
                   level={id ? 3 : 2}
                 />
               ))}
+
+            {/* The search's count, where the results start. */}
+            {showMatchCount && (
+              <div className="flex items-center gap-1.5 px-1">
+                <Search
+                  className="w-3 h-3 text-on-surface-variant"
+                  aria-hidden="true"
+                />
+                <span className={cn(LABEL, "tabular-nums")}>
+                  {matchCount} {matchCount === 1 ? "match" : "matches"}
+                </span>
+              </div>
+            )}
 
             {/* ── Recent contacts strip ─────────────────────────────────────── */}
             {!isLoading &&

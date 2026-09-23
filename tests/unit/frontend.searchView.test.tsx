@@ -587,24 +587,22 @@ describe("the history", () => {
     expect(panel()?.hasAttribute("inert")).toBe(true);
   });
 
-  it("hides from the panel's own button, and hands focus to the rail icon", async () => {
+  it("closes from the History button that opened it, with no second close button", async () => {
     const sent = stubFetch();
     renderView();
 
     const aside = await screen.findByRole("complementary", { name: "History" });
-    const hide = within(aside).getByRole("button", { name: "Hide history" });
-    // The shortcut that also toggles the panel is in the tooltip.
-    expect(hide.getAttribute("title")).toBe("Hide history (H)");
+    expect(within(aside).queryByRole("button", { name: /hide/i })).toBeNull();
+    const button = screen.getByRole("button", { name: "History" });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
     // A press focuses the button in a browser. jsdom's click does not.
-    hide.focus();
-    fireEvent.click(hide);
+    button.focus();
+    fireEvent.click(button);
 
     await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
     expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
     expect(panel()?.hasAttribute("inert")).toBe(true);
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "History" }),
-    );
+    expect(document.activeElement).toBe(button);
   });
 
   it("toggles the panel with the H key outside a text field", async () => {
@@ -623,12 +621,12 @@ describe("the history", () => {
     expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
   });
 
-  it("hands focus to the rail icon when H closes the panel from inside it", async () => {
+  it("hands focus to the History button when H closes the panel from inside it", async () => {
     stubFetch();
     renderView();
 
     const aside = await screen.findByRole("complementary", { name: "History" });
-    const inside = within(aside).getByRole("button", { name: "Hide history" });
+    const inside = within(aside).getByRole("radio", { name: "All" });
     inside.focus();
     fireEvent.keyDown(inside, { key: "h" });
 
@@ -665,7 +663,7 @@ describe("the history", () => {
     stubFetch();
     renderView();
 
-    // No rail below lg: the header's button opens a sheet.
+    // No side panel below lg: the header's button opens a sheet.
     const button = await screen.findByRole("button", { name: "History" });
     expect(panel()).toBeNull();
     expect(button.getAttribute("aria-expanded")).toBe("false");

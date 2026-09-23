@@ -6,8 +6,15 @@ import {
   resolveLayout,
   pulseLayoutReducer,
   MAX_CARDS_PER_COL,
+  columnOf,
+  moveCard,
+  sameColumns,
+  dropAction,
 } from "../../src/views/pulse/lib/layout";
-import type { PulseLayout } from "../../src/views/pulse/lib/layout";
+import type {
+  PulseLayout,
+  VisibleColumns,
+} from "../../src/views/pulse/lib/layout";
 
 describe("pulse.layout", () => {
   it("provides sensible defaults for all 3 columns", () => {
@@ -302,5 +309,103 @@ describe("pulse.layout", () => {
       "activity",
       "keeping-up",
     ]);
+  });
+});
+
+// =============================================================================
+// The drag's draft
+// =============================================================================
+// A drag moves a card through a local copy of the visible columns and saves
+// once, on the drop, through the reducer. These are the pure steps.
+// =============================================================================
+describe("pulse.layout: the drag's draft", () => {
+  const start = (): VisibleColumns =>
+    resolveLayout(DEFAULT_PULSE_LAYOUT).visible;
+
+  it("finds the column that holds a card", () => {
+    expect(columnOf(start(), "up-next")).toBe("focus");
+    expect(columnOf(start(), "activity")).toBe("network");
+    expect(columnOf(start(), "composition")).toBe("intel");
+    expect(columnOf(start(), "not-a-card")).toBeNull();
+  });
+
+  it("moves a card to another column at an index among that column's other cards", () => {
+    const before = start();
+    const next = moveCard(before, "keeping-up", "focus", 1);
+    expect(next.focus).toEqual(["up-next", "keeping-up", "completed"]);
+    expect(next.network).toEqual(["activity"]);
+    expect(next.intel).toEqual(before.intel);
+    // Pure: the columns it was given are left as they were.
+    expect(before.network).toEqual(["keeping-up", "activity"]);
+    expect(before.focus).toEqual(["up-next", "completed"]);
+  });
+
+  it("moves a card inside its own column, counting the others", () => {
+    // Index 1 among the others (Activity) is after Activity.
+    expect(moveCard(start(), "keeping-up", "network", 1).network).toEqual([
+      "activity",
+      "keeping-up",
+    ]);
+    expect(moveCard(start(), "composition", "intel", 0).intel).toEqual([
+      "composition",
+      "insight",
+      "inbox",
+      "coming-up",
+    ]);
+  });
+
+  it("clamps the index to the column", () => {
+    expect(moveCard(start(), "inbox", "network", 99).network).toEqual([
+      "keeping-up",
+      "activity",
+      "inbox",
+    ]);
+    expect(moveCard(start(), "inbox", "network", -3).network).toEqual([
+      "inbox",
+      "keeping-up",
+      "activity",
+    ]);
+  });
+
+  it("tells two sets of columns apart by order, not only by content", () => {
+    expect(sameColumns(start(), start())).toBe(true);
+    expect(
+      sameColumns(start(), moveCard(start(), "keeping-up", "network", 1)),
+    ).toBe(false);
+  });
+
+  it("turns a drop in the same column into one reorder of that column", () => {
+    const after = moveCard(start(), "keeping-up", "network", 1);
+    const action = dropAction(start(), after, "keeping-up");
+    expect(action).toEqual({
+      type: "reorder",
+      column: "network",
+      cardIds: ["activity", "keeping-up"],
+    });
+    expect(
+      resolveLayout(pulseLayoutReducer(DEFAULT_PULSE_LAYOUT, action!)).visible,
+    ).toEqual(after);
+  });
+
+  it("turns a drop in another column into one move to its place there", () => {
+    const after = moveCard(start(), "up-next", "intel", 2);
+    const action = dropAction(start(), after, "up-next");
+    expect(action).toEqual({
+      type: "move",
+      cardId: "up-next",
+      targetColumn: "intel",
+      targetIndex: 2,
+    });
+    // The saved layout is the draft the person saw.
+    expect(
+      resolveLayout(pulseLayoutReducer(DEFAULT_PULSE_LAYOUT, action!)).visible,
+    ).toEqual(after);
+  });
+
+  it("saves nothing for a card let go where it started", () => {
+    expect(dropAction(start(), start(), "inbox")).toBeNull();
+    const there = moveCard(start(), "inbox", "focus", 0);
+    const back = moveCard(there, "inbox", "intel", 1);
+    expect(dropAction(start(), back, "inbox")).toBeNull();
   });
 });

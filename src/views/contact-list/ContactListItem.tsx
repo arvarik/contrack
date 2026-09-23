@@ -27,6 +27,7 @@ import { cn } from "../../lib/utils";
 import { Contact } from "../../types";
 import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
 import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
+import { PROXIMITY_ROW_ATTR } from "../../hooks/useProximityLift";
 import { describeFollowUp } from "../../lib/followUp";
 import { MapPin } from "lucide-react";
 
@@ -198,12 +199,16 @@ const ContactListItemInner = ({
       onClick={handleClick}
       tabIndex={tabIndex}
       {...(rovingIndex !== undefined && { [ROVING_INDEX_ATTR]: rovingIndex })}
+      {...{ [PROXIMITY_ROW_ATTR]: "" }}
       onKeyDown={onRowKeyDown}
       onFocus={onRowFocus}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className={cn(
         listRow(selected),
+        // The row rises toward the pointer (`useProximityLift` on the
+        // list), so its transition names `translate` with its colours.
+        "proximity-row transition-[translate,color,background-color]",
         // Compact trims the padding, not the information: the same name and
         // company are shown, just in less vertical space.
         compact && "gap-2.5 p-2",

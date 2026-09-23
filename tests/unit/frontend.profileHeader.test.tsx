@@ -4,9 +4,12 @@
 // =============================================================================
 // The header had a palette button, an archive button, a kebab and an unnamed
 // sparkle at the same rank as the name. It now has no primary button, only a
-// kebab with everything in it: a note starts in the composer under the tabs.
-// Links on the meta line say that they open a new tab. The weather asks a third party for the contact's
-// coordinates, so it must not ask when it is not allowed to.
+// kebab with the rare actions in it, Enrich contact among them: a note starts
+// in the composer under the tabs. The avatar carries its own pencil, "Change
+// avatar", a button beside the score button and never inside it. Links on
+// the meta line say that they open a new tab, and "+ link" after them adds
+// one. The weather asks a third party for the contact's coordinates, so it
+// must not ask when it is not allowed to.
 //
 // The briefing moved from a modal behind the sparkle to a card at the top of
 // the Dossier tab, with a labelled button, a status line and an error line.
@@ -38,6 +41,28 @@ const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 );
 vi.mock("sonner", () => ({ toast: toastMock }));
+
+/**
+ * The enrichment context, which the app provides at its root. A test sets
+ * what is running and reads what was started.
+ */
+const aiSearch = vi.hoisted(() => ({
+  startSearch: vi.fn(),
+  isStarting: false,
+  batch: null as null | {
+    status: "processing" | "complete" | "cancelled";
+    jobs: { contactId: string; status: string }[];
+  },
+}));
+vi.mock("../../src/contexts/AISearchContext", () => ({
+  useAISearch: () => aiSearch,
+}));
+
+/** Whether AI assistance is on for the account. */
+const ai = vi.hoisted(() => ({ allowed: true }));
+vi.mock("../../src/hooks/useAiAllowed", () => ({
+  useAiAllowed: () => ai.allowed,
+}));
 
 import {
   ContactIntro,
@@ -168,6 +193,10 @@ afterEach(() => {
   toastMock.mockClear();
   toastMock.success.mockClear();
   toastMock.error.mockClear();
+  aiSearch.startSearch.mockClear();
+  aiSearch.isStarting = false;
+  aiSearch.batch = null;
+  ai.allowed = true;
 });
 
 /** A clipboard that records what it was given, or refuses. */
@@ -211,16 +240,15 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("puts the Track split button beside the kebab, in one shape either way", () => {
+  it("puts the one Track menu button beside the kebab, saying the cadence once tracked", () => {
     const { unmount } = mount(<ProfileHeader {...makeProps()} />);
-    const track = screen.getByRole("button", { name: "Track" });
-    expect(track.getAttribute("aria-pressed")).toBe("false");
-    // The caret is there before tracking too, offering the same choice the
-    // word takes by default, so the control never changes shape.
-    expect(
-      screen.getByRole("button", { name: "Track, and choose how often" }),
-    ).toBeTruthy();
+    const track = screen.getByRole("button", {
+      name: "Track, choose how often",
+    });
+    expect(track.getAttribute("aria-haspopup")).toBe("menu");
+    // One control: no toggle beside a caret, and no second half.
     expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Track" })).toBeNull();
     // Track comes before the kebab in the cluster.
     const kebab = screen.getByRole("button", { name: "Contact actions" });
     expect(
@@ -235,17 +263,13 @@ describe("the contact header", () => {
         })}
       />,
     );
-    expect(
-      screen
-        .getByRole("button", { name: "Tracked" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "Cadence: every 3 months" }),
-    ).toBeTruthy();
+    const tracked = screen.getByRole("button", {
+      name: "Tracking quarterly, change or stop",
+    });
+    expect(tracked.textContent).toContain("Quarterly");
   });
 
-  it("shows the icon-only Track and the wordless caret in the narrow header", () => {
+  it("shows Track as the glyph and the chevron in the narrow header, with the words in the name", () => {
     mount(
       <ProfileHeader
         {...makeProps({
@@ -254,14 +278,13 @@ describe("the contact header", () => {
         })}
       />,
     );
-    const track = screen.getByRole("button", { name: "Tracked" });
+    const track = screen.getByRole("button", {
+      name: "Tracking quarterly, change or stop",
+    });
     expect(track.textContent).toBe("");
-    expect(track.getAttribute("title")).toBe("Tracked");
-    // The caret carries the cadence in its name, not in words on screen.
-    expect(
-      screen.getByRole("button", { name: "Cadence: every 3 months" })
-        .textContent,
-    ).toBe("");
+    expect(track.getAttribute("title")).toBe(
+      "Tracking quarterly, change or stop",
+    );
   });
 
   it("offers no Track to a ghost, which cannot be tracked", () => {
@@ -276,21 +299,21 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("has no top-level colour, archive, avatar or briefing buttons", () => {
+  it("has no top-level colour, archive, enrichment or briefing buttons", () => {
     mount(<ProfileHeader {...makeProps()} />);
-    for (const name of [/colou?r/i, /archive/i, "Change avatar", /briefing/i]) {
+    for (const name of [/colou?r/i, /archive/i, /enrich/i, /briefing/i]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
 
-  it("lists the six contact actions in order", () => {
+  it("lists the six contact actions in order, Enrich contact after the colour", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     const menu = screen.getByRole("menu", { name: "Contact actions" });
     const items = within(menu).getAllByRole("menuitem");
     const names = [
       "Change colour",
-      "Change avatar",
+      "Enrich contact",
       "Copy basic details",
       "Copy full details",
       "Archive",
@@ -300,6 +323,10 @@ describe("the contact header", () => {
     names.forEach((name, index) => {
       expect(within(menu).getByRole("menuitem", { name })).toBe(items[index]);
     });
+    // Change avatar moved to the pencil on the avatar.
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Change avatar" }),
+    ).toBeNull();
   });
 
   it("offers Unarchive for an archived contact", () => {
@@ -313,13 +340,62 @@ describe("the contact header", () => {
     expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
   });
 
-  it("opens the avatar picker from Change avatar", () => {
+  it("opens the avatar picker from the pencil on the avatar", () => {
     const props = makeProps();
-    mount(<ProfileHeader {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Change avatar" }));
+    const pencilRef = React.createRef<HTMLButtonElement>();
+    mount(<ProfileHeader {...props} avatarEditRef={pencilRef} />);
+    const pencil = screen.getByRole("button", { name: "Change avatar" });
+    expect(pencil.getAttribute("title")).toBe("Change avatar");
+    // The picker hands focus back to this very button when it closes.
+    expect(pencilRef.current).toBe(pencil);
+    fireEvent.click(pencil);
     expect(props.onOpenAvatarPicker).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu")).toBeNull();
+    // 28 px on the 96 px avatar, with the 44 px tap box.
+    expect(pencil.className).toContain("size-7");
+    expect(pencil.className).toContain("hit-area");
+  });
+
+  it("puts the pencil beside the score button, never inside it", () => {
+    // A tracked contact with a score: the ring is the button that explains
+    // it, so the pencil has to be a sibling (axe: nested-interactive).
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({
+            isTracked: true,
+            relationshipScore: 72,
+            lastContactedAt: "2026-09-01T00:00:00.000Z",
+          }),
+        })}
+      />,
+    );
+    const score = screen.getByRole("button", {
+      name: "Relationship score 72 out of 100, explain",
+    });
+    const pencil = screen.getByRole("button", { name: "Change avatar" });
+    expect(score.contains(pencil)).toBe(false);
+    expect(pencil.parentElement?.closest("button")).toBeNull();
+    // The score first, then the pencil, then the name: the reading order.
+    expect(
+      score.compareDocumentPosition(pencil) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("keeps the Archived chip and the ghost badge clear of the pencil", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({ isArchived: true, isGhost: true }),
+        })}
+      />,
+    );
+    const pencil = screen.getByRole("button", { name: "Change avatar" });
+    const chip = screen.getByText("Archived");
+    // The pencil holds the lower right corner, the chip sits under the
+    // avatar, and the ghost badge holds the upper right corner.
+    expect(pencil.className).toContain("bottom-0");
+    expect(pencil.className).toContain("right-0");
+    expect(chip.className).toContain("top-full");
   });
 
   it("opens social links in a new tab, and says so", () => {
@@ -572,6 +648,212 @@ describe("the contact actions", () => {
     );
     const link = screen.getByRole("link", { name: /umbrella\.com/ });
     expect(link.getAttribute("target")).toBe("_blank");
+  });
+});
+
+describe("Enrich contact", () => {
+  /** The kebab's enrich item, by either of its two names. */
+  function enrichItem() {
+    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+    return screen.queryByRole("menuitem", { name: /^Enrich/ });
+  }
+
+  it("starts a run for this one contact, with any limit said in a toast", () => {
+    mount(<ProfileHeader {...makeProps()} />);
+    fireEvent.click(enrichItem()!);
+    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
+      limitAs: "toast",
+    });
+    // No confirmation for one contact: the run starts on the choice.
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("is not offered when AI assistance is off, or for a ghost", () => {
+    ai.allowed = false;
+    const { unmount } = mount(<ProfileHeader {...makeProps()} />);
+    expect(enrichItem()).toBeNull();
+    unmount();
+
+    ai.allowed = true;
+    mount(
+      <ProfileHeader
+        {...makeProps({ contact: makeContact({ isGhost: true }) })}
+      />,
+    );
+    expect(enrichItem()).toBeNull();
+  });
+
+  it("reads Enriching… and waits while a start is on its way", () => {
+    aiSearch.isStarting = true;
+    mount(<ProfileHeader {...makeProps()} />);
+    const item = enrichItem()!;
+    expect(item.textContent).toBe("Enriching…");
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(item);
+    expect(aiSearch.startSearch).not.toHaveBeenCalled();
+  });
+
+  it("waits while the running batch has an unfinished job for this contact, and only this one", () => {
+    aiSearch.batch = {
+      status: "processing",
+      jobs: [
+        { contactId: "c1", status: "searching" },
+        { contactId: "c2", status: "queued" },
+      ],
+    };
+    const { unmount } = mount(<ProfileHeader {...makeProps()} />);
+    expect(enrichItem()!.getAttribute("aria-disabled")).toBe("true");
+    unmount();
+
+    // This contact's job is done, another's is not: the item is free.
+    aiSearch.batch = {
+      status: "processing",
+      jobs: [
+        { contactId: "c1", status: "success" },
+        { contactId: "c2", status: "searching" },
+      ],
+    };
+    const again = mount(<ProfileHeader {...makeProps()} />);
+    const item = enrichItem()!;
+    expect(item.textContent).toBe("Enrich contact");
+    expect(item.getAttribute("aria-disabled")).toBeNull();
+    again.unmount();
+
+    // A batch that has finished holds nothing back.
+    aiSearch.batch = {
+      status: "cancelled",
+      jobs: [{ contactId: "c1", status: "queued" }],
+    };
+    mount(<ProfileHeader {...makeProps()} />);
+    expect(enrichItem()!.getAttribute("aria-disabled")).toBeNull();
+  });
+});
+
+describe("+ link", () => {
+  it("ends the meta line after the last link, with no dot before it", () => {
+    mount(<ProfileHeader {...makeProps()} />);
+    const add = screen.getByRole("button", { name: "Add link" });
+    expect(add.textContent).toBe("link");
+    const line = add.parentElement!;
+    expect(line.lastElementChild).toBe(add);
+    // The item before it is the last link, and nothing sits between them.
+    const lastLink = screen.getByRole("link", { name: /@Thomas_Walker/ });
+    expect(add.previousElementSibling?.contains(lastLink)).toBe(true);
+  });
+
+  it("adds the link as a URL alone, after the links the contact has", () => {
+    const props = makeProps();
+    mount(<ProfileHeader {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    const field = screen.getByRole("textbox", { name: "New link" });
+    fireEvent.change(field, { target: { value: "github.com/thomaswalker" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(props.updateContact.mutate).toHaveBeenCalledWith({
+      id: "c1",
+      data: {
+        socialLinks: [
+          {
+            platform: "linkedin",
+            url: "https://www.linkedin.com/in/ThomasWalker",
+            handle: "ThomasWalker",
+          },
+          {
+            platform: "twitter",
+            url: "https://twitter.com/Thomas_Walker",
+            handle: "@Thomas_Walker",
+          },
+          { url: "https://github.com/thomaswalker" },
+        ],
+      },
+    });
+    // Closed, with focus back on "+ link" rather than on the page.
+    expect(screen.queryByRole("textbox", { name: "New link" })).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Add link" }),
+    );
+  });
+
+  it("keeps focus on + link while the new link arrives in front of it", () => {
+    const client = new QueryClient();
+    const wrap = (ui: React.ReactElement) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </QueryClientProvider>
+    );
+    const props = makeProps();
+    const { rerender } = render(wrap(<ProfileHeader {...props} />));
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    const field = screen.getByRole("textbox", { name: "New link" });
+    fireEvent.change(field, { target: { value: "github.com/thomaswalker" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    const add = screen.getByRole("button", { name: "Add link" });
+    expect(document.activeElement).toBe(add);
+
+    // The save answers, and the new link is the last one now.
+    const links = makeContact().socialLinks;
+    rerender(
+      wrap(
+        <ProfileHeader
+          {...props}
+          contact={makeContact({
+            socialLinks: [
+              ...links,
+              {
+                id: "s3",
+                platform: "github",
+                url: "https://github.com/thomaswalker",
+                handle: "thomaswalker",
+                source: null,
+              },
+            ],
+          })}
+        />,
+      ),
+    );
+    expect(
+      screen.getByRole("link", { name: /thomaswalker, Github/ }),
+    ).toBeTruthy();
+    // The same button, still focused: it was not rebuilt.
+    expect(screen.getByRole("button", { name: "Add link" })).toBe(add);
+    expect(document.activeElement).toBe(add);
+  });
+
+  it("refuses the website again, in another spelling", () => {
+    const props = makeProps({
+      contact: makeContact({ website: "https://www.umbrella.com" }),
+    });
+    mount(<ProfileHeader {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    const field = screen.getByRole("textbox", { name: "New link" });
+    fireEvent.change(field, { target: { value: "umbrella.com/" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This contact already has that link.",
+    );
+    expect(props.updateContact.mutate).not.toHaveBeenCalled();
+  });
+
+  it("is the plus alone in the narrow header, named and titled", () => {
+    mount(<ProfileHeader {...makeProps({ layout: "narrow" })} />);
+    const add = screen.getByRole("button", { name: "Add link" });
+    expect(add.textContent).toBe("");
+    expect(add.getAttribute("title")).toBe("Add link");
+  });
+
+  it("shows for a contact with no place, time or links yet", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({
+            socialLinks: [],
+            location: null,
+            lat: null,
+            lng: null,
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Add link" })).toBeTruthy();
   });
 });
 

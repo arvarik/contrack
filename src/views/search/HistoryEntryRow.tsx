@@ -2,7 +2,10 @@
  * HistoryEntryRow — one question in the search history pane.
  *
  * Each row is a full-width button that re-runs the question on click.
- * Hover and focus reveal Pin and Delete icon buttons with 44px hit areas.
+ * Hover and focus reveal Pin and Delete, two small icon buttons with 44 px
+ * tap boxes, at the end of the row's meta line ("7 people · 18 hours ago"),
+ * which keeps their room free. They used to float on a card-face pill over
+ * the row's middle and covered the end of the question itself.
  *
  * @module views/search/HistoryEntryRow
  */
@@ -10,9 +13,8 @@
 import React from "react";
 import { FileText, Pin, PinOff, Search, Sparkles, Trash2 } from "lucide-react";
 import type { HistoryEntry } from "../../../shared/searchHistory";
-import { IconButton } from "../../components/ui/IconButton";
 import { formatRelative } from "../../lib/datetime";
-import { SELECTED_ROW } from "../../lib/styles";
+import { ICON_BTN, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 export interface HistoryEntryRowProps {
@@ -87,9 +89,9 @@ export const HistoryEntryRow = React.memo(
           onClick={() => onSelect(entry)}
           aria-label={`Run again: ${entry.query}`}
           aria-current={isCurrent ? "true" : undefined}
-          // The text takes the row's width. Only a touch screen, where Pin
-          // and Delete always show, keeps room for them.
-          className="w-full text-left p-2.5 [@media(hover:none)]:pr-20 flex items-start gap-2.5 rounded-xl cursor-pointer"
+          // The question takes the row's whole width. Pin and Delete sit at
+          // the end of the meta line under it, which keeps their room.
+          className="w-full text-left p-2.5 flex items-start gap-2.5 rounded-xl cursor-pointer"
         >
           <div className="p-1 rounded-lg bg-surface-container-highest shrink-0 mt-0.5">
             <Icon className="w-3.5 h-3.5 text-primary" />
@@ -105,45 +107,47 @@ export const HistoryEntryRow = React.memo(
             >
               {entry.query}
             </div>
-            <div className="text-xs text-on-surface-variant mt-0.5">
+            <div className="text-xs text-on-surface-variant mt-0.5 pr-14 truncate">
               {renderMeta()}
             </div>
           </div>
         </button>
 
-        {/* Pin and Delete (44 px tap boxes). With a pointer they float over
-            the row's right edge on a card-face pill while the row is hovered
-            or holds focus, and take no pointer events while hidden: an
-            invisible Delete took the taps at a row's end. A touch screen
-            has no hover, so there they always show, in room the row keeps. */}
-        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-lg p-0.5 bg-surface-container-lowest shadow-sm transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:bg-transparent [@media(hover:none)]:shadow-none">
-          <IconButton
+        {/* Pin and Delete, at the end of the meta line, in the room it
+            keeps. With a pointer they show while the row is hovered or holds
+            focus, and take no pointer events while hidden: an invisible
+            Delete took the taps at a row's end. A touch screen has no hover,
+            so there they always show. Each glyph is 24 px on screen with a
+            44 px tap box. */}
+        <div className="absolute right-2 bottom-1.5 flex items-center gap-0.5 transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto">
+          <button
+            type="button"
             aria-label={entry.pinned ? "Unpin question" : "Pin question"}
-            size="sm"
-            tone="subtle"
+            title={entry.pinned ? "Unpin" : "Pin"}
             onClick={(e) => {
               e.stopPropagation();
               onTogglePin(entry.id, !entry.pinned);
             }}
+            className={cn(ICON_BTN, "p-1 rounded-md")}
           >
             {entry.pinned ? (
-              <PinOff className="w-4 h-4 text-primary" />
+              <PinOff className="w-4 h-4 text-primary" aria-hidden="true" />
             ) : (
-              <Pin className="w-4 h-4" />
+              <Pin className="w-4 h-4" aria-hidden="true" />
             )}
-          </IconButton>
-
-          <IconButton
+          </button>
+          <button
+            type="button"
             aria-label="Delete question"
-            size="sm"
-            tone="danger"
+            title="Delete"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(entry.id);
             }}
+            className={cn(ICON_BTN, "p-1 rounded-md hover:text-error")}
           >
-            <Trash2 className="w-4 h-4" />
-          </IconButton>
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
     );

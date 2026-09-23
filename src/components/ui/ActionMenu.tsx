@@ -77,6 +77,17 @@ export interface ActionMenuItem {
   disabled?: boolean;
   /** A hint at the end of the row: a shortcut ("L"), a count. */
   hint?: string;
+  /**
+   * The hint is words a screen reader should hear too ("Default"). A key or
+   * a count stays silent: the row's name already says what it does.
+   */
+  speakHint?: boolean;
+  /**
+   * A hairline before the item, to set it apart from the rows above it that
+   * are not destructive: Stop tracking under the cadences. A `danger` item
+   * gets one of its own.
+   */
+  separatorBefore?: boolean;
 }
 
 export interface ActionMenuProps {
@@ -303,6 +314,13 @@ export const ActionMenu = ({
       item.danger && MENU_ITEM_DANGER,
       item.disabled && "opacity-50 cursor-not-allowed",
     );
+    // A spoken hint joins the name after a comma: "Quarterly, Default".
+    // Written out, because the hint is a flex item, a block of its own to
+    // the name, and text in its box was read with a space before the comma.
+    const spokenName =
+      item.speakHint && item.hint && !isChecked
+        ? `${item.label}, ${item.hint}`
+        : undefined;
     if (item.to && !item.disabled) {
       return (
         <Link
@@ -310,6 +328,7 @@ export const ActionMenu = ({
           to={item.to}
           role={role}
           aria-checked={isCheckable ? isChecked : undefined}
+          aria-label={spokenName}
           tabIndex={-1}
           className={classes}
           onPointerMove={focusOnPointer}
@@ -328,6 +347,7 @@ export const ActionMenu = ({
         type="button"
         role={role}
         aria-checked={isCheckable ? isChecked : undefined}
+        aria-label={spokenName}
         tabIndex={-1}
         aria-disabled={item.disabled || undefined}
         onPointerMove={focusOnPointer}
@@ -383,7 +403,14 @@ export const ActionMenu = ({
               {heading}
             </div>
           )}
-          {regular.map(renderItem)}
+          {regular.map((item, index) => (
+            <React.Fragment key={item.id}>
+              {item.separatorBefore && index > 0 && (
+                <div role="none" className={MENU_SEPARATOR} />
+              )}
+              {renderItem(item)}
+            </React.Fragment>
+          ))}
           {danger.length > 0 && (
             // A hairline before the destructive items, so a thumb aimed at
             // the last safe item has a gap to miss into.

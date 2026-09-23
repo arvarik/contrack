@@ -25,6 +25,7 @@ import {
 } from "react";
 import { useMatch, useNavigate, useSearchParams } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
+import { cubicBezier } from "motion/react";
 import { CalendarPlus, ZoomIn, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMapContacts, useBulkAddToList } from "../../api";
@@ -39,7 +40,12 @@ import {
 } from "../../api/mapViews";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
-import { SIDE_PANEL_WIDTH } from "../../components/layout/SidePanel";
+import {
+  SIDE_PANEL_CLOSE_MS,
+  SIDE_PANEL_OPEN_MS,
+  SIDE_PANEL_WIDTH,
+} from "../../components/layout/SidePanel";
+import { EASE } from "../../lib/motion";
 import { ContactMap } from "./ContactMap";
 import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
 import {
@@ -77,6 +83,12 @@ import { QuickInteractionModal } from "../../components/QuickInteractionModal";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
 import { cn } from "../../lib/utils";
+
+/**
+ * The insights panel's own curve, so the map's pan and the panel's slide
+ * start, run and land together.
+ */
+const PANEL_EASING = cubicBezier(...EASE);
 
 /** The box around the placed contacts among `people`, or null for none. */
 const placedBounds = (people: readonly MapContact[]) =>
@@ -507,13 +519,23 @@ export const MapView = () => {
   const open = contacts.find((contact) => contact.id === openId) ?? null;
   const openLat = open?.lat ?? null;
   const openLng = open?.lng ?? null;
+  // The pane's last state, so a move that only the pane asked for takes the
+  // pane's timing: 300 ms in and 200 out, on its curve.
+  const paneWasOpen = useRef(isPaneOpen);
   useEffect(() => {
     if (!map) return;
+    const paneMoved = paneWasOpen.current !== isPaneOpen;
+    paneWasOpen.current = isPaneOpen;
     const padding = paddingFor(
       measureInsets(map.getContainer(), { contactOpen: openId !== null }),
     );
     if (openLat !== null && openLng !== null) {
       flyToContact(map, { longitude: openLng, latitude: openLat }, { padding });
+    } else if (paneMoved) {
+      settlePadding(map, padding, {
+        duration: isPaneOpen ? SIDE_PANEL_OPEN_MS : SIDE_PANEL_CLOSE_MS,
+        easing: PANEL_EASING,
+      });
     } else {
       settlePadding(map, padding);
     }
@@ -615,9 +637,8 @@ export const MapView = () => {
   }, [singleKeyShortcuts, handleFitAll, toggleInsightsPane]);
 
   return (
-    // The map, and beside it from `lg` the insights rail: the rail is in the
-    // layout, so the map ends where it starts, and the panel slides over the
-    // map from under it.
+    // The map, edge to edge. From `lg` the insights button sits in its
+    // top-right corner and the panel slides over its right edge.
     //
     // On a phone the bottom line spans the map above the tab bar, where
     // MapLibre's zoom buttons, and the credit on top of them, also start.

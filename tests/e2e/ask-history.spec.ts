@@ -9,8 +9,9 @@
  * - Filtering narrows the visible list.
  * - Clearing all removes entries through ConfirmDialog.
  * - From `lg` the history is a panel over the page, opened and closed from
- *   the rail's icon and closed from its own Hide button, which hands the
- *   keyboard to the rail icon. Opening it moves nothing on the page.
+ *   the History button in the page's top-right corner, which stays where it
+ *   is. Escape inside the panel closes it and hands the keyboard to the
+ *   button. Opening it moves nothing on the page.
  * - Phone view opens history pane as a mobile bottom sheet.
  * - Accessibility scans on open desktop, closed desktop, and notes mode.
  */
@@ -22,10 +23,10 @@ import { expectPageAccessible } from "./fixtures/a11y";
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
 /**
- * The rail's icon, a disclosure for the panel. `exact` keeps it apart from
- * the panel's own "Hide history" button.
+ * The History button, a disclosure for the panel. `exact` keeps it apart
+ * from the entries' "Run again: …" buttons.
  */
-const railIcon = (page: Page) =>
+const historyButton = (page: Page) =>
   page.getByRole("button", { name: "History", exact: true });
 
 /**
@@ -33,7 +34,10 @@ const railIcon = (page: Page) =>
  * and `inert`, so it can slide back out; to Playwright it is still visible.
  */
 async function expectPanelOpen(page: Page, open: boolean) {
-  await expect(railIcon(page)).toHaveAttribute("aria-expanded", String(open));
+  await expect(historyButton(page)).toHaveAttribute(
+    "aria-expanded",
+    String(open),
+  );
   const panel = page.getByRole("complementary", { name: "History" });
   if (open) await expect(panel).not.toHaveAttribute("inert");
   else await expect(panel).toHaveAttribute("inert");
@@ -178,23 +182,35 @@ test.describe("desktop", () => {
       historyPane.getByText("Your questions will appear here"),
     ).toBeVisible();
 
-    // The rail icon closes the panel and opens it again. The panel slides
-    // over the page, so the search box does not move by a pixel.
+    // The History button closes the panel and opens it again. The panel
+    // slides over the page, so the search box does not move by a pixel,
+    // and the button stays where it is.
     const boxOpen = await input.boundingBox();
-    await railIcon(page).click();
+    const buttonOpen = (await historyButton(page).boundingBox())!;
+    await historyButton(page).click();
     await expectPanelOpen(page, false);
     expect(await input.boundingBox()).toEqual(boxOpen);
-    await railIcon(page).click();
+    // Open, the button is latched: pressed in by 2 px, as on a press.
+    // Closed, it rises 1 px under the pointer that just pressed it. It does
+    // not move across the page.
+    const buttonClosed = (await historyButton(page).boundingBox())!;
+    expect(buttonClosed.x).toBe(buttonOpen.x);
+    expect(buttonClosed.width).toBe(buttonOpen.width);
+    expect(Math.abs(buttonClosed.y - buttonOpen.y)).toBeLessThanOrEqual(3);
+    await historyButton(page).click();
     await expectPanelOpen(page, true);
     expect(await input.boundingBox()).toEqual(boxOpen);
 
-    // The panel closes from its own heading row too, and the keyboard lands
-    // on the rail icon that opens it again
-    const paneHide = historyPane.getByRole("button", { name: "Hide history" });
-    await expect(paneHide).toHaveAttribute("title", /^Hide history/);
-    await paneHide.click();
+    // The button is the one way out: the panel has no Hide button of its
+    // own. Escape inside the panel closes it too, and the keyboard lands on
+    // the button that opens it again.
+    await expect(
+      historyPane.getByRole("button", { name: /^Hide/ }),
+    ).toHaveCount(0);
+    await historyPane.getByRole("textbox", { name: "Filter history" }).focus();
+    await page.keyboard.press("Escape");
     await expectPanelOpen(page, false);
-    await expect(railIcon(page)).toBeFocused();
+    await expect(historyButton(page)).toBeFocused();
 
     // Accessibility check with pane closed
     await expectPageAccessible(page, testInfo, "ask-history-desktop-closed");
@@ -216,7 +232,7 @@ test.describe("desktop", () => {
     // shared instance. Put it back, so the next journey finds the panel it
     // expects.
     await page.goto("/search");
-    await railIcon(page).click();
+    await historyButton(page).click();
     await expectPanelOpen(page, true);
   });
 
@@ -231,9 +247,9 @@ test.describe("desktop", () => {
     // Its open state is an account preference, so another journey on the
     // same instance may have closed it.
     await page.goto("/search");
-    await expect(railIcon(page)).toBeVisible();
-    if ((await railIcon(page).getAttribute("aria-expanded")) === "false") {
-      await railIcon(page).click();
+    await expect(historyButton(page)).toBeVisible();
+    if ((await historyButton(page).getAttribute("aria-expanded")) === "false") {
+      await historyButton(page).click();
     }
     await expectPanelOpen(page, true);
     const searchInput = page.getByRole("textbox", {
@@ -318,7 +334,7 @@ test.describe("phone", () => {
 
     await page.goto("/search");
 
-    // On a phone there is no rail and no panel
+    // On a phone there is no side panel
     await expect(page.locator("#search-history")).toHaveCount(0);
 
     // The history button opens the mobile sheet

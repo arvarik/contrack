@@ -448,3 +448,61 @@ describe("closing an account", () => {
     ).toEqual({ n: 0 });
   });
 });
+
+/**
+ * The default cadence.
+ *
+ * The menus offer four cadences since 2.0: weekly, monthly, quarterly and
+ * yearly. Every 2 months and every 6 months were choices before that, and an
+ * account that saved one must keep it: a stored value the schema refuses is
+ * skipped on read, and the account would drop to quarterly without a word.
+ *
+ * Last in the file, with an account of its own: the isolation test above
+ * counts the accounts that have rows.
+ */
+describe("the default cadence", () => {
+  let C: Actor;
+  beforeAll(async () => {
+    C = await createActor(app, {
+      username: "prefcadence",
+      email: "prefcadence@test.dev",
+    });
+  });
+
+  it("takes each of the four choices, weekly included", async () => {
+    for (const days of [7, 30, 90, 365]) {
+      const res = await patch(C, { defaultCadenceDays: days });
+      expect(res.status, String(days)).toBe(200);
+      expect(res.body.preferences.defaultCadenceDays).toBe(days);
+    }
+  });
+
+  it("still takes every 2 months and every 6 months, and reads them back", async () => {
+    for (const days of [60, 180]) {
+      const res = await patch(C, { defaultCadenceDays: days });
+      expect(res.status, String(days)).toBe(200);
+      expect(getPreferences(C.user.id).defaultCadenceDays).toBe(days);
+    }
+    // A row written before 2.0, straight into the table.
+    sqlite
+      .prepare(
+        `INSERT INTO user_settings (userId, key, value) VALUES (?, ?, ?)
+         ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
+      )
+      .run(C.user.id, "pref.defaultCadenceDays", "60");
+    const res = await get(C);
+    expect(res.body.preferences.defaultCadenceDays).toBe(60);
+    expect(res.body.stored).toContain("defaultCadenceDays");
+  });
+
+  it.each([
+    ["a number of days no menu has offered", 45],
+    ["zero", 0],
+    ["a string", "90"],
+  ])("refuses %s", async (_label, days) => {
+    const before = getPreferences(C.user.id).defaultCadenceDays;
+    const res = await patch(C, { defaultCadenceDays: days });
+    expect(res.status).toBe(400);
+    expect(getPreferences(C.user.id).defaultCadenceDays).toBe(before);
+  });
+});

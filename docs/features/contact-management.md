@@ -88,6 +88,8 @@ The three actions are icon buttons at every width. Each has an accessible name a
 - The scrollbar sits on the **left** edge of the list. The letter rail sits on the right, and the two no longer share a strip: a thumb on "M" reaches "M".
 - When the letter rail shows (an alphabetical list of 15 or more people), the rows stop 2 rem short of the right edge. A selected row's ring and a hover tint end before the letters.
 - The current row is a light primary wash with a 1 px inset ring. Keyboard focus draws its own ring on top.
+- **A search's count** sits where its results start, in the list's own small label, the slot that holds "Recent" and "All contacts" while nobody searches: "12 matches". With no match the empty state says so, and no count shows. A screen reader hears "12 contacts found" once the typing pauses for a second, from a status region beside the search box, not on every letter.
+- **Rows rise toward the pointer.** The row under a mouse rises up to 2 px with a soft shadow, and the neighbour on the pointer's side rises as the pointer nears it: in a row's lower half the row below, in its upper half the row above. On the line between two rows each has half the lift. It follows a mouse only, not a touch, the rows do not move under reduced motion (the shadow stays), and a key press in the list lays them down. Nothing renders while the pointer moves (`useProximityLift`).
 
 ### The Start Panel
 
@@ -110,32 +112,30 @@ The header names the person and says the facts you need before you talk. It has 
 
 ```
 Wide:
-(avatar 96) Thomas Walker (they/them)            [◎ Tracked │ ▾]        ⋮
-            UX Researcher at Umbrella Corp
-            Sydney · 2:45 AM · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗
+(avatar 96) Thomas Walker (they/them)             [◎ Quarterly ▾]       ⋮
+         ✎  UX Researcher at Umbrella Corp
+            Sydney · 2:45 AM AEST · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗  + link
             [tech-lead ×] [advisor ×] [+ tag]
 
 Narrow:
 ← Network
-(avatar 56) Thomas Walker                            [◎ │ ▾]           ⋮
-            UX Researcher · Umbrella Corp
-            Sydney · 2:45 AM · ThomasWalker ↗
+(avatar 56) Thomas Walker                            [◎ ▾]             ⋮
+         ✎  UX Researcher · Umbrella Corp
+            Sydney · 2:45 AM AEST · ↗  +
 ```
 
-The Track control is a split button, and it is the same shape before and
-after: `[◎ Track │ ▾]` becomes `[◎ Tracked │ ▾]`.
-
-```
-
-```
+The Track control is one menu button, and it keeps one width whatever it
+says: `[◎ Track ▾]` becomes `[◎ Quarterly ▾]`. The ✎ is the pencil on the
+avatar that changes the picture.
 
 1. **The name** is the page's `h1`. Opening a contact moves focus to it. The name, the role and the company each edit in place. The ring around the avatar is the relationship score (see [The Score Ring](#the-score-ring)).
-2. **The meta line** is plain text: the location, the person's local time, and the weather. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**.
+2. **The meta line** is plain text: the location, the person's local time with its short time zone ("2:45 AM AEST", or "GMT+9" where the zone has no common abbreviation), and the weather. A screen reader hears the zone's full name. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**. **+ link** ends the line, with no dot before it because it is an action: it opens a field, "Paste a link", where Enter adds the link. `https://` is added when the text has none, and text that is not a web address, or a link the contact already has in any spelling, is refused beside the field. The server works out the platform from the host, so the link arrives with its icon. On a phone it is the plus alone.
 3. **The weather** makes a request to Open-Meteo with the contact's coordinates. It shows only when it is allowed. When it is not shown, no request is made. The settings revamp adds the switch for it.
 4. **Tags** are chips. **+ tag** adds one. Removing a tag offers **Undo** for 7 seconds. List memberships sit on the same row.
-5. **Track** is the one control beside the ⋮ menu, and it is a split button: the word on the left, a caret on the right behind a hairline. The word says **Track** when off and **Tracked** when on, and it is a toggle (`aria-pressed`). Tracked, the control takes the primary wash. The caret is there in both states and means the same thing in both, how often. **Pressing it changes nothing about the shape**, and the word does not move: the label is sized to the longer of the two words. See [Tracking](#tracking). In the narrow header the word gives way to the glyph, with the same caret.
-6. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
-7. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
+5. **Track** is the one control beside the ⋮ menu: one menu button, 32 px tall, with no line down its middle. It reads **Track** when off and the cadence when on, one word ("Quarterly"), in the selected tint. It keeps one width whatever it says, so choosing a cadence never moves it. See [Tracking](#tracking). In the narrow header the word gives way to the glyph, with the chevron.
+6. **The pencil on the avatar** (✎, "Change avatar") opens the avatar picker. It is a small round badge on the ring's lower right, lightly clear at rest and solid under the pointer or the keyboard, and it shows on a phone too, which has no hover. It is its own button beside the avatar, because a scored avatar is already the button that explains the score. When the picker closes, focus comes back to the pencil.
+7. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Enrich contact**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. **Enrich contact** researches this one person on the web in the background, the way the Enrichment settings page does for many: the progress panel opens at the bottom right and you keep working. It is hidden when AI is off for the account and for a ghost, and it reads **Enriching…** while this contact's research runs. A limit (a cooldown, or another account's research in progress) is said in a toast. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
+8. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
 
 A ghost contact shows **Promote to contact** and no Track button, because a ghost cannot be tracked. In the narrow header, the button sits under the meta line.
 
@@ -355,7 +355,7 @@ It is also in the Command Palette action sub-menu (`B`).
 
 ## Avatar System
 
-Open **Contact actions → Change avatar**. There are three ways to set a contact's avatar:
+Press the pencil on the avatar (**Change avatar**). There are three ways to set a contact's avatar:
 
 1. **Upload** — Drag or click to upload an image (max 10 MB)
 2. **URL** — Paste an image URL
@@ -371,11 +371,11 @@ The relationship score and Pulse are about the people you chose to keep up with.
 
 ### Track, on the contact page
 
-- **The Track button** sits beside the ⋮ menu in the header. Press it when off and the contact is tracked, the ring appears around the avatar, and a toast says "Tracking Ada Lovelace, every 3 months" with **Undo**. Press it when on and the ring goes, the toast says "Stopped tracking Ada Lovelace", and **Undo** tracks again with the cadence the contact had.
-- **The cadence caret** is the right end of the Track button, separated from the word by a hairline, and it is there whether or not the contact is tracked. It carries no words: its name and its tooltip say what it does. It opens a menu, **Keep up**, with five choices: every month, every 2 months, every 3 months, every 6 months, every year.
-  - **Before tracking**, the caret is named "Track, and choose how often", and its rows are five ways to take the same action the word takes: choosing one tracks the contact at that cadence rather than at the **Default cadence**, in one press. None is checked, because there is no cadence yet.
-  - **After tracking**, it is named for the cadence now in force, "Cadence: every 3 months", the current row is checked, and choosing another changes it and toasts "Ada Lovelace, every month". A cadence set through the API that is not on the list shows as a sixth checked item, "Every 45 days", so the menu never claims a cadence the contact does not have.
-- **The `t` key** does what the button does, toast and Undo included. It is listed under **Contact** in the shortcuts dialog and obeys the single-key shortcuts switch.
+- **The Track button** sits beside the ⋮ menu in the header, and it opens one menu, **Keep up**, with four choices, one word each: **Weekly**, **Monthly**, **Quarterly** and **Yearly**.
+  - **Before tracking**, the button reads **Track** and is named "Track, choose how often". Each row tracks the contact at that cadence in one press, and the **Default cadence** row carries the hint "Default". The ring appears around the avatar, and a toast says "Tracking Ada Lovelace, quarterly" with **Undo**.
+  - **After tracking**, the button reads the cadence ("Quarterly") and is named "Tracking quarterly, change or stop". The current row is checked, and choosing another changes it and toasts "Ada Lovelace, monthly". **Stop tracking**, under a hairline, untracks: the ring goes, the toast says "Stopped tracking Ada Lovelace", and **Undo** tracks again with the cadence the contact had.
+  - **A cadence off the four**, such as every 2 months or every 6 months saved before 2.0, or any value the API took, keeps working. It shows as one more checked row in its place in the order ("Every 2 months"), and the button says it short, "2 months", so the menu never claims a cadence the contact does not have. The choices were five sentences before 2.0 (every month, every 2 months, every 3 months, every 6 months, every year).
+- **The `t` key** tracks or untracks in one press, at the **Default cadence**, toast and Undo included. It is listed under **Contact** in the shortcuts dialog and obeys the single-key shortcuts switch.
 - **The cadence** is set at the moment of tracking: from the request when it names one, else from the **Default cadence** preference. A contact that is not tracked has no cadence anyone can see.
 
 ### Track, in bulk

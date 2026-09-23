@@ -118,7 +118,7 @@ curl http://localhost:3210/api/contacts/abc123
 }
 ```
 
-**Tracking.** `isTracked` says a person chose to keep up with this contact. Only a tracked contact has a score, a place on Pulse and a tint on the map. Every contact starts untracked. `trackedAt` is the moment the flag last turned on, written by the database and null while untracked. `cadenceDays` is set at the moment of tracking: from the request when it names one, else from the account's `defaultCadenceDays` preference (30, 60, 90, 180 or 365). `relationshipScore` on an untracked contact is a placeholder and never shown.
+**Tracking.** `isTracked` says a person chose to keep up with this contact. Only a tracked contact has a score, a place on Pulse and a tint on the map. Every contact starts untracked. `trackedAt` is the moment the flag last turned on, written by the database and null while untracked. `cadenceDays` is set at the moment of tracking: from the request when it names one, else from the account's `defaultCadenceDays` preference (7, 30, 60, 90, 180 or 365; the app offers 7, 30, 90 and 365 as Weekly, Monthly, Quarterly and Yearly). `relationshipScore` on an untracked contact is a placeholder and never shown.
 
 ---
 

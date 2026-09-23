@@ -288,15 +288,17 @@ describe("the Tracked contacts page", () => {
     const edsger = screen
       .getByText("Edsger Dijkstra")
       .closest("[data-contact-id]")!;
-    expect(edsger.textContent).toContain("every month");
+    expect(edsger.textContent).toContain("monthly");
     expect(edsger.textContent).toContain("3 weeks past due");
     const ada = screen.getByText("Ada Lovelace").closest("[data-contact-id]")!;
-    expect(ada.textContent).toContain("every 3 months");
+    expect(ada.textContent).toContain("quarterly");
     expect(ada.textContent).not.toContain("past due");
     const linus = screen
       .getByText("Linus Torvalds")
       .closest("[data-contact-id]")!;
-    expect(linus.textContent).not.toContain("every");
+    // No cadence at all for a contact nobody tracks: its stored 90 days
+    // were never chosen for it.
+    expect(linus.textContent).not.toMatch(/quarterly|monthly|every/);
   });
 
   it("links each name to the contact", () => {
@@ -384,7 +386,11 @@ describe("the Tracked contacts page", () => {
     expect(api.bulkUpdate).toHaveBeenCalledTimes(1);
 
     fireEvent.click(within(bar).getByRole("button", { name: "Cadence" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Every month" }));
+    // The four cadences, one word each.
+    expect(
+      screen.getAllByRole("menuitem").map((item) => item.textContent),
+    ).toEqual(["Weekly", "Monthly", "Quarterly", "Yearly"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Monthly" }));
     expect(api.bulkUpdate).toHaveBeenLastCalledWith(
       { ids: ["linus", "margaret"], data: { cadenceDays: 30 } },
       expect.anything(),
