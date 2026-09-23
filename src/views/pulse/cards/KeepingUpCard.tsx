@@ -100,7 +100,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
 
   if (!tracking) {
     return (
-      <CardFrame cardId="keeping-up" title="Keeping up" compact>
+      <CardFrame cardId="keeping-up" title="Keeping up">
         <div className="animate-pulse space-y-3 py-2" aria-busy="true">
           <div className="h-2.5 bg-surface-container-high rounded-full" />
           <div className="h-7 bg-surface-container-high rounded w-2/3" />
@@ -113,7 +113,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
 
   if (count === 0) {
     return (
-      <CardFrame cardId="keeping-up" title="Keeping up" compact>
+      <CardFrame cardId="keeping-up" title="Keeping up">
         <EmptyState
           level={3}
           icon={Radar}
@@ -139,7 +139,6 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
       cardId="keeping-up"
       title="Keeping up"
       count={count}
-      compact
       headerAction={
         <Link to="/tracked" className={BTN_QUIET}>
           Manage

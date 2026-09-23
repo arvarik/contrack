@@ -59,6 +59,7 @@ import { Segmented } from "../components/ui/Segmented";
 import { PageHeader } from "../components/layout/PageHeader";
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { useBulkActions } from "../components/bulk/useBulkActions";
+import { useSwapFocus } from "../components/bulk/useSwapFocus";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useTrackToggle, type TrackableContact } from "../hooks/useTrackToggle";
 import { describePastDue, parseServerTime } from "../lib/datetime";
@@ -78,6 +79,7 @@ import {
 } from "../lib/styles";
 import { cn } from "../lib/utils";
 import type { Contact } from "../types";
+import { SelectedCount } from "./contact-list/BulkActionToolbar";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The groups
@@ -190,9 +192,6 @@ export function pastDue(
 // A row
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** The middle dot between two facts. Decoration: a screen reader skips it. */
-const Dot = () => <span aria-hidden="true">·</span>;
-
 interface RowProps {
   contact: Contact;
   selectMode: boolean;
@@ -251,19 +250,31 @@ const TrackedRow = React.memo(function TrackedRow({
       <ScoreRingAvatar contact={contact} size={40} ring="list" />
 
       <div className="flex-1 min-w-0">
+        {/* A selected row's name takes the primary ink: the tint alone is
+            about 1.06 to 1. */}
         <Link
           to={`/contact/${contact.id}`}
-          className="hit-area font-semibold text-sm text-on-surface hover:underline rounded truncate block w-fit max-w-full"
+          className={cn(
+            "hit-area font-semibold text-sm hover:underline rounded truncate block w-fit max-w-full",
+            selectMode && selected ? "text-on-primary-wash" : "text-on-surface",
+          )}
         >
           {contact.name}
         </Link>
+        {/* The facts, a middle dot between two. Each dot sits in the gap
+            before its fact, and the line clips what falls outside it, so a
+            fact that wraps takes its dot out of sight: no line ends, or
+            starts, with a dot. The dot is decoration, and a screen reader
+            skips it. */}
         {facts.length > 0 && (
-          <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-on-surface-variant">
+          <p className="flex flex-wrap items-center gap-x-3 overflow-hidden text-xs text-on-surface-variant">
             {facts.map((fact, index) => (
-              <React.Fragment key={index}>
-                {index > 0 && <Dot />}
+              <span key={index} className="relative">
+                <span aria-hidden="true" className="absolute -left-2">
+                  ·
+                </span>
                 {fact}
-              </React.Fragment>
+              </span>
             ))}
           </p>
         )}
@@ -412,6 +423,10 @@ export const TrackedContactsView = () => {
       return next;
     });
   }, []);
+  // Select and Done trade places. Focus follows to the one that appears.
+  const selectButtonRef = useRef<HTMLButtonElement>(null);
+  const doneButtonRef = useRef<HTMLButtonElement>(null);
+  useSwapFocus(selectMode, doneButtonRef, selectButtonRef);
   const bulk = useBulkActions({
     selectedIds,
     contacts: visible,
@@ -419,6 +434,28 @@ export const TrackedContactsView = () => {
   });
   const { handleBulkCadence } = bulk;
   const selectedCount = selectedIds.size;
+  // The bar's room: its height, its sticky offset and a gap. While the bar
+  // shows, the scroller keeps it as scroll padding, so a checkbox that Tab
+  // reaches stops above the bar, not under it. Measured, as in ContactList:
+  // the offset changes at `md`.
+  const [barRoom, setBarRoom] = useState(0);
+  const measureBar = useCallback((bar: HTMLDivElement | null) => {
+    if (!bar) return;
+    const measure = () =>
+      setBarRoom(
+        bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0) + 8,
+      );
+    measure();
+    if (typeof ResizeObserver === "undefined") return () => setBarRoom(0);
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      setBarRoom(0);
+    };
+  }, []);
+  /** Nobody picked, or a change on its way: the bar's buttons wait. */
+  const nothingToAct = bulk.isPending || selectedCount === 0;
 
   const cadenceItems = useMemo(
     () =>
@@ -502,17 +539,54 @@ export const TrackedContactsView = () => {
   );
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto nice-scrollbar">
+    <div
+      ref={scrollRef}
+      className="h-full overflow-y-auto nice-scrollbar"
+      style={barRoom ? { scrollPaddingBottom: barRoom } : undefined}
+    >
       <div
         className={cn(
           PAGE_X,
           PAGE_TOP,
-          "max-w-4xl mx-auto pb-32 md:pb-28 space-y-5",
+          "max-w-4xl mx-auto pb-24 md:pb-6 space-y-5",
         )}
       >
-        <PageHeader title={NAMES.tracked.title} description={TRACKED_INTRO} />
+        {/* Select sits with the title, as on the Network list. In the row
+            below it wrapped to a line of its own on a phone, under the
+            full-width order control. */}
+        <PageHeader
+          title={NAMES.tracked.title}
+          description={TRACKED_INTRO}
+          actions={
+            selectMode ? (
+              // The count is in the bar, once.
+              <button
+                key="done"
+                ref={doneButtonRef}
+                type="button"
+                onClick={exitSelectMode}
+                className="btn-secondary btn-sm"
+              >
+                Done
+              </button>
+            ) : (
+              <button
+                key="select"
+                ref={selectButtonRef}
+                type="button"
+                onClick={() => setSelectMode(true)}
+                disabled={visible.length === 0}
+                className={cn(ICON_BTN, "disabled:opacity-40")}
+                aria-label="Select"
+                title="Select"
+              >
+                <Square className="w-5 h-5" aria-hidden="true" />
+              </button>
+            )
+          }
+        />
 
-        {/* Search, the order, and Select */}
+        {/* Search and the order */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[12rem]">
             <Search
@@ -537,27 +611,6 @@ export const TrackedContactsView = () => {
               { value: "recent", label: "Recently tracked" },
             ]}
           />
-          {selectMode ? (
-            // The count is in the bar, once.
-            <button
-              type="button"
-              onClick={exitSelectMode}
-              className="btn-secondary btn-sm"
-            >
-              Done
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSelectMode(true)}
-              disabled={visible.length === 0}
-              className={cn(ICON_BTN, "disabled:opacity-40")}
-              aria-label="Select"
-              title="Select"
-            >
-              <Square className="w-5 h-5" aria-hidden="true" />
-            </button>
-          )}
         </div>
 
         {isLoading && (
@@ -657,64 +710,79 @@ export const TrackedContactsView = () => {
             })}
           </div>
         )}
-      </div>
 
-      {/* The bar: Track, Untrack, the cadence, and the count. */}
-      <AnimatePresence>
-        {selectMode && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 300 }}
-            className="fixed bottom-24 md:bottom-6 left-0 right-0 z-40 px-4 sm:px-6 max-w-4xl mx-auto"
-          >
-            <div
-              role="toolbar"
-              aria-label="Bulk actions"
-              className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hide"
+        {/* The bar: the count, Track, Untrack and the cadence. It is the
+            column's last child and sticks to the bottom of the scroller, so
+            it is exactly as wide as the cards above it, beside the rail at
+            every width. Fixed to the window, it was centred on the window
+            instead: past the cards on a desktop, and over the rail's
+            Settings gear at 768 px. The column's bottom padding is the gap
+            it sticks at, so the last row scrolls clear of it. */}
+        <AnimatePresence>
+          {selectMode && (
+            <motion.div
+              ref={measureBar}
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ type: "spring", damping: 22, stiffness: 300 }}
+              className="sticky bottom-24 md:bottom-6 z-40"
             >
-              <span
-                aria-live="polite"
-                className="text-sm font-bold text-on-surface mx-2 shrink-0 tabular-nums"
+              <div
+                role="toolbar"
+                aria-label="Bulk actions"
+                className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hide"
               >
-                <span className="text-primary">{selectedCount}</span> selected
-              </span>
-              <div className="flex-1" />
-              <BarButton
-                icon={<Radar className="w-4 h-4" aria-hidden="true" />}
-                label="Track"
-                onClick={() => bulk.handleBulkTrack(true)}
-                disabled={bulk.isPending || selectedCount === 0}
-              />
-              <BarButton
-                icon={<CircleSlash className="w-4 h-4" aria-hidden="true" />}
-                label="Untrack"
-                onClick={() => bulk.handleBulkTrack(false)}
-                disabled={bulk.isPending || selectedCount === 0}
-              />
-              <ActionMenu
-                label="Cadence"
-                title="One cadence for the selection"
-                heading="Keep up"
-                items={cadenceItems}
-                // The bar button's look and the primary ink, at rest and on
-                // hover, so the three buttons in the bar look alike.
-                triggerClassName={cn(
-                  BAR_BUTTON,
-                  "text-primary hover:text-primary",
+                <SelectedCount count={selectedCount} />
+                <div className="flex-1" />
+                <BarButton
+                  icon={<Radar className="w-4 h-4" aria-hidden="true" />}
+                  label="Track"
+                  onClick={() => bulk.handleBulkTrack(true)}
+                  disabled={nothingToAct}
+                />
+                <BarButton
+                  icon={<CircleSlash className="w-4 h-4" aria-hidden="true" />}
+                  label="Untrack"
+                  onClick={() => bulk.handleBulkTrack(false)}
+                  disabled={nothingToAct}
+                />
+                {/* Disabled with the other two. The menu cannot be, so a
+                    button with its look stands in while nobody is picked. */}
+                {nothingToAct ? (
+                  <BarButton
+                    icon={
+                      <CalendarClock className="w-4 h-4" aria-hidden="true" />
+                    }
+                    label="Cadence"
+                    onClick={() => undefined}
+                    disabled
+                  />
+                ) : (
+                  <ActionMenu
+                    label="Cadence"
+                    title="One cadence for the selection"
+                    heading="Keep up"
+                    items={cadenceItems}
+                    // The bar button's look and the primary ink, at rest and
+                    // on hover, so the three buttons in the bar look alike.
+                    triggerClassName={cn(
+                      BAR_BUTTON,
+                      "text-primary hover:text-primary",
+                    )}
+                    triggerContent={
+                      <span className="flex flex-col items-center gap-0.5">
+                        <CalendarClock className="w-4 h-4" aria-hidden="true" />
+                        <span className={BAR_LABEL}>Cadence</span>
+                      </span>
+                    }
+                  />
                 )}
-                triggerContent={
-                  <span className="flex flex-col items-center gap-0.5">
-                    <CalendarClock className="w-4 h-4" aria-hidden="true" />
-                    <span className={BAR_LABEL}>Cadence</span>
-                  </span>
-                }
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

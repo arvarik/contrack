@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Search, SearchX, Sparkles, X } from "lucide-react";
+import { PanelRightClose, Search, SearchX, Sparkles, X } from "lucide-react";
 import type { HistoryEntry, HistoryMode } from "../../../shared/searchHistory";
 import { normalizeQuery } from "../../../shared/searchHistory";
 import {
@@ -36,6 +36,18 @@ export interface HistoryPaneProps {
   currentQuery?: string;
   currentMode?: HistoryMode;
   onSelect: (entry: HistoryEntry) => void;
+  /**
+   * Closes the side pane. Given, the pane draws a "Hide history" button at
+   * the right end of its header.
+   */
+  onHide?: () => void;
+  /**
+   * Closes the phone's sheet. Given, the pane draws an X named "Close
+   * history" in the same place: the sheet has no close control of its own.
+   */
+  onClose?: () => void;
+  /** The key that also hides the pane, named in the button's tooltip. */
+  hideShortcut?: string;
   className?: string;
 }
 
@@ -51,6 +63,9 @@ export const HistoryPane = ({
   currentQuery,
   currentMode = "people",
   onSelect,
+  onHide,
+  onClose,
+  hideShortcut,
   className,
 }: HistoryPaneProps) => {
   const { preferences } = usePreferences();
@@ -149,21 +164,48 @@ export const HistoryPane = ({
 
   return (
     <div className={className ?? "flex flex-col h-full p-4 space-y-4"}>
-      {/* 1. Title Row */}
+      {/* 1. Title row. The pane closes from its own top corner, where a
+          side panel's close control usually sits, and the page header's
+          toggle opens it again. */}
       <div className="flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-on-surface">History</h2>
           <Badge tone="neutral">{totalCount}</Badge>
         </div>
-        {totalCount > 0 && !filterText.trim() && (
-          <button
-            type="button"
-            onClick={() => setClearDialogOpen(true)}
-            className={cn(BTN_QUIET, "hover:text-error cursor-pointer")}
-          >
-            Clear
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {totalCount > 0 && !filterText.trim() && (
+            <button
+              type="button"
+              onClick={() => setClearDialogOpen(true)}
+              className={cn(BTN_QUIET, "hover:text-error cursor-pointer")}
+            >
+              Clear
+            </button>
+          )}
+          {onHide && (
+            <button
+              type="button"
+              onClick={onHide}
+              aria-label="Hide history"
+              title={
+                hideShortcut ? `Hide history (${hideShortcut})` : "Hide history"
+              }
+              className={cn(ICON_BTN, "-mr-2")}
+            >
+              <PanelRightClose className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close history"
+              className={cn(ICON_BTN, "-mr-2")}
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 2. Filter & Segmented controls */}

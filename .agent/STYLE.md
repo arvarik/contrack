@@ -168,19 +168,20 @@ keyboard chips.
 
 #### Shared class tokens (`src/lib/styles.ts`)
 
-| Token                                           | Size          | Use                                                         |
-| ----------------------------------------------- | ------------- | ----------------------------------------------------------- |
-| `LABEL`, `LABEL_PRIMARY`                        | 11 px, caps   | Micro labels, tracking 0.08em                               |
-| `SECTION_HEADING`                               | 11 px, caps   | Card titles ("DETAILS"), one step below body                |
-| `FIELD_LABEL`                                   | 12 px         | The name above one value ("Location"), sentence case        |
-| `META_LINE`                                     | 14 px         | Facts under a name, joined by a middle dot                  |
-| `KBD_SM`, `MICRO_BADGE`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                               |
-| `TAG_PILL`, `SOURCE_BADGE`                      | 11 px         | Pills                                                       |
-| `ICON_BTN`                                      | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)  |
-| `PAGE_TITLE`                                    | 24 / 30 px    | A page's title, or Pulse's date (see "Page header")         |
-| `PAGE_EYEBROW`                                  | 13 px         | The small line above a title: a back link, a page name      |
-| `PAGE_DESCRIPTION`                              | 14 / 16 px    | The one line under a title                                  |
-| `SEARCH_INPUT`                                  | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm` |
+| Token                                           | Size          | Use                                                            |
+| ----------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| `LABEL`, `LABEL_PRIMARY`                        | 11 px, caps   | Micro labels, tracking 0.08em                                  |
+| `SECTION_HEADING`                               | 11 px, caps   | Card titles ("DETAILS"), one step below body                   |
+| `FIELD_LABEL`                                   | 12 px         | The name above one value ("Location"), sentence case           |
+| `META_LINE`                                     | 14 px         | Facts under a name, joined by a middle dot                     |
+| `KBD_SM`, `MICRO_BADGE`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                                  |
+| `TAG_PILL`, `SOURCE_BADGE`                      | 11 px         | Pills                                                          |
+| `ICON_BTN`                                      | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)     |
+| `PAGE_TITLE`                                    | 24 / 30 px    | A page's title, its name and its `h1` (see \"Page header\")    |
+| `PAGE_TITLE_SUFFIX`                             | 24 / 30 px    | The title line's second part in the variant ink: Pulse's day   |
+| `PAGE_EYEBROW`                                  | 13 px         | The small line above a title: the back link to the parent page |
+| `PAGE_DESCRIPTION`                              | 14 / 16 px    | The one line under a title                                     |
+| `SEARCH_INPUT`                                  | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm`    |
 
 ### Radius System
 
@@ -211,7 +212,7 @@ These reusable atomic classes are the blessed patterns. Use them instead of ad-h
 | `card`             | Card surface, `rounded-2xl`, `p-6`, the soft shadow                      | A static card. `CARD` in `styles.ts`. No hover                                                                                        |
 | `card-interactive` | Rises 2 px on hover, its shadow a step up, its edge a primary tint       | Beside `card`, on a card that is itself a control. `CARD_INTERACTIVE`                                                                 |
 | `state-layer`      | A 6 percent ink layer on hover, 10 on press, over any background         | Every flat control: a row, a ghost or icon button, a pill, a nav item                                                                 |
-| `row-selected`     | A 10 percent primary tint and a 3 px bar on the leading edge             | The selected row in a list. `SELECTED_ROW`. A Tailwind `@utility`, so it takes a variant: `aria-selected:row-selected` in the palette |
+| `row-selected`     | A 10 percent primary tint on the row's face, no ring and no bar          | The selected row in a list. `SELECTED_ROW`. A Tailwind `@utility`, so it takes a variant: `aria-selected:row-selected` in the palette |
 | `focus-frame`      | Draws the focus ring on a box while its field has focus                  | A composite field: an icon, an input and buttons in one box                                                                           |
 | `input`            | `bg-surface-container-low rounded-xl px-4 py-2.5`                        | Text inputs                                                                                                                           |
 | `btn-primary`      | The primary face on a darker edge, bold 14 px, 44 px tall (40 from `sm`) | The main call to action. One per view where possible                                                                                  |
@@ -278,11 +279,19 @@ recipes had grown on three pages.
 ### Selected: one look
 
 - ✅ A selected row in a list (a contact row, a queue row, a history entry, a
-  settings rail item) is `SELECTED_ROW`: the 10 percent primary tint with a
-  3 px bar on its leading edge. Its text that was `text-primary` is
-  `text-on-primary-wash`.
-- ✅ A selected pill, chip, toggle or nav item is `SELECTED_TINT`: the tint
-  and its ink, no bar. A menu option is `MENU_ITEM_SELECTED`, the same tint.
+  settings rail item) is `SELECTED_ROW`: the 10 percent primary tint on the
+  row's face. Its name, or its label, takes `text-on-primary-wash` as the
+  second cue: the tint alone sits about 1.06 to 1 against a resting wash,
+  and the name's ink is the cue a person finds. Text that was
+  `text-primary` is `text-on-primary-wash` too.
+- ✅ A selected pill, chip, toggle or nav item is `SELECTED_TINT`: the same
+  tint and its ink. A menu option is `MENU_ITEM_SELECTED`, the same tint.
+- ❌ A coloured bar or sliver down a box's leading edge, for a selection, a
+  tone or an accent: a `border-l-*` colour, a `before:` bar or an inset
+  shadow. It is the stock accent of generated interfaces, and a list that
+  wears it looks assembled rather than designed. `styles.floor.test.ts`
+  fails on it. A tone goes on a dot, a chip or the text.
+- ❌ A ring on a selected row. It reads as keyboard focus, on every visit.
 - ✅ An option in a radio group (a preset tile, a role, an expiry) takes the
   tint and a `RadioDot` (`src/components/ui/RadioDot.tsx`) beside its label:
   a ring on every option, filled with a centre dot on the chosen one. The
@@ -294,7 +303,7 @@ recipes had grown on three pages.
 - ✅ The chosen swatch in a picker of colours, icons or avatars is
   `SWATCH_SELECTED`: a 2 px ring in the ink colour, 2 px off the swatch. A
   swatch's fill is its content, so it cannot take the tint, and it has no
-  room for a bar or a dot. The ring is the ink, never the primary, so it
+  room for a dot. The ring is the ink, never the primary, so it
   does not read as the focus ring. It is the one ring a selection wears.
 - ✅ A selected card in a list is `SELECTED_ROW` too: on a `.card` the tint
   mixes with the card's own face (`--row-face`) and the card keeps its
@@ -316,8 +325,10 @@ its own ring, so the ring always says which element Enter acts on.
   `focus:outline-none` or a `focus:border-*` indicator. The scan fails on the
   rings.
 - `MENU_ITEM` draws the same ring inset, because its rows touch and the
-  panel would cut an outside ring. The map's controls draw it as an inset
-  shadow for the same reason.
+  panel would cut an outside ring. The map's zoom buttons draw it as an inset
+  shadow for the same reason: their group clips anything outside. The map
+  credit's "i" takes the normal outside ring on its pill. A pointer's focus
+  draws nothing on either, so MapLibre's own blue glow never shows.
 - The command palette's input draws no ring. The palette is a dialog with
   one field that has focus for as long as it is open, so a ring would never
   go away and would say nothing.
@@ -329,25 +340,37 @@ its own ring, so the ring always says which element Enter acts on.
 Every page's top is `PageHeader` (`src/components/layout/PageHeader.tsx`):
 
 ```text
-back link or eyebrow                                 actions
-Title
+back link                                            actions
+Title  suffix
 One line of description
 children (a search box, filters, a form)
 ```
 
-- The title is the `h1` in `PAGE_TITLE`. Pulse keeps the day as its headline:
-  its eyebrow "Pulse" is the `h1` (`eyebrowAs="h1"`) and the date is the
-  title in a `p` (`titleAs="p"`), in the same slots and sizes. The Network
-  list uses an `h2` when an open contact's name is the page's `h1`.
-- `back={{ to, label }}` draws the link to the parent page as the eyebrow.
-  Its text is the parent's name and its accessible name is "Back to …",
-  like every back control in the app, because the sidebar has a link with
-  the bare name too.
+- The title is the page's name and its `h1`, in `PAGE_TITLE`: the same size,
+  face and ink on Network, Pulse, Ask Contrack and every Settings page. The
+  Map has no header, because it paints edge to edge. The Network list uses
+  an `h2` when an open contact's name is the page's `h1`.
+- `suffix` continues the title line with the one fact a page leads with, in
+  `PAGE_TITLE_SUFFIX`: the title's face and size in the variant ink, so the
+  line reads as one headline in two tones. Pulse is the one page with a
+  suffix: "Pulse Tuesday, September 22". The suffix is a `p` outside the
+  heading, so the heading's name stays the page's name. A header with a
+  suffix is a grid (`TITLE_GRID`): in a narrow header the title and the
+  actions share the first row and the suffix takes a full line under them,
+  so a phone never squeezes the day into a column beside the buttons. From
+  `@2xl` the suffix sits on the title's baseline.
+- ❌ An eyebrow: a small label with the page's name over a large line that
+  is not the name. The page's name is the title.
+- `back={{ to, label }}` draws the link to the parent page above the title,
+  in small type (`PAGE_EYEBROW`). Its text is the parent's name and its
+  accessible name is "Back to …", like every back control in the app,
+  because the sidebar has a link with the bare name too.
 - The title block shrinks to its longest word, so the actions stay at the
   right and the description wraps beside them, and they drop under the
-  block only on a phone. The title's size follows the header's own width
-  (`PageHeader` is a size container), so the narrow Network pane keeps the
-  phone size on a desktop.
+  block only on a phone. The title is 24 px on a phone and 30 px from `md`
+  on every page, the narrow Network pane too, so moving between pages does
+  not change the title's size. The description and the suffix's place follow
+  the header's own width (`PageHeader` is a size container).
 - The page owns the padding: `PAGE_X` for the sides (a narrow pane keeps
   `px-4`) and `PAGE_TOP` above the header, so every title starts at the
   same height. A skeleton or a route fallback mirrors it.
@@ -782,7 +805,8 @@ score handles all three:
 Rules that follow from it:
 
 - **An untracked contact is never At risk.** The band needs a score. The map
-  health layer paints its pin `ring-outline-variant`, the cluster arc leaves
+  health layer paints its pin with a ring in the variant ink
+  (`ring-on-surface-variant`), as the legend draws it, the cluster arc leaves
   it out, and the stats strip counts it in neither At risk nor the average.
   Both it and a never-met contact used to be painted red.
 - **Say nothing rather than say unknown.** A row that names a contact
@@ -838,18 +862,20 @@ One object, `PULSE_TYPE`, holds every size on the page. Two sizes, 13 and
 15 px, are new on the app's scale and live only there, so no other page picks
 them up by accident. The 11 px floor stands.
 
-| Key         | Size and weight                          | Use                                         |
-| ----------- | ---------------------------------------- | ------------------------------------------- |
-| `label`     | 13 px semibold, variant colour           | The page label, the `h1` "Pulse"            |
-| `date`      | 32 px bold headline face, 24 px on phone | The date line, the largest text on the page |
-| `line`      | 18 px, 16 px on a phone, variant colour  | The sentence under the date                 |
-| `cardTitle` | 15 px bold, tight tracking               | A card's `h2`                               |
-| `cardCount` | 15 px semibold, variant colour, tabular  | The muted count after a card title          |
-| `name`      | 14 px semibold                           | A person's name in a row                    |
-| `rowTitle`  | 14 px                                    | The task or the fact in a row               |
-| `meta`      | 13 px, variant colour                    | Dates, counts, hints, the progress mark     |
-| `chip`      | 12 px semibold                           | A chip's text                               |
-| `group`     | 13 px semibold, variant colour           | A group heading inside the queue            |
+| Key         | Size and weight                         | Use                                                                 |
+| ----------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `cardTitle` | 15 px bold, tight tracking              | A card's `h2`                                                       |
+| `cardCount` | 15 px semibold, variant colour, tabular | The muted count after a card title                                  |
+| `name`      | 14 px semibold                          | A person's name in a row                                            |
+| `rowTitle`  | 14 px                                   | The task or the fact in a row                                       |
+| `meta`      | 13 px, variant colour                   | Dates, counts, hints                                                |
+| `group`     | 13 px semibold, variant colour          | A group heading inside the queue                                    |
+| `figure`    | 24 px bold headline face, tabular       | The one large figure on a card: the "9" of "9 of 10 within cadence" |
+| `insight`   | 15 px, relaxed leading                  | The insight's own text, a paragraph a person reads                  |
+
+The masthead's title and day are the page header's (`PAGE_TITLE` and
+`PAGE_TITLE_SUFFIX`), not keys here, so Pulse's title is the size of every
+page's title.
 
 - ✅ Read a size from `PULSE_TYPE`. A card title is 15 px everywhere because
   one constant says so.
@@ -883,18 +909,21 @@ on a card, so "Hide Completed" is one locator in both shapes.
 
 ### The masthead and its sentence
 
-The masthead is `PageHeader`: the eyebrow "Pulse" is the `h1` (it stays for
-the landmark structure and the specs), and the date is the title in a `p`,
-in `PAGE_TITLE`, the same size and place as every other page's title. One sentence from `buildDayLine` in
-`lib/dayLine.ts` replaces the chips: the counts above zero in the order
+The masthead is `PageHeader` with the title "Pulse", the `h1`, and the day
+as its `suffix`: "Pulse Tuesday, September 22", one line in two tones at the
+size of every page's title. On a phone the day takes its own line under the
+title and the actions. One sentence from `buildDayLine` in `lib/dayLine.ts`
+replaces the chips: the counts above zero in the order
 overdue, due today, birthdays this week, joined by commas and closed by a
 period, then the streak from two days. From `sm` up each count is a
 `hit-area` button that jumps to its card. Below `sm` the counts are plain
 text, because the queue starts one flick down and inline 44 px tap boxes
-would overlap across two wrapped lines. `describeProgress` gives the words
-on the 40 px progress mark: "4 to do", "1 of 4 done", "All done", "Nothing
-due". Log a note is the one `.btn-primary`. New contact and Customize layout
-live in an `ActionMenu` named More.
+would overlap across two wrapped lines. Log note is the one `.btn-primary`.
+It is a label, so it takes no article, like New contact. New contact and
+Customize layout live in an `ActionMenu` named More.
+
+- ❌ A progress ring or a "3 to do" beside the actions. It repeats the
+  sentence's counts in a smaller, vaguer form.
 
 ### The queue: a pane of rows
 
@@ -910,8 +939,8 @@ card's own colour.
 
 A row is `rounded-xl px-3 py-2.5` on `bg-surface-container-low/70`, with no
 border. From `sm`, line one is the name (`PULSE_TYPE.name`) and the chip
-(`PULSE_TYPE.chip rounded-md px-2 py-0.5`, a wash and an ink, no border, no
-caps), and it wraps so the name is never cut. Line two is the title
+(`PULSE_CHIP`, 12 px semibold on `rounded-md px-2 py-0.5`, a wash and an ink,
+no border, no caps), and it wraps so the name is never cut. Line two is the title
 (`PULSE_TYPE.rowTitle`, one line). Under them, `PULSE_TYPE.meta` for "Last
 spoke 12 days ago". The one action, snooze, is an `ActionMenu` that floats
 over the row's right edge on a wash and shows on hover or focus. Below `sm`
@@ -919,7 +948,7 @@ the row takes the phone anatomy (`compact`): the name on line one with the
 snooze at its end as a 32 px glyph with the 44 px tap box, the title on up
 to two lines, then a meta line with the chip and "Last spoke". A phone row
 has about 220 px for text, and a name, a chip and a button do not share it.
-Selected is `SELECTED_ROW`, the tint and the 3 px bar, the same as the
+Selected is `SELECTED_ROW`, the tint and nothing else, the same as the
 Network list's current row. Hover is `state-layer` over the resting wash.
 The group's dot, the row's leading glyph and its chip read from the group's
 tone (`TONE_*`): overdue `error`, today `primary`, this week `neutral`,
@@ -979,3 +1008,8 @@ event target is the row itself, so a button inside the row keeps its own
 Enter and Space. J and K stay as bare letters on the window. The row keeps
 its list role: it is a clickable element with a keyboard equivalent, not a
 button.
+
+The highlight wears its tint only while the keyboard uses the queue: keyboard
+focus in the list, or a queue key. While it does not show, the first of J,
+K, D, S and L only shows it, and acts from the next press, so D never
+completes a row nobody can see. A pointer press outside the list hides it.

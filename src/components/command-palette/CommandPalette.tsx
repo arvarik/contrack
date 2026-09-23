@@ -52,7 +52,6 @@ import {
 import { AIShimmerRow, AIResultCard } from "./AiComponents";
 import { ZeroStateView } from "./ZeroStateView";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { DataAgeHalo } from "./DataAgeHalo";
 import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
 import { ResultPeek } from "./ResultPeek";
 import { SynthesisBar } from "./SynthesisBar";
@@ -152,7 +151,7 @@ export const CommandPalette = () => {
     [enrichContact],
   );
 
-  // ── Space-to-Peek state ──
+  // ── Shift-to-peek state ──
   const [peekContact, setPeekContact] = useState<PeekContact | null>(null);
   const [peekVisible, setPeekVisible] = useState(false);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -564,7 +563,7 @@ export const CommandPalette = () => {
   // AI loading: mutation is pending AND query is long enough
   const isAiLoading = mode === "ai" && semanticSearch.isPending;
 
-  // ── Space-to-Peek: track focused result via MutationObserver ──
+  // ── Shift-to-peek: track focused result via MutationObserver ──
   useEffect(() => {
     if (!open) {
       setPeekContact(null);
@@ -1025,11 +1024,11 @@ export const CommandPalette = () => {
                     value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
                     onSelect={handleActionExecute}
                     className={cn(
-                      "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-emerald-500/10 transition-colors text-on-surface",
+                      "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-success/10 transition-colors text-on-surface",
                       ITEM_CURRENT,
                     )}
                   >
-                    <div className="w-10 h-10 flex items-center justify-center bg-emerald-500/20 text-success rounded-full shrink-0">
+                    <div className="w-10 h-10 flex items-center justify-center bg-success/20 text-success rounded-full shrink-0">
                       {getLogIcon(actionMatch.type)}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col">
@@ -1094,16 +1093,14 @@ export const CommandPalette = () => {
                             ITEM_CURRENT,
                           )}
                         >
-                          <DataAgeHalo updatedAt={contact.updatedAt}>
-                            <img
-                              src={
-                                contact.avatarUrl ||
-                                fallbackAvatarUrl(contact.name)
-                              }
-                              alt=""
-                              className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
-                            />
-                          </DataAgeHalo>
+                          <img
+                            src={
+                              contact.avatarUrl ||
+                              fallbackAvatarUrl(contact.name)
+                            }
+                            alt=""
+                            className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
+                          />
                           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm truncate">
@@ -1200,7 +1197,7 @@ export const CommandPalette = () => {
               )}
             </Command.List>
 
-            {/* ── Space-to-Peek portal ── */}
+            {/* ── Shift-to-peek, in a portal on the body ── */}
             <ResultPeek contact={peekContact} visible={peekVisible} />
 
             {/* ── Footer ── */}

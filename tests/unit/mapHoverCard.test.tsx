@@ -10,7 +10,7 @@ import {
 } from "../../src/views/map/MapHoverCard";
 import type { MapContact } from "../../shared/geo";
 
-vi.mock("react-map-gl/maplibre", () => ({
+vi.mock("@vis.gl/react-maplibre", () => ({
   Popup: ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   ),

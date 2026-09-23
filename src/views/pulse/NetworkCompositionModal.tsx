@@ -86,7 +86,12 @@ export const NetworkCompositionModal = ({
   composition,
 }: NetworkCompositionModalProps) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="2xl"
+      ariaLabel="Network composition"
+    >
       {/* Header */}
       <div className="px-6 py-5 bg-surface-container-low flex items-center justify-between">
         <div className="flex items-center gap-3">

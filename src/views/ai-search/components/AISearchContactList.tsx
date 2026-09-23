@@ -44,7 +44,7 @@ export function ContactRow({
       tabIndex={0}
       role="button"
       onClick={onToggle}
-      // A checked row is a selected row: the tint and the bar.
+      // A checked row is a selected row: the tint.
       className={cn(
         "state-layer flex items-center gap-4 px-6 py-3.5 cursor-pointer transition-colors",
         isSelected && SELECTED_ROW,

@@ -7,7 +7,7 @@
  *   3. Session length
  *   4. Trash (retention window)
  *   5. Backups (interval and keep count)
- *   6. Integrations (Mapbox geocoding key and SearXNG search URL)
+ *   6. Integrations (SearXNG search URL and Google OAuth client)
  */
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -21,7 +21,6 @@ import {
   Globe,
   Key,
   Mail,
-  MapPin,
   Tag,
   Timer,
   Trash2,
@@ -629,7 +628,6 @@ export const IntegrationsCard = () => {
   const { data, isLoading, isError, refetch } = useIntegrations();
   const update = useUpdateIntegrations();
 
-  const [mapboxInput, setMapboxInput] = useState("");
   const [searxngInput, setSearxngInput] = useState<string | null>(null);
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleClientSecret, setGoogleClientSecret] = useState("");
@@ -638,12 +636,8 @@ export const IntegrationsCard = () => {
 
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
-  const mapbox = data?.mapbox;
   const searxng = data?.searxng;
   const googleOAuth = data?.googleOAuth;
-
-  const isMapboxEnv = mapbox?.source === "env";
-  const isMapboxConfigured = mapbox?.configured === true;
 
   const isSearxngEnv = searxng?.source === "env";
   const searxngVal = searxngInput ?? searxng?.url ?? "";
@@ -654,101 +648,8 @@ export const IntegrationsCard = () => {
 
   return (
     <div id="integrations" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
-      {/* Mapbox */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-sm text-on-surface">
-              Mapbox geocoding
-            </h3>
-          </div>
-          {isMapboxConfigured && (
-            <span className={CONFIGURED_CHIP}>
-              <Check className="w-3.5 h-3.5" />
-              Configured
-            </span>
-          )}
-        </div>
-
-        <p className="text-sm text-on-surface-variant text-pretty">
-          High-accuracy address geocoding and coordinate lookup for contacts.
-          Falling back to OpenStreetMap Nominatim when unset.
-        </p>
-
-        {isMapboxEnv ? (
-          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
-            Set by MAPBOX_API_KEY in the environment.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <label htmlFor="mapbox-key" className="flex-1 min-w-0">
-                <span className="sr-only">Mapbox API key</span>
-                <input
-                  id="mapbox-key"
-                  type="password"
-                  aria-label="Mapbox API key"
-                  value={mapboxInput}
-                  disabled={isLoading || update.isPending}
-                  onChange={(e) => setMapboxInput(e.target.value)}
-                  placeholder={
-                    isMapboxConfigured
-                      ? "Enter new key to replace…"
-                      : "pk.eyJ1..."
-                  }
-                  className={KEY_INPUT}
-                />
-              </label>
-
-              <button
-                type="button"
-                disabled={!mapboxInput.trim() || update.isPending}
-                onClick={() =>
-                  update.mutate(
-                    { mapboxKey: mapboxInput.trim() },
-                    {
-                      onSuccess: () => {
-                        setMapboxInput("");
-                        toast.success("Mapbox API key saved");
-                      },
-                      onError: (err: Error) => toast.error(err.message),
-                    },
-                  )
-                }
-                className="btn-primary shrink-0"
-              >
-                Save
-              </button>
-
-              {isMapboxConfigured && (
-                <button
-                  type="button"
-                  disabled={update.isPending}
-                  onClick={() =>
-                    update.mutate(
-                      { mapboxKey: "" },
-                      {
-                        onSuccess: () => {
-                          setMapboxInput("");
-                          toast.success("Mapbox API key removed");
-                        },
-                        onError: (err: Error) => toast.error(err.message),
-                      },
-                    )
-                  }
-                  className="btn-secondary shrink-0 text-error"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* SearXNG */}
-      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+      <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Globe className="w-5 h-5 text-primary" />
           <h3 className="font-bold text-sm text-on-surface">
@@ -829,8 +730,9 @@ export const IntegrationsCard = () => {
         )}
       </div>
 
-      {/* Google OAuth */}
-      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+      {/* Google OAuth. Space sets it apart from SearXNG: a line between
+          sections is a failure of hierarchy (STYLE.md). */}
+      <div className="pt-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Key className="w-5 h-5 text-primary" />

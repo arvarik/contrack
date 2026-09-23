@@ -41,7 +41,32 @@ const BulkActionBtn = ({
   </button>
 );
 
+/**
+ * "3 selected" at the start of a bulk bar, read out as it changes. The
+ * Network list's bar and the Tracked page's bar both lead with it.
+ *
+ * Atomic, so a screen reader says the whole "2 selected" when the number
+ * changes. Without it NVDA read the changed text node alone: "2".
+ */
+export const SelectedCount = ({ count }: { count: number }) => (
+  <span
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    className="text-sm font-bold text-on-surface mx-2 shrink-0 tabular-nums"
+  >
+    <span className="text-primary">{count}</span> selected
+  </span>
+);
+
 interface BulkActionToolbarProps {
+  /** The bar's outer box, for a list that keeps room under its last row. */
+  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * How many are selected, said first in the bar. The map leaves it out:
+   * its own selection bar above this one already says it.
+   */
+  selectedCount?: number;
   isPending: boolean;
   /**
    * Track the selection, or untrack it. The bar reads Untrack when every
@@ -58,6 +83,8 @@ interface BulkActionToolbarProps {
 }
 
 export const BulkActionToolbar = ({
+  ref,
+  selectedCount,
   isPending,
   onTrack,
   selectionTracked,
@@ -69,6 +96,9 @@ export const BulkActionToolbar = ({
   onDelete,
 }: BulkActionToolbarProps) => {
   const { mode } = usePreferences();
+  // "0 selected" acts on no one, so every action rests until a row is
+  // picked. Delete was live at zero, beside a Tracked bar that rests.
+  const nothingSelected = selectedCount === 0;
   const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
   const bulkColorPickerRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +118,7 @@ export const BulkActionToolbar = ({
 
   return (
     <motion.div
+      ref={ref}
       initial={{ y: 80, opacity: 1 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 80, opacity: 1 }}
@@ -117,44 +148,48 @@ export const BulkActionToolbar = ({
         aria-label="Bulk actions"
         className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex flex-wrap items-center justify-center gap-1 min-w-0"
       >
+        {selectedCount !== undefined && <SelectedCount count={selectedCount} />}
         {/* Action buttons. Track first: it is the one that decides who the
             score, Pulse and the map's health layer are about. */}
         <BulkActionBtn
           icon={<Radar className="w-4 h-4" />}
           label={selectionTracked === "all" ? "Untrack" : "Track"}
           onClick={() => onTrack(selectionTracked !== "all")}
-          disabled={isPending}
+          disabled={isPending || nothingSelected}
           className="text-primary"
         />
         <BulkActionBtn
           icon={<Archive className="w-4 h-4" />}
           label="Archive"
           onClick={onArchive}
-          disabled={isPending}
+          disabled={isPending || nothingSelected}
           className="text-warning"
         />
         <BulkActionBtn
           icon={<AddToListIcon className="w-4 h-4" />}
           label="List"
           onClick={onAddToList}
-          disabled={false}
+          disabled={nothingSelected}
           className="text-primary"
         />
         <BulkActionBtn
           icon={<Pencil className="w-4 h-4" />}
           label="Field"
           onClick={onEditField}
-          disabled={false}
+          disabled={nothingSelected}
           className="text-primary"
         />
 
         {/* Bulk Color Picker */}
         <div className="relative shrink-0" ref={bulkColorPickerRef}>
           <button
+            type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
+            disabled={nothingSelected}
             title="Change color"
             className={cn(
               BAR_BUTTON,
+              "disabled:opacity-40",
               showBulkColorPicker ? SELECTED_TINT : "text-on-surface-variant",
             )}
           >
@@ -178,7 +213,7 @@ export const BulkActionToolbar = ({
                       onColorChange(vibe.id);
                       setShowBulkColorPicker(false);
                     }}
-                    disabled={isPending}
+                    disabled={isPending || nothingSelected}
                     style={{
                       backgroundColor: vibeTokens(vibe.id, mode).primary,
                     }}
@@ -195,7 +230,7 @@ export const BulkActionToolbar = ({
           icon={<Download className="w-4 h-4" />}
           label="CSV"
           onClick={onExportCSV}
-          disabled={false}
+          disabled={nothingSelected}
           className="text-on-surface-variant"
         />
 
@@ -206,7 +241,7 @@ export const BulkActionToolbar = ({
           icon={<Trash2 className="w-4 h-4" />}
           label="Delete"
           onClick={onDelete}
-          disabled={isPending}
+          disabled={isPending || nothingSelected}
           className="text-error"
         />
       </div>

@@ -15,7 +15,7 @@
  * @module views/map/AdjustPinModal
  */
 import { useCallback, useEffect, useId, useState } from "react";
-import { Marker, type MarkerDragEvent } from "react-map-gl/maplibre";
+import { Marker, type MarkerDragEvent } from "@vis.gl/react-maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";

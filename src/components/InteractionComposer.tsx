@@ -585,7 +585,9 @@ const Composer = ({
                 setFollowUpText(e.target.value);
                 if (e.target.value.trim()) setProblem(null);
               }}
-              placeholder="Next action (e.g. Follow up next Tuesday at 2pm)..."
+              // Short enough for a phone's field: the long example was cut
+              // mid-word at 390 px.
+              placeholder="Next action, like follow up Tuesday"
               // A field draws no `::after`, so the 44 px tap floor on a phone
               // has to be the field's own height. 16 px there stops iOS
               // zooming in.

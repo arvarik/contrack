@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { PALETTES } from "../../src/lib/theme";
 import { contrast, hexToRgb, over } from "../../src/lib/color";
 import { HEATMAP_ALPHA_STEPS } from "../../src/views/pulse/lib/heatmapScale";
-import { COMPOSITION_RAMP } from "../../src/views/pulse/lib/pulseStyles";
+import {
+  CHECK_RING_REST,
+  COMPOSITION_RAMP,
+} from "../../src/views/pulse/lib/pulseStyles";
 
 /**
  * Non-text contrast ratio floor per WCAG 2.1 SC 1.4.11 (3:1).
@@ -56,6 +59,39 @@ describe("pulse.contrast", () => {
           contrast(hexToRgb(palette[band]), track),
           `The unscored segment beside "${band}" in ${mode} mode`,
         ).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it("draws the Up next check's resting ring at 3:1 on the row's wash and on the selected tint, under full ink", () => {
+    // The ring is the group's ink at the class's percentage. The rows with a
+    // check are overdue (error), today (primary) and this week (neutral).
+    const alpha = Number(CHECK_RING_REST.match(/\/(\d+)$/)?.[1]) / 100;
+    expect(alpha).toBeGreaterThan(0);
+    // A step under the full ink of hover.
+    expect(alpha).toBeLessThan(1);
+    // ActionRow's resting wash is `bg-surface-container-low/70` on the card.
+    const ROW_WASH_ALPHA = 0.7;
+    const tones = ["error", "primary", "on-surface-variant"] as const;
+
+    for (const [mode, palette] of Object.entries(PALETTES)) {
+      const card = hexToRgb(palette["surface-container-lowest"]);
+      const faces = {
+        wash: over(
+          hexToRgb(palette["surface-container-low"]),
+          ROW_WASH_ALPHA,
+          card,
+        ),
+        tint: over(hexToRgb(palette.primary), 0.1, card),
+      };
+      for (const tone of tones) {
+        for (const [face, bg] of Object.entries(faces)) {
+          const ring = over(hexToRgb(palette[tone]), alpha, bg);
+          expect(
+            contrast(ring, bg),
+            `The ${tone} check ring on the row's ${face} in ${mode} mode`,
+          ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
+        }
       }
     }
   });

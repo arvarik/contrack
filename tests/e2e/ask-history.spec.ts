@@ -8,15 +8,27 @@
  * - Deleting triggers undo toast, and Undo restores the entry.
  * - Filtering narrows the visible list.
  * - Clearing all removes entries through ConfirmDialog.
+ * - The pane closes from the header toggle and from its own "Hide history"
+ *   button, and the header toggle opens it again.
  * - Phone view opens history pane as a mobile bottom sheet.
  * - Accessibility scans on open desktop, closed desktop, and notes mode.
  */
-import { devices } from "@playwright/test";
+import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { answerPeopleSearch, personMatch } from "./fixtures/search";
 import { expectPageAccessible } from "./fixtures/a11y";
 
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
+
+/**
+ * The page header's history toggle. Its name is "History" in both states,
+ * and it is pressed while the pane is open. `exact` keeps it apart from the
+ * pane's own "Hide history" button.
+ */
+const hideToggle = (page: Page) =>
+  page.getByRole("button", { name: "History", exact: true, pressed: true });
+const showToggle = (page: Page) =>
+  page.getByRole("button", { name: "History", exact: true, pressed: false });
 
 test.describe("desktop", () => {
   test("records questions, pins, deletes with undo, filters, and clears history", async ({
@@ -160,30 +172,43 @@ test.describe("desktop", () => {
     ).toBeVisible();
 
     // Toggle pane closed via header button
-    const toggleButton = page.getByRole("button", { name: "Search history" });
-    await toggleButton.click();
+    await hideToggle(page).click();
     await expect(historyPane).toBeHidden();
+
+    // The same button opens it again
+    await showToggle(page).click();
+    await expect(historyPane).toBeVisible();
+
+    // The pane closes from its own header too, and the keyboard lands on the
+    // header toggle, which is still on the page
+    const paneHide = historyPane.getByRole("button", { name: "Hide history" });
+    await expect(paneHide).toHaveAttribute("title", /^Hide history/);
+    await paneHide.click();
+    await expect(historyPane).toBeHidden();
+    await expect(showToggle(page)).toBeFocused();
 
     // Accessibility check with pane closed
     await expectPageAccessible(page, testInfo, "ask-history-desktop-closed");
 
-    // Notes mode accessibility check
+    // Notes mode accessibility check. The header is the title and its two
+    // controls, with no line of description under it.
     await page.goto("/search?mode=notes");
     await expect(
       page
         .getByRole("radiogroup", { name: "What to search" })
         .getByRole("radio", { name: "Notes" }),
     ).toHaveAttribute("aria-checked", "true");
-    await expect(page.getByText("Find what was said, and when")).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Search your notes" }),
+    ).toBeVisible();
     await expectPageAccessible(page, testInfo, "ask-history-notes");
 
     // The pane's open state is an account preference on the worker's shared
     // instance. Put it back, so the next journey finds the pane it expects.
     await page.goto("/search");
-    const reopen = page.getByRole("button", { name: "Search history" });
-    await expect(reopen).toHaveAttribute("aria-pressed", "false");
-    await reopen.click();
-    await expect(reopen).toHaveAttribute("aria-pressed", "true");
+    await showToggle(page).click();
+    await expect(hideToggle(page)).toBeVisible();
+    await expect(historyPane).toBeVisible();
   });
 
   test("palette and Ask Contrack pane share unified search history", async ({
@@ -197,12 +222,11 @@ test.describe("desktop", () => {
     // Its open state is an account preference, so another journey on the
     // same instance may have closed it.
     await page.goto("/search");
-    const historyToggle = page.getByRole("button", { name: "Search history" });
-    await expect(historyToggle).toHaveAttribute("aria-pressed", /true|false/);
-    if ((await historyToggle.getAttribute("aria-pressed")) === "false") {
-      await historyToggle.click();
-      await expect(historyToggle).toHaveAttribute("aria-pressed", "true");
+    await expect(hideToggle(page).or(showToggle(page))).toBeVisible();
+    if (await showToggle(page).isVisible()) {
+      await showToggle(page).click();
     }
+    await expect(hideToggle(page)).toBeVisible();
     const searchInput = page.getByRole("textbox", {
       name: "Ask anything about your network",
     });
@@ -278,7 +302,7 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ ...PHONE });
 
-  test("the pane opens as a mobile bottom sheet from the header clock button", async ({
+  test("the pane opens as a mobile bottom sheet from the header history button", async ({
     page,
     seed,
   }) => {
@@ -291,21 +315,38 @@ test.describe("phone", () => {
     const desktopAside = page.locator("aside[aria-label='Search history']");
     await expect(desktopAside).toBeHidden();
 
-    // Clock button opens mobile sheet
-    const clockButton = page.getByRole("button", { name: "Search history" });
-    await expect(clockButton).toBeVisible();
-    await clockButton.click();
+    // The history button opens the mobile sheet
+    const historyButton = page.getByRole("button", {
+      name: "History",
+      exact: true,
+    });
+    await expect(historyButton).toBeVisible();
+    await expect(historyButton).toHaveAttribute("aria-haspopup", "dialog");
+    await historyButton.click();
 
-    // The pane appears inside a Modal bottom sheet
+    // The pane appears inside a Modal bottom sheet. The sheet closes from a
+    // visible X in the pane's header, not from the side pane's "Hide
+    // history" button, and nothing sits over the header's Clear
     const sheet = page.getByRole("dialog", { name: "Search history" });
     await expect(sheet).toBeVisible();
     await expect(
       sheet.getByText("Your questions will appear here"),
     ).toBeVisible();
+    await expect(
+      sheet.getByRole("button", { name: "Hide history" }),
+    ).toHaveCount(0);
+    await expect(sheet).toBeFocused();
 
-    // Escape closes the sheet and restores focus to Clock button
+    // Escape closes the sheet and restores focus to the history button
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
-    await expect(clockButton).toBeFocused();
+    await expect(historyButton).toBeFocused();
+
+    // So does the X
+    await historyButton.click();
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "Close history" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(historyButton).toBeFocused();
   });
 });

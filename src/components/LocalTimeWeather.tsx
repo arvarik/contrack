@@ -55,7 +55,7 @@ const getWeatherIcon = (code: number, isDay: boolean) => {
       <Cloud className="w-4 h-4 text-info" />
     );
   if (code === 45 || code === 48)
-    return <CloudFog className="w-4 h-4 text-slate-400" />;
+    return <CloudFog className="w-4 h-4 text-on-surface-variant" />;
   if ((code >= 51 && code <= 55) || (code >= 56 && code <= 57))
     return <CloudDrizzle className="w-4 h-4 text-info" />;
   if (
@@ -68,7 +68,7 @@ const getWeatherIcon = (code: number, isDay: boolean) => {
     return <CloudSnow className="w-4 h-4 text-info" />;
   if (code >= 95 && code <= 99)
     return <CloudLightning className="w-4 h-4 text-warning" />;
-  return <Cloud className="w-4 h-4 text-slate-400" />;
+  return <Cloud className="w-4 h-4 text-on-surface-variant" />;
 };
 
 const formatLocalTime = (timezone: string, now: Date) => {

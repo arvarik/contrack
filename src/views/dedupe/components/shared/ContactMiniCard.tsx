@@ -61,7 +61,16 @@ export const ContactMiniCard = ({
       className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
     />
     <div className="min-w-0 flex-1">
-      <div className="text-sm font-bold truncate">{contact.name}</div>
+      {/* A picked row's name takes the primary ink: the tint alone is about
+          1.06 to 1. */}
+      <div
+        className={cn(
+          "text-sm font-bold truncate",
+          selected && "text-on-primary-wash",
+        )}
+      >
+        {contact.name}
+      </div>
       <div className="text-xs text-on-surface-variant truncate">
         {[contact.role, contact.company].filter(Boolean).join(" · ") ||
           [contact.emails?.[0]?.email, contact.phones?.[0]?.phone]

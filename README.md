@@ -33,7 +33,7 @@ Sync your contacts from every source into one unified network with automatic ded
 
 Get a complete picture of every connection instantly. View their interaction history, personal details, and relationship context all in one beautifully designed profile card.
 
-Built with a timeline architecture featuring @mention network weaving, AI briefings, Ghost entity extraction, multi-value fields, and data age halos.
+Built with a timeline architecture featuring @mention network weaving, AI briefings, Ghost entity extraction and multi-value fields.
 
 </td>
 <td width="70%">
@@ -209,7 +209,7 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 | **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
-| **Mapping**  | MapLibre GL JS + OpenFreeMap tiles, Mapbox/Nominatim geocoding        |
+| **Mapping**  | MapLibre GL JS + OpenFreeMap tiles, Nominatim geocoding               |
 | **Testing**  | Vitest — 1,695 unit, integration and eval tests, no API keys needed   |
 
 ---
@@ -259,7 +259,6 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `CONTRACK_SECRET_KEY`   | 64-character hex key encrypting database secrets; generated at `DATA_DIR/secret.key` when omitted                                                 | — (auto)     |
 | `API_TOKEN`             | **Deprecated.** Instance-wide machine credential, and setting it gates the instance. Removed in 3.0, use a personal token from Settings → Account | — (off)      |
 | `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache)                                                                                         | project root |
-| `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)                                                                                                      | —            |
 | `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)                                                                                               | `24`         |
 | `BACKUP_KEEP`           | Rotation depth for automatic snapshots                                                                                                            | `7`          |
 

@@ -73,21 +73,44 @@ export const SECTION_HEADING_SPACED = cn(
 // at the right. These are its parts, and the page's own padding.
 
 /**
- * The page title: the h1, or the day on Pulse. 24 px, and 30 px once its
- * header is 28 rem wide. The size follows the header's own width, not the
- * window's (`PageHeader` is a size container), so the narrow Network pane on
- * a desktop keeps the phone size and "12 selected" and its two buttons still
- * fit on one row.
+ * The page title, the page's name and its h1: 24 px on a phone and 30 px
+ * from `md`, on every page. The size follows the window, not the header, so
+ * the narrow Network pane beside a contact has the same title as Pulse, Ask
+ * Contrack and Settings, and moving between pages does not move the eye.
  */
 export const PAGE_TITLE =
-  "text-2xl @md:text-3xl leading-tight font-headline font-bold tracking-tight text-on-surface";
+  "text-2xl md:text-3xl leading-tight font-headline font-bold tracking-tight text-on-surface";
 
 /**
- * The small line above a title: a back link, or the page's name over a
- * headline. The face and tracking are set here because Pulse's eyebrow is an
- * `h1`, and the base layer gives every heading the headline face: without
- * them the same line would look different on Pulse and on a back link.
+ * The second part of a title line, such as the day on Pulse: the title's
+ * face and size in the variant ink, so the line reads as one headline in two
+ * tones. It is not part of the heading.
  */
+export const PAGE_TITLE_SUFFIX =
+  "text-2xl md:text-3xl leading-tight font-headline font-semibold tracking-tight text-on-surface-variant";
+
+/**
+ * A header with a suffix is a grid in the header's size container, so a
+ * phone never squeezes the suffix into a column beside the actions. In a
+ * narrow header the title and the actions share the first row, and the
+ * suffix and the description each take a full row under them. From `@2xl`
+ * the suffix continues the title's line on its baseline, the description
+ * sits under both, and the actions span the two rows at the right edge.
+ * The row aligns to the top, like the header without a suffix, so Pulse's
+ * title starts at the height of every other page's. The cells place
+ * themselves, so the page header and its skeleton agree.
+ */
+export const TITLE_GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 @2xl:grid-cols-[auto_minmax(0,1fr)_auto] @2xl:items-baseline @2xl:gap-x-3";
+export const TITLE_GRID_TITLE = "col-start-1 row-start-1";
+export const TITLE_GRID_SUFFIX =
+  "col-start-1 col-span-2 row-start-2 @2xl:col-start-2 @2xl:col-span-1 @2xl:row-start-1";
+export const TITLE_GRID_DESCRIPTION =
+  "col-start-1 col-span-2 row-start-3 @2xl:row-start-2";
+export const TITLE_GRID_ACTIONS =
+  "col-start-2 row-start-1 @2xl:col-start-3 @2xl:row-span-2 @2xl:self-start";
+
+/** The small line above a title: the back link to the parent page. */
 export const PAGE_EYEBROW =
   "font-body tracking-normal text-[13px] leading-tight font-semibold text-on-surface-variant";
 
@@ -119,6 +142,14 @@ export const CARD_COMPACT = "card p-5";
  */
 export const CARD_INTERACTIVE = "card card-interactive";
 
+/**
+ * A suggested question on Ask Contrack, in both modes: a flat chip on the
+ * card face with the state layer, so the search box above stays the one
+ * raised surface on the page. A click fills the box and runs the search.
+ */
+export const SUGGESTION_CHIP =
+  "hit-area state-layer rounded-md bg-surface-container-lowest px-3 py-2 text-left text-sm text-on-surface-variant hover:text-on-surface transition-colors";
+
 /** Section background — the mid-tone layer for headers / sidebars */
 export const SECTION_BG = "bg-surface-container-low";
 
@@ -134,15 +165,16 @@ export const CARD_TINTED = "card bg-primary/5 relative overflow-hidden";
 //   - A card that is a control takes `CARD_INTERACTIVE`: it rises 2 px.
 //   - A static card has no hover.
 //
-// And one selected look: the primary tint. A row in a list adds a 3 px bar
-// on its leading edge (`row-selected`), a pill or a nav item does not.
+// And one selected look: the primary tint, on a row (`row-selected`), a
+// pill or a nav item alike. No ring and no bar down the leading edge.
 
 /** A selected pill, chip, nav item or menu option: the tint and its ink. */
 export const SELECTED_TINT = "bg-primary/10 text-on-primary-wash";
 
 /**
- * The selected row in a list: the tint and the 3 px bar (`.row-selected`).
- * Put `text-on-primary-wash` on the text that was `text-primary`.
+ * The selected row in a list: the tint (`row-selected`), mixed onto a card's
+ * face when the row is a card. Put `text-on-primary-wash` on the text that
+ * was `text-primary`.
  */
 export const SELECTED_ROW = "row-selected";
 
@@ -339,10 +371,10 @@ export const filterPill = (active: boolean) =>
 /**
  * Contact list row — returns className based on active state.
  *
- * The current row is the selected row: the tint and the 3 px bar. It was a
- * ring, first 2 px solid and then 1 px inset, and either way it read as a
- * focus ring on every visit, with two rings when the row also had focus.
- * The hover layer sits over the tint as well as over the plain row.
+ * The current row is the selected row: the tint. It was a ring, first 2 px
+ * solid and then 1 px inset, and either way it read as a focus ring on every
+ * visit, with two rings when the row also had focus. The hover layer sits
+ * over the tint as well as over the plain row.
  */
 export const listRow = (active: boolean) =>
   cn(

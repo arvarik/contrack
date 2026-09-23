@@ -103,7 +103,6 @@ export class ContrackInstance {
         GEMINI_API_KEY: "",
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",
-        MAPBOX_API_KEY: "",
         AI_EMBEDDINGS_MODEL: "",
         API_TOKEN: "",
         AUTH_TOKEN: "",

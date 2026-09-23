@@ -1,27 +1,28 @@
 /**
- * ResultPeek — Space-hold tooltip for deep profile preview in Cmd+K results.
+ * ResultPeek — Shift-hold tooltip for deep profile preview in Cmd+K results.
  *
- * Appears after 200ms of holding the Space key when a search result is focused.
+ * Appears after 200ms of holding Shift when a search result is focused.
  * Shows enriched metadata that goes beyond what's visible in the result card:
  *   - Relationship score bar (visual gauge)
  *   - Last interaction title + date
  *   - Top 3 tags
  *   - Pending action item count
  *
- * Positioned as a fixed portal card — appears to the right of the palette.
+ * A portal on `document.body`, fixed to the right of the palette. Inside the
+ * palette's panel it was clipped: the panel's backdrop filter and its entry
+ * transform make it the containing block of anything `fixed` in it, and its
+ * `overflow: hidden` cut the card to its last 56 px.
  * Uses data already present in the Contact/SemanticMatch payload (no API calls).
  *
  * @module src/components/command-palette/ResultPeek
  */
 import React from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Tag, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import {
-  NOT_TRACKED_TEXT,
-  scoreView,
-  type ScoreBand,
-} from "../../../shared/scoreBand";
+import { NOT_TRACKED_TEXT, scoreView } from "../../../shared/scoreBand";
+import { TONE_DOT } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { DURATION, EASE } from "../../lib/motion";
 
@@ -45,26 +46,15 @@ interface ResultPeekProps {
   visible: boolean;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * The bar colour for each band. The cut points and the words come from
- * shared/scoreBand, so the peek and the avatar ring always agree.
- */
-const SCORE_BAR_COLOR: Record<ScoreBand, string> = {
-  strong: "bg-emerald-500",
-  fading: "bg-amber-500",
-  "at-risk": "bg-rose-500",
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
   // The same reader as the ring, so the peek and the ring always agree. A
   // contact nobody tracks has no bar, and neither has one with nothing
-  // logged yet.
+  // logged yet. The bar takes its band's tone (`SCORE_BANDS`), the token the
+  // ring strokes with, so the two agree on the colour too.
   const view = contact ? scoreView(contact) : null;
-  return (
+  return createPortal(
     <AnimatePresence>
       {visible && contact && (
         <motion.div
@@ -73,8 +63,11 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: -4, scale: 0.97 }}
           transition={{ duration: DURATION.fast, ease: EASE }}
+          aria-hidden="true"
           className="fixed top-1/2 -translate-y-1/2 z-[200] pointer-events-none"
-          style={{ left: "calc(50% + 280px)" }}
+          // Beside the palette (672 px wide, centred) with an 8 px gap, and
+          // over its right edge in a window too narrow for both.
+          style={{ left: "min(calc(50% + 344px), calc(100% - 17rem))" }}
         >
           <div className="w-64 bg-surface-container-highest/95 backdrop-blur-xl rounded-2xl shadow-2xl ring-1 ring-white/10 p-4 flex flex-col gap-3">
             {/* Header */}
@@ -112,7 +105,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
                 </div>
                 <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${SCORE_BAR_COLOR[view.band.band]}`}
+                    className={`h-full rounded-full transition-all ${TONE_DOT[view.band.token]}`}
                     style={{ width: `${view.score}%` }}
                   />
                 </div>
@@ -175,11 +168,12 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
 
             {/* Hint */}
             <div className="text-[11px] text-on-surface-variant text-center mt-1">
-              Release Space to dismiss
+              Release Shift to dismiss
             </div>
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };

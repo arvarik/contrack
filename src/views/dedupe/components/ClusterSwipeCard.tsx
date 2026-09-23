@@ -196,7 +196,7 @@ export const ClusterSwipeCard = ({
           className="absolute inset-0 rounded-2xl swipe-approve-overlay z-10 pointer-events-none flex items-center justify-center"
           style={{ opacity: approveOpacity }}
         >
-          <div className="p-4 bg-emerald-500/20 rounded-full">
+          <div className="p-4 bg-success/20 rounded-full">
             <Check className="w-12 h-12 text-success" strokeWidth={3} />
           </div>
         </motion.div>
@@ -204,7 +204,7 @@ export const ClusterSwipeCard = ({
           className="absolute inset-0 rounded-2xl swipe-reject-overlay z-10 pointer-events-none flex items-center justify-center"
           style={{ opacity: rejectOpacity }}
         >
-          <div className="p-4 bg-rose-500/20 rounded-full">
+          <div className="p-4 bg-error/20 rounded-full">
             <X className="w-12 h-12 text-error" strokeWidth={3} />
           </div>
         </motion.div>
@@ -244,7 +244,7 @@ export const ClusterSwipeCard = ({
           {/* Large cluster warning */}
           {cluster.size > 5 && (
             <div
-              className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3"
+              className="flex items-start gap-3 bg-warning/8 rounded-xl p-3"
               role="alert"
             >
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
@@ -375,7 +375,7 @@ export const ClusterSwipeCard = ({
 
           {/* Conflicting field values banner */}
           {conflicts.length > 0 && (
-            <div className="flex items-start gap-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-on-surface">
+            <div className="flex items-start gap-2.5 p-3 bg-warning/10 rounded-xl text-xs text-on-surface">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-warning">
@@ -412,7 +412,7 @@ export const ClusterSwipeCard = ({
             {/* Large cluster confirmation warning */}
             {cluster.requiresConfirmation && (
               <div className="w-full">
-                <div className="flex items-start gap-3 p-3 bg-amber-500/10 rounded-xl mb-3">
+                <div className="flex items-start gap-3 p-3 bg-warning/10 rounded-xl mb-3">
                   <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-warning">

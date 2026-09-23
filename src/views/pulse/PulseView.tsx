@@ -82,6 +82,9 @@ const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
 );
 
+/** The single keys that walk or act on the selected Up next row. */
+const QUEUE_KEYS = new Set(["j", "k", "d", "s", "l"]);
+
 interface DroppableColumnProps {
   id: PulseColumn;
   cards: PulseCardId[];
@@ -418,6 +421,12 @@ const PulseOffice = () => {
 
   // Selected index in Up Next
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  // Whether the selected row wears its tint: from the first queue key, or
+  // while keyboard focus is in the list, until focus leaves the list or a
+  // pointer presses outside it. See UpNextCard.
+  const [selectionShown, setSelectionShown] = useState(false);
+  const selectionShownRef = useRef(selectionShown);
+  selectionShownRef.current = selectionShown;
   const prevItemsRef = useRef(upNext.items);
 
   // Maintain highlight index when items leave or change
@@ -433,17 +442,19 @@ const PulseOffice = () => {
       ? upNext.items[selectedIndex]
       : null;
 
-  // Screen reader announcement for keyboard navigation
+  // Screen reader announcement for keyboard navigation. It speaks only once
+  // the selection shows, from the first queue key or keyboard focus in the
+  // list: "Row 1 of 8" on load was the spoken form of the stray tint.
   const [liveStatus, setLiveStatus] = useState("");
   useEffect(() => {
-    if (highlightedItem) {
+    if (highlightedItem && selectionShown) {
       setLiveStatus(
         `Row ${selectedIndex + 1} of ${upNext.items.length}, ${highlightedItem.contactName}, ${highlightedItem.dueChip.text.toLowerCase()}`,
       );
     } else {
       setLiveStatus("");
     }
-  }, [selectedIndex, highlightedItem, upNext.items.length]);
+  }, [selectedIndex, highlightedItem, upNext.items.length, selectionShown]);
 
   const highlightedItemRef = useRef(highlightedItem);
   highlightedItemRef.current = highlightedItem;
@@ -459,6 +470,10 @@ const PulseOffice = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A key pressed in a dialog belongs to the dialog: D on a button in
+      // the Log note dialog would complete the queue's row behind it.
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+        return;
 
       const item = highlightedItemRef.current;
 
@@ -466,6 +481,15 @@ const PulseOffice = () => {
       if (!singleKey) return;
 
       const key = e.key.toLowerCase();
+
+      // J, K, D, S and L walk or act on the selected row. While no row
+      // shows it, the first of them only shows the row and does nothing
+      // else: D on a row nobody can see completed it unseen.
+      if (QUEUE_KEYS.has(key) && !selectionShownRef.current) {
+        e.preventDefault();
+        setSelectionShown(true);
+        return;
+      }
 
       if (key === "c") {
         e.preventDefault();
@@ -529,6 +553,8 @@ const PulseOffice = () => {
               groups={upNext.groups}
               selectedIndex={selectedIndex}
               onSelectIndex={setSelectedIndex}
+              selectionShown={selectionShown}
+              onSelectionShownChange={setSelectionShown}
               onComplete={(id) => completeAction.mutate(id)}
               onLog={(cid) => openQuickNote(cid)}
               onOpenContact={(cid) => navigate(`/contact/${cid}`)}
@@ -611,7 +637,18 @@ const PulseOffice = () => {
   }
 
   if (isDashboardLoading || !dashboard) {
-    return <PulseSkeleton ask={aiAllowed} />;
+    // The insight loads beside the dashboard. The skeleton draws its card
+    // at the height of its words once they are back, and at the height of
+    // an insight of a common length before that. It draws the line only
+    // when there is no insight to draw: AI is off, or it came back empty.
+    return (
+      <PulseSkeleton
+        ask={aiAllowed}
+        insight={
+          !aiAllowed || (!isInsightLoading && !insight) ? null : insight?.text
+        }
+      />
+    );
   }
 
   const isZeroContacts = dashboard.metrics.totalActive === 0;
@@ -633,13 +670,13 @@ const PulseOffice = () => {
           PAGE_TOP,
         )}
       >
-        {/* The masthead: the day, the sentence, the progress mark, the actions */}
+        {/* The masthead: the title and the day, the sentence, the actions */}
         <Masthead
           counts={{
             overdue: upNext.counts.overdue,
             dueToday: upNext.counts.today,
             birthdaysThisWeek: upNext.counts.birthdays,
-            completedToday: activity?.today.completed ?? 0,
+            queued: upNext.counts.total,
             streak: activity?.streak.current ?? 0,
           }}
           isEditing={isEditing}

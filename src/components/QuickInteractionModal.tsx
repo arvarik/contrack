@@ -123,8 +123,8 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
   }, [isOpen]);
 
   // Focus on open: the picker, or the editor when the contact is chosen
-  // already. Deferred past the Modal's own focus on its close button, so
-  // this one wins.
+  // already. Deferred past the Modal's own first focus (the dialog itself,
+  // as this dialog has no title), so this one wins.
   useEffect(() => {
     if (!isOpen) return;
     const t = setTimeout(() => {

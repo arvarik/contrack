@@ -188,7 +188,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
 
       {/* Conflicting field values banner */}
       {conflicts.length > 0 && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+        <div className="p-4 rounded-xl bg-warning/10 space-y-3">
           <div className="flex items-center gap-2 text-warning font-bold text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>Conflicting field values ({conflicts.length})</span>
@@ -197,9 +197,9 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
             The following fields differ between contacts. The primary contact's
             value will be kept; duplicate values will be discarded.
           </p>
-          <div className="divide-y divide-amber-500/10 rounded-lg bg-surface-container-low/60 p-2 text-xs space-y-2">
+          <div className="rounded-lg bg-surface-container-low/60 p-2 text-xs space-y-4">
             {conflicts.map((c, i) => (
-              <div key={i} className="pt-2 first:pt-0 space-y-1">
+              <div key={i} className="space-y-1">
                 <div className="font-bold text-on-surface flex items-center justify-between">
                   <span>{c.label}</span>
                   <span className="text-[11px] text-on-surface-variant font-normal">
@@ -207,19 +207,21 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-emerald-500/10 text-success">
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-bold px-1 py-0.5 rounded bg-emerald-500/20">
+                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-success/10 text-success">
+                    <span className="text-[11px] uppercase tracking-[0.08em] font-bold px-1 py-0.5 rounded">
                       Kept
                     </span>
                     <span className="font-medium truncate">
                       {c.primaryValue}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-amber-500/10 text-on-surface-variant line-through">
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-warning not-line-through">
+                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-warning/10 text-on-surface-variant">
+                    <span className="text-[11px] uppercase tracking-[0.08em] font-bold px-1 py-0.5 rounded text-warning">
                       Discarded
                     </span>
-                    <span className="truncate">{c.duplicateValue}</span>
+                    <span className="truncate line-through">
+                      {c.duplicateValue}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -229,7 +231,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
       )}
 
       {/* Preview card */}
-      <div className={cn(CARD, "space-y-5 ring-2 ring-primary/20")}>
+      <div className={cn(CARD, "space-y-5")}>
         <div className={cn(LABEL_PRIMARY, "flex items-center gap-1.5")}>
           <Shield className="w-3.5 h-3.5" />
           Merge preview — final result
@@ -240,7 +242,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
           <img
             src={preview.avatarUrl || fallbackAvatarUrl(preview.name)}
             alt={preview.name}
-            className="w-14 h-14 rounded-full object-cover bg-surface-container-high ring-2 ring-emerald-500/30"
+            className="w-14 h-14 rounded-full object-cover bg-surface-container-high"
           />
           <div>
             <div className="text-lg font-bold">{preview.name}</div>

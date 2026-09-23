@@ -93,7 +93,6 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
       <CardFrame
         cardId="composition"
         title="Composition"
-        compact
         headerAction={
           <button
             type="button"

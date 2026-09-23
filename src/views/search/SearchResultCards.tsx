@@ -118,8 +118,10 @@ export const ResultCard = ({
                 {t.tag}
               </span>
             ))}
+            {/* The variant ink at full strength: at half opacity the count
+                fell to about 2 to 1 against the card. */}
             {match.tags.length > 5 && (
-              <span className="text-[11px] text-on-surface-variant opacity-50">
+              <span className="text-[11px] text-on-surface-variant">
                 +{match.tags.length - 5}
               </span>
             )}

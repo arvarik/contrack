@@ -74,6 +74,12 @@ export interface SettingsPage {
   rows?: SettingsRow[];
   load: () => Promise<{ default: React.ComponentType }>;
   ownsScrolling?: boolean;
+  /**
+   * A page that owns its scrolling but sits in the centred settings box, as
+   * every page that does not own it: the shell's header takes the box too,
+   * so the title starts at the same place as on every other settings page.
+   */
+  boxed?: boolean;
   badge?: () => number | null;
 }
 
@@ -479,6 +485,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Copy,
     group: "tools",
     ownsScrolling: true,
+    boxed: true,
     keywords: [
       "duplicates",
       "dedupe",
@@ -818,7 +825,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "trash",
       "backups",
       "integrations",
-      "mapbox",
       "searxng",
       "general",
       "admin",
@@ -866,15 +872,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       {
         id: "integrations",
         label: "Integrations",
-        keywords: [
-          "integrations",
-          "mapbox",
-          "searxng",
-          "maps",
-          "geocoding",
-          "search",
-          "admin",
-        ],
+        keywords: ["integrations", "searxng", "search", "admin"],
       },
     ],
     load: () => import("./admin/GeneralView"),

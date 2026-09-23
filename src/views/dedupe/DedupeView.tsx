@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useMergeCluster } from "../../api";
 import type { DedupeScanMode } from "../../types";
+import { MODE_NAME, runsAiPass, stepStatus } from "./utils/scanPhases";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -293,7 +294,11 @@ export const DedupeView = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-surface">
+    // The settings page is the one scroller at every width, so the tool
+    // takes its own height and clips only sideways (for the tabs' slide).
+    // A clip on both axes would stop a sticky control inside it, Compare in
+    // the manual tab, from sticking to the screen.
+    <div className="flex flex-col overflow-x-clip bg-surface">
       {/* Segmented Mode Selector */}
       <div className={cn("shrink-0 pt-4 bg-surface", PAGE_X)}>
         <div className="flex items-center justify-between gap-3">
@@ -332,7 +337,7 @@ export const DedupeView = () => {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
-            className="flex-1 flex flex-col overflow-hidden min-h-0"
+            className="flex flex-col"
           >
             {/* Results header (swipe view) */}
             {hasResults && resultView === "swipe" && totalActive > 0 && (
@@ -446,21 +451,12 @@ export const DedupeView = () => {
               </div>
             )}
 
-            {/* Body */}
-            <div
-              className={cn(
-                "flex-1 overflow-y-auto pt-6 pb-24 lg:pb-6",
-                PAGE_X,
-              )}
-            >
+            {/* Body. The page scrolls it. The bottom padding clears the
+                phone tab bar below md. */}
+            <div className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}>
               {/* ═══ Phase 1: Pre-scan — mode selector ═══ */}
               {preScan && (
-                <div
-                  className={cn(
-                    EMPTY_HERO,
-                    "h-auto min-h-full py-4 max-w-none",
-                  )}
-                >
+                <div className={cn(EMPTY_HERO, "h-auto py-4 max-w-none")}>
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -542,7 +538,7 @@ export const DedupeView = () => {
                 somebody else is scanning, and this one starts by itself.
               */}
               {isQueued && !scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -575,7 +571,7 @@ export const DedupeView = () => {
 
               {/* ═══ Phase 2: Scanning — progress card ═══ */}
               {isScanning && scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -598,8 +594,8 @@ export const DedupeView = () => {
                           <div className="text-sm font-bold text-on-surface">
                             Dedupe scan
                           </div>
-                          <div className="text-[11px] text-on-surface-variant capitalize">
-                            {scan.mode} mode
+                          <div className="text-[11px] text-on-surface-variant">
+                            {MODE_NAME[scan.mode] ?? scan.mode} mode
                           </div>
                         </div>
                         <span className="text-xs text-on-surface-variant tabular-nums">
@@ -633,37 +629,29 @@ export const DedupeView = () => {
 
                         {/* Phase pipeline */}
                         <div className="space-y-2">
-                          {(scan.mode === "deterministic" ||
-                            scan.mode === "both") && (
-                            <PhaseRow
-                              icon={<Shield className="w-3.5 h-3.5" />}
-                              label="Deterministic pass"
-                              status={
-                                scan.phase === "starting"
-                                  ? "pending"
-                                  : scan.phase === "deterministic"
-                                    ? "active"
-                                    : "done"
-                              }
-                              detail={
-                                scan.deterministicFound > 0
-                                  ? `${scan.deterministicFound} found`
-                                  : undefined
-                              }
-                            />
-                          )}
-                          {(scan.mode === "ai" || scan.mode === "both") && (
+                          {/* Every mode runs the exact-match pass. The
+                              rows used to test the old mode names only
+                              (deterministic, ai, both), so the three modes
+                              the picker offers showed neither row. */}
+                          <PhaseRow
+                            icon={<Shield className="w-3.5 h-3.5" />}
+                            label="Exact matches"
+                            status={stepStatus(
+                              scan.phase,
+                              "deterministic",
+                              "deterministic",
+                            )}
+                            detail={
+                              scan.deterministicFound > 0
+                                ? `${scan.deterministicFound} found`
+                                : undefined
+                            }
+                          />
+                          {runsAiPass(scan.mode) && (
                             <PhaseRow
                               icon={<Sparkles className="w-3.5 h-3.5" />}
                               label="AI analysis"
-                              status={
-                                scan.phase === "starting" ||
-                                scan.phase === "deterministic"
-                                  ? "pending"
-                                  : scan.phase === "ai"
-                                    ? "active"
-                                    : "done"
-                              }
+                              status={stepStatus(scan.phase, "blocking", "ai")}
                               detail={
                                 scan.aiCandidatesFound > 0
                                   ? `${scan.aiCandidatesFound} found`
@@ -674,13 +662,11 @@ export const DedupeView = () => {
                           <PhaseRow
                             icon={<GitMerge className="w-3.5 h-3.5" />}
                             label="Cluster grouping"
-                            status={
-                              scan.phase === "clustering"
-                                ? "active"
-                                : scan.phase === "complete"
-                                  ? "done"
-                                  : "pending"
-                            }
+                            status={stepStatus(
+                              scan.phase,
+                              "clustering",
+                              "clustering",
+                            )}
                             detail={
                               scan.clustersFound > 0
                                 ? `${scan.clustersFound} cluster${scan.clustersFound !== 1 ? "s" : ""}`
@@ -723,7 +709,7 @@ export const DedupeView = () => {
 
               {/* ═══ Phase 3: Scan error ═══ */}
               {scanError && scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <AlertCircle className="w-12 h-12 text-error mb-4" />
                   <p className="text-error font-bold">Scan failed</p>
                   <p className="text-sm text-on-surface-variant mt-1">
@@ -743,7 +729,7 @@ export const DedupeView = () => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center h-full"
+                  className="flex flex-col items-center"
                 >
                   <EmptyState
                     icon={CheckCircle2}
@@ -766,7 +752,7 @@ export const DedupeView = () => {
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="flex flex-col items-center justify-center h-full"
+                      className="flex flex-col items-center"
                     >
                       <EmptyState
                         /*
@@ -835,7 +821,9 @@ export const DedupeView = () => {
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 10 }}
-            className={cn("flex-1 overflow-hidden py-6 min-h-0", PAGE_X)}
+            // The bottom padding clears the phone tab bar, like the auto
+            // tab's body, so the last contact and Compare scroll above it.
+            className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}
           >
             <ManualMerge />
           </motion.div>

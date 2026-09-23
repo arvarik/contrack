@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MapToolbar } from "../../src/views/map/MapToolbar";
@@ -65,7 +71,9 @@ function TestComponent({
   onOpenSaveModal,
   onStartLasso,
   onSelectInView,
+  room,
 }: {
+  room?: number | null;
   contacts?: MapContact[];
   map?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   layer?: "pins" | "heat" | "health";
@@ -99,6 +107,7 @@ function TestComponent({
       onOpenSaveModal={onOpenSaveModal}
       onStartLasso={onStartLasso}
       onSelectInView={onSelectInView}
+      room={room}
     />
   );
 }
@@ -121,6 +130,35 @@ function renderWithProviders(ui: React.ReactElement, initialPath = "/map") {
 describe("MapToolbar and useMapFilter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  // An open contact covered the end of the toolbar at 1440 px, and left a
+  // strip of 100 px at 1024 px with the toolbar cut off in it.
+  it("keeps inside the map an open contact leaves, 16 px clear of it", () => {
+    renderWithProviders(<TestComponent room={516} />);
+    const card = screen
+      .getByRole("textbox", { name: "Filter contacts" })
+      .closest(".glass-panel") as HTMLElement;
+    expect(card.style.maxWidth).toBe("484px");
+    cleanup();
+    renderWithProviders(<TestComponent room={1200} />);
+    expect(
+      (
+        screen
+          .getByRole("textbox", { name: "Filter contacts" })
+          .closest(".glass-panel") as HTMLElement
+      ).style.maxWidth,
+    ).toBe("520px");
+  });
+
+  it("steps aside when the open contact leaves only a sliver", () => {
+    renderWithProviders(<TestComponent room={100} />);
+    expect(
+      screen.queryByRole("textbox", { name: "Filter contacts" }),
+    ).toBeNull();
+    expect(screen.queryAllByRole("button", { name: "Fit all" })).toHaveLength(
+      0,
+    );
   });
 
   it("renders filter input and Fit all button", () => {

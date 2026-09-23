@@ -7,6 +7,7 @@ import { ContactMiniCard } from "./shared/ContactMiniCard";
 import { LABEL, SEARCH_INPUT, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { roomAtTop } from "../utils/stickyRoom";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -60,72 +61,77 @@ export const ContactPicker = ({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Selected chips */}
-      <AnimatePresence mode="popLayout">
-        {selected.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            // The padding sits inside the clip the height animation needs,
-            // so the remove buttons' 44px tap boxes are not cut off.
-            className="flex flex-wrap gap-2 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
-          >
-            {selected.map((c) => (
-              <motion.div
-                key={c.id}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                layout
-                className={cn(
-                  "inline-flex items-center gap-2 px-3 py-1.5 rounded-md",
-                  SELECTED_TINT,
-                )}
-              >
-                <img
-                  src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                  alt={c.name}
-                  className="w-5 h-5 rounded-full object-cover"
-                />
-                <span className="text-xs font-bold">{c.name}</span>
-                <button
-                  onClick={() => removeContact(c.id)}
-                  aria-label={`Remove ${c.name}`}
-                  className="hit-area state-layer p-0.5 rounded-full"
+    <div className="flex flex-col">
+      {/* The picked contacts and the search. The page is the one scroller
+          and the list takes its full height, so this block sticks to the
+          top of the page, on its surface, and both stay in reach from far
+          down the list. Its top padding is the gap under the stage's
+          heading. */}
+      <div ref={roomAtTop} className="sticky top-0 z-10 py-4 bg-surface">
+        <AnimatePresence mode="popLayout">
+          {selected.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              // The padding sits inside the clip the height animation needs,
+              // so the remove buttons' 44px tap boxes are not cut off.
+              className="flex flex-wrap gap-2 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
+            >
+              {selected.map((c) => (
+                <motion.div
+                  key={c.id}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  layout
+                  className={cn(
+                    "inline-flex items-center gap-2 px-3 py-1.5 rounded-md",
+                    SELECTED_TINT,
+                  )}
                 >
-                  <X className="w-3 h-3" />
-                </button>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  <img
+                    src={c.avatarUrl || fallbackAvatarUrl(c.name)}
+                    alt={c.name}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                  <span className="text-xs font-bold">{c.name}</span>
+                  <button
+                    onClick={() => removeContact(c.id)}
+                    aria-label={`Remove ${c.name}`}
+                    className="hit-area state-layer p-0.5 rounded-full"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-        <input
-          aria-label="Search contacts to merge"
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search contacts by name, email, company..."
-          className={SEARCH_INPUT}
-          // Search field in a picker the user just opened.
-          // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
-        />
-        {query && (
-          <button
-            onClick={() => setQuery("")}
-            aria-label="Clear search"
-            className="hit-area state-layer absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full"
-          >
-            <X className="w-3.5 h-3.5 text-on-surface-variant" />
-          </button>
-        )}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
+          <input
+            aria-label="Search contacts to merge"
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search contacts by name, email, company..."
+            className={SEARCH_INPUT}
+            // Search field in a picker the user just opened.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="hit-area state-layer absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full"
+            >
+              <X className="w-3.5 h-3.5 text-on-surface-variant" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Selection status */}
@@ -139,8 +145,9 @@ export const ContactPicker = ({
         </span>
       </div>
 
-      {/* Contact list */}
-      <div className="flex-1 overflow-y-auto space-y-1 -mx-1 px-1 nice-scrollbar">
+      {/* Contact list. It takes its full height and the page scrolls it:
+          a list that scrolled inside the page showed two rows at 900 px. */}
+      <div className="space-y-1">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-on-surface-variant">
             <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />

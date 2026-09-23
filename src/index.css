@@ -22,7 +22,7 @@
    * Every colour below that is ever used as TEXT or as an ICON clears
    * WCAG AA (4.5:1) against every surface it actually lands on in this
    * app — measured, not assumed. The binding cases are not white cards;
-   * they are the pale tints (`bg-primary/15`, `bg-emerald-500/10`, …)
+   * they are the pale tints (`bg-primary/15`, `bg-success/10`, …)
    * that badges and pills are built from, where a colour sits on a wash
    * of itself.
    *
@@ -1110,29 +1110,28 @@
 }
 
 /* ── Selected: the row that is current ────────────────────────────────
- * A 10 percent tint of the primary with a 3 px bar on the leading edge. It
- * replaced a full ring, which read as keyboard focus on every visit and drew
- * two rings when the row also had focus. Text on it uses
- * `text-on-primary-wash`. A selected pill or nav item takes the tint without
- * the bar (`SELECTED_TINT` in `src/lib/styles.ts`).
+ * A 10 percent tint of the primary, the same tint a selected pill wears, and
+ * nothing else: no ring, which read as keyboard focus on every visit, and no
+ * bar down the leading edge, the stock accent of generated interfaces. The
+ * row's own text says the rest: its name takes `text-on-primary-wash`, and
+ * the page beside a list shows what is open. A selected pill or nav item
+ * takes the same tint (`SELECTED_TINT` in `src/lib/styles.ts`).
  *
  * A utility rather than a component class, so it takes a variant: the
  * command palette's rows are current by `aria-selected`, which cmdk sets,
- * and write `aria-selected:row-selected`. */
+ * and write `aria-selected:row-selected`. It sets no shadow, so a selected
+ * card keeps its own. */
 @utility row-selected {
   background-color: color-mix(
     in oklab,
     var(--color-primary) 10%,
     var(--row-face, transparent)
   );
-  box-shadow:
-    inset 3px 0 0 0 var(--color-primary),
-    var(--tw-shadow, 0 0 #0000);
 }
 
 /* A selected card keeps what makes it a card. On a flat row the tint mixes
    with transparent and the row stays flat. On a `.card` it mixes with the
-   card's own face and keeps the card's shadow, so a checked card reads as
+   card's own face, and the card keeps its shadow, so a checked card reads as
    raised and chosen, not as a translucent hole in the page. The face does
    not inherit, so a row inside a card mixes with transparent. */
 @property --row-face {
@@ -1256,10 +1255,26 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group button:not(:disabled):hover {
   background-color: var(--color-surface-container-high);
 }
-/* The app's focus colour, inset because the group clips anything outside. */
-.contact-map .maplibregl-ctrl-group button:focus:focus-visible,
-.contact-map .maplibregl-ctrl-attrib-button:focus:focus-visible {
+/*
+ * MapLibre's own focus glow, a blue shadow, showed after a pointer click on
+ * the zoom buttons and on the credit's "i", and the dark palette's filter
+ * turned the "i"'s orange. Focus from a pointer draws nothing. The keyboard
+ * gets the app's ring: inset on a zoom button, because the group clips
+ * anything outside, and on the credit's pill around the "i", 2 px outside
+ * like every other control, because the dark palette draws the "i" through
+ * a filter that would recolour a ring on the button itself.
+ */
+.contact-map .maplibregl-ctrl-group button:focus,
+.contact-map .maplibregl-ctrl-attrib-button:focus {
+  box-shadow: none;
+}
+.contact-map .maplibregl-ctrl-group button:focus:focus-visible {
   box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+.contact-map
+  .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .contact-map .maplibregl-ctrl-attrib,
@@ -1321,6 +1336,37 @@ html[data-text-scale="large"] {
 }
 
 /*
+ * The credit sits on top of the zoom buttons, and opens there as a card no
+ * wider than 13rem, which wraps its words onto a second line. At the foot
+ * of the column it opened across the bottom of the map, over the stats
+ * strip at 800 and 1024 px and over the health legend on a phone. On top of
+ * the zoom buttons it opens above the strip, and beside the legend's row at
+ * most, where the legend leaves it room at every width.
+ *
+ * With a contact open, both keep to the map the contact leaves: MapView sets
+ * `--map-open`, the open width, and the corner's right edge is where the
+ * contact starts. The contact used to cover them, and the licence needs the
+ * credit on screen. When the open map is under MIN_OPEN_PX, MapView sets
+ * `data-cramped`: the zoom buttons step aside like the toolbar, and the
+ * credit stays. The open credit keeps inside the open map too: its width
+ * leaves MapLibre's 36 px of padding, its 10 px margin and 10 px on the
+ * left, and a long word breaks rather than run under the contact.
+ */
+.map-page .maplibregl-ctrl-bottom-right {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  right: calc(100% - var(--map-open, 100%));
+}
+.map-page .maplibregl-ctrl-attrib.maplibregl-compact-show {
+  max-width: min(13rem, calc(var(--map-open, 100vw) - 56px));
+  overflow-wrap: anywhere;
+}
+.map-page[data-cramped] .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+  display: none;
+}
+
+/*
  * On a phone the tab bar is fixed over the bottom of the map page. The zoom
  * buttons and the attribution sit above it, and the zoom buttons grow to the
  * 44 px tap floor.
@@ -1337,8 +1383,9 @@ html[data-text-scale="large"] {
 }
 
 @media (min-width: 1024px) {
-  .map-page:has([aria-label="Map insights"]) .maplibregl-ctrl-bottom-right {
-    right: 20.5rem;
+  .map-page:has(aside[aria-label="Map insights"])
+    .maplibregl-ctrl-bottom-right {
+    right: max(20.5rem, calc(100% - var(--map-open, 100%)));
     transition: right var(--dur-slow) var(--ease);
   }
 }

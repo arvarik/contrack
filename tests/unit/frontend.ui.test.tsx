@@ -68,16 +68,19 @@ describe("dialog interaction", () => {
     await waitFor(() => expect(document.body.style.pointerEvents).toBe(""));
     expect(document.activeElement).toBe(screen.getByText("Open parent"));
   });
-  it("contains Tab and Shift+Tab and gives headless dialogs a name", () => {
+  it("contains Tab and Shift+Tab, and gives a headless dialog a name and the first focus", async () => {
     render(
       <Modal isOpen onClose={() => {}} ariaLabel="Contact details">
+        <input aria-label="First input" />
         <input aria-label="Last input" />
       </Modal>,
     );
-    expect(
-      screen.getByRole("dialog", { name: "Contact details" }),
-    ).toBeTruthy();
-    const first = screen.getByRole("button", { name: "Close dialog" });
+    const dialog = screen.getByRole("dialog", { name: "Contact details" });
+    // A dialog that renders its own header draws its own close control. A
+    // hidden one used to take focus on open and show as a box in the corner.
+    expect(screen.queryByRole("button", { name: "Close dialog" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    const first = screen.getByLabelText("First input");
     const last = screen.getByLabelText("Last input");
     last.focus();
     fireEvent.keyDown(last, { key: "Tab" });

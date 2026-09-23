@@ -49,8 +49,6 @@ export interface EmptyStateProps {
    * for a place that failed to load.
    */
   tone?: Tone;
-  /** Extra content under the sentence, such as a coverage card. */
-  children?: ReactNode;
   className?: string;
 }
 
@@ -62,7 +60,6 @@ export const EmptyState = ({
   action,
   level = 2,
   tone = "primary",
-  children,
   className,
 }: EmptyStateProps) => {
   const Heading = level === 3 ? "h3" : "h2";
@@ -101,7 +98,6 @@ export const EmptyState = ({
           {action.label}
         </button>
       )}
-      {children}
     </div>
   );
 };

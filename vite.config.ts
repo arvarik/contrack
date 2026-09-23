@@ -57,8 +57,8 @@ export default defineConfig({
               name: "vendor-maplibre",
               test: (id: string) =>
                 id.includes("/node_modules/") &&
+                // "maplibre" also matches @vis.gl/react-maplibre.
                 (id.includes("maplibre") ||
-                  id.includes("react-map-gl") ||
                   id.includes("pmtiles") ||
                   id.includes("/fflate/")),
               includeDependenciesRecursively: false,

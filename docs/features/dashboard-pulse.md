@@ -8,7 +8,7 @@ Access Pulse via the navigation bar or `Cmd+Shift+P`.
 
 ## Layout Overview
 
-The page opens with a masthead. The `h1` "Pulse" is a small page label over the date, which is the largest text on the page (32 px, 24 px on a phone). Under the date, one sentence says what the day holds: "2 overdue, 2 due today, 3 birthdays this week. 12 days in a row." Each count above zero is a button that jumps to its group in the queue on wide screens, and plain text on a phone. Beside the sentence a 40 px progress mark reads "4 to do", "1 of 4 done", "All done" or "Nothing due". **Log a note** is the one primary action. **More** opens a menu with **New contact** and **Customize layout**.
+The page opens with a masthead. The title "Pulse" is the `h1`, at the size of every page's title, and the day continues the line in a softer ink: "Pulse Tuesday, September 22" (30 px, 24 px on a phone, where the day takes its own line under the title and the buttons). Under it, one sentence says what the day holds: "2 overdue, 2 due today, 3 birthdays this week. 12 days in a row." Each count above zero is a button that jumps to its group in the queue on wide screens, and plain text on a phone. **Log note** is the one primary action. **More** opens a menu with **New contact** and **Customize layout**.
 
 Under the sentence, when AI is allowed for the account and there is a network to ask about, one field reads **Ask about your network**. It sends its question to the Ask page (`/search?q=`), where the People search runs it. The **Ask** button waits for three characters, the shortest question the search accepts. The form renders from 640 px up only: on a phone the tab bar has Ask Contrack one tap away, and the masthead must not push the queue off the first screen.
 
@@ -30,7 +30,7 @@ Every card is a title and a body: no line between them, no icon, and the count i
 
 The Up next card aggregates and ranks everything requesting attention into one list. From 1024 px the list scrolls inside its card, capped near the viewport height, so the page never grows with the queue. On a phone it has no cap. Each group has a heading that sticks to the pane, with a dot in the group's tone and the count at the right:
 
-- **Overdue**: Past-due follow-ups ordered oldest first. The chip reads "Overdue" or "12 days overdue".
+- **Overdue**: Past-due follow-ups ordered oldest first. The chip reads "1 day overdue" or "12 days overdue".
 - **Today**: Follow-up tasks due today.
 - **This week**: Action items due in the next seven days. The chip names the day: "Tomorrow", "Wednesday".
 - **Birthdays**: Contacts with a birthday in the next seven days, with a one-click action to log a birthday note.
@@ -38,9 +38,9 @@ The Up next card aggregates and ranks everything requesting attention into one l
 
 A row is two lines: the name and the chip, then the title. Under them, when known, "Last spoke 12 days ago". A click or a tap anywhere on the row opens the contact. The check completes a follow-up, and the Log button on a birthday or a catch-up opens the note composer. **Snooze** is the one action at the right: on a desktop it appears on hover or focus, on a phone it is always visible. It offers Tomorrow, In 3 days, Next week and Next month. A birthday or a catch-up row has no snooze.
 
-The masthead's counts jump to these group headings. The progress mark in the masthead shows how many of today's follow-ups are done.
+The masthead's counts jump to these group headings.
 
-When all tasks are cleared, the queue reads "Nothing due today" with one button, Log a note, and celebrates with confetti in the palette's colours.
+When all tasks are cleared, the queue reads "Nothing due today" with one button, Log note, and celebrates with confetti in the palette's colours.
 
 ### Keyboard Navigation
 
@@ -56,6 +56,8 @@ Up next provides single-key keyboard operations when typing targets do not have 
 | `C` | Toggle layout customize mode                                    |
 
 These single-key shortcuts can be toggled in Settings under Keyboard shortcuts.
+
+The highlighted row wears the selected tint only once the keyboard is using the queue: from keyboard focus in the list, or from the first of `J`, `K`, `D`, `S` and `L`. While no row shows the tint, that first key only shows the highlighted row and does nothing else, so `D` never completes a row nobody can see. A pointer press outside the list takes the tint away again.
 
 The highlighted row is the list's one tab stop. Tab reaches it, and from a focused row:
 

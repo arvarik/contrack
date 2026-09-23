@@ -29,6 +29,7 @@ import { useMergeCluster, useMergeClusters } from "../../../api";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { activateOnKey } from "../../../lib/a11y";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { roomAtTop } from "../utils/stickyRoom";
 
 // =============================================================================
 // ClusterList — Expandable list of duplicate clusters with bulk merge
@@ -150,15 +151,21 @@ export const ClusterList = ({
         icon={CheckCircle2}
         title="All clean"
         body="No duplicate clusters remaining."
-        className="h-full justify-center"
       />
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header bar */}
-      <div className="shrink-0 flex items-center justify-between mb-4">
+    <div className="flex flex-col">
+      {/* Select all, the count and Merge. The settings page is the one
+          scroller, so the bar sticks to its top, on the page's surface, and
+          stays in reach while a person checks clusters far down the list.
+          The negative margins keep its controls in place, and its surface
+          reaches 8 px past the cards, over the shadow of a card under it. */}
+      <div
+        ref={roomAtTop}
+        className="sticky top-0 z-10 -mx-2 -mt-3 mb-1 px-2 py-3 bg-surface flex items-center justify-between"
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={toggleSelectAll}
@@ -212,8 +219,8 @@ export const ClusterList = ({
         )}
       </div>
 
-      {/* Cluster rows */}
-      <div className="flex-1 overflow-y-auto space-y-2 nice-scrollbar pr-1">
+      {/* Cluster rows. The settings page scrolls them. */}
+      <div className="space-y-2">
         {clusters.map((cluster, i) => {
           const isSelected = selected.has(cluster.id);
           const isExpanded = expanded === cluster.id;
@@ -240,7 +247,7 @@ export const ClusterList = ({
                   onKeyDown={activateOnKey(() => toggleExpand(cluster.id))}
                   tabIndex={0}
                   role="button"
-                  className="state-layer flex items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
+                  className="state-layer flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
                   onClick={() => toggleExpand(cluster.id)}
                 >
                   {/* Checkbox */}
@@ -287,7 +294,12 @@ export const ClusterList = ({
 
                   {/* Cluster info */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate">
+                    <div
+                      className={cn(
+                        "text-sm font-bold truncate",
+                        isSelected && "text-on-primary-wash",
+                      )}
+                    >
                       {primary.name}
                     </div>
                     <div className="text-[11px] text-on-surface-variant truncate">
@@ -295,75 +307,79 @@ export const ClusterList = ({
                     </div>
                   </div>
 
-                  {/* Stats */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-md flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {cluster.size}
-                    </span>
-                    {cluster.hasWeakLink && (
+                  {/* The stats, the actions and the chevron. On a phone
+                      they take a line of their own under the name: beside
+                      them the name had no room and Merge ran off the card. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 max-sm:w-full sm:shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-md flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {cluster.size}
+                      </span>
+                      {cluster.hasWeakLink && (
+                        <span
+                          className={cn(
+                            "text-xs font-bold px-2.5 py-1 rounded-md",
+                            TONE_WASH.warning,
+                          )}
+                        >
+                          Weak
+                        </span>
+                      )}
                       <span
                         className={cn(
-                          "text-xs font-bold px-2.5 py-1 rounded-md",
-                          TONE_WASH.warning,
+                          "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
+                          TONE_WASH[
+                            cluster.aggregateConfidence >= 0.9
+                              ? "success"
+                              : cluster.aggregateConfidence >= 0.7
+                                ? "primary"
+                                : "warning"
+                          ],
                         )}
                       >
-                        Weak
+                        {Math.round(cluster.aggregateConfidence * 100)}%
                       </span>
-                    )}
-                    <span
-                      className={cn(
-                        "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
-                        TONE_WASH[
-                          cluster.aggregateConfidence >= 0.9
-                            ? "success"
-                            : cluster.aggregateConfidence >= 0.7
-                              ? "primary"
-                              : "warning"
-                        ],
-                      )}
+                    </div>
+
+                    {/* Skip button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveCluster(cluster.id);
+                        toast("Kept separate", {
+                          icon: (
+                            <Shield className="w-4 h-4 text-on-surface-variant" />
+                          ),
+                        });
+                      }}
+                      aria-label={`Skip cluster ${primary.name}`}
+                      className="btn-secondary btn-sm shrink-0 ml-auto"
                     >
-                      {Math.round(cluster.aggregateConfidence * 100)}%
-                    </span>
-                  </div>
+                      Skip
+                    </button>
 
-                  {/* Skip button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveCluster(cluster.id);
-                      toast("Kept separate", {
-                        icon: (
-                          <Shield className="w-4 h-4 text-on-surface-variant" />
-                        ),
-                      });
-                    }}
-                    aria-label={`Skip cluster ${primary.name}`}
-                    className="btn-secondary btn-sm shrink-0"
-                  >
-                    Skip
-                  </button>
+                    {/* Merge button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSingleMerge(cluster);
+                      }}
+                      disabled={mergeCluster.isPending}
+                      aria-label={`Merge ${cluster.size} contacts in this cluster`}
+                      className="btn-primary btn-sm shrink-0"
+                    >
+                      Merge
+                    </button>
 
-                  {/* Merge button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSingleMerge(cluster);
-                    }}
-                    disabled={mergeCluster.isPending}
-                    aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="btn-primary btn-sm shrink-0"
-                  >
-                    Merge
-                  </button>
-
-                  {/* Expand chevron */}
-                  <div className="shrink-0 text-on-surface-variant">
-                    {isExpanded ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
+                    {/* Expand chevron */}
+                    <div className="shrink-0 text-on-surface-variant">
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
                   </div>
                 </div>
 

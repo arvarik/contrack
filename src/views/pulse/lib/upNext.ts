@@ -16,6 +16,7 @@ import { differenceInCalendarDays } from "date-fns";
 import type { ActionItem } from "../../../types";
 import type { CatchUpCard } from "../../../../shared/pulse";
 import { describePastDue } from "../../../../shared/pastDue";
+import { parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "./birthdays";
 
 export type UpNextGroup =
@@ -114,11 +115,13 @@ export const GROUP_LABELS: Record<UpNextGroup, string> = {
  * The words on a due chip, in sentence case.
  *
  * `daysFromNow` is the calendar-day distance to the due date: negative for
- * a past date. A past date reads "Overdue" for one day and "12 days
- * overdue" after that. Today and tomorrow are named. Inside the week the
- * chip says the weekday in full ("Wednesday") when it has the date, and
- * "In 2 days" when it does not. From a week out it counts days. A catch-up
- * row does not come here: its chip is `describePastDue`.
+ * a past date. A past date counts its days, "1 day overdue" and "12 days
+ * overdue": the row sits under the Overdue heading, so a bare "Overdue"
+ * repeated the heading and hid how late it was. Today and tomorrow are
+ * named. Inside the week the chip says the weekday in full ("Wednesday")
+ * when it has the date, and "In 2 days" when it does not. From a week out
+ * it counts days. A catch-up row does not come here: its chip is
+ * `describePastDue`.
  *
  * The chips used to read "12D OVERDUE", "IN 2D" and "WED", which a person
  * has to decode. A chip is a fact, and a fact reads as words.
@@ -130,7 +133,7 @@ export function describeDueChip(
   const days = Math.round(daysFromNow);
   if (days < 0) {
     const late = -days;
-    return late === 1 ? "Overdue" : `${late} days overdue`;
+    return `${late} ${late === 1 ? "day" : "days"} overdue`;
   }
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
@@ -167,15 +170,19 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
 
   const overdueItems: UpNextItem[] = [...overdue]
     .sort((a, b) => {
-      const timeA = a.dueAt ? new Date(a.dueAt).getTime() : 0;
-      const timeB = b.dueAt ? new Date(b.dueAt).getTime() : 0;
+      const timeA = parseServerTime(a.dueAt)?.getTime() ?? 0;
+      const timeB = parseServerTime(b.dueAt)?.getTime() ?? 0;
       return timeA - timeB; // Oldest dueAt first
     })
     .map((item) => {
       // The server put it in this bucket, so it is at least a day late
-      // whatever the browser's clock says.
-      const daysLate = item.dueAt
-        ? Math.min(-1, differenceInCalendarDays(new Date(item.dueAt), now))
+      // whatever the browser's clock says. A date with no time is that day
+      // on the local calendar (`parseServerTime`), as the contact page's
+      // banner reads it: read as UTC midnight it was a day early west of
+      // Greenwich, "4 days overdue" beside the banner's "3 days".
+      const due = parseServerTime(item.dueAt);
+      const daysLate = due
+        ? Math.min(-1, differenceInCalendarDays(due, now))
         : -1;
       return {
         id: item.id,
@@ -218,13 +225,13 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
 
   const thisWeekItems: UpNextItem[] = [...upcoming]
     .sort((a, b) => {
-      const timeA = a.dueAt ? new Date(a.dueAt).getTime() : 0;
-      const timeB = b.dueAt ? new Date(b.dueAt).getTime() : 0;
+      const timeA = parseServerTime(a.dueAt)?.getTime() ?? 0;
+      const timeB = parseServerTime(b.dueAt)?.getTime() ?? 0;
       return timeA - timeB;
     })
     .map((item) => {
       // In this bucket the date is after today, so at least a day out.
-      const due = item.dueAt ? new Date(item.dueAt) : null;
+      const due = parseServerTime(item.dueAt);
       const label = due
         ? describeDueChip(Math.max(1, differenceInCalendarDays(due, now)), due)
         : "Upcoming";

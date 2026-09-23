@@ -29,7 +29,7 @@ contrack/
 │   ├── services/            # Core business logic
 │   │   ├── dedupe/          #   Multi-pass deduplication engine
 │   │   ├── search/          #   Hybrid retrieval (FTS5 + vector KNN)
-│   │   └── geocoding/       #   Address geocoding (Mapbox / Nominatim)
+│   │   └── geocoding/       #   Address geocoding (Nominatim)
 │   ├── repositories/        # Data access layer (hydration, query helpers)
 │   ├── utils/               # Shared utilities (NLP, logging, caching)
 │   └── db.ts                # Database init, migrations, virtual tables
@@ -50,7 +50,7 @@ contrack/
 │   │   │   ├── ListPicker.tsx      # List membership toggle
 │   │   │   ├── FacetPills.tsx      # Color-coded filter badges
 │   │   │   ├── FacetAutocomplete.tsx # Prefix operator autocomplete
-│   │   │   ├── ResultPeek.tsx      # Space-to-peek tooltip
+│   │   │   ├── ResultPeek.tsx      # Shift-to-peek tooltip
 │   │   │   ├── SynthesisBar.tsx    # AI executive brief streamer
 │   │   │   └── ZeroStateView.tsx   # Intelligence + history display
 │   │   └── ...              #   Other shared components

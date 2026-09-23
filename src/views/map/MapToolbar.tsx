@@ -43,7 +43,7 @@ import { isValidLatLng } from "../../../shared/geo";
 import type { FacetFilter } from "../../../shared/searchFacets";
 import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
 import { prefersReducedMotion } from "./flyTo";
-import { measureInsets, paddingFor } from "./insets";
+import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
 import { SELECTED_TINT } from "../../lib/styles";
 
@@ -84,6 +84,12 @@ export interface MapToolbarProps {
   onStartRename?: (view: MapView) => void;
   onDeleteView?: (view: MapView) => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
+  /**
+   * How much map an open contact leaves at the toolbar's left, in px. Null
+   * or left out: the whole page. The toolbar keeps inside it, 16 px clear
+   * of the contact, and steps aside under `MIN_OPEN_PX`.
+   */
+  room?: number | null;
   onFitAll?: () => void;
   onToggleInsights?: () => void;
   onSelectInView?: () => void;
@@ -113,6 +119,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onStartRename,
   onDeleteView,
   inputRef: externalInputRef,
+  room = null,
   onFitAll: externalFitAll,
   onToggleInsights,
   onSelectInView,
@@ -408,9 +415,11 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu */}
+      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu.
+          It wraps, Views and Select under the layers, when an open contact
+          leaves the toolbar narrow. */}
       {!isMobile && (
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-outline-variant/20">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <Segmented<MapLayer>
             options={LAYER_OPTIONS}
             value={layer}
@@ -508,49 +517,64 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     </div>
   );
 
+  // With a contact open, the toolbar keeps to the map the contact leaves.
+  const cramped = room !== null && room < MIN_OPEN_PX;
+  const roomWidth = room !== null ? room - 32 : null;
+
   return (
     <>
       {/* Desktop Toolbar */}
-      <div className="absolute top-4 left-4 z-10 w-[calc(100%-2rem)] max-w-[520px] hidden lg:flex flex-col gap-2 p-2 rounded-2xl glass-panel shadow-xl border border-outline-variant/20">
-        {renderToolbarContent(false)}
-      </div>
+      {!cramped && (
+        <div
+          className="absolute top-4 left-4 z-10 w-[calc(100%-2rem)] max-w-[520px] hidden lg:flex flex-col gap-2 p-2 rounded-2xl glass-panel shadow-xl border border-outline-variant/20"
+          style={
+            roomWidth !== null
+              ? { maxWidth: Math.min(520, roomWidth) }
+              : undefined
+          }
+        >
+          {renderToolbarContent(false)}
+        </div>
+      )}
 
       {/* Mobile Toolbar Button */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setIsMobileSheetOpen(true)}
-          aria-label="Filters"
-          className="hit-area state-layer glass-panel shadow-lg rounded-xl px-3 py-2 text-sm font-medium text-on-surface flex items-center gap-2 cursor-pointer border border-outline-variant/30"
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span>Filters</span>
-          {hasActiveFilter && (
-            <span className="inline-flex items-center justify-center bg-primary text-on-primary rounded-full text-xs font-semibold px-1.5 min-w-[18px] h-[18px]">
-              {effectiveFilters.length || 1}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={handleFitAll}
-          aria-label="Fit all"
-          className="hit-area state-layer glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-        {onToggleInsights && (
+      {!cramped && (
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden">
           <button
             type="button"
-            onClick={onToggleInsights}
-            aria-label="Insights"
-            className="hit-area state-layer glass-panel shadow-lg rounded-xl px-2.5 py-2 text-sm font-medium text-on-surface flex items-center gap-1.5 cursor-pointer border border-outline-variant/30"
+            onClick={() => setIsMobileSheetOpen(true)}
+            aria-label="Filters"
+            className="hit-area state-layer glass-panel shadow-lg rounded-xl px-3 py-2 text-sm font-medium text-on-surface flex items-center gap-2 cursor-pointer border border-outline-variant/30"
           >
-            <BarChart3 className="w-4 h-4" />
-            <span>Insights</span>
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Filters</span>
+            {hasActiveFilter && (
+              <span className="inline-flex items-center justify-center bg-primary text-on-primary rounded-full text-xs font-semibold px-1.5 min-w-[18px] h-[18px]">
+                {effectiveFilters.length || 1}
+              </span>
+            )}
           </button>
-        )}
-      </div>
+          <button
+            type="button"
+            onClick={handleFitAll}
+            aria-label="Fit all"
+            className="hit-area state-layer glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+          {onToggleInsights && (
+            <button
+              type="button"
+              onClick={onToggleInsights}
+              aria-label="Insights"
+              className="hit-area state-layer glass-panel shadow-lg rounded-xl px-2.5 py-2 text-sm font-medium text-on-surface flex items-center gap-1.5 cursor-pointer border border-outline-variant/30"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Insights</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mobile Filter Sheet Modal */}
       <Modal

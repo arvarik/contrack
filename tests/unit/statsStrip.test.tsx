@@ -29,7 +29,7 @@ describe("StatsStrip", () => {
     expect(screen.getByText("42 in view")).toBeDefined();
     expect(screen.getByText("7 at risk")).toBeDefined();
     expect(screen.getByText("3 overdue")).toBeDefined();
-    expect(screen.getByText("avg 61")).toBeDefined();
+    expect(screen.getByText("61 avg score")).toBeDefined();
     expect(screen.getByText("3 time zones")).toBeDefined();
 
     const status = screen.getByRole("status");
@@ -45,6 +45,18 @@ describe("StatsStrip", () => {
     });
     fireEvent.click(atRiskButton);
     expect(onApplyFacet).toHaveBeenCalledWith("score:<40");
+  });
+
+  it("says overdue as a fact in the overdue ink, not as a second button", () => {
+    // It wore the at risk button's wash with no hover, and no facet filters
+    // by follow-up.
+    render(<StatsStrip stats={mockStats} onApplyFacet={vi.fn()} />);
+    const overdue = screen.getByText("3 overdue");
+    expect(overdue.tagName).toBe("SPAN");
+    expect(overdue.closest("button")).toBeNull();
+    expect(overdue.className).toContain("text-error");
+    expect(overdue.className).not.toContain("bg-error");
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
   it("renders empty state with Fit all button when no one is in view", () => {

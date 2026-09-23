@@ -279,6 +279,20 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
+  it("paints with the colour tokens, never a raw palette colour", () => {
+    // `bg-emerald-500` is one green in both palettes and matches no token,
+    // so the palette's health dot and the avatar ring showed one band in two
+    // greens, and amber washes ignored the dark palette. A status is
+    // `success`, `warning`, `error` or `info`, and a grey is a surface or an
+    // ink token.
+    const raw =
+      /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration|shadow|outline|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?![\w])/;
+    const offenders = everyClassString()
+      .filter(({ text }) => raw.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   it("transitions only properties that exist", () => {
     // `transition-[shadow,…]` names no CSS property, so the shadow jumped.
     const offenders = everyClassString()
@@ -316,10 +330,10 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
-  it("keeps a selected row's bar free of rings and shadows", () => {
+  it("keeps a selected row free of rings and background overrides", () => {
     const selected = /(?<![-\w])row-selected(?![-\w])|SELECTED_ROW/;
-    const clash = /(?<![-\w])(?:ring|shadow)-(?!none)/;
-    // A background utility replaces the tint too. Checked inside one literal
+    const ring = /(?<![-\w])ring-(?!0(?![-\w])|inset(?![-\w])|offset)/;
+    // A background utility replaces the tint. Checked inside one literal
     // only: a ternary that picks the tint or a resting wash is fine, and a
     // scan cannot tell it from a conflict.
     const literal = /(?<![-\w])row-selected(?![-\w])/;
@@ -327,7 +341,7 @@ describe("the one look", () => {
     const offenders = everyClassString()
       .filter(
         ({ text }) =>
-          (selected.test(text) && clash.test(text)) ||
+          (selected.test(text) && ring.test(text)) ||
           (literal.test(text) &&
             !/SELECTED_ROW/.test(text) &&
             text.length < 200 &&
@@ -335,6 +349,52 @@ describe("the one look", () => {
       )
       .map(({ file, line }) => `${file}:${line}`);
     expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("draws no coloured bar down a leading edge", () => {
+    // A tinted box with a sliver of colour on its left is the stock accent of
+    // generated interfaces. A selection is the tint, a category is a tone.
+    // The forms: a thick left or inline-start border, a left border in a
+    // status colour, a hairline left border beside a status border colour,
+    // a narrow `before:` or `after:` box with a fill, and an inset shadow.
+    // A pane's neutral hairline (`border-l border-outline-variant/30`) is a
+    // divider, not a bar.
+    const STATUS = "(?:primary|error|warning|success|info|ai)(?:/\\d+)?";
+    const thick = /(?<![-\w])(?:[a-z-]+:)*border-[ls]-(?:[1-9]|\[)/;
+    const coloured = new RegExp(
+      `(?<![-\\w])(?:[a-z-]+:)*border-[ls]-${STATUS}(?![-\\w])`,
+    );
+    const hairline = /(?<![-\w])(?:[a-z-]+:)*border-[ls](?![-\w])/;
+    const statusBorder = new RegExp(
+      `(?<![-\\w])(?:[a-z-]+:)*border-${STATUS}(?![-\\w])`,
+    );
+    const pseudoBox =
+      /(?:before|after):(?:w-(?:px|0\.5|1|1\.5|\[\d+px\])|left-0|inset-y-)/;
+    const pseudoFill = /(?:before|after):bg-/;
+    const inset = /shadow-\[inset_\d+px_0/;
+    const isBar = (text: string) =>
+      thick.test(text) ||
+      coloured.test(text) ||
+      (hairline.test(text) && statusBorder.test(text)) ||
+      (pseudoBox.test(text) && pseudoFill.test(text)) ||
+      inset.test(text);
+    for (const sample of [
+      "border-l-3 border-primary",
+      "border-s-4",
+      "border-l-primary",
+      "border-l border-error/40",
+      "before:absolute before:left-0 before:w-1 before:bg-primary",
+      "shadow-[inset_3px_0_0_var(--color-primary)]",
+    ]) {
+      expect(isBar(sample), sample).toBe(true);
+    }
+    expect(isBar("border-l border-outline-variant/30")).toBe(false);
+    expect(isBar("sm:border-l-0")).toBe(false);
+    const offenders = everyClassString()
+      .filter(({ text }) => isBar(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+    expect(css).not.toMatch(/box-shadow:\s*inset\s+\d+px\s+0\s+0/);
   });
 
   it("times transitions with the motion tokens, not a hand-picked duration", () => {

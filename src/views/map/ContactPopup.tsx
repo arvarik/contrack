@@ -24,7 +24,7 @@
  * @module views/map/ContactPopup
  */
 import { useEffect } from "react";
-import { Popup } from "react-map-gl/maplibre";
+import { Popup } from "@vis.gl/react-maplibre";
 import { MapPin } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
 import { contactPinLabel } from "./ContactMarker";

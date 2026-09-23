@@ -88,8 +88,6 @@ export const SETTING_KEYS = {
   backupIntervalHours: "backup.intervalHours",
   /** number — count of backup files to keep */
   backupKeep: "backup.keep",
-  /** string (sealed) — Mapbox access token encrypted with secretBox */
-  mapboxKey: "geo.mapboxKey",
   /** string (sealed) — Google OAuth clientId and clientSecret encrypted with secretBox */
   googleOAuth: "connectors.googleOAuth",
 } as const;

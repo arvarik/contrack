@@ -526,7 +526,7 @@ curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
 
 ### `GET /api/geo/search`
 
-Search for a place or city by name to resolve geographic coordinates. Backed by the local geocoding cache and Nominatim (or Mapbox if configured). Does not access or modify contacts.
+Search for a place or city by name to resolve geographic coordinates. Backed by the local geocoding cache and Nominatim. Does not access or modify contacts.
 
 **Query Parameters:**
 
@@ -2495,8 +2495,8 @@ Every route under `/api/admin` needs an account with the `admin` role and answer
 | DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                               |
 | GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, `instanceName`, lifecycle settings  |
 | PUT    | `/api/admin/settings`                 | Update settings (refuses env-locked keys: `409 SET_BY_ENVIRONMENT`)       |
-| GET    | `/api/admin/integrations`             | Mapbox and SearXNG status without secrets (`configured`, `source`, `url`) |
-| PUT    | `/api/admin/integrations`             | Update Mapbox key / SearXNG URL (password current; env-locked: `409`)     |
+| GET    | `/api/admin/integrations`             | SearXNG and Google OAuth status without secrets                           |
+| PUT    | `/api/admin/integrations`             | Update SearXNG, Google OAuth client (password current; env-locked: `409`) |
 | GET    | `/api/admin/audit`                    | Every administrative action, newest first                                 |
 | GET    | `/api/admin/mail`                     | Outgoing mail status and configuration without secrets                    |
 | PUT    | `/api/admin/mail`                     | Save SMTP configuration (seals password with secretBox)                   |
@@ -2525,21 +2525,32 @@ every route outside the six the sign-in flow needs answers
 
 ### `GET /api/admin/integrations`
 
-Admin only. Read current configuration status and sources for third-party integrations (Mapbox geocoding and SearXNG search). Never returns raw or sealed API keys.
+Admin only. Read current configuration status and sources for third-party integrations (SearXNG search and the Google OAuth client). Never returns the raw or sealed client secret, only a redacted preview of its last four characters.
 
 ```bash
 curl http://localhost:3210/api/admin/integrations
-# → 200 { "mapbox": { "configured": true, "source": "setting" }, "searxng": { "url": "http://searxng.local:8080", "source": "setting" } }
+```
+
+```json
+{
+  "searxng": { "url": "http://searxng.local:8080", "source": "setting" },
+  "googleOAuth": {
+    "configured": true,
+    "source": "setting",
+    "clientId": "123456789-abc.apps.googleusercontent.com",
+    "clientSecretPreview": "••••x9Qz"
+  }
+}
 ```
 
 ### `PUT /api/admin/integrations`
 
-Admin only. Requires a current non-temporary password (`requirePasswordCurrent`). Store or clear integration settings. Mapbox keys are sealed using AES-256-GCM (`secretBox`). An empty string clears the setting. Answers `409 SET_BY_ENVIRONMENT` if the key or URL is locked by environment variables.
+Admin only. Requires a current non-temporary password (`requirePasswordCurrent`). Store or clear integration settings. The Google OAuth client is sealed using AES-256-GCM (`secretBox`). An empty `searxngUrl` clears the URL, and `"googleOAuth": null` clears the client. Answers `409 SET_BY_ENVIRONMENT` if the URL or the client is locked by environment variables.
 
 ```bash
 curl -X PUT http://localhost:3210/api/admin/integrations \
   -H "Content-Type: application/json" \
-  -d '{ "mapboxKey": "pk.ey...", "searxngUrl": "http://searxng.local:8080" }'
+  -d '{ "searxngUrl": "http://searxng.local:8080" }'
 ```
 
 ### `POST /api/admin/users/:id/reset-link`

@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, type RefObject, useRef } from "react";
 
 const SIZE_MAP = {
   sm: "sm:max-w-sm",
@@ -15,11 +15,22 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
-  /** Accessible name for dialogs that render their own header. */
+  /**
+   * Accessible name for dialogs that render their own header. Such a dialog
+   * draws its own close control (an X, a Cancel button): the dialog has none
+   * to add. A hidden one used to take focus on open and appear as a box over
+   * the header's corner.
+   */
   ariaLabel?: string;
   children: ReactNode;
   size?: keyof typeof SIZE_MAP;
   disableMobileSheet?: boolean;
+  /**
+   * Where focus goes on close, when it is not wherever it was on open: the
+   * control that opened the dialog. Safari does not focus a clicked button,
+   * so "wherever it was" can be a field the person never meant to return to.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /** Responsive dialog with nested focus, scroll locking, and keyboard dismissal. */
@@ -31,9 +42,11 @@ export function Modal({
   children,
   size = "md",
   disableMobileSheet = false,
+  returnFocusRef,
 }: ModalProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const content = useRef<HTMLDivElement>(null);
 
   // Where focus was before this opened, captured during the render that opens
   // it rather than in `onOpenAutoFocus`.
@@ -63,19 +76,28 @@ export function Modal({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-on-surface/20 backdrop-blur-sm z-[200] modal-fade" />
         <Dialog.Content
+          ref={content}
+          // A dialog without a title takes focus on itself, so a screen
+          // reader hears its name and the first Tab reaches its first control.
+          tabIndex={-1}
           aria-describedby={undefined}
-          className={`fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden modal-fade`}
+          // `outline-none`: the dialog itself takes focus when it has no
+          // title, and a ring around the whole panel would say nothing.
+          className={`fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden outline-none modal-fade`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            closeButton.current?.focus({ preventScroll: true });
+            (closeButton.current ?? content.current)?.focus({
+              preventScroll: true,
+            });
           }}
           onCloseAutoFocus={(event) => {
             // Only take over when there is somewhere to put focus. Preventing
             // the default and then restoring nothing leaves it on <body>,
             // which is worse than whatever Radix would have done.
-            if (!previousFocus.current?.isConnected) return;
+            const target = returnFocusRef?.current ?? previousFocus.current;
+            if (!target?.isConnected) return;
             event.preventDefault();
-            previousFocus.current.focus({ preventScroll: true });
+            target.focus({ preventScroll: true });
           }}
         >
           {title ? (
@@ -92,16 +114,7 @@ export function Modal({
               </Dialog.Close>
             </div>
           ) : (
-            <>
-              <Dialog.Title className="sr-only">{ariaLabel}</Dialog.Title>
-              <Dialog.Close
-                ref={closeButton}
-                aria-label="Close dialog"
-                className="sr-only focus:not-sr-only focus:absolute focus:right-3 focus:top-3 focus:z-10 focus:p-3 focus:bg-surface"
-              >
-                Close
-              </Dialog.Close>
-            </>
+            <Dialog.Title className="sr-only">{ariaLabel}</Dialog.Title>
           )}
           <div
             className={`min-h-0 overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] ${title ? "p-5 sm:p-6" : "flex flex-col"}`}

@@ -8,7 +8,7 @@ import {
   Calendar,
   ChevronRight,
 } from "lucide-react";
-import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../../lib/styles";
+import { CARD, KBD_SM, LABEL_PRIMARY, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { SETTINGS_PAGES } from "../../settings/registry";
@@ -44,7 +44,9 @@ export const WelcomeOffice = () => {
     : "/settings/privacy#ai-assist";
 
   return (
-    <div className={CARD}>
+    // The inner block sets the inset. The card's own padding came on top of
+    // it and a phone lost 96 of its 358 px to padding.
+    <div className={cn(CARD, "p-0")}>
       <div className="p-6 sm:p-8 space-y-6">
         <div>
           <div className={cn(LABEL_PRIMARY, "flex items-center gap-2 mb-2")}>
@@ -85,11 +87,13 @@ export const WelcomeOffice = () => {
               <div>
                 <span className={STEP_TITLE}>Log your first note</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
-                  Record a recent interaction or set a follow-up date (press{" "}
-                  <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-                    ⌘⇧I
-                  </kbd>
-                  ).
+                  Record a recent interaction or set a follow-up date
+                  {/* A phone has no keyboard to press it on. */}
+                  <span className="hidden sm:inline">
+                    {" "}
+                    (press <kbd className={KBD_SM}>⌘⇧I</kbd>)
+                  </span>
+                  .
                 </span>
               </div>
             </div>

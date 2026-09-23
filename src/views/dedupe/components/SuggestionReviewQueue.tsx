@@ -455,8 +455,9 @@ export const SuggestionReviewQueue = () => {
 
   return (
     <div className="space-y-3">
-      {/* Toolbar: select all / count / batch actions */}
-      <div className="flex flex-wrap items-center gap-3 mb-3 px-1">
+      {/* Toolbar: select all / count / batch actions. Its inset puts the
+          select-all box in the column of the groups' boxes. */}
+      <div className="flex flex-wrap items-center gap-3 mb-3 px-3">
         {/* Select all / none toggle */}
         <button
           onClick={
@@ -478,19 +479,22 @@ export const SuggestionReviewQueue = () => {
 
         <div className="flex-1" />
 
-        {/* Batch action buttons — appear when items are selected */}
+        {/* Batch action buttons, when a group is checked. The toolbar's
+            size, so a phone keeps each label on one line, and a fade: a
+            scale would grow the words. */}
         <AnimatePresence>
           {hasSelection && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: DURATION.fast, ease: EASE }}
               className="flex items-center gap-2 ml-auto"
             >
               <button
                 onClick={handleBatchDismiss}
                 disabled={isBatchProcessing}
-                className="btn-secondary"
+                className="btn-secondary btn-sm"
               >
                 <X className="w-3.5 h-3.5" />
                 Keep separate ({selected.size})
@@ -498,7 +502,7 @@ export const SuggestionReviewQueue = () => {
               <button
                 onClick={handleBatchMerge}
                 disabled={isBatchProcessing}
-                className="btn-primary"
+                className="btn-primary btn-sm"
               >
                 {isBatchProcessing ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -567,6 +571,27 @@ export const SuggestionReviewQueue = () => {
 // PairRow — Simple 2-contact row (most common case)
 // =============================================================================
 
+/** One side of a pair: the avatar, the full name and the company. */
+function PairContact({ contact }: { contact: Contact }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <img
+        src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
+        alt={contact.name}
+        className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
+      />
+      <div className="min-w-0 break-words">
+        <div className="text-sm font-bold">{contact.name}</div>
+        {contact.company && (
+          <div className="text-xs text-on-surface-variant">
+            {contact.company}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PairRow({
   cluster,
   mergeSuggestion,
@@ -626,7 +651,7 @@ function PairRow({
         onKeyDown={activateOnKey(() => setExpanded((e) => !e))}
         tabIndex={0}
         role="button"
-        className="state-layer flex items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
+        className="state-layer flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
       >
         {/* Checkbox */}
@@ -646,82 +671,56 @@ function PairRow({
           )}
         </button>
 
-        {/* Primary */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <img
-            src={primary.avatarUrl || fallbackAvatarUrl(primary.name)}
-            alt={primary.name}
-            className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-bold truncate">{primary.name}</div>
-            {primary.company && (
-              <div className="text-[11px] text-on-surface-variant truncate">
-                {primary.company}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* The two contacts. Their names and companies wrap and are never
+            cut: two rows of "Elizabeth …" could not be told apart. */}
+        <PairContact contact={primary} />
 
         <span className="text-on-surface-variant/30 shrink-0 text-xs">⇄</span>
 
-        {/* Duplicate */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <img
-            src={duplicate.avatarUrl || fallbackAvatarUrl(duplicate.name)}
-            alt={duplicate.name}
-            className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-bold truncate">{duplicate.name}</div>
-            {duplicate.company && (
-              <div className="text-[11px] text-on-surface-variant truncate">
-                {duplicate.company}
-              </div>
-            )}
-          </div>
-        </div>
+        <PairContact contact={duplicate} />
 
-        {/* Badge */}
-        <div className="shrink-0 hidden sm:block">
+        {/* The badge, the actions and the chevron. Below lg they take a
+            line of their own under the pair: beside them the names had
+            about 87 px. From sm the line starts under the first avatar
+            (the checkbox and its gap are 28 px). A phone needs the whole
+            width for "Email match" and the two buttons. From lg the row is
+            wide enough for one line. */}
+        <div className="flex flex-wrap items-center gap-3 w-full sm:pl-7 lg:w-auto lg:pl-0 lg:shrink-0">
           <MatchBadge
             type={suggestion.matchType}
             confidence={suggestion.confidence}
           />
-        </div>
-
-        {/* Actions */}
-        <div className="shrink-0 flex items-center gap-1.5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleMerge();
-            }}
-            disabled={mergeSuggestion.isPending}
-            className="btn-primary btn-sm"
-          >
-            Merge
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDismiss();
-            }}
-            disabled={dismissSuggestion.isPending}
-            className="btn-secondary btn-sm"
-            title="Not the same person"
-            aria-label="Not the same person"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="shrink-0 text-on-surface-variant">
-          {expanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMerge();
+                }}
+                disabled={mergeSuggestion.isPending}
+                className="btn-primary btn-sm"
+              >
+                Merge
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDismiss();
+                }}
+                disabled={dismissSuggestion.isPending}
+                className="btn-secondary btn-sm"
+                title="Not the same person"
+                aria-label="Not the same person"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {expanded ? (
+              <ChevronUp className="w-4 h-4 text-on-surface-variant" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-on-surface-variant" />
+            )}
+          </div>
         </div>
       </div>
 
@@ -746,11 +745,14 @@ function PairRow({
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 relative">
                 <div className="min-w-0">
+                  {/* The keeper's own values are kept. Without `isPrimary`
+                      the card marked every one that differs "Discarded". */}
                   <ContactCard
                     contact={primary}
                     label="Primary (keeper)"
                     labelColor={TONE_WASH.success}
                     other={duplicate}
+                    isPrimary
                   />
                 </div>
                 {/*
@@ -876,7 +878,7 @@ function ClusterCard({
             <Square className="w-4 h-4" />
           )}
         </button>
-        <div className="flex-1 bg-surface-container-low rounded-xl p-3 flex items-start gap-3">
+        <div className="flex-1 bg-surface-container-low rounded-xl p-3 flex flex-wrap items-start gap-3">
           <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-on-surface leading-relaxed">
@@ -884,7 +886,9 @@ function ClusterCard({
               person.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Under the sentence on a phone, which the two chips squeezed
+              to a word a line. */}
+          <div className="flex items-center gap-2 shrink-0 max-sm:w-full max-sm:pl-8">
             <span
               className={cn(
                 "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
@@ -910,7 +914,7 @@ function ClusterCard({
       {/* Large cluster warning */}
       {cluster.contacts.length > 5 && (
         <div
-          className="flex items-start gap-3 bg-warning/10 rounded-xl p-3 ml-7"
+          className="flex items-start gap-3 bg-warning/10 rounded-xl p-3 sm:ml-7"
           role="alert"
         >
           <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
@@ -925,12 +929,14 @@ function ClusterCard({
 
       {/* Primary selection strip */}
       <div
-        className="space-y-2 ml-7"
+        className="space-y-2 sm:ml-7"
         role="radiogroup"
         aria-label="Select primary contact"
       >
         <div className={cn(LABEL, "px-1")}>Select primary contact</div>
-        <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
+        {/* The chips wrap. A strip that scrolled sideways was a second
+            scroller inside the page, and on a phone it caught the flick. */}
+        <div className="flex flex-wrap gap-2 p-1">
           {cluster.contacts.map((contact) => {
             const isContactSelected = contact.id === selectedPrimaryId;
             return (
@@ -971,7 +977,7 @@ function ClusterCard({
       </div>
 
       {/* Side-by-side comparison */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 ml-7">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:ml-7">
         <div className="min-w-0">
           <ContactCard
             contact={primary}
@@ -997,7 +1003,7 @@ function ClusterCard({
       {/* Evidence toggle */}
       <button
         onClick={() => setShowEvidence((s) => !s)}
-        className="state-layer w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant transition-colors ml-7 max-w-[calc(100%-1.75rem)]"
+        className="state-layer w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant transition-colors sm:ml-7 sm:max-w-[calc(100%-1.75rem)]"
       >
         <Link2 className="w-3.5 h-3.5" />
         {showEvidence ? "Hide" : "Show"} evidence ({cluster.suggestions.length}{" "}
@@ -1013,7 +1019,7 @@ function ClusterCard({
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
-          className="space-y-2 overflow-hidden ml-7"
+          className="space-y-2 overflow-hidden sm:ml-7"
         >
           {cluster.suggestions.map((s, i) => {
             const a = cluster.contacts.find((c) => c.id === s.contactIdA);
@@ -1037,7 +1043,7 @@ function ClusterCard({
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 ml-7">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 sm:ml-7">
         <button
           onClick={handleDismissAll}
           className="btn-secondary w-full sm:w-auto"

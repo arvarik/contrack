@@ -151,10 +151,12 @@ export const SettingsShell = () => {
       className={cn(
         PAGE_TOP,
         // A page that owns its scrolling is a full-width tool, and its
-        // header spans the column. Every other page is a centred box, and
-        // the header takes the same box, so the title starts above the
-        // page's first card and not off to its left.
-        ownsScrolling ? cn(PAGE_X, "shrink-0") : SETTINGS_BOX,
+        // header spans the column, unless it is `boxed`. Every other page is
+        // a centred box, and the header takes the same box, so the title
+        // starts above the page's first card and not off to its left.
+        ownsScrolling
+          ? cn(currentSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
+          : SETTINGS_BOX,
       )}
     />
   );

@@ -1,4 +1,11 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
 import {
@@ -6,22 +13,24 @@ import {
   Search,
   X,
   AlertTriangle,
-  Clock,
+  HistoryIcon,
   RefreshCw,
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch, useSearchCoverage } from "../api";
+import { useSemanticSearch } from "../api";
+import { useContacts } from "../api/contacts";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
 import {
+  BTN_QUIET,
   CARD,
-  CARD_INTERACTIVE,
   ICON_BTN,
   PAGE_TOP,
-  TONE_WASH,
+  SECTION_HEADING,
+  SUGGESTION_CHIP,
 } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { tileDelay } from "../lib/motion";
@@ -34,6 +43,7 @@ import { NAMES } from "../lib/names";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
+import { suggestedQuestions } from "./search/suggestions";
 import { Segmented } from "../components/ui/Segmented";
 import { IconButton } from "../components/ui/IconButton";
 import { Modal } from "../components/ui/Modal";
@@ -57,15 +67,6 @@ type SearchMode = "people" | "notes";
 const MODES: readonly { value: SearchMode; label: string }[] = [
   { value: "people", label: "People" },
   { value: "notes", label: "Notes" },
-];
-
-const EXAMPLE_QUERIES = [
-  "Who do I know in London working in FinTech?",
-  "Who likes espresso?",
-  "Who haven't I contacted in over 3 months?",
-  "Who works at a startup as a designer?",
-  "Who do I know in venture capital?",
-  "Find people interested in AI or machine learning",
 ];
 
 // ─── Main SearchView Component ────────────────────────────────────────────────
@@ -106,7 +107,6 @@ export const SearchView = () => {
     setPhase: setLastAISearchPhase,
   });
   const { submittedQuery, isPending, mutate, reset } = semanticSearch;
-  const { data: coverage } = useSearchCoverage();
 
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
     null,
@@ -184,6 +184,26 @@ export const SearchView = () => {
       setMobileHistoryOpen((prev) => !prev);
     }
   }, [isWide, askHistoryOpen, setPreference]);
+
+  /**
+   * Close the side pane from the button in its own header. Focus moves to
+   * the page header's toggle, which stays on the page and opens the pane
+   * again, so the keyboard keeps its place when the button it pressed goes.
+   */
+  const handleHideHistory = useCallback(() => {
+    setPreference("askHistoryOpen", false);
+    historyToggleRef.current?.focus();
+  }, [setPreference]);
+
+  /** Close the phone's sheet. The sheet hands focus back to the toggle. */
+  const closeMobileHistory = useCallback(() => {
+    setMobileHistoryOpen(false);
+  }, []);
+
+  /** Whether the history is showing: the side pane, or the phone's sheet. */
+  const historyOpen = isWide ? askHistoryOpen : mobileHistoryOpen;
+  /** The key that toggles the history, while single-key shortcuts are on. */
+  const historyShortcut = singleKeys ? "H" : undefined;
 
   const handleSelectHistoryEntry = useCallback(
     (entry: HistoryEntry) => {
@@ -271,6 +291,10 @@ export const SearchView = () => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       if (!singleKeys) return;
+      // A key pressed in a dialog belongs to the dialog: H in the history's
+      // Clear confirmation would close the pane under it.
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+        return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();
@@ -280,14 +304,36 @@ export const SearchView = () => {
         !e.ctrlKey &&
         !e.altKey
       ) {
-        if (!singleKeys) return;
         e.preventDefault();
-        handleToggleHistory();
+        // With focus inside the side pane, H is its Hide history button:
+        // the pane goes, and the keyboard moves to the toggle that brings it
+        // back instead of falling onto the body.
+        const inPane =
+          document.activeElement instanceof Element &&
+          document.activeElement.closest("#search-history-aside") !== null;
+        if (isWide && askHistoryOpen && inPane) handleHideHistory();
+        else handleToggleHistory();
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [singleKeys, handleToggleHistory]);
+  }, [
+    singleKeys,
+    isWide,
+    askHistoryOpen,
+    handleToggleHistory,
+    handleHideHistory,
+  ]);
+
+  // Built from the network, which the Network list has most often loaded
+  // already (the two share one cache). The list waits for the network to
+  // settle, so its chips never move under a pointer when it arrives. A
+  // failed load shows the fixed examples.
+  const { data: contacts, isPending: contactsPending } = useContacts();
+  const suggestions = useMemo(
+    () => suggestedQuestions(Array.isArray(contacts) ? contacts : []),
+    [contacts],
+  );
 
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {
@@ -296,6 +342,8 @@ export const SearchView = () => {
     },
     [handleSearch],
   );
+  /** Names the list of suggested questions after its heading. */
+  const suggestionsId = useId();
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
@@ -341,13 +389,10 @@ export const SearchView = () => {
               PAGE_TOP,
             )}
           >
+            {/* The title and its two controls, nothing else: the search box
+                under it says what the page is for. */}
             <PageHeader
               title={NAMES.ask.label}
-              description={
-                mode === "notes"
-                  ? "Find what was said, and when"
-                  : NAMES.ask.description
-              }
               // The controls are the same two in both modes, so the switch stays
               // where the person clicked it. On a phone they fill the row under
               // the title, the switch growing beside the history button.
@@ -361,9 +406,21 @@ export const SearchView = () => {
                     label="What to search"
                     className="max-sm:w-auto max-sm:flex-1"
                   />
+                  {/* One name, "History", and the state says the rest: a
+                      pressed toggle for the side pane, an expanded opener
+                      for the phone's sheet. A name that flipped between
+                      Show and Hide on a pressed toggle would say the state
+                      twice, and a screen reader would read "Hide history,
+                      pressed". The side pane also closes from its own
+                      header, and this is the way to open it again. */}
                   <IconButton
                     ref={historyToggleRef}
-                    aria-label="Search history"
+                    aria-label="History"
+                    title={
+                      historyShortcut
+                        ? `History (${historyShortcut})`
+                        : "History"
+                    }
                     aria-pressed={isWide ? askHistoryOpen : undefined}
                     aria-expanded={isWide ? undefined : mobileHistoryOpen}
                     aria-haspopup={isWide ? undefined : "dialog"}
@@ -373,25 +430,13 @@ export const SearchView = () => {
                         : undefined
                     }
                     onClick={handleToggleHistory}
-                    tone={
-                      isWide
-                        ? askHistoryOpen
-                          ? "primary"
-                          : "ghost"
-                        : mobileHistoryOpen
-                          ? "primary"
-                          : "ghost"
-                    }
+                    tone={historyOpen ? "primary" : "ghost"}
                   >
-                    <Clock className="w-5 h-5" />
+                    <HistoryIcon className="w-5 h-5" aria-hidden="true" />
                   </IconButton>
                 </>
               }
-            >
-              {/* How much of the network People search can read yet. People
-                  only, under the title, so it never pushes the controls around. */}
-              {mode === "people" && <SearchCoverageBar compact />}
-            </PageHeader>
+            />
             {mode === "notes" ? (
               <InteractionSearchPanel />
             ) : (
@@ -399,120 +444,107 @@ export const SearchView = () => {
                 <LiveStatus message={status} label="Search status" />
 
                 {/*
-                  The search box is one field: the glyph, the input, Clear
-                  and Search in one card. The card draws the focus ring while
-                  the input has focus (`focus-frame`). The button drops below
-                  the field on phones.
+                  The search box, and under it the index's one line while
+                  People search cannot read the whole network yet.
                 */}
-                <div
-                  className={cn(
-                    CARD,
-                    "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-2 sm:py-4",
-                  )}
-                >
-                  {isLoading ? (
-                    // Decorative: the "Searching..." line under the box says
-                    // the same thing in words, and the status region reads it.
-                    <CorvidThinking
-                      decorative
-                      size={20}
-                      className="text-primary shrink-0"
-                    />
-                  ) : (
-                    <Sparkles className="w-5 h-5 text-primary shrink-0" />
-                  )}
-                  <input
-                    ref={inputRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    // Short enough to survive a 390px viewport without the
-                    // placeholder being clipped mid-word.
-                    placeholder="Ask about your network…"
-                    aria-label="Ask anything about your network"
-                    // 44px tall on a phone, the touch floor; the row's
-                    // padding shrinks there to make up for it.
-                    className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
-                  />
+                <div className="space-y-3">
                   {/*
-                    Reserved slot, not an AnimatePresence exit. Mounting and
-                    unmounting the clear button changed the row's width
-                    mid-typing and nudged the caret; now the space is always
-                    there and only the button's opacity changes.
+                    The search box is one field: the glyph, the input, Clear
+                    and Search in one card. The card draws the focus ring
+                    while the input has focus (`focus-frame`). The button
+                    drops below the field on phones, with the card's side
+                    padding under it. It is the one raised surface on the
+                    page, and 80 px tall from `sm`, the same as the Notes
+                    box, so switching modes moves nothing.
                   */}
-                  <button
-                    onClick={handleClear}
-                    tabIndex={query.length > 0 ? 0 : -1}
-                    aria-hidden={query.length === 0}
+                  <div
                     className={cn(
-                      ICON_BTN,
-                      "p-1.5 shrink-0 transition-opacity",
-                      query.length === 0 && "opacity-0 pointer-events-none",
+                      CARD,
+                      "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-6 pt-2 pb-4 sm:py-5",
                     )}
-                    aria-label="Clear search"
                   >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => handleSearch()}
-                    disabled={query.trim().length < 3 || isLoading}
-                    className="btn-primary w-full sm:w-auto shrink-0"
-                  >
-                    <Search className="w-4 h-4" />
-                    Search
-                  </button>
+                    {isLoading ? (
+                      // Decorative: the "Searching..." line under the box says
+                      // the same thing in words, and the status region reads it.
+                      <CorvidThinking
+                        decorative
+                        size={20}
+                        className="text-primary shrink-0"
+                      />
+                    ) : (
+                      <Sparkles className="w-5 h-5 text-primary shrink-0" />
+                    )}
+                    <input
+                      ref={inputRef}
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      // Short enough to survive a 390px viewport without the
+                      // placeholder being clipped mid-word.
+                      placeholder="Ask about your network…"
+                      aria-label="Ask anything about your network"
+                      // 44px tall on a phone, the touch floor, and the Search
+                      // button's 40 px from `sm`.
+                      className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+                    />
+                    {/*
+                      Reserved slot, not an AnimatePresence exit. Mounting and
+                      unmounting the clear button changed the row's width
+                      mid-typing and nudged the caret; now the space is always
+                      there and only the button's opacity changes.
+                    */}
+                    <button
+                      onClick={handleClear}
+                      tabIndex={query.length > 0 ? 0 : -1}
+                      aria-hidden={query.length === 0}
+                      className={cn(
+                        ICON_BTN,
+                        "p-1.5 shrink-0 transition-opacity",
+                        query.length === 0 && "opacity-0 pointer-events-none",
+                      )}
+                      aria-label="Clear search"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleSearch()}
+                      disabled={query.trim().length < 3 || isLoading}
+                      className="btn-primary w-full sm:w-auto shrink-0"
+                    >
+                      <Search className="w-4 h-4" />
+                      Search
+                    </button>
+                  </div>
+                  <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
                 </div>
 
-                {/* Example queries — only shown before first search */}
-                {!hasSearched && !isLoading && (
-                  <div className="space-y-4">
-                    <EmptyState
-                      icon={Sparkles}
-                      title="Ask anything"
-                      body="Semantic search reads names, roles, notes and interests."
-                      className="py-4"
+                {/* Suggested questions, before the first search. A press
+                    fills the box and asks. */}
+                {!hasSearched && !isLoading && !contactsPending && (
+                  <div className="space-y-3">
+                    <h2 id={suggestionsId} className={SECTION_HEADING}>
+                      Try asking
+                    </h2>
+                    <ul
+                      aria-labelledby={suggestionsId}
+                      className="flex flex-wrap gap-2"
                     >
-                      {mode === "people" &&
-                        coverage &&
-                        coverage.coverage < 100 && (
-                          <div className="w-full max-w-md pt-2 text-left space-y-2">
-                            <p className="text-xs text-on-surface-variant">
-                              Indexing turns contacts into searchable concepts
-                              so you can find people by meaning rather than
-                              exact words.
-                            </p>
-                            <SearchCoverageBar />
-                          </div>
-                        )}
-                    </EmptyState>
-                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
-                      Try asking...
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {EXAMPLE_QUERIES.map((q, i) => (
-                        // The entrance runs on a wrapper. `tile-enter` holds
-                        // its last `transform` after it ends, which would
-                        // cancel the card's hover lift.
-                        <div
+                      {suggestions.map((q, i) => (
+                        <li
                           key={q}
                           className="tile-enter"
                           style={{ animationDelay: tileDelay(i) }}
                         >
                           <button
+                            type="button"
                             onClick={() => handleExampleClick(q)}
-                            className={cn(
-                              CARD_INTERACTIVE,
-                              "w-full h-full text-left px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:text-on-surface",
-                            )}
+                            className={SUGGESTION_CHIP}
                           >
-                            <span className="text-primary mr-1.5 font-bold">
-                              ?
-                            </span>
                             {q}
                           </button>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 )}
 
@@ -542,7 +574,9 @@ export const SearchView = () => {
                     {/* Results header — wraps rather than crushes on narrow screens */}
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-[0.08em] text-primary">
+                        {/* A label in the muted ink, like "Try asking": blue
+                            would read as a link. */}
+                        <span className={SECTION_HEADING}>
                           {isFallback
                             ? isEnriching
                               ? "Keyword candidates"
@@ -580,9 +614,17 @@ export const SearchView = () => {
                           disabled={isPending || !answeredQuery}
                           aria-label="Refresh results"
                           title="Ask this question again"
-                          className="hit-area flex items-center gap-1 text-xs text-primary hover:underline disabled:text-on-surface-variant disabled:no-underline disabled:cursor-not-allowed"
+                          // A quiet text button, like the status row's:
+                          // it is a button, not a link.
+                          className={cn(
+                            BTN_QUIET,
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                          )}
                         >
-                          <RefreshCw className="w-3 h-3 shrink-0" />
+                          <RefreshCw
+                            className="w-3.5 h-3.5 shrink-0"
+                            aria-hidden="true"
+                          />
                           Refresh
                         </button>
                       </div>
@@ -612,7 +654,8 @@ export const SearchView = () => {
                   </div>
                 ) : null}
 
-                {/* No results */}
+                {/* No results. When the index is not complete, the line
+                    under the search box already says so. */}
                 {!isLoading &&
                   hasSearched &&
                   results.length === 0 &&
@@ -620,51 +663,40 @@ export const SearchView = () => {
                     <EmptyState
                       icon={SearchX}
                       title="No one matches"
-                      body="Try other words, or check the coverage below."
+                      body="Try other words."
                       className="tile-enter"
-                    >
-                      <div className="w-full max-w-md pt-2 text-left">
-                        <SearchCoverageBar />
-                      </div>
-                    </EmptyState>
+                    />
                   )}
 
                 {/*
-                Error state. `role="alert"` so the failure is announced the
-                moment it appears (WCAG 4.1.3, technique ARIA19). The status
-                region above says nothing for an error, so it is spoken once.
-              */}
+                  Error state. `role="alert"` so the failure is announced the
+                  moment it appears (WCAG 4.1.3, technique ARIA19). The status
+                  region above says nothing for an error, so it is spoken
+                  once. The question that failed is kept by the hook, so Retry
+                  asks it again without reading the input, which may have
+                  moved on. Asking clears the error, so the button is gone
+                  before a second press could send the question twice.
+                */}
                 {semanticSearch.isError && (
-                  <div
-                    role="alert"
-                    className="tile-enter flex flex-col items-center justify-center py-16 text-center"
-                  >
-                    <div
-                      className={cn(TONE_WASH.error, "p-4 rounded-2xl mb-4")}
-                    >
-                      <AlertTriangle className="w-10 h-10" />
-                    </div>
-                    <p className="font-bold text-on-surface mb-1">
-                      Search failed
-                    </p>
-                    <p className="text-sm text-on-surface-variant">
-                      {(semanticSearch.error as Error)?.message ||
-                        "An unexpected error occurred."}
-                    </p>
-                    {/*
-                The question that failed is kept by the hook, so this asks it
-                again without reading the input, which may have moved on.
-              */}
-                    {submittedQuery && (
-                      <button
-                        onClick={handleRerun}
-                        disabled={isPending}
-                        className="btn-primary mt-4"
-                      >
-                        <RotateCw className="w-4 h-4" />
-                        Retry
-                      </button>
-                    )}
+                  <div role="alert" className="tile-enter">
+                    <EmptyState
+                      icon={AlertTriangle}
+                      tone="error"
+                      title="Search failed"
+                      body={
+                        (semanticSearch.error as Error)?.message ||
+                        "An unexpected error occurred."
+                      }
+                      action={
+                        submittedQuery
+                          ? {
+                              label: "Retry",
+                              onClick: handleRerun,
+                              icon: RotateCw,
+                            }
+                          : undefined
+                      }
+                    />
                   </div>
                 )}
               </>
@@ -690,6 +722,8 @@ export const SearchView = () => {
             }
             currentMode={mode}
             onSelect={handleSelectHistoryEntry}
+            onHide={handleHideHistory}
+            hideShortcut={historyShortcut}
           />
         </aside>
       )}
@@ -697,11 +731,9 @@ export const SearchView = () => {
       {/* Mobile History Bottom Sheet (below lg) */}
       <Modal
         isOpen={mobileHistoryOpen}
-        onClose={() => {
-          setMobileHistoryOpen(false);
-          historyToggleRef.current?.focus();
-        }}
+        onClose={closeMobileHistory}
         ariaLabel="Search history"
+        returnFocusRef={historyToggleRef}
       >
         <div className="p-2 -m-2">
           <HistoryPane
@@ -711,9 +743,9 @@ export const SearchView = () => {
                 : answeredQuery || query
             }
             currentMode={mode}
+            onClose={closeMobileHistory}
             onSelect={(entry) => {
               setMobileHistoryOpen(false);
-              historyToggleRef.current?.focus();
               handleSelectHistoryEntry(entry);
             }}
           />

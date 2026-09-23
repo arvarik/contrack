@@ -7,8 +7,8 @@
  *    - "Merge activity" moves into an ActionMenu in the header below sm.
  *    - expectPageAccessible and expectFloors hold.
  * 2. /search:
- *    - Coverage card and indexing explanation shown in empty state before search when < 100%.
- *    - Compact bar remains in the header.
+ *    - The coverage row is shown under the search box before a search when < 100%.
+ *    - No coverage card, hero or explanation around it.
  * 3. /settings/import:
  *    - Drop zone appears before "How to export from..." disclosure.
  *    - Last chosen source is persisted in localStorage and restored on reload.
@@ -69,6 +69,18 @@ test.describe("phone pages (390 px)", () => {
     expect(autoScanClipped).toBe(false);
     expect(manualMergeClipped).toBe(false);
 
+    // One scroller: the settings card and the tool scroll with the page. A
+    // box that scrolls inside the page catches a flick and stops the page.
+    const scrollers = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("#main-content *")).filter(
+          (el) =>
+            /(auto|scroll)/.test(getComputedStyle(el).overflowY) &&
+            el.scrollHeight > el.clientHeight + 1,
+        ).length,
+    );
+    expect(scrollers).toBe(1);
+
     // Below sm, "Merge activity" moves into an ActionMenu in the header
     const actionMenuBtn = page.getByRole("button", {
       name: "Duplicates actions",
@@ -107,9 +119,60 @@ test.describe("phone pages (390 px)", () => {
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "duplicates-phone-dark.png"),
     });
+
+    // Manual merge: the picker takes its full height in the page's one
+    // scroller, and Compare sticks on top of the tab bar while a person
+    // picks. Picking and comparing write nothing.
+    await manualMerge.click();
+    await page.getByRole("button", { name: /Ada Lovelace/ }).click();
+    await page.getByRole("button", { name: /Grace Hopper/ }).click();
+    const compare = page.getByRole("button", { name: /Compare 2 contacts/ });
+    await expect(compare).toBeInViewport();
+    const tabBar = await page
+      .getByRole("navigation", { name: "Primary" })
+      .boundingBox();
+    const compareBox = await compare.boundingBox();
+    expect(compareBox!.y + compareBox!.height).toBeLessThanOrEqual(tabBar!.y);
+    expect(
+      await page.evaluate(
+        () =>
+          Array.from(document.querySelectorAll("#main-content *")).filter(
+            (el) =>
+              /(auto|scroll)/.test(getComputedStyle(el).overflowY) &&
+              el.scrollHeight > el.clientHeight + 1,
+          ).length,
+      ),
+    ).toBe(1);
+
+    // The picked contacts and the search stick to the top of the scroller,
+    // so both stay in reach from the bottom of the list.
+    await page.evaluate(() => {
+      const scroller = Array.from(
+        document.querySelectorAll("#main-content *"),
+      ).find(
+        (el) =>
+          /(auto|scroll)/.test(getComputedStyle(el).overflowY) &&
+          el.scrollHeight > el.clientHeight + 1,
+      )!;
+      scroller.scrollTop = scroller.scrollHeight;
+    });
+    await expect(
+      page.getByRole("textbox", { name: "Search contacts to merge" }),
+    ).toBeInViewport();
+    await expect(
+      page.getByRole("button", { name: "Remove Grace Hopper" }),
+    ).toBeInViewport();
+    await expect(compare).toBeInViewport();
+
+    // The Compare stage opens at its top, with Back on the screen. It used
+    // to open where the list was scrolled to, 998 px down.
+    await compare.click();
+    await expect(
+      page.getByRole("button", { name: "Back", exact: true }),
+    ).toBeInViewport();
   });
 
-  test("ask contrack on phone: coverage card shown in empty state before search when < 100%", async ({
+  test("ask contrack on phone: coverage row shown under the search box before search when < 100%", async ({
     page,
   }) => {
     // Intercept search coverage to guarantee under 100%
@@ -137,24 +200,40 @@ test.describe("phone pages (390 px)", () => {
     });
 
     await page.goto("/search");
-    await expect(page.getByText("Ask anything")).toBeVisible();
-
-    // Explanatory sentence is visible
-    await expect(
-      page.getByText(
-        "Indexing turns contacts into searchable concepts so you can find people by meaning rather than exact words.",
-      ),
-    ).toBeVisible();
-
-    // Full coverage bar is visible inside the empty state
-    await expect(
-      page.getByRole("heading", { name: "Semantic search coverage" }),
-    ).toBeVisible();
-
-    // Compact bar in the header is also present
     await expect(
       page.getByRole("heading", { level: 1, name: "Ask Contrack" }),
     ).toBeVisible();
+
+    // One slim row under the search box says how far indexing has got, with
+    // the action that finishes it
+    const row = page.getByRole("region", { name: "Semantic search coverage" });
+    await expect(row).toBeVisible();
+    await expect(row.getByText("6 of 10 contacts indexed")).toBeVisible();
+    await expect(
+      row.getByRole("button", { name: "Index missing" }),
+    ).toBeVisible();
+    const input = page.getByRole("textbox", {
+      name: "Ask anything about your network",
+    });
+    const inputBox = await input.boundingBox();
+    const rowBox = await row.boundingBox();
+    expect(inputBox).not.toBeNull();
+    expect(rowBox).not.toBeNull();
+    expect(rowBox!.y).toBeGreaterThan(inputBox!.y);
+
+    // The suggestions are still the empty page's content
+    await expect(
+      page.getByRole("heading", { name: "Try asking" }),
+    ).toBeVisible();
+
+    // No coverage card, hero or explanation around it
+    await expect(
+      page.getByRole("heading", { name: "Semantic search coverage" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Ask anything", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText(/Indexing turns contacts/)).toHaveCount(0);
 
     // Capture screenshots in light and dark
     await page.emulateMedia({ colorScheme: "light" });

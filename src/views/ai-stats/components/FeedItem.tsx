@@ -87,9 +87,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
         <div
           className={cn(
             "w-2 h-2 rounded-full",
-            item.cached
-              ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]"
-              : "bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.4)]",
+            item.cached ? "bg-success" : "bg-info",
           )}
         />
       </div>
@@ -101,7 +99,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
 
           {/* Model badge or CACHED pill */}
           {item.cached ? (
-            <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded bg-emerald-500/10 text-success ring-1 ring-emerald-500/20">
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded bg-success/10 text-success ring-1 ring-success/20">
               Cached
             </span>
           ) : item.model ? (

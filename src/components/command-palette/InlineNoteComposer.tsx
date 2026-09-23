@@ -108,7 +108,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
         <div
-          className={`w-7 h-7 flex items-center justify-center rounded-lg ${isNote ? "bg-blue-500/15 text-info" : "bg-emerald-500/15 text-success"}`}
+          className={`w-7 h-7 flex items-center justify-center rounded-lg ${isNote ? "bg-info/15 text-info" : "bg-success/15 text-success"}`}
         >
           <Icon className="w-4 h-4" />
         </div>

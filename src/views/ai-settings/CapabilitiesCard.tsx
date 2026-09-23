@@ -291,7 +291,7 @@ const CapabilityRow = ({
               {meta.label}
             </span>
             {isDirty && (
-              <span className="text-[11px] font-bold uppercase tracking-[0.08em] bg-amber-500/15 text-warning px-1.5 py-0.5 rounded">
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] bg-warning/15 text-warning px-1.5 py-0.5 rounded">
                 Unsaved
               </span>
             )}
@@ -371,7 +371,7 @@ const CapabilityRow = ({
 
       {/* The re-index warning belongs to the moment of deciding, not after. */}
       {meta.warning && isDirty && (
-        <div className="flex items-start gap-1.5 text-xs text-warning bg-amber-500/10 rounded-lg px-3 py-2 mt-2">
+        <div className="flex items-start gap-1.5 text-xs text-warning bg-warning/10 rounded-lg px-3 py-2 mt-2">
           <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
           <span className="text-pretty">{meta.warning}</span>
         </div>
@@ -403,7 +403,7 @@ export const CapabilitiesCard = ({ settings }: { settings: AISettings }) => {
       </div>
 
       {!hasAnyProvider && (
-        <div className="flex items-start gap-2 text-sm text-warning bg-amber-500/10 rounded-xl p-3">
+        <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 rounded-xl p-3">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span className="text-pretty">
             No providers connected, so the language-model and web-research

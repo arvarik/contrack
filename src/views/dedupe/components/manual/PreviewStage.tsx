@@ -27,7 +27,6 @@ export const PreviewStage = ({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex-1 overflow-y-auto min-h-0 nice-scrollbar"
     >
       <div className="mb-4 flex items-center justify-between">
         <button

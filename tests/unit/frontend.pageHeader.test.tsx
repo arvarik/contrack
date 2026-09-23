@@ -4,7 +4,7 @@
  *
  * Every page's top is `PageHeader`, so its promises are the ones every page
  * makes: one heading for the page, a line under it, the actions beside it,
- * and one set of sizes. Pulse keeps its day as the headline, and the Network
+ * and one set of sizes. Pulse puts its day beside its title, and the Network
  * list steps down to an h2 when a contact is open beside it.
  */
 import React from "react";
@@ -14,8 +14,8 @@ import { MemoryRouter } from "react-router-dom";
 import { PageHeader } from "../../src/components/layout/PageHeader";
 import {
   PAGE_DESCRIPTION,
-  PAGE_EYEBROW,
   PAGE_TITLE,
+  PAGE_TITLE_SUFFIX,
 } from "../../src/lib/styles";
 
 afterEach(() => {
@@ -48,20 +48,17 @@ describe("PageHeader", () => {
     expect(screen.getByRole("button", { name: "History" })).toBeTruthy();
   });
 
-  it("makes the eyebrow the h1 when the title is a headline", () => {
-    renderHeader(
-      <PageHeader
-        eyebrow="Pulse"
-        eyebrowAs="h1"
-        title="Tuesday, September 22"
-        titleAs="p"
-      />,
-    );
+  it("continues the title line with a suffix that is not part of the heading", () => {
+    renderHeader(<PageHeader title="Pulse" suffix="Tuesday, September 22" />);
     const heading = screen.getByRole("heading", { level: 1, name: "Pulse" });
-    expect(heading.className).toContain(PAGE_EYEBROW);
+    expect(heading.className).toContain(PAGE_TITLE);
     const date = screen.getByText("Tuesday, September 22");
     expect(date.tagName).toBe("P");
-    expect(date.className).toContain(PAGE_TITLE);
+    expect(date.className).toContain(PAGE_TITLE_SUFFIX);
+    expect(heading.contains(date)).toBe(false);
+    // The two share one line and one baseline.
+    expect(date.parentElement).toBe(heading.parentElement);
+    expect(date.parentElement?.className).toContain("items-baseline");
     expect(screen.getAllByRole("heading")).toHaveLength(1);
   });
 

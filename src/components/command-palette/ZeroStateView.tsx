@@ -183,8 +183,8 @@ export const ZeroStateView = ({
                 key={`recent_${c.id}`}
                 value={`recent_${c.id}_${c.name}`}
                 onSelect={() => onSelectContact(c.id)}
-                // A chip in a row, not a row in a list, so the current one
-                // takes the selected tint (`SELECTED_TINT`) without the bar.
+                // A chip in a row, not a row in a list: the current one takes
+                // the selected tint (`SELECTED_TINT`).
                 className="flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-on-primary-wash transition-colors text-on-surface shrink-0"
               >
                 <img

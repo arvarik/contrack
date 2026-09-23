@@ -11,6 +11,7 @@
  * @module shared/geo
  */
 
+import { isPastDay } from "./dates";
 import { scoreView } from "./scoreBand";
 
 /**
@@ -138,7 +139,6 @@ export function toFeatureCollection(
   contacts: readonly MapContact[],
   now: Date = new Date(),
 ): ContactFeatureCollection {
-  const nowTime = now.getTime();
   const features: ContactPointFeature[] = [];
   for (const contact of contacts) {
     if (!isValidLatLng(contact.lat, contact.lng)) continue;
@@ -147,11 +147,9 @@ export function toFeatureCollection(
     const view = scoreView(contact);
     const atRisk =
       view.kind === "scored" && view.band.band === "at-risk" ? 1 : 0;
-    const overdue =
-      contact.nextFollowUpAt &&
-      new Date(contact.nextFollowUpAt).getTime() < nowTime
-        ? 1
-        : 0;
+    // By the calendar day, as the contact page's banner counts. The instant
+    // said a follow-up set to "Tomorrow" was late by the evening before.
+    const overdue = isPastDay(contact.nextFollowUpAt, now) ? 1 : 0;
     const weight = contact.interactionCount ?? 0;
 
     const properties: ContactPointProperties = {

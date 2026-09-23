@@ -8,7 +8,6 @@ import { DURATION, EASE } from "../../lib/motion";
 import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { DataAgeHalo } from "./DataAgeHalo";
 import { ITEM_CURRENT, MATCH_BADGE } from "./utils";
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
@@ -69,14 +68,14 @@ export const AIResultCard = ({
       }}
       className="contents"
     >
-      {/* Avatar with Data Age Halo */}
-      <DataAgeHalo updatedAt={match.updatedAt}>
-        <img
-          src={match.avatarUrl || fallbackAvatarUrl(match.name)}
-          alt=""
-          className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
-        />
-      </DataAgeHalo>
+      {/* The avatar wears no ring: a coloured ring around an avatar is the
+          relationship's health everywhere else, and the dot after the name
+          says it here. */}
+      <img
+        src={match.avatarUrl || fallbackAvatarUrl(match.name)}
+        alt=""
+        className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
+      />
 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         {/* Name + Score Dot + Fallback Badge */}

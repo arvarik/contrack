@@ -15,26 +15,31 @@ interface SummaryBarProps {
   isLoading: boolean;
 }
 
+/**
+ * The tier badge. A paid key, Gemini's paid tier or an OpenAI or Anthropic
+ * key, is `info`. The free tier is `success` and mock mode is `warning`, so
+ * a badge's tone says what the calls cost.
+ */
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   FREE: {
     label: "Free tier",
-    color: "bg-emerald-500/10 text-success ring-emerald-500/20",
+    color: "bg-success/10 text-success ring-success/20",
   },
   PAID: {
     label: "Paid tier",
-    color: "bg-blue-500/10 text-info ring-blue-500/20",
+    color: "bg-info/10 text-info ring-info/20",
   },
   MOCK: {
     label: "Mock mode",
-    color: "bg-amber-500/10 text-warning ring-amber-500/20",
+    color: "bg-warning/10 text-warning ring-warning/20",
   },
   OPENAI: {
     label: "OpenAI",
-    color: "bg-teal-500/10 text-success ring-teal-500/20",
+    color: "bg-info/10 text-info ring-info/20",
   },
   ANTHROPIC: {
     label: "Anthropic",
-    color: "bg-orange-500/10 text-warning ring-orange-500/20",
+    color: "bg-info/10 text-info ring-info/20",
   },
 };
 

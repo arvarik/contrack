@@ -30,7 +30,6 @@ process.env.AI_PROVIDER = "gemini";
 process.env.GEMINI_API_KEY = "";
 process.env.OPENAI_API_KEY = "";
 process.env.ANTHROPIC_API_KEY = "";
-process.env.MAPBOX_API_KEY = "";
 process.env.AUTH_REQUIRED = "true";
 process.env.NODE_ENV = "test";
 

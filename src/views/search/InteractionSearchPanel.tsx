@@ -14,6 +14,7 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -46,7 +47,9 @@ import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
 import {
   CARD,
   CARD_INTERACTIVE,
-  TONE_WASH,
+  ICON_BTN,
+  SECTION_HEADING,
+  SUGGESTION_CHIP,
   filterPill,
 } from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
@@ -59,11 +62,18 @@ import type { HighlightRange, InteractionSearchHit } from "../../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+/**
+ * Searches a person could type, each with a date phrase the search reads:
+ * "last month", "this year", "in the last 30 days", "since March". The
+ * words are ones notes tend to hold (a meeting, a call, coffee, an intro),
+ * so a press finds notes. Three of the four old examples, such as
+ * "fundraising this year", found none on a real network.
+ */
 const EXAMPLE_QUESTIONS = [
-  "Who discussed hiring last month?",
-  "fundraising this year",
+  "meeting last month",
+  "calls this year",
   "coffee in the last 30 days",
-  "Berlin office since March",
+  "intro since March",
 ];
 
 const TYPES: { value: string; label: string }[] = [
@@ -255,7 +265,7 @@ const HitCard = ({
           <time
             dateTime={parseServerTime(hit.date)?.toISOString()}
             title={formatDay(hit.date)}
-            className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mt-0.5"
+            className="text-xs text-on-surface-variant mt-0.5"
           >
             {formatDay(hit.date)} · {formatRelative(hit.date)}
           </time>
@@ -271,6 +281,8 @@ export const InteractionSearchPanel = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Names the list of suggested questions after its heading. */
+  const suggestionsId = useId();
 
   const q = searchParams.get("q") ?? "";
   const from = searchParams.get("from") ?? "";
@@ -316,8 +328,17 @@ export const InteractionSearchPanel = () => {
     }
   }, [q]);
 
-  // The debounced input becomes the question in the URL.
+  /*
+   * The debounced input becomes the question in the URL, when the typing
+   * settles and only then. This ran on every change of `q` too, so a
+   * question that arrived from elsewhere (a suggestion, a history entry) was
+   * overwritten at once by the debounced text from before it, which had not
+   * caught up yet, and the press undid itself.
+   */
+  const settledRef = useRef(debounced);
   useEffect(() => {
+    if (debounced === settledRef.current) return;
+    settledRef.current = debounced;
     if (debounced !== q) update({ q: debounced });
   }, [debounced, q, update]);
 
@@ -371,6 +392,12 @@ export const InteractionSearchPanel = () => {
   const hits = result?.hits ?? [];
   const total = result?.total ?? 0;
   const period: Period = customOpen ? "custom" : periodOf(from, to);
+  // A date phrase in the words ("coffee last month") sets the range, and
+  // the result says so in its own chip. "Any time" pressed beside that chip
+  // would say the opposite, so no period shows pressed then.
+  const phraseSetsRange =
+    period === "any" && result?.query.range?.source === "phrase";
+  const shownPeriod: Period | null = phraseSetsRange ? null : period;
   const hasSearch = Boolean(q || from || to || type);
   const showModeToggle = (result?.query.tokens.length ?? 0) >= 2;
 
@@ -441,12 +468,14 @@ export const InteractionSearchPanel = () => {
 
       {/*
         Question. One field: the glyph, the input and Clear in one card,
-        which draws the focus ring while the input has focus.
+        which draws the focus ring while the input has focus. The same box as
+        the People mode's, 80 px tall from `sm` with the same padding, so
+        switching modes moves nothing.
       */}
       <div
         className={cn(
           CARD,
-          "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-3.5 sm:py-4",
+          "focus-frame flex items-center gap-3 px-4 sm:px-6 py-2 sm:py-5",
         )}
       >
         {/*
@@ -470,21 +499,22 @@ export const InteractionSearchPanel = () => {
           }}
           placeholder="Search your notes…"
           aria-label="Search your notes"
-          className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+          className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
         />
-        <IconButton
+        <button
+          type="button"
           aria-label="Clear search"
-          tone="subtle"
           onClick={clear}
           tabIndex={hasSearch ? 0 : -1}
           aria-hidden={!hasSearch}
           className={cn(
-            "shrink-0 transition-opacity",
+            ICON_BTN,
+            "p-1.5 shrink-0 transition-opacity",
             !hasSearch && "opacity-0 pointer-events-none",
           )}
         >
           <X className="w-5 h-5" />
-        </IconButton>
+        </button>
       </div>
 
       {/* Period and kind */}
@@ -499,10 +529,10 @@ export const InteractionSearchPanel = () => {
             type="button"
             onClick={() => choosePeriod(p.value)}
             className={cn(
-              filterPill(period === p.value),
+              filterPill(shownPeriod === p.value),
               "min-h-[44px] sm:min-h-[36px]",
             )}
-            aria-pressed={period === p.value}
+            aria-pressed={shownPeriod === p.value}
           >
             {p.label}
           </button>
@@ -556,129 +586,133 @@ export const InteractionSearchPanel = () => {
         </div>
       )}
 
-      {/* Before the first search */}
+      {/* Before the first search: suggested questions, which show by
+          example that dates in a question are understood. A press fills the
+          box and searches. */}
       {!hasSearch && (
-        <div className="space-y-4">
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
-            Try asking...
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="space-y-3">
+          <h2 id={suggestionsId} className={SECTION_HEADING}>
+            Try asking
+          </h2>
+          <ul aria-labelledby={suggestionsId} className="flex flex-wrap gap-2">
             {EXAMPLE_QUESTIONS.map((question) => (
-              // The entrance runs on a wrapper. `tile-enter` holds its last
-              // `transform` after it ends, which would cancel the card's
-              // hover lift.
-              <div key={question} className="tile-enter">
+              <li key={question} className="tile-enter">
                 <button
                   type="button"
                   onClick={() => {
                     setText(question);
                     update({ q: question });
                   }}
-                  className={cn(
-                    CARD_INTERACTIVE,
-                    "w-full h-full text-left px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:text-on-surface",
-                  )}
+                  className={SUGGESTION_CHIP}
                 >
-                  <span className="text-primary mr-1.5 font-bold">?</span>
                   {question}
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
-          <p className="text-xs text-on-surface-variant">
-            Dates in a question are understood: last week, last month, this
-            year, the last 30 days, since March, in 2025, or between two months.
-            Words are matched by their stem, so hire finds hiring.
-          </p>
+          </ul>
         </div>
       )}
 
-      {/* What the server understood */}
-      {hasSearch && result && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-          <span className="font-bold uppercase tracking-[0.08em] text-primary">
-            {total} note{total === 1 ? "" : "s"}
-          </span>
-          {result.query.range && (
-            <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
-              <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
-              {result.query.phrase && result.query.range.source === "phrase"
-                ? `“${result.query.phrase}” → `
-                : ""}
-              {describeRange(result.query.range.from, result.query.range.to)}
-            </span>
-          )}
-          {result.query.mode === "any" && showModeToggle && mode === "auto" && (
-            <span className="inline-flex items-center gap-1 text-warning">
-              <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
-              No note has every word, showing notes with any of them
-            </span>
-          )}
-          {showModeToggle && (
-            <div
-              className="inline-flex items-center gap-1 ml-auto"
-              role="group"
-              aria-label="How to match the words"
-            >
-              <button
-                type="button"
-                onClick={() => setMode(mode === "all" ? "auto" : "all")}
-                className={cn(
-                  filterPill(result.query.mode === "all"),
-                  "min-h-[44px] sm:min-h-[36px]",
-                )}
-                aria-pressed={result.query.mode === "all"}
-              >
-                All words
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode(mode === "any" ? "auto" : "any")}
-                className={cn(
-                  filterPill(result.query.mode === "any"),
-                  "min-h-[44px] sm:min-h-[36px]",
-                )}
-                aria-pressed={result.query.mode === "any"}
-              >
-                Any word
-              </button>
-            </div>
-          )}
-          {result.query.mode !== "none" && (
-            <div
-              className={cn(
-                "inline-flex items-center gap-1",
-                !showModeToggle && "ml-auto",
+      {/* What the server understood. With no notes found, only what still
+          helps stays: the date range it read, and the way back from "All
+          words" a person chose. The count, the any-word notice and the
+          order would describe a list that is not there. */}
+      {hasSearch &&
+        result &&
+        (total > 0 ||
+          result.query.range ||
+          (showModeToggle && mode === "all")) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            {/* A label in the muted ink, like "Try asking" above it: blue
+              would read as a link. */}
+            {total > 0 && (
+              <span className={SECTION_HEADING}>
+                {total} note{total === 1 ? "" : "s"}
+              </span>
+            )}
+            {result.query.range && (
+              <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
+                <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
+                {result.query.phrase && result.query.range.source === "phrase"
+                  ? `“${result.query.phrase}” → `
+                  : ""}
+                {describeRange(result.query.range.from, result.query.range.to)}
+              </span>
+            )}
+            {total > 0 &&
+              result.query.mode === "any" &&
+              showModeToggle &&
+              mode === "auto" && (
+                <span className="inline-flex items-center gap-1 text-warning">
+                  <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
+                  No note has every word, showing notes with any of them
+                </span>
               )}
-              role="group"
-              aria-label="Order"
-            >
-              <button
-                type="button"
-                onClick={() => setSort("relevance")}
-                className={cn(
-                  filterPill(sort === "relevance"),
-                  "min-h-[44px] sm:min-h-[36px]",
-                )}
-                aria-pressed={sort === "relevance"}
+            {showModeToggle && (total > 0 || mode === "all") && (
+              <div
+                className="inline-flex items-center gap-1 ml-auto"
+                role="group"
+                aria-label="How to match the words"
               >
-                Best match
-              </button>
-              <button
-                type="button"
-                onClick={() => setSort("date")}
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "all" ? "auto" : "all")}
+                  className={cn(
+                    filterPill(result.query.mode === "all"),
+                    "min-h-[44px] sm:min-h-[36px]",
+                  )}
+                  aria-pressed={result.query.mode === "all"}
+                >
+                  All words
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "any" ? "auto" : "any")}
+                  className={cn(
+                    filterPill(result.query.mode === "any"),
+                    "min-h-[44px] sm:min-h-[36px]",
+                  )}
+                  aria-pressed={result.query.mode === "any"}
+                >
+                  Any word
+                </button>
+              </div>
+            )}
+            {total > 0 && result.query.mode !== "none" && (
+              <div
                 className={cn(
-                  filterPill(sort === "date"),
-                  "min-h-[44px] sm:min-h-[36px]",
+                  "inline-flex items-center gap-1",
+                  !showModeToggle && "ml-auto",
                 )}
-                aria-pressed={sort === "date"}
+                role="group"
+                aria-label="Order"
               >
-                Newest
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+                <button
+                  type="button"
+                  onClick={() => setSort("relevance")}
+                  className={cn(
+                    filterPill(sort === "relevance"),
+                    "min-h-[44px] sm:min-h-[36px]",
+                  )}
+                  aria-pressed={sort === "relevance"}
+                >
+                  Best match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSort("date")}
+                  className={cn(
+                    filterPill(sort === "date"),
+                    "min-h-[44px] sm:min-h-[36px]",
+                  )}
+                  aria-pressed={sort === "date"}
+                >
+                  Newest
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
       {/* Results */}
       {hits.length > 0 && (
@@ -741,19 +775,17 @@ export const InteractionSearchPanel = () => {
         region says nothing for an error, so the failure is spoken once.
       */}
       {search.isError && (
-        <div
-          role="alert"
-          className="tile-enter flex flex-col items-center justify-center py-12 text-center"
-        >
-          <div className={cn(TONE_WASH.error, "p-4 rounded-2xl mb-3")}>
-            <AlertTriangle className="w-10 h-10" />
-          </div>
-          <p className="font-bold text-on-surface mb-1">Search failed</p>
-          <p className="text-sm text-on-surface-variant">
-            {search.error instanceof Error
-              ? search.error.message
-              : "An unexpected error occurred."}
-          </p>
+        <div role="alert" className="tile-enter">
+          <EmptyState
+            icon={AlertTriangle}
+            tone="error"
+            title="Search failed"
+            body={
+              search.error instanceof Error
+                ? search.error.message
+                : "An unexpected error occurred."
+            }
+          />
         </div>
       )}
     </div>

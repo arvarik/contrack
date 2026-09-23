@@ -20,7 +20,6 @@ cp .env.example .env
 | `PUBLIC_URL`                     | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
 | `CORS_ORIGIN`                    | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
 | `DATA_DIR`                       | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
-| `MAPBOX_API_KEY`                 | Mapbox geocoding API key (higher accuracy). Environment overrides setting in UI                                                                                                                | —                      | No       |
 | `SEARXNG_URL`                    | Base URL of self-hosted SearXNG search instance. Environment overrides setting in UI                                                                                                           | —                      | No       |
 | `MAP_STYLE_LIGHT`                | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                 | OpenFreeMap `positron` | No       |
 | `MAP_STYLE_DARK`                 | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                | OpenFreeMap `dark`     | No       |
@@ -238,17 +237,11 @@ code change. Contrack also registers the `pmtiles://` protocol, so a
 self-hosted style can read its tiles from a single `.pmtiles` archive with no
 tile server behind it.
 
-### Mapbox Geocoding
+### Geocoding
 
-By default, Contrack uses Nominatim (OpenStreetMap) for geocoding contact addresses. For higher accuracy:
-
-1. Get an API key from [Mapbox](https://account.mapbox.com/access-tokens/)
-2. Set in `.env`:
-   ```
-   MAPBOX_API_KEY="your-key-here"
-   ```
-
-Mapbox becomes the primary geocoder, and Nominatim serves as the fallback.
+Contrack geocodes contact addresses with Nominatim (OpenStreetMap). It needs no
+API key and no setting. [Map View](features/map-view.md#geocoding) says how it
+works.
 
 ---
 
@@ -496,7 +489,6 @@ Instance-wide policies can be managed by administrators in **Settings → Admini
 | `trashRetentionDays`  | `TRASH_RETENTION_DAYS`                                  | `30`    | `1` to `365` days     | Days deleted contacts remain before automated purge                        |
 | `backupIntervalHours` | `BACKUP_INTERVAL_HOURS`                                 | `24`    | `0` to `168` hours    | Snapshot frequency (`0` disables scheduled backups)                        |
 | `backupKeep`          | `BACKUP_KEEP`                                           | `7`     | `1` to `50` snapshots | Maximum number of rotated snapshots kept on disk                           |
-| `mapboxKey`           | `MAPBOX_API_KEY`                                        | —       | string (`pk.ey...`)   | Write-only geocoding key sealed with AES-256-GCM                           |
 | `searxngUrl`          | `SEARXNG_URL`                                           | —       | URL (`http://...`)    | Self-hosted SearXNG instance for web research fallback                     |
 | `googleOAuth`         | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | —       | Client ID & Secret    | OAuth credentials for Google Workspace connectors, sealed with AES-256-GCM |
 

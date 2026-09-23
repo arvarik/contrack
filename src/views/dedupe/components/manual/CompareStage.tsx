@@ -27,17 +27,16 @@ export const CompareStage = ({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex-1 overflow-y-auto min-h-0 nice-scrollbar"
     >
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <button
           onClick={onBack}
-          className="hit-area flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+          className="hit-area flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
         >
           <ChevronLeft className="w-4 h-4" />
           Back
         </button>
-        <p className="text-xs text-on-surface-variant">
+        <p className="text-xs text-on-surface-variant text-right">
           Choose which contact should be the primary (keeper)
         </p>
       </div>
@@ -70,7 +69,7 @@ export const CompareStage = ({
 
       {/* Warning for 3-way merge */}
       {selected.length === 3 && (
-        <div className="flex items-start gap-3 p-4 bg-amber-500/8 rounded-xl mb-6">
+        <div className="flex items-start gap-3 p-4 bg-warning/8 rounded-xl mb-6">
           <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
           <div>
             <div className="text-sm font-bold text-warning mb-1">

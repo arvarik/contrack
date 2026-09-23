@@ -39,7 +39,10 @@ import {
   getActiveBackupTimer,
   stopBackupSchedule,
 } from "../../server/services/backupService.ts";
-import { getMapboxApiKey } from "../../server/services/integrationSettings.ts";
+import {
+  getGoogleOAuthCredentials,
+  getSearxngUrl,
+} from "../../server/services/integrationSettings.ts";
 
 const app = makeTestApp();
 
@@ -1905,8 +1908,9 @@ describe("instance lifecycle and integration settings (P4)", () => {
     delete process.env.TRASH_RETENTION_DAYS;
     delete process.env.BACKUP_INTERVAL_HOURS;
     delete process.env.BACKUP_KEEP;
-    delete process.env.MAPBOX_API_KEY;
     delete process.env.SEARXNG_URL;
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
     stopBackupSchedule();
   });
 
@@ -1994,17 +1998,6 @@ describe("instance lifecycle and integration settings (P4)", () => {
     expect(resKeep.body.error.code).toBe("SET_BY_ENVIRONMENT");
     delete process.env.BACKUP_KEEP;
 
-    // Mapbox key locked by env
-    process.env.MAPBOX_API_KEY = "pk.locked_by_env";
-    const resMapbox = await as(admin)(
-      request(app)
-        .put("/api/admin/integrations")
-        .send({ mapboxKey: "pk.new_key" }),
-    );
-    expect(resMapbox.status).toBe(409);
-    expect(resMapbox.body.error.code).toBe("SET_BY_ENVIRONMENT");
-    delete process.env.MAPBOX_API_KEY;
-
     // SearXNG URL locked by env
     process.env.SEARXNG_URL = "http://searxng.env";
     const resSearx = await as(admin)(
@@ -2042,14 +2035,13 @@ describe("instance lifecycle and integration settings (P4)", () => {
     expect(getActiveBackupTimer()).toBeNull();
   });
 
-  it("manages integrations, seals Mapbox key, and never returns it in any response", async () => {
+  it("manages integrations, seals the Google OAuth client secret, and never returns it in any response", async () => {
     // 1. Initial GET
     const initial = await as(admin)(
       request(app).get("/api/admin/integrations"),
     );
     expect(initial.status).toBe(200);
     expect(initial.body).toEqual({
-      mapbox: { configured: false, source: "none" },
       searxng: { url: null, source: "none" },
       googleOAuth: {
         configured: false,
@@ -2059,90 +2051,107 @@ describe("instance lifecycle and integration settings (P4)", () => {
       },
     });
 
-    // 2. PUT Mapbox key and SearXNG URL
-    const SECRET_KEY =
-      "pk.eyJ1IjoiY29udHJhY2stdGVzdCIsImEiOiJjbGV4YW1wbGUifQ.abcdef12345";
+    // 2. PUT the Google OAuth client and the SearXNG URL
+    const CLIENT_ID = "contrack-test.apps.googleusercontent.com";
+    const SECRET = "GOCSPX-contrack-test-secret-abcdef12345";
     const putRes = await as(admin)(
-      request(app).put("/api/admin/integrations").send({
-        mapboxKey: SECRET_KEY,
-        searxngUrl: "https://searxng.internal.example.com",
-      }),
+      request(app)
+        .put("/api/admin/integrations")
+        .send({
+          googleOAuth: { clientId: CLIENT_ID, clientSecret: SECRET },
+          searxngUrl: "https://searxng.internal.example.com",
+        }),
     );
     expect(putRes.status).toBe(200);
-    expect(putRes.body).toEqual({
-      mapbox: { configured: true, source: "setting" },
+    const configured = {
       searxng: {
         url: "https://searxng.internal.example.com",
         source: "setting",
       },
       googleOAuth: {
-        configured: false,
-        source: "none",
-        clientId: null,
-        clientSecretPreview: null,
+        configured: true,
+        source: "setting",
+        clientId: CLIENT_ID,
+        clientSecretPreview: "••••2345",
       },
-    });
+    };
+    expect(putRes.body).toEqual(configured);
 
-    // CRITICAL: The secret key must NEVER be in the response body (raw or sealed)
+    // CRITICAL: The secret must NEVER be in the response body (raw or sealed)
     const putJson = JSON.stringify(putRes.body);
-    expect(putJson).not.toContain(SECRET_KEY);
+    expect(putJson).not.toContain(SECRET);
     expect(putJson).not.toContain("v1:");
 
-    // 3. Subsequent GET must also NEVER return the key
+    // 3. Subsequent GET must also NEVER return the secret
     const getRes = await as(admin)(request(app).get("/api/admin/integrations"));
     expect(getRes.status).toBe(200);
-    expect(getRes.body).toEqual({
-      mapbox: { configured: true, source: "setting" },
-      searxng: {
-        url: "https://searxng.internal.example.com",
-        source: "setting",
-      },
-      googleOAuth: {
-        configured: false,
-        source: "none",
-        clientId: null,
-        clientSecretPreview: null,
-      },
-    });
+    expect(getRes.body).toEqual(configured);
     const getJson = JSON.stringify(getRes.body);
-    expect(getJson).not.toContain(SECRET_KEY);
+    expect(getJson).not.toContain(SECRET);
     expect(getJson).not.toContain("v1:");
 
     // 4. Verify in DB: stored sealed with v1: prefix, not plaintext
     const row = sqlite
-      .prepare("SELECT value FROM app_settings WHERE key = 'geo.mapboxKey'")
+      .prepare(
+        "SELECT value FROM app_settings WHERE key = 'connectors.googleOAuth'",
+      )
       .get() as { value: string };
     expect(row).toBeDefined();
-    expect(row.value).not.toContain(SECRET_KEY);
+    expect(row.value).not.toContain(SECRET);
     expect(row.value).toContain("v1:");
 
-    // 5. Geocoding provider unseals the key successfully
-    const providerKey = getMapboxApiKey();
-    expect(providerKey).toBe(SECRET_KEY);
+    // 5. The server unseals the secret successfully
+    expect(getGoogleOAuthCredentials()).toEqual({
+      clientId: CLIENT_ID,
+      clientSecret: SECRET,
+      source: "setting",
+    });
 
     // 6. Audit log check: integrations.changed recorded with key names only, no secret
     const auditRes = await as(admin)(
       request(app).get("/api/admin/audit?limit=20"),
     );
     const auditJson = JSON.stringify(auditRes.body);
-    expect(auditJson).not.toContain(SECRET_KEY);
+    expect(auditJson).not.toContain(SECRET);
     const integrationsEntries = (
       auditRes.body.entries as { action: string; targetId: string }[]
     ).filter((e) => e.action === "integrations.changed");
     expect(integrationsEntries.map((e) => e.targetId)).toEqual(
-      expect.arrayContaining(["mapboxKey", "searxngUrl"]),
+      expect.arrayContaining(["googleOAuth", "searxngUrl"]),
     );
 
-    // 7. Clear the Mapbox key with empty string
+    // 7. Clear the SearXNG URL with an empty string
     const clearRes = await as(admin)(
-      request(app).put("/api/admin/integrations").send({ mapboxKey: "" }),
+      request(app).put("/api/admin/integrations").send({ searxngUrl: "" }),
     );
     expect(clearRes.status).toBe(200);
-    expect(clearRes.body.mapbox).toEqual({
-      configured: false,
-      source: "none",
-    });
-    expect(getMapboxApiKey()).toBeNull();
+    expect(clearRes.body.searxng).toEqual({ url: null, source: "none" });
+    expect(getSearxngUrl()).toBeNull();
+  });
+
+  it("refuses a body that sends only the removed mapboxKey, ignores it beside a known field, and stores nothing for it", async () => {
+    const alone = await as(admin)(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({ mapboxKey: "pk.stray" }),
+    );
+    expect(alone.status).toBe(400);
+    expect(alone.body.error.code).toBe("VALIDATION_ERROR");
+
+    const beside = await as(admin)(
+      request(app).put("/api/admin/integrations").send({
+        mapboxKey: "pk.stray",
+        searxngUrl: "https://searxng.internal.example.com",
+      }),
+    );
+    expect(beside.status).toBe(200);
+    expect(Object.keys(beside.body).sort()).toEqual(["googleOAuth", "searxng"]);
+    expect(beside.body.searxng.source).toBe("setting");
+
+    const stray = sqlite
+      .prepare("SELECT 1 FROM app_settings WHERE key = 'geo.mapboxKey'")
+      .get();
+    expect(stray).toBeUndefined();
   });
 
   it("enforces authentication and admin role on integrations routes", async () => {

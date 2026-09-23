@@ -186,8 +186,8 @@ From the search results view or Command Palette, click **"✨ Synthesize"** to g
 
 The Ask Contrack page retains search questions across sessions so frequent questions can be re-run, pinned, and organized:
 
-- **Layout:** Displays as a fixed 320px right-hand side pane on desktop screens (`lg` and wider). On smaller viewports, it opens as a mobile bottom sheet modal from the Clock icon button in the header.
-- **Header toggle & shortcut:** The Clock button in the header toggles the pane and saves the `askHistoryOpen` preference to the account. Pressing `h` anywhere on the page (when not typing in an input and single-key shortcuts are enabled) also toggles the pane.
+- **Layout:** Displays as a fixed 320px right-hand side pane on desktop screens (`lg` and wider). On smaller viewports, it opens as a mobile bottom sheet modal from the History button in the header.
+- **Hide and show:** The pane closes from the **Hide history** button at the right end of its own header, and the **History** button in the page header opens it again. Both save the `askHistoryOpen` preference to the account. The page header's button keeps the name "History" in both states and is pressed while the pane is open. Pressing `h` anywhere on the page (when not typing in an input and single-key shortcuts are enabled) also toggles the pane, and both buttons show the key in their tooltip.
 - **Groupings:** Questions are automatically organized into chronological groups:
   1. **Pinned** (pinned rows stay at the top and do not repeat in date groups)
   2. **Today**
@@ -216,9 +216,8 @@ When AI is turned off for an account:
 
 ## Indexing Coverage and Empty State
 
-When semantic search coverage across your contacts is under 100 percent, Ask Contrack guides the user before their first query:
+The page leads with the search box. The header is the title, the People and Notes switch and the History button, with no line of description.
 
-- **Empty state coverage card:** The "Ask anything" landing empty state renders the complete Semantic Search Coverage card with current percentage, indexed count, missing items, and index triggers.
-- **Indexing explanation:** A clear sentence explains what indexing accomplishes: "Indexing turns contacts into searchable concepts so you can find people by meaning rather than exact words."
-- **Header indicator:** The compact coverage pill in the header remains visible for quick glance status at any time.
-- **Automatic dismissal:** Once coverage reaches 100 percent or a query produces results, the full coverage card hides to keep attention focused on your search.
+- **One status line:** In People mode, while contacts are missing from the index, indexing runs, or a contact failed, one line sits under the search box: a thin progress bar, the words ("12 of 30 contacts indexed", or "Indexing 12 of 30…" while it runs) and quiet text buttons for **Index missing**, **Inspect failed** and **Retry failed**. The line is a region named "Semantic search coverage". It hides at 100 percent with nothing running. The paid-provider confirmation and the failed-contacts dialog open from its buttons.
+- **Try asking:** Before a search, the page shows suggested questions as flat chips. A click fills the box and runs the search. In People mode the first three come from your own network, its most common industry, city and company ("Who works in Music Streaming?", "Who do I know in Sydney?", "Who works at TechNova?"), so a press always finds someone. Fixed examples fill the rest. People search reads profiles, not dates, so no suggestion asks about when you last spoke. Notes mode shows its own suggestions, which also show the date phrases it understands.
+- **No results:** "No one matches" with "Try other words." The status line above already says when the index is incomplete.

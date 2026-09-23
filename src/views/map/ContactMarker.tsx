@@ -17,7 +17,7 @@
  * @module views/map/ContactMarker
  */
 import { memo, useRef, useState } from "react";
-import { Marker } from "react-map-gl/maplibre";
+import { Marker } from "@vis.gl/react-maplibre";
 import type { MapContact } from "../../../shared/geo";
 import { scoreView } from "../../../shared/scoreBand";
 import type { MapLayer } from "../../api/mapViews";
@@ -81,13 +81,15 @@ export const ContactMarker = memo(function ContactMarker({
   const isHighlighted = selected || multiSelected;
 
   // The health layer paints the band. A contact with no score takes the
-  // neutral outline: a pin nobody tracks, and a pin for somebody never met,
-  // both used to be painted red, which said a relationship was failing when
-  // there was no relationship to measure.
+  // neutral ring in the variant ink: a pin nobody tracks, and a pin for
+  // somebody never met, both used to be painted red, which said a
+  // relationship was failing when there was no relationship to measure. The
+  // hairline tone it wore next measured about 1.5 to 1 on the map, and the
+  // legend draws the same ring (`HealthLegend`).
   const view = scoreView(contact);
   const healthRing =
     view.kind !== "scored"
-      ? "ring-outline-variant"
+      ? "ring-on-surface-variant"
       : view.band.band === "strong"
         ? "ring-success"
         : view.band.band === "fading"

@@ -7,7 +7,7 @@
  * @module views/map/ClusterMarker
  */
 import { memo } from "react";
-import { Marker } from "react-map-gl/maplibre";
+import { Marker } from "@vis.gl/react-maplibre";
 import type { ClusterFeature } from "./useClusterFeatures";
 
 /** The cluster's accessible name. */

@@ -46,7 +46,6 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
-import { isPast, isToday } from "date-fns";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 
@@ -74,6 +73,7 @@ import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactTags } from "./ContactTags";
 import { TrackButton } from "./TrackButton";
+import { BANNER_DAYS, describeFollowUp } from "../../../lib/followUp";
 import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
 
@@ -490,6 +490,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   }
 
   const avatarSize = narrow ? 56 : 96;
+  const followUp = describeFollowUp(contact.nextFollowUpAt);
 
   // The score the ring draws, or null when there is none: nobody tracks this
   // contact, or nothing is logged yet. Only a scored ring explains itself.
@@ -517,24 +518,27 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         </div>
       )}
 
-      {/* URGENCY BANNER */}
-      {contact.nextFollowUpAt &&
-        (isPast(new Date(contact.nextFollowUpAt)) ||
-          isToday(new Date(contact.nextFollowUpAt))) && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={cn(
-              "w-full px-6 py-3 flex items-center justify-center gap-2 shadow-sm",
-              TONE_WASH.error,
-            )}
-          >
-            <CalendarClock className="w-4 h-4 shrink-0" />
-            <span className="text-sm font-bold truncate">
-              Pending follow-up alert
-            </span>
-          </motion.div>
-        )}
+      {/*
+        The next follow-up, when it is late, today or within the week, in
+        the words of the fact: "Follow-up 3 days overdue", "Follow-up due
+        Friday". It read "Pending follow-up alert", which said neither what
+        nor when. A week out is the last day Pulse's "This week" holds, so
+        the two show the same follow-ups. Details has the date too, but under
+        the fold, or behind a tab on a phone. A later follow-up is only there.
+      */}
+      {followUp && followUp.days <= BANNER_DAYS && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            "w-full px-6 py-3 flex items-center justify-center gap-2",
+            TONE_WASH[followUp.tone],
+          )}
+        >
+          <CalendarClock aria-hidden="true" className="w-4 h-4 shrink-0" />
+          <span className="text-sm font-bold truncate">{followUp.text}</span>
+        </motion.div>
+      )}
 
       <div
         className={cn(

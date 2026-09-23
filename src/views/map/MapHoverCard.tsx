@@ -20,7 +20,7 @@
  * @module views/map/MapHoverCard
  */
 import React, { useEffect, useRef, useMemo } from "react";
-import { Popup } from "react-map-gl/maplibre";
+import { Popup } from "@vis.gl/react-maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { formatDistanceToNow } from "date-fns";
 import {

@@ -28,12 +28,20 @@ const DEDUPE_PRESET_COPY = {
 } as const;
 
 /**
- * The page's one column: the cards' width, starting on the title's line. The
- * shell's header spans the column (this page owns its scrolling), so the
- * column does not centre. The settings card and the dedupe tool both sit in
- * it, so the page has one left edge and one width at every size.
+ * The page's one column: the settings box's width, centred, as the shell's
+ * header is (`boxed` in the registry), so the title and the cards start at
+ * the same place as on every other settings page. The settings card and the
+ * dedupe tool both sit in it, so the page has one left edge and one width at
+ * every size. The page still owns its scrolling: its scroller spans the
+ * pane, so the sticky controls stick to the screen.
+ *
+ * The page is one scroller at every width: the settings card and the tool
+ * scroll together. From `sm` the card used to stay put and the tool scrolled
+ * under it, which at 900 px tall left the manual merge's contact list about
+ * 150 px, two rows, in a box inside a box. On a phone the card had scrolled
+ * on its own before that, and a flick caught one box and the page stopped.
  */
-const COLUMN = "max-w-4xl w-full";
+const COLUMN = "max-w-4xl w-full mx-auto";
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
@@ -43,14 +51,8 @@ export const DuplicatesPage = () => {
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div
-        className={cn(
-          PAGE_X,
-          COLUMN,
-          "pt-4 pb-4 shrink-0 overflow-y-auto max-h-[50vh] sm:max-h-none",
-        )}
-      >
+    <div className="h-full overflow-y-auto nice-scrollbar">
+      <div className={cn(PAGE_X, COLUMN, "pt-4 pb-4")}>
         {/* Review strip */}
         {dedupeCount > 0 && (
           <div
@@ -145,8 +147,9 @@ export const DuplicatesPage = () => {
         </div>
       </div>
 
-      {/* The same column. The tool's rows carry their own gutters. */}
-      <div className={cn(COLUMN, "flex-1 min-h-0 relative")}>
+      {/* The same column. The tool's rows carry their own gutters, and it
+          takes its own height, so the page scrolls it. */}
+      <div className={cn(COLUMN, "relative")}>
         <DedupeView />
       </div>
     </div>

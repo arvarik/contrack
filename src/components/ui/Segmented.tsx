@@ -101,9 +101,11 @@ export const Segmented = <T extends string | number>({
               // A glyph alone is narrower than a thumb, so it gets the width
               // floor as well as the height.
               Icon && "min-w-[44px] sm:min-w-0",
+              // An option not chosen is a flat control in the trough: the
+              // hover and press layer, like every flat control.
               value === option.value
                 ? "bg-surface shadow-sm text-primary"
-                : "text-on-surface-variant hover:text-on-surface",
+                : "state-layer text-on-surface-variant hover:text-on-surface",
             )}
           >
             {Icon ? (

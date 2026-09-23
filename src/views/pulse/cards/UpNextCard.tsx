@@ -19,6 +19,14 @@ export interface UpNextCardProps {
   groups: UpNextGroupMeta[];
   selectedIndex: number;
   onSelectIndex: (index: number) => void;
+  /**
+   * Whether the selected row wears its tint. The page turns it on when a
+   * queue key (J, K, D, S, L) acts on the selected row. The card turns it on
+   * when keyboard focus enters the list, and off when focus leaves it or a
+   * pointer presses outside it.
+   */
+  selectionShown: boolean;
+  onSelectionShownChange: (shown: boolean) => void;
   onComplete: (id: string) => void;
   onLog: (contactId: string) => void;
   onOpenContact: (contactId: string) => void;
@@ -45,6 +53,8 @@ export const UpNextCard = ({
   groups,
   selectedIndex,
   onSelectIndex,
+  selectionShown,
+  onSelectionShownChange,
   onComplete,
   onLog,
   onOpenContact,
@@ -58,6 +68,23 @@ export const UpNextCard = ({
   const [focusWithin, setFocusWithin] = useState(false);
   /** Below sm the rows take the phone anatomy. See `ActionRow`. */
   const compact = !useMediaQuery("(min-width: 640px)");
+  const paneRef = useRef<HTMLDivElement>(null);
+
+  // A pointer press outside the list takes the tint away, as focus that
+  // leaves the list does. A bare J or K shows the tint with focus anywhere
+  // on the page, and a click elsewhere used to leave it on the row. The
+  // snooze menu's panel sits inside its row in the DOM, so a press on it
+  // is inside the list.
+  useEffect(() => {
+    if (!selectionShown) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!paneRef.current?.contains(e.target as Node | null)) {
+        onSelectionShownChange(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectionShown, onSelectionShownChange]);
 
   useEffect(() => {
     if (
@@ -119,7 +146,7 @@ export const UpNextCard = ({
             title="Nothing due today"
             body="Log a note to keep the streak."
             action={{
-              label: "Log a note",
+              label: "Log note",
               icon: PenLine,
               onClick: () => openQuickNote(),
             }}
@@ -134,16 +161,32 @@ export const UpNextCard = ({
         // its own list under its heading: a list may own only list items,
         // so a heading inside one is a structure a screen reader cannot
         // read, and axe fails it.
+        //
+        // The first row is the current row from the start, for the keys and
+        // for a screen reader, but it wears the selected tint only while the
+        // keyboard is on the list. On load the tint read as a stray
+        // highlight on a row nobody had chosen.
         <div
+          ref={paneRef}
           role="group"
           aria-label="Up next items"
           className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 lg:-ml-1 lg:pl-1 nice-scrollbar"
-          onFocus={() => setFocusWithin(true)}
+          onFocus={(e) => {
+            setFocusWithin(true);
+            // The row that focus enters is the current row by now (see
+            // `ActionRow`). Keyboard focus shows it, so the tint and the
+            // live status follow Tab from row to row. A click does not
+            // show it: the tint is for the keyboard.
+            if (e.target.matches(":focus-visible")) {
+              onSelectionShownChange(true);
+            }
+          }}
           onBlur={(e) => {
             // Focus moving from one row to another, or to a control inside
             // a row, stays inside the list.
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
               setFocusWithin(false);
+              onSelectionShownChange(false);
             }
           }}
         >
@@ -189,6 +232,7 @@ export const UpNextCard = ({
                       key={item.id}
                       item={item}
                       isSelected={isSelected}
+                      looksSelected={isSelected && selectionShown}
                       onSelect={() => onSelectIndex(globalIdx)}
                       onComplete={onComplete}
                       onLog={onLog}

@@ -19,6 +19,7 @@ import { useUpdateActionItem } from "../../../api";
 import { formatRelative } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import {
+  CHECK_RING_REST,
   DUE_TONE,
   GROUP_TONE,
   PULSE_CHIP,
@@ -28,7 +29,13 @@ import type { UpNextItem } from "../lib/upNext";
 
 export interface ActionRowProps {
   item: UpNextItem;
+  /**
+   * The row is the list's current row: `aria-current` and the one tab stop.
+   * It does not paint the row. See `looksSelected`.
+   */
   isSelected?: boolean;
+  /** The row wears the selected tint. The queue paints it for the keyboard only. */
+  looksSelected?: boolean;
   onSelect?: () => void;
   onComplete?: (id: string) => void;
   onLog?: (contactId: string) => void;
@@ -97,12 +104,15 @@ const onControl = (target: EventTarget | null) =>
  * is claimed only when the event target is the row itself, so a button
  * inside the row keeps its own Enter and Space. The row keeps
  * `role="listitem"`: it is a clickable element with a keyboard equivalent,
- * not a button.
+ * not a button. Focus that enters the row, on the row or on a control in
+ * it, makes it the current row. Being current and looking selected are two
+ * props: the queue paints the tint only while the keyboard is on the list.
  */
 export const ActionRow = memo(
   ({
     item,
     isSelected = false,
+    looksSelected = false,
     onSelect,
     onComplete,
     onLog,
@@ -127,8 +137,11 @@ export const ActionRow = memo(
 
     // When the highlight arrives on this row, bring it into view. It takes
     // focus too when focus was already inside the list, so the arrows and
-    // J or K pressed on a row keep walking rows. The first render is not an
-    // arrival: the page must not scroll to the queue on load.
+    // J or K pressed on a row keep walking rows. Focus that is already in
+    // the row stays where it is: Tab onto the row's check makes the row
+    // current, and the row must not take focus back from the check. The
+    // first render is not an arrival: the page must not scroll to the
+    // queue on load.
     useEffect(() => {
       const arrived = isSelected && !wasSelectedRef.current;
       wasSelectedRef.current = isSelected;
@@ -137,7 +150,9 @@ export const ActionRow = memo(
       if (!el) return;
       // jsdom has no scrollIntoView, so the call is optional.
       el.scrollIntoView?.({ block: "nearest" });
-      if (focusOnSelect) el.focus({ preventScroll: true });
+      if (focusOnSelect && !el.contains(document.activeElement)) {
+        el.focus({ preventScroll: true });
+      }
     }, [isSelected, focusOnSelect]);
 
     const complete = () => {
@@ -220,9 +235,11 @@ export const ActionRow = memo(
     );
     const tone = GROUP_TONE[item.group];
 
-    // The one action. On a phone it ends line one and is always visible.
-    // From sm it floats over the row's right edge and shows on hover or
-    // focus, so at rest the text has the whole width.
+    // The one action. On a phone it ends line one and is always visible,
+    // and its negative margin keeps the 32 px glyph from making line one
+    // taller than the name, so a row with a snooze has the same rhythm as
+    // a row without one. From sm it floats over the row's right edge and
+    // shows on hover or focus, so at rest the text has the whole width.
     const snooze = item.hasCheckAction ? (
       <ActionMenu
         label="Snooze item"
@@ -237,7 +254,7 @@ export const ActionRow = memo(
             ? "ml-auto"
             : "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
         )}
-        triggerClassName={compact ? undefined : "p-1 rounded-lg"}
+        triggerClassName={compact ? "-my-1.5" : "p-1 rounded-lg"}
       />
     ) : null;
 
@@ -252,20 +269,27 @@ export const ActionRow = memo(
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
+        // Focus on the row, or on a control inside it, makes the row the
+        // current one, the row J and K move. Tab walks the controls of
+        // every row, and the tint used to stay behind on the first.
+        onFocus={() => {
+          if (!isSelected) onSelect?.();
+        }}
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          // The resting wash, or the selected row's tint and bar, with the
+          // The resting wash, or the selected row's tint, with the
           // hover layer over either one.
           "state-layer group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
           compact ? "gap-2.5 px-2.5" : "gap-3 px-3",
-          isSelected ? SELECTED_ROW : "bg-surface-container-low/70",
+          looksSelected ? SELECTED_ROW : "bg-surface-container-low/70",
           isCompleting && "opacity-50",
         )}
       >
         {/* The primary action: the check for a follow-up, Log for a
-            birthday or a catch-up, in the group's tone. The check is faint
-            at rest and full on hover, on focus and while it completes. */}
+            birthday or a catch-up, in the group's tone. The check's ring
+            is a step under full ink at rest, and full on hover and while
+            it completes. */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -279,7 +303,7 @@ export const ActionRow = memo(
               // clear AA where white on a raw green did not.
               isCompleting
                 ? cn(TONE_WASH.success, "border-success scale-110")
-                : cn(TONE_TEXT[tone], "border-current/40 hover:border-current"),
+                : cn(TONE_TEXT[tone], CHECK_RING_REST, "hover:border-current"),
             )}
           >
             <Check
@@ -341,6 +365,9 @@ export const ActionRow = memo(
               className={cn(
                 PULSE_TYPE.name,
                 "hit-area inline-flex hover:text-primary transition-colors",
+                // The second cue beside the tint, as on a Network row: the
+                // tint alone sits about 1.06 to 1 against the resting wash.
+                looksSelected && "text-on-primary-wash",
               )}
             >
               {item.contactName}

@@ -404,6 +404,17 @@ test.describe("map features - filters and place search", () => {
     await expect(legend.getByText("At risk")).toBeVisible();
     // The fourth swatch: a pin with no score takes the neutral ring.
     await expect(legend.getByText("Not tracked")).toBeVisible();
+    // It sits over the stats strip at the left. At the bottom right it was
+    // under the insights pane, which is open at this width.
+    const legendBox = await legend.boundingBox();
+    const paneBox = await page
+      .getByRole("complementary", { name: "Map insights" })
+      .boundingBox();
+    const stripBox = await page
+      .getByRole("region", { name: "Map viewport statistics" })
+      .boundingBox();
+    expect(legendBox!.x + legendBox!.width).toBeLessThanOrEqual(paneBox!.x);
+    expect(legendBox!.y + legendBox!.height).toBeLessThanOrEqual(stripBox!.y);
 
     // URL contains ?layer=health
     await expect(page).toHaveURL(/layer=health/);

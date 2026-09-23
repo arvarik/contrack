@@ -270,6 +270,44 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
   );
 };
 
+/** The known parts, joined: "BSc · Physics". */
+const metaLine = (
+  first: string | null,
+  second: string | null,
+  separator = " · ",
+): string => [first, second].filter(Boolean).join(separator);
+
+/**
+ * "Dec 2024" for an ISO month or day. An import keeps a date as it found
+ * it, so other text shows as written, and the "null" some imports wrote is
+ * nothing. The raw "2024-12-07" read as a database field.
+ */
+function monthOf(value: string | null | undefined): string | null {
+  if (!value || value === "null") return null;
+  const iso = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(value);
+  return iso
+    ? new Date(Number(iso[1]), Number(iso[2]) - 1).toLocaleDateString(
+        undefined,
+        { month: "short", year: "numeric" },
+      )
+    : value;
+}
+
+/**
+ * "Dec 2024 – Present", or whichever end is known. An end alone is "Until
+ * Dec 2024": printed bare, it read as the start.
+ */
+const dateSpan = (
+  start: string | null,
+  end: string | null,
+  current = false,
+): string => {
+  const from = monthOf(start);
+  const to = monthOf(end);
+  if (!from && to) return `Until ${to}`;
+  return metaLine(from, to ?? (current ? "Present" : null), " – ");
+};
+
 /** Every dossier section that has something to show. */
 const DossierContent = ({ contact }: { contact: Contact }) => {
   return (
@@ -318,10 +356,11 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {contact.attributes.map(
             (attr: { id: string; name: string; value: string }) => {
-              // Format attribute names: replace underscores/hyphens with spaces, title-case
+              // "favorite_coffee" reads "Favorite coffee": spaces for the
+              // underscores and hyphens, and sentence case.
               const displayName = attr.name
                 .replace(/[_-]/g, " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase());
+                .replace(/^\w/, (c) => c.toUpperCase());
               return (
                 <div key={attr.id} className={cn(CARD, "p-4")}>
                   <span className={cn(LABEL, "text-ai block mb-1")}>
@@ -359,26 +398,18 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
                           <span className={STATUS_BADGE_SUCCESS}>Current</span>
                         )}
                       </p>
-                      <p className="text-sm text-primary font-bold">
-                        {exp.company}
-                      </p>
+                      {/* The ink, not the primary: the name is no link. */}
+                      <p className="text-sm text-on-surface">{exp.company}</p>
                       <p className="text-xs text-on-surface-variant mb-1 font-medium">
-                        {exp.startDate && exp.startDate !== "null"
-                          ? exp.startDate
-                          : ""}
-                        {exp.endDate && exp.endDate !== "null"
-                          ? ` – ${exp.endDate}`
-                          : exp.isCurrent
-                            ? " – Present"
-                            : ""}
-                        {exp.location && (
-                          <span className="ml-2 opacity-60">
-                            · {exp.location}
-                          </span>
+                        {metaLine(
+                          dateSpan(exp.startDate, exp.endDate, exp.isCurrent),
+                          exp.location,
                         )}
                       </p>
+                      {/* All of it. Two lines that opened on hover could
+                          not be read with a finger. */}
                       {exp.description && (
-                        <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 hover:line-clamp-none mt-1">
+                        <p className="text-xs text-on-surface-variant leading-relaxed mt-1">
                           {exp.description}
                         </p>
                       )}
@@ -400,23 +431,11 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
                     <div>
                       <p className="font-bold text-on-surface">{edu.school}</p>
                       <p className="text-sm text-on-surface-variant font-medium">
-                        {edu.degree}
-                        {edu.fieldOfStudy && (
-                          <span className="opacity-70">
-                            {" "}
-                            · {edu.fieldOfStudy}
-                          </span>
-                        )}
+                        {metaLine(edu.degree, edu.fieldOfStudy)}
                       </p>
-                      {((edu.startDate && edu.startDate !== "null") ||
-                        (edu.endDate && edu.endDate !== "null")) && (
-                        <p className="text-xs text-on-surface-variant opacity-70 mt-0.5">
-                          {edu.startDate && edu.startDate !== "null"
-                            ? edu.startDate
-                            : ""}
-                          {edu.endDate && edu.endDate !== "null"
-                            ? ` – ${edu.endDate}`
-                            : ""}
+                      {dateSpan(edu.startDate, edu.endDate) && (
+                        <p className="text-xs text-on-surface-variant mt-0.5">
+                          {dateSpan(edu.startDate, edu.endDate)}
                         </p>
                       )}
                     </div>

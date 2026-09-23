@@ -15,6 +15,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -149,6 +150,20 @@ describe("InteractionSearchPanel", () => {
     expect(mark?.textContent).toBe("hiring");
     expect(screen.getByText("1 note")).toBeTruthy();
     expect(screen.getByText(/“last month” →/)).toBeTruthy();
+    // The phrase set the range, so "Any time" does not show pressed beside it.
+    expect(
+      screen
+        .getByRole("button", { name: "Any time" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+    // The date reads as written, "Aug 12, 2026 · 6 weeks ago", in the muted
+    // meta line: no capitals forced on it and no label tracking.
+    const time = document.querySelector("time");
+    expect(time?.textContent).toContain(
+      new Date(HIT.date).toLocaleDateString(undefined, { dateStyle: "medium" }),
+    );
+    expect(time?.classList.contains("uppercase")).toBe(false);
+    expect(time?.className).toContain("text-on-surface-variant");
   });
 
   it("sends a preset as calendar dates and shows the custom fields on request", async () => {
@@ -201,10 +216,62 @@ describe("InteractionSearchPanel", () => {
     );
   });
 
-  it("says when nothing matched", async () => {
-    stubFetch(() => answer({ total: 0, hits: [] }));
-    mount("/search?mode=notes&q=nothing");
+  it("says when nothing matched, with no count, notice or order for a list that is not there", async () => {
+    stubFetch(() =>
+      answer({
+        total: 0,
+        hits: [],
+        query: {
+          text: "nothing here",
+          tokens: ["nothing", "here"],
+          mode: "any",
+          phrase: null,
+          range: null,
+          timeZone: "UTC",
+        },
+      }),
+    );
+    mount("/search?mode=notes&q=nothing+here");
     await screen.findByText("No notes match");
+    expect(screen.queryByText("0 notes")).toBeNull();
+    expect(screen.queryByText(/No note has every word/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "All words" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Best match" })).toBeNull();
+  });
+
+  it("suggests questions as plain words, and a press searches for one", async () => {
+    const urls = stubFetch();
+    mount();
+    const list = await screen.findByRole("list", { name: "Try asking" });
+    const suggestion = within(list).getByRole("button", {
+      name: "coffee in the last 30 days",
+    });
+    expect(suggestion.textContent).toBe("coffee in the last 30 days");
+    fireEvent.click(suggestion);
+    await waitFor(() =>
+      expect(
+        urls.some((u) => params(u).get("q") === "coffee in the last 30 days"),
+      ).toBe(true),
+    );
+    expect(screen.getByLabelText("Search your notes")).toHaveProperty(
+      "value",
+      "coffee in the last 30 days",
+    );
+  });
+
+  it("announces a failure as an alert with the reason", async () => {
+    stubFetch(
+      () =>
+        new Response(JSON.stringify({ error: "Index unavailable" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    mount("/search?mode=notes&q=hiring");
+    const alert = await screen.findByRole("alert");
+    expect(
+      within(alert).getByRole("heading", { name: "Search failed" }),
+    ).toBeTruthy();
   });
 });
 

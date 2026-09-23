@@ -28,6 +28,26 @@ import { fallbackAvatarUrl } from "../../../../lib/avatar";
 // ContactCard — Full side-by-side comparison card
 // =============================================================================
 
+/**
+ * A value that differs from the other contact's: the warning tone's lightest
+ * wash, the same one `FieldRow` uses, in place of a raw amber and a ring.
+ * Its 8 px inset and negative margin match the field rows', so the washes
+ * end on one edge and the words keep their place.
+ */
+const DIFF_WASH = "bg-warning/5 rounded-lg px-2 py-0.5 -mx-2";
+
+/** An address with a break after the @, so it wraps as name and domain. */
+const Email = ({ address }: { address: string }) => {
+  const at = address.indexOf("@") + 1;
+  return (
+    <span className="font-mono text-xs">
+      {address.slice(0, at)}
+      <wbr />
+      {address.slice(at)}
+    </span>
+  );
+};
+
 export interface ContactCardProps {
   key?: React.Key;
   contact: Contact;
@@ -127,9 +147,14 @@ export const ContactCard = ({
           className="w-12 h-12 rounded-full object-cover bg-surface-container-high"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          {/* The chip comes with the name's wash, which reaches 8 px past
+              the name, so the gap clears the wash and not only the word. */}
+          <div className="flex items-center gap-3">
             <span
-              className={`text-base font-bold truncate ${isDiff("name") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+              className={cn(
+                "text-base font-bold truncate",
+                isDiff("name") && DIFF_WASH,
+              )}
             >
               {contact.name}
             </span>
@@ -146,7 +171,10 @@ export const ContactCard = ({
           </div>
           {contact.headline && (
             <div
-              className={`text-xs text-on-surface-variant italic truncate ${isDiff("headline") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+              className={cn(
+                "text-xs text-on-surface-variant italic truncate",
+                isDiff("headline") && DIFF_WASH,
+              )}
             >
               {contact.headline}
             </div>
@@ -226,7 +254,7 @@ export const ContactCard = ({
         )}
         {primaryEmail && (
           <FieldRow icon={<Mail className="w-4 h-4" />} label="Email">
-            <span className="font-mono text-xs">{primaryEmail}</span>
+            <Email address={primaryEmail} />
             {contact.emails.length > 1 && (
               <span className="text-[11px] text-on-surface-variant ml-1">
                 +{contact.emails.length - 1}
@@ -255,7 +283,10 @@ export const ContactCard = ({
       {/* About */}
       {contact.about && (
         <div
-          className={`text-xs text-on-surface-variant leading-relaxed p-3 bg-surface-container-low rounded-xl ${isDiff("about") ? "ring-2 ring-amber-400/30" : ""}`}
+          className={cn(
+            "text-xs text-on-surface-variant leading-relaxed p-3 rounded-xl",
+            isDiff("about") ? "bg-warning/10" : "bg-surface-container-low",
+          )}
         >
           <FileText className="w-3.5 h-3.5 inline mr-1 opacity-50" />
           {contact.about}

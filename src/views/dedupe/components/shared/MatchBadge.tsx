@@ -22,7 +22,7 @@ export const MatchBadge = ({ type, confidence }: MatchBadgeProps) => {
     phone: {
       icon: <Phone className="w-3.5 h-3.5" />,
       label: "Phone match",
-      color: "text-info bg-blue-500/10",
+      color: "bg-info/10 text-info",
     },
     // A model found this pair, so the badge wears the AI colour.
     ai: {
@@ -37,7 +37,7 @@ export const MatchBadge = ({ type, confidence }: MatchBadgeProps) => {
     middle_name: {
       icon: <UserPlus className="w-3.5 h-3.5" />,
       label: "Middle name added",
-      color: "text-info bg-blue-500/10",
+      color: "bg-info/10 text-info",
     },
     // Not found by a scan. A note named somebody, the name was close to this
     // contact but not close enough to attach without asking, so the pair is

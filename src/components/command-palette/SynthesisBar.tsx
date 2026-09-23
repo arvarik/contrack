@@ -248,9 +248,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
       {/* ── Error state ── */}
       {phase === "error" && (
-        <div
-          className={`${compact ? "mx-1" : ""} rounded-xl bg-rose-500/5 ${px}`}
-        >
+        <div className={`${compact ? "mx-1" : ""} rounded-xl bg-error/5 ${px}`}>
           <div className={`flex items-center gap-2 ${textSize}`}>
             <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0" />
             <span className="text-error">

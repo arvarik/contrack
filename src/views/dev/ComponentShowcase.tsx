@@ -346,8 +346,8 @@ export const ComponentShowcase = () => {
           <p className="text-sm text-on-surface-variant">
             Three kinds of surface, three hovers. A flat control takes the state
             layer, a card that is a control rises, and a static card has no
-            hover. One selected look: the primary tint, with a bar on a selected
-            row.
+            hover. One selected look: the primary tint, on a row, a pill or a
+            nav item alike. No ring and no bar down the leading edge.
           </p>
           <Group title="Rows: state-layer and SELECTED_ROW">
             <div className="space-y-1 max-w-sm">
@@ -458,7 +458,7 @@ export const ComponentShowcase = () => {
         {/* ── Page header ──────────────────────────────────── */}
         <Section title="Page header">
           <PageHeader
-            titleAs="p"
+            titleAs="h2"
             back={{ to: "/settings", label: NAMES.settings.label }}
             title={NAMES.enrichment.label}
             description={NAMES.enrichment.description}
@@ -468,12 +468,18 @@ export const ComponentShowcase = () => {
               </button>
             }
           />
+          <PageHeader
+            titleAs="h2"
+            title={NAMES.pulse.label}
+            suffix="Tuesday, September 22"
+          />
           <p className="text-sm text-on-surface-variant">
             Every page&apos;s top is <code className={KBD}>PageHeader</code>. No
             band, no border and no icon tile. The page sets{" "}
             <code className={KBD}>PAGE_X</code> and{" "}
             <code className={KBD}>PAGE_TOP</code>, so every title starts at the
-            same height.
+            same height. A <code className={KBD}>suffix</code> continues the
+            title line in the variant ink: Pulse&apos;s day.
           </p>
         </Section>
 

@@ -40,10 +40,8 @@ import {
 } from "../services/lifecycleSettings.ts";
 import {
   getIntegrationsStatus,
-  setMapboxApiKey,
   setSearxngUrl,
   setGoogleOAuthCredentials,
-  isMapboxEnvSet,
   isSearxngEnvSet,
   isGoogleOAuthEnvSet,
 } from "../services/integrationSettings.ts";
@@ -477,18 +475,6 @@ router.put(
   validateBody(adminIntegrationsSchema),
   asyncHandler(async (req, res) => {
     const changed: string[] = [];
-
-    if (req.body.mapboxKey !== undefined) {
-      if (isMapboxEnvSet()) {
-        throw new AppError(
-          "Mapbox API key is set by environment variable MAPBOX_API_KEY",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
-      setMapboxApiKey(req.body.mapboxKey);
-      changed.push("mapboxKey");
-    }
 
     if (req.body.searxngUrl !== undefined) {
       if (isSearxngEnvSet()) {

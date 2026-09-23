@@ -156,7 +156,8 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
           <span className="text-[11px] font-medium text-on-surface-variant">
             Overdue
           </span>
-          <span className="text-lg font-extrabold text-warning tabular-nums">
+          {/* The overdue tone, red, as on the strip and on Pulse. */}
+          <span className="text-lg font-extrabold text-error tabular-nums">
             {stats.overdue}
           </span>
         </div>

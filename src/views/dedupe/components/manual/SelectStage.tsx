@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Merge, ArrowRight } from "lucide-react";
 import { ContactPicker } from "../ContactPicker";
 import type { Contact } from "../../../../types";
+import { roomAtBottom } from "../../utils/stickyRoom";
 
 interface SelectStageProps {
   selected: Contact[];
@@ -21,9 +22,9 @@ export const SelectStage = ({
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex-1 flex flex-col min-h-0"
+      className="flex flex-col"
     >
-      <div className="mb-4">
+      <div>
         <h3 className="text-sm font-bold text-on-surface mb-1">
           Select contacts to merge
         </h3>
@@ -33,15 +34,21 @@ export const SelectStage = ({
         </p>
       </div>
 
-      <div className="flex-1 min-h-0">
-        <ContactPicker
-          selected={selected}
-          onSelectionChange={onSelectionChange}
-          maxSelection={5}
-        />
-      </div>
+      <ContactPicker
+        selected={selected}
+        onSelectionChange={onSelectionChange}
+        maxSelection={5}
+      />
 
-      <div className="pt-4 shrink-0">
+      {/* The page is the one scroller and the picker takes its full height,
+          so the button sticks to the bottom of the screen and stays in
+          reach while a person picks. Below md it sits on top of the tab
+          bar, and the offset is the bar's height, as in
+          InteractionComposer. */}
+      <div
+        ref={roomAtBottom}
+        className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 pt-4 pb-4 bg-surface"
+      >
         <button
           onClick={onNext}
           disabled={selected.length < 2}

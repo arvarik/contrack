@@ -58,6 +58,15 @@ export const PULSE_CHIP =
   "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap";
 
 /**
+ * The ring of an Up next check at rest: the group's ink at 75 percent. A
+ * control's edge needs 3 to 1 (WCAG 1.4.11), and at 40 percent the ring
+ * measured 1.8 to 1 on the row's wash. At 75 it clears 3 to 1 on the wash
+ * and on the selected tint in both palettes, and stays a step under the
+ * full ink of hover. `pulse.contrast.test.ts` measures it.
+ */
+export const CHECK_RING_REST = "border-current/75";
+
+/**
  * The tone of each Up next group. The group's dot and its rows' leading
  * glyph read from it, so the eye can follow one colour down the queue.
  */

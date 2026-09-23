@@ -178,10 +178,15 @@ const plainAnswers = (s: Sent) => {
     );
   }
   if (s.url.includes("/preferences")) {
-    return new Response(
-      JSON.stringify({ preferences: defaultPreferences, stored: [] }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
+    // The server answers a PATCH with the saved preferences, the patch in them.
+    const preferences =
+      s.method === "PATCH"
+        ? { ...defaultPreferences, ...s.body }
+        : defaultPreferences;
+    return new Response(JSON.stringify({ preferences, stored: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (s.url.endsWith("/search/coverage")) {
     return new Response(
@@ -543,9 +548,16 @@ describe("the history pane", () => {
     const sent = stubFetch();
     renderView();
 
+    // The pane is open, so the toggle is pressed. Its name stays "History"
+    // in both states: the pressed state says open or closed.
     const toggleButton = await screen.findByRole("button", {
-      name: "Search history",
+      name: "History",
+      pressed: true,
     });
+    expect(toggleButton.getAttribute("aria-controls")).toBe(
+      "search-history-aside",
+    );
+    expect(toggleButton.getAttribute("title")).toBe("History (H)");
     fireEvent.click(toggleButton);
 
     await waitFor(() => {
@@ -555,5 +567,176 @@ describe("the history pane", () => {
       expect(patches).toHaveLength(1);
       expect(patches[0].body).toEqual({ askHistoryOpen: false });
     });
+
+    // Closed: the same button opens it again, and controls nothing on the page.
+    const reopen = await screen.findByRole("button", {
+      name: "History",
+      pressed: false,
+    });
+    expect(reopen).toBe(toggleButton);
+    expect(reopen.hasAttribute("aria-controls")).toBe(false);
+    expect(
+      screen.queryByRole("complementary", { name: "Search history" }),
+    ).toBeNull();
+  });
+
+  it("hides the pane from the button in its own header, and hands focus to the header toggle", async () => {
+    stubMatchMedia(true);
+    const sent = stubFetch();
+    renderView();
+
+    const aside = await screen.findByRole("complementary", {
+      name: "Search history",
+    });
+    const hide = within(aside).getByRole("button", { name: "Hide history" });
+    // The shortcut that also toggles the pane is in the tooltip.
+    expect(hide.getAttribute("title")).toBe("Hide history (H)");
+    fireEvent.click(hide);
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Search history" }),
+      ).toBeNull(),
+    );
+    // The button that was pressed is gone, and the keyboard is on the one
+    // that brings the pane back.
+    const toggle = screen.getByRole("button", {
+      name: "History",
+      pressed: false,
+    });
+    expect(document.activeElement).toBe(toggle);
+    await waitFor(() => {
+      const patches = sent.filter(
+        (s) => s.url.includes("/preferences") && s.method === "PATCH",
+      );
+      expect(patches).toHaveLength(1);
+      expect(patches[0].body).toEqual({ askHistoryOpen: false });
+    });
+  });
+
+  it("toggles the pane with the H key outside a text field", async () => {
+    stubMatchMedia(true);
+    const sent = stubFetch();
+    renderView();
+
+    await screen.findByRole("complementary", { name: "Search history" });
+    // The box has focus on arrival, and an h typed there is a letter.
+    input().blur();
+    fireEvent.keyDown(document.body, { key: "h" });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Search history" }),
+      ).toBeNull(),
+    );
+    await waitFor(() => {
+      const patches = sent.filter(
+        (s) => s.url.includes("/preferences") && s.method === "PATCH",
+      );
+      expect(patches).toHaveLength(1);
+      expect(patches[0].body).toEqual({ askHistoryOpen: false });
+    });
+  });
+
+  it("hands focus to the header toggle when H closes the pane from inside it", async () => {
+    stubMatchMedia(true);
+    stubFetch();
+    renderView();
+
+    const aside = await screen.findByRole("complementary", {
+      name: "Search history",
+    });
+    const inside = within(aside).getByRole("button", { name: "Hide history" });
+    inside.focus();
+    fireEvent.keyDown(inside, { key: "h" });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Search history" }),
+      ).toBeNull(),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "History", pressed: false }),
+    );
+  });
+
+  it("opens the history sheet from the toggle on a phone, where the sheet's own close control is the way out", async () => {
+    stubMatchMedia(false);
+    stubFetch();
+    renderView();
+
+    const toggle = await screen.findByRole("button", { name: "History" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(toggle.hasAttribute("aria-pressed")).toBe(false);
+    fireEvent.click(toggle);
+
+    const sheet = await screen.findByRole("dialog", { name: "Search history" });
+    expect(
+      within(sheet).queryByRole("button", { name: "Hide history" }),
+    ).toBeNull();
+    // The sheet closes from a visible X in the pane's header, and the
+    // keyboard goes back to the toggle.
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "Close history" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Search history" }),
+      ).toBeNull(),
+    );
+    expect(document.activeElement).toBe(toggle);
+  });
+});
+
+describe("the page", () => {
+  it("is the title, its two controls and the search box: no description", async () => {
+    stubFetch();
+    renderView();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Ask Contrack" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("Ask a question about your network in plain words"),
+    ).toBeNull();
+    expect(input()).toBeTruthy();
+  });
+
+  it("fills the box and asks when a suggested question is pressed", async () => {
+    const sent = stubFetch();
+    renderView();
+
+    const list = await screen.findByRole("list", { name: "Try asking" });
+    const suggestion = within(list).getByRole("button", {
+      name: "Who likes espresso?",
+    });
+    // The words and nothing else: no glyph before them.
+    expect(suggestion.textContent).toBe("Who likes espresso?");
+    fireEvent.click(suggestion);
+
+    expect(input().value).toBe("Who likes espresso?");
+    await waitFor(() =>
+      expect(semantic(sent)[0]?.body).toEqual({
+        query: "Who likes espresso?",
+      }),
+    );
+  });
+
+  it("says no one matches in one sentence, with nothing inside it", async () => {
+    stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic")) {
+        return new Response(complete([]));
+      }
+    });
+    renderView();
+
+    ask(QUESTION);
+    const heading = await screen.findByRole("heading", {
+      name: "No one matches",
+    });
+    const state = heading.parentElement as HTMLElement;
+    expect(within(state).getByText("Try other words.")).toBeTruthy();
+    expect(within(state).queryByRole("button")).toBeNull();
   });
 });

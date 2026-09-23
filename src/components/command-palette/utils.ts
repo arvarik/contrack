@@ -18,8 +18,8 @@ export const GROUP_HEADING =
 
 /**
  * The palette's current row: the selected-row look (the `row-selected`
- * utility in index.css), the primary tint with a 3 px bar on the leading
- * edge. cmdk marks the current row with `aria-selected`, so the utility
+ * utility in index.css), the primary tint. cmdk marks the current row with
+ * `aria-selected`, so the utility
  * takes that variant. Text that was `text-primary` on the row takes
  * `aria-selected:text-on-primary-wash`.
  */

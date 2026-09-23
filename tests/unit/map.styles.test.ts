@@ -66,3 +66,43 @@ describe("registerPmtilesProtocol", () => {
     expect(addProtocol).toHaveBeenCalledWith("pmtiles", tilev4);
   });
 });
+
+describe("heatRamp", () => {
+  // The heat layer was one fixed blue in both palettes. It is the accent's
+  // tokens as the page computes them: the pale container at low density,
+  // then the primary at rising strength.
+  it("builds the ramp from the primary and the pale container", async () => {
+    const { heatRamp } = await loadModule();
+    expect(heatRamp(" #006a91", "#47befd")).toEqual([
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      "rgba(0, 106, 145, 0)",
+      0.2,
+      "rgba(71, 190, 253, 0.2)",
+      0.4,
+      "rgba(0, 106, 145, 0.4)",
+      0.6,
+      "rgba(0, 106, 145, 0.6)",
+      0.8,
+      "rgba(0, 106, 145, 0.8)",
+      1,
+      "rgba(0, 106, 145, 1)",
+    ]);
+  });
+
+  it("follows another accent and the dark palette", async () => {
+    const { heatRamp } = await loadModule();
+    const dark = heatRamp("#6ec6ee", "#004d6b");
+    expect(dark?.[4]).toBe("rgba(110, 198, 238, 0)");
+    expect(dark?.[6]).toBe("rgba(0, 77, 107, 0.2)");
+    expect(dark?.[14]).toBe("rgba(110, 198, 238, 1)");
+  });
+
+  it("draws nothing rather than a colour of its own for an unreadable token", async () => {
+    const { heatRamp } = await loadModule();
+    expect(heatRamp("", "#47befd")).toBeNull();
+    expect(heatRamp("#006a91", "oklch(0.7 0.1 230)")).toBeNull();
+  });
+});

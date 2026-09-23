@@ -348,6 +348,10 @@ const ResponsiveLayout = () => {
         The role changes rather than the element, because swapping <main> for
         <aside> would remount the list and lose its search, scroll and
         selection. The skip link picks its own target per route (SkipLink).
+
+        Below `lg` the list fills the row beside the sidebar rail (`flex-1`).
+        It was `w-full`, the whole row, so from 768 px it ran 64 px past the
+        window and cut off Import, New and the sort menu.
       */}
       <section
         id={
@@ -367,7 +371,7 @@ const ResponsiveLayout = () => {
         tabIndex={-1}
         className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
-        ${isMapActive ? "flex-1 z-0" : "w-full lg:w-[350px] shrink-0 bg-surface-container-lowest z-10"}
+        ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-[350px] bg-surface-container-lowest z-10"}
         h-full flex-col relative outline-none
       `}
       >
@@ -444,7 +448,11 @@ const ResponsiveLayout = () => {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "100%", opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
+              // z 40 on a phone, under the tab bar's 50, so the bar stays on
+              // top and tappable over the contact, as it does over
+              // /contact/:id. The map page is z 0, so 40 still covers every
+              // pin and bar on it. From md there is no tab bar.
+              className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
             >
               <Routes location={location}>
                 <Route

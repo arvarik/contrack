@@ -86,27 +86,36 @@ export const ListManagerView = () => {
           title of its own: the shell's header above already says "Lists".
           While the pane is the whole page it takes the page's gutters, so it
           lines up with the title. Beside an open list it is a narrow column
-          with its own. */}
-      <div
-        className={cn(
-          "pt-5 pb-4 shrink-0 flex items-center gap-3",
-          selectedListId ? "px-4" : PAGE_X,
-        )}
-      >
-        <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
-          {lists.length} {lists.length === 1 ? "list" : "lists"}
-          {lists.length > 1 && " · drag to reorder"}
-        </p>
-        <button
-          type="button"
-          onClick={() => setIsCreateOpen(true)}
-          className="btn-secondary btn-sm shrink-0"
+          with its own. With no list yet the empty state says it and offers
+          New list, so this row said "0 lists" over a second New list. It
+          shows while the lists load, without its count, so the rows arrive
+          where the skeleton was instead of 68 px lower. */}
+      {(isLoading || lists.length > 0) && (
+        <div
+          className={cn(
+            "pt-5 pb-4 shrink-0 flex items-center gap-3",
+            selectedListId ? "px-4" : PAGE_X,
+          )}
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">New list</span>
-          <span className="sm:hidden">New</span>
-        </button>
-      </div>
+          <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
+            {!isLoading && (
+              <>
+                {lists.length} {lists.length === 1 ? "list" : "lists"}
+                {lists.length > 1 && " · drag to reorder"}
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="btn-secondary btn-sm shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New list</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </div>
+      )}
 
       {/* List rows */}
       <div
@@ -155,11 +164,12 @@ export const ListManagerView = () => {
                   "group state-layer flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer select-none",
                   isSelected && SELECTED_ROW,
                   isDragging && "opacity-40",
-                  // The row a drop lands on. An outline, not a ring: a ring
-                  // is a box shadow, and it would take the selected row's
-                  // bar away. No fill either, because a `bg-*` utility
-                  // would replace the selected row's tint.
-                  isDragTarget && "outline-2 outline-primary/40",
+                  // The row a drop lands on: a dashed outline, the drop
+                  // target's line. The focus ring is a solid one, so a solid
+                  // outline or a ring here read as keyboard focus. No fill
+                  // either, because a `bg-*` utility would replace the
+                  // selected row's tint.
+                  isDragTarget && "outline-2 outline-dashed outline-primary/60",
                 )}
                 onClick={() => setSelectedListId(isSelected ? null : list.id)}
                 onKeyDown={activateOnKey(() =>

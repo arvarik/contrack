@@ -165,9 +165,11 @@ export const Sparkline = ({ weekTotals, thisWeek }: SparklineProps) => {
           {comparison.recent}
         </span>{" "}
         in the last four weeks ·{" "}
+        {/* One phrase: on a narrow card it moves to the next line whole,
+            not as "on the four" and "before". */}
         <span
           className={cn(
-            "font-semibold",
+            "font-semibold whitespace-nowrap",
             TONE_TEXT[TREND_TONE[comparison.tone]],
           )}
         >
