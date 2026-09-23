@@ -177,35 +177,44 @@ test.describe("map", () => {
     // Everyone the geocoder places by the same city gets the same point, so
     // past the cluster zoom their pins would sit on top of each other.
     // Tokyo, where the seed has nobody, so this is the only pair on the map.
-    for (const name of ["Alan Turing", "Barbara Liskov"]) {
-      await instance.api("POST", "/contacts", {
-        name,
-        company: "Same Place Ltd",
-        location: "Tokyo, Japan",
-        lat: 35.6762,
-        lng: 139.6503,
+    // The two are deleted after the test: the worker's instance is shared,
+    // and left behind they sort between the seeded Ada and Edsger, so the
+    // keyboard journey's ArrowDown from Ada landed on Alan Turing.
+    const ids: string[] = [];
+    try {
+      for (const name of ["Alan Turing", "Barbara Liskov"]) {
+        const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+          name,
+          company: "Same Place Ltd",
+          location: "Tokyo, Japan",
+          lat: 35.6762,
+          lng: 139.6503,
+        });
+        ids.push(id);
+      }
+      await stubBasemap(page);
+      await page.goto("/map");
+
+      // Close the insights, so the Tokyo cluster at the right edge is clear.
+      const insights = page.getByRole("button", {
+        name: "Map insights",
+        exact: true,
       });
+      await insights.click();
+      await expect(insights).toHaveAttribute("aria-expanded", "false");
+
+      await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
+      const list = page.getByRole("list", { name: "People at this place" });
+      await expect(list.getByRole("button")).toHaveCount(2);
+      await list
+        .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
+        .click();
+      await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+      // Restore pane preference for subsequent tests
+      await page.keyboard.press("i");
+    } finally {
+      for (const id of ids) await instance.api("DELETE", `/contacts/${id}`);
     }
-    await stubBasemap(page);
-    await page.goto("/map");
-
-    // Close the insights, so the Tokyo cluster at the right edge is clear.
-    const insights = page.getByRole("button", {
-      name: "Map insights",
-      exact: true,
-    });
-    await insights.click();
-    await expect(insights).toHaveAttribute("aria-expanded", "false");
-
-    await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
-    const list = page.getByRole("list", { name: "People at this place" });
-    await expect(list.getByRole("button")).toHaveCount(2);
-    await list
-      .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
-      .click();
-    await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
-    // Restore pane preference for subsequent tests
-    await page.keyboard.press("i");
   });
 
   test("opens the map from a contact, on that contact", async ({
