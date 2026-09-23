@@ -43,14 +43,24 @@ import { isValidLatLng } from "../../../shared/geo";
 import type { FacetFilter } from "../../../shared/searchFacets";
 import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
 import { prefersReducedMotion } from "./flyTo";
-import { measureInsets, paddingFor } from "./insets";
+import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
+import { SELECTED_TINT } from "../../lib/styles";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
   { value: "heat", label: "Heat" },
   { value: "health", label: "Health" },
 ];
+
+/**
+ * A toolbar toggle's resting and selected looks. Selected is the tint and its
+ * ink. The border turns transparent rather than going away, so the toggle
+ * keeps its size.
+ */
+const TOGGLE_ON = cn(SELECTED_TINT, "border-transparent");
+const TOGGLE_OFF =
+  "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30";
 
 export interface MapToolbarProps {
   contacts: MapContact[];
@@ -74,6 +84,12 @@ export interface MapToolbarProps {
   onStartRename?: (view: MapView) => void;
   onDeleteView?: (view: MapView) => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
+  /**
+   * How much map an open contact leaves at the toolbar's left, in px. Null
+   * or left out: the whole page. The toolbar keeps inside it, 16 px clear
+   * of the contact, and steps aside under `MIN_OPEN_PX`.
+   */
+  room?: number | null;
   onFitAll?: () => void;
   onToggleInsights?: () => void;
   onSelectInView?: () => void;
@@ -103,6 +119,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onStartRename,
   onDeleteView,
   inputRef: externalInputRef,
+  room = null,
   onFitAll: externalFitAll,
   onToggleInsights,
   onSelectInView,
@@ -241,7 +258,9 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     <div className="flex flex-col gap-2 w-full">
       {/* Top Input Row */}
       <div className="flex items-center gap-1.5 w-full">
-        <div className="relative flex-1 flex items-center bg-surface-container-high/60 hover:bg-surface-container-high/80 focus-within:bg-surface-container-high focus-within:ring-2 focus-within:ring-primary/40 rounded-xl transition-all border border-outline-variant/30">
+        {/* Opaque while it has focus, so the map's labels do not show
+            through the words being typed. */}
+        <div className="focus-frame relative flex-1 flex items-center bg-surface-container-high/60 focus-within:bg-surface-container-high rounded-xl border border-outline-variant/30">
           {mode === "filter" ? (
             <>
               <Search className="absolute left-3 w-4 h-4 text-on-surface-variant pointer-events-none" />
@@ -258,14 +277,14 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 }}
                 placeholder="Filter contacts… (/)"
                 aria-label="Filter contacts"
-                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none py-2 pl-9 pr-8"
+                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />
               {rawInput && (
                 <button
                   type="button"
                   onClick={() => setRawInput("")}
                   aria-label="Clear filter text"
-                  className="absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
+                  className="state-layer absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -291,7 +310,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 }}
                 placeholder="Go to place… (e.g. London)"
                 aria-label="Go to place"
-                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none py-2 pl-9 pr-8"
+                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />
               {gotoLoading ? (
                 <Loader2 className="absolute right-2.5 w-4 h-4 text-primary animate-spin" />
@@ -304,7 +323,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                       setGotoError(null);
                     }}
                     aria-label="Clear place search"
-                    className="absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
+                    className="state-layer absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -327,14 +346,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           }}
           aria-label={mode === "goto" ? "Back to filters" : "Go to place"}
           aria-pressed={mode === "goto"}
-          className={`
-            hit-area px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all shrink-0 border
-            ${
-              mode === "goto"
-                ? "bg-primary text-on-primary border-primary shadow-sm"
-                : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30"
-            }
-          `}
+          className={cn(
+            "hit-area px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 border",
+            mode === "goto" ? TOGGLE_ON : TOGGLE_OFF,
+          )}
         >
           {mode === "goto" ? "Filter" : "Go to"}
         </button>
@@ -345,7 +360,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           onClick={handleFitAll}
           aria-label="Fit all"
           title="Fit all contacts in view (F)"
-          className="hit-area p-2 rounded-xl text-xs font-semibold bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border border-outline-variant/30 cursor-pointer transition-all shrink-0"
+          className={cn(
+            "hit-area p-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors shrink-0",
+            TOGGLE_OFF,
+          )}
         >
           <Maximize2 className="w-4 h-4" />
         </button>
@@ -397,9 +415,11 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu */}
+      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu.
+          It wraps, Views and Select under the layers, when an open contact
+          leaves the toolbar narrow. */}
       {!isMobile && (
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-outline-variant/20">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <Segmented<MapLayer>
             options={LAYER_OPTIONS}
             value={layer}
@@ -432,10 +452,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 </>
               }
               triggerClassName={cn(
-                "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
-                selectMenuOpen || isLassoActive
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
+                "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors border",
+                selectMenuOpen || isLassoActive ? TOGGLE_ON : TOGGLE_OFF,
               )}
             />
           </div>
@@ -490,7 +508,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               onSelectInView();
               setIsMobileSheetOpen(false);
             }}
-            className="w-full hit-area py-2.5 px-3 rounded-xl text-xs font-semibold bg-surface-container-high hover:bg-surface-container-highest text-on-surface flex items-center justify-center gap-2 cursor-pointer border border-outline-variant/30"
+            className="btn-secondary w-full"
           >
             <span>Select all in view</span>
           </button>
@@ -499,49 +517,64 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     </div>
   );
 
+  // With a contact open, the toolbar keeps to the map the contact leaves.
+  const cramped = room !== null && room < MIN_OPEN_PX;
+  const roomWidth = room !== null ? room - 32 : null;
+
   return (
     <>
       {/* Desktop Toolbar */}
-      <div className="absolute top-4 left-4 z-10 w-[calc(100%-2rem)] max-w-[520px] hidden lg:flex flex-col gap-2 p-2 rounded-2xl glass-panel shadow-xl border border-outline-variant/20">
-        {renderToolbarContent(false)}
-      </div>
+      {!cramped && (
+        <div
+          className="absolute top-4 left-4 z-10 w-[calc(100%-2rem)] max-w-[520px] hidden lg:flex flex-col gap-2 p-2 rounded-2xl glass-panel shadow-xl border border-outline-variant/20"
+          style={
+            roomWidth !== null
+              ? { maxWidth: Math.min(520, roomWidth) }
+              : undefined
+          }
+        >
+          {renderToolbarContent(false)}
+        </div>
+      )}
 
       {/* Mobile Toolbar Button */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setIsMobileSheetOpen(true)}
-          aria-label="Filters"
-          className="hit-area glass-panel shadow-lg rounded-xl px-3 py-2 text-sm font-medium text-on-surface flex items-center gap-2 cursor-pointer border border-outline-variant/30"
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span>Filters</span>
-          {hasActiveFilter && (
-            <span className="inline-flex items-center justify-center bg-primary text-on-primary rounded-full text-xs font-semibold px-1.5 min-w-[18px] h-[18px]">
-              {effectiveFilters.length || 1}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={handleFitAll}
-          aria-label="Fit all"
-          className="hit-area glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface hover:text-primary cursor-pointer border border-outline-variant/30"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-        {onToggleInsights && (
+      {!cramped && (
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden">
           <button
             type="button"
-            onClick={onToggleInsights}
-            aria-label="Insights"
-            className="hit-area glass-panel shadow-lg rounded-xl px-2.5 py-2 text-sm font-medium text-on-surface hover:text-primary flex items-center gap-1.5 cursor-pointer border border-outline-variant/30"
+            onClick={() => setIsMobileSheetOpen(true)}
+            aria-label="Filters"
+            className="hit-area state-layer glass-panel shadow-lg rounded-xl px-3 py-2 text-sm font-medium text-on-surface flex items-center gap-2 cursor-pointer border border-outline-variant/30"
           >
-            <BarChart3 className="w-4 h-4" />
-            <span>Insights</span>
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Filters</span>
+            {hasActiveFilter && (
+              <span className="inline-flex items-center justify-center bg-primary text-on-primary rounded-full text-xs font-semibold px-1.5 min-w-[18px] h-[18px]">
+                {effectiveFilters.length || 1}
+              </span>
+            )}
           </button>
-        )}
-      </div>
+          <button
+            type="button"
+            onClick={handleFitAll}
+            aria-label="Fit all"
+            className="hit-area state-layer glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+          {onToggleInsights && (
+            <button
+              type="button"
+              onClick={onToggleInsights}
+              aria-label="Insights"
+              className="hit-area state-layer glass-panel shadow-lg rounded-xl px-2.5 py-2 text-sm font-medium text-on-surface flex items-center gap-1.5 cursor-pointer border border-outline-variant/30"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Insights</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mobile Filter Sheet Modal */}
       <Modal

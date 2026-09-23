@@ -53,7 +53,7 @@ const markerHandles: {
   at?: { longitude: number; latitude: number };
 } = {};
 
-vi.mock("react-map-gl/maplibre", () => ({
+vi.mock("@vis.gl/react-maplibre", () => ({
   Marker: (props: {
     children?: React.ReactNode;
     longitude: number;

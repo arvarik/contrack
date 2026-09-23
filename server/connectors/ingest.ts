@@ -356,13 +356,10 @@ export async function ingestStream(
               if (newSeen >= ghostThreshold) {
                 // Promote to ghost contact
                 const ghostId = crypto.randomUUID();
-                const newTheme = [
-                  "brand",
-                  "indigo",
-                  "rose",
-                  "emerald",
-                  "amber",
-                ][Math.floor(Math.random() * 5)];
+                // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
+                const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
+                  Math.floor(Math.random() * 5)
+                ];
                 const ghostName = p.name || p.email || p.phone || "Unknown";
 
                 sqlite
@@ -420,7 +417,7 @@ export async function ingestStream(
             // First time seen
             if (ghostThreshold <= 1) {
               const ghostId = crypto.randomUUID();
-              const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
+              const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
                 Math.floor(Math.random() * 5)
               ];
               const ghostName = p.name || p.email || p.phone || "Unknown";

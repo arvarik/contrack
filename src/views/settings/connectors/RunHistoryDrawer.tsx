@@ -15,6 +15,8 @@ import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { useConnectorRuns } from "../../../api/connectors";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import type {
   ConnectorRun,
   ConnectorSummary,
@@ -96,7 +98,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={connector ? `${connector.name} — Run History` : "Run History"}
+      title={connector ? `${connector.name} — Run history` : "Run history"}
       size="lg"
     >
       <div className="space-y-4 pt-2">
@@ -149,7 +151,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
                       type="button"
                       onClick={() => handleCopy(run)}
                       aria-label="Copy run details"
-                      className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+                      className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
                       title="Copy JSON details"
                     >
                       {copiedId === run.id ? (
@@ -173,7 +175,10 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
                 {run.error && (
                   <div
                     role="alert"
-                    className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-xs text-error font-mono break-all"
+                    className={cn(
+                      "rounded-lg p-2 text-xs font-mono break-all",
+                      TONE_WASH.error,
+                    )}
                   >
                     {run.error}
                   </div>
@@ -184,11 +189,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
         )}
 
         <div className="flex justify-end pt-3 border-t border-surface-container-high/40">
-          <button
-            type="button"
-            onClick={onClose}
-            className="hit-area px-4 py-2 rounded-xl text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors min-h-[44px]"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Close
           </button>
         </div>

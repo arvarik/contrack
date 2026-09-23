@@ -34,6 +34,7 @@ import {
 } from "../../../api/admin";
 import { Badge } from "../../../components/ui/Badge";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
+import { CARD, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { AdminPage } from "./AdminShell";
 
@@ -63,9 +64,14 @@ const Card = ({
   note?: ReactNode;
   children?: ReactNode;
 }) => (
-  <section className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-3">
+  <section className={cn(CARD, "p-5 space-y-3")}>
     <header className="flex items-center gap-2.5">
-      <span className="shrink-0 w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+      <span
+        className={cn(
+          "shrink-0 w-8 h-8 rounded-xl flex items-center justify-center",
+          TONE_WASH.primary,
+        )}
+      >
         {icon}
       </span>
       <h2 className="text-sm font-bold text-on-surface flex-1 min-w-0 truncate">
@@ -391,7 +397,7 @@ export const HealthView = () => {
       )}
 
       {isError && (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-3">
+        <div className={cn(CARD, "p-5 space-y-3")}>
           <p className="text-sm text-error">
             The instance could not be read. That is itself worth knowing.
           </p>

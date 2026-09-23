@@ -69,6 +69,30 @@ export function samePadding(a: PaddingOptions, b: PaddingOptions): boolean {
   );
 }
 
+/** The insights pane's name. It covers the map too, but it is not a contact. */
+const INSIGHTS_LABEL = "Map insights";
+
+/**
+ * How much of `container`'s width an open contact leaves uncovered, in px,
+ * or null when no contact covers it. The map's toolbar and its bottom-left
+ * corner fit in it, and step aside when it is under `MIN_OPEN_PX`.
+ */
+export function measureOpenWidth(container: HTMLElement): number | null {
+  const widths = Array.from(
+    container.ownerDocument.querySelectorAll<HTMLElement>(
+      `[${COVERS_MAP_ATTR}="right"]`,
+    ),
+  )
+    .filter((panel) => panel.getAttribute("aria-label") !== INSIGHTS_LABEL)
+    .map((panel) => panel.offsetWidth)
+    .filter((width) => width > 0);
+  if (widths.length === 0) return null;
+  return Math.max(
+    0,
+    container.getBoundingClientRect().width - Math.max(...widths),
+  );
+}
+
 /**
  * Measure the covers over `container`, the map's element.
  *
@@ -93,7 +117,7 @@ export function measureInsets(
     doc.querySelectorAll<HTMLElement>(`[${COVERS_MAP_ATTR}="right"]`),
   );
   const rightWidths = rightCovers.map((panel) => {
-    const isInsightsPane = panel.getAttribute("aria-label") === "Map insights";
+    const isInsightsPane = panel.getAttribute("aria-label") === INSIGHTS_LABEL;
     if (isInsightsPane) {
       return panel.offsetWidth > 0 ? panel.offsetWidth : 0;
     }

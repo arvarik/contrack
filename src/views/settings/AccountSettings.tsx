@@ -56,11 +56,25 @@ import { Modal } from "../../components/ui/Modal";
 import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SecretReveal } from "../../components/ui/SecretReveal";
-import { CARD, SECTION_HEADING, DANGER_BTN } from "../../lib/styles";
+import {
+  CARD,
+  LABEL_PRIMARY,
+  SECTION_HEADING,
+  SELECTED_TINT,
+  TONE_WASH,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { RadioDot } from "../../components/ui/RadioDot";
 import { tileDelay } from "../../lib/motion";
 import { describeDevice } from "../../lib/devices";
 import { PasskeysCard } from "./account/PasskeysCard";
+import { SETTINGS_PAGE } from "./layout";
+
+/** The tile beside a session or a token: the primary wash with its ink. */
+const ROW_ICON = cn(
+  "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+  TONE_WASH.primary,
+);
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -156,7 +170,6 @@ const Field = ({
             revealable && "pr-12",
             // 16px on mobile: anything less and iOS Safari zooms on focus.
             "text-base sm:text-sm",
-            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
             error && "ring-2 ring-error",
           )}
           {...props}
@@ -167,7 +180,7 @@ const Field = ({
             onClick={() => setRevealed((prev) => !prev)}
             aria-label={revealed ? "Hide password" : "Show password"}
             aria-pressed={revealed}
-            className="absolute right-0 top-0 bottom-0 w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:text-primary transition-colors cursor-pointer"
+            className="state-layer absolute right-0 top-0 bottom-0 w-11 h-11 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
           >
             {revealed ? (
               <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -291,10 +304,7 @@ const PhotoCard = () => {
             type="button"
             onClick={handleRemove}
             disabled={isBusy}
-            className={cn(
-              "btn-secondary text-sm text-error hover:bg-error/10 hover:text-error",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
+            className="btn-secondary text-error"
           >
             {remove.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             Remove photo
@@ -459,16 +469,14 @@ const PasswordCard = () => {
 
 const SessionRow = ({ session }: { session: SessionSummary }) => (
   <li className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-    <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+    <span className={ROW_ICON}>
       <Monitor className="w-[18px] h-[18px]" />
     </span>
     <div className="flex-1 min-w-0">
       <p className="text-sm font-bold text-on-surface">
         {describeDevice(session.userAgent)}
         {session.current && (
-          <span className="ml-2 text-[11px] font-bold uppercase tracking-wide text-primary">
-            This device
-          </span>
+          <span className={cn(LABEL_PRIMARY, "ml-2")}>This device</span>
         )}
       </p>
       <p className="text-xs text-on-surface-variant">
@@ -519,11 +527,7 @@ const SessionsCard = () => {
           type="button"
           onClick={() => revoke.mutate()}
           disabled={others === 0 || revoke.isPending}
-          className={cn(
-            DANGER_BTN,
-            "flex items-center gap-2 text-sm",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
+          className="btn-secondary text-error"
         >
           {revoke.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -588,8 +592,8 @@ const TokenRow = ({
 }) => {
   const state = tokenState(token);
   return (
-    <li className="flex items-start gap-3 px-4 sm:px-6 py-3.5 hover:bg-surface-container-low transition-colors">
-      <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+    <li className="flex items-start gap-3 px-4 sm:px-6 py-3.5">
+      <span className={ROW_ICON}>
         <Terminal className="w-[18px] h-[18px]" />
       </span>
       <div className="flex-1 min-w-0">
@@ -619,11 +623,7 @@ const TokenRow = ({
         <button
           type="button"
           onClick={onRevoke}
-          className={cn(
-            "shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold",
-            "min-h-[44px] sm:min-h-0 sm:py-1.5",
-            "text-error bg-red-500/10 hover:bg-red-500/20 transition-colors",
-          )}
+          className="btn-secondary btn-sm shrink-0 text-error"
         >
           Revoke
         </button>
@@ -734,12 +734,13 @@ const CreateTokenModal = ({
                     aria-checked={active}
                     onClick={() => setExpiresInDays(preset.days)}
                     className={cn(
-                      "px-3 py-3 sm:py-2.5 rounded-xl text-sm font-bold transition-colors",
+                      "flex items-center justify-center gap-2 px-3 py-3 sm:py-2.5 rounded-xl text-sm font-bold transition-colors",
                       active
-                        ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
-                        : "bg-surface-container-highest text-on-surface hover:bg-surface-container-high",
+                        ? SELECTED_TINT
+                        : "state-layer bg-surface-container-highest text-on-surface",
                     )}
                   >
+                    <RadioDot checked={active} />
                     {preset.label}
                   </button>
                 );
@@ -800,7 +801,7 @@ const ApiTokensCard = () => {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="btn-primary shrink-0 px-4"
+            className="btn-primary shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Create token</span>
@@ -815,7 +816,7 @@ const ApiTokensCard = () => {
           the operator will read it.
         */}
         {legacyTokenConfigured && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 p-3">
+          <div className="flex items-start gap-2.5 rounded-xl bg-warning/10 p-3">
             <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <p className="text-xs text-on-surface text-pretty">
               This instance still uses the environment{" "}
@@ -882,9 +883,14 @@ export const AccountSettings = () => {
 
   if (!authRequired || !user) {
     return (
-      <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto pb-28 md:pb-10">
+      <div className={SETTINGS_PAGE}>
         <div className={cn(CARD, "p-6 space-y-2 text-center")}>
-          <span className="w-12 h-12 rounded-2xl bg-surface-container-high text-on-surface-variant flex items-center justify-center mx-auto">
+          <span
+            className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
+              TONE_WASH.neutral,
+            )}
+          >
             <UserRound className="w-6 h-6" />
           </span>
           <h2 className="font-bold text-on-surface">No account needed</h2>
@@ -900,7 +906,7 @@ export const AccountSettings = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
         <GroupHeading>Profile</GroupHeading>
         <div className="space-y-4">

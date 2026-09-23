@@ -10,9 +10,10 @@
  *
  * @module views/map/mapStyles
  */
-import { addProtocol } from "maplibre-gl";
+import { addProtocol, type ExpressionSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import type { MapStyleUrls } from "../../../shared/geo";
+import { hexToRgb, type Rgb } from "../../lib/color";
 
 export type { MapStyleUrls };
 
@@ -65,4 +66,48 @@ export function registerPmtilesProtocol(): void {
   const protocol = new Protocol();
   addProtocol("pmtiles", protocol.tilev4);
   pmtilesRegistered = true;
+}
+
+/**
+ * The heat layer's colour ramp, in the accent.
+ *
+ * MapLibre paints on a canvas and reads no CSS variable, so the map passes
+ * the computed values of `--color-primary` and `--color-primary-container`
+ * here. Density climbs from the pale container to the primary at full
+ * strength, so the ramp follows a picked accent and the dark palette the
+ * way every class does. It was one fixed blue in both palettes. Null when a
+ * value is not a hex colour, the form every token takes: the map then draws
+ * no heat rather than a colour of its own.
+ */
+export function heatRamp(
+  primary: string,
+  container: string,
+): ExpressionSpecification | null {
+  let ink: Rgb;
+  let pale: Rgb;
+  try {
+    ink = hexToRgb(primary);
+    pale = hexToRgb(container);
+  } catch {
+    return null;
+  }
+  const at = ({ r, g, b }: Rgb, alpha: number) =>
+    `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  return [
+    "interpolate",
+    ["linear"],
+    ["heatmap-density"],
+    0,
+    at(ink, 0),
+    0.2,
+    at(pale, 0.2),
+    0.4,
+    at(ink, 0.4),
+    0.6,
+    at(ink, 0.6),
+    0.8,
+    at(ink, 0.8),
+    1,
+    at(ink, 1),
+  ];
 }

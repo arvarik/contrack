@@ -87,7 +87,7 @@ export const ForgotPassword = ({
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-2.5 px-4 min-h-[44px] rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm flex items-center justify-center"
+            className="btn-secondary w-full"
           >
             Back to sign in
           </button>
@@ -120,7 +120,7 @@ export const ForgotPassword = ({
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-2.5 px-4 min-h-[44px] rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm flex items-center justify-center"
+            className="btn-secondary w-full"
           >
             Back to sign in
           </button>

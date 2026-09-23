@@ -19,7 +19,7 @@
 import { Download, FileJson, FileSpreadsheet, Contact } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { CARD } from "../../lib/styles";
+import { CARD, TONE_WASH } from "../../lib/styles";
 
 const FORMATS: {
   href: string;
@@ -54,7 +54,12 @@ export const ExportCard = ({ show = true }: { show?: boolean }) =>
   !show ? null : (
     <div className={cn(CARD, "p-4 sm:p-6")}>
       <div className="flex items-start gap-3.5">
-        <span className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10 text-primary">
+        <span
+          className={cn(
+            "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+            TONE_WASH.primary,
+          )}
+        >
           <Download className="w-[18px] h-[18px]" />
         </span>
         <div className="min-w-0">
@@ -74,11 +79,7 @@ export const ExportCard = ({ show = true }: { show?: boolean }) =>
             key={href}
             href={href}
             download
-            className={cn(
-              "flex flex-col gap-1.5 p-3 rounded-xl bg-surface-container-low",
-              "hover:bg-surface-container-high transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            )}
+            className="state-layer flex flex-col gap-1.5 p-3 rounded-xl bg-surface-container-low transition-colors"
           >
             <span className="flex items-center gap-2 font-bold text-sm text-on-surface">
               <Icon className="w-4 h-4 text-primary shrink-0" aria-hidden />

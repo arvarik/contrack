@@ -6,13 +6,15 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { ExportCard } from "../ExportCard";
+import { SETTINGS_PAGE } from "../layout";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { cn } from "../../../lib/utils";
 
 export const ExportPage = () => {
   const { isAdmin } = useAuth();
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           Take your contacts and interactions with you.

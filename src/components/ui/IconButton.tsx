@@ -16,6 +16,7 @@
  */
 import { forwardRef, ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/utils";
+import { SELECTED_TINT } from "../../lib/styles";
 
 type Tone = "ghost" | "subtle" | "primary" | "danger";
 type Size = "sm" | "md" | "lg";
@@ -31,13 +32,16 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
 }
 
+/**
+ * Every tone hovers with the one state layer (`.state-layer` in index.css).
+ * `primary` is a toggle that is on, such as the history pane's button while
+ * the pane is open: the selected tint, the way a selected pill looks.
+ */
 const toneClasses: Record<Tone, string> = {
-  ghost:
-    "text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest",
-  subtle:
-    "text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest",
-  primary: "text-on-primary-wash hover:bg-primary/10 active:bg-primary/20",
-  danger: "text-error hover:bg-error/10 active:bg-error/20",
+  ghost: "text-on-surface",
+  subtle: "text-on-surface-variant hover:text-on-surface",
+  primary: SELECTED_TINT,
+  danger: "text-error",
 };
 
 // Visible "padding-bubble" sizes. Each is paired with a guaranteed minimum
@@ -59,8 +63,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
           // Touch-safe baseline: 44px minimum hit area on every device.
           // The CSS variable -webkit-tap-highlight-color is killed because we
           // render our own active state.
-          "inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full transition-colors",
-          "outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+          "state-layer inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl transition-colors",
           "disabled:opacity-40 disabled:pointer-events-none",
           "[-webkit-tap-highlight-color:transparent]",
           sizeClasses[size],

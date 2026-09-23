@@ -128,7 +128,12 @@ test.describe("Pulse Office", () => {
     await expect(page.getByText("Task One Overdue")).toBeVisible();
     await expect(page.getByText("Task Two Today")).toBeVisible();
 
-    // Focus on body / page, press J to advance to item 2
+    // Focus on the page: the first J shows the current row, the second
+    // advances to item 2
+    await page.keyboard.press("j");
+    await expect(page.getByRole("listitem").first()).toHaveClass(
+      /row-selected/,
+    );
     await page.keyboard.press("j");
 
     const items = page.getByRole("listitem");
@@ -214,12 +219,20 @@ test.describe("Pulse Office", () => {
       masthead.getByRole("heading", { level: 1, name: "Pulse" }),
     ).toBeVisible();
 
-    // The date is the display line and the largest text on the page.
-    const dateSize = await masthead
-      .locator("p")
-      .first()
-      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    expect(dateSize).toBe(32);
+    // "Pulse" and the date share one line at the page title's size, 30 px
+    // in a wide header, the largest text on the page. The date is in the
+    // variant ink, so the page's name reads first.
+    const inkAndSize = (el: Element) => {
+      const style = getComputedStyle(el);
+      return { size: parseFloat(style.fontSize), color: style.color };
+    };
+    const title = await masthead
+      .getByRole("heading", { level: 1, name: "Pulse" })
+      .evaluate(inkAndSize);
+    const date = await masthead.locator("p").first().evaluate(inkAndSize);
+    expect(title.size).toBe(30);
+    expect(date.size).toBe(30);
+    expect(date.color).not.toBe(title.color);
     const largest = await page.evaluate(() => {
       let max = 0;
       for (const el of Array.from(document.body.querySelectorAll("*"))) {
@@ -230,14 +243,10 @@ test.describe("Pulse Office", () => {
       }
       return max;
     });
-    expect(largest).toBe(32);
+    expect(largest).toBe(30);
 
     await expect(masthead).toContainText(
       "1 overdue, 1 due today, 1 birthday this week.",
-    );
-    // Other specs in the worker may have completed a follow-up today.
-    await expect(masthead.getByRole("img")).toHaveAccessibleName(
-      /^(2 to do|\d+ of \d+ done)$/,
     );
 
     // Each count is a button that jumps to its card.
@@ -266,22 +275,38 @@ test.describe("Pulse Office", () => {
     const rows = page.getByRole("listitem");
     await expect(rows.first()).toContainText("Keyboard row one");
     await expect(rows.first()).toHaveAttribute("aria-current", "true");
+    // Current from the start, but nothing looks selected before the
+    // keyboard reaches the list.
+    await expect(rows.first()).not.toHaveClass(/row-selected/);
 
     // The highlighted row is the list's one tab stop. The control before
     // it in the page is the Keyboard tip in the card's header.
-    await page.getByRole("button", { name: "Keyboard", exact: true }).focus();
+    const tip = page.getByRole("button", { name: "Keyboard", exact: true });
+    await tip.focus();
     await page.keyboard.press("Tab");
     await expect(rows.first()).toBeFocused();
+    await expect(rows.first()).toHaveClass(/row-selected/);
 
     await page.keyboard.press("ArrowDown");
     await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
     await expect(rows.nth(1)).toBeFocused();
     await expect(rows.nth(1)).toContainText("Keyboard row two");
     await expect(rows.first()).not.toHaveAttribute("aria-current", "true");
+    await expect(rows.nth(1)).toHaveClass(/row-selected/);
+    await expect(rows.first()).not.toHaveClass(/row-selected/);
 
     await page.keyboard.press("ArrowUp");
     await expect(rows.first()).toHaveAttribute("aria-current", "true");
     await expect(rows.first()).toBeFocused();
+
+    // Focus that leaves the list takes the tint with it, and the row stays
+    // current. Tab comes back to it, the list's tab stop, and shows it.
+    await tip.focus();
+    await expect(rows.first()).not.toHaveClass(/row-selected/);
+    await expect(rows.first()).toHaveAttribute("aria-current", "true");
+    await page.keyboard.press("Tab");
+    await expect(rows.first()).toBeFocused();
+    await expect(rows.first()).toHaveClass(/row-selected/);
 
     // J from a focused row keeps focus on the rows too.
     await page.keyboard.press("j");
@@ -289,6 +314,62 @@ test.describe("Pulse Office", () => {
 
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/contact/${grace.id}$`));
+  });
+
+  test("Tab into another row makes it the current row, tinted and spoken, and a click outside the list takes the tint away", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    const grace = seed.byName("Grace Hopper");
+    await addActionItem(instance, ada.id, "Focus row one", daysFromNow(-5));
+    await addActionItem(instance, grace.id, "Focus row two", new Date());
+
+    await page.goto("/pulse");
+    const rows = page.getByRole("listitem");
+    await expect(rows.first()).toContainText("Focus row one");
+    await expect(rows.nth(1)).toContainText("Focus row two");
+
+    // Tab from the card's Keyboard tip onto the first row, then on through
+    // its controls into the second row. The controls stay in the order.
+    await page.getByRole("button", { name: "Keyboard", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(rows.first()).toBeFocused();
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press("Tab");
+      const inSecond = await rows
+        .nth(1)
+        .evaluate((row) => row.contains(document.activeElement));
+      if (inSecond) break;
+    }
+    await expect(
+      rows.nth(1).getByRole("button", { name: 'Mark "Focus row two" done' }),
+    ).toBeFocused();
+
+    // The row that focus is in is the current row, the one J and K move.
+    // It wears the tint, and the status says which row it is.
+    await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(rows.nth(1)).toHaveClass(/row-selected/);
+    await expect(rows.first()).not.toHaveClass(/row-selected/);
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: /^Row 2 of \d+, Grace Hopper/ }),
+    ).toHaveCount(1);
+
+    // A click outside the list takes the tint away. The row stays current.
+    const title = page.getByRole("heading", { level: 1, name: "Pulse" });
+    await title.click();
+    await expect(page.locator('[role="listitem"].row-selected')).toHaveCount(0);
+    await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
+
+    // A bare J with focus outside the list shows the current row, and a
+    // click elsewhere takes the tint away again.
+    await page.keyboard.press("j");
+    await expect(page.locator('[role="listitem"].row-selected')).toHaveCount(1);
+    await title.click();
+    await expect(page.locator('[role="listitem"].row-selected')).toHaveCount(0);
   });
 
   test("the queue scrolls inside its card at 1440, and the group heading stays put", async ({
@@ -423,7 +504,7 @@ test.describe("Pulse Office", () => {
     );
     const backLink = page
       .getByRole("main")
-      .getByRole("link", { name: "Pulse" });
+      .getByRole("link", { name: "Back to Pulse" });
     await expect(backLink).toBeVisible();
 
     // Click back link to return to Pulse
@@ -676,8 +757,21 @@ test.describe("Pulse Office", () => {
     await page.goto("/pulse");
     await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
 
+    // Every card keeps its place and its height when the controls appear.
+    // A card's header keeps its 24 px row, and a line keeps its words'
+    // place with the controls over the end of its title's row.
+    const boxes = () =>
+      page.locator("section[data-card-id]").evaluateAll((sections) =>
+        sections.map((section) => {
+          const box = section.getBoundingClientRect();
+          return `${section.getAttribute("data-card-id")} ${Math.round(box.top)} ${Math.round(box.height)}`;
+        }),
+      );
+    const atRest = await boxes();
+
     // Customize from the More menu
     await openCustomize(page);
+    expect(await boxes()).toEqual(atRest);
 
     // The tray waits for a hidden card.
     await expect(page.getByTestId("hidden-cards-tray")).toHaveCount(0);
@@ -915,10 +1009,19 @@ test.describe("Pulse on a phone", () => {
       innerWidth: window.innerWidth,
     }));
     expect(page_.scrollWidth).toBe(page_.innerWidth);
-    const headerOverflow = await masthead.evaluate(
-      (el) => el.scrollWidth - el.clientWidth,
-    );
-    expect(headerOverflow).toBe(0);
+    // No box in the masthead runs past its right edge. `scrollWidth` would
+    // also count the More button's 44 px tap box (`hit-area`, a pseudo
+    // element 4 px wider than its face), which draws nothing.
+    const headerOverflow = await masthead.evaluate((el) => {
+      const right = el.getBoundingClientRect().right;
+      return Math.max(
+        0,
+        ...Array.from(el.querySelectorAll("*")).map(
+          (child) => child.getBoundingClientRect().right - right,
+        ),
+      );
+    });
+    expect(headerOverflow).toBeLessThanOrEqual(0.5);
 
     // The masthead stays under 180 px before the first card.
     const distance = await page.evaluate(() => {
@@ -933,15 +1036,18 @@ test.describe("Pulse on a phone", () => {
     });
     expect(distance).toBeLessThan(180);
 
-    // The date is 24 px on a phone, and the sentence is plain text.
-    const dateSize = await masthead
-      .locator("p")
-      .first()
-      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    expect(dateSize).toBe(24);
+    // The title and the date are 24 px on a phone, and the sentence is
+    // plain text.
+    const fontSize = (el: Element) => parseFloat(getComputedStyle(el).fontSize);
+    expect(
+      await masthead
+        .getByRole("heading", { level: 1, name: "Pulse" })
+        .evaluate(fontSize),
+    ).toBe(24);
+    expect(await masthead.locator("p").first().evaluate(fontSize)).toBe(24);
     await expect(masthead.locator("p").getByRole("button")).toHaveCount(0);
     await expect(
-      masthead.getByRole("button", { name: "Log a note" }),
+      masthead.getByRole("button", { name: "Log note" }),
     ).toBeVisible();
     await expect(masthead.getByRole("button", { name: "More" })).toBeVisible();
 

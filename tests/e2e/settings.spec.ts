@@ -6,7 +6,7 @@
  * - Tab sequence walking the rail in order
  * - SettingRow search, keyboard selection, deep link navigation, flash and focus
  * - Modified indicator dot and reset preference button
- * - Phone single-pane view and back button behavior
+ * - Phone single-pane view and back link behavior
  * - Redirection aliases for moved settings paths
  * - Accessibility scans for the revamped settings pages
  */
@@ -31,9 +31,12 @@ test.describe("Settings — Desktop", () => {
     expect(box).not.toBeNull();
     expect(Math.abs(box!.width - 240)).toBeLessThan(2);
 
-    // On wide screens, the back button points to "/" with label "Back to Network"
-    const backBtn = page.getByRole("button", { name: "Back to Network" });
-    await expect(backBtn).toBeVisible();
+    // On wide screens, the header's back link goes to "/" and is named
+    // "Back to Network", so it is not a second bare "Network" beside the
+    // sidebar's.
+    const backLink = page.getByRole("link", { name: "Back to Network" });
+    await expect(backLink).toBeVisible();
+    await expect(backLink).toHaveAttribute("href", "/");
 
     // Clicking Appearance navigates and marks aria-current="page"
     const appearanceLink = rail.getByRole("link", { name: "Appearance" });
@@ -153,7 +156,7 @@ test.describe("Settings — Desktop", () => {
 test.describe("Settings — Phone", () => {
   test.use({ ...PHONE });
 
-  test("renders list on phone, opens page with back button, back returns to list", async ({
+  test("renders list on phone, opens page with back link, back returns to list", async ({
     page,
   }) => {
     await page.goto("/settings");
@@ -163,9 +166,9 @@ test.describe("Settings — Phone", () => {
       page.getByRole("heading", { name: "Settings", level: 1 }),
     ).toBeVisible();
 
-    // Finding A14: On phone landing page, Back button is omitted
-    const backBtn = page.getByRole("button", { name: /^Back to/ });
-    await expect(backBtn).toBeHidden();
+    // Finding A14: On phone landing page, no back control of any kind
+    await expect(page.getByRole("link", { name: /^Back to/ })).toBeHidden();
+    await expect(page.getByRole("button", { name: /^Back to/ })).toBeHidden();
 
     // Group items are listed as clickable links
     const appearanceLink = page
@@ -177,11 +180,11 @@ test.describe("Settings — Phone", () => {
     // Navigated to /settings/appearance
     await expect(page).toHaveURL(/\/settings\/appearance/);
 
-    // On subpages, Back button is visible and labeled "Back to Settings"
-    const subpageBack = page.getByRole("button", { name: "Back to Settings" });
+    // On subpages, the back link is visible and labeled "Back to Settings"
+    const subpageBack = page.getByRole("link", { name: "Back to Settings" });
     await expect(subpageBack).toBeVisible();
 
-    // Click Back to Settings
+    // Follow it back to the list
     await subpageBack.click();
     await expect(page).toHaveURL(/\/settings$/);
   });
@@ -248,7 +251,7 @@ test.describe("Settings — Personal preferences", () => {
   test("single-key shortcuts toggle turns window-level shortcuts off and on", async ({
     page,
   }) => {
-    // 1. With single-key shortcuts on (default), pressing 'n' on '/' opens New Contact modal
+    // 1. With single-key shortcuts on (default), pressing 'n' on '/' opens the New contact modal
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace").first()).toBeVisible();
     await page.evaluate(() =>
@@ -256,7 +259,7 @@ test.describe("Settings — Personal preferences", () => {
     );
 
     await page.keyboard.press("n");
-    const dialog = page.getByRole("dialog", { name: "New Contact" });
+    const dialog = page.getByRole("dialog", { name: "New contact" });
     await expect(dialog).toBeVisible();
 
     // Close dialog
@@ -323,7 +326,7 @@ test.describe("Settings — Tools and Data", () => {
     });
 
     // Verify import completes
-    await expect(page.getByText("Import Complete")).toBeVisible({
+    await expect(page.getByText("Import complete")).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByText("1 contacts processed")).toBeVisible();
@@ -469,10 +472,11 @@ test.describe("Tracked contacts", () => {
     await expect(
       page.locator("[data-contact-id]", { hasText: "Linus Torvalds" }),
     ).not.toContainText("every");
-    // The sidebar keeps Network lit: this is a Network sub-page.
+    // The sidebar keeps Network lit: this is a Network sub-page. A selected
+    // nav item wears the selected tint (`SELECTED_TINT`).
     await expect(
       page.locator("aside").getByRole("link", { name: "Network" }),
-    ).toHaveClass(/bg-primary\/15/);
+    ).toHaveClass(/(?:^|\s)bg-primary\/10(?:\s|$)/);
     await expect(
       page.getByRole("link", { name: "Ada Lovelace" }),
     ).toHaveAttribute("href", `/contact/${seed.byName("Ada Lovelace").id}`);

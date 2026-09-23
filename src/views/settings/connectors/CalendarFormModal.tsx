@@ -22,6 +22,8 @@ import type {
   ConnectorDetail,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 interface CalendarFormModalProps {
   isOpen: boolean;
@@ -167,7 +169,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Edit ${connector?.name}` : "Connect Calendar"}
+      title={isEditing ? `Edit ${connector?.name}` : "Connect calendar"}
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -184,7 +186,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
         {formError && (
           <div
             role="alert"
-            className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-error"
+            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
           >
             {formError}
           </div>
@@ -204,8 +206,8 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Work Calendar, Personal iCloud"
-            className="w-full rounded-xl bg-surface-container px-3 py-2 text-sm text-on-surface border border-surface-container-high/60 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+            placeholder="e.g. Work calendar, Personal iCloud"
+            className={FORM_INPUT}
           />
         </div>
 
@@ -215,7 +217,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             htmlFor="connector-ics-url"
             className="block text-xs font-semibold text-on-surface mb-1"
           >
-            Private ICS Calendar URL
+            Private ICS calendar URL
           </label>
           <div className="relative">
             <input
@@ -225,13 +227,13 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-              className="w-full rounded-xl bg-surface-container pl-3 pr-11 py-2 text-sm text-on-surface border border-surface-container-high/60 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] font-mono text-xs"
+              className={cn(FORM_INPUT, "pr-11 font-mono")}
             />
             <button
               type="button"
               onClick={() => setShowUrl(!showUrl)}
               aria-label={showUrl ? "Hide URL" : "Show URL"}
-              className="hit-area absolute right-1 top-1/2 -translate-y-1/2 p-2 text-on-surface-variant hover:text-on-surface focus:outline-none"
+              className="hit-area state-layer absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
             >
               {showUrl ? (
                 <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -302,7 +304,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
                     Math.max(1, parseInt(e.target.value, 10) || 25),
                   )
                 }
-                className="w-24 rounded-xl bg-surface-container px-3 py-2 text-sm text-on-surface border border-surface-container-high/60 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                className={cn(FORM_INPUT, "w-24")}
               />
               <span className="text-xs text-on-surface-variant">attendees</span>
             </div>
@@ -330,7 +332,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
                     ),
                   )
                 }
-                className="w-24 rounded-xl bg-surface-container px-3 py-2 text-sm text-on-surface border border-surface-container-high/60 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                className={cn(FORM_INPUT, "w-24")}
               />
               <span className="text-xs text-on-surface-variant">
                 interactions
@@ -360,11 +362,10 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
         {testResult && (
           <div
             role="status"
-            className={`rounded-lg p-3 text-xs border ${
-              testResult.ok
-                ? "bg-emerald-500/10 border-emerald-500/20 text-success"
-                : "bg-red-500/10 border-red-500/20 text-error"
-            }`}
+            className={cn(
+              "rounded-lg p-3 text-xs",
+              TONE_WASH[testResult.ok ? "success" : "error"],
+            )}
           >
             {testResult.message}
           </div>
@@ -376,7 +377,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             type="button"
             onClick={handleTest}
             disabled={testConnector.isPending || isSaving}
-            className="hit-area inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] disabled:opacity-50"
+            className="btn-secondary"
           >
             {testConnector.isPending ? (
               <>
@@ -392,18 +393,10 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="hit-area px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors min-h-[44px]"
-            >
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="hit-area inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] disabled:opacity-50"
-            >
+            <button type="submit" disabled={isSaving} className="btn-primary">
               {isSaving ? (
                 <>
                   <Loader2

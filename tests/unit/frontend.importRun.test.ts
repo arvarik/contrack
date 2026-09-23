@@ -91,7 +91,7 @@ describe("readImportStream", () => {
     s.end();
 
     // This is the case the old reader got wrong: it returned a count of
-    // zero here and the modal showed "Import Complete" over it.
+    // zero here and the modal showed "Import complete" over it.
     expect(await reading).toEqual({ kind: "interrupted", importId: "imp-2" });
   });
 

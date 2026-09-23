@@ -36,9 +36,6 @@ export interface SwitchProps {
   className?: string;
 }
 
-/** The standard curve: fast out, settles gently. */
-const EASE = "duration-200 ease-[cubic-bezier(0.2,0,0,1)]";
-
 export const Switch = ({
   checked,
   onChange,
@@ -58,8 +55,6 @@ export const Switch = ({
     className={cn(
       "hit-area group shrink-0 inline-flex items-center w-11 h-6 rounded-full cursor-pointer",
       "transition-colors",
-      EASE,
-      "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
       "disabled:opacity-50 disabled:cursor-not-allowed",
       checked
         ? "bg-primary"
@@ -71,8 +66,8 @@ export const Switch = ({
       aria-hidden="true"
       className={cn(
         "flex items-center justify-center rounded-full",
+        // The app's curve and base duration (index.css, "Motion").
         "transition-[transform,width,height,background-color]",
-        EASE,
         "group-active:scale-110 group-disabled:scale-100",
         checked
           ? "w-5 h-5 translate-x-[22px] bg-on-primary text-primary"
@@ -82,7 +77,7 @@ export const Switch = ({
       <Check
         strokeWidth={3}
         className={cn(
-          "w-3 h-3 transition-opacity duration-150",
+          "w-3 h-3 transition-opacity",
           checked ? "opacity-100" : "opacity-0",
         )}
       />

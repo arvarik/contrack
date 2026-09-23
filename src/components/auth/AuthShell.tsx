@@ -21,6 +21,7 @@ import React, {
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { TONE_WASH } from "../../lib/styles";
 import { CorvidMark } from "../brand/CorvidMark";
 import { playCorvidBeat } from "../../hooks/useCorvidIdle";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
@@ -114,7 +115,12 @@ export const AuthShell = ({
             absent when nobody has named the instance, which is the default.
           */}
             {icon ? (
-              <span className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto">
+              <span
+                className={cn(
+                  "w-14 h-14 rounded-2xl flex items-center justify-center mx-auto",
+                  TONE_WASH.primary,
+                )}
+              >
                 {icon}
               </span>
             ) : (
@@ -160,7 +166,7 @@ const InstanceName = () => {
   const { instanceName } = useAuth();
   if (!instanceName) return null;
   return (
-    <p className="text-xs font-bold uppercase tracking-widest text-primary text-balance">
+    <p className="text-xs font-bold uppercase tracking-[0.08em] text-primary text-balance">
       {instanceName}
     </p>
   );
@@ -269,7 +275,6 @@ export const AuthField = React.forwardRef<HTMLInputElement, AuthFieldProps>(
               revealable && "pr-12",
               // 16px on mobile: anything less and iOS Safari zooms on focus.
               "text-base sm:text-sm",
-              "outline-none focus-visible:ring-2 focus-visible:ring-primary",
               error && "ring-2 ring-error",
             )}
             {...props}
@@ -280,7 +285,7 @@ export const AuthField = React.forwardRef<HTMLInputElement, AuthFieldProps>(
               onClick={() => setRevealed((prev) => !prev)}
               aria-label={revealed ? "Hide password" : "Show password"}
               aria-pressed={revealed}
-              className="absolute right-0 top-0 bottom-0 w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:text-primary transition-colors cursor-pointer"
+              className="state-layer absolute right-0 top-0 bottom-0 w-11 h-11 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
             >
               {revealed ? (
                 <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -327,12 +332,7 @@ export const AuthSubmit = ({
   <button
     type="submit"
     disabled={disabled || busy}
-    className={cn(
-      "w-full bg-primary text-on-primary font-bold py-3 rounded-xl",
-      "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
-      "disabled:bg-surface-container-high disabled:text-on-surface-variant",
-      "disabled:cursor-not-allowed disabled:hover:opacity-100",
-    )}
+    className="btn-primary w-full"
   >
     {children}
   </button>

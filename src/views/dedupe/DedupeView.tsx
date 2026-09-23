@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { isTypingTarget } from "../../lib/keyboard";
-import { Link } from "react-router-dom";
 import {
   CheckCircle2,
   Sparkles,
@@ -24,9 +23,21 @@ import {
 } from "lucide-react";
 import { useMergeCluster } from "../../api";
 import type { DedupeScanMode } from "../../types";
+import { MODE_NAME, runsAiPass, stepStatus } from "./utils/scanPhases";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
-import { EMPTY_HERO, TAB_CONTAINER, tabItem } from "../../lib/styles";
+import {
+  CARD,
+  CARD_INTERACTIVE,
+  EMPTY_HERO,
+  ICON_BTN,
+  PAGE_X,
+  SELECTED_ROW,
+  TAB_CONTAINER,
+  TONE_WASH,
+  tabItem,
+} from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import {
   ClusterSwipeCard,
@@ -40,7 +51,7 @@ import { NAMES } from "../../lib/names";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { CorvidMark } from "../../components/brand/CorvidMark";
 import { Segmented } from "../../components/ui/Segmented";
-import { ActionMenu } from "../../components/ui/ActionMenu";
+import { RadioDot } from "../../components/ui/RadioDot";
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -49,13 +60,22 @@ import { ActionMenu } from "../../components/ui/ActionMenu";
 type DedupeTab = "auto" | "manual";
 type ResultView = "swipe" | "list";
 
-export const DedupeView = ({
-  embedded = false,
-  hideBackLink = false,
-}: {
-  embedded?: boolean;
-  hideBackLink?: boolean;
-}) => {
+/** "Merge activity": a quiet button that opens the activity panel. */
+const ACTIVITY_BUTTON =
+  "hit-area state-layer hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low rounded-xl transition-colors shrink-0";
+
+/** The previous and next arrows over the swipe card. */
+const STEP_BUTTON =
+  "hit-area state-layer p-1.5 rounded-lg transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed";
+
+/**
+ * The Duplicates page's body. It always renders inside the Settings shell,
+ * which draws the page's header and, below `sm`, its Merge activity menu.
+ * The page sets its width (`DuplicatesPage`'s column) and each row here adds
+ * the gutters, so the content fills that column and shares the settings
+ * card's left edge. A narrower cap here would start it off that edge.
+ */
+export const DedupeView = () => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
   const [resultView, setResultView] = useState<ResultView>("swipe");
   const [selectedMode, setSelectedMode] = useState<DedupeScanMode>("deep");
@@ -256,72 +276,31 @@ export const DedupeView = ({
     {
       mode: "quick",
       icon: <Shield className="w-5 h-5 text-success" />,
-      title: "Quick Scan",
+      title: "Quick scan",
       desc: "Finds contacts with the same email, phone, or name.",
     },
     {
       mode: "deep",
       icon: <Sparkles className="w-5 h-5 text-primary" />,
-      title: "Smart Scan",
+      title: "Smart scan",
       desc: "Uses AI to catch duplicates that aren\u2019t obvious.",
     },
     {
       mode: "full",
       icon: <Zap className="w-5 h-5 text-warning" />,
-      title: "Full Scan",
+      title: "Full scan",
       desc: "Reanalyzes your entire network from scratch.",
     },
   ];
 
   return (
-    <div
-      className={cn(
-        "flex flex-col overflow-hidden bg-surface",
-        embedded ? "h-full" : "h-full",
-      )}
-    >
-      {/* Title row (when parent shell does not render back link) */}
-      {!hideBackLink && (
-        <div className="shrink-0 p-4 pb-0 bg-surface flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/settings"
-              className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
-              aria-label="Back to Settings"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Link>
-            <h2 className="text-xl font-headline font-bold text-on-surface">
-              {NAMES.duplicates.label}
-            </h2>
-          </div>
-
-          {/* Merge Activity: button from sm, ActionMenu below sm */}
-          <button
-            onClick={() => setShowActivity(true)}
-            className="hit-area hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
-          >
-            <History className="w-4 h-4" />
-            Merge Activity
-          </button>
-          <div className="sm:hidden shrink-0">
-            <ActionMenu
-              label="Duplicates actions"
-              items={[
-                {
-                  id: "merge-activity",
-                  label: "Merge activity",
-                  icon: History,
-                  onSelect: () => setShowActivity(true),
-                },
-              ]}
-            />
-          </div>
-        </div>
-      )}
-
+    // The settings page is the one scroller at every width, so the tool
+    // takes its own height and clips only sideways (for the tabs' slide).
+    // A clip on both axes would stop a sticky control inside it, Compare in
+    // the manual tab, from sticking to the screen.
+    <div className="flex flex-col overflow-x-clip bg-surface">
       {/* Segmented Mode Selector */}
-      <div className="shrink-0 p-4 pb-0 bg-surface">
+      <div className={cn("shrink-0 pt-4 bg-surface", PAGE_X)}>
         <div className="flex items-center justify-between gap-3">
           <Segmented
             label="Dedupe mode"
@@ -334,15 +313,19 @@ export const DedupeView = ({
             className="w-full sm:w-auto"
           />
 
-          {hideBackLink && (
-            <button
-              onClick={() => setShowActivity(true)}
-              className="hit-area hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
-            >
-              <History className="w-4 h-4" />
-              Merge Activity
-            </button>
-          )}
+          {/*
+            The Settings shell draws the header and puts Merge activity in
+            its menu below sm. From sm up this button is the one control, so
+            every width has one.
+          */}
+          <button
+            type="button"
+            onClick={() => setShowActivity(true)}
+            className={ACTIVITY_BUTTON}
+          >
+            <History className="w-4 h-4" />
+            Merge activity
+          </button>
         </div>
       </div>
 
@@ -354,11 +337,11 @@ export const DedupeView = ({
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
-            className="flex-1 flex flex-col overflow-hidden min-h-0"
+            className="flex flex-col"
           >
             {/* Results header (swipe view) */}
             {hasResults && resultView === "swipe" && totalActive > 0 && (
-              <div className="shrink-0 px-6 pt-4">
+              <div className={cn("shrink-0 pt-4", PAGE_X)}>
                 {/* Stats bar */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-4">
@@ -386,7 +369,7 @@ export const DedupeView = ({
                     {dismissHistory.length > 0 && (
                       <button
                         onClick={handleUndoDismiss}
-                        className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-low hover:bg-primary/10 rounded-lg transition-all"
+                        className="hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg transition-colors"
                         title="Undo last dismiss (⌘Z)"
                       >
                         <Undo2 className="w-3.5 h-3.5" />
@@ -397,7 +380,7 @@ export const DedupeView = ({
                       onClick={goPrev}
                       disabled={currentIndex === 0}
                       aria-label="Previous group"
-                      className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      className={STEP_BUTTON}
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -405,7 +388,7 @@ export const DedupeView = ({
                       onClick={goNext}
                       disabled={currentIndex >= totalActive - 1}
                       aria-label="Next group"
-                      className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      className={STEP_BUTTON}
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -428,7 +411,12 @@ export const DedupeView = ({
 
             {/* Results view switcher */}
             {hasResults && (
-              <div className="shrink-0 px-6 pt-3 flex items-center justify-between">
+              <div
+                className={cn(
+                  "shrink-0 pt-3 flex items-center justify-between",
+                  PAGE_X,
+                )}
+              >
                 <div className={cn(TAB_CONTAINER, "w-fit")}>
                   <button
                     onClick={() => setResultView("swipe")}
@@ -454,22 +442,21 @@ export const DedupeView = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleNewScan}
-                    className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-lg transition-colors"
+                    className="btn-secondary btn-sm"
                   >
                     <ScanSearch className="w-3.5 h-3.5" />
-                    New Scan
+                    New scan
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6 pb-24 lg:pb-6">
+            {/* Body. The page scrolls it. The bottom padding clears the
+                phone tab bar below md. */}
+            <div className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}>
               {/* ═══ Phase 1: Pre-scan — mode selector ═══ */}
               {preScan && (
-                <div
-                  className={cn(EMPTY_HERO, "h-auto min-h-full py-4 max-w-3xl")}
-                >
+                <div className={cn(EMPTY_HERO, "h-auto py-4 max-w-none")}>
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -485,35 +472,27 @@ export const DedupeView = ({
                     Clean your network by merging duplicate contacts
                   </p>
 
-                  {/* Scan mode selector */}
-                  <div className="w-full max-w-3xl mx-auto space-y-2 mb-8">
+                  {/*
+                    Scan mode selector. Each mode is a card that is a
+                    control. The chosen one is the selected row, which mixes
+                    its tint onto the card's white face and keeps the card's
+                    shadow, and it wears a filled `RadioDot`, so it is chosen
+                    by shape as well as by hue.
+                  */}
+                  <div className="w-full space-y-2 mb-8">
                     {scanModes.map(({ mode, icon, title, desc }) => (
                       <button
                         key={mode}
+                        type="button"
+                        aria-pressed={selectedMode === mode}
                         onClick={() => setSelectedMode(mode)}
                         className={cn(
-                          "w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all",
-                          selectedMode === mode
-                            ? "bg-primary/8 ring-2 ring-primary/40 shadow-sm"
-                            : "bg-surface-container-lowest shadow-sm hover:bg-surface-container-low",
+                          CARD_INTERACTIVE,
+                          "w-full flex items-center gap-4 p-4 text-left",
+                          selectedMode === mode && SELECTED_ROW,
                         )}
                       >
-                        <div
-                          className={cn(
-                            "w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all",
-                            selectedMode === mode
-                              ? "bg-primary"
-                              : "bg-surface-container-high",
-                          )}
-                        >
-                          {selectedMode === mode && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="w-2 h-2 bg-white rounded-full"
-                            />
-                          )}
-                        </div>
+                        <RadioDot checked={selectedMode === mode} />
                         <div
                           className={cn(
                             "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
@@ -539,14 +518,14 @@ export const DedupeView = ({
                   <button
                     onClick={handleStartScan}
                     disabled={isStarting}
-                    className="btn-primary px-8"
+                    className="btn-primary"
                   >
                     {isStarting ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <ScanSearch className="w-5 h-5" />
                     )}
-                    Begin Scan
+                    Begin scan
                   </button>
                 </div>
               )}
@@ -559,14 +538,19 @@ export const DedupeView = ({
                 somebody else is scanning, and this one starts by itself.
               */}
               {isQueued && !scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="w-full max-w-md"
                   >
-                    <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-6 text-center space-y-3">
-                      <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                    <div className={cn(CARD, "text-center space-y-3")}>
+                      <span
+                        className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
+                          TONE_WASH.primary,
+                        )}
+                      >
                         <Hourglass className="w-6 h-6" />
                       </span>
                       <h3 className="font-bold text-on-surface">
@@ -587,13 +571,13 @@ export const DedupeView = ({
 
               {/* ═══ Phase 2: Scanning — progress card ═══ */}
               {isScanning && scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="w-full max-w-md"
                   >
-                    <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+                    <div className={cn(CARD, "p-0 overflow-hidden")}>
                       {/* Header */}
                       <div className="px-5 py-4 bg-surface-container-low flex items-center gap-3">
                         <motion.div
@@ -608,10 +592,10 @@ export const DedupeView = ({
                         </motion.div>
                         <div className="flex-1">
                           <div className="text-sm font-bold text-on-surface">
-                            Dedupe Scan
+                            Dedupe scan
                           </div>
-                          <div className="text-[11px] text-on-surface-variant capitalize">
-                            {scan.mode} mode
+                          <div className="text-[11px] text-on-surface-variant">
+                            {MODE_NAME[scan.mode] ?? scan.mode} mode
                           </div>
                         </div>
                         <span className="text-xs text-on-surface-variant tabular-nums">
@@ -629,7 +613,7 @@ export const DedupeView = ({
                                 ? `${(scan.contactsScanned / scan.totalContacts) * 100}%`
                                 : "0%",
                           }}
-                          transition={{ duration: 0.4, ease: "easeOut" }}
+                          transition={{ duration: DURATION.slow, ease: EASE }}
                         />
                       </div>
 
@@ -645,37 +629,29 @@ export const DedupeView = ({
 
                         {/* Phase pipeline */}
                         <div className="space-y-2">
-                          {(scan.mode === "deterministic" ||
-                            scan.mode === "both") && (
-                            <PhaseRow
-                              icon={<Shield className="w-3.5 h-3.5" />}
-                              label="Deterministic Pass"
-                              status={
-                                scan.phase === "starting"
-                                  ? "pending"
-                                  : scan.phase === "deterministic"
-                                    ? "active"
-                                    : "done"
-                              }
-                              detail={
-                                scan.deterministicFound > 0
-                                  ? `${scan.deterministicFound} found`
-                                  : undefined
-                              }
-                            />
-                          )}
-                          {(scan.mode === "ai" || scan.mode === "both") && (
+                          {/* Every mode runs the exact-match pass. The
+                              rows used to test the old mode names only
+                              (deterministic, ai, both), so the three modes
+                              the picker offers showed neither row. */}
+                          <PhaseRow
+                            icon={<Shield className="w-3.5 h-3.5" />}
+                            label="Exact matches"
+                            status={stepStatus(
+                              scan.phase,
+                              "deterministic",
+                              "deterministic",
+                            )}
+                            detail={
+                              scan.deterministicFound > 0
+                                ? `${scan.deterministicFound} found`
+                                : undefined
+                            }
+                          />
+                          {runsAiPass(scan.mode) && (
                             <PhaseRow
                               icon={<Sparkles className="w-3.5 h-3.5" />}
-                              label="AI Analysis"
-                              status={
-                                scan.phase === "starting" ||
-                                scan.phase === "deterministic"
-                                  ? "pending"
-                                  : scan.phase === "ai"
-                                    ? "active"
-                                    : "done"
-                              }
+                              label="AI analysis"
+                              status={stepStatus(scan.phase, "blocking", "ai")}
                               detail={
                                 scan.aiCandidatesFound > 0
                                   ? `${scan.aiCandidatesFound} found`
@@ -685,14 +661,12 @@ export const DedupeView = ({
                           )}
                           <PhaseRow
                             icon={<GitMerge className="w-3.5 h-3.5" />}
-                            label="Cluster Grouping"
-                            status={
-                              scan.phase === "clustering"
-                                ? "active"
-                                : scan.phase === "complete"
-                                  ? "done"
-                                  : "pending"
-                            }
+                            label="Cluster grouping"
+                            status={stepStatus(
+                              scan.phase,
+                              "clustering",
+                              "clustering",
+                            )}
                             detail={
                               scan.clustersFound > 0
                                 ? `${scan.clustersFound} cluster${scan.clustersFound !== 1 ? "s" : ""}`
@@ -735,7 +709,7 @@ export const DedupeView = ({
 
               {/* ═══ Phase 3: Scan error ═══ */}
               {scanError && scan && (
-                <div className="flex flex-col items-center justify-center h-full">
+                <div className="flex flex-col items-center">
                   <AlertCircle className="w-12 h-12 text-error mb-4" />
                   <p className="text-error font-bold">Scan failed</p>
                   <p className="text-sm text-on-surface-variant mt-1">
@@ -745,7 +719,7 @@ export const DedupeView = ({
                     onClick={handleNewScan}
                     className="mt-4 btn-secondary"
                   >
-                    Try Again
+                    Try again
                   </button>
                 </div>
               )}
@@ -755,7 +729,7 @@ export const DedupeView = ({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center h-full"
+                  className="flex flex-col items-center"
                 >
                   <EmptyState
                     icon={CheckCircle2}
@@ -778,7 +752,7 @@ export const DedupeView = ({
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="flex flex-col items-center justify-center h-full"
+                      className="flex flex-col items-center"
                     >
                       <EmptyState
                         /*
@@ -818,30 +792,26 @@ export const DedupeView = ({
 
                   {/* Active swipe card */}
                   {currentCluster && (
-                    <div className="max-w-3xl mx-auto">
-                      <AnimatePresence mode="wait">
-                        <ClusterSwipeCard
-                          key={currentCluster.id}
-                          cluster={currentCluster}
-                          onMerge={handleClusterMerge}
-                          onDismiss={handleDismiss}
-                          isMerging={mergeCluster.isPending}
-                          hasNext={currentIndex < totalActive - 1}
-                        />
-                      </AnimatePresence>
-                    </div>
+                    <AnimatePresence mode="wait">
+                      <ClusterSwipeCard
+                        key={currentCluster.id}
+                        cluster={currentCluster}
+                        onMerge={handleClusterMerge}
+                        onDismiss={handleDismiss}
+                        isMerging={mergeCluster.isPending}
+                        hasNext={currentIndex < totalActive - 1}
+                      />
+                    </AnimatePresence>
                   )}
                 </>
               )}
 
               {/* ═══ Phase 3: Results — List view ═══ */}
               {hasResults && resultView === "list" && (
-                <div className="max-w-3xl mx-auto">
-                  <ClusterList
-                    clusters={clusters}
-                    onRemoveCluster={removeCluster}
-                  />
-                </div>
+                <ClusterList
+                  clusters={clusters}
+                  onRemoveCluster={removeCluster}
+                />
               )}
             </div>
           </motion.div>
@@ -851,14 +821,16 @@ export const DedupeView = ({
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 10 }}
-            className="flex-1 overflow-hidden p-6 min-h-0"
+            // The bottom padding clears the phone tab bar, like the auto
+            // tab's body, so the last contact and Compare scroll above it.
+            className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}
           >
             <ManualMerge />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Merge Activity Slide-out Panel */}
+      {/* Merge activity slide-out panel */}
       <AnimatePresence>
         {showActivity && (
           <>
@@ -882,13 +854,13 @@ export const DedupeView = ({
                 <div className="flex items-center gap-2">
                   <History className="w-5 h-5 text-on-surface-variant" />
                   <h2 className="text-lg font-headline font-bold">
-                    Merge Activity
+                    Merge activity
                   </h2>
                 </div>
                 <button
                   onClick={() => setShowActivity(false)}
                   aria-label="Close merge activity"
-                  className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors"
+                  className={ICON_BTN}
                 >
                   <X className="w-5 h-5" />
                 </button>

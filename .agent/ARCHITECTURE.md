@@ -11,7 +11,7 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 ## 1. Tech Stack & Infrastructure
 
 - **Language / Runtime**: TypeScript ~5.8 / Node.js 22+
-- **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and MapLibre GL JS via `react-map-gl/maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
+- **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
 - **Backend / API**: Express 4 running natively via `tsx`. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
 - **AI Provider**: Capability-routed multi-provider — Google Gemini via `@google/genai`, OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`, plus a generic OpenAI-compatible adapter for self-hosted servers. Providers are resolved per capability at call time (see `capabilities.ts`), not fixed at startup; `AI_PROVIDER` is now only the Auto-mode preference. Local embeddings via `@huggingface/transformers` (Transformers.js).
@@ -237,7 +237,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
-  - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
+  - `server/services/geocoding/` — Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
 - `server/mcp/` — Model Context Protocol (MCP) server subsystem:
   - `server.ts` — Per-request `McpServer` factory bound to caller's `Scope`
@@ -264,7 +264,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`BACKUP_INTERVAL_HOURS`/`BACKUP_KEEP`).
 - `src/components/auth/` - `AuthGate` routes between setup wizard, sign-in, passkey-nudge, password reset, magic link landing, and the app, publishing the current account through `useAuth`. Tokens in query parameters are extracted and stripped with `takeUrlSecret`. `ForgotPassword` supports both mail-enabled link requests and no-mail guidance. `ResetPassword` and `MagicLinkLanding` handle token redemption. Listens for `AUTH_EXPIRED_EVENT` (dispatched by `src/api/client.ts` on any 401) so an expired session returns to sign-in instead of a wall of error toasts. `PasskeyButton` offers biometric/hardware login. `PasskeyNudge` offers first-run passkey enrollment. `PasskeysCard` manages credentials in Account settings.
 - `server/services/lifecycleSettings.ts` - Instance lifecycle configuration (`trashRetentionDays`, `backupIntervalHours`, `backupKeep`) with setting > env > default hierarchy, change listeners, and env override detection.
-- `server/services/integrationSettings.ts` - Third-party service integration settings (`mapboxKey` sealed via `secretBox`, `searxngUrl`) with env overrides, status reporting, and write-only key masking.
+- `server/services/integrationSettings.ts` - Third-party service integration settings (`searxngUrl`, and the Google OAuth client sealed via `secretBox`) with env overrides, status reporting, and write-only secret masking.
 - `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`backupIntervalHours`/`backupKeep`), dynamic `rescheduleBackups()` on interval change, and single active timer handle management.
 - `server/services/exportService.ts` — Full-DB JSON export + flat contacts CSV.
 - `server/routes/dataLifecycle.ts` — `/api/trash` (+restore/purge, reports dynamic `retentionDays`), `/api/backups`, `/api/export/{json,csv}`.
@@ -282,7 +282,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 
 - `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `connectors.ts`, `index.ts`
 - `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useCorvidIdle.ts` (the mark's blink and head tilt, and `playCorvidBeat` for one-off beats), `useCorvidLevel.ts` (the one place a surface asks how much the bird may move), `useTrackToggle.ts` (track or untrack one contact, with the toast and the Undo every control shares)
-- `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
+- `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
 - `src/components/` — Feature components: `ImportModal.tsx`, `ImportPanel.tsx` (inline dropzone, upload, and progress panel), `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `ScoreRingAvatar.tsx` (the avatar in its score ring, and no ring at all for a contact nobody tracks), `FloatingContactCard.tsx`
@@ -330,7 +330,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - **Anthropic**: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
 - **Dedupe Embeddings**: resolved from the embeddings capability — the same model that backs semantic search. Defaults to the built-in local model. Degrades to deterministic-only matching when unavailable.
 - **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
-- **Geocoding**: Mapbox (Primary, configured via `MAPBOX_API_KEY` or stored sealed key in Admin Settings) / Nominatim (Fallback, no key needed).
+- **Geocoding**: Nominatim (OpenStreetMap), the one geocoder. No key needed. The background queue spaces requests 1.1 s apart, and `geocode_cache` keeps every answer, a failure for seven days.
 - **Web Search (Enrichment)**: Google Search Grounding (Gemini), OpenAI Responses API web search, Anthropic native web search tool, or self-hosted SearXNG instance (configured via `SEARXNG_URL` or Admin Settings).
 - **Avatar Processing**: `sharp` for image resizing/optimization.
 - **Icons**: `lucide-react` icon library.
@@ -396,7 +396,6 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 | `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                                                            |
 | `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
 | `AI_TIER`             | No                      | `FREE`       | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
-| `MAPBOX_API_KEY`      | No                      | —            | Enables Mapbox as primary geocoder (falls back to Nominatim if missing).                                                                             |
 | `PORT`                | No                      | `3210`       | Server port.                                                                                                                                         |
 | `HOST`                | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                                                                      |
 | `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                                                               |

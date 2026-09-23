@@ -39,6 +39,30 @@ function sourceFiles(): string[] {
 
 const rel = (file: string) => path.relative(SRC, file);
 
+const css = fs.readFileSync(path.join(SRC, "index.css"), "utf8");
+
+/** One rule's body, from its selector to the first closing brace. */
+const block = (selector: string) => {
+  const start = css.indexOf(`${selector} {`);
+  expect(start, selector).toBeGreaterThan(-1);
+  return css.slice(start, css.indexOf("}", start));
+};
+
+/**
+ * The rule that is `selector` alone, not a list that ends with it: the line
+ * before it must not end in a comma.
+ */
+const ownBlock = (selector: string) => {
+  let from = 0;
+  for (;;) {
+    const at = css.indexOf(`${selector} {`, from);
+    expect(at, selector).toBeGreaterThan(-1);
+    const before = css.slice(0, at).trimEnd();
+    if (!before.endsWith(",")) return css.slice(at, css.indexOf("}", at));
+    from = at + selector.length;
+  }
+};
+
 /**
  * Files where a filled pill is the component's job, not a button's.
  * Each entry says why.
@@ -145,27 +169,261 @@ describe("the button shape", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("gives .btn-primary a rounded rectangle, a 44 px floor and one disabled look", () => {
-    const css = fs.readFileSync(path.join(SRC, "index.css"), "utf8");
-    const block = (selector: string) => {
-      const start = css.indexOf(`${selector} {`);
-      expect(start, selector).toBeGreaterThan(-1);
-      return css.slice(start, css.indexOf("}", start));
-    };
-    const shared = block(".btn-primary,\n  .btn-secondary");
+  it("gives the buttons a rounded rectangle, a 44 px floor and one disabled look", () => {
+    const shared = block(".btn-primary,\n  .btn-secondary,\n  .btn-danger");
     expect(shared).toContain("border-radius: 0.375rem");
     expect(shared).toContain("min-height: 44px");
-    expect(css).toContain(".btn-primary:disabled,\n  .btn-secondary:disabled");
-    expect(css).not.toMatch(/\.btn-(?:primary|secondary)[^{]*\{[^}]*9999px/);
+    expect(css).toContain(
+      ".btn-primary:disabled,\n  .btn-secondary:disabled,\n  .btn-danger:disabled",
+    );
+    expect(css).not.toMatch(
+      /\.btn-(?:primary|secondary|danger)[^{]*\{[^}]*9999px/,
+    );
+  });
+
+  it("gives every button an edge under its face, and takes it away when disabled", () => {
+    // The depth: a solid shadow `--btn-lift` below the face, in the edge
+    // colour, which the border shares. Hover raises the face 1 px and press
+    // sinks it until 1 px of edge is left, so the edge's bottom never moves.
+    const shared = block(".btn-primary,\n  .btn-secondary,\n  .btn-danger");
+    expect(shared).toContain(
+      "border: 1px solid var(--btn-border, var(--btn-edge))",
+    );
+    expect(shared).toContain(
+      "box-shadow: 0 var(--btn-lift) 0 0 var(--btn-edge)",
+    );
+    for (const name of ["primary", "secondary", "danger"]) {
+      const own = ownBlock(`.btn-${name}`);
+      expect(own, name).toContain("--btn-face:");
+      expect(own, name).toContain("--btn-edge:");
+    }
+    expect(css).toContain("transform: translateY(-1px)");
+    expect(css).toContain("transform: translateY(calc(var(--btn-lift) - 1px))");
+    const disabled = block(
+      ".btn-primary:disabled,\n  .btn-secondary:disabled,\n  .btn-danger:disabled",
+    );
+    expect(disabled).toContain("box-shadow: none");
+    expect(disabled).toContain("border-color: transparent");
+    // A tap leaves no raised button behind on a phone.
+    expect(css).toMatch(/@media \(hover: hover\) \{\s*\.btn-primary:hover/);
+  });
+
+  it("gives the small button the 44 px tap box", () => {
+    const rule = block(".btn-sm::after");
+    expect(rule).toContain("width: max(100%, 44px)");
+    expect(rule).toContain("height: max(100%, 44px)");
   });
 
   it("defines the hit-area utility as a 44 px ::after box", () => {
-    const css = fs.readFileSync(path.join(SRC, "index.css"), "utf8");
     const start = css.indexOf(".hit-area::after {");
     expect(start).toBeGreaterThan(-1);
     const rule = css.slice(start, css.indexOf("}", start));
     expect(rule).toContain("width: max(100%, 44px)");
     expect(rule).toContain("height: max(100%, 44px)");
     expect(rule).toContain("transform: translate(-50%, -50%)");
+  });
+});
+
+/**
+ * The one look, held by a scan.
+ *
+ * Section 1 of the 2.0 design review found six hover recipes on three pages,
+ * ten focus rings, two label trackings, a colour token that did not exist
+ * and a transition on a property that does not exist. Each rule below keeps
+ * one of those from coming back on a pull request that nobody screenshots.
+ */
+describe("the one look", () => {
+  /** Class strings with their file and line, comments blanked. */
+  const everyClassString = () => {
+    const out: { file: string; line: number; text: string }[] = [];
+    for (const file of sourceFiles()) {
+      if (file.endsWith(".css")) continue;
+      const source = fs.readFileSync(file, "utf8");
+      for (const { text, line } of classStrings(source)) {
+        // An apostrophe in JSX text opens a "string" that runs to the next
+        // one, across markup. A class string never holds a tag.
+        if (/<\/?[A-Za-z]/.test(text)) continue;
+        out.push({ file: rel(file), line, text });
+      }
+    }
+    return out;
+  };
+
+  it("tracks every uppercase label at 0.08em, never Tailwind's widest", () => {
+    const offenders = everyClassString()
+      .filter(({ text }) => /(?<![-\w])tracking-widest(?![-\w])/.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("draws no focus ring of its own: the base layer's outline is the one ring", () => {
+    const ring = /(?<![-\w])focus(?:-visible|-within)?:ring(?:-|\b)/;
+    const offenders = everyClassString()
+      .filter(({ text }) => ring.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("names no colour token that does not exist", () => {
+    // `danger` was never a token, so `text-danger` painted nothing and a
+    // destructive button looked like every other one. `outline` is not one
+    // either (`outline-variant` is), so `border-outline/20` drew its border
+    // in the text colour.
+    const offenders = everyClassString()
+      .filter(({ text }) =>
+        /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration)-(?:danger|outline)(?![-\w])/.test(
+          text,
+        ),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("paints with the colour tokens, never a raw palette colour", () => {
+    // `bg-emerald-500` is one green in both palettes and matches no token,
+    // so the palette's health dot and the avatar ring showed one band in two
+    // greens, and amber washes ignored the dark palette. A status is
+    // `success`, `warning`, `error` or `info`, and a grey is a surface or an
+    // ink token.
+    const raw =
+      /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration|shadow|outline|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?![\w])/;
+    const offenders = everyClassString()
+      .filter(({ text }) => raw.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("transitions only properties that exist", () => {
+    // `transition-[shadow,…]` names no CSS property, so the shadow jumped.
+    const offenders = everyClassString()
+      .filter(({ text }) =>
+        /transition-\[[^\]]*(?<![-\w])shadow(?![-\w])/.test(text),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("lets a button class own its fill, its edge and its disabled look", () => {
+    // A shadow, a ring or a hover fill on a call site outranks the class
+    // (utilities come later) and takes the edge or the face away.
+    const button = /(?<![-\w])btn-(?:primary|secondary|danger)(?![-\w])/;
+    // Padding, a text size and a height are the class's too: `.btn-sm` and
+    // `.btn-icon` are the other sizes.
+    const override =
+      /(?<![-\w])(?:hover:|active:|disabled:)?(?:shadow|ring)(?:-|\b)|(?<![-\w])(?:hover|disabled|active):(?:bg|opacity)-|(?<![-\w])(?:bg-(?:primary|error|red|rose)|opacity-\d)|(?<![-\w])(?:[a-z]+:)?(?:p[xytblrse]?|min-h)-|(?<![-\w])(?:[a-z]+:)?text-(?:xs|sm|base|lg|xl|2xl|\[)/;
+    const offenders = everyClassString()
+      .filter(({ text }) => button.test(text) && override.test(text))
+      .map(
+        ({ file, line, text }) =>
+          `${file}:${line}: ${text.trim().slice(0, 120)}`,
+      );
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("lets an interactive card own its hover", () => {
+    const card = /(?<![-\w])card-interactive(?![-\w])/;
+    const hover =
+      /(?<![-\w])(?:hover|active):(?:shadow|ring|scale|-?translate|bg)-|(?<![-\w])shadow-(?:sm|md|lg|xl|2xl)(?![-\w])|(?<![-\w])ring-(?!0(?![-\w])|inset(?![-\w])|offset)/;
+    const offenders = everyClassString()
+      .filter(({ text }) => card.test(text) && hover.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("keeps a selected row free of rings and background overrides", () => {
+    const selected = /(?<![-\w])row-selected(?![-\w])|SELECTED_ROW/;
+    const ring = /(?<![-\w])ring-(?!0(?![-\w])|inset(?![-\w])|offset)/;
+    // A background utility replaces the tint. Checked inside one literal
+    // only: a ternary that picks the tint or a resting wash is fine, and a
+    // scan cannot tell it from a conflict.
+    const literal = /(?<![-\w])row-selected(?![-\w])/;
+    const background = /(?<![-\w])(?:[a-z-]+:)?bg-/;
+    const offenders = everyClassString()
+      .filter(
+        ({ text }) =>
+          (selected.test(text) && ring.test(text)) ||
+          (literal.test(text) &&
+            !/SELECTED_ROW/.test(text) &&
+            text.length < 200 &&
+            background.test(text)),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("draws no coloured bar down a leading edge", () => {
+    // A tinted box with a sliver of colour on its left is the stock accent of
+    // generated interfaces. A selection is the tint, a category is a tone.
+    // The forms: a thick left or inline-start border, a left border in a
+    // status colour, a hairline left border beside a status border colour,
+    // a narrow `before:` or `after:` box with a fill, and an inset shadow.
+    // A pane's neutral hairline (`border-l border-outline-variant/30`) is a
+    // divider, not a bar.
+    const STATUS = "(?:primary|error|warning|success|info|ai)(?:/\\d+)?";
+    const thick = /(?<![-\w])(?:[a-z-]+:)*border-[ls]-(?:[1-9]|\[)/;
+    const coloured = new RegExp(
+      `(?<![-\\w])(?:[a-z-]+:)*border-[ls]-${STATUS}(?![-\\w])`,
+    );
+    const hairline = /(?<![-\w])(?:[a-z-]+:)*border-[ls](?![-\w])/;
+    const statusBorder = new RegExp(
+      `(?<![-\\w])(?:[a-z-]+:)*border-${STATUS}(?![-\\w])`,
+    );
+    const pseudoBox =
+      /(?:before|after):(?:w-(?:px|0\.5|1|1\.5|\[\d+px\])|left-0|inset-y-)/;
+    const pseudoFill = /(?:before|after):bg-/;
+    const inset = /shadow-\[inset_\d+px_0/;
+    const isBar = (text: string) =>
+      thick.test(text) ||
+      coloured.test(text) ||
+      (hairline.test(text) && statusBorder.test(text)) ||
+      (pseudoBox.test(text) && pseudoFill.test(text)) ||
+      inset.test(text);
+    for (const sample of [
+      "border-l-3 border-primary",
+      "border-s-4",
+      "border-l-primary",
+      "border-l border-error/40",
+      "before:absolute before:left-0 before:w-1 before:bg-primary",
+      "shadow-[inset_3px_0_0_var(--color-primary)]",
+    ]) {
+      expect(isBar(sample), sample).toBe(true);
+    }
+    expect(isBar("border-l border-outline-variant/30")).toBe(false);
+    expect(isBar("sm:border-l-0")).toBe(false);
+    const offenders = everyClassString()
+      .filter(({ text }) => isBar(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+    expect(css).not.toMatch(/box-shadow:\s*inset\s+\d+px\s+0\s+0/);
+  });
+
+  it("times transitions with the motion tokens, not a hand-picked duration", () => {
+    // The base duration applies to every `transition-*` with no class, and
+    // `duration-(--dur-fast)` or `duration-(--dur-slow)` name the other two.
+    const offenders = everyClassString()
+      .filter(({ text }) =>
+        /(?<![-\w])duration-(?:\d+|\[[^\]]+\])(?![-\w])/.test(text),
+      )
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("holds the same three durations in index.css and lib/motion.ts", async () => {
+    const { DURATION, EASE } = await import("../../src/lib/motion");
+    const ms = (name: string) => {
+      const match = css.match(new RegExp(`--dur-${name}:\\s*(\\d+)ms`));
+      expect(match, name).not.toBeNull();
+      return Number(match![1]) / 1000;
+    };
+    expect(ms("fast")).toBe(DURATION.fast);
+    expect(ms("base")).toBe(DURATION.base);
+    expect(ms("slow")).toBe(DURATION.slow);
+    expect(css).toContain(`--ease: cubic-bezier(${EASE.join(", ")})`);
+    expect(css).toContain(
+      `--default-transition-timing-function: cubic-bezier(${EASE.join(", ")})`,
+    );
+    expect(css).toContain(
+      `--default-transition-duration: ${DURATION.base * 1000}ms`,
+    );
   });
 });

@@ -1,9 +1,11 @@
-import React, { useCallback, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, useReducedMotion } from "motion/react";
 import type { Contact } from "../../../types";
 import { useMergeContacts } from "../../../api";
+import { usePreferences } from "../../../contexts/PreferencesContext";
 import { toast } from "sonner";
 import { cn } from "../../../lib/utils";
+import { SELECTED_TINT } from "../../../lib/styles";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
 import { PreviewStage } from "./manual/PreviewStage";
@@ -21,6 +23,27 @@ export const ManualMerge = () => {
   const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [mergeComplete, setMergeComplete] = useState(false);
   const mergeContacts = useMergeContacts();
+
+  // The page is one scroller, so a new stage opened where the last one was
+  // scrolled to: Compare landed 998 px down on a phone, its Back above the
+  // screen. On a stage change the top of the tool comes into view: the
+  // steps, or the finished merge. Either way of asking for less motion
+  // makes the jump instant.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const shownRef = useRef({ stage, mergeComplete });
+  const reducedMotion = useReducedMotion();
+  const { preferences } = usePreferences();
+  const smooth = !reducedMotion && preferences.motion !== "reduced";
+  useEffect(() => {
+    const shown = shownRef.current;
+    if (shown.stage === stage && shown.mergeComplete === mergeComplete) return;
+    shownRef.current = { stage, mergeComplete };
+    // jsdom has no scrollIntoView, so the call is optional.
+    rootRef.current?.firstElementChild?.scrollIntoView?.({
+      block: "nearest",
+      behavior: smooth ? "smooth" : "auto",
+    });
+  }, [stage, mergeComplete, smooth]);
 
   // Auto-set first selected as primary
   const handleSelectionChange = useCallback(
@@ -74,13 +97,21 @@ export const ManualMerge = () => {
   // Success state
   if (mergeComplete) {
     return (
-      <SuccessStage primary={primary} duplicates={duplicates} onReset={reset} />
+      <div ref={rootRef} className="w-full">
+        <SuccessStage
+          primary={primary}
+          duplicates={duplicates}
+          onReset={reset}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto w-full">
-      {/* Stage indicator */}
+    // The page's column sets the width, so this tab starts on the same left
+    // edge as the settings card above it.
+    <div ref={rootRef} className="flex flex-col w-full">
+      {/* Stage indicator, the element a stage change scrolls into view */}
       <div className="flex items-center gap-2 mb-6 px-1">
         {(["select", "compare", "preview"] as Stage[]).map((s, i) => (
           <React.Fragment key={s}>
@@ -101,17 +132,17 @@ export const ManualMerge = () => {
                 }
               }}
               className={cn(
-                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap",
                 stage === s
-                  ? "bg-primary/10 text-primary"
-                  : "text-on-surface-variant hover:text-on-surface",
+                  ? SELECTED_TINT
+                  : "state-layer text-on-surface-variant hover:text-on-surface",
               )}
             >
               <span
                 className={cn(
                   "w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold",
                   stage === s
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-on-primary"
                     : "bg-surface-container-high text-on-surface-variant",
                 )}
               >

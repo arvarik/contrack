@@ -20,7 +20,14 @@ import {
 import { ContactList } from "../../types";
 import { ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
-import { SECTION_HEADING, ICON_BTN } from "../../lib/styles";
+import {
+  CARD,
+  ICON_BTN,
+  SECTION_HEADING,
+  SELECTED_TINT,
+  SWATCH_SELECTED,
+} from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
 
 // Icon options (same set as CreateListModal)
 import {
@@ -179,8 +186,9 @@ export const ListDetailPanel = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onViewInNetwork}
-            className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="btn-secondary btn-sm shrink-0"
             title="View filtered in Network page"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -202,8 +210,9 @@ export const ListDetailPanel = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onViewInNetwork}
-            className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="btn-secondary btn-sm shrink-0"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Network
@@ -216,7 +225,7 @@ export const ListDetailPanel = ({
         <section className="p-5 space-y-4">
           <h4 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
             <ListIcon icon={editIcon} className="w-4 h-4 text-primary" />
-            Icon & Name
+            Icon & name
           </h4>
 
           <div className="grid grid-cols-8 gap-1.5">
@@ -228,11 +237,19 @@ export const ListDetailPanel = ({
                   key={key}
                   type="button"
                   onClick={() => handleIconChange(key)}
+                  aria-pressed={active}
                   className={cn(
-                    "hit-area p-2 rounded-xl transition-all flex items-center justify-center",
+                    "hit-area state-layer p-2 rounded-xl transition-colors flex items-center justify-center",
+                    // The tint says "chosen" by hue alone, so the swatch
+                    // ring is the second cue. The panel sits on the page
+                    // surface, so the ring's gap takes that colour.
                     active
-                      ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
-                      : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
+                      ? cn(
+                          SELECTED_TINT,
+                          SWATCH_SELECTED,
+                          "ring-offset-surface",
+                        )
+                      : "text-on-surface-variant hover:text-on-surface",
                   )}
                   title={key}
                 >
@@ -252,18 +269,22 @@ export const ListDetailPanel = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSave();
               }}
-              className="flex-1 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none font-bold"
+              className="flex-1 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm font-bold"
               placeholder="List name"
             />
             <AnimatePresence>
               {isDirty && (
+                // Opacity only. A scale here would make Motion write an
+                // inline transform, which cancels the button's own lift on
+                // hover and its sink on press.
                 <motion.button
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: DURATION.slow, ease: EASE }}
                   onClick={handleSave}
                   disabled={!editName.trim() || updateList.isPending}
-                  className="btn-primary shrink-0 px-4"
+                  className="btn-primary shrink-0"
                 >
                   <Check className="w-3.5 h-3.5" />
                   Save
@@ -302,7 +323,7 @@ export const ListDetailPanel = ({
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 20, height: 0 }}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-lowest shadow-sm group"
+                  className={cn(CARD, "flex items-center gap-3 p-3 group")}
                 >
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-surface-container-low">
@@ -336,7 +357,7 @@ export const ListDetailPanel = ({
                     onClick={() => handleRemoveMember(contact.id)}
                     disabled={removingId === contact.id}
                     aria-label={`Remove ${contact.name} from list`}
-                    className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-all disabled:opacity-50"
+                    className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-error sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-all disabled:opacity-50"
                     title="Remove from list"
                   >
                     {removingId === contact.id ? (
@@ -353,7 +374,7 @@ export const ListDetailPanel = ({
 
         {/* ── Delete List ──────────────────────────────────────────────────── */}
         <section className="px-5 pb-8">
-          <div className="bg-rose-500/6 rounded-xl px-4 py-2.5 flex items-center gap-3 min-h-[44px]">
+          <div className="bg-error/5 rounded-xl px-4 py-2.5 flex items-center gap-3 min-h-[44px]">
             <Trash2 className="w-3.5 h-3.5 text-error shrink-0" />
             <AnimatePresence mode="wait" initial={false}>
               {!showDeleteConfirm ? (
@@ -367,9 +388,12 @@ export const ListDetailPanel = ({
                   <span className="text-xs text-error font-medium">
                     Delete this list
                   </span>
+                  {/* Not final yet: it asks first, so it is the quiet
+                      destructive button. */}
                   <button
+                    type="button"
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold text-error bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
+                    className="btn-secondary btn-sm text-error shrink-0"
                   >
                     Delete
                   </button>
@@ -391,15 +415,17 @@ export const ListDetailPanel = ({
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
+                      type="button"
                       onClick={() => setShowDeleteConfirm(false)}
-                      className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                      className="btn-secondary btn-sm"
                     >
                       Cancel
                     </button>
                     <button
+                      type="button"
                       onClick={handleDelete}
                       disabled={deleteList.isPending}
-                      className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
+                      className="btn-danger btn-sm"
                     >
                       {deleteList.isPending ? "…" : "Delete"}
                     </button>

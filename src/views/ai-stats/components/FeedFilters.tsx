@@ -1,10 +1,14 @@
 /**
- * FeedFilters — Filter pills + sort toggle for the AI Stats activity feed.
- * Follows the filterPill pattern from the AI Search view.
+ * FeedFilters — the cache filter and the sort toggle for the AI Stats
+ * activity feed. The cache filter is a `Segmented`, so it is one radio group
+ * with arrow keys for a screen reader and a keyboard, not three loose
+ * buttons. The sort toggle is a flat button with the state layer, as tall as
+ * the trough beside it.
  */
 import React from "react";
 import { cn } from "../../../lib/utils";
 import { ArrowUpDown } from "lucide-react";
+import { Segmented } from "../../../components/ui/Segmented";
 
 interface FeedFiltersProps {
   cacheFilter: "all" | "fresh" | "cached";
@@ -13,11 +17,11 @@ interface FeedFiltersProps {
   onSortChange: (s: "newest" | "oldest") => void;
 }
 
-const CACHE_PILLS: { value: "all" | "fresh" | "cached"; label: string }[] = [
+const CACHE_OPTIONS = [
   { value: "all", label: "All" },
   { value: "fresh", label: "Fresh" },
   { value: "cached", label: "Cached" },
-];
+] as const;
 
 export const FeedFilters = ({
   cacheFilter,
@@ -27,31 +31,22 @@ export const FeedFilters = ({
 }: FeedFiltersProps) => {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Cache filter pills. Below `sm` each pill is 44 px tall, the touch
-          floor, and the trough grows around them, as in `Segmented`. */}
-      <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-auto sm:h-8">
-        {CACHE_PILLS.map((pill) => (
-          <button
-            key={pill.value}
-            onClick={() => onCacheFilterChange(pill.value)}
-            className={cn(
-              "px-3 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold transition-all flex items-center justify-center whitespace-nowrap",
-              cacheFilter === pill.value
-                ? "bg-surface shadow-sm text-primary"
-                : "text-on-surface-variant hover:text-on-surface",
-            )}
-          >
-            {pill.label}
-          </button>
-        ))}
-      </div>
+      {/* `w-auto` keeps the trough to its options on a phone, so the sort
+          toggle still fits on the same row. */}
+      <Segmented
+        label="Cache"
+        options={CACHE_OPTIONS}
+        value={cacheFilter}
+        onChange={onCacheFilterChange}
+        className="w-auto"
+      />
 
       {/* Sort toggle */}
       <button
         onClick={() => onSortChange(sort === "newest" ? "oldest" : "newest")}
         className={cn(
-          "hit-area ml-auto flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold",
-          "bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors",
+          "hit-area ml-auto flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold",
+          "state-layer bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors",
         )}
       >
         <ArrowUpDown className="w-3 h-3" />

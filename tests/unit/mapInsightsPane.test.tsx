@@ -110,6 +110,23 @@ describe("MapInsightsPane", () => {
     expect(aside.getAttribute("data-covers-map")).toBe("right");
   });
 
+  it("says Overdue in the overdue tone, red as on the strip", () => {
+    render(
+      <MapInsightsPane
+        isOpen={true}
+        onToggle={vi.fn()}
+        stats={{ ...mockStats, overdue: 2 }}
+        inViewContacts={mockContacts}
+        onApplyFacet={vi.fn()}
+        onSelectContact={vi.fn()}
+      />,
+    );
+    const figure = screen.getByText("Overdue").nextElementSibling!;
+    expect(figure.textContent).toBe("2");
+    expect(figure.className).toContain("text-error");
+    expect(figure.className).not.toContain("text-warning");
+  });
+
   it("calls onApplyFacet when clicking a bar in the Stats tab", () => {
     const onApplyFacet = vi.fn();
     render(

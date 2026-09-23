@@ -84,7 +84,7 @@ export function AISearchConfirmModal({
             <Sparkles className="w-4 h-4" />
             {isStarting
               ? "Starting…"
-              : `Search ${total} Contact${total !== 1 ? "s" : ""}`}
+              : `Search ${total} contact${total !== 1 ? "s" : ""}`}
           </button>
         </div>
 

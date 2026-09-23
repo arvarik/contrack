@@ -33,16 +33,13 @@ const CITIES = [
 ];
 
 const THEME_COLORS = [
+  // The vibe ids the client draws (`VIBES` in src/lib/theme.ts), each once.
   "brand",
   "rose",
   "amber",
   "emerald",
-  "cyan",
-  "blue",
-  "violet",
   "pink",
-  "orange",
-  "slate",
+  "teal",
 ];
 const INDUSTRIES = [
   "Enterprise Software",

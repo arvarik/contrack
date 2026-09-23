@@ -299,7 +299,7 @@ export const Heatmap = ({
                           ? Math.max(alpha * 0.8, 0.3)
                           : 0.15
                     }
-                    className="transition-colors duration-150"
+                    className="transition-colors"
                     onPointerEnter={(event) => {
                       if (event.pointerType !== "touch") {
                         show(cell, event.currentTarget);

@@ -398,6 +398,63 @@ describe("the Tracked contacts page", () => {
     ).toBeTruthy();
   });
 
+  it("waits with all three bar buttons while nobody is picked", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
+    for (const name of ["Track", "Untrack", "Cadence"]) {
+      expect(
+        (within(bar).getByRole("button", { name }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    }
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Select Linus Torvalds" }),
+    );
+    for (const name of ["Track", "Untrack", "Cadence"]) {
+      expect(
+        (within(bar).getByRole("button", { name }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    }
+  });
+
+  it("keeps the bar in the page's column, and focus on the swapped button", () => {
+    mount();
+    const select = screen.getByRole("button", { name: "Select" });
+    select.focus();
+    fireEvent.click(select);
+    // Select turned into Done: focus went with it rather than to the body.
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Done" }),
+    );
+    // In the column with the cards, stuck to the bottom of the scroller, and
+    // no longer fixed to the window, where it covered the rail.
+    const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
+    const box = bar.parentElement!;
+    expect(box.className).toContain("sticky");
+    expect(box.className).not.toContain("fixed");
+    expect(box.parentElement).toBe(
+      section(/^At risk/).parentElement!.parentElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Select" }),
+    );
+  });
+
+  it("keeps the bar's room as scroll padding while it shows, so Tab stops above it", async () => {
+    mount();
+    const scroller = screen
+      .getByRole("heading", { level: 1 })
+      .closest(".overflow-y-auto") as HTMLElement;
+    expect(scroller.style.scrollPaddingBottom).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    expect(scroller.style.scrollPaddingBottom).toMatch(/px$/);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(scroller.style.scrollPaddingBottom).toBe(""));
+  });
+
   it("says nobody is tracked yet, and keeps the Not tracked group as the way in", () => {
     api.contacts = PEOPLE.filter((p) => !p.isTracked);
     mount();

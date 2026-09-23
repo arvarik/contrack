@@ -26,8 +26,16 @@ import {
 import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { CARD } from "../../../lib/styles";
+import { CARD, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+
+/** Save and cancel beside the name field: flat, with the one hover layer. */
+const EDIT_ACTION =
+  "state-layer p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded transition-colors";
+
+/** Rename and remove at the end of a passkey's row. */
+const ROW_ACTION =
+  "state-layer p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant rounded-lg transition-colors";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -138,7 +146,7 @@ export const PasskeysCard = () => {
             type="button"
             onClick={handleAddPasskey}
             disabled={isAdding}
-            className="btn-secondary text-xs flex items-center gap-1.5 shrink-0"
+            className="btn-secondary btn-sm shrink-0"
           >
             {isAdding ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -172,7 +180,12 @@ export const PasskeysCard = () => {
               className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
             >
               <div className="flex items-start gap-3 min-w-0 flex-1">
-                <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mt-0.5">
+                <span
+                  className={cn(
+                    "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5",
+                    TONE_WASH.primary,
+                  )}
+                >
                   <KeyRound className="w-[18px] h-[18px]" />
                 </span>
                 <div className="flex-1 min-w-0">
@@ -188,13 +201,13 @@ export const PasskeysCard = () => {
                         }}
                         // eslint-disable-next-line jsx-a11y/no-autofocus
                         autoFocus
-                        className="px-2 py-1 rounded bg-surface-container-highest text-sm text-on-surface outline-none ring-1 ring-primary flex-1"
+                        className="px-2 py-1 rounded bg-surface-container-highest text-sm text-on-surface flex-1"
                       />
                       <button
                         type="button"
                         onClick={() => submitRename(passkey.id)}
                         disabled={renameMutation.isPending}
-                        className="p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center text-primary hover:bg-primary/10 rounded"
+                        className={cn(EDIT_ACTION, "text-primary")}
                         aria-label="Save name"
                       >
                         <Check className="w-4 h-4" />
@@ -202,7 +215,10 @@ export const PasskeysCard = () => {
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high rounded"
+                        className={cn(
+                          EDIT_ACTION,
+                          "text-on-surface-variant hover:text-on-surface",
+                        )}
                         aria-label="Cancel rename"
                       >
                         <X className="w-4 h-4" />
@@ -234,7 +250,7 @@ export const PasskeysCard = () => {
                 <button
                   type="button"
                   onClick={() => startEditing(passkey)}
-                  className="p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
+                  className={cn(ROW_ACTION, "hover:text-on-surface")}
                   aria-label={`Rename ${passkey.name}`}
                 >
                   <Pencil className="w-4 h-4" />
@@ -242,7 +258,7 @@ export const PasskeysCard = () => {
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(passkey)}
-                  className="p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+                  className={cn(ROW_ACTION, "hover:text-error")}
                   aria-label={`Remove ${passkey.name}`}
                 >
                   <Trash2 className="w-4 h-4" />

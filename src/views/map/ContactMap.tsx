@@ -39,9 +39,11 @@ import {
   type LayerProps,
   type MapLayerMouseEvent,
   type ViewStateChangeEvent,
-} from "react-map-gl/maplibre";
+} from "@vis.gl/react-maplibre";
 import type {
+  ExpressionSpecification,
   GeoJSONSource,
+  HeatmapLayerSpecification,
   Map as MapLibreMap,
   PaddingOptions,
   StyleSpecification,
@@ -61,7 +63,7 @@ import { prefersReducedMotion } from "./flyTo";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";
 import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
-import { registerPmtilesProtocol, styleFor } from "./mapStyles";
+import { heatRamp, registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
 import { useClusterFeatures, type ClusterFeature } from "./useClusterFeatures";
 
@@ -93,43 +95,26 @@ const PRESENCE_LAYER: LayerProps = {
   },
 };
 
-const HEATMAP_LAYER: LayerProps = {
-  id: "contacts-heatmap",
-  type: "heatmap",
-  paint: {
-    "heatmap-weight": [
-      "interpolate",
-      ["linear"],
-      ["get", "weight"],
-      0,
-      0,
-      1,
-      1,
-      10,
-      2,
-    ],
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3],
-    "heatmap-color": [
-      "interpolate",
-      ["linear"],
-      ["heatmap-density"],
-      0,
-      "rgba(0, 106, 145, 0)",
-      0.2,
-      "rgba(71, 190, 253, 0.2)",
-      0.4,
-      "rgba(0, 106, 145, 0.4)",
-      0.6,
-      "rgba(0, 106, 145, 0.6)",
-      0.8,
-      "rgba(0, 106, 145, 0.8)",
-      1,
-      "rgba(0, 106, 145, 1)",
-    ],
-    "heatmap-radius": 30,
-    "heatmap-opacity": 0.85,
-  },
-};
+/**
+ * The heat layer's paint, less its colours. The colours are the accent's,
+ * read off the page when the layer is on (`heatRamp`).
+ */
+const HEATMAP_PAINT = {
+  "heatmap-weight": [
+    "interpolate",
+    ["linear"],
+    ["get", "weight"],
+    0,
+    0,
+    1,
+    1,
+    10,
+    2,
+  ],
+  "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3],
+  "heatmap-radius": 30,
+  "heatmap-opacity": 0.85,
+} satisfies HeatmapLayerSpecification["paint"];
 
 /**
  * What the map draws when the basemap style fails to load. A map with no
@@ -233,9 +218,10 @@ export const ContactMap = ({
   layer = "pins",
   children,
 }: ContactMapProps) => {
-  const { mode } = usePreferences();
+  const { mode, preferences } = usePreferences();
   const { mapStyles } = useAuth();
   const styleUrl = styleFor(mode, mapStyles);
+  const accent = preferences.accent;
 
   // Read once, before the map exists, so the remembered view is a creation
   // prop like every other part of the first frame.
@@ -243,11 +229,7 @@ export const ContactMap = ({
     rememberView && !initialView ? readLastView() : null,
   );
   const startView = initialView ?? remembered ?? DEFAULT_VIEW;
-  const [currentZoom, setCurrentZoom] = useState<number>(
-    () => startView.zoom ?? 1,
-  );
   const remember = useCallback((event: ViewStateChangeEvent) => {
-    setCurrentZoom(event.viewState.zoom);
     writeLastView(event.viewState);
   }, []);
 
@@ -268,6 +250,31 @@ export const ContactMap = ({
 
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useKeepWorldCovering(map, wrapperRef, minZoomFromViewport);
+
+  // The heat ramp, in the accent's tokens as the page computes them, read
+  // again when the palette or the accent changes. A frame late, because the
+  // provider paints a new palette in its own effect, after this one.
+  const [heatColor, setHeatColor] = useState<ExpressionSpecification | null>(
+    null,
+  );
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (layer !== "heat" || !el) return;
+    const frame = requestAnimationFrame(() => {
+      const css = getComputedStyle(el);
+      setHeatColor(
+        heatRamp(
+          css.getPropertyValue("--color-primary"),
+          css.getPropertyValue("--color-primary-container"),
+        ),
+      );
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [layer, mode, accent]);
+  const heatPaint = useMemo(
+    () => heatColor && { ...HEATMAP_PAINT, "heatmap-color": heatColor },
+    [heatColor],
+  );
 
   /**
    * MapLibre's own chrome is hidden until the map has loaded.
@@ -558,7 +565,6 @@ export const ContactMap = ({
             setReady(true);
             onMapReady?.(loaded);
           }}
-          onMove={(event) => setCurrentZoom(event.viewState.zoom)}
           onMoveEnd={rememberView ? remember : undefined}
           onError={handleError}
           onClick={handleClick}
@@ -578,48 +584,50 @@ export const ContactMap = ({
             }}
           >
             <Layer {...PRESENCE_LAYER} />
-            {layer === "heat" && <Layer {...HEATMAP_LAYER} />}
+            {layer === "heat" && heatPaint && (
+              <Layer id="contacts-heatmap" type="heatmap" paint={heatPaint} />
+            )}
           </Source>
           {interactive && (
             <NavigationControl position="bottom-right" showCompass={false} />
           )}
-          {features.map((feature) => {
-            if (layer === "heat" && currentZoom > 9) {
-              return null;
-            }
-            if (feature.kind === "cluster") {
-              const leaves = clusterLeaves.get(feature.clusterId) || [];
-              const selectedInCluster = selectedIds
-                ? leaves.filter((id) => selectedIds.has(id)).length
-                : 0;
+          {/* The heat layer draws no pins. Below zoom 9 they used to stay,
+              over the heat they stood for, so Heat looked like Pins. */}
+          {layer !== "heat" &&
+            features.map((feature) => {
+              if (feature.kind === "cluster") {
+                const leaves = clusterLeaves.get(feature.clusterId) || [];
+                const selectedInCluster = selectedIds
+                  ? leaves.filter((id) => selectedIds.has(id)).length
+                  : 0;
 
+                return (
+                  <ClusterMarker
+                    key={feature.key}
+                    cluster={feature}
+                    selectedCount={selectedInCluster}
+                    onExpand={expandCluster}
+                  />
+                );
+              }
+              const contact = byId.get(feature.id);
+              if (!contact) return null;
               return (
-                <ClusterMarker
+                <ContactMarker
                   key={feature.key}
-                  cluster={feature}
-                  selectedCount={selectedInCluster}
-                  onExpand={expandCluster}
+                  contact={contact}
+                  selected={contact.id === selectedId}
+                  multiSelected={
+                    selectedIds ? selectedIds.has(contact.id) : false
+                  }
+                  layer={layer}
+                  onSelect={onSelect}
+                  onPreview={hoverCard ? handlePreview : noPreview}
+                  onPinCard={handlePinCard}
+                  hasActiveCard={activeCardId === contact.id}
                 />
               );
-            }
-            const contact = byId.get(feature.id);
-            if (!contact) return null;
-            return (
-              <ContactMarker
-                key={feature.key}
-                contact={contact}
-                selected={contact.id === selectedId}
-                multiSelected={
-                  selectedIds ? selectedIds.has(contact.id) : false
-                }
-                layer={layer}
-                onSelect={onSelect}
-                onPreview={hoverCard ? handlePreview : noPreview}
-                onPinCard={handlePinCard}
-                hasActiveCard={activeCardId === contact.id}
-              />
-            );
-          })}
+            })}
           {activeCardContact && !stack && (
             <MapHoverCard
               contact={activeCardContact}

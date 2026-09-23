@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Search, SearchX, Sparkles, X } from "lucide-react";
+import { PanelRightClose, Search, SearchX, Sparkles, X } from "lucide-react";
 import type { HistoryEntry, HistoryMode } from "../../../shared/searchHistory";
 import { normalizeQuery } from "../../../shared/searchHistory";
 import {
@@ -27,7 +27,8 @@ import {
   startPendingDelete,
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
-import { SECTION_HEADING } from "../../lib/styles";
+import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
 
@@ -35,6 +36,18 @@ export interface HistoryPaneProps {
   currentQuery?: string;
   currentMode?: HistoryMode;
   onSelect: (entry: HistoryEntry) => void;
+  /**
+   * Closes the side pane. Given, the pane draws a "Hide history" button at
+   * the right end of its header.
+   */
+  onHide?: () => void;
+  /**
+   * Closes the phone's sheet. Given, the pane draws an X named "Close
+   * history" in the same place: the sheet has no close control of its own.
+   */
+  onClose?: () => void;
+  /** The key that also hides the pane, named in the button's tooltip. */
+  hideShortcut?: string;
   className?: string;
 }
 
@@ -50,6 +63,9 @@ export const HistoryPane = ({
   currentQuery,
   currentMode = "people",
   onSelect,
+  onHide,
+  onClose,
+  hideShortcut,
   className,
 }: HistoryPaneProps) => {
   const { preferences } = usePreferences();
@@ -148,21 +164,48 @@ export const HistoryPane = ({
 
   return (
     <div className={className ?? "flex flex-col h-full p-4 space-y-4"}>
-      {/* 1. Title Row */}
+      {/* 1. Title row. The pane closes from its own top corner, where a
+          side panel's close control usually sits, and the page header's
+          toggle opens it again. */}
       <div className="flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-on-surface">History</h2>
           <Badge tone="neutral">{totalCount}</Badge>
         </div>
-        {totalCount > 0 && !filterText.trim() && (
-          <button
-            type="button"
-            onClick={() => setClearDialogOpen(true)}
-            className="text-xs font-medium text-on-surface-variant hover:text-error transition-colors px-2 py-1 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            Clear
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {totalCount > 0 && !filterText.trim() && (
+            <button
+              type="button"
+              onClick={() => setClearDialogOpen(true)}
+              className={cn(BTN_QUIET, "hover:text-error cursor-pointer")}
+            >
+              Clear
+            </button>
+          )}
+          {onHide && (
+            <button
+              type="button"
+              onClick={onHide}
+              aria-label="Hide history"
+              title={
+                hideShortcut ? `Hide history (${hideShortcut})` : "Hide history"
+              }
+              className={cn(ICON_BTN, "-mr-2")}
+            >
+              <PanelRightClose className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close history"
+              className={cn(ICON_BTN, "-mr-2")}
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 2. Filter & Segmented controls */}
@@ -176,7 +219,7 @@ export const HistoryPane = ({
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Filter questions"
             aria-label="Filter history"
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none focus:outline-none focus:ring-2 focus:ring-primary/40 text-on-surface placeholder:text-on-surface-variant"
+            className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
           />
           {filterText.length > 0 && (
             <button
@@ -186,7 +229,7 @@ export const HistoryPane = ({
                 filterInputRef.current?.focus();
               }}
               aria-label="Clear filter text"
-              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className={cn(ICON_BTN, "absolute right-2 p-1 cursor-pointer")}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -235,7 +278,7 @@ export const HistoryPane = ({
               type="button"
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
-              className="w-full py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-xl transition-colors cursor-pointer disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="state-layer w-full py-2 text-xs font-semibold text-primary rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
               {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>

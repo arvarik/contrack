@@ -25,6 +25,9 @@ import {
 import { useCreateContact } from "../../../api/contacts";
 import { Badge } from "../../../components/ui/Badge";
 import type { Correspondent } from "../../../../shared/connectors";
+import { SETTINGS_PAGE } from "../layout";
+import { CARD, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -98,7 +101,7 @@ export const CorrespondentsView: React.FC = () => {
   const hasCorrespondents = correspondents && correspondents.length > 0;
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-16">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -139,7 +142,10 @@ export const CorrespondentsView: React.FC = () => {
       {isError && (
         <div
           role="alert"
-          className="rounded-2xl bg-red-500/10 border border-red-500/20 p-6 text-center space-y-3"
+          className={cn(
+            "rounded-2xl p-6 text-center space-y-3",
+            TONE_WASH.error,
+          )}
         >
           <p className="text-sm font-semibold text-error">
             Failed to load correspondents
@@ -147,7 +153,7 @@ export const CorrespondentsView: React.FC = () => {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="hit-area px-4 py-2 rounded-xl text-xs font-medium bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors"
+            className="btn-secondary btn-sm"
           >
             Retry
           </button>
@@ -166,10 +172,18 @@ export const CorrespondentsView: React.FC = () => {
             return (
               <div
                 key={key}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline/10 hover:border-outline/20 transition-all shadow-sm"
+                className={cn(
+                  CARD,
+                  "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4",
+                )}
               >
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                      TONE_WASH.primary,
+                    )}
+                  >
                     <UserRound className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -206,7 +220,7 @@ export const CorrespondentsView: React.FC = () => {
                     type="button"
                     disabled={isBusy}
                     onClick={() => handleIgnore(c)}
-                    className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-danger hover:bg-danger/10 transition-colors focus:outline-none focus:ring-2 focus:ring-danger min-h-[44px]"
+                    className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors min-h-[44px]"
                     title="Ignore this correspondent"
                   >
                     <EyeOff className="w-3.5 h-3.5" />
@@ -217,7 +231,7 @@ export const CorrespondentsView: React.FC = () => {
                     type="button"
                     disabled={isBusy}
                     onClick={() => handleAddContact(c)}
-                    className="hit-area inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                    className="btn-primary btn-sm"
                   >
                     {isBusy ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -235,8 +249,13 @@ export const CorrespondentsView: React.FC = () => {
 
       {/* Empty state */}
       {!isLoading && !isError && !hasCorrespondents && (
-        <div className="rounded-2xl bg-surface-container border border-surface-container-high/60 p-8 text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+        <div className={cn(CARD, "p-8 text-center space-y-4")}>
+          <div
+            className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
+              TONE_WASH.primary,
+            )}
+          >
             <UserCheck className="w-6 h-6" aria-hidden="true" />
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
@@ -249,10 +268,7 @@ export const CorrespondentsView: React.FC = () => {
             </p>
           </div>
           <div className="pt-2">
-            <Link
-              to="/settings/connectors"
-              className="hit-area inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition-colors min-h-[44px]"
-            >
+            <Link to="/settings/connectors" className="btn-secondary">
               <span>View connected accounts</span>
             </Link>
           </div>

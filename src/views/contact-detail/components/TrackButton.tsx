@@ -17,8 +17,9 @@
  * ```
  *
  * 1. The word is a toggle with `aria-pressed`: Track when off, Tracked when
- *    on. Off it is the container fill, on it is the primary wash the "New"
- *    button wears, with the Radar glyph in the accent.
+ *    on. Off it is the container fill, on it is the selected tint that every
+ *    toggle wears when it is on, with the Radar glyph in the accent. Both
+ *    halves are flat and hover with the one state layer.
  * 2. The caret is `CadenceMenu`, a real button with `aria-haspopup` and
  *    `aria-expanded`, divided from the word by a hairline. It is there in
  *    both states and means the same thing in both: how often.
@@ -42,6 +43,7 @@
  */
 import { Radar } from "lucide-react";
 import { cn } from "../../../lib/utils";
+import { SELECTED_TINT } from "../../../lib/styles";
 import {
   useTrackToggle,
   type TrackableContact,
@@ -55,12 +57,14 @@ export interface TrackButtonProps {
   className?: string;
 }
 
-/** On: the primary wash the "New" button wears. */
-const ON = "bg-primary/10 text-on-primary-wash hover:bg-primary/20";
+/**
+ * On: the selected tint. The ink stays on hover, so the caret half does not
+ * take the menu button's hover ink and read as off.
+ */
+const ON = cn(SELECTED_TINT, "hover:text-on-primary-wash");
 
-/** Off: the same tone `.btn-secondary` uses. */
-const OFF =
-  "bg-surface-container-high text-on-surface hover:bg-surface-container-highest";
+/** Off: the container fill. */
+const OFF = "bg-surface-container-high text-on-surface";
 
 export const TrackButton = ({
   contact,
@@ -70,7 +74,7 @@ export const TrackButton = ({
   const { toggle, isPending } = useTrackToggle();
   const on = contact.isTracked;
   const word = on ? "Tracked" : "Track";
-  const half = cn(on ? ON : OFF, "transition-colors");
+  const half = cn("state-layer transition-colors", on ? ON : OFF);
 
   return (
     <div
@@ -117,9 +121,14 @@ export const TrackButton = ({
         )}
       </button>
 
+      {/* The hairline between the word and the caret: the primary's own
+          tint while tracked, else the light line token. */}
       <CadenceMenu
         contact={contact}
-        className={cn(half, on ? "border-primary/25" : "border-outline/20")}
+        className={cn(
+          half,
+          on ? "border-primary/25" : "border-outline-variant",
+        )}
       />
     </div>
   );

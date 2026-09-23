@@ -109,6 +109,11 @@ export interface Palette {
   ai: string;
   /** Text and icons on a 10, 15 or 20 percent wash of `ai`. */
   "on-ai-wash": string;
+  /**
+   * The highlighter behind the words a search matched (`mark`). A
+   * background only: the text on it is always `on-surface`.
+   */
+  highlight: string;
   secondary: string;
   "secondary-container": string;
   "on-secondary-container": string;
@@ -142,6 +147,7 @@ export const LIGHT: Palette = {
   // text is what `deriveWashText` returns for it.
   ai: "#6f3fd0",
   "on-ai-wash": "#6734c6",
+  highlight: "#fce7a6",
   secondary: "#4d626c",
   "secondary-container": "#cfe6f2",
   "on-secondary-container": "#40555f",
@@ -150,16 +156,18 @@ export const LIGHT: Palette = {
   info: "#036796",
   error: "#bf1b1b",
   "on-error": "#ffffff",
-  surface: "#f5f6f9",
+  // Warm paper: hue 85 in OKLCH at a chroma of 0.005 to 0.010, with the
+  // lightness of each step kept where the cool greys were measured.
+  surface: "#f8f6f2",
   "on-surface": "#2a3437",
-  "surface-variant": "#d9e4e8",
+  "surface-variant": "#e5e2db",
   "on-surface-variant": "#566164",
   "surface-container-lowest": "#ffffff",
-  "surface-container-low": "#eff1f4",
-  "surface-container": "#e8eff1",
-  "surface-container-high": "#e0e3e6",
-  "surface-container-highest": "#d9e4e8",
-  "outline-variant": "#c9d3d9",
+  "surface-container-low": "#f2f1ed",
+  "surface-container": "#f1eeea",
+  "surface-container-high": "#e7e5e1",
+  "surface-container-highest": "#e5e2db",
+  "outline-variant": "#d4d1cb",
 };
 
 /**
@@ -188,6 +196,7 @@ export const DARK: Palette = {
   // Reads at 6.16:1 on its own heaviest wash, so the wash text is unchanged.
   ai: "#bfa3f9",
   "on-ai-wash": "#bfa3f9",
+  highlight: "#5a4116",
   secondary: "#b0c2ca",
   "secondary-container": "#2d4049",
   "on-secondary-container": "#cfe6f2",
@@ -413,7 +422,7 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
 // ---------------------------------------------------------------------------
 
 /**
- * The eight colours a contact can be given.
+ * The six colours a contact can be given.
  *
  * One base value each, and the tokens are derived from it exactly the way a
  * chosen accent is. They used to be eight hand-written triples, tuned for the
@@ -424,17 +433,31 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
  * Deriving them instead means the vibe answers the same contrast contract the
  * accent picker does, in both palettes, and the sweep in
  * `tests/unit/theme.contrast.test.ts` already covers the arithmetic.
+ *
+ * Violet and indigo are gone. A vibe replaces the primary on its contact's
+ * page, and violet sat on the AI colour's own hue (293 in OKLCH, the same
+ * number), with indigo 16 degrees away. On a violet contact the Save button,
+ * the Tracked button and every link wore the colour that means "a model wrote
+ * this", so the AI chips beside them said nothing. Every vibe now keeps
+ * {@link AI_HUE_CLEARANCE} degrees from the AI hue, and the contrast test
+ * holds that. A contact stored as "violet" or "indigo" reads as the first
+ * vibe, the way any unknown id does.
  */
 export const VIBES: readonly { id: string; label: string; base: string }[] = [
   { id: "brand", label: "Blue", base: DEFAULT_ACCENT },
   { id: "emerald", label: "Emerald", base: "#059669" },
   { id: "amber", label: "Amber", base: "#d97706" },
   { id: "rose", label: "Rose", base: "#e11d48" },
-  { id: "indigo", label: "Indigo", base: "#4f46e5" },
   { id: "pink", label: "Pink", base: "#be185d" },
-  { id: "violet", label: "Violet", base: "#6d28d9" },
   { id: "teal", label: "Teal", base: "#0f766e" },
 ];
+
+/**
+ * How far, in degrees of OKLCH hue, a preset accent or a vibe keeps from the
+ * AI colour. Thirty is where a violet and a magenta stop reading as one
+ * colour at a glance on both palettes.
+ */
+export const AI_HUE_CLEARANCE = 30;
 
 /** The primary tokens for one vibe, in one palette. Falls back to the first. */
 export function vibeTokens(

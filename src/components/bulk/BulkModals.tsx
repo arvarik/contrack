@@ -48,7 +48,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
       <Modal
         isOpen={isAddToListOpen}
         onClose={onCloseAddToList}
-        title="Add to List"
+        title="Add to list"
       >
         <div className="space-y-2 pt-2">
           <p className="text-xs text-on-surface-variant mb-4">
@@ -66,7 +66,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
               type="button"
               onClick={() => onBulkAddToList(list.id)}
               disabled={isBulkAddToListPending}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-left disabled:text-on-surface-variant disabled:cursor-not-allowed cursor-pointer"
+              className="state-layer flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-surface-container transition-colors text-left disabled:text-on-surface-variant disabled:cursor-not-allowed cursor-pointer"
             >
               <span className="text-primary">
                 <ListIcon icon={list.icon} className="w-4 h-4" />

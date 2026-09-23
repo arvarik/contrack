@@ -15,6 +15,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ContactListItem } from "../../src/views/contact-list/ContactListItem";
+import { BulkActionToolbar } from "../../src/views/contact-list/BulkActionToolbar";
 import { formatDay } from "../../src/lib/datetime";
 import type { Contact } from "../../src/types";
 
@@ -67,7 +68,15 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
   };
 }
 
-function mount(contact: Contact) {
+function mount(
+  contact: Contact,
+  state: {
+    active?: boolean;
+    isSelectMode?: boolean;
+    isSelected?: boolean;
+    showSelection?: boolean;
+  } = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -77,9 +86,10 @@ function mount(contact: Contact) {
         <ContactListItem
           contact={contact}
           density="comfortable"
-          active={false}
-          isSelectMode={false}
-          isSelected={false}
+          active={state.active ?? false}
+          isSelectMode={state.isSelectMode ?? false}
+          isSelected={state.isSelected ?? false}
+          showSelection={state.showSelection}
           onToggleSelect={vi.fn()}
         />
       </MemoryRouter>
@@ -163,6 +173,167 @@ describe("the ring in the row", () => {
     expect(ring.getAttribute("data-score-band")).toBe("untracked");
     expect(ring.querySelector("svg")).toBeNull();
     expect(ring.closest("[title]")).toBeNull();
+  });
+});
+
+describe("the selected look", () => {
+  // One look for a selected row: the tint (`row-selected`), and the name in
+  // the ink that reads on the tint. The open contact wore a ring and a
+  // picked row an outline, and both read as keyboard focus.
+  const name = (row: HTMLElement) => within(row).getByText("Betty Clark");
+
+  it("marks the open contact with the tint", () => {
+    const row = mount(makeContact(), { active: true });
+    expect(row.classList.contains("row-selected")).toBe(true);
+    expect(row.className).not.toMatch(/\b(ring|outline)-/);
+    expect(name(row).classList.contains("text-on-primary-wash")).toBe(true);
+  });
+
+  it("marks a row picked in select mode the same way", () => {
+    const row = mount(makeContact(), { isSelectMode: true, isSelected: true });
+    expect(row.classList.contains("row-selected")).toBe(true);
+    expect(row.className).not.toMatch(/\b(ring|outline)-/);
+    expect(name(row).classList.contains("text-on-primary-wash")).toBe(true);
+  });
+
+  it("leaves the open contact unmarked in select mode until it is picked", () => {
+    const row = mount(makeContact(), { active: true, isSelectMode: true });
+    expect(row.classList.contains("row-selected")).toBe(false);
+    expect(name(row).classList.contains("text-on-surface")).toBe(true);
+  });
+
+  // The Recent strip repeats a person who is also a row in the list under
+  // it, and the open contact looked selected twice. The copy is current for
+  // a screen reader and shows its checkbox, and never takes the tint.
+  it("keeps the Recent copy of the open contact current, with no tint", () => {
+    const row = mount(makeContact(), { active: true, showSelection: false });
+    expect(row.getAttribute("aria-current")).toBe("page");
+    expect(row.classList.contains("row-selected")).toBe(false);
+    expect(name(row).classList.contains("text-on-surface")).toBe(true);
+  });
+
+  it("keeps the Recent copy of a picked row checked, with no tint", () => {
+    const row = mount(makeContact(), {
+      isSelectMode: true,
+      isSelected: true,
+      showSelection: false,
+    });
+    expect(row.classList.contains("row-selected")).toBe(false);
+    expect(row.querySelector(".bg-primary")).not.toBeNull();
+  });
+});
+
+describe("the follow-up glyph", () => {
+  // The calendar glyph said nothing, and it was red for today where Pulse
+  // uses the primary. It takes the due chip's tones and says the fact.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("says the follow-up in its tooltip, in the tone of how late it is", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 22, 12, 0));
+    const glyph = (day: number) => {
+      cleanup();
+      const row = mount(
+        makeContact({
+          nextFollowUpAt: new Date(2026, 8, day, 9, 0).toISOString(),
+        }),
+      );
+      const tip = row.querySelector('[title^="Follow-up"]')!;
+      return {
+        title: tip.getAttribute("title"),
+        svg: tip.querySelector("svg")!,
+      };
+    };
+    const late = glyph(19);
+    expect(late.title).toBe("Follow-up 3 days overdue");
+    expect(late.svg.classList.contains("text-error")).toBe(true);
+    const today = glyph(22);
+    expect(today.title).toBe("Follow-up due today");
+    expect(today.svg.classList.contains("text-primary")).toBe(true);
+    const later = glyph(23);
+    expect(later.title).toBe("Follow-up due tomorrow");
+    expect(later.svg.classList.contains("text-on-surface-variant")).toBe(true);
+  });
+
+  it("draws no glyph with no follow-up", () => {
+    const row = mount(makeContact());
+    expect(row.querySelector('[title^="Follow-up"]')).toBeNull();
+  });
+
+  // The glyph's colour and its tooltip were the only signs of it. The
+  // row's name closes with the same words.
+  it("closes the row's name with the follow-up", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 22, 12, 0));
+    const row = mount(makeContact({ nextFollowUpAt: "2026-09-19" }));
+    expect(row.getAttribute("aria-label")).toMatch(
+      /, follow-up 3 days overdue$/,
+    );
+  });
+
+  // Between 768 and 1023 px the glyph sat at the end of the name's line,
+  // and moved with the width of the city in the column beside it. It has a
+  // slot of its own in that column, on every row, empty with no follow-up.
+  it("keeps a slot of one width for the glyph in the tablet column", () => {
+    const slotOf = (row: HTMLElement) =>
+      row.querySelector(".md\\:flex.lg\\:hidden > span.w-3\\.5");
+    const late = mount(makeContact({ nextFollowUpAt: "2026-09-19" }));
+    expect(slotOf(late)?.querySelector("svg")).not.toBeNull();
+    // The one on the name's line hides at that width.
+    expect(
+      late
+        .querySelector('[title^="Follow-up"]')!
+        .classList.contains("md:hidden"),
+    ).toBe(true);
+    cleanup();
+    const none = mount(makeContact());
+    expect(slotOf(none)).not.toBeNull();
+    expect(slotOf(none)?.querySelector("svg")).toBeNull();
+  });
+});
+
+describe("the bulk bar", () => {
+  // Select mode kept "Network" as the page's title. The count moved to the
+  // start of the bar, and is read out as it changes.
+  const noop = () => {};
+  const bar = (selectedCount?: number) =>
+    render(
+      <BulkActionToolbar
+        selectedCount={selectedCount}
+        isPending={false}
+        onTrack={noop}
+        selectionTracked="none"
+        onArchive={noop}
+        onAddToList={noop}
+        onEditField={noop}
+        onColorChange={noop}
+        onExportCSV={noop}
+        onDelete={noop}
+      />,
+    );
+
+  it("leads with the count, in a polite live region", () => {
+    bar(3);
+    const toolbar = screen.getByRole("toolbar", { name: "Bulk actions" });
+    const count = within(toolbar).getByText(
+      (_, el) => el?.textContent === "3 selected" && el.tagName === "SPAN",
+    );
+    expect(count.getAttribute("aria-live")).toBe("polite");
+    // Atomic, so NVDA says "3 selected" and not the changed "3" alone.
+    expect(count.getAttribute("role")).toBe("status");
+    expect(count.getAttribute("aria-atomic")).toBe("true");
+    expect(toolbar.firstElementChild).toBe(count);
+    // Track is still the first button.
+    expect(within(toolbar).getAllByRole("button")[0]).toBe(
+      within(toolbar).getByRole("button", { name: "Track" }),
+    );
+  });
+
+  it("says no count where the page gives none, as the map does", () => {
+    bar();
+    expect(screen.queryByText(/selected/)).toBeNull();
   });
 });
 

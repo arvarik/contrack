@@ -15,8 +15,10 @@ import type { Contact } from "../../../../types";
 import {
   CARD_COMPACT,
   SECTION_HEADING,
+  SELECTED_TINT,
   SOURCE_BADGE,
   TAG_PILL,
+  TONE_WASH,
 } from "../../../../lib/styles";
 import { cn } from "../../../../lib/utils";
 import { FieldRow } from "./FieldRow";
@@ -25,6 +27,26 @@ import { fallbackAvatarUrl } from "../../../../lib/avatar";
 // =============================================================================
 // ContactCard — Full side-by-side comparison card
 // =============================================================================
+
+/**
+ * A value that differs from the other contact's: the warning tone's lightest
+ * wash, the same one `FieldRow` uses, in place of a raw amber and a ring.
+ * Its 8 px inset and negative margin match the field rows', so the washes
+ * end on one edge and the words keep their place.
+ */
+const DIFF_WASH = "bg-warning/5 rounded-lg px-2 py-0.5 -mx-2";
+
+/** An address with a break after the @, so it wraps as name and domain. */
+const Email = ({ address }: { address: string }) => {
+  const at = address.indexOf("@") + 1;
+  return (
+    <span className="font-mono text-xs">
+      {address.slice(0, at)}
+      <wbr />
+      {address.slice(at)}
+    </span>
+  );
+};
 
 export interface ContactCardProps {
   key?: React.Key;
@@ -67,13 +89,11 @@ export const ContactCard = ({
   const primaryEmail = contact.emails?.[0]?.email;
   const primaryPhone = contact.phones?.[0]?.phone;
 
+  // The keeper is marked by its label, not by a ring: a ring read as keyboard
+  // focus.
   return (
     <div
-      className={cn(
-        CARD_COMPACT,
-        "space-y-3 relative transition-all overflow-hidden min-w-0",
-        isPrimary && "ring-2 ring-inset ring-emerald-500/50 shadow-md",
-      )}
+      className={cn(CARD_COMPACT, "space-y-3 relative overflow-hidden min-w-0")}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -102,19 +122,19 @@ export const ContactCard = ({
         <button
           onClick={onSetPrimary}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs font-bold transition-all",
+            "w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs font-bold transition-colors",
             isPrimary
-              ? "bg-emerald-500/10 text-success"
-              : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
+              ? SELECTED_TINT
+              : "state-layer bg-surface-container-low text-on-surface-variant hover:text-on-surface",
           )}
         >
           {isPrimary ? (
             <>
               <Shield className="w-3.5 h-3.5" />
-              Primary Contact
+              Primary contact
             </>
           ) : (
-            "Set as Primary"
+            "Set as primary"
           )}
         </button>
       )}
@@ -127,19 +147,23 @@ export const ContactCard = ({
           className="w-12 h-12 rounded-full object-cover bg-surface-container-high"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          {/* The chip comes with the name's wash, which reaches 8 px past
+              the name, so the gap clears the wash and not only the word. */}
+          <div className="flex items-center gap-3">
             <span
-              className={`text-base font-bold truncate ${isDiff("name") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+              className={cn(
+                "text-base font-bold truncate",
+                isDiff("name") && DIFF_WASH,
+              )}
             >
               {contact.name}
             </span>
             {isConflict("name") && (
               <span
-                className={`text-[11px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                  isPrimary
-                    ? "bg-emerald-500/20 text-success"
-                    : "bg-amber-500/20 text-warning"
-                }`}
+                className={cn(
+                  "text-[11px] uppercase tracking-[0.08em] font-bold px-1.5 py-0.5 rounded",
+                  isPrimary ? TONE_WASH.success : TONE_WASH.warning,
+                )}
               >
                 {isPrimary ? "Kept" : "Discarded"}
               </span>
@@ -147,7 +171,10 @@ export const ContactCard = ({
           </div>
           {contact.headline && (
             <div
-              className={`text-xs text-on-surface-variant italic truncate ${isDiff("headline") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+              className={cn(
+                "text-xs text-on-surface-variant italic truncate",
+                isDiff("headline") && DIFF_WASH,
+              )}
             >
               {contact.headline}
             </div>
@@ -227,7 +254,7 @@ export const ContactCard = ({
         )}
         {primaryEmail && (
           <FieldRow icon={<Mail className="w-4 h-4" />} label="Email">
-            <span className="font-mono text-xs">{primaryEmail}</span>
+            <Email address={primaryEmail} />
             {contact.emails.length > 1 && (
               <span className="text-[11px] text-on-surface-variant ml-1">
                 +{contact.emails.length - 1}
@@ -256,7 +283,10 @@ export const ContactCard = ({
       {/* About */}
       {contact.about && (
         <div
-          className={`text-xs text-on-surface-variant leading-relaxed p-3 bg-surface-container-low rounded-xl ${isDiff("about") ? "ring-2 ring-amber-400/30" : ""}`}
+          className={cn(
+            "text-xs text-on-surface-variant leading-relaxed p-3 rounded-xl",
+            isDiff("about") ? "bg-warning/10" : "bg-surface-container-low",
+          )}
         >
           <FileText className="w-3.5 h-3.5 inline mr-1 opacity-50" />
           {contact.about}

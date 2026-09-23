@@ -1,7 +1,7 @@
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { getMapboxApiKey } from "../integrationSettings.ts";
 
+// Nominatim's usage policy allows at most one request a second.
 export const INTER_REQUEST_DELAY_MS = 1100;
 
 export interface GeoResult {
@@ -10,17 +10,22 @@ export interface GeoResult {
   provider: string;
 }
 
+/**
+ * Resolve an address with Nominatim (OpenStreetMap), the one geocoder.
+ *
+ * The fallback is to a broader address, not to another provider. When a query
+ * finds nothing, the first comma-separated part is dropped and the rest is
+ * tried, up to four queries, with the rate-limit pause between them.
+ */
 export async function geocodeWithFallback(
   location: string,
 ): Promise<GeoResult | null> {
   let searchStr = location;
-  const mapboxKey = getMapboxApiKey() ?? undefined;
-  const provider = mapboxKey ? "Mapbox" : "Nominatim";
 
   for (let fallback = 0; fallback < 4 && searchStr.length > 0; fallback++) {
     try {
-      const result = await geocodeSingle(searchStr, mapboxKey);
-      if (result) return { ...result, provider };
+      const result = await geocodeSingle(searchStr);
+      if (result) return { ...result, provider: "Nominatim" };
 
       const parts = searchStr.split(",");
       if (parts.length <= 1) break;
@@ -43,49 +48,31 @@ export async function geocodeWithFallback(
 
 async function geocodeSingle(
   query: string,
-  mapboxKey?: string,
 ): Promise<{ lat: number; lng: number } | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    if (mapboxKey) {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxKey}&limit=1`;
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) {
-        log.warn(
-          "Geocode",
-          `Mapbox returned HTTP ${res.status} for "${query}"`,
-        );
-        return null;
-      }
-      const data = await res.json();
-      if (data?.features?.[0]) {
-        const [lng, lat] = data.features[0].center;
-        return { lat, lng };
-      }
-    } else {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          "User-Agent":
-            "ContrackCRM/1.0 (personal-crm; geocoder; +https://github.com/contrack)",
-          Accept: "application/json",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-      });
-      if (!res.ok) {
-        log.warn(
-          "Geocode",
-          `Nominatim returned HTTP ${res.status} for "${query}"`,
-        );
-        return null;
-      }
-      const data = await res.json();
-      if (data?.[0]) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      }
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "ContrackCRM/1.0 (personal-crm; geocoder; +https://github.com/arvarik/contrack)",
+        Accept: "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+    if (!res.ok) {
+      log.warn(
+        "Geocode",
+        `Nominatim returned HTTP ${res.status} for "${query}"`,
+      );
+      return null;
+    }
+    const data = await res.json();
+    if (data?.[0]) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     }
   } finally {
     clearTimeout(timeoutId);

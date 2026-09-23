@@ -4,7 +4,8 @@
  */
 import React from "react";
 import { cn } from "../../../lib/utils";
-import { CARD_TINTED, SECTION_HEADING } from "../../../lib/styles";
+import { CARD_TINTED, LABEL_PRIMARY } from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import { Brain } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { AIStatsSummary } from "../../../api";
@@ -14,26 +15,31 @@ interface SummaryBarProps {
   isLoading: boolean;
 }
 
+/**
+ * The tier badge. A paid key, Gemini's paid tier or an OpenAI or Anthropic
+ * key, is `info`. The free tier is `success` and mock mode is `warning`, so
+ * a badge's tone says what the calls cost.
+ */
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   FREE: {
-    label: "Free Tier",
-    color: "bg-emerald-500/10 text-success ring-emerald-500/20",
+    label: "Free tier",
+    color: "bg-success/10 text-success ring-success/20",
   },
   PAID: {
-    label: "Paid Tier",
-    color: "bg-blue-500/10 text-info ring-blue-500/20",
+    label: "Paid tier",
+    color: "bg-info/10 text-info ring-info/20",
   },
   MOCK: {
-    label: "Mock Mode",
-    color: "bg-amber-500/10 text-warning ring-amber-500/20",
+    label: "Mock mode",
+    color: "bg-warning/10 text-warning ring-warning/20",
   },
   OPENAI: {
     label: "OpenAI",
-    color: "bg-teal-500/10 text-success ring-teal-500/20",
+    color: "bg-info/10 text-info ring-info/20",
   },
   ANTHROPIC: {
     label: "Anthropic",
-    color: "bg-orange-500/10 text-warning ring-orange-500/20",
+    color: "bg-info/10 text-info ring-info/20",
   },
 };
 
@@ -76,23 +82,16 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
-      className={cn(CARD_TINTED, "col-span-full group")}
+      transition={{ duration: DURATION.slow, ease: EASE }}
+      className={cn(CARD_TINTED, "col-span-full")}
     >
       <div className="flex items-center gap-2 mb-4">
         <Brain className="w-4 h-4 text-primary" />
-        <span
-          className={cn(
-            SECTION_HEADING,
-            "mb-0 text-primary uppercase tracking-widest font-bold",
-          )}
-        >
-          AI Usage
-        </span>
+        <span className={LABEL_PRIMARY}>AI usage</span>
         {tierInfo && (
           <span
             className={cn(
-              "text-[11px] ml-auto uppercase tracking-widest font-bold px-2 py-0.5 rounded-md ring-1",
+              "text-[11px] ml-auto uppercase tracking-[0.08em] font-bold px-2 py-0.5 rounded-md ring-1",
               tierInfo.color,
             )}
           >
@@ -118,7 +117,7 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
             key="loaded"
             initial={{ opacity: 0, filter: "blur(4px)" }}
             animate={{ opacity: 1, filter: "blur(0px)" }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: DURATION.slow, ease: EASE }}
           >
             <p className="text-on-surface font-headline text-lg leading-relaxed text-pretty">
               {buildSummaryText(summary)}
@@ -131,7 +130,8 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
         )}
       </AnimatePresence>
 
-      <div className="absolute -right-8 -bottom-8 opacity-5 pointer-events-none transition-transform duration-700 group-hover:scale-110 group-hover:-rotate-12">
+      {/* A watermark. The card is not a control, so it does not move on hover. */}
+      <div className="absolute -right-8 -bottom-8 opacity-5 pointer-events-none">
         <Brain className="w-48 h-48 text-primary" />
       </div>
     </motion.div>

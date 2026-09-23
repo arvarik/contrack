@@ -247,12 +247,12 @@ test.describe("map features - filters and place search", () => {
     // Click "Add follow-up"
     await page.getByRole("button", { name: "Add follow-up" }).click();
     const followupDialog = page.getByRole("dialog", {
-      name: "Add Follow-up (2 selected)",
+      name: "Add follow-up (2 selected)",
     });
     await expect(followupDialog).toBeVisible();
 
     // Fill title and submit with default "Tomorrow" preset
-    await followupDialog.getByLabel("Task Title *").fill("Virginia catch up");
+    await followupDialog.getByLabel("Task title *").fill("Virginia catch up");
     await followupDialog
       .getByRole("button", { name: "Add to 2 contacts" })
       .click();
@@ -372,7 +372,7 @@ test.describe("map features - filters and place search", () => {
 
     // Open follow-up modal from hover card
     await dialog.getByRole("button", { name: "Add follow-up" }).click();
-    const modal = page.getByRole("dialog", { name: "Add Follow-up" });
+    const modal = page.getByRole("dialog", { name: "Add follow-up" });
     await expect(modal).toBeVisible();
 
     // Check accessibility with follow-up modal open
@@ -404,6 +404,17 @@ test.describe("map features - filters and place search", () => {
     await expect(legend.getByText("At risk")).toBeVisible();
     // The fourth swatch: a pin with no score takes the neutral ring.
     await expect(legend.getByText("Not tracked")).toBeVisible();
+    // It sits over the stats strip at the left. At the bottom right it was
+    // under the insights pane, which is open at this width.
+    const legendBox = await legend.boundingBox();
+    const paneBox = await page
+      .getByRole("complementary", { name: "Map insights" })
+      .boundingBox();
+    const stripBox = await page
+      .getByRole("region", { name: "Map viewport statistics" })
+      .boundingBox();
+    expect(legendBox!.x + legendBox!.width).toBeLessThanOrEqual(paneBox!.x);
+    expect(legendBox!.y + legendBox!.height).toBeLessThanOrEqual(stripBox!.y);
 
     // URL contains ?layer=health
     await expect(page).toHaveURL(/layer=health/);

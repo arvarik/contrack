@@ -29,7 +29,7 @@ export const PullIndicator = ({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         style={{ height: isRefreshing ? 48 : pullDistance }}
-        className="flex items-center justify-center overflow-hidden transition-[height] duration-200"
+        className="flex items-center justify-center overflow-hidden transition-[height]"
       >
         <motion.div
           animate={{ rotate: isRefreshing ? 360 : progress * 180 }}

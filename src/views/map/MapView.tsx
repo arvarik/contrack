@@ -14,7 +14,15 @@
  *
  * @module views/map/MapView
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useMatch, useNavigate, useSearchParams } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { BarChart3, CalendarPlus, ZoomIn, X } from "lucide-react";
@@ -33,7 +41,13 @@ import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
 import { ContactMap } from "./ContactMap";
 import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
-import { measureInsets, paddingFor, type Insets } from "./insets";
+import {
+  MIN_OPEN_PX,
+  measureInsets,
+  measureOpenWidth,
+  paddingFor,
+  type Insets,
+} from "./insets";
 import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
@@ -282,6 +296,26 @@ export const MapView = () => {
     },
   });
 
+  /**
+   * The bulk bar's room: its height and its offset from the map's bottom.
+   * The selection bar sits 8 px above it. On a phone the bulk bar wraps to
+   * two rows, and at a fixed offset it covered the selection bar and its
+   * Clear button. Measured, as in ContactList.
+   */
+  const [bulkRoom, setBulkRoom] = useState(0);
+  const measureBulkBar = useCallback((bar: HTMLDivElement | null) => {
+    if (!bar) return;
+    const measure = () =>
+      setBulkRoom(
+        bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0),
+      );
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
   const [isLassoMode, setIsLassoMode] = useState(false);
   const [quickNoteContactId, setQuickNoteContactId] = useState<string | null>(
     null,
@@ -475,6 +509,27 @@ export const MapView = () => {
     return () => window.removeEventListener("resize", onResize);
   }, [map, openId, isPaneOpen]);
 
+  /**
+   * How much map the open contact leaves on the left, or null while no
+   * contact is open. The toolbar, the legend and the stats strip fit in it:
+   * at 1440 px the contact starts at x 580, over the end of the toolbar.
+   * Under `MIN_OPEN_PX` they step aside: at 1024 px the contact leaves a
+   * strip of 100 px, and they were cut off mid-word.
+   */
+  const [room, setRoom] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!openId || !page) {
+      setRoom(null);
+      return;
+    }
+    const measure = () => setRoom(measureOpenWidth(page));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [openId]);
+  const cramped = room !== null && room < MIN_OPEN_PX;
+
   const openContact = useCallback(
     (id: string) => navigate(`/map/contact/${id}`),
     [navigate],
@@ -538,9 +593,23 @@ export const MapView = () => {
   }, [singleKeyShortcuts, handleFitAll, toggleInsightsPane]);
 
   return (
+    // On a phone the stats strip spans the map above the tab bar, where
+    // MapLibre's zoom buttons, and the credit on top of them, also start
+    // (index.css). The last class lifts those one strip higher, so they are
+    // never under the strip and the credit opens above it. `translate`,
+    // because index.css sets the corner's `bottom` and MapLibre's own sheet
+    // outranks a utility on it. With a contact open, `--map-open` and
+    // `data-cramped` keep the credit and the zoom buttons in the map the
+    // contact leaves (index.css).
     <div
       ref={pageRef}
-      className="map-page w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden"
+      className="map-page w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden max-md:[&_.maplibregl-ctrl-bottom-right]:-translate-y-8"
+      data-cramped={cramped || undefined}
+      style={
+        room !== null
+          ? ({ "--map-open": `${room}px` } as CSSProperties)
+          : undefined
+      }
     >
       <h1 className="sr-only">{NAMES.map.label}</h1>
       <LiveStatus label="Map selection" message={selection.announcement} />
@@ -578,6 +647,7 @@ export const MapView = () => {
         onStartRename={(v) => setRenameTargetView(v)}
         onDeleteView={handleDeleteView}
         inputRef={inputRef}
+        room={room}
         onFitAll={handleFitAll}
         onToggleInsights={() => toggleInsightsPane(true)}
         onSelectInView={() =>
@@ -586,11 +656,32 @@ export const MapView = () => {
         onStartLasso={() => setIsLassoMode(true)}
         isLassoActive={isLassoMode}
       />
-      <StatsStrip
-        stats={stats}
-        onApplyFacet={handleApplyFacet}
-        onFitAll={handleFitAll}
-      />
+      {/*
+        The bottom-left corner: the health legend over the stats strip, 12 px
+        over the tab bar on a phone. `z-[3]` puts it over every pin, the
+        selected one (z 2) too, which used to paint over the strip. The pin
+        cards are z 3 as well and come later in the page, so a card still
+        draws over the corner. MapLibre's credit and zoom buttons stay in the
+        opposite corner, the credit on top of the zoom buttons (index.css),
+        so the two corners never meet. With a contact open the corner keeps
+        to the map it leaves, or steps aside. It steps aside while contacts
+        are selected too: the bulk bar spans the map's bottom edge and
+        covered the strip at every width, and the legend on a phone.
+      */}
+      {!cramped && selection.selectedCount === 0 && (
+        <div
+          className="absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex flex-col items-start gap-2 max-w-[calc(100%-2rem)] pointer-events-none"
+          style={room !== null ? { maxWidth: room - 32 } : undefined}
+        >
+          {layer === "health" && <HealthLegend />}
+          <StatsStrip
+            className="pointer-events-auto"
+            stats={stats}
+            onApplyFacet={handleApplyFacet}
+            onFitAll={handleFitAll}
+          />
+        </div>
+      )}
       <MapInsightsPane
         isOpen={isPaneOpen}
         onToggle={toggleInsightsPane}
@@ -599,14 +690,16 @@ export const MapView = () => {
         onApplyFacet={handleApplyFacet}
         onSelectContact={handleSelectContactFromPane}
       />
-      {/* Desktop floating button to reopen insights pane when closed */}
+      {/* Desktop floating button to reopen insights pane when closed. It
+          is on the map already, so its word is "Insights". index.css moves
+          the zoom buttons clear of the open pane, the `aside` named "Map
+          insights". */}
       {!isPaneOpen && (
         <button
           type="button"
           onClick={() => toggleInsightsPane(true)}
-          aria-label="Map insights"
           aria-expanded={false}
-          className="hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface hover:text-primary transition-colors cursor-pointer border border-outline-variant/30 hit-area"
+          className="state-layer hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30 hit-area"
         >
           <BarChart3 className="w-4 h-4 text-primary" />
           <span>Insights</span>
@@ -634,7 +727,6 @@ export const MapView = () => {
           setIsFollowUpOpen(true);
         }}
       />
-      {layer === "health" && <HealthLegend />}
 
       {/* Map selection floating toolbars */}
       {selection.selectedCount > 0 && (
@@ -642,7 +734,8 @@ export const MapView = () => {
           <div
             role="toolbar"
             aria-label="Map selection actions"
-            className="absolute bottom-44 md:bottom-22 left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
+            className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
+            style={{ bottom: bulkRoom + 8 }}
           >
             <span className="font-bold text-xs text-on-surface whitespace-nowrap pl-1">
               {selection.selectedCount} selected
@@ -659,7 +752,7 @@ export const MapView = () => {
                 setSingleFollowUpContactId(null);
                 setIsFollowUpOpen(true);
               }}
-              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0"
+              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary cursor-pointer shrink-0"
             >
               <CalendarPlus className="w-3.5 h-3.5" />
               <span>Add follow-up</span>
@@ -667,7 +760,7 @@ export const MapView = () => {
             <button
               type="button"
               onClick={handleZoomToSelection}
-              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer shrink-0"
+              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface cursor-pointer shrink-0"
             >
               <ZoomIn className="w-3.5 h-3.5" />
               <span>Zoom to selection</span>
@@ -678,13 +771,14 @@ export const MapView = () => {
               onClick={selection.clear}
               aria-label="Clear selection"
               title="Clear selection (Escape)"
-              className="hit-area p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
+              className="hit-area state-layer p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <BulkActionToolbar
+            ref={measureBulkBar}
             isPending={bulkActions.isPending}
             onTrack={bulkActions.handleBulkTrack}
             selectionTracked={bulkActions.selectionTracked}

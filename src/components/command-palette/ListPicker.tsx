@@ -16,7 +16,9 @@ import {
   useRemoveFromList,
   useContacts,
 } from "../../api";
-import { KBD_SM } from "../../lib/styles";
+import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
+import { cn } from "../../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,7 +113,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
+      transition={{ duration: DURATION.fast, ease: EASE }}
       className="p-2"
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -120,7 +122,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className="hit-area p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
           aria-label="Back to actions"
         >
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -153,15 +155,13 @@ export const ListPicker: React.FC<ListPickerProps> = ({
                 onClick={() => handleToggle(list.id)}
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={isPending}
-                className={`
-                  w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all
-                  ${
-                    i === selectedIndex
-                      ? "bg-primary/10 text-primary"
-                      : "text-on-surface hover:bg-surface-container-low"
-                  }
-                  ${isPending ? "opacity-50" : ""}
-                `}
+                className={cn(
+                  "state-layer w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors",
+                  i === selectedIndex
+                    ? cn(SELECTED_ROW, "text-on-primary-wash")
+                    : "text-on-surface",
+                  isPending && "opacity-50",
+                )}
               >
                 {/* List icon */}
                 <span className="text-base w-6 text-center">

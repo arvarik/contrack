@@ -30,8 +30,19 @@ import {
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
-import { CARD, SEARCH_INPUT } from "../../../lib/styles";
+import {
+  CARD,
+  FORM_INPUT,
+  FORM_LABEL,
+  SEARCH_INPUT,
+  TONE_WASH,
+} from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { SETTINGS_PAGE } from "../layout";
+
+/** A tag row's icon buttons: flat, with the one hover layer. */
+const ROW_ACTION =
+  "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
 
 export const TagsPage = () => {
   const { data: tags = [], isLoading, isError } = useTagSummary();
@@ -122,7 +133,7 @@ export const TagsPage = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           Organise contacts with labels. Rename, merge, or delete tags across
@@ -135,7 +146,12 @@ export const TagsPage = () => {
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       ) : isError ? (
-        <div className="p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
+        <div
+          className={cn(
+            "p-4 rounded-xl flex items-center gap-3 text-sm font-medium",
+            TONE_WASH.error,
+          )}
+        >
           <AlertCircle className="w-5 h-5 shrink-0" />
           Failed to load tags.
         </div>
@@ -155,7 +171,7 @@ export const TagsPage = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter tags…"
-                className={cn(SEARCH_INPUT, "pl-9 text-sm")}
+                className={SEARCH_INPUT}
                 aria-label="Filter tags"
               />
             </div>
@@ -173,7 +189,7 @@ export const TagsPage = () => {
               return (
                 <div
                   key={item.tag}
-                  className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 hover:bg-surface-container-high/40 transition-colors"
+                  className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <span className="p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
@@ -195,13 +211,13 @@ export const TagsPage = () => {
                           onKeyDown={(e) => {
                             if (e.key === "Escape") cancelEditing();
                           }}
-                          className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-surface-container border border-primary/50 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[38px]"
+                          className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-surface-container border border-primary/50 text-on-surface min-h-[38px]"
                           aria-label={`Rename tag ${item.tag}`}
                         />
                         <button
                           type="submit"
                           disabled={renameMutation.isPending}
-                          className="btn-primary text-xs px-2.5 py-1.5 min-h-[38px] min-w-[38px] flex items-center justify-center hit-area"
+                          className="btn-primary btn-sm"
                           aria-label="Save tag name"
                         >
                           <Check className="w-4 h-4" />
@@ -209,7 +225,7 @@ export const TagsPage = () => {
                         <button
                           type="button"
                           onClick={cancelEditing}
-                          className="btn-secondary text-xs px-2.5 py-1.5 min-h-[38px] min-w-[38px] flex items-center justify-center hit-area"
+                          className="btn-secondary btn-sm"
                           aria-label="Cancel rename"
                         >
                           <X className="w-4 h-4" />
@@ -235,7 +251,7 @@ export const TagsPage = () => {
                       <button
                         type="button"
                         onClick={() => startEditing(item)}
-                        className="p-2.5 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container min-h-[44px] min-w-[44px] flex items-center justify-center hit-area transition-colors"
+                        className={cn(ROW_ACTION, "hover:text-on-surface")}
                         aria-label={`Rename ${item.tag}`}
                         title="Rename"
                       >
@@ -248,7 +264,7 @@ export const TagsPage = () => {
                           setMergeSource(item);
                           setMergeTarget("");
                         }}
-                        className="p-2.5 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container min-h-[44px] min-w-[44px] flex items-center justify-center hit-area transition-colors"
+                        className={cn(ROW_ACTION, "hover:text-on-surface")}
                         aria-label={`Merge ${item.tag} into another tag`}
                         title="Merge into…"
                       >
@@ -258,7 +274,7 @@ export const TagsPage = () => {
                       <button
                         type="button"
                         onClick={() => setTagToDelete(item)}
-                        className="p-2.5 rounded-xl text-on-surface-variant hover:text-error hover:bg-red-500/10 min-h-[44px] min-w-[44px] flex items-center justify-center hit-area transition-colors"
+                        className={cn(ROW_ACTION, "hover:text-error")}
                         aria-label={`Delete tag ${item.tag}`}
                         title="Delete"
                       >
@@ -295,11 +311,8 @@ export const TagsPage = () => {
               tag, and <strong>{mergeSource.tag}</strong> will be removed.
             </p>
 
-            <div className="space-y-2">
-              <label
-                htmlFor="merge-target-input"
-                className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant"
-              >
+            <div>
+              <label htmlFor="merge-target-input" className={FORM_LABEL}>
                 Target tag
               </label>
               <input
@@ -309,7 +322,7 @@ export const TagsPage = () => {
                 value={mergeTarget}
                 onChange={(e) => setMergeTarget(e.target.value)}
                 placeholder="Choose or enter tag name…"
-                className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container border border-surface-container-high text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                className={FORM_INPUT}
               />
               <datalist id="existing-tags">
                 {tags

@@ -1,10 +1,10 @@
 /**
- * The masthead's sentence and the words on its progress mark.
+ * The masthead's sentence.
  *
  * The Today strip used to show its numbers as chips, and a chip that says
  * "2 overdue" beside one that says "3 birthdays" is a row of labels a person
  * has to assemble. One sentence says the same thing and wraps, so nothing
- * scrolls sideways on a phone. Both functions are pure: the masthead renders
+ * scrolls sideways on a phone. The function is pure: the masthead renders
  * the parts, and the unit test reads the words.
  *
  * @module views/pulse/lib/dayLine
@@ -15,7 +15,12 @@ export interface MastheadCounts {
   overdue: number;
   dueToday: number;
   birthdaysThisWeek: number;
-  completedToday: number;
+  /**
+   * Every row in the Up next queue, this week's and the catch-ups too. The
+   * sentence names only three counts, and "All caught up." has to be true of
+   * the whole queue.
+   */
+  queued: number;
   streak: number;
 }
 
@@ -39,13 +44,17 @@ const plural = (n: number, one: string, many: string) =>
  * The sentence under the date, as parts.
  *
  * The counts above zero come first, in the order overdue, due today,
- * birthdays this week, joined by ", " and closed by ".". With no count above
- * zero the first part is "Nothing due today." A streak of two days or more
- * adds " 12 days in a row." Joined, the parts read for example:
+ * birthdays this week, joined by ", " and closed by ".". With none of the
+ * three above zero, the first part is "Nothing due today." while the queue
+ * still holds this week's rows or catch-ups, and "All caught up." once it is
+ * empty. The empty queue under the masthead reads "Nothing due today", and
+ * the masthead does not say it twice. A streak of two days or more adds
+ * " 12 days in a row." Joined, the parts read for example:
  *
  *   "2 overdue, 2 due today, 3 birthdays this week. 12 days in a row."
  *   "1 overdue, 1 due today, 1 birthday this week."
  *   "Nothing due today."
+ *   "All caught up."
  */
 export function buildDayLine(c: MastheadCounts): DayLinePart[] {
   const counts: DayLinePart[] = [];
@@ -68,7 +77,9 @@ export function buildDayLine(c: MastheadCounts): DayLinePart[] {
 
   const parts: DayLinePart[] = [];
   if (counts.length === 0) {
-    parts.push({ text: "Nothing due today." });
+    parts.push({
+      text: c.queued > 0 ? "Nothing due today." : "All caught up.",
+    });
   } else {
     counts.forEach((part, index) => {
       if (index > 0) parts.push({ text: ", " });
@@ -81,18 +92,4 @@ export function buildDayLine(c: MastheadCounts): DayLinePart[] {
     parts.push({ text: ` ${c.streak} days in a row.` });
   }
   return parts;
-}
-
-/**
- * The words beside the progress mark. `toDo` is overdue plus due today.
- *
- *   (0, 0) "Nothing due"   (0, 4) "4 to do"
- *   (2, 0) "All done"      (1, 3) "1 of 4 done"
- */
-export function describeProgress(completed: number, toDo: number): string {
-  const total = completed + toDo;
-  if (total === 0) return "Nothing due";
-  if (completed === 0) return `${toDo} to do`;
-  if (toDo === 0) return "All done";
-  return `${completed} of ${total} done`;
 }

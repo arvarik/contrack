@@ -24,8 +24,9 @@ import { cn } from "./utils";
 /*
  * The type floor is 11 px. Nothing a person reads is smaller, and
  * tests/unit/styles.floor.test.ts fails on `text-[11px]` and `text-[11px]`
- * anywhere in src/. Uppercase labels keep their tracking, a little tighter
- * than `tracking-widest`, so the larger size does not widen every chip.
+ * anywhere in src/. Uppercase labels keep their tracking at 0.08em, a
+ * little tighter than Tailwind's widest, so the larger size does not widen
+ * every chip. Every uppercase label in the app uses this one tracking.
  */
 
 /** Micro label — field labels inside detail cards (e.g. "LOCATION", "EMAIL") */
@@ -65,24 +66,168 @@ export const SECTION_HEADING_SPACED = cn(
   "mb-3 flex items-center gap-2",
 );
 
-/** Page title */
-export const PAGE_TITLE = "text-2xl font-headline font-bold";
+// ─── Page header ─────────────────────────────────────────────────────────────
+//
+// Every page's top is `PageHeader` (src/components/layout/PageHeader.tsx): an
+// optional small line above, the title, one line under it, and the actions
+// at the right. These are its parts, and the page's own padding.
+
+/**
+ * The page title, the page's name and its h1: 24 px on a phone and 30 px
+ * from `md`, on every page. The size follows the window, not the header, so
+ * the narrow Network pane beside a contact has the same title as Pulse, Ask
+ * Contrack and Settings, and moving between pages does not move the eye.
+ */
+export const PAGE_TITLE =
+  "text-2xl md:text-3xl leading-tight font-headline font-bold tracking-tight text-on-surface";
+
+/**
+ * The second part of a title line, such as the day on Pulse: the title's
+ * face and size in the variant ink, so the line reads as one headline in two
+ * tones. It is not part of the heading.
+ */
+export const PAGE_TITLE_SUFFIX =
+  "text-2xl md:text-3xl leading-tight font-headline font-semibold tracking-tight text-on-surface-variant";
+
+/**
+ * A header with a suffix is a grid in the header's size container, so a
+ * phone never squeezes the suffix into a column beside the actions. In a
+ * narrow header the title and the actions share the first row, and the
+ * suffix and the description each take a full row under them. From `@2xl`
+ * the suffix continues the title's line on its baseline, the description
+ * sits under both, and the actions span the two rows at the right edge.
+ * The row aligns to the top, like the header without a suffix, so Pulse's
+ * title starts at the height of every other page's. The cells place
+ * themselves, so the page header and its skeleton agree.
+ */
+export const TITLE_GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 @2xl:grid-cols-[auto_minmax(0,1fr)_auto] @2xl:items-baseline @2xl:gap-x-3";
+export const TITLE_GRID_TITLE = "col-start-1 row-start-1";
+export const TITLE_GRID_SUFFIX =
+  "col-start-1 col-span-2 row-start-2 @2xl:col-start-2 @2xl:col-span-1 @2xl:row-start-1";
+export const TITLE_GRID_DESCRIPTION =
+  "col-start-1 col-span-2 row-start-3 @2xl:row-start-2";
+export const TITLE_GRID_ACTIONS =
+  "col-start-2 row-start-1 @2xl:col-start-3 @2xl:row-span-2 @2xl:self-start";
+
+/** The small line above a title: the back link to the parent page. */
+export const PAGE_EYEBROW =
+  "font-body tracking-normal text-[13px] leading-tight font-semibold text-on-surface-variant";
+
+/** The one line under a title. 14 px, 16 px in a wide header. */
+export const PAGE_DESCRIPTION =
+  "text-sm @md:text-base leading-snug text-on-surface-variant text-pretty";
+
+/** A page's side gutters. A narrow pane (the Network list) keeps `px-4`. */
+export const PAGE_X = "px-4 sm:px-6 lg:px-10";
+
+/** The space above a page's header. The same on every page, so the titles line up. */
+export const PAGE_TOP = "pt-6 lg:pt-8";
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
-/** Card — the primary borderless white container (see also .card in CSS) */
-export const CARD = "bg-surface-container-lowest rounded-2xl p-6 shadow-sm";
+/**
+ * Card — the static white surface (`.card` in index.css). Not a control, so
+ * no hover. A card that is a control is `CARD_INTERACTIVE`.
+ */
+export const CARD = "card";
 
 /** Card compact — slightly tighter padding */
-export const CARD_COMPACT =
-  "bg-surface-container-lowest rounded-2xl p-5 shadow-sm";
+export const CARD_COMPACT = "card p-5";
+
+/**
+ * A card that is a control: a search result, a suggestion tile. It rises
+ * 2 px on hover (`.card-interactive`). Never add a `shadow-*`, `ring-*`,
+ * `scale-*` or `translate-*` hover of its own: those are the card's job.
+ */
+export const CARD_INTERACTIVE = "card card-interactive";
+
+/**
+ * A suggested question on Ask Contrack, in both modes: a flat chip on the
+ * card face with the state layer, so the search box above stays the one
+ * raised surface on the page. A click fills the box and runs the search.
+ */
+export const SUGGESTION_CHIP =
+  "hit-area state-layer rounded-md bg-surface-container-lowest px-3 py-2 text-left text-sm text-on-surface-variant hover:text-on-surface transition-colors";
 
 /** Section background — the mid-tone layer for headers / sidebars */
 export const SECTION_BG = "bg-surface-container-low";
 
-/** Tinted card — subtle primary wash (e.g. AI Intel block) */
-export const CARD_TINTED =
-  "bg-primary/5 rounded-2xl p-6 shadow-sm relative overflow-hidden";
+/** Tinted card — a card on a subtle primary wash, such as the AI usage summary. */
+export const CARD_TINTED = "card bg-primary/5 relative overflow-hidden";
+
+// ─── Hover and selection ─────────────────────────────────────────────────────
+//
+// Three kinds of surface, three hovers (`.agent/STYLE.md`, "Hover"):
+//
+//   - A flat control (a row, a ghost button, a pill, a nav item) takes
+//     `state-layer`: a 6 percent ink layer on hover, 10 on press.
+//   - A card that is a control takes `CARD_INTERACTIVE`: it rises 2 px.
+//   - A static card has no hover.
+//
+// And one selected look: the primary tint, on a row (`row-selected`), a
+// pill or a nav item alike. No ring and no bar down the leading edge.
+
+/** A selected pill, chip, nav item or menu option: the tint and its ink. */
+export const SELECTED_TINT = "bg-primary/10 text-on-primary-wash";
+
+/**
+ * The selected row in a list: the tint (`row-selected`), mixed onto a card's
+ * face when the row is a card. Put `text-on-primary-wash` on the text that
+ * was `text-primary`.
+ */
+export const SELECTED_ROW = "row-selected";
+
+/**
+ * The chosen swatch in a picker of colours, icons or avatars: a 2 px ring in
+ * the ink colour, 2 px off the swatch. A swatch has no room for a bar or a
+ * dot, and its fill is its content, so it cannot take the tint either. The
+ * ring is the ink, not the primary, so it never reads as the focus ring,
+ * which is the primary with no gap on a swatch like this.
+ */
+export const SWATCH_SELECTED =
+  "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest";
+
+// ─── Tones ───────────────────────────────────────────────────────────────────
+//
+// A colour that means something, in one place. Overdue is the error red,
+// today is the primary, a birthday is the warning amber, new people are the
+// success green, and everything else is neutral. A group's dot, its rows'
+// leading glyph and its chips read from the same tone, so the eye can follow
+// a colour down a card. The AI colour is not a tone: it marks what a model
+// wrote, and a category is not that.
+
+export type Tone = "error" | "primary" | "warning" | "success" | "neutral";
+
+/** The 6 px dot before a group's name. */
+export const TONE_DOT: Record<Tone, string> = {
+  error: "bg-error",
+  primary: "bg-primary",
+  warning: "bg-warning",
+  success: "bg-success",
+  neutral: "bg-outline-variant",
+};
+
+/**
+ * A chip or an icon tile: the tone's 10 percent wash with the tone's own ink.
+ * Each pair clears AA; `tests/unit/theme.contrast.test.ts` measures them.
+ */
+export const TONE_WASH: Record<Tone, string> = {
+  error: "bg-error/10 text-error",
+  primary: "bg-primary/10 text-on-primary-wash",
+  warning: "bg-warning/10 text-warning",
+  success: "bg-success/10 text-success",
+  neutral: "bg-surface-container-high text-on-surface-variant",
+};
+
+/** The tone's ink alone, for an icon on a surface. */
+export const TONE_TEXT: Record<Tone, string> = {
+  error: "text-error",
+  primary: "text-primary",
+  warning: "text-warning",
+  success: "text-success",
+  neutral: "text-on-surface-variant",
+};
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 
@@ -91,31 +236,32 @@ export const navLink = (active: boolean, extra?: string) =>
   cn(
     "p-3 rounded-xl transition-colors",
     active
-      ? "bg-primary/15 text-on-primary-wash"
-      : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
+      ? SELECTED_TINT
+      : "state-layer text-on-surface-variant hover:text-on-surface",
     extra,
   );
 
 // ─── Buttons ─────────────────────────────────────────────────────────────────
 
 /**
- * Icon button — small clickable icon (toolbar, header actions).
- * Use CSS `.btn-primary` / `.btn-secondary` for full CTA buttons.
+ * Icon button — small clickable icon (toolbar, header actions). Flat, with
+ * the one hover layer. Use `.btn-primary` / `.btn-secondary` for a call to
+ * action, which is the only kind of button with depth.
  *
  * About 32 px on screen with a 16 px icon, and a 44 px tap box from
  * `hit-area` (see index.css). Give neighbours 12 px of gap so the boxes do
  * not overlap.
  */
 export const ICON_BTN =
-  "hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors";
+  "hit-area state-layer p-2 rounded-xl text-on-surface-variant hover:text-on-surface transition-colors";
 
 /**
  * A quiet text button beside a control: "Reset", "Show more", "Clear".
- * Small, the variant text colour, the accent on hover, and a 44 px tap box.
+ * Small, the variant text colour, the ink on hover, and a 44 px tap box.
  * It never competes with the control it sits beside.
  */
 export const BTN_QUIET =
-  "hit-area inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors whitespace-nowrap";
+  "hit-area state-layer inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors whitespace-nowrap";
 
 /**
  * The mark on a setting that is not at its default: a 6 px accent dot after
@@ -124,18 +270,6 @@ export const BTN_QUIET =
  */
 export const CHANGED_MARK =
   "inline-block w-1.5 h-1.5 rounded-full bg-primary shrink-0";
-
-/** Icon button, active/selected variant */
-export const ICON_BTN_ACTIVE =
-  "p-2 rounded-lg bg-primary text-on-primary shadow-sm transition-all";
-
-/** Icon button, inactive variant (for toggle groups like composer type selector) */
-export const ICON_BTN_INACTIVE =
-  "p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all";
-
-/** Toggle icon button — returns className based on active state */
-export const iconToggle = (active: boolean) =>
-  active ? ICON_BTN_ACTIVE : ICON_BTN_INACTIVE;
 
 /** Text link style — inline clickable text */
 export const TEXT_LINK = "text-primary hover:underline font-bold";
@@ -148,17 +282,24 @@ export const TEXT_LINK = "text-primary hover:underline font-bold";
  * underlined bare input, and nothing at all for tags.
  */
 export const ADD_BUTTON =
-  "hit-area inline-flex items-center gap-1 w-fit rounded-lg px-1.5 -mx-1.5 py-0.5 text-sm font-bold text-primary hover:bg-primary/10 transition-colors";
+  "hit-area state-layer inline-flex items-center gap-1 w-fit rounded-lg px-1.5 -mx-1.5 py-0.5 text-sm font-bold text-primary transition-colors";
 
-/** Danger text button — destructive inline action */
-export const DANGER_BTN =
-  "w-full text-xs text-error hover:text-error hover:bg-red-500/5 rounded-xl py-3 transition-colors font-bold uppercase tracking-widest flex items-center justify-center gap-2";
+/**
+ * A button in a floating selection bar: a glyph over a word, flat, with the
+ * hover layer. The Network list's bulk bar and the Tracked page's bar share
+ * it, and `BAR_LABEL` is the word.
+ */
+export const BAR_BUTTON =
+  "state-layer flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors shrink-0";
+
+/** The word under a bar button's glyph. */
+export const BAR_LABEL = cn(LABEL, "text-inherit whitespace-nowrap");
 
 // ─── Badges & Pills ─────────────────────────────────────────────────────────
 
 /** Tag pill — used in contact tags, filter indicators */
 export const TAG_PILL =
-  "text-[11px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md";
+  "text-[11px] font-bold bg-primary/10 text-on-primary-wash px-2 py-0.5 rounded-md";
 
 /** Micro badge — tiny inline status labels (e.g. "Current", "work", "personal") */
 export const MICRO_BADGE =
@@ -166,7 +307,7 @@ export const MICRO_BADGE =
 
 /** Status badge — success variant (e.g. "Current" on experience) */
 export const STATUS_BADGE_SUCCESS =
-  "text-[11px] uppercase tracking-[0.08em] bg-emerald-500/10 text-success px-1.5 py-0.5 rounded font-bold";
+  "text-[11px] uppercase tracking-[0.08em] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold";
 
 /** Source badge */
 export const SOURCE_BADGE =
@@ -174,13 +315,16 @@ export const SOURCE_BADGE =
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
-/** Search input — the list-header search box. 44 px tall on a phone, 40 from `sm`. */
+/**
+ * Search input — the list-header search box. 44 px tall on a phone, 40 from
+ * `sm`. Its focus ring is the app's one ring, drawn on its edge (index.css).
+ */
 export const SEARCH_INPUT =
-  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-3 sm:py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all";
+  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-3 sm:py-2.5 text-sm transition-colors";
 
 /** Inline editable field input — appears on click-to-edit */
 export const EDITABLE_INPUT =
-  "bg-surface-container-high border-none focus:ring-2 focus:ring-primary rounded px-2 py-0.5 max-w-full text-inherit font-inherit leading-inherit";
+  "bg-surface-container-high border-none rounded px-2 py-0.5 max-w-full text-inherit font-inherit leading-inherit";
 
 // ─── Keyboard shortcut hints ─────────────────────────────────────────────────
 
@@ -209,13 +353,17 @@ export const tabItem = (active: boolean) =>
 
 // ─── Filter pills ────────────────────────────────────────────────────────────
 
-/** Filter pill button — returns className based on active state */
+/**
+ * Filter pill button — returns className based on active state. The active
+ * pill is the selected tint and nothing else: the ring it used to wear read
+ * as a pressed button.
+ */
 export const filterPill = (active: boolean) =>
   cn(
-    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors",
     active
-      ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
-      : "text-on-surface-variant hover:bg-surface-container-high",
+      ? SELECTED_TINT
+      : "state-layer text-on-surface-variant hover:text-on-surface",
   );
 
 // ─── List Items ──────────────────────────────────────────────────────────────
@@ -223,17 +371,15 @@ export const filterPill = (active: boolean) =>
 /**
  * Contact list row — returns className based on active state.
  *
- * The current row is a wash and a 1 px inset ring in the primary at half
- * strength. It used to be a 2 px solid ring with a shadow, which read as a
- * focus ring on every visit, and the keyboard focus ring on top of it made
- * two rings. `z-10` keeps the ring above the next row's hover tint.
+ * The current row is the selected row: the tint. It was a ring, first 2 px
+ * solid and then 1 px inset, and either way it read as a focus ring on every
+ * visit, with two rings when the row also had focus. The hover layer sits
+ * over the tint as well as over the plain row.
  */
 export const listRow = (active: boolean) =>
   cn(
-    "flex items-center gap-3 p-3 rounded-xl transition-colors relative",
-    active
-      ? "bg-primary/10 ring-1 ring-inset ring-primary/50 z-10"
-      : "hover:bg-surface-container-low",
+    "state-layer flex items-center gap-3 p-3 rounded-xl transition-colors relative",
+    active && SELECTED_ROW,
   );
 
 // ─── Timeline ────────────────────────────────────────────────────────────────
@@ -243,27 +389,18 @@ export const listRow = (active: boolean) =>
  * hover shadow, because the card itself is not a control. Its title button
  * and its kebab are.
  */
-export const TIMELINE_CARD =
-  "p-4 sm:p-5 rounded-2xl bg-surface-container-lowest shadow-sm";
+export const TIMELINE_CARD = "card p-4 sm:p-5";
 
 // ─── Composer ────────────────────────────────────────────────────────────────
 
 /**
  * Rich text composer container. No outer margin: the timeline puts its own
- * gap between the composer and the first group.
+ * gap between the composer and the first group. A composite field, so the
+ * card draws the focus ring while its editor has focus (`.focus-frame`).
  */
-export const COMPOSER =
-  "bg-surface-container-lowest rounded-2xl p-4 shadow-sm z-20 transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md";
-
-/** NLP action input (follow-up detector) */
-export const NLP_INPUT_ROW =
-  "flex items-center mt-3 bg-surface-container-low p-2 rounded-xl";
+export const COMPOSER = "card focus-frame p-4 z-20";
 
 // ─── Empty States ────────────────────────────────────────────────────────────
-
-/** Empty state container */
-export const EMPTY_STATE =
-  "text-center p-8 bg-surface-container-low rounded-2xl text-on-surface-variant";
 
 /** Empty state hero — large centered content with icon + heading */
 export const EMPTY_HERO =
@@ -299,7 +436,7 @@ export const MENU_ITEM_DANGER =
   "text-error hover:bg-error/10 focus:bg-error/10";
 
 /** A row that is the current choice. */
-export const MENU_ITEM_SELECTED = "bg-primary/10 text-primary";
+export const MENU_ITEM_SELECTED = SELECTED_TINT;
 
 /** A heading over a group of rows ("Snooze until", a provider's name). */
 export const MENU_HEADING =
@@ -331,8 +468,7 @@ export const DROPDOWN_ITEM = cn(MENU_ITEM, "cursor-pointer");
 // ─── Form Inputs ─────────────────────────────────────────────────────────────
 
 /** Standard modal form label */
-export const FORM_LABEL =
-  "block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5";
+export const FORM_LABEL = cn(LABEL, "block mb-1.5");
 
 /** Standard modal form input */
 /**
@@ -342,10 +478,13 @@ export const FORM_LABEL =
  * this rule; the app's other forms now do too.
  */
 export const FORM_INPUT =
-  "w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
+  "w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm bg-surface-container text-on-surface transition-colors";
 
-/** AI pre-fill glow — returns additional classes when a field was auto-populated */
+/**
+ * A field a model filled in — returns additional classes when a field was
+ * auto-populated. AI-derived data, so the AI colour: its wash and a 1 px
+ * inset edge, still. It used to be a pulsing primary glow, which said
+ * "focus" and "loading" at once and never stopped.
+ */
 export const formInputHighlight = (hasValue: boolean) =>
-  hasValue
-    ? "bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,113,156,0.3)] animate-pulse"
-    : "";
+  hasValue ? "bg-ai/10 ring-1 ring-inset ring-ai/40" : "";

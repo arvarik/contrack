@@ -161,18 +161,30 @@ describe("toFeatureCollection", () => {
   });
 
   it("computes score, atRisk, overdue and weight properties", () => {
-    const [feature] = toFeatureCollection([
-      person({
-        relationshipScore: 85,
-        lastContactedAt: "2026-09-01T10:00:00.000Z",
-        interactionCount: 7,
-        nextFollowUpAt: new Date(Date.now() - 60_000).toISOString(),
-      }),
-    ]).features;
-    expect(feature.properties.score).toBe(85);
-    expect(feature.properties.atRisk).toBe(0);
-    expect(feature.properties.overdue).toBe(1);
-    expect(feature.properties.weight).toBe(7);
+    // Overdue by the calendar day: a follow-up due yesterday is late, and
+    // one due earlier today is not, as the contact page's banner says.
+    const now = new Date(2026, 8, 22, 12, 0);
+    const [late, today] = toFeatureCollection(
+      [
+        person({
+          id: "late",
+          relationshipScore: 85,
+          lastContactedAt: "2026-09-01T10:00:00.000Z",
+          interactionCount: 7,
+          nextFollowUpAt: new Date(2026, 8, 21, 17, 0).toISOString(),
+        }),
+        person({
+          id: "today",
+          nextFollowUpAt: new Date(2026, 8, 22, 9, 0).toISOString(),
+        }),
+      ],
+      now,
+    ).features;
+    expect(late.properties.score).toBe(85);
+    expect(late.properties.atRisk).toBe(0);
+    expect(late.properties.overdue).toBe(1);
+    expect(late.properties.weight).toBe(7);
+    expect(today.properties.overdue).toBe(0);
   });
 
   it("gives a contact nobody tracks no score, and never calls it at risk", () => {

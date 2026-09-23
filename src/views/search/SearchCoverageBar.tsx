@@ -1,4 +1,19 @@
-import React, { useState } from "react";
+/**
+ * SearchCoverageBar: how much of the network People search can read.
+ *
+ * Two looks, for two places:
+ *
+ *   - `card` (the default), on the AI settings page: the coverage, its
+ *     numbers and its actions as buttons, with a progress bar under them.
+ *   - `row`, under the Ask Contrack search box: one slim line with a short
+ *     bar, the count in words and quiet text buttons. It is only there while
+ *     there is something to say, so a network that is fully indexed shows
+ *     nothing and the search keeps the page.
+ *
+ * Both reach the same two dialogs: the confirmation before a paid provider
+ * embeds anything, and the list of the contacts that failed.
+ */
+import React, { type RefObject, useCallback, useState } from "react";
 import {
   Sparkles,
   RefreshCw,
@@ -14,16 +29,54 @@ import {
   type FailedIndexItem,
 } from "../../api";
 import { Modal } from "../../components/ui/Modal";
+import { BTN_QUIET, TONE_DOT, TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 interface SearchCoverageBarProps {
-  /** If true, renders a compact badge/pill suitable for headers */
-  compact?: boolean;
+  /** `card` on a settings page, `row` under a search box. */
+  variant?: "card" | "row";
+  /**
+   * Where the keyboard goes when the row leaves with focus inside it: the
+   * search box. Indexing that ends after a press hides the row, and focus on
+   * its button would fall onto the body.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
   className?: string;
 }
 
+/**
+ * The share of contacts indexed, as a bar. Decorative: the words beside it
+ * say the same number. It fills, so it takes the slow duration.
+ */
+const CoverageMeter = ({
+  value,
+  tone,
+  className,
+}: {
+  value: number;
+  tone: Tone;
+  className?: string;
+}) => (
+  <div
+    aria-hidden="true"
+    className={cn(
+      "bg-surface-container-highest rounded-full overflow-hidden",
+      className,
+    )}
+  >
+    <div
+      className={cn(
+        "h-full rounded-full transition-[width] duration-(--dur-slow)",
+        TONE_DOT[tone],
+      )}
+      style={{ width: `${value}%` }}
+    />
+  </div>
+);
+
 export function SearchCoverageBar({
-  compact = false,
+  variant = "card",
+  returnFocusRef,
   className,
 }: SearchCoverageBarProps) {
   const { data: coverage, isLoading } = useSearchCoverage();
@@ -31,6 +84,25 @@ export function SearchCoverageBar({
 
   const [showProviderConfirm, setShowProviderConfirm] = useState(false);
   const [showInspectModal, setShowInspectModal] = useState(false);
+  // Whether a person pressed Index missing or Retry failed, so the row keeps
+  // that button until the work is done. It resets once nothing is missing
+  // or failed.
+  const [queuePressed, setQueuePressed] = useState(false);
+  // React detaches a ref before it removes the node, so the cleanup still
+  // finds focus inside the row and can hand it on while the row is there.
+  const keepFocus = useCallback(
+    (node: HTMLElement | null) => {
+      if (!node) return;
+      return () => {
+        if (node.contains(document.activeElement)) {
+          returnFocusRef?.current?.focus();
+        }
+      };
+    },
+    [returnFocusRef],
+  );
+  const workLeft = !!coverage && (coverage.missing > 0 || coverage.failed > 0);
+  if (queuePressed && coverage && !workLeft) setQueuePressed(false);
 
   if (isLoading || !coverage) return null;
 
@@ -38,8 +110,15 @@ export function SearchCoverageBar({
     coverage.coverage === 100 &&
     coverage.pending === 0 &&
     coverage.failed === 0;
+  /** The bar's tone, and the card's icon tile: done, failing, or still to do. */
+  const tone: Tone = isComplete
+    ? "success"
+    : coverage.failed > 0
+      ? "error"
+      : "primary";
 
   const handleRefreshClick = () => {
+    setQueuePressed(true);
     if (coverage.provider.isPaid) {
       setShowProviderConfirm(true);
       return;
@@ -64,82 +143,130 @@ export function SearchCoverageBar({
     }
   };
 
-  if (compact) {
+  // Mounted whatever the row shows, so a dialog that is open stays open when
+  // the numbers under it change.
+  const dialogs = (
+    <>
+      <ProviderConfirmModal
+        isOpen={showProviderConfirm}
+        onClose={() => setShowProviderConfirm(false)}
+        onConfirm={() => triggerRefresh(true)}
+        isPending={refreshIndex.isPending}
+        providerId={coverage.provider.providerId}
+        model={coverage.provider.model}
+        count={coverage.missing + coverage.pending}
+      />
+      <FailedInspectModal
+        isOpen={showInspectModal}
+        onClose={() => setShowInspectModal(false)}
+        failedItems={coverage.failedItems}
+        onRetry={handleRefreshClick}
+        isRetrying={refreshIndex.isPending}
+      />
+    </>
+  );
+
+  if (variant === "row") {
+    /*
+     * Indexing is under way: the worker is running, or contacts wait for the
+     * built-in model, which drains its queue on its own between batches. A
+     * paid provider's queue waits until a person allows it, so it is not
+     * running: while contacts are missing, the row offers the action that
+     * asks, and the changed contacts it would embed again are a settings
+     * matter, as they always were.
+     */
+    const running =
+      coverage.isIndexing ||
+      (coverage.pending > 0 && !coverage.provider.isPaid);
+    const hasNews = running || coverage.missing > 0 || coverage.failed > 0;
+    // One endpoint queues the missing contacts and the failed ones together,
+    // so there is one action, named for the failures when there are some.
+    // Once pressed it stays on the row until the work is done, marked
+    // unavailable with `aria-disabled` while the queue runs: a pressed button
+    // that left the page, or turned `disabled`, would drop the keyboard's
+    // focus onto the body.
+    const hasWork = coverage.missing > 0 || coverage.failed > 0;
+    const canQueue = !running && hasWork;
+    const showQueue = canQueue || (queuePressed && hasWork);
+    const queueUnavailable = running || refreshIndex.isPending;
+    // Every contact counted and the worker busy: it is embedding contacts
+    // that changed, and "30 of 30" would read as stuck.
+    const words = running
+      ? coverage.missing > 0
+        ? `Indexing ${coverage.indexed} of ${coverage.total}…`
+        : "Updating the search index…"
+      : `${coverage.indexed} of ${coverage.total} contacts indexed`;
+
     return (
-      <div className={cn("flex items-center gap-2", className)}>
-        {coverage.isIndexing || coverage.pending > 0 ? (
-          <button
-            onClick={handleRefreshClick}
-            disabled={refreshIndex.isPending}
-            title={`${coverage.pending} contact(s) pending indexing`}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
+      <>
+        {hasNews && (
+          <section
+            ref={keepFocus}
+            aria-label="Semantic search coverage"
+            className={cn(
+              "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant",
+              className,
+            )}
           >
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>
-              Indexing ({coverage.indexed}/{coverage.total})
-            </span>
-          </button>
-        ) : coverage.failed > 0 ? (
-          <button
-            onClick={() => setShowInspectModal(true)}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
-            title={`${coverage.failed} contact(s) failed indexing — click to inspect`}
-          >
-            <AlertCircle className="w-3.5 h-3.5 text-error" />
-            <span>{coverage.failed} failed</span>
-          </button>
-        ) : coverage.missing > 0 ? (
-          <button
-            onClick={handleRefreshClick}
-            disabled={refreshIndex.isPending}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
-            title={`${coverage.missing} contact(s) missing search vectors — click to index`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-            <span>{coverage.coverage}% indexed</span>
-          </button>
-        ) : (
-          <div
-            title={`Semantic search coverage: 100% (${coverage.indexed}/${coverage.total} contacts)`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>100% indexed</span>
-          </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <CoverageMeter
+                value={coverage.coverage}
+                tone={tone}
+                className="w-16 h-1 shrink-0"
+              />
+              <p>
+                {words}
+                {coverage.failed > 0 && (
+                  <span className="text-error">
+                    {" "}
+                    · {coverage.failed} failed
+                  </span>
+                )}
+              </p>
+            </div>
+            {/* The negative margin sets the last word flush with the search
+                box's right edge, past the button's own padding. */}
+            {(coverage.failed > 0 || showQueue) && (
+              <div className="flex items-center gap-1 ml-auto -mr-2">
+                {coverage.failed > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowInspectModal(true)}
+                    className={BTN_QUIET}
+                  >
+                    Inspect failed
+                  </button>
+                )}
+                {showQueue && (
+                  <button
+                    type="button"
+                    onClick={queueUnavailable ? undefined : handleRefreshClick}
+                    aria-disabled={queueUnavailable || undefined}
+                    className={cn(
+                      BTN_QUIET,
+                      "aria-disabled:opacity-50 aria-disabled:cursor-not-allowed",
+                    )}
+                  >
+                    {coverage.failed > 0 ? "Retry failed" : "Index missing"}
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
         )}
-
-        {/* Confirmation modal for paid provider */}
-        <ProviderConfirmModal
-          isOpen={showProviderConfirm}
-          onClose={() => setShowProviderConfirm(false)}
-          onConfirm={() => triggerRefresh(true)}
-          isPending={refreshIndex.isPending}
-          providerId={coverage.provider.providerId}
-          model={coverage.provider.model}
-          count={coverage.missing + coverage.pending}
-        />
-
-        {/* Inspect modal for failed contacts */}
-        <FailedInspectModal
-          isOpen={showInspectModal}
-          onClose={() => setShowInspectModal(false)}
-          failedItems={coverage.failedItems}
-          onRetry={handleRefreshClick}
-          isRetrying={refreshIndex.isPending}
-        />
-      </div>
+        {dialogs}
+      </>
     );
   }
 
-  // Banner / full display
   return (
     <div
       className={cn(
-        "rounded-2xl p-4 border transition-all duration-200",
+        "rounded-2xl p-4 border transition-colors",
         isComplete
           ? "bg-surface-container-lowest border-outline-variant/30"
           : coverage.failed > 0
-            ? "bg-rose-500/5 border-rose-500/20"
+            ? "bg-error/5 border-error/20"
             : "bg-surface-container-low border-primary/20",
         className,
       )}
@@ -149,11 +276,7 @@ export function SearchCoverageBar({
           <div
             className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-              isComplete
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : coverage.failed > 0
-                  ? "bg-rose-500/10 text-error"
-                  : "bg-primary/10 text-primary",
+              TONE_WASH[tone],
             )}
           >
             {coverage.isIndexing ? (
@@ -170,14 +293,12 @@ export function SearchCoverageBar({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-on-surface">
-                Semantic Search Coverage
+                Semantic search coverage
               </h2>
               <span
                 className={cn(
                   "text-xs font-semibold px-2 py-0.5 rounded-md",
-                  isComplete
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                    : "bg-primary/10 text-primary",
+                  TONE_WASH[isComplete ? "success" : "primary"],
                 )}
               >
                 {coverage.coverage}%
@@ -200,7 +321,7 @@ export function SearchCoverageBar({
               onClick={() => setShowInspectModal(true)}
               className="btn-secondary"
             >
-              Inspect {coverage.failed} Failed
+              Inspect {coverage.failed} failed
             </button>
           )}
 
@@ -218,46 +339,19 @@ export function SearchCoverageBar({
               )}
             />
             <span>
-              {coverage.missing > 0 ? "Index Missing" : "Refresh Index"}
+              {coverage.missing > 0 ? "Index missing" : "Refresh index"}
             </span>
           </button>
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-surface-container-highest rounded-full h-1.5 mt-3 overflow-hidden">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all duration-300",
-            isComplete
-              ? "bg-emerald-500"
-              : coverage.failed > 0
-                ? "bg-amber-500"
-                : "bg-primary",
-          )}
-          style={{ width: `${coverage.coverage}%` }}
-        />
-      </div>
-
-      {/* Confirmation modal for paid provider */}
-      <ProviderConfirmModal
-        isOpen={showProviderConfirm}
-        onClose={() => setShowProviderConfirm(false)}
-        onConfirm={() => triggerRefresh(true)}
-        isPending={refreshIndex.isPending}
-        providerId={coverage.provider.providerId}
-        model={coverage.provider.model}
-        count={coverage.missing + coverage.pending}
+      <CoverageMeter
+        value={coverage.coverage}
+        tone={tone}
+        className="w-full h-1.5 mt-3"
       />
 
-      {/* Inspect modal for failed contacts */}
-      <FailedInspectModal
-        isOpen={showInspectModal}
-        onClose={() => setShowInspectModal(false)}
-        failedItems={coverage.failedItems}
-        onRetry={handleRefreshClick}
-        isRetrying={refreshIndex.isPending}
-      />
+      {dialogs}
     </div>
   );
 }
@@ -283,14 +377,19 @@ function ProviderConfirmModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Confirm Provider Embeddings Refresh"
+      title="Confirm provider embeddings refresh"
       size="md"
     >
       <div className="space-y-4 pt-2">
-        <div className="p-3 bg-amber-500/10 text-warning rounded-xl flex items-start gap-2.5">
+        <div
+          className={cn(
+            TONE_WASH.warning,
+            "p-3 rounded-xl flex items-start gap-2.5",
+          )}
+        >
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <p className="font-bold">Paid Provider Embeddings</p>
+            <p className="font-bold">Paid provider embeddings</p>
             <p>
               Your instance is configured to use{" "}
               <strong className="underline">
@@ -328,7 +427,7 @@ function ProviderConfirmModal({
             className="btn-primary"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>Confirm & Refresh</span>
+            <span>Confirm & refresh</span>
           </button>
         </div>
       </div>
@@ -353,7 +452,7 @@ function FailedInspectModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Failed Search Indexing Tasks"
+      title="Failed search indexing tasks"
       size="lg"
     >
       <div className="space-y-4 pt-2">
@@ -376,7 +475,12 @@ function FailedInspectModal({
               >
                 <div className="flex items-center justify-between font-bold text-on-surface">
                   <span>{item.name}</span>
-                  <span className="text-[11px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-md">
+                  <span
+                    className={cn(
+                      TONE_WASH.error,
+                      "text-[11px] font-mono px-2 py-0.5 rounded-md",
+                    )}
+                  >
                     {item.attempts} attempts
                   </span>
                 </div>
@@ -406,7 +510,7 @@ function FailedInspectModal({
               className="btn-primary"
             >
               {isRetrying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Retry All Failed</span>
+              <span>Retry all failed</span>
             </button>
           </div>
         </div>

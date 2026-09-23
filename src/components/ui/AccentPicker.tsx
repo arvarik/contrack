@@ -1,7 +1,7 @@
 /**
  * AccentPicker — choose the colour the app is built around.
  *
- * Eight presets and a colour well. The swatches show the DERIVED primary
+ * Seven presets and a colour well. The swatches show the DERIVED primary
  * rather than the raw value somebody picked, so the control shows what the app
  * will actually look like: pick a pale yellow and the swatch is the brown-gold
  * the contrast contract turns it into, rather than a pale yellow that then
@@ -15,6 +15,7 @@
 import { useId, useRef } from "react";
 import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { SWATCH_SELECTED } from "../../lib/styles";
 import {
   ACCENT_TOKENS,
   deriveAccent,
@@ -24,15 +25,22 @@ import {
   type ResolvedMode,
 } from "../../lib/theme";
 
-/** The presets, named so a screen reader can say which one is selected. */
+/**
+ * The presets, named so a screen reader can say which one is selected.
+ *
+ * No violet: the accent replaces the primary on every button and link, and
+ * violet is the AI colour's hue. Each preset keeps `AI_HUE_CLEARANCE`
+ * degrees away from it, which `tests/unit/theme.contrast.test.ts` holds.
+ */
 export const ACCENT_PRESETS: readonly { value: string; label: string }[] = [
   { value: DEFAULT_ACCENT, label: "Contrack blue" },
   { value: "#0f766e", label: "Teal" },
   { value: "#15803d", label: "Green" },
   { value: "#b45309", label: "Amber" },
   { value: "#be123c", label: "Rose" },
-  { value: "#a21caf", label: "Magenta" },
-  { value: "#6d28d9", label: "Violet" },
+  // Hue 339: the derived dark primary sits 41 degrees from the dark AI
+  // colour. The old #a21caf (hue 324) came within 26 of it in dark.
+  { value: "#b0158f", label: "Magenta" },
   { value: "#334155", label: "Slate" },
 ];
 
@@ -95,7 +103,7 @@ export const AccentPicker = ({
     buttons?.[ACCENT_PRESETS.indexOf(next)]?.focus();
   };
 
-  // Swatches are 36 px with a 44 px tap box (`hit-area`). Nine of them do not
+  // Swatches are 36 px with a 44 px tap box (`hit-area`). Eight of them do not
   // fit one row of a phone card, so below `sm` the presets sit in two rows of
   // four with the colour well beside them. The 8 px gap keeps the tap boxes
   // from overlapping.
@@ -129,8 +137,7 @@ export const AccentPicker = ({
               className={cn(
                 "hit-area w-9 h-9 rounded-full flex items-center justify-center transition-transform",
                 "hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2",
-                selected &&
-                  "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
+                selected && SWATCH_SELECTED,
               )}
             >
               {selected && (
@@ -163,8 +170,7 @@ export const AccentPicker = ({
           className={cn(
             "w-9 h-9 rounded-full transition-transform group-hover/well:scale-110",
             "bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)]",
-            !isPreset &&
-              "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
+            !isPreset && SWATCH_SELECTED,
           )}
         />
         <span className="sr-only">Any other colour</span>

@@ -30,6 +30,7 @@ import type {
 import { cn } from "../../../lib/utils";
 import {
   CARD,
+  LABEL,
   SECTION_HEADING_SPACED,
   STATUS_BADGE_SUCCESS,
 } from "../../../lib/styles";
@@ -162,7 +163,8 @@ function BriefingCard({
           <ul className="mt-4 space-y-3">
             {points.map((point, index) => (
               <li key={index} className="flex gap-3">
-                <span aria-hidden="true" className="text-primary font-bold">
+                {/* A model wrote the points, so the bullet is the AI colour. */}
+                <span aria-hidden="true" className="text-ai font-bold">
                   •
                 </span>
                 <span className="text-sm leading-relaxed text-on-surface">
@@ -268,6 +270,44 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
   );
 };
 
+/** The known parts, joined: "BSc · Physics". */
+const metaLine = (
+  first: string | null,
+  second: string | null,
+  separator = " · ",
+): string => [first, second].filter(Boolean).join(separator);
+
+/**
+ * "Dec 2024" for an ISO month or day. An import keeps a date as it found
+ * it, so other text shows as written, and the "null" some imports wrote is
+ * nothing. The raw "2024-12-07" read as a database field.
+ */
+function monthOf(value: string | null | undefined): string | null {
+  if (!value || value === "null") return null;
+  const iso = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(value);
+  return iso
+    ? new Date(Number(iso[1]), Number(iso[2]) - 1).toLocaleDateString(
+        undefined,
+        { month: "short", year: "numeric" },
+      )
+    : value;
+}
+
+/**
+ * "Dec 2024 – Present", or whichever end is known. An end alone is "Until
+ * Dec 2024": printed bare, it read as the start.
+ */
+const dateSpan = (
+  start: string | null,
+  end: string | null,
+  current = false,
+): string => {
+  const from = monthOf(start);
+  const to = monthOf(end);
+  if (!from && to) return `Until ${to}`;
+  return metaLine(from, to ?? (current ? "Present" : null), " – ");
+};
+
 /** Every dossier section that has something to show. */
 const DossierContent = ({ contact }: { contact: Contact }) => {
   return (
@@ -279,7 +319,7 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       {contact.about && <AboutSection about={contact.about} />}
       {contact.aiBackground && (
         <details className={cn(CARD, "min-w-0")}>
-          <summary className="hit-area cursor-pointer font-semibold text-sm text-primary">
+          <summary className="hit-area state-layer w-fit -mx-1.5 rounded-lg px-1.5 py-0.5 cursor-pointer font-semibold text-sm text-primary transition-colors">
             Research notes and sources
           </summary>
           <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
@@ -310,21 +350,20 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
         </details>
       )}
 
-      {/* AI Custom Attributes */}
+      {/* AI custom attributes. Enrichment writes them, so each name wears
+          the AI colour. */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {contact.attributes.map(
             (attr: { id: string; name: string; value: string }) => {
-              // Format attribute names: replace underscores/hyphens with spaces, title-case
+              // "favorite_coffee" reads "Favorite coffee": spaces for the
+              // underscores and hyphens, and sentence case.
               const displayName = attr.name
                 .replace(/[_-]/g, " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase());
+                .replace(/^\w/, (c) => c.toUpperCase());
               return (
-                <div
-                  key={attr.id}
-                  className="bg-surface-container-lowest rounded-xl p-4 shadow-sm"
-                >
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-primary block mb-1">
+                <div key={attr.id} className={cn(CARD, "p-4")}>
+                  <span className={cn(LABEL, "text-ai block mb-1")}>
                     {displayName}
                   </span>
                   <span className="text-sm text-on-surface leading-relaxed font-medium block">
@@ -340,16 +379,16 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       {/* Experience & Education */}
       {((contact.experience?.length ?? 0) > 0 ||
         (contact.education?.length ?? 0) > 0) && (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+        <div className={cn(CARD, "p-0 overflow-hidden")}>
           {contact.experience && contact.experience.length > 0 && (
-            <div className="p-6 last:border-0 bg-surface-container-lowest">
+            <div className="p-6">
               <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}>
-                <Briefcase className="w-4 h-4" /> Experience Overview
+                <Briefcase className="w-4 h-4" /> Experience overview
               </h3>
               <div className="space-y-5">
                 {contact.experience.map((exp: ContactExperience) => (
                   <div key={exp.id} className="flex gap-4">
-                    <div className="icon-container">
+                    <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center shrink-0 shadow-xs">
                       <Briefcase className="w-4 h-4 text-primary" />
                     </div>
                     <div>
@@ -359,26 +398,18 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
                           <span className={STATUS_BADGE_SUCCESS}>Current</span>
                         )}
                       </p>
-                      <p className="text-sm text-primary font-bold">
-                        {exp.company}
-                      </p>
+                      {/* The ink, not the primary: the name is no link. */}
+                      <p className="text-sm text-on-surface">{exp.company}</p>
                       <p className="text-xs text-on-surface-variant mb-1 font-medium">
-                        {exp.startDate && exp.startDate !== "null"
-                          ? exp.startDate
-                          : ""}
-                        {exp.endDate && exp.endDate !== "null"
-                          ? ` – ${exp.endDate}`
-                          : exp.isCurrent
-                            ? " – Present"
-                            : ""}
-                        {exp.location && (
-                          <span className="ml-2 opacity-60">
-                            · {exp.location}
-                          </span>
+                        {metaLine(
+                          dateSpan(exp.startDate, exp.endDate, exp.isCurrent),
+                          exp.location,
                         )}
                       </p>
+                      {/* All of it. Two lines that opened on hover could
+                          not be read with a finger. */}
                       {exp.description && (
-                        <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 hover:line-clamp-none mt-1">
+                        <p className="text-xs text-on-surface-variant leading-relaxed mt-1">
                           {exp.description}
                         </p>
                       )}
@@ -400,23 +431,11 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
                     <div>
                       <p className="font-bold text-on-surface">{edu.school}</p>
                       <p className="text-sm text-on-surface-variant font-medium">
-                        {edu.degree}
-                        {edu.fieldOfStudy && (
-                          <span className="opacity-70">
-                            {" "}
-                            · {edu.fieldOfStudy}
-                          </span>
-                        )}
+                        {metaLine(edu.degree, edu.fieldOfStudy)}
                       </p>
-                      {((edu.startDate && edu.startDate !== "null") ||
-                        (edu.endDate && edu.endDate !== "null")) && (
-                        <p className="text-xs text-on-surface-variant opacity-70 mt-0.5">
-                          {edu.startDate && edu.startDate !== "null"
-                            ? edu.startDate
-                            : ""}
-                          {edu.endDate && edu.endDate !== "null"
-                            ? ` – ${edu.endDate}`
-                            : ""}
+                      {dateSpan(edu.startDate, edu.endDate) && (
+                        <p className="text-xs text-on-surface-variant mt-0.5">
+                          {dateSpan(edu.startDate, edu.endDate)}
                         </p>
                       )}
                     </div>
@@ -479,13 +498,13 @@ function AboutSection({ about }: { about: string }) {
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((open) => !open)}
-          className="hit-area mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary"
+          className="hit-area state-layer mt-3 -mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-sm font-semibold text-primary transition-colors"
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDown
             aria-hidden="true"
             className={cn(
-              "w-4 h-4 transition-transform duration-300",
+              "w-4 h-4 transition-transform duration-(--dur-slow)",
               expanded && "rotate-180",
             )}
           />

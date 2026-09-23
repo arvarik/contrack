@@ -1,10 +1,12 @@
 /**
  * ContactMetaBadges — Inline metadata badges for search result cards.
  *
- * Renders up to 3 lightweight data points on any search result card:
- *   1. Relationship score dot (🟢/🟡/🔴) — after the contact name
+ * Renders up to 2 lightweight data points on any search result card:
+ *   1. Relationship score dot — after the contact name, in its band's tone
  *   2. "Last contact" time distance — below role/company
- *   3. Data age indicator — not rendered here (see DataAgeHalo)
+ *
+ * The avatar wears no freshness ring any more: a coloured ring around an
+ * avatar is the relationship's health everywhere else in the app.
  *
  * Designed to be composable: each badge renders only if its data is non-null.
  * Zero API calls — uses data already present in the search result payload.
@@ -15,11 +17,9 @@ import React from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, RefreshCw } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
-import {
-  describeScore,
-  scoreView,
-  type ScoreBand,
-} from "../../../shared/scoreBand";
+import { TONE_DOT, TONE_WASH } from "../../lib/styles";
+import { cn } from "../../lib/utils";
+import { describeScore, scoreView } from "../../../shared/scoreBand";
 
 // ─── Score Dot ───────────────────────────────────────────────────────────────
 
@@ -37,21 +37,14 @@ interface ScoreDotProps {
 }
 
 /**
- * The dot colour for each band. The cut points and the words come from
- * shared/scoreBand, so the palette and the avatar ring always agree.
- */
-const SCORE_DOT_COLOR: Record<ScoreBand, string> = {
-  strong: "bg-emerald-500",
-  fading: "bg-amber-500",
-  "at-risk": "bg-rose-500",
-};
-
-/**
  * A 6 px coloured circle after the contact's name, for the band.
  *
  * The dot shows for a tracked contact with a score. It is absent for a
  * contact nobody tracks and for one with nothing logged yet, so a fresh
- * import of hundreds of people shows no wall of red.
+ * import of hundreds of people shows no wall of red. It takes its band's
+ * tone (`SCORE_BANDS` in shared/scoreBand), the token the avatar ring
+ * strokes with, so the palette and the ring agree on the colour as well as
+ * the cut points.
  */
 export const ScoreDot = ({ contact }: ScoreDotProps) => {
   const view = scoreView(contact);
@@ -60,7 +53,7 @@ export const ScoreDot = ({ contact }: ScoreDotProps) => {
   return (
     <span
       title={describeScore(view.score)}
-      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${SCORE_DOT_COLOR[view.band.band]}`}
+      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${TONE_DOT[view.band.token]}`}
     />
   );
 };
@@ -162,7 +155,12 @@ export const StaleChip = ({
   };
 
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-warning bg-amber-500/10 px-1.5 py-0.5 rounded-md font-medium">
+    <span
+      className={cn(
+        TONE_WASH.warning,
+        "inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md font-medium",
+      )}
+    >
       {ageLabel}
       {onRefresh && (
         <button
@@ -170,11 +168,12 @@ export const StaleChip = ({
           title={tooltip}
           onClick={handleClick}
           disabled={disabled}
-          className={`hit-area inline-flex items-center justify-center w-4 h-4 rounded transition-colors ${
+          className={cn(
+            "hit-area state-layer inline-flex items-center justify-center w-4 h-4 rounded transition-colors",
             disabled
               ? "text-on-surface-variant/30 cursor-not-allowed"
-              : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
-          }`}
+              : "text-warning cursor-pointer",
+          )}
         >
           {/*
             The bird thinks while this contact refreshes. Decorative, because

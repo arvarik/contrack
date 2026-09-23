@@ -3,23 +3,16 @@
  *
  * Driven by registry.ts. From lg width, renders a 240px rail with search
  * and navigation groups beside a scrolling outlet. Below lg, renders the
- * familiar landing list and pages with Back.
+ * familiar landing list and pages with a link back to it.
+ *
+ * The page's header is `PageHeader`, drawn above the scrolling outlet so it
+ * stays in place while the page scrolls under it.
  */
 import React, { Suspense } from "react";
-import {
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
-import {
-  ChevronLeft,
-  History,
-  Loader2,
-  Settings as SettingsIcon,
-} from "lucide-react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { History, Loader2 } from "lucide-react";
 import { ActionMenu } from "../../components/ui/ActionMenu";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { useDedupeOptional } from "../../contexts/DedupeContext";
 import {
   SETTINGS_PAGES,
@@ -33,24 +26,24 @@ import { RequireAdmin } from "../../components/auth/RequireAdmin";
 import { useAuth } from "../../components/auth/AuthGate";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { usePageTitle } from "../../hooks/usePageTitle";
-import { ICON_BTN, PAGE_TITLE } from "../../lib/styles";
+import { PAGE_TOP, PAGE_X } from "../../lib/styles";
 import { NAMES } from "../../lib/names";
 import { cn } from "../../lib/utils";
+import { SETTINGS_BOX, SETTINGS_PAGE } from "./layout";
 
 // Lazy admin user view for special route /admin/users/new
 const UsersView = React.lazy(() =>
   import("./admin/UsersView").then((m) => ({ default: m.UsersView })),
 );
 
-const AdminFallback = () => (
-  <div className="p-6 flex items-center gap-2 text-sm text-on-surface-variant">
-    <Loader2 className="w-4 h-4 animate-spin" />
-    Loading…
-  </div>
-);
-
+/** A page on its way, in the page's own box, so its content lands in place. */
 const PageFallback = () => (
-  <div className="p-6 flex items-center gap-2 text-sm text-on-surface-variant">
+  <div
+    className={cn(
+      SETTINGS_PAGE,
+      "flex items-center gap-2 text-sm text-on-surface-variant",
+    )}
+  >
     <Loader2 className="w-4 h-4 animate-spin" />
     Loading…
   </div>
@@ -70,7 +63,7 @@ const AdminRoute = ({
         ownsScrolling ? "overflow-hidden" : "overflow-y-auto",
       )}
     >
-      <Suspense fallback={<AdminFallback />}>{children}</Suspense>
+      <Suspense fallback={<PageFallback />}>{children}</Suspense>
     </div>
   </RequireAdmin>
 );
@@ -97,7 +90,6 @@ function getLazyComponent(page: SettingsPage) {
 
 export const SettingsShell = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const isWide = useMediaQuery(WIDE_QUERY);
 
   // Match subpage by longest matching path
@@ -112,21 +104,62 @@ export const SettingsShell = () => {
 
   const isSubpage = !!currentSubpage;
   const title = currentSubpage?.title ?? NAMES.settings.title;
-  const Icon = currentSubpage?.icon ?? SettingsIcon;
   const ownsScrolling = currentSubpage?.ownsScrolling ?? false;
 
   usePageTitle(title);
 
-  // Back button behaviour:
-  // On wide screens (lg and up): back goes to "/" ("Back to Network")
+  // The back link names the page it goes to.
+  // On wide screens (lg and up) the rail is on screen, so it goes to "/",
+  // the Network.
   // On narrow screens (< lg):
-  // - on landing page (/settings): no back control (finding A14)
-  // - on subpages: back goes to "/settings" ("Back to Settings")
-  const showBackButton = isWide || isSubpage;
-  const backLabel = isWide ? "Back to Network" : "Back to Settings";
-  const backDestination = isWide ? "/" : "/settings";
+  // - on the landing page (/settings): no back link (finding A14)
+  // - on subpages: it goes to "/settings", the landing list
+  const back = isWide
+    ? { to: "/", label: NAMES.network.label }
+    : isSubpage
+      ? { to: "/settings", label: NAMES.settings.label }
+      : undefined;
 
   const dedupe = useDedupeOptional();
+
+  // A page that scrolls carries its header with it, the way Pulse and the
+  // Tracked page do, so text never slides under a fixed title. A page that
+  // owns its scrolling (a full-width tool) keeps the header fixed above it.
+  const header = (
+    <PageHeader
+      back={back}
+      title={title}
+      actions={
+        // Below sm, Merge activity moves into an ActionMenu in the header
+        // for Duplicates.
+        currentSubpage?.id === "duplicates" ? (
+          <div className="sm:hidden">
+            <ActionMenu
+              label="Duplicates actions"
+              items={[
+                {
+                  id: "merge-activity",
+                  label: "Merge activity",
+                  icon: History,
+                  onSelect: () => dedupe?.setShowActivity(true),
+                },
+              ]}
+            />
+          </div>
+        ) : undefined
+      }
+      className={cn(
+        PAGE_TOP,
+        // A page that owns its scrolling is a full-width tool, and its
+        // header spans the column, unless it is `boxed`. Every other page is
+        // a centred box, and the header takes the same box, so the title
+        // starts above the page's first card and not off to its left.
+        ownsScrolling
+          ? cn(currentSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
+          : SETTINGS_BOX,
+      )}
+    />
+  );
 
   return (
     <div className="h-full flex overflow-hidden bg-surface text-on-surface">
@@ -137,53 +170,7 @@ export const SettingsShell = () => {
 
       {/* ── Content Area (Header + Outlet) ── */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        <header className="px-4 sm:px-6 py-4 sm:py-5 bg-surface-container-low shrink-0 border-b border-surface-container/30">
-          <div className="flex items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              {showBackButton && (
-                <button
-                  type="button"
-                  onClick={() => navigate(backDestination)}
-                  className={cn(
-                    ICON_BTN,
-                    "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",
-                  )}
-                  aria-label={backLabel}
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-              )}
-              <h1 className={cn(PAGE_TITLE, "flex items-center gap-3 min-w-0")}>
-                <span className="p-2 bg-primary/10 rounded-xl shrink-0">
-                  <Icon
-                    className={cn(
-                      "w-5 h-5 sm:w-6 sm:h-6",
-                      currentSubpage?.tone ?? "text-primary",
-                    )}
-                  />
-                </span>
-                <span className="truncate">{title}</span>
-              </h1>
-            </div>
-
-            {/* Below sm, Merge activity moves into an ActionMenu in the header for Duplicates */}
-            {currentSubpage?.id === "duplicates" && (
-              <div className="sm:hidden shrink-0">
-                <ActionMenu
-                  label="Duplicates actions"
-                  items={[
-                    {
-                      id: "merge-activity",
-                      label: "Merge activity",
-                      icon: History,
-                      onSelect: () => dedupe?.setShowActivity(true),
-                    },
-                  ]}
-                />
-              </div>
-            )}
-          </div>
-        </header>
+        {ownsScrolling && header}
 
         <main
           id="main-content"
@@ -192,6 +179,7 @@ export const SettingsShell = () => {
             ownsScrolling ? "overflow-hidden" : "overflow-y-auto",
           )}
         >
+          {!ownsScrolling && header}
           <Routes>
             <Route path="/" element={<SettingsHome />} />
 

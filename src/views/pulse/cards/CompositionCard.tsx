@@ -40,9 +40,9 @@ export interface CompositionCardProps {
   dashboard?: DashboardPayload;
 }
 
-/** The legend's dot, in the slice's own fill and opacity. */
+/** One legend line: a control, so the hover layer, across the card's width. */
 const LEGEND_ROW =
-  "hit-area flex items-center gap-2 min-w-0 w-full rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-surface-container-low transition-colors text-left";
+  "hit-area state-layer flex items-center gap-2 min-w-0 w-full rounded-lg px-1.5 py-1 -mx-1.5 text-left";
 
 export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
   const [tab, setTab] = useState<CompositionTab>("industry");
@@ -93,7 +93,6 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
       <CardFrame
         cardId="composition"
         title="Composition"
-        compact
         headerAction={
           <button
             type="button"

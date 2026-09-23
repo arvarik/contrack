@@ -33,7 +33,7 @@ export const ComposerPlaceholder = ({
     className={
       compact
         ? "flex flex-col"
-        : cn(COMPOSER, "p-0 overflow-hidden flex flex-col shadow-md")
+        : cn(COMPOSER, "p-0 overflow-hidden flex flex-col")
     }
     aria-busy="true"
     aria-label="Loading the note composer"
@@ -58,7 +58,7 @@ export const ComposerPlaceholder = ({
         <div className="flex flex-1 items-center min-h-[44px] sm:min-h-0 px-3 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm">
           <CalendarClock className="w-4 h-4 text-primary mr-2.5 shrink-0" />
           <span className="text-xs font-semibold text-on-surface-variant">
-            Next action (e.g. Follow up next Tuesday at 2pm)...
+            Next action, like follow up Tuesday
           </span>
         </div>
       </div>

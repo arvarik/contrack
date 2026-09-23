@@ -23,6 +23,9 @@ import { CalendarFormModal } from "./CalendarFormModal";
 import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
+import { SETTINGS_PAGE } from "../layout";
+import { CARD, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import type {
   ConnectorKind,
   ConnectorSummary,
@@ -103,20 +106,17 @@ export const ConnectorsView: React.FC = () => {
   const correspondentCount = correspondents?.length ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-xs text-on-surface-variant">
+          <p className="text-sm text-on-surface-variant text-pretty">
             Calendar, mailbox, Google, messages. Sync who you talk to.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            to="/settings/connectors/people"
-            className="hit-area inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors min-h-[44px]"
-          >
+          <Link to="/settings/connectors/people" className="btn-secondary">
             <Users
               className="w-4 h-4 text-on-surface-variant"
               aria-hidden="true"
@@ -133,7 +133,7 @@ export const ConnectorsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setAddSheetOpen(true)}
-              className="hit-area inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className="btn-primary"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Add connector</span>
@@ -154,7 +154,10 @@ export const ConnectorsView: React.FC = () => {
       {isError && (
         <div
           role="alert"
-          className="rounded-2xl bg-red-500/10 border border-red-500/20 p-6 text-center space-y-3"
+          className={cn(
+            "rounded-2xl p-6 text-center space-y-3",
+            TONE_WASH.error,
+          )}
         >
           <p className="text-sm font-semibold text-error">
             Failed to load connectors
@@ -162,7 +165,7 @@ export const ConnectorsView: React.FC = () => {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="hit-area px-4 py-2 rounded-xl text-xs font-medium bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors"
+            className="btn-secondary btn-sm"
           >
             Retry
           </button>
@@ -185,15 +188,20 @@ export const ConnectorsView: React.FC = () => {
 
       {/* Empty state: show gallery directly with intro */}
       {!isLoading && !isError && !hasConnectors && (
-        <div className="rounded-2xl bg-surface-container border border-surface-container-high/60 p-6 space-y-6">
+        <div className={cn(CARD, "space-y-6")}>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                  TONE_WASH.primary,
+                )}
+              >
                 <Cable className="w-5 h-5" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="text-base font-semibold text-on-surface">
-                  Get started with Connectors
+                  Get started with connectors
                 </h2>
                 <p className="text-xs text-on-surface-variant">
                   Contrack learns who you talk to from your calendar and email.
@@ -207,7 +215,7 @@ export const ConnectorsView: React.FC = () => {
             {(kinds ?? []).map((k) => (
               <div
                 key={k.kind}
-                className="flex items-start justify-between gap-4 p-4 rounded-xl border transition-all bg-surface-container-low border-surface-container-high hover:border-primary/40"
+                className="flex items-start justify-between gap-4 p-4 rounded-xl bg-surface-container-low"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -223,7 +231,7 @@ export const ConnectorsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSelectKind(k.kind)}
-                  className="hit-area shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                  className="btn-primary btn-sm shrink-0"
                 >
                   Connect
                 </button>

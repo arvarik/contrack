@@ -7,6 +7,7 @@
  * @module views/map/mapStats
  */
 import tzlookup from "tz-lookup";
+import { isPastDay } from "../../../shared/dates";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
 import { scoreView } from "../../../shared/scoreBand";
 import { boundsContain } from "./mapMath";
@@ -35,7 +36,7 @@ export interface MapStats {
    * contact has a score, so an untracked pin counts for nobody.
    */
   atRisk: number;
-  /** In-view contacts whose next follow-up date is before now. */
+  /** In-view contacts whose next follow-up's day is before today. */
   overdue: number;
   /** In-view contacts who have never been contacted. */
   neverContacted: number;
@@ -107,7 +108,6 @@ export function computeMapStats(
   now: Date = new Date(),
   totalCount?: number,
 ): MapStats {
-  const nowMs = now.getTime();
   const total = totalCount ?? contacts.length;
   const matching = contacts.length;
 
@@ -157,13 +157,10 @@ export function computeMapStats(
       }
     }
 
-    // Overdue
-    if (c.nextFollowUpAt) {
-      const dueMs = new Date(c.nextFollowUpAt).getTime();
-      if (Number.isFinite(dueMs) && dueMs < nowMs) {
-        overdue++;
-      }
-    }
+    // Overdue: the follow-up's day is before today, as the contact page's
+    // banner counts it. Compared as instants, a follow-up set to "Tomorrow"
+    // was one overdue by 6 PM in Los Angeles.
+    if (isPastDay(c.nextFollowUpAt, now)) overdue++;
 
     // Never contacted
     if (

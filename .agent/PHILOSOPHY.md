@@ -41,7 +41,7 @@ Core storage (SQLite) is local — `curator.db` lives on disk, never in the clou
 Intelligence should feel passive and ambient, not interventional:
 
 - **Automated relationship scoring**: `relationshipService` recomputes decay-weighted scores hourly using interaction frequency, recency, and cadence adherence — users see health rings and at-risk warnings without manual input.
-- **Retroactive geocoding**: On startup, contacts with locations but no coordinates are silently geocoded (Mapbox → Nominatim fallback), populating the map without user intervention.
+- **Retroactive geocoding**: On startup, contacts with locations but no coordinates are silently geocoded with Nominatim, populating the map without user intervention.
 - **Background embedding backfill**: Both search embeddings (local, 384-dim) and dedupe embeddings (Gemini, 768-dim) backfill silently on startup.
 - **Phonetic hash indexing**: Double Metaphone hashes are computed and backfilled on startup for O(1) phonetic blocking in the deduplication engine.
 

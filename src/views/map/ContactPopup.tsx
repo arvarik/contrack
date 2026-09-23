@@ -24,7 +24,7 @@
  * @module views/map/ContactPopup
  */
 import { useEffect } from "react";
-import { Popup } from "react-map-gl/maplibre";
+import { Popup } from "@vis.gl/react-maplibre";
 import { MapPin } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
 import { contactPinLabel } from "./ContactMarker";
@@ -115,7 +115,7 @@ export const StackPopup = ({ stack, onSelect, onClose }: StackPopupProps) => {
               <button
                 type="button"
                 onClick={() => onSelect(contact.id)}
-                className="w-full min-h-[44px] px-2 rounded-lg text-left text-sm font-semibold text-on-surface hover:bg-surface-container-high"
+                className="state-layer w-full min-h-[44px] px-2 rounded-lg text-left text-sm font-semibold text-on-surface"
               >
                 {contactPinLabel(contact)}
               </button>

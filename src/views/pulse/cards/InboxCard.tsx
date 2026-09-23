@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { TONE_TEXT, TONE_WASH, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_ROW, PULSE_TYPE } from "../lib/pulseStyles";
 
@@ -61,28 +62,45 @@ const N = ({ children }: { children: React.ReactNode }) => (
 );
 
 /**
+ * A row's glyph in a 28 px tile of its tone: new people are the success
+ * green, possible duplicates the warning amber, correspondents the primary,
+ * and the clean-up jobs neutral.
+ */
+const RowIcon = ({ icon: Icon, tone }: { icon: LucideIcon; tone: Tone }) => (
+  <span
+    className={cn(
+      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+      TONE_WASH[tone],
+    )}
+    aria-hidden="true"
+  >
+    <Icon className="w-4 h-4" />
+  </span>
+);
+
+/**
  * One row: a glyph, a sentence that wraps rather than truncates, and a
  * chevron that says the row goes somewhere. The whole row is the link.
  */
 const InboxRow = ({
   to,
-  icon: Icon,
-  tone = "text-on-surface-variant",
+  icon,
+  tone = "neutral",
   children,
 }: {
   to: string;
   icon: LucideIcon;
-  tone?: string;
+  tone?: Tone;
   children: React.ReactNode;
 }) => (
   <li>
     <Link to={to} className={PULSE_ROW}>
-      <Icon className={cn("w-4 h-4 shrink-0", tone)} aria-hidden="true" />
+      <RowIcon icon={icon} tone={tone} />
       <span className={cn(PULSE_TYPE.rowTitle, "min-w-0 flex-1 text-pretty")}>
         {children}
       </span>
       <ChevronRight
-        className="w-4 h-4 shrink-0 text-on-surface-variant opacity-50 transition-all group-hover:opacity-100 group-hover:translate-x-0.5"
+        className="w-4 h-4 shrink-0 text-on-surface-variant opacity-50 transition-opacity group-hover:opacity-100"
         aria-hidden="true"
       />
     </Link>
@@ -120,7 +138,7 @@ export const InboxCard = ({
       <CardFrame cardId="inbox" title="Inbox" count={0} variant="line">
         <span className="inline-flex items-center gap-1.5">
           <CheckCircle2
-            className="w-4 h-4 text-success shrink-0"
+            className={cn("w-4 h-4 shrink-0", TONE_TEXT.success)}
             aria-hidden="true"
           />
           Nothing to clean up.
@@ -134,14 +152,14 @@ export const InboxCard = ({
       <ul className="flex flex-col gap-1.5">
         {/* The tracking action first: the new people nobody follows yet. */}
         {newPeople && untracked > 0 && (
-          <InboxRow to="/?q=tracked:no" icon={UserPlus} tone="text-primary">
+          <InboxRow to="/?q=tracked:no" icon={UserPlus} tone="success">
             <N>{newPeople.total}</N> new this month, <N>{untracked}</N>{" "}
             untracked
           </InboxRow>
         )}
 
         {pendingDuplicates > 0 && (
-          <InboxRow to="/pulse/duplicates" icon={Copy}>
+          <InboxRow to="/pulse/duplicates" icon={Copy} tone="warning">
             Review <N>{pendingDuplicates}</N> possible{" "}
             {pendingDuplicates === 1 ? "duplicate" : "duplicates"}
           </InboxRow>
@@ -164,13 +182,11 @@ export const InboxCard = ({
               aria-controls="ghosts-list"
               className={cn(
                 PULSE_ROW,
-                "w-full text-left cursor-pointer bg-transparent hover:bg-surface-container-low rounded-xl",
+                // The item carries the wash, so the open list sits on it too.
+                "w-full text-left cursor-pointer bg-transparent",
               )}
             >
-              <Ghost
-                className="w-4 h-4 shrink-0 text-on-surface-variant"
-                aria-hidden="true"
-              />
+              <RowIcon icon={Ghost} tone="neutral" />
               <span
                 className={cn(
                   PULSE_TYPE.rowTitle,
@@ -203,7 +219,7 @@ export const InboxCard = ({
                   <Link
                     key={g.id}
                     to={`/contact/${g.id}`}
-                    className="hit-area inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container hover:bg-surface-container-high text-xs font-medium text-on-surface transition-colors"
+                    className="hit-area state-layer inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container text-xs font-medium text-on-surface"
                   >
                     <img
                       src={g.avatarUrl || fallbackAvatarUrl(g.name)}
@@ -237,7 +253,11 @@ export const InboxCard = ({
         )}
 
         {correspondents > 0 && (
-          <InboxRow to="/settings/connectors/people" icon={UserCheck}>
+          <InboxRow
+            to="/settings/connectors/people"
+            icon={UserCheck}
+            tone="primary"
+          >
             <N>{correspondents}</N> people you talk to are not contacts
           </InboxRow>
         )}

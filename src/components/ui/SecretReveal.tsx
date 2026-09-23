@@ -86,7 +86,7 @@ export const SecretReveal = ({
             "min-w-[44px] min-h-[44px] -m-1.5 rounded-full transition-colors",
             copied
               ? "text-success"
-              : "text-on-surface-variant hover:text-primary hover:bg-primary/10",
+              : "state-layer text-on-surface-variant hover:text-on-surface",
           )}
         >
           {copied ? (

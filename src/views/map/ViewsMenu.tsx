@@ -16,6 +16,7 @@ import {
   MENU_ITEM_SELECTED,
   MENU_PANEL,
   MENU_SEPARATOR,
+  SELECTED_TINT,
 } from "../../lib/styles";
 
 export interface ViewsMenuProps {
@@ -105,10 +106,12 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         className={cn(
-          "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all border",
+          "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border",
+          // Selected is the tint and its ink. The border turns transparent
+          // rather than going away, so the toggle keeps its size.
           isOpen || activeViewId
-            ? "bg-primary text-on-primary border-primary shadow-sm"
-            : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
+            ? cn(SELECTED_TINT, "border-transparent")
+            : "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30",
         )}
       >
         <Bookmark className="w-3.5 h-3.5" />
@@ -158,14 +161,14 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                       className={cn(
                         MENU_ITEM,
                         "min-w-0 flex-1",
-                        isActive && "text-primary",
+                        isActive && "text-on-primary-wash",
                       )}
                     >
                       <span className="w-4 flex items-center justify-center shrink-0">
                         {isActive ? (
                           <Check
                             aria-hidden="true"
-                            className={cn(MENU_ICON, "text-primary")}
+                            className={cn(MENU_ICON, "text-on-primary-wash")}
                           />
                         ) : null}
                       </span>
@@ -190,7 +193,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         }}
                         aria-label={`Rename ${view.name}`}
                         title="Rename view"
-                        className="hit-area w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-primary focus-visible:text-primary rounded-lg cursor-pointer"
+                        className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -205,7 +208,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         }}
                         aria-label={`Delete ${view.name}`}
                         title="Delete view"
-                        className="hit-area w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-error focus-visible:text-error rounded-lg cursor-pointer"
+                        className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-error rounded-lg cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

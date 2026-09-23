@@ -2,7 +2,7 @@
 // =============================================================================
 // The palette's action row for Track
 // =============================================================================
-// `→` on a result opens the actions for one contact. After Add to List sits
+// `→` on a result opens the actions for one contact. After Add to list sits
 // Track, or Untrack, on the T key. It reads the flag from the contact cache,
 // flips it with the same toast and Undo as the header button, and closes the
 // palette. A ghost cannot be tracked, so it gets no row and T does nothing.
@@ -83,10 +83,10 @@ afterEach(() => {
 });
 
 describe("the Track row", () => {
-  it("sits after Add to List, on T, and reads Untrack for a tracked contact", () => {
+  it("sits after Add to list, on T, and reads Untrack for a tracked contact", () => {
     const { unmount } = { unmount: mount().onClose };
     const rows = screen.getAllByRole("button").map((b) => b.textContent);
-    const list = rows.findIndex((text) => text?.includes("Add to List"));
+    const list = rows.findIndex((text) => text?.includes("Add to list"));
     expect(rows[list + 1]).toContain("Track");
     expect(rows[list + 1]).toContain("T");
     void unmount;

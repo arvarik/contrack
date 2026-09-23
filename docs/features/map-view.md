@@ -81,7 +81,7 @@ Floating at the bottom-left corner of the map, the **Stats Strip** aggregates li
 
 - **In view**: Count of contacts placed within the visible bounding box.
 - **At risk**: Count of tracked in-view contacts whose score is under 40. A contact nobody tracks has no score, and neither has one nobody has met yet, so neither is counted. Clicking this chip appends `score:<40` to the active search filter.
-- **Overdue**: Count of contacts past their follow-up cadence. Clicking this chip filters by overdue contacts.
+- **Overdue**: Count of contacts whose next follow-up's day is before today, counted by the calendar day as the contact page's banner counts it. It is a fact in the error ink on a resting chip, not a button: no facet filters by follow-up.
 - **Average score**: Mean score of the in-view contacts that have one.
 - **Time zones**: Number of distinct time zones spanned by in-view contacts.
 
@@ -148,8 +148,8 @@ The map toolbar provides layer switching and a saved views dropdown for quick na
 A segmented toggle control (`aria-label="Map layer"`) lets users switch between three visual representations:
 
 - **Pins**: The standard view showing contact avatars and cluster markers.
-- **Heat**: Renders a client-side MapLibre heatmap layer with radius 30 and zoom-based weight calculated from each contact's interaction count. Pin markers are hidden above zoom level 9 while the heat layer is active.
-- **Health**: Pin markers display ring borders tinted by relationship score bands using theme color tokens: `ring-success` for Strong (scores 70 and up), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores under 40). A pin with no score takes `ring-outline-variant`: a contact nobody tracks, and one nobody has met yet. Both used to be painted red. A floating legend chip in the bottom-right corner names all four, with a text label beside each coloured dot, so colour is never the only signal.
+- **Heat**: Renders a client-side MapLibre heatmap layer with radius 30 and zoom-based weight calculated from each contact's interaction count. Heat draws no pin markers at any zoom, so the layer reads on its own.
+- **Health**: Pin markers display ring borders tinted by relationship score bands using theme color tokens: `ring-success` for Strong (scores 70 and up), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores under 40). A pin with no score takes `ring-on-surface-variant`, a ring in the variant ink: a contact nobody tracks, and one nobody has met yet. Both used to be painted red. A floating legend chip in the bottom-left corner, over the stats strip, names all four, with a text label beside each mark, so colour is never the only signal. The three bands are dots in their tones, and "Not tracked" is a hollow ring in the variant ink, the ring those pins wear.
 
 Changing the layer updates the `?layer=` URL parameter and persists to the user's `mapLayer` account preference.
 
@@ -234,7 +234,7 @@ it. `src/views/map/lastView.ts` holds the read, the write and the check.
 
 ### The Map Stays Warm Between Visits
 
-Leaving the map page does not destroy the map. `react-map-gl` keeps the map
+Leaving the map page does not destroy the map. `@vis.gl/react-maplibre` keeps the map
 instance, with its style, its tiles and its worker, and hands it back when
 the page mounts again. A return to the map shows it at once, where you left
 it, with no style fetch and no tile fetch. One map is kept, and only the page
@@ -253,6 +253,13 @@ MapLibre draws the basemap's credit in the bottom right corner, as a compact
 "i" button. MapLibre opens it expanded on load and collapses it on the first
 drag. Here it opens collapsed. The credit the basemap's terms require is one
 click away, where MapLibre puts it after a drag.
+
+On the map page the "i" sits on top of the zoom buttons, and the credit it
+opens is a card no wider than 13rem that wraps its words. At the foot of the
+column it opened across the bottom of the map, over the stats strip at 800
+and 1024 px and over the health legend on a phone. A pointer click on the
+"i" or a zoom button draws no focus glow. Focus from the keyboard draws the
+app's ring: inset on a zoom button, and 2 px outside the credit's pill.
 
 ### On a Phone
 
@@ -413,12 +420,12 @@ reads.
 
 Contrack automatically geocodes contact addresses to latitude/longitude coordinates.
 
-### Providers
+### Provider
 
-| Provider      | Priority                | Accuracy | API Key Required       |
-| ------------- | ----------------------- | -------- | ---------------------- |
-| **Mapbox**    | Primary (if configured) | High     | Yes (`MAPBOX_API_KEY`) |
-| **Nominatim** | Fallback                | Medium   | No (free, no key)      |
+Nominatim (OpenStreetMap) is the one geocoder. It is free and needs no API
+key. Its usage policy allows at most one request a second, so the background
+queue waits 1.1 s between requests. Every answer is cached in `geocode_cache`,
+and an address that found nothing is not tried again for seven days.
 
 ### How It Works
 
@@ -571,16 +578,6 @@ Two things to know:
 - A style on another host needs that host in `connect-src`. The server adds
   it when the style URL is absolute. Tiles, glyphs or a sprite on a third
   host are the operator's to serve from the style's host, or from here.
-
-### Mapbox Geocoding
-
-To enable Mapbox geocoding (recommended for accuracy):
-
-```
-MAPBOX_API_KEY="your-mapbox-token"
-```
-
-Without Mapbox, Nominatim (OpenStreetMap) is used. Nominatim is free but has rate limits and lower accuracy for ambiguous addresses.
 
 ---
 

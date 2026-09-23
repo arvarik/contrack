@@ -17,12 +17,25 @@ import {
 } from "../../../components/ui/ActionMenu";
 import { useUpdateActionItem } from "../../../api";
 import { formatRelative } from "../../../lib/datetime";
-import { PULSE_TYPE } from "../lib/pulseStyles";
+import { SELECTED_ROW, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
+import {
+  CHECK_RING_REST,
+  DUE_TONE,
+  GROUP_TONE,
+  PULSE_CHIP,
+  PULSE_TYPE,
+} from "../lib/pulseStyles";
 import type { UpNextItem } from "../lib/upNext";
 
 export interface ActionRowProps {
   item: UpNextItem;
+  /**
+   * The row is the list's current row: `aria-current` and the one tab stop.
+   * It does not paint the row. See `looksSelected`.
+   */
   isSelected?: boolean;
+  /** The row wears the selected tint. The queue paints it for the keyboard only. */
+  looksSelected?: boolean;
   onSelect?: () => void;
   onComplete?: (id: string) => void;
   onLog?: (contactId: string) => void;
@@ -48,13 +61,12 @@ export interface ActionRowProps {
   compact?: boolean;
 }
 
-/** The chip's wash and ink, by how soon the row is due. No border, no caps. */
-const CHIP: Record<UpNextItem["dueChip"]["variant"], string> = {
-  urgent: "bg-error/10 text-error",
-  today: "bg-primary/10 text-on-primary-wash",
-  upcoming: "bg-surface-container-high text-on-surface-variant",
-  neutral: "bg-surface-container-high text-on-surface-variant",
-};
+/**
+ * The leading glyph's circle: 24 px on screen with a 44 px tap box, and the
+ * hover layer rather than a fill, so the glyph keeps its group's colour.
+ */
+const GLYPH =
+  "hit-area state-layer w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer";
 
 /** The snooze choices. Each one moves the due date that many days out. */
 const SNOOZE_PRESETS = [
@@ -92,12 +104,15 @@ const onControl = (target: EventTarget | null) =>
  * is claimed only when the event target is the row itself, so a button
  * inside the row keeps its own Enter and Space. The row keeps
  * `role="listitem"`: it is a clickable element with a keyboard equivalent,
- * not a button.
+ * not a button. Focus that enters the row, on the row or on a control in
+ * it, makes it the current row. Being current and looking selected are two
+ * props: the queue paints the tint only while the keyboard is on the list.
  */
 export const ActionRow = memo(
   ({
     item,
     isSelected = false,
+    looksSelected = false,
     onSelect,
     onComplete,
     onLog,
@@ -122,8 +137,11 @@ export const ActionRow = memo(
 
     // When the highlight arrives on this row, bring it into view. It takes
     // focus too when focus was already inside the list, so the arrows and
-    // J or K pressed on a row keep walking rows. The first render is not an
-    // arrival: the page must not scroll to the queue on load.
+    // J or K pressed on a row keep walking rows. Focus that is already in
+    // the row stays where it is: Tab onto the row's check makes the row
+    // current, and the row must not take focus back from the check. The
+    // first render is not an arrival: the page must not scroll to the
+    // queue on load.
     useEffect(() => {
       const arrived = isSelected && !wasSelectedRef.current;
       wasSelectedRef.current = isSelected;
@@ -132,7 +150,9 @@ export const ActionRow = memo(
       if (!el) return;
       // jsdom has no scrollIntoView, so the call is optional.
       el.scrollIntoView?.({ block: "nearest" });
-      if (focusOnSelect) el.focus({ preventScroll: true });
+      if (focusOnSelect && !el.contains(document.activeElement)) {
+        el.focus({ preventScroll: true });
+      }
     }, [isSelected, focusOnSelect]);
 
     const complete = () => {
@@ -204,21 +224,22 @@ export const ActionRow = memo(
         ? formatRelative(item.lastContactedAt)
         : null;
 
+    // The chip's tone says how soon the row is due. The leading glyph's tone
+    // is its group's, the same as the dot beside the group's name.
     const chip = (
       <span
-        className={cn(
-          PULSE_TYPE.chip,
-          "rounded-md px-2 py-0.5 tabular-nums shrink-0",
-          CHIP[item.dueChip.variant],
-        )}
+        className={cn(PULSE_CHIP, TONE_WASH[DUE_TONE[item.dueChip.variant]])}
       >
         {item.dueChip.text}
       </span>
     );
+    const tone = GROUP_TONE[item.group];
 
-    // The one action. On a phone it ends line one and is always visible.
-    // From sm it floats over the row's right edge and shows on hover or
-    // focus, so at rest the text has the whole width.
+    // The one action. On a phone it ends line one and is always visible,
+    // and its negative margin keeps the 32 px glyph from making line one
+    // taller than the name, so a row with a snooze has the same rhythm as
+    // a row without one. From sm it floats over the row's right edge and
+    // shows on hover or focus, so at rest the text has the whole width.
     const snooze = item.hasCheckAction ? (
       <ActionMenu
         label="Snooze item"
@@ -233,7 +254,7 @@ export const ActionRow = memo(
             ? "ml-auto"
             : "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
         )}
-        triggerClassName={compact ? undefined : "p-1 rounded-lg"}
+        triggerClassName={compact ? "-my-1.5" : "p-1 rounded-lg"}
       />
     ) : null;
 
@@ -248,20 +269,27 @@ export const ActionRow = memo(
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
+        // Focus on the row, or on a control inside it, makes the row the
+        // current one, the row J and K move. Tab walks the controls of
+        // every row, and the tint used to stay behind on the first.
+        onFocus={() => {
+          if (!isSelected) onSelect?.();
+        }}
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
+          // The resting wash, or the selected row's tint, with the
+          // hover layer over either one.
+          "state-layer group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
           compact ? "gap-2.5 px-2.5" : "gap-3 px-3",
-          isSelected
-            ? "bg-primary/10 ring-1 ring-inset ring-primary/50"
-            : "bg-surface-container-low/70 hover:bg-surface-container-low",
+          looksSelected ? SELECTED_ROW : "bg-surface-container-low/70",
           isCompleting && "opacity-50",
         )}
       >
         {/* The primary action: the check for a follow-up, Log for a
-            birthday or a catch-up. The check is faint at rest and full on
-            hover, on focus and while it completes. */}
+            birthday or a catch-up, in the group's tone. The check's ring
+            is a step under full ink at rest, and full on hover and while
+            it completes. */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -269,12 +297,13 @@ export const ActionRow = memo(
             disabled={isCompleting}
             aria-label={`Mark "${item.title}" done`}
             className={cn(
-              "hit-area w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer",
-              item.dueChip.variant === "urgent"
-                ? "border-error/40 text-error hover:bg-error hover:text-white"
-                : "border-primary/40 text-primary hover:bg-primary hover:text-on-primary",
-              isCompleting &&
-                "bg-emerald-500 border-emerald-500 text-white scale-110",
+              GLYPH,
+              "border-2 transition-all duration-(--dur-fast)",
+              // Done is the success tone: its wash and its own ink, which
+              // clear AA where white on a raw green did not.
+              isCompleting
+                ? cn(TONE_WASH.success, "border-success scale-110")
+                : cn(TONE_TEXT[tone], CHECK_RING_REST, "hover:border-current"),
             )}
           >
             <Check
@@ -292,7 +321,7 @@ export const ActionRow = memo(
             onClick={handleLog}
             title="Log a birthday note"
             aria-label={`Wish ${item.contactName} a happy birthday`}
-            className="hit-area w-6 h-6 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 hover:bg-amber-500 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+            className={cn(GLYPH, TONE_WASH[tone])}
           >
             <Cake className="w-3.5 h-3.5" />
           </button>
@@ -302,7 +331,7 @@ export const ActionRow = memo(
             onClick={handleLog}
             title="Log an interaction"
             aria-label={`Log note for ${item.contactName}`}
-            className="hit-area w-6 h-6 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-on-primary flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+            className={cn(GLYPH, TONE_WASH[tone])}
           >
             <HeartPulse className="w-3.5 h-3.5" />
           </button>
@@ -336,6 +365,9 @@ export const ActionRow = memo(
               className={cn(
                 PULSE_TYPE.name,
                 "hit-area inline-flex hover:text-primary transition-colors",
+                // The second cue beside the tint, as on a Network row: the
+                // tint alone sits about 1.06 to 1 against the resting wash.
+                looksSelected && "text-on-primary-wash",
               )}
             >
               {item.contactName}

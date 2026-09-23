@@ -19,6 +19,11 @@ import { Badge } from "../../../components/ui/Badge";
 import { MCP_TOOLS } from "../../../../shared/mcpTools";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { SETTINGS_PAGE } from "../layout";
+
+/** A Copy button beside a value: flat, on a resting wash, with the hover layer. */
+const COPY_BUTTON =
+  "hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container text-on-surface transition-colors shrink-0 min-h-[44px] min-w-[44px]";
 
 interface SnippetBlockProps {
   id: string;
@@ -57,7 +62,7 @@ const SnippetBlock: React.FC<SnippetBlockProps> = ({
           type="button"
           onClick={handleCopy}
           aria-label={`Copy ${title} snippet`}
-          className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors focus:outline-none focus:ring-2 focus:ring-primary shrink-0 min-h-[44px] min-w-[44px]"
+          className={COPY_BUTTON}
         >
           {copied ? (
             <>
@@ -79,7 +84,7 @@ const SnippetBlock: React.FC<SnippetBlockProps> = ({
         tabIndex={0}
         role="region"
         aria-label={`${title} code snippet`}
-        className="relative rounded-xl bg-surface-container p-3 font-mono text-xs text-on-surface overflow-x-auto border border-surface-container-high/40 focus:outline-none focus:ring-1 focus:ring-primary"
+        className="relative rounded-xl bg-surface-container p-3 font-mono text-xs text-on-surface overflow-x-auto border border-surface-container-high/40"
       >
         <pre className="whitespace-pre">
           <code>{code}</code>
@@ -136,14 +141,14 @@ export const McpView: React.FC = () => {
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'`;
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       {/* Endpoint & Token Card */}
       <div className={cn(CARD, "space-y-6")} id="endpoint">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className={cn(SECTION_HEADING, "mb-1")}>
-                MCP Server Endpoint
+                MCP server endpoint
               </h2>
               <p className="text-xs text-on-surface-variant">
                 Streamable HTTP transport endpoint for all MCP hosts and
@@ -161,7 +166,7 @@ export const McpView: React.FC = () => {
                 type="button"
                 onClick={handleCopyUrl}
                 aria-label="Copy MCP endpoint URL"
-                className="hit-area inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors shrink-0 min-h-[44px] min-w-[44px]"
+                className={COPY_BUTTON}
               >
                 {copiedUrl ? (
                   <>
@@ -194,7 +199,7 @@ export const McpView: React.FC = () => {
                 className="text-sm font-semibold text-on-surface flex items-center gap-1.5"
               >
                 <KeyRound className="w-4 h-4 text-primary" aria-hidden="true" />
-                Personal API Token
+                Personal API token
               </label>
               <Link
                 to="/settings/account"
@@ -213,7 +218,7 @@ export const McpView: React.FC = () => {
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="Paste your ctk_... token to preview snippets"
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-container border border-surface-container-high/60 text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className="w-full px-3 py-2.5 rounded-xl bg-surface-container border border-surface-container-high/60 text-on-surface text-sm placeholder:text-on-surface-variant/50 min-h-[44px]"
             />
             <p className="text-xs text-on-surface-variant">
               Your token is never saved or sent to the server. It is only used
@@ -226,7 +231,7 @@ export const McpView: React.FC = () => {
       {/* Host Snippets Card */}
       <div className={cn(CARD, "space-y-6")} id="snippets">
         <div>
-          <h2 className={cn(SECTION_HEADING, "mb-1")}>Host Configuration</h2>
+          <h2 className={cn(SECTION_HEADING, "mb-1")}>Host configuration</h2>
           <p className="text-xs text-on-surface-variant">
             Copy the configuration or command for your preferred MCP client.
           </p>
@@ -254,7 +259,7 @@ export const McpView: React.FC = () => {
           <div className="pt-6">
             <SnippetBlock
               id="curl"
-              title="curl (HTTP Test)"
+              title="curl (HTTP test)"
               description="Send an initialize request directly to test connectivity."
               code={curlSnippet}
             />
@@ -276,7 +281,7 @@ export const McpView: React.FC = () => {
           tabIndex={0}
           role="region"
           aria-label="MCP tools list"
-          className="overflow-x-auto -mx-6 sm:mx-0 focus:outline-none focus:ring-1 focus:ring-primary"
+          className="overflow-x-auto -mx-6 sm:mx-0"
         >
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -297,10 +302,7 @@ export const McpView: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-surface-container">
               {MCP_TOOLS.map((tool) => (
-                <tr
-                  key={tool.name}
-                  className="hover:bg-surface-container/50 transition-colors"
-                >
+                <tr key={tool.name}>
                   <td className="py-3 px-4 sm:px-3 font-mono font-medium text-primary whitespace-nowrap">
                     {tool.name}
                   </td>
@@ -309,7 +311,7 @@ export const McpView: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 sm:px-3 text-right whitespace-nowrap">
                     <Badge tone={tool.readOnly ? "primary" : "neutral"}>
-                      {tool.readOnly ? "Read-only" : "Read / Write"}
+                      {tool.readOnly ? "Read-only" : "Read / write"}
                     </Badge>
                   </td>
                 </tr>

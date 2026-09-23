@@ -414,7 +414,7 @@ const Composer = ({
       Mention.configure({
         HTMLAttributes: {
           class:
-            "bg-primary/10 text-primary font-bold px-1 py-0.5 rounded-md cursor-pointer",
+            "bg-primary/10 text-on-primary-wash font-bold px-1 py-0.5 rounded-md cursor-pointer",
         },
         suggestion: getMentionSuggestion(() => contactsRef.current),
       }),
@@ -444,7 +444,7 @@ const Composer = ({
         "aria-multiline": "true",
         "aria-describedby": placeholderId,
         class:
-          "prose prose-sm max-w-none focus:outline-none min-h-[80px] text-base sm:text-sm text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1",
+          "prose prose-sm max-w-none min-h-[80px] text-base sm:text-sm text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1",
       },
     },
   });
@@ -520,7 +520,7 @@ const Composer = ({
           ? "flex flex-col"
           : cn(
               COMPOSER,
-              "p-0 flex flex-col shadow-md",
+              "p-0 flex flex-col",
               // `clip` and not `hidden` when the bar can stick: an overflow
               // that hides makes the card the bar's scroller, and the bar
               // would never move.
@@ -545,7 +545,10 @@ const Composer = ({
           editor={editor}
           className={cn(
             "w-full custom-tiptap",
-            compact && "bg-surface-container-low rounded-xl px-3 py-2",
+            // The dialog's form has no card around it, so the field box is
+            // the frame that draws the ring while the editor has focus.
+            compact &&
+              "focus-frame bg-surface-container-low rounded-xl px-3 py-2",
             // One line: the editor's own 80 px floor is set once, when it is
             // created, so the collapsed form lifts it from outside.
             !expanded && "[&_.ProseMirror]:min-h-0",
@@ -563,7 +566,14 @@ const Composer = ({
             !expanded && "hidden",
           )}
         >
-          <div className="flex flex-1 items-center px-3 py-0 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          {/* One box for the glyph, the field and the date. In the card the
+              card draws the ring, and in the dialog this box does. */}
+          <div
+            className={cn(
+              "flex flex-1 items-center px-3 py-0 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm",
+              compact && "focus-frame",
+            )}
+          >
             <CalendarClock
               aria-hidden="true"
               className="w-4 h-4 text-primary mr-2.5 shrink-0"
@@ -575,14 +585,16 @@ const Composer = ({
                 setFollowUpText(e.target.value);
                 if (e.target.value.trim()) setProblem(null);
               }}
-              placeholder="Next action (e.g. Follow up next Tuesday at 2pm)..."
+              // Short enough for a phone's field: the long example was cut
+              // mid-word at 390 px.
+              placeholder="Next action, like follow up Tuesday"
               // A field draws no `::after`, so the 44 px tap floor on a phone
               // has to be the field's own height. 16 px there stops iOS
               // zooming in.
-              className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 bg-transparent border-none text-base sm:text-xs font-semibold text-on-surface focus:ring-0 p-0 focus:outline-none placeholder:text-on-surface-variant"
+              className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 bg-transparent border-none text-base sm:text-xs font-semibold text-on-surface p-0 placeholder:text-on-surface-variant"
             />
             {parsedDate && (
-              <span className={cn(TAG_PILL, "ml-2 shrink-0 shadow-sm")}>
+              <span className={cn(TAG_PILL, "ml-2 shrink-0")}>
                 {formatWhen(parsedDate.toISOString())}
               </span>
             )}
@@ -638,7 +650,7 @@ const Composer = ({
           onClick={() => submitRef.current()}
           aria-busy={isSaving}
           aria-describedby={problem ? messageId : undefined}
-          className="btn-primary px-7 ml-auto"
+          className="btn-primary ml-auto"
         >
           {isSaving ? "Saving…" : "Save"}
         </button>

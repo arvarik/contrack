@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import {
   buildUpNextQueue,
   computeNextHighlightIndex,
@@ -277,7 +277,9 @@ describe("pulse.upNext", () => {
       d.toLocaleDateString(undefined, { weekday: "long" });
 
     it("speaks in sentence case: overdue days, today, tomorrow, the weekday, in N days", () => {
-      expect(describeDueChip(-1)).toBe("Overdue");
+      // A late row counts its days from the first one: the Overdue heading
+      // above it already says "Overdue".
+      expect(describeDueChip(-1)).toBe("1 day overdue");
       expect(describeDueChip(-12)).toBe("12 days overdue");
       expect(describeDueChip(0)).toBe("Today");
       expect(describeDueChip(1)).toBe("Tomorrow");
@@ -343,7 +345,7 @@ describe("pulse.upNext", () => {
       );
       expect(chips).toEqual({
         "ov-old": "12 days overdue",
-        "ov-new": "Overdue",
+        "ov-new": "1 day overdue",
         td: "Today",
         tm: "Tomorrow",
         tw: weekday(wednesday),
@@ -386,5 +388,42 @@ describe("pulse.upNext", () => {
     });
     expect(result.items.map((i) => i.id)).toEqual(["bday-seven"]);
     expect(result.counts.birthdays).toBe(1);
+  });
+});
+
+describe("pulse.upNext reads a date with no time as a local day", () => {
+  // The follow-up dialog writes "2026-09-19". Read as UTC midnight it is
+  // 5 PM the day before in Los Angeles, so the chip said a day more than
+  // the contact page's banner, which reads the local day.
+  const item = (id: string, dueAt: string): ActionItem => ({
+    id,
+    contactId: "c1",
+    contactName: "Alice",
+    title: "Follow up",
+    dueAt,
+    completedAt: null,
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+  });
+
+  beforeAll(() => {
+    vi.stubEnv("TZ", "America/Los_Angeles");
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("counts the calendar days late, and names the weekday due, as the banner does", () => {
+    // 6 PM on Tuesday, September 22, 2026, in Los Angeles.
+    const now = new Date("2026-09-23T01:00:00.000Z");
+    const queue = buildUpNextQueue({
+      overdue: [item("late", "2026-09-19")],
+      upcoming: [item("soon", "2026-09-25")],
+      now,
+    });
+    const chip = (id: string) =>
+      queue.items.find((i) => i.id === id)?.dueChip.text;
+    expect(chip("late")).toBe("3 days overdue");
+    expect(chip("soon")).toBe("Friday");
   });
 });

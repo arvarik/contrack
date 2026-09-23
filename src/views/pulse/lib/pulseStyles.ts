@@ -1,5 +1,5 @@
 /**
- * The type and the grid of the morning page.
+ * The type, the tones and the grid of the morning page.
  *
  * A review of Pulse found 98 of 230 text nodes at 11 or 12 px, the date the
  * smallest text on the screen, and three columns of one width. The sizes
@@ -7,20 +7,17 @@
  * everywhere, a name is 14 px everywhere, and the page, its skeleton and the
  * route fallback draw the same three columns. Two of these sizes, 13 and
  * 15 px, are new on the app's scale and stay inside this object so no other
- * page picks them up by accident. The repository floor of 11 px stands.
+ * page picks them up by accident. The repository floor of 11 px stands. The
+ * masthead's own sizes are the shared page header's (`PageHeader`).
  *
  * @module views/pulse/lib/pulseStyles
  */
 import type { PulseColumn } from "../../../api/preferences";
+import type { Tone } from "../../../lib/styles";
+import type { UpNextGroup, UpNextItem } from "./upNext";
 
 /** The type of the morning page. Sizes are decisions, so they live here. */
 export const PULSE_TYPE = {
-  /** The page label, the h1. */
-  label: "text-[13px] font-semibold text-on-surface-variant",
-  /** The date line in the masthead. 24 px on a phone keeps "Wednesday, 24 September" on one line. */
-  date: "text-2xl sm:text-[32px] leading-tight font-headline font-bold text-on-surface",
-  /** The sentence under the date. */
-  line: "text-base sm:text-lg leading-snug text-on-surface-variant",
   /** A card's title. */
   cardTitle: "text-[15px] font-bold text-on-surface tracking-tight",
   /** The muted count after a card title. */
@@ -31,8 +28,6 @@ export const PULSE_TYPE = {
   rowTitle: "text-sm text-on-surface",
   /** Meta text: dates, counts, hints. */
   meta: "text-[13px] text-on-surface-variant",
-  /** A chip's text. */
-  chip: "text-xs font-semibold",
   /** A group heading inside the queue. */
   group: "text-[13px] font-semibold text-on-surface-variant",
   /** The one large figure on a card: "9" of "9 of 10 within cadence". */
@@ -43,15 +38,53 @@ export const PULSE_TYPE = {
 
 /**
  * A row on the wash: the shape of every list row on a Pulse card that is
- * not the queue (Inbox, Coming up). No border, 44 px tall at least, and the
- * hover is one surface step up.
+ * not the queue (Inbox, Coming up). No border and 44 px tall at least. A row
+ * that is only a fact, such as a meeting, uses this as it is.
  */
-export const PULSE_ROW =
-  "group flex items-center gap-3 min-h-[44px] rounded-xl px-3 py-2.5 bg-surface-container-low/70 hover:bg-surface-container-low transition-colors";
+export const PULSE_ROW_STATIC =
+  "flex items-center gap-3 min-h-[44px] rounded-xl px-3 py-2.5 bg-surface-container-low/70";
 
-/** A neutral chip: a fact at the right edge of a row, "In 10 days". */
-export const PULSE_CHIP_NEUTRAL =
-  "shrink-0 rounded-md px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-xs font-semibold tabular-nums whitespace-nowrap";
+/**
+ * A row that goes somewhere. The hover is the state layer over the wash, so
+ * the row reads the same on a card, on the page and in both palettes.
+ */
+export const PULSE_ROW = `state-layer group ${PULSE_ROW_STATIC}`;
+
+/**
+ * A chip: a fact at the right edge of a row, "In 10 days", "+12". No border
+ * and no caps. Its colour is a tone, `TONE_WASH[tone]` beside it.
+ */
+export const PULSE_CHIP =
+  "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap";
+
+/**
+ * The ring of an Up next check at rest: the group's ink at 75 percent. A
+ * control's edge needs 3 to 1 (WCAG 1.4.11), and at 40 percent the ring
+ * measured 1.8 to 1 on the row's wash. At 75 it clears 3 to 1 on the wash
+ * and on the selected tint in both palettes, and stays a step under the
+ * full ink of hover. `pulse.contrast.test.ts` measures it.
+ */
+export const CHECK_RING_REST = "border-current/75";
+
+/**
+ * The tone of each Up next group. The group's dot and its rows' leading
+ * glyph read from it, so the eye can follow one colour down the queue.
+ */
+export const GROUP_TONE: Record<UpNextGroup, Tone> = {
+  overdue: "error",
+  today: "primary",
+  thisWeek: "neutral",
+  birthdays: "warning",
+  "catch-up": "primary",
+};
+
+/** The tone of a due chip, by how soon its row is due. */
+export const DUE_TONE: Record<UpNextItem["dueChip"]["variant"], Tone> = {
+  urgent: "error",
+  today: "primary",
+  upcoming: "neutral",
+  neutral: "neutral",
+};
 
 /**
  * The Composition donut's ramp: one hue at six steps of opacity, the

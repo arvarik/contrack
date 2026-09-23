@@ -14,9 +14,27 @@
 // =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { DedupeProvider, useDedupe } from "../../src/contexts/DedupeContext";
+import { SuggestionReviewQueue } from "../../src/views/dedupe/components/SuggestionReviewQueue";
+import { ManualMerge } from "../../src/views/dedupe/components/ManualMerge";
+
+/** The account's Motion row. Nothing else here reads the preferences. */
+let mockMotion: "system" | "reduced" = "system";
+vi.mock("../../src/contexts/PreferencesContext", () => ({
+  usePreferences: () => ({ preferences: { motion: mockMotion } }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -171,7 +189,7 @@ describe("a scan booked behind another account's", () => {
 
   it("keeps waiting through a run of failed polls", async () => {
     // The server still holds the place in line, so dropping the wait shows a
-    // Begin Scan button the server answers "a scan is already running for
+    // Begin scan button the server answers "a scan is already running for
     // your account" — with no way back to the waiting state.
     stubEventSource();
     const fetchMock = vi
@@ -243,5 +261,286 @@ describe("a scan booked behind another account's", () => {
     // A wait, not a scan: no progress card, nothing pretending to advance.
     expect(result.current.scan).toBeNull();
     expect(result.current.isScanning).toBe(false);
+  });
+});
+
+// =============================================================================
+// The review list on Pulse: the keeper's card keeps its values
+// =============================================================================
+describe("an open pair in the review list", () => {
+  it("marks the keeper's differing values Kept and the duplicate's Discarded", async () => {
+    // Ada has more on file, so she is the keeper. The two roles differ.
+    const person = (id: string, name: string, extra: object) => ({
+      id,
+      name,
+      emails: [],
+      phones: [],
+      tags: [],
+      sources: [],
+      socialLinks: [],
+      ...extra,
+    });
+    const ada = person("c-1", "Ada Lovelace", {
+      role: "Engineer",
+      company: "Analytical Engines",
+    });
+    const augusta = person("c-2", "Augusta King", { role: "Countess" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          suggestions: [
+            {
+              id: "s-1",
+              contactIdA: ada.id,
+              contactIdB: augusta.id,
+              matchType: "email",
+              confidence: 0.97,
+              reasoning: "Same email.",
+              matchedField: null,
+              status: "pending",
+              createdAt: "2026-09-01T00:00:00.000Z",
+              reviewedAt: null,
+              reviewedBy: null,
+              contactA: ada,
+              contactB: augusta,
+            },
+          ],
+        }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <SuggestionReviewQueue />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByText("Ada Lovelace"));
+
+    const card = (label: string) =>
+      within(screen.getByText(label).parentElement!.parentElement!);
+    const keeper = card("Primary (keeper)");
+    const duplicate = card("Duplicate (merges in)");
+    expect(keeper.getAllByText("Kept").length).toBeGreaterThan(0);
+    expect(keeper.queryByText("Discarded")).toBeNull();
+    expect(duplicate.getAllByText("Discarded").length).toBeGreaterThan(0);
+    expect(duplicate.queryByText("Kept")).toBeNull();
+  });
+
+  it("shows both names of a pair in full, with the badge and the actions on a line of their own", async () => {
+    // Two people with the same first name. Cut to "Elizabeth …" at 87 px,
+    // the two rows could not be told apart.
+    const person = (id: string, name: string, company: string) => ({
+      id,
+      name,
+      company,
+      emails: [],
+      phones: [],
+      tags: [],
+      sources: [],
+      socialLinks: [],
+    });
+    const a = person("c-3", "Elizabeth Rodriguez", "Black Mesa");
+    const b = person("c-4", "Elizabeth Walker", "Bluth Company");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          suggestions: [
+            {
+              id: "s-2",
+              contactIdA: a.id,
+              contactIdB: b.id,
+              matchType: "email",
+              confidence: 0.84,
+              reasoning: "Same email pattern.",
+              matchedField: null,
+              status: "pending",
+              createdAt: "2026-09-01T00:00:00.000Z",
+              reviewedAt: null,
+              reviewedBy: null,
+              contactA: a,
+              contactB: b,
+            },
+          ],
+        }),
+      ),
+    );
+    client.clear();
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <SuggestionReviewQueue />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const first = await screen.findByText("Elizabeth Rodriguez");
+    const second = screen.getByText("Elizabeth Walker");
+    for (const name of [first, second]) {
+      // The name and the company wrap rather than truncate.
+      expect(name.className).not.toContain("truncate");
+      expect(name.parentElement!.className).toContain("break-words");
+    }
+    expect(screen.getByText("Black Mesa").className).not.toContain("truncate");
+
+    // The badge, Merge and the dismiss fill the row's width below lg, so
+    // they take a line under the pair, and share the row from lg.
+    const actions = screen
+      .getByRole("button", { name: "Merge" })
+      .closest(".w-full")!;
+    expect(actions).not.toBeNull();
+    expect(actions.className).toContain("lg:w-auto");
+    expect(actions.contains(first)).toBe(false);
+    expect(within(actions as HTMLElement).getByText(/84%/)).toBeDefined();
+  });
+});
+
+// =============================================================================
+// The manual merge: a new stage opens at its top
+// =============================================================================
+describe("the manual merge", () => {
+  const person = (id: string, name: string) => ({
+    id,
+    name,
+    company: "Analytical Engines",
+    emails: [],
+    phones: [],
+    tags: [],
+    sources: [],
+    socialLinks: [],
+    isGhost: false,
+    isArchived: false,
+  });
+
+  /** jsdom has no `scrollIntoView`. Record each call and its element. */
+  function stubScrollIntoView() {
+    const calls: Array<{ el: Element; options: unknown }> = [];
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value(this: Element, options: unknown) {
+        calls.push({ el: this, options });
+      },
+    });
+    return calls;
+  }
+
+  /**
+   * The operating system asks for full motion. `motion` reads this media
+   * query once for the whole run, so the reduced case goes through the
+   * account's Motion row, the other input the tool reads.
+   */
+  function stubFullMotion() {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+  }
+
+  async function pickTwoAndCompare() {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            Response.json(
+              String(url).includes("/contacts")
+                ? [person("c-1", "Ada Lovelace"), person("c-2", "Augusta King")]
+                : {},
+            ),
+          ),
+        ),
+    );
+    client.clear();
+    render(
+      <QueryClientProvider client={client}>
+        <ManualMerge />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByText("Ada Lovelace"));
+    fireEvent.click(screen.getByText("Augusta King"));
+    fireEvent.click(screen.getByRole("button", { name: /Compare 2 contacts/ }));
+  }
+
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    mockMotion = "system";
+  });
+
+  it("brings the steps into view when the stage changes, and not on the first render", async () => {
+    stubFullMotion();
+    const calls = stubScrollIntoView();
+    await pickTwoAndCompare();
+    const toSteps = calls.filter(({ el }) =>
+      within(el as HTMLElement).queryByRole("button", { name: /Compare/ }),
+    );
+    expect(toSteps).toHaveLength(1);
+    expect(toSteps[0].options).toEqual({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  });
+
+  it("keeps the sticky blocks' room as scroll padding on the page's scroller", async () => {
+    // The chips and the search stick to the top, Compare to the bottom. A
+    // row that Tab reaches stops clear of both, and the padding goes with
+    // the picker.
+    stubFullMotion();
+    stubScrollIntoView();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            Response.json(
+              String(url).includes("/contacts")
+                ? [person("c-1", "Ada Lovelace"), person("c-2", "Augusta King")]
+                : {},
+            ),
+          ),
+        ),
+    );
+    client.clear();
+    render(
+      <QueryClientProvider client={client}>
+        <div data-testid="scroller" style={{ overflowY: "auto" }}>
+          <ManualMerge />
+        </div>
+      </QueryClientProvider>,
+    );
+    const scroller = screen.getByTestId("scroller");
+    fireEvent.click(await screen.findByText("Ada Lovelace"));
+    fireEvent.click(screen.getByText("Augusta King"));
+    expect(scroller.style.scrollPaddingTop).toMatch(/px$/);
+    expect(scroller.style.scrollPaddingBottom).toMatch(/px$/);
+
+    fireEvent.click(screen.getByRole("button", { name: /Compare 2 contacts/ }));
+    await waitFor(() => expect(scroller.style.scrollPaddingTop).toBe(""));
+    expect(scroller.style.scrollPaddingBottom).toBe("");
+  });
+
+  it("jumps without motion when the Motion row asks for less", async () => {
+    stubFullMotion();
+    mockMotion = "reduced";
+    const calls = stubScrollIntoView();
+    await pickTwoAndCompare();
+    const toSteps = calls.filter(({ el }) =>
+      within(el as HTMLElement).queryByRole("button", { name: /Compare/ }),
+    );
+    expect(toSteps).toHaveLength(1);
+    expect(toSteps[0].options).toEqual({ block: "nearest", behavior: "auto" });
   });
 });

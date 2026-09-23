@@ -46,7 +46,8 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
-import { EMPTY_STATE } from "../../lib/styles";
+import { PAGE_TOP, PAGE_X } from "../../lib/styles";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { cn } from "../../lib/utils";
 import {
   resolveLayout,
@@ -80,6 +81,9 @@ import { CompositionCard } from "./cards/CompositionCard";
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
 );
+
+/** The single keys that walk or act on the selected Up next row. */
+const QUEUE_KEYS = new Set(["j", "k", "d", "s", "l"]);
 
 interface DroppableColumnProps {
   id: PulseColumn;
@@ -121,7 +125,7 @@ const DroppableColumn = ({
       <SortableContext items={cards} strategy={rectSortingStrategy}>
         {cards.map((cardId, index) => renderCard(cardId, index, cards.length))}
         {cards.length === 0 && isEditing && (
-          <div className="p-8 rounded-2xl border-2 border-dashed border-outline/20 text-center text-xs text-on-surface-variant font-medium">
+          <div className="p-8 rounded-2xl border-2 border-dashed border-outline-variant text-center text-xs text-on-surface-variant font-medium">
             Drop cards here
           </div>
         )}
@@ -417,6 +421,12 @@ const PulseOffice = () => {
 
   // Selected index in Up Next
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  // Whether the selected row wears its tint: from the first queue key, or
+  // while keyboard focus is in the list, until focus leaves the list or a
+  // pointer presses outside it. See UpNextCard.
+  const [selectionShown, setSelectionShown] = useState(false);
+  const selectionShownRef = useRef(selectionShown);
+  selectionShownRef.current = selectionShown;
   const prevItemsRef = useRef(upNext.items);
 
   // Maintain highlight index when items leave or change
@@ -432,17 +442,19 @@ const PulseOffice = () => {
       ? upNext.items[selectedIndex]
       : null;
 
-  // Screen reader announcement for keyboard navigation
+  // Screen reader announcement for keyboard navigation. It speaks only once
+  // the selection shows, from the first queue key or keyboard focus in the
+  // list: "Row 1 of 8" on load was the spoken form of the stray tint.
   const [liveStatus, setLiveStatus] = useState("");
   useEffect(() => {
-    if (highlightedItem) {
+    if (highlightedItem && selectionShown) {
       setLiveStatus(
         `Row ${selectedIndex + 1} of ${upNext.items.length}, ${highlightedItem.contactName}, ${highlightedItem.dueChip.text.toLowerCase()}`,
       );
     } else {
       setLiveStatus("");
     }
-  }, [selectedIndex, highlightedItem, upNext.items.length]);
+  }, [selectedIndex, highlightedItem, upNext.items.length, selectionShown]);
 
   const highlightedItemRef = useRef(highlightedItem);
   highlightedItemRef.current = highlightedItem;
@@ -458,6 +470,10 @@ const PulseOffice = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A key pressed in a dialog belongs to the dialog: D on a button in
+      // the Log note dialog would complete the queue's row behind it.
+      if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+        return;
 
       const item = highlightedItemRef.current;
 
@@ -465,6 +481,15 @@ const PulseOffice = () => {
       if (!singleKey) return;
 
       const key = e.key.toLowerCase();
+
+      // J, K, D, S and L walk or act on the selected row. While no row
+      // shows it, the first of them only shows the row and does nothing
+      // else: D on a row nobody can see completed it unseen.
+      if (QUEUE_KEYS.has(key) && !selectionShownRef.current) {
+        e.preventDefault();
+        setSelectionShown(true);
+        return;
+      }
 
       if (key === "c") {
         e.preventDefault();
@@ -528,6 +553,8 @@ const PulseOffice = () => {
               groups={upNext.groups}
               selectedIndex={selectedIndex}
               onSelectIndex={setSelectedIndex}
+              selectionShown={selectionShown}
+              onSelectionShownChange={setSelectionShown}
               onComplete={(id) => completeAction.mutate(id)}
               onLog={(cid) => openQuickNote(cid)}
               onOpenContact={(cid) => navigate(`/contact/${cid}`)}
@@ -599,19 +626,29 @@ const PulseOffice = () => {
   if (isError) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
-        <div className={EMPTY_STATE}>
-          <HeartPulse className="w-12 h-12 text-error mx-auto mb-4 opacity-50" />
-          <h2 className="text-xl font-bold text-on-surface mb-2">
-            System Disconnected
-          </h2>
-          <p>Failed to load the relationship pulse dashboard.</p>
-        </div>
+        <EmptyState
+          icon={HeartPulse}
+          tone="error"
+          title="System disconnected"
+          body="Failed to load the relationship pulse dashboard."
+        />
       </div>
     );
   }
 
   if (isDashboardLoading || !dashboard) {
-    return <PulseSkeleton />;
+    // The insight loads beside the dashboard. The skeleton draws its card
+    // at the height of its words once they are back, and at the height of
+    // an insight of a common length before that. It draws the line only
+    // when there is no insight to draw: AI is off, or it came back empty.
+    return (
+      <PulseSkeleton
+        ask={aiAllowed}
+        insight={
+          !aiAllowed || (!isInsightLoading && !insight) ? null : insight?.text
+        }
+      />
+    );
   }
 
   const isZeroContacts = dashboard.metrics.totalActive === 0;
@@ -626,14 +663,20 @@ const PulseOffice = () => {
         {announcement}
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
-        {/* The masthead: the day, the sentence, the progress mark, the actions */}
+      <div
+        className={cn(
+          "max-w-[1600px] mx-auto flex flex-col gap-6 sm:gap-8 pb-32",
+          PAGE_X,
+          PAGE_TOP,
+        )}
+      >
+        {/* The masthead: the title and the day, the sentence, the actions */}
         <Masthead
           counts={{
             overdue: upNext.counts.overdue,
             dueToday: upNext.counts.today,
             birthdaysThisWeek: upNext.counts.birthdays,
-            completedToday: activity?.today.completed ?? 0,
+            queued: upNext.counts.total,
             streak: activity?.streak.current ?? 0,
           }}
           isEditing={isEditing}
@@ -672,7 +715,7 @@ const PulseOffice = () => {
                     <div
                       key={cardId}
                       data-card-id={cardId}
-                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high border border-outline/15 text-xs sm:text-sm font-medium text-on-surface shadow-xs"
+                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high text-xs sm:text-sm font-medium text-on-surface"
                     >
                       <span>{title}</span>
                       <button
@@ -680,7 +723,7 @@ const PulseOffice = () => {
                         onClick={() => handleShowCard(cardId)}
                         aria-label={`Show ${title}`}
                         title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
-                        className="hit-area p-1 rounded-lg hover:bg-surface-container-highest text-primary cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -740,7 +783,7 @@ const PulseOffice = () => {
           <div
             role="region"
             aria-label="Layout customize actions"
-            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 animate-in fade-in slide-in-from-bottom-4 duration-200"
+            className="tile-enter fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline-variant flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
           >
             {/* Anchored on both sides and centred with auto margins, so the
                 bar sizes itself against the whole width. At left 50% a fixed
@@ -765,14 +808,14 @@ const PulseOffice = () => {
               <button
                 type="button"
                 onClick={handleResetLayout}
-                className="btn-secondary hit-area text-xs sm:text-sm px-3 py-1.5 cursor-pointer"
+                className="btn-secondary btn-sm"
               >
                 Reset layout
               </button>
               <button
                 type="button"
                 onClick={handleDone}
-                className="btn-primary hit-area text-xs sm:text-sm px-4 py-1.5 cursor-pointer"
+                className="btn-primary btn-sm"
               >
                 Done
               </button>

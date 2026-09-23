@@ -20,11 +20,22 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { formatDay } from "../lib/datetime";
 import { toastUndoableDelete } from "../lib/undoToast";
-import { CARD, SECTION_HEADING, ICON_BTN } from "../lib/styles";
+import {
+  BAR_BUTTON,
+  BAR_LABEL,
+  CARD,
+  ICON_BTN,
+  SECTION_HEADING,
+  SELECTED_ROW,
+  SELECTED_TINT,
+  TONE_WASH,
+} from "../lib/styles";
+import { DURATION, EASE } from "../lib/motion";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
+import { SETTINGS_PAGE } from "./settings/layout";
 
 // ---------------------------------------------------------------------------
 // ArchivedContactsView — lists archived contacts with individual + bulk restore
@@ -125,11 +136,13 @@ export const ArchivedContactsView = () => {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28">
+    // The bottom padding stays tall at every width: the bulk bar floats over
+    // the end of the list.
+    <div className={cn(SETTINGS_PAGE, "space-y-6 md:pb-28")}>
       {/*
         Description and actions only — the Settings shell above already
-        renders the archive icon and the "Archived Contacts" heading, and
-        printing them again here stacked two headers with the same words.
+        renders the "Archived contacts" heading, and printing it again here
+        stacked two headers with the same words.
       */}
       <div className="flex items-start gap-3 mb-2">
         <p className="flex-1 min-w-0 text-sm text-on-surface-variant">
@@ -141,12 +154,9 @@ export const ArchivedContactsView = () => {
         {contacts.length > 0 && (
           <button
             onClick={isSelectMode ? exitSelectMode : enterSelectMode}
-            className={cn(
-              ICON_BTN,
-              isSelectMode && "text-primary bg-primary/10",
-            )}
-            title={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
-            aria-label={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
+            className={cn(ICON_BTN, isSelectMode && SELECTED_TINT)}
+            title={isSelectMode ? "Exit select mode" : "Multi-select"}
+            aria-label={isSelectMode ? "Exit select mode" : "Multi-select"}
           >
             {isSelectMode ? (
               <CheckSquare className="w-5 h-5" />
@@ -164,16 +174,16 @@ export const ArchivedContactsView = () => {
                 ? () => setSelectedIds(new Set())
                 : selectAll
             }
-            className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+            className="hit-area state-layer text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 transition-colors whitespace-nowrap"
           >
-            {selectedCount === contacts.length ? "Deselect All" : "Select All"}
+            {selectedCount === contacts.length ? "Deselect all" : "Select all"}
           </button>
         )}
       </div>
 
       {isLoading && (
         <div className="flex justify-center p-12">
-          <div className="animate-pulse w-6 h-6 rounded-full bg-amber-500/20" />
+          <div className="animate-pulse w-6 h-6 rounded-full bg-warning/20" />
         </div>
       )}
 
@@ -202,8 +212,16 @@ export const ArchivedContactsView = () => {
                   key={contact.id}
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
-                  transition={{ delay: i * 0.03 }}
+                  exit={{
+                    opacity: 0,
+                    x: 40,
+                    transition: { duration: DURATION.slow, ease: EASE },
+                  }}
+                  transition={{
+                    duration: DURATION.slow,
+                    ease: EASE,
+                    delay: i * 0.03,
+                  }}
                   onClick={() => {
                     if (isSelectMode) {
                       toggleSelect(contact.id);
@@ -212,11 +230,8 @@ export const ArchivedContactsView = () => {
                     setFloatingContactId(contact.id);
                   }}
                   className={cn(
-                    "flex items-center gap-4 px-6 py-4 transition-colors group cursor-pointer",
-                    isSelectMode &&
-                      isSelected &&
-                      "bg-primary/8 ring-inset ring-2 ring-primary/30",
-                    "hover:bg-surface-container-low",
+                    "state-layer flex items-center gap-4 px-6 py-4 transition-colors group cursor-pointer",
+                    isSelectMode && isSelected && SELECTED_ROW,
                   )}
                 >
                   {/* Checkbox */}
@@ -230,14 +245,14 @@ export const ArchivedContactsView = () => {
                       >
                         <div
                           className={cn(
-                            "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                            "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
                             isSelected
                               ? "bg-primary border-primary"
                               : "border-on-surface-variant/40 bg-surface-container-low",
                           )}
                         >
                           {isSelected && (
-                            <CheckCheck className="w-3 h-3 text-white" />
+                            <CheckCheck className="w-3 h-3 text-on-primary" />
                           )}
                         </div>
                       </motion.div>
@@ -248,14 +263,17 @@ export const ArchivedContactsView = () => {
                       own name ("Score 72, strong") and its tooltip. */}
                   <div className="relative shrink-0">
                     <ScoreRingAvatar contact={contact} size={44} ring="list" />
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500/90 rounded-full flex items-center justify-center shadow-sm">
-                      <Archive className="w-2.5 h-2.5 text-white" />
+                    {/* The warning ink on the card face, like the contact
+                        page's Archived badge. White on a raw amber measured
+                        about 2 to 1. */}
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-surface-container-lowest text-warning rounded-full flex items-center justify-center shadow-sm">
+                      <Archive className="w-2.5 h-2.5" />
                     </div>
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-sm text-on-surface group-hover:text-primary transition-colors truncate block text-left">
+                    <span className="font-semibold text-sm text-on-surface truncate block text-left">
                       {contact.name}
                     </span>
                     {(contact.role || contact.company) && (
@@ -281,7 +299,10 @@ export const ArchivedContactsView = () => {
                       }}
                       disabled={unarchive.isPending}
                       title="Restore to Network"
-                      className="hit-area flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-warning bg-amber-500/10 hover:bg-amber-500/20 transition-colors sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 shrink-0 disabled:opacity-50"
+                      className={cn(
+                        "hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 shrink-0 disabled:opacity-50",
+                        TONE_WASH.warning,
+                      )}
                     >
                       <ArchiveRestore className="w-3.5 h-3.5" />
                       Restore
@@ -316,26 +337,24 @@ export const ArchivedContactsView = () => {
               <button
                 onClick={handleBulkRestore}
                 disabled={bulkUpdate.isPending}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-warning hover:bg-amber-500/10 transition-colors disabled:opacity-40 shrink-0"
+                className={cn(BAR_BUTTON, "text-warning disabled:opacity-40")}
               >
                 <ArchiveRestore className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">
+                <span className={BAR_LABEL}>
                   {bulkUpdate.isPending ? "Restoring…" : "Restore"}
                 </span>
               </button>
 
               <div className="w-px h-6 bg-surface-container-high mx-1" />
 
-              {/* Delete Permanently */}
+              {/* Delete: moves them to Trash, with an undo */}
               <button
                 onClick={() => handleBulkDelete()}
                 disabled={bulkDelete.isPending}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-error hover:bg-rose-500/10 transition-colors disabled:opacity-40 shrink-0"
+                className={cn(BAR_BUTTON, "text-error disabled:opacity-40")}
               >
                 <Trash2 className="w-4 h-4" />
-                <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">
-                  Delete
-                </span>
+                <span className={BAR_LABEL}>Delete</span>
               </button>
             </div>
           </motion.div>

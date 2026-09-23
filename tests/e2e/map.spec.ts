@@ -33,6 +33,34 @@ const CREDITED_STYLE = {
   layers: [{ id: "credit", type: "circle", source: "credit" }],
 };
 
+/**
+ * The default basemap's credit, as long as it is. A short credit fits
+ * anywhere, and this one ran over the stats strip at 800 and 1024 px.
+ */
+const LONG_CREDIT_STYLE = {
+  ...CREDITED_STYLE,
+  sources: {
+    credit: {
+      ...CREDITED_STYLE.sources.credit,
+      attribution:
+        '<a href="https://openfreemap.org">OpenFreeMap</a> <a href="https://www.openmaptiles.org/">© OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+  },
+};
+
+/** True when two boxes share any area. */
+function overlaps(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return (
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height
+  );
+}
+
 interface PinFields {
   lat: number | null;
   lng: number | null;
@@ -589,6 +617,141 @@ test.describe("map", () => {
     expect(stacking.card).toBeGreaterThan(stacking.pin);
     expect(stacking.pin).toBeGreaterThanOrEqual(1);
   });
+
+  test("keeps the toolbar and the stats strip clear of an open contact", async ({
+    page,
+    seed,
+  }) => {
+    // At 1440 px the contact started at x 580 and covered Fit all and the
+    // end of Select. The toolbar and the corner keep to the map it leaves.
+    await stubBasemap(page);
+    await page.goto(`/map/contact/${seed.byName("Ada Lovelace").id}`);
+    const overlay = page.getByRole("region", { name: "Contact", exact: true });
+    await expect(
+      overlay.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
+    ).toBeVisible();
+    // The contact slides in. Measure it where it comes to rest, flush with
+    // the window's right edge.
+    const width = page.viewportSize()!.width;
+    await expect
+      .poll(async () => {
+        const box = await overlay.boundingBox();
+        return box ? Math.round(box.x + box.width) : 0;
+      })
+      .toBe(width);
+    const panel = (await overlay.boundingBox())!;
+
+    const clear = [
+      page.getByRole("textbox", { name: "Filter contacts" }),
+      page.getByRole("button", { name: "Fit all" }),
+      page.getByRole("button", { name: "Select contacts" }),
+      page.getByRole("region", { name: "Map viewport statistics" }),
+    ];
+    for (const control of clear) {
+      await expect(control).toBeVisible();
+      const box = (await control.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(panel.x);
+    }
+  });
+
+  test("draws MapLibre's focus glow for no pointer, and the app's ring for the keyboard", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.goto("/map");
+    const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
+    await zoomIn.click();
+    await expect(zoomIn).toBeFocused();
+    expect(await zoomIn.evaluate((el) => getComputedStyle(el).boxShadow)).toBe(
+      "none",
+    );
+
+    // Focus from the keyboard shows the ring, inset in the primary. Zoom out
+    // is the next button in the group, so Shift+Tab from it is a key press
+    // that lands on Zoom in. Two steps in first: at the world's zoom Zoom
+    // out is disabled, and one step out would take it back there.
+    await zoomIn.click();
+    await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+    await page.keyboard.press("Shift+Tab");
+    await expect(zoomIn).toBeFocused();
+    expect(
+      await zoomIn.evaluate((el) => getComputedStyle(el).boxShadow),
+    ).toContain("inset");
+  });
+
+  test.describe("at 1024 px", () => {
+    test.use({ viewport: { width: 1024, height: 768 } });
+
+    test("steps the toolbar and the corner aside when a contact leaves a sliver", async ({
+      page,
+      seed,
+    }) => {
+      // The contact left 100 px of map, and the toolbar and the strip were
+      // cut off in it mid-word.
+      await stubBasemap(page);
+      await page.goto(`/map/contact/${seed.byName("Ada Lovelace").id}`);
+      const overlay = page.getByRole("region", {
+        name: "Contact",
+        exact: true,
+      });
+      await expect(
+        overlay.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
+      ).toBeVisible();
+      // The map page owns Escape, and it arrives with the map's own chunk:
+      // a ready map is the proof that the page behind the contact runs.
+      await expect(
+        page.getByRole("region", { name: "Contact map" }),
+      ).toHaveAttribute("data-map-ready", "true");
+      await expect(
+        page.getByRole("textbox", { name: "Filter contacts" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("region", { name: "Map viewport statistics" }),
+      ).toHaveCount(0);
+
+      // They come back with the whole map.
+      await page.keyboard.press("Escape");
+      await expect(page).toHaveURL(/\/map$/);
+      await expect(
+        page.getByRole("textbox", { name: "Filter contacts" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("region", { name: "Map viewport statistics" }),
+      ).toBeVisible();
+    });
+
+    test("opens the credit clear of the stats strip and the health legend", async ({
+      page,
+    }) => {
+      await page.route(OPENFREEMAP_ROUTE, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(LONG_CREDIT_STYLE),
+        }),
+      );
+      await page.goto("/map?layer=health");
+      const map = page.getByRole("region", { name: "Contact map" });
+      await expect(map).toHaveAttribute("data-map-ready", "true");
+      const strip = page.getByRole("region", {
+        name: "Map viewport statistics",
+      });
+      const legend = page.getByRole("group", { name: "Health legend" });
+      await expect(strip).toBeVisible();
+      await expect(legend).toBeVisible();
+
+      await map.locator(".maplibregl-ctrl-attrib-button").click();
+      await expect(map.locator(".maplibregl-ctrl-attrib-inner")).toContainText(
+        "OpenStreetMap",
+      );
+      const credit = (await map
+        .locator(".maplibregl-ctrl-attrib")
+        .boundingBox())!;
+      for (const other of [strip, legend]) {
+        expect(overlaps(credit, (await other.boundingBox())!)).toBe(false);
+      }
+    });
+  });
 });
 
 /**
@@ -645,5 +808,43 @@ test.describe("map on a phone", () => {
         { message: "the pin did not settle above the tab bar" },
       )
       .toBeLessThan(40);
+  });
+
+  test("keeps the credit clear of the stats strip, shut and open", async ({
+    page,
+  }) => {
+    // The credit's "i" sat under the right end of the stats strip, which
+    // took its taps, and the credit it opens ran under the strip. On a
+    // phone the zoom buttons and the credit start one strip higher.
+    await page.route(OPENFREEMAP_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(CREDITED_STYLE),
+      }),
+    );
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toHaveAttribute("data-map-ready", "true");
+    const strip = page.getByRole("region", { name: "Map viewport statistics" });
+    await expect(strip).toBeVisible();
+    const credit = map.locator(".maplibregl-ctrl-attrib");
+
+    /** How far above the strip's top the credit's box ends. */
+    const clearance = async () => {
+      const creditBox = await credit.boundingBox();
+      const stripBox = await strip.boundingBox();
+      return creditBox && stripBox
+        ? stripBox.y - (creditBox.y + creditBox.height)
+        : Number.NEGATIVE_INFINITY;
+    };
+    expect(await clearance()).toBeGreaterThan(0);
+
+    // A real tap: it fails if anything lies over the button.
+    await map.locator(".maplibregl-ctrl-attrib-button").tap();
+    await expect(map.locator(".maplibregl-ctrl-attrib-inner")).toContainText(
+      "Test Basemap",
+    );
+    expect(await clearance()).toBeGreaterThan(0);
   });
 });

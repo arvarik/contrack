@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { DURATION, EASE } from "../../lib/motion";
 import {
   MENU_ITEM,
   MENU_ITEM_DANGER,
@@ -97,7 +98,7 @@ export const ContextMenu = ({
           initial={{ opacity: 0, scale: 0.95, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -4 }}
-          transition={{ duration: 0.1 }}
+          transition={{ duration: DURATION.fast, ease: EASE }}
           style={{ position: "fixed", left: adjustedPos.x, top: adjustedPos.y }}
           // The panel without `menu-enter`: Motion animates this one.
           className={cn(MENU_PANEL, "menu-enter-none z-[300] min-w-[180px]")}

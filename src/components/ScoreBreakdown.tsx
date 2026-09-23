@@ -199,7 +199,7 @@ export const ScoreBreakdown = ({
         }}
         // 24px minimum on screen for the bare-icon form, and a 44px tap box
         // from `hit-area`. A badge passed as children is larger than that.
-        className="hit-area inline-flex items-center justify-center rounded-full min-w-6 min-h-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="hit-area inline-flex items-center justify-center rounded-full min-w-6 min-h-6"
       >
         {children ?? <Info className="w-3.5 h-3.5" />}
       </button>

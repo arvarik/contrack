@@ -512,10 +512,6 @@ export const useUpdateInstanceSettings = () => {
 // ---------------------------------------------------------------------------
 
 export interface IntegrationsConfig {
-  mapbox: {
-    configured: boolean;
-    source: "setting" | "env" | "none";
-  };
   searxng: {
     url: string | null;
     source: "setting" | "env" | "none";
@@ -529,7 +525,6 @@ export interface IntegrationsConfig {
 }
 
 export interface UpdateIntegrationsInput {
-  mapboxKey?: string;
   searxngUrl?: string;
   googleOAuth?: { clientId: string; clientSecret: string } | null;
 }

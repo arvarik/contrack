@@ -184,7 +184,7 @@ export const LocationMiniMap = ({
           {settled && (
             <div
               className={cn(
-                "absolute inset-0 transition-opacity duration-300 motion-reduce:transition-none",
+                "absolute inset-0 transition-opacity duration-(--dur-slow) motion-reduce:transition-none",
                 loaded ? "opacity-100" : "opacity-0",
               )}
             >

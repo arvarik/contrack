@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, HTMLMotionProps } from "motion/react";
 import { cn } from "../../lib/utils";
+import { DURATION, EASE } from "../../lib/motion";
 
 export interface AnimatedSkeletonProps extends HTMLMotionProps<"div"> {
   className?: string;
@@ -17,7 +18,7 @@ export const AnimatedSkeleton = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.3, delay }}
+      transition={{ duration: DURATION.slow, ease: EASE, delay }}
       className={cn(
         "relative overflow-hidden bg-surface-container-high/50",
         className,

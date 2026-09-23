@@ -160,7 +160,8 @@ async function runMentionExtraction(
         // point at something and a mention with no contact is a mention the
         // timeline cannot show. What changes is whether anybody is told.
         const ghostId = crypto.randomUUID();
-        const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
+        // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
+        const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
           Math.floor(Math.random() * 5)
         ];
         const ghost = db

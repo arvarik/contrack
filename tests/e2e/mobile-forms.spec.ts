@@ -84,11 +84,11 @@ test.describe("open instance", () => {
     await page.getByRole("button", { name: "New", exact: true }).click();
     await page.getByRole("menuitem", { name: "New contact" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "New Contact" });
+    const dialog = page.getByRole("dialog", { name: "New contact" });
     await expect(dialog).toBeVisible();
     await expectBottomSheet(page, dialog);
     await expectPhoneSizedFields(dialog, [
-      "Full Name",
+      "Full name",
       "Role",
       "Company",
       "Email",
@@ -99,9 +99,9 @@ test.describe("open instance", () => {
       b.include('[role="dialog"]'),
     );
 
-    await dialog.getByLabel("Full Name").fill("Radia Perlman");
+    await dialog.getByLabel("Full name").fill("Radia Perlman");
     await dialog.getByLabel("Company").fill("Digital Equipment");
-    await dialog.getByRole("button", { name: "Save Contact" }).click();
+    await dialog.getByRole("button", { name: "Save contact" }).click();
 
     await expect(dialog).toBeHidden();
     // Saving keeps the list, with the new person in it, rather than leaving

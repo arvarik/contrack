@@ -68,6 +68,12 @@ test.describe("people", () => {
     await expect(
       page.getByRole("heading", { name: "No one matches" }),
     ).toBeVisible();
+    // One sentence and no coverage card inside it: the row under the search
+    // box speaks for the index.
+    await expect(page.getByText("Try other words.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Semantic search coverage" }),
+    ).toHaveCount(0);
   });
 
   test("says that AI was unavailable and the matches are by keyword", async ({

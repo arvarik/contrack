@@ -24,6 +24,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { TONE_WASH, type Tone } from "../../lib/styles";
 
 export interface EmptyStateAction {
   label: string;
@@ -43,8 +44,11 @@ export interface EmptyStateProps {
   action?: EmptyStateAction;
   /** 2 on a page, 3 inside a card that has its own h2. */
   level?: 2 | 3;
-  /** Extra content under the sentence, such as a coverage card. */
-  children?: ReactNode;
+  /**
+   * The icon tile's tone. `primary` (the default) for an empty place, `error`
+   * for a place that failed to load.
+   */
+  tone?: Tone;
   className?: string;
 }
 
@@ -55,7 +59,7 @@ export const EmptyState = ({
   body,
   action,
   level = 2,
-  children,
+  tone = "primary",
   className,
 }: EmptyStateProps) => {
   const Heading = level === 3 ? "h3" : "h2";
@@ -72,7 +76,10 @@ export const EmptyState = ({
         (Icon && (
           <div
             data-testid="empty-state-icon"
-            className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center"
+            className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center",
+              TONE_WASH[tone],
+            )}
           >
             <Icon className="w-6 h-6" aria-hidden="true" />
           </div>
@@ -91,7 +98,6 @@ export const EmptyState = ({
           {action.label}
         </button>
       )}
-      {children}
     </div>
   );
 };

@@ -22,6 +22,8 @@ import type {
   ConnectorDetail,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 interface ImapFormModalProps {
   isOpen: boolean;
@@ -232,7 +234,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Edit ${connector?.name}` : "Connect Mailbox (IMAP)"}
+      title={isEditing ? `Edit ${connector?.name}` : "Connect mailbox (IMAP)"}
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -249,7 +251,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         {formError && (
           <div
             role="alert"
-            className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-error"
+            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
           >
             {formError}
           </div>
@@ -268,8 +270,8 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Fastmail Personal, Gmail Archive"
-            className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+            placeholder="e.g. Fastmail personal, Gmail archive"
+            className={FORM_INPUT}
           />
         </div>
 
@@ -288,7 +290,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
               value={host}
               onChange={(e) => setHost(e.target.value)}
               placeholder="imap.fastmail.com"
-              className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs font-mono text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className={cn(FORM_INPUT, "font-mono")}
             />
           </div>
           <div>
@@ -303,7 +305,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
               type="number"
               value={port}
               onChange={(e) => setPort(Number(e.target.value) || 993)}
-              className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs font-mono text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className={cn(FORM_INPUT, "font-mono")}
             />
           </div>
         </div>
@@ -314,7 +316,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             htmlFor="imap-username"
             className="block text-xs font-semibold text-on-surface mb-1"
           >
-            Username / Email
+            Username / email
           </label>
           <input
             id="imap-username"
@@ -322,7 +324,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="you@example.com"
-            className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+            className={FORM_INPUT}
           />
         </div>
 
@@ -345,12 +347,12 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
               placeholder={
                 isEditing ? "••••••••••••••••" : "Paste your app password"
               }
-              className="w-full px-3 py-2 pr-10 rounded-xl bg-surface-container-high text-xs font-mono text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className={cn(FORM_INPUT, "pr-10 font-mono")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1"
+              className="state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
               title={showPassword ? "Hide password" : "Show password"}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -381,7 +383,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             value={folders}
             onChange={(e) => setFolders(e.target.value)}
             placeholder="INBOX, Sent"
-            className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+            className={FORM_INPUT}
           />
           <p className="text-[11px] text-on-surface-variant mt-1">
             Comma-separated list of mailboxes to scan (e.g. INBOX, Sent).
@@ -402,7 +404,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             value={aliases}
             onChange={(e) => setAliases(e.target.value)}
             placeholder="alias@company.com, old@example.org"
-            className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+            className={FORM_INPUT}
           />
           <p className="text-[11px] text-on-surface-variant mt-1">
             Outgoing mail from these aliases will be counted as sent by you.
@@ -500,7 +502,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
                   Math.max(1, Math.min(10, Number(e.target.value) || 3)),
                 )
               }
-              className="w-20 px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+              className={cn(FORM_INPUT, "w-20")}
             />
             <span className="text-xs text-on-surface-variant">
               interactions before suggesting an unknown correspondent as a
@@ -512,11 +514,10 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         {/* Test Result feedback */}
         {testResult && (
           <div
-            className={`rounded-xl p-3 text-xs ${
-              testResult.ok
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                : "bg-red-500/10 border border-red-500/20 text-error"
-            }`}
+            className={cn(
+              "rounded-xl p-3 text-xs",
+              TONE_WASH[testResult.ok ? "success" : "error"],
+            )}
           >
             {testResult.message}
           </div>
@@ -528,7 +529,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             type="button"
             onClick={handleTest}
             disabled={testConnector.isPending || isSaving}
-            className="hit-area px-3 py-2 rounded-xl text-xs font-medium bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors min-h-[44px] flex items-center gap-1.5"
+            className="btn-secondary"
           >
             {testConnector.isPending && (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -537,18 +538,10 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="hit-area px-3 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors min-h-[44px]"
-            >
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="hit-area px-4 py-2 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] flex items-center gap-1.5"
-            >
+            <button type="submit" disabled={isSaving} className="btn-primary">
               {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>{isEditing ? "Save changes" : "Connect"}</span>
             </button>

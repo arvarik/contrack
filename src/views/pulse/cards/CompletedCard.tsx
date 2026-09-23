@@ -4,7 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { useCompletedActionItems } from "../../../api";
 import { formatWhen } from "../../../lib/datetime";
-import { BTN_QUIET } from "../../../lib/styles";
+import { BTN_QUIET, TONE_TEXT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 
@@ -48,20 +48,25 @@ export const CompletedCard = () => {
       </CardFrame>
 
       {open && (
+        // The rows start on the line's edge, where a card's rows start. The
+        // list scrolls inside itself from lg only, like the queue: on a
+        // phone a box that scrolls inside the page catches the flick.
         <ul
           id={LIST_ID}
           aria-label="Completed follow-ups"
-          className="flex flex-col gap-1.5 px-2 max-h-72 overflow-y-auto nice-scrollbar"
+          className="flex flex-col gap-1.5 px-4 sm:px-5 lg:max-h-72 lg:overflow-y-auto nice-scrollbar"
         >
           {completedItems.map((item) => (
+            // On a phone the date takes a line of its own under the title:
+            // beside the name and the date the title had one letter left.
             <li
               key={item.id}
-              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-surface-container-low/70"
+              className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl px-3 py-2 bg-surface-container-low/70"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <CheckCircle2
                   aria-hidden="true"
-                  className="w-4 h-4 text-success shrink-0"
+                  className={cn("w-4 h-4 shrink-0", TONE_TEXT.success)}
                 />
                 <span
                   className={cn(
@@ -82,7 +87,12 @@ export const CompletedCard = () => {
                   {item.contactName}
                 </Link>
               </div>
-              <span className={cn(PULSE_TYPE.meta, "shrink-0 tabular-nums")}>
+              <span
+                className={cn(
+                  PULSE_TYPE.meta,
+                  "shrink-0 tabular-nums max-sm:w-full max-sm:pl-6",
+                )}
+              >
                 {item.completedAt ? formatWhen(item.completedAt) : "Done"}
               </span>
             </li>

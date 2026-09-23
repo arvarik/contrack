@@ -2,7 +2,7 @@
 /**
  * The map's markers, without a map.
  *
- * MapLibre needs WebGL, which jsdom does not have, so `react-map-gl/maplibre`
+ * MapLibre needs WebGL, which jsdom does not have, so `@vis.gl/react-maplibre`
  * is replaced by components that render their children. What is left is the
  * part this app wrote: one named button per visible feature, a count button
  * for a cluster, and the click that opens a contact. The map itself is
@@ -10,7 +10,13 @@
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { MapContact } from "../../shared/geo";
 import type { VisibleFeature } from "../../src/views/map/useClusterFeatures";
 
@@ -28,7 +34,7 @@ vi.mock("../../src/views/map/maplibreWorker", () => ({
 /** The props the map was created with, for the tests that read them. */
 const mapProps = vi.fn<(props: Record<string, unknown>) => void>();
 
-vi.mock("react-map-gl/maplibre", () => {
+vi.mock("@vis.gl/react-maplibre", () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   );
@@ -52,7 +58,10 @@ vi.mock("../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({ mapStyles: null }),
 }));
 vi.mock("../../src/contexts/PreferencesContext", () => ({
-  usePreferences: () => ({ mode: "light" }),
+  usePreferences: () => ({
+    mode: "light",
+    preferences: { accent: "#006a91" },
+  }),
 }));
 
 const visible = vi.fn<() => VisibleFeature[]>(() => []);
@@ -62,6 +71,7 @@ vi.mock("../../src/views/map/useClusterFeatures", () => ({
 
 // Imported after the mocks, which is what vi.mock hoisting expects.
 const { ContactMap } = await import("../../src/views/map/ContactMap");
+const { HealthLegend } = await import("../../src/views/map/HealthLegend");
 
 const person = (id: string, name: string, company: string): MapContact => ({
   id,
@@ -322,5 +332,37 @@ describe("ContactMap", () => {
     const map = loadedMap();
     createdWith().onLoad({ target: map });
     expect(map.touchZoomRotate.disableRotation).not.toHaveBeenCalled();
+  });
+});
+
+describe("the health layer's neutral ring", () => {
+  // A pin nobody tracks wore the hairline tone, and the legend a filled dot
+  // in it: about 1.5 to 1, and it looked like a fourth band. Both are a ring
+  // in the variant ink now, the legend's hollow.
+  it("rings a pin nobody tracks in the variant ink", () => {
+    const stranger = {
+      ...person("c9", "Nobody Tracked", "Acme"),
+      isTracked: false,
+    };
+    visible.mockReturnValue([point(stranger)]);
+    render(
+      <ContactMap contacts={[stranger]} onSelect={() => {}} layer="health" />,
+    );
+    const pin = screen.getByRole("button", { name: "Nobody Tracked, Acme" });
+    expect(pin.className).toContain("ring-on-surface-variant");
+    expect(pin.className).not.toContain("ring-outline-variant");
+  });
+
+  it("names it in the legend with a hollow ring of the same ink", () => {
+    render(<HealthLegend />);
+    const legend = screen.getByRole("group", { name: "Health legend" });
+    const mark = within(legend).getByText("Not tracked")
+      .previousElementSibling as HTMLElement;
+    expect(mark.className).toContain("border-on-surface-variant");
+    expect(mark.className).not.toMatch(/\bbg-/);
+    // The three bands keep their filled dots.
+    const strong = within(legend).getByText("Strong")
+      .previousElementSibling as HTMLElement;
+    expect(strong.className).toContain("bg-success");
   });
 });

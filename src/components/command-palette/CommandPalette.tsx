@@ -36,7 +36,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { KBD, KBD_SM, SECTION_BG } from "../../lib/styles";
+import { KBD, KBD_SM, SECTION_BG, TONE_WASH } from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
+import { cn } from "../../lib/utils";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
   getMode,
@@ -44,11 +46,12 @@ import {
   GROUP_HEADING_DEFAULT,
   GROUP_HEADING_PRIMARY,
   GROUP_HEADING_EMERALD,
+  ITEM_CURRENT,
+  MATCH_BADGE,
 } from "./utils";
 import { AIShimmerRow, AIResultCard } from "./AiComponents";
 import { ZeroStateView } from "./ZeroStateView";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { DataAgeHalo } from "./DataAgeHalo";
 import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
 import { ResultPeek } from "./ResultPeek";
 import { SynthesisBar } from "./SynthesisBar";
@@ -58,6 +61,17 @@ import { FacetPills } from "./FacetPills";
 import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
+
+/** The icon at the start of the input, swapped when the mode changes. */
+const ICON_SWAP = {
+  initial: { scale: 0.5, opacity: 0 },
+  animate: { scale: 1, opacity: 1 },
+  exit: { scale: 0.5, opacity: 0 },
+  transition: { duration: DURATION.fast, ease: EASE },
+} as const;
+
+/** The 11 px uppercase type of a badge or a status line in the list. */
+const SMALL_CAPS = "text-[11px] font-bold uppercase tracking-[0.08em]";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -137,7 +151,7 @@ export const CommandPalette = () => {
     [enrichContact],
   );
 
-  // ── Space-to-Peek state ──
+  // ── Shift-to-peek state ──
   const [peekContact, setPeekContact] = useState<PeekContact | null>(null);
   const [peekVisible, setPeekVisible] = useState(false);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,7 +177,7 @@ export const CommandPalette = () => {
   // Track if a successful AI search was recorded for the current debounced query.
   // Without this, the recording effect re-fires on every keystroke while
   // `semanticSearch.isSuccess` stays true, leaving a trail of prefix entries
-  // in "Recent Searches" (e.g. "vent", "ventu", "ventur", "venture").
+  // in "Recent searches" (e.g. "vent", "ventu", "ventur", "venture").
   const lastRecordedAiRef = useRef<string>("");
 
   // Derive the raw NL query from the ? prefix
@@ -549,7 +563,7 @@ export const CommandPalette = () => {
   // AI loading: mutation is pending AND query is long enough
   const isAiLoading = mode === "ai" && semanticSearch.isPending;
 
-  // ── Space-to-Peek: track focused result via MutationObserver ──
+  // ── Shift-to-peek: track focused result via MutationObserver ──
   useEffect(() => {
     if (!open) {
       setPeekContact(null);
@@ -652,7 +666,7 @@ export const CommandPalette = () => {
               setOpen(true);
             }
           }}
-          label="Global Command Palette"
+          label="Global command palette"
           shouldFilter={
             mode !== "ai" && !isEmptyInput && !subMenuContactId && !hasFilters
           }
@@ -666,51 +680,40 @@ export const CommandPalette = () => {
               handleClose();
             }
           }}
-          className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40 transition-all duration-200"
+          className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: DURATION.fast, ease: EASE }}
             className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
           >
             {/* ── Facet pills (Feature 5) ── */}
             <FacetPills filters={parsed.filters} onRemove={removeFilter} />
 
-            {/* ── Search input row ── */}
+            {/*
+              Search input row: the mode icon, the input and the Escape hint.
+              The input draws no ring, the one exception to the app's focus
+              ring besides menu rows: the palette is a dialog with one field
+              that has focus for as long as it is open, so a ring would never
+              go away and would say nothing. Its caret and the open panel say
+              where the typing goes.
+            */}
             <div className="flex items-center px-4 py-2 sm:py-4 bg-surface-container-low gap-3">
               <AnimatePresence mode="wait">
                 {mode === "ai" ? (
-                  <motion.div
-                    key="ai-icon"
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
+                  <motion.div key="ai-icon" {...ICON_SWAP}>
                     <Sparkles
                       className={`w-5 h-5 text-primary ${isAiLoading ? "animate-pulse" : ""}`}
                     />
                   </motion.div>
                 ) : mode === "action" ? (
-                  <motion.div
-                    key="action-icon"
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
+                  <motion.div key="action-icon" {...ICON_SWAP}>
                     <Zap className="w-5 h-5 text-success animate-pulse" />
                   </motion.div>
                 ) : (
-                  <motion.div
-                    key="search-icon"
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
+                  <motion.div key="search-icon" {...ICON_SWAP}>
                     <Search className="w-5 h-5 text-on-surface-variant" />
                   </motion.div>
                 )}
@@ -728,7 +731,7 @@ export const CommandPalette = () => {
                     ? "Add more filters or search..."
                     : "Search contacts, ? to ask AI, > for actions..."
                 }
-                className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant outline-none text-lg"
+                className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
               />
               <div className="flex items-center gap-1.5 opacity-50">
                 <kbd className={KBD}>ESC</kbd>
@@ -746,7 +749,7 @@ export const CommandPalette = () => {
               <span
                 className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant"}`}
               >
-                <Sparkles className="w-3 h-3" /> ? AI Query
+                <Sparkles className="w-3 h-3" /> ? AI query
               </span>
               <span className="text-on-surface-variant/20">•</span>
               <span
@@ -824,7 +827,7 @@ export const CommandPalette = () => {
                     <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
                       <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
                       <p className="font-bold text-on-surface mb-1">
-                        AI Query Mode
+                        AI query mode
                       </p>
                       <p className="text-xs mb-4">
                         Ask anything about your network in plain English.
@@ -837,7 +840,7 @@ export const CommandPalette = () => {
                               e.preventDefault();
                               setSearch(`? ${q}`);
                             }}
-                            className="w-full min-h-[44px] sm:min-h-0 text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary transition-colors"
+                            className="state-layer w-full min-h-[44px] sm:min-h-0 text-left text-xs px-3 py-2 rounded-lg bg-primary/5 text-primary transition-colors"
                           >
                             ? {q}
                           </button>
@@ -859,7 +862,12 @@ export const CommandPalette = () => {
                     isAiLoading &&
                     aiResults.length === 0 && (
                       <div className="px-1 py-2 space-y-1">
-                        <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                        <div
+                          className={cn(
+                            SMALL_CAPS,
+                            "px-3 py-2 text-primary flex items-center gap-1.5",
+                          )}
+                        >
                           <Sparkles className="w-3 h-3 animate-pulse" /> Asking
                           AI…
                         </div>
@@ -876,8 +884,8 @@ export const CommandPalette = () => {
                         isAiLoading
                           ? "Keyword candidates · checking with AI"
                           : aiFallback
-                            ? "Keyword Results (AI Fallback)"
-                            : "AI Query Results"
+                            ? "Keyword results (AI fallback)"
+                            : "AI query results"
                       }
                       className={GROUP_HEADING_PRIMARY}
                     >
@@ -937,7 +945,7 @@ export const CommandPalette = () => {
                             );
                             handleClose();
                           }}
-                          className="hit-area text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
+                          className="hit-area text-xs text-primary flex items-center gap-1 group"
                         >
                           Search notes
                           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -949,7 +957,7 @@ export const CommandPalette = () => {
                             );
                             handleClose();
                           }}
-                          className="hit-area text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
+                          className="hit-area text-xs text-primary flex items-center gap-1 group"
                         >
                           Open in full-page search
                           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -987,7 +995,7 @@ export const CommandPalette = () => {
                 <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
                   <Zap className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
                   <p className="font-bold text-on-surface">
-                    Action Mode Active
+                    Action mode active
                   </p>
                   <p className="mt-1">
                     Syntax:{" "}
@@ -1009,15 +1017,18 @@ export const CommandPalette = () => {
 
               {!subMenuContactId && mode === "action" && actionMatch && (
                 <Command.Group
-                  heading="Action Engine"
+                  heading="Action engine"
                   className={GROUP_HEADING_EMERALD}
                 >
                   <Command.Item
                     value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
                     onSelect={handleActionExecute}
-                    className="flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-emerald-500/10 aria-selected:bg-emerald-500/15 transition-colors text-on-surface"
+                    className={cn(
+                      "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-success/10 transition-colors text-on-surface",
+                      ITEM_CURRENT,
+                    )}
                   >
-                    <div className="w-10 h-10 flex items-center justify-center bg-emerald-500/20 text-success rounded-full shrink-0 shadow-lg shadow-emerald-500/10">
+                    <div className="w-10 h-10 flex items-center justify-center bg-success/20 text-success rounded-full shrink-0">
                       {getLogIcon(actionMatch.type)}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col">
@@ -1054,12 +1065,17 @@ export const CommandPalette = () => {
                         <span className="flex items-center gap-1.5">
                           Contacts
                           {instantSearch.isInstant && (
-                            <span className="text-warning text-[11px] font-bold uppercase tracking-widest animate-pulse">
+                            <span
+                              className={cn(
+                                SMALL_CAPS,
+                                "text-warning animate-pulse",
+                              )}
+                            >
                               ⚡ instant
                             </span>
                           )}
                           {hasFilters && (
-                            <span className="text-primary text-[11px] font-bold uppercase tracking-widest">
+                            <span className={cn(SMALL_CAPS, "text-primary")}>
                               filtered
                             </span>
                           )}
@@ -1072,18 +1088,19 @@ export const CommandPalette = () => {
                           key={contact.id}
                           value={contact.id + contact.name}
                           onSelect={() => handleSelectFtsContact(contact.id)}
-                          className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface group/result"
+                          className={cn(
+                            "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:text-on-primary-wash transition-colors text-on-surface group/result",
+                            ITEM_CURRENT,
+                          )}
                         >
-                          <DataAgeHalo updatedAt={contact.updatedAt}>
-                            <img
-                              src={
-                                contact.avatarUrl ||
-                                fallbackAvatarUrl(contact.name)
-                              }
-                              alt=""
-                              className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
-                            />
-                          </DataAgeHalo>
+                          <img
+                            src={
+                              contact.avatarUrl ||
+                              fallbackAvatarUrl(contact.name)
+                            }
+                            alt=""
+                            className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
+                          />
                           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm truncate">
@@ -1091,7 +1108,9 @@ export const CommandPalette = () => {
                               </span>
                               <ScoreDot contact={contact} />
                               {contact.approximate && (
-                                <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+                                <span
+                                  className={cn(TONE_WASH.primary, MATCH_BADGE)}
+                                >
                                   Approximate
                                 </span>
                               )}
@@ -1137,7 +1156,7 @@ export const CommandPalette = () => {
                               setSubMenuContactAvatar(contact.avatarUrl);
                             }}
                             onMouseDown={(e) => e.preventDefault()}
-                            className="hit-area shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0 active:bg-surface-container-high sm:active:bg-transparent"
+                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
                             aria-label={`Actions for ${contact.name}`}
                           >
                             <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
@@ -1157,7 +1176,10 @@ export const CommandPalette = () => {
                         <Command.Item
                           value={`create_${search}`}
                           onSelect={handleCreateContact}
-                          className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-surface-container-high transition-colors text-on-surface"
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface",
+                            ITEM_CURRENT,
+                          )}
                         >
                           <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
                             <UserPlus className="w-4 h-4 text-primary" />
@@ -1175,7 +1197,7 @@ export const CommandPalette = () => {
               )}
             </Command.List>
 
-            {/* ── Space-to-Peek portal ── */}
+            {/* ── Shift-to-peek, in a portal on the body ── */}
             <ResultPeek contact={peekContact} visible={peekVisible} />
 
             {/* ── Footer ── */}

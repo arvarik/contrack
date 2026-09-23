@@ -10,8 +10,9 @@
  * `line` is for a card with nothing to show: the title, the count and one
  * sentence on one row, on the page surface, with no card background. Nobody
  * reads a framed box that says nothing. The customize controls sit at the
- * end of the row in both shapes, in the same order with the same names, so
- * the customize journeys work on a line as on a card.
+ * end of the title's row in both shapes, in the same order with the same
+ * names, so the customize journeys work on a line as on a card. Neither
+ * shape changes height when they appear.
  *
  * The count is inside the `h2` after a screen-reader-only comma, so the
  * section is named "Up next, 10" and a sighted reader sees the number in
@@ -19,7 +20,7 @@
  */
 import React from "react";
 import { cn } from "../../../lib/utils";
-import { CARD, CARD_COMPACT } from "../../../lib/styles";
+import { CARD } from "../../../lib/styles";
 import { GripVertical, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
 import {
   ActionMenu,
@@ -42,14 +43,13 @@ export interface CardFrameProps {
   headerAction?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-  headerClassName?: string;
-  compact?: boolean;
   /** `card` (default) is the framed section. `line` is one row on the page surface. */
   variant?: CardFrameVariant;
 }
 
+/** A customize control: a flat icon button with the hover layer. */
 const CONTROL_BTN =
-  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  "hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors";
 
 /**
  * The customize controls: the phone arrows, the drag handle, the eye and
@@ -180,8 +180,6 @@ export const CardFrame = ({
   headerAction,
   children,
   className,
-  headerClassName,
-  compact = false,
   variant = "card",
 }: CardFrameProps) => {
   const customize = useCardCustomize();
@@ -208,21 +206,41 @@ export const CardFrame = ({
         aria-labelledby={headingId}
         data-card-id={cardId}
         className={cn(
-          "flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 rounded-2xl transition-all duration-200",
+          // The card's own side inset, so a line's title starts on the same
+          // edge as the titles of the cards above and below it.
+          "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-all",
           isCustomizing && "ring-1 ring-primary/20",
           className,
         )}
       >
         {heading}
         {badge}
-        <div className={cn(PULSE_TYPE.meta, "min-w-0")}>{children}</div>
-        {headerAction}
+        {/* In customize mode the words after the title step aside and keep
+            their place, and the controls sit over the end of the title's
+            row, so the line keeps its height. In the flow the controls
+            took a row of their own, and every card under the line moved. */}
+        <div
+          className={cn(
+            PULSE_TYPE.meta,
+            "min-w-0",
+            isCustomizing && "invisible",
+          )}
+        >
+          {children}
+        </div>
+        {headerAction && isCustomizing ? (
+          <span className="invisible">{headerAction}</span>
+        ) : (
+          headerAction
+        )}
         {isCustomizing && cardId && (
           <CustomizeControls
             title={title}
             cardId={cardId}
             customize={customize}
-            className="ml-auto"
+            // One line of the title, 15 px at a line height of 1.5, below
+            // the line's top inset: the controls centre on the title.
+            className="absolute right-4 sm:right-5 top-2 h-[22.5px]"
           />
         )}
       </section>
@@ -237,19 +255,21 @@ export const CardFrame = ({
         // The card surface without its own padding: the header and the body
         // set the inset (16 px on a phone, 20 px from sm). With both, a
         // phone card lost 80 of its 350 px to padding.
-        compact ? CARD_COMPACT : CARD,
-        "p-0 flex flex-col relative overflow-hidden transition-all duration-200",
+        CARD,
+        "p-0 flex flex-col relative overflow-hidden transition-all",
         isCustomizing && "ring-1 ring-primary/20",
         className,
       )}
     >
-      <div
-        className={cn(
-          "flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3",
-          headerClassName,
-        )}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
+      {/* The header's 16 px under the title is the one gap between header
+          and body, the same step as the blocks inside a body. The body
+          used to add its own top inset to it, and the title sat 32 px
+          above the first row. */}
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-4">
+        {/* The header's row is 24 px on every card, the height of a header
+            action such as Manage, so a card with an action and a card
+            without one have the same header. */}
+        <div className="flex items-center gap-2.5 min-w-0 min-h-6">
           {heading}
           {badge}
         </div>
@@ -259,6 +279,10 @@ export const CardFrame = ({
             title={title}
             cardId={cardId}
             customize={customize}
+            // The buttons are 32 px. The margin fits them in the header's
+            // 24 px row, so the card keeps its height when customize mode
+            // turns on.
+            className="-my-1"
           />
         ) : (
           headerAction && (
@@ -269,7 +293,7 @@ export const CardFrame = ({
         )}
       </div>
 
-      <div className="flex-1 p-4 sm:p-5">{children}</div>
+      <div className="flex-1 px-4 sm:px-5 pb-4 sm:pb-5">{children}</div>
     </section>
   );
 };

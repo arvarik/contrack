@@ -16,7 +16,7 @@ import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useDedupeCount } from "../../../api";
-import { CARD } from "../../../lib/styles";
+import { CARD, PAGE_X, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 const DEDUPE_PRESET_COPY = {
@@ -27,6 +27,22 @@ const DEDUPE_PRESET_COPY = {
     "Auto-merges pairs at 88%+ confidence. Fewer to review; more misfires to undo.",
 } as const;
 
+/**
+ * The page's one column: the settings box's width, centred, as the shell's
+ * header is (`boxed` in the registry), so the title and the cards start at
+ * the same place as on every other settings page. The settings card and the
+ * dedupe tool both sit in it, so the page has one left edge and one width at
+ * every size. The page still owns its scrolling: its scroller spans the
+ * pane, so the sticky controls stick to the screen.
+ *
+ * The page is one scroller at every width: the settings card and the tool
+ * scroll together. From `sm` the card used to stay put and the tool scrolled
+ * under it, which at 900 px tall left the manual merge's contact list about
+ * 150 px, two rows, in a box inside a box. On a phone the card had scrolled
+ * on its own before that, and a flick caught one box and the page stopped.
+ */
+const COLUMN = "max-w-4xl w-full mx-auto";
+
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
   const { preferences, setPreference } = usePreferences();
@@ -35,18 +51,20 @@ export const DuplicatesPage = () => {
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 sm:p-6 pb-4 shrink-0 max-w-4xl w-full mx-auto overflow-y-auto max-h-[50vh] sm:max-h-none">
+    <div className="h-full overflow-y-auto nice-scrollbar">
+      <div className={cn(PAGE_X, COLUMN, "pt-4 pb-4")}>
         {/* Review strip */}
         {dedupeCount > 0 && (
           <div
             className={cn(
               CARD,
-              "p-4 mb-4 flex items-center justify-between gap-4 bg-primary/10 border-primary/20",
+              "p-4 mb-4 flex items-center justify-between gap-4 bg-primary/10",
             )}
           >
             <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+              <span
+                className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}
+              >
                 <Copy className="w-5 h-5" />
               </span>
               <div>
@@ -61,7 +79,7 @@ export const DuplicatesPage = () => {
             </div>
             <Link
               to="/pulse/duplicates"
-              className="btn-primary text-xs px-3 py-2 shrink-0 flex items-center gap-1.5"
+              className="btn-primary btn-sm shrink-0"
             >
               Review them
               <ArrowRight className="w-3.5 h-3.5" />
@@ -129,8 +147,10 @@ export const DuplicatesPage = () => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative">
-        <DedupeView embedded hideBackLink />
+      {/* The same column. The tool's rows carry their own gutters, and it
+          takes its own height, so the page scrolls it. */}
+      <div className={cn(COLUMN, "relative")}>
+        <DedupeView />
       </div>
     </div>
   );

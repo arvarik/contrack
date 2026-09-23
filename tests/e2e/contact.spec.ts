@@ -236,7 +236,7 @@ test.describe("the Network header and start panel", () => {
     await expect(menu).toBeHidden();
   });
 
-  test("Select mode shows N selected, Select all, Done, and the bulk toolbar", async ({
+  test("Select mode keeps the title, shows Select all, Done, and the count in the bulk toolbar", async ({
     page,
   }) => {
     await page.goto("/");
@@ -245,17 +245,24 @@ test.describe("the Network header and start panel", () => {
     const selectBtn = page.getByRole("button", { name: "Select", exact: true });
     await selectBtn.click();
 
-    await expect(page.getByText(/0 selected/)).toBeVisible();
+    // The page keeps its name as the title. The count leads the bar, where
+    // it sits beside what it acts on, and the search box keeps its words.
+    const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+    await expect(bar).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Network" }),
+    ).toBeVisible();
+    await expect(bar).toContainText("0 selected");
+    await expect(
+      page.getByRole("textbox", { name: "Search contacts" }),
+    ).toHaveAttribute("placeholder", "Search...");
     const selectAllBtn = page.getByRole("button", { name: "Select all" });
     const doneBtn = page.getByRole("button", { name: "Done" });
     await expect(selectAllBtn).toBeVisible();
     await expect(doneBtn).toBeVisible();
-    await expect(
-      page.getByRole("toolbar", { name: "Bulk actions" }),
-    ).toBeVisible();
 
     await selectAllBtn.click();
-    await expect(page.getByText(/\d+ selected/)).toBeVisible();
+    await expect(bar).toContainText(/[1-9]\d* selected/);
 
     await doneBtn.click();
     await expect(
@@ -380,6 +387,75 @@ test.describe("the Network header and start panel", () => {
  * returns to the button. There is no button to log: the composer is the first
  * thing in the Timeline column.
  */
+/**
+ * Twelve people of the test's own, so the list is longer than the window.
+ * Their names sort after the seed's, so the last of them is the list's
+ * last row.
+ */
+async function longList(instance: ContrackInstance): Promise<string[]> {
+  const ids: string[] = [];
+  for (let n = 1; n <= 12; n += 1) {
+    ids.push(
+      await ownContact(instance, `Zz Person ${String(n).padStart(2, "0")}`),
+    );
+  }
+  return ids;
+}
+
+test.describe("a long list", () => {
+  test("a deep link scrolls the list to the open contact's row", async ({
+    page,
+    instance,
+  }) => {
+    // The row wore the selected tint off screen, under the fold.
+    const ids = await longList(instance);
+    const last = ids[ids.length - 1];
+    await page.goto(`/contact/${last}`);
+    await expect(contactHeading(page, "Zz Person 12")).toBeVisible();
+    const row = page.locator(`#contact-row-${last}`);
+    await expect(row).toBeInViewport();
+    await expect(row).toHaveAttribute("aria-current", "page");
+  });
+
+  test("select mode keeps the last row above the bulk bar, and focus on the button that replaces the pressed one", async ({
+    page,
+    instance,
+  }) => {
+    const ids = await longList(instance);
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    // Select becomes Done, and focus goes with it rather than to the body.
+    await page.getByRole("button", { name: "Select", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    const done = page.getByRole("button", { name: "Done" });
+    await expect(done).toBeFocused();
+
+    // Scrolled to the end, the last row sits above the floating bar. It sat
+    // under it, with 16 px of padding under the list.
+    const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+    await expect(bar).toBeVisible();
+    const last = page.locator(`#contact-row-${ids[ids.length - 1]}`);
+    await expect
+      .poll(async () => {
+        await page
+          .locator("#contact-list")
+          .evaluate((list) => list.scrollTo(0, list.scrollHeight));
+        const row = await last.boundingBox();
+        const barBox = await bar.boundingBox();
+        return row && barBox ? barBox.y - (row.y + row.height) : -1;
+      })
+      .toBeGreaterThanOrEqual(0);
+
+    // Done becomes Select again, and focus goes back to it.
+    await done.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("button", { name: "Select", exact: true }),
+    ).toBeFocused();
+  });
+});
+
 test.describe("the contact header", () => {
   test("the menu lists the actions in order, and the keys work inside it", async ({
     page,
@@ -637,6 +713,43 @@ test.describe("tracking", () => {
       page.getByRole("button", { name: "Track", exact: true }),
     ).toHaveAttribute("aria-pressed", "false");
     await page.keyboard.press("Escape");
+  });
+
+  // The Tracked page's bar was fixed to the window and centred on it: at
+  // 800 px it started at x 24 over the rail's Settings gear, and at 1440 px
+  // it ran past the cards on both sides.
+  test.describe("the Tracked page at 800 px", () => {
+    test.use({ viewport: { width: 800, height: 900 } });
+
+    test("puts the bulk bar in the column of cards, clear of the rail", async ({
+      page,
+    }) => {
+      await page.goto("/tracked");
+      const main = page.getByRole("main");
+      await main.getByRole("button", { name: "Select", exact: true }).click();
+      await expect(main.getByRole("button", { name: "Done" })).toBeFocused();
+      const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+      await expect(bar).toBeVisible();
+      // Nobody is picked: all three of the bar's buttons wait.
+      for (const name of ["Track", "Untrack", "Cadence"]) {
+        await expect(
+          bar.getByRole("button", { name, exact: true }),
+        ).toBeDisabled();
+      }
+
+      const card = (await main.locator("section").first().boundingBox())!;
+      await expect
+        .poll(async () => {
+          const box = await bar.boundingBox();
+          return box ? [Math.round(box.x), Math.round(box.width)] : null;
+        })
+        .toEqual([Math.round(card.x), Math.round(card.width)]);
+      const gear = page.getByRole("link", { name: "Settings" }).first();
+      if (await gear.isVisible()) {
+        const box = (await gear.boundingBox())!;
+        expect(box.x + box.width).toBeLessThanOrEqual(card.x);
+      }
+    });
   });
 
   // A taller window: the three people of this test sort last, and in a

@@ -14,16 +14,18 @@
  */
 import { type ReactNode } from "react";
 import { cn } from "../../lib/utils";
+import { TONE_WASH } from "../../lib/styles";
 
 export type BadgeTone =
   "neutral" | "primary" | "success" | "warning" | "danger";
 
+/** Each tone is the app's tone wash (`TONE_WASH`), so a badge and a chip agree. */
 const TONES: Record<BadgeTone, string> = {
-  neutral: "bg-surface-container-high text-on-surface-variant",
-  primary: "bg-primary/10 text-primary",
-  success: "bg-emerald-500/10 text-success",
-  warning: "bg-amber-500/10 text-warning",
-  danger: "bg-red-500/10 text-error",
+  neutral: TONE_WASH.neutral,
+  primary: TONE_WASH.primary,
+  success: TONE_WASH.success,
+  warning: TONE_WASH.warning,
+  danger: TONE_WASH.error,
 };
 
 export const Badge = ({

@@ -56,9 +56,11 @@ import {
   filterPill,
   BTN_QUIET,
   ICON_BTN,
-  PAGE_TITLE,
+  LABEL,
+  PAGE_TOP,
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
@@ -86,6 +88,7 @@ import { useRovingList, type RovingItemProps } from "./useRovingList";
 import { useRecent } from "../../contexts/SessionContext";
 import { NAMES } from "../../lib/names";
 import { ActionMenu } from "../../components/ui/ActionMenu";
+import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import {
   OPEN_IMPORT_EVENT,
   OPEN_NEW_CONTACT_EVENT,
@@ -119,8 +122,11 @@ const FilterButton = ({
   >
     {icon}
     {label}
+    {/* On the selected pill the count takes the pill's own ink, which is
+        the one that reads on the tint. On the others it is the variant ink
+        at full strength: at half opacity it measured 2.2 to 1. */}
     <span
-      className={`ml-0.5 text-[11px] ${active ? "text-primary" : "opacity-50"}`}
+      className={cn("ml-0.5 text-[11px]", !active && "text-on-surface-variant")}
     >
       {count}
     </span>
@@ -173,13 +179,13 @@ const ContactRowWrapper = React.memo(
       () => [
         {
           id: "view",
-          label: "View Contact",
+          label: "View contact",
           icon: <UserPlus className="w-3.5 h-3.5" />,
           onClick: () => navigate(`/contact/${contact.id}`),
         },
         {
           id: "copy-email",
-          label: contact.emails?.[0]?.email ? `Copy Email` : "No email",
+          label: contact.emails?.[0]?.email ? "Copy email" : "No email",
           icon: <Copy className="w-3.5 h-3.5" />,
           disabled: !contact.emails?.[0]?.email,
           onClick: () => {
@@ -210,15 +216,19 @@ const ContactRowWrapper = React.memo(
         // Presentational: the interactive element is the <Link> inside
         // ContactListItem. Enter on that link fires a click that bubbles to
         // this handler, so keyboard users record a visit without this wrapper
-        // needing to be focusable itself.
+        // needing to be focusable itself. A click in select mode picks the
+        // row and opens nothing, so it is no visit: each one used to add a
+        // row to Recent and push the list down under the pointer.
         role="presentation"
         onContextMenu={(e) => handleContextMenu(e, contextItems)}
-        onClick={() => recordVisit(contact.id)}
+        onClick={isSelectMode ? undefined : () => recordVisit(contact.id)}
         {...longPress}
         className={cn(
-          "rounded-xl transition-all duration-300",
+          // The flash arrives and leaves at the slow duration. Its glow is
+          // mixed from the primary, so it follows the accent and the palette.
+          "rounded-xl transition-all duration-(--dur-slow)",
           isFlashing &&
-            "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,113,156,0.2)]",
+            "ring-2 ring-primary/40 shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_20%,transparent)]",
         )}
       >
         <ContactListItem
@@ -251,8 +261,9 @@ export const ContactList = () => {
    *
    * The list is mounted on the catch-all route (`path="*"`), so `useParams`
    * had no `:id` to give it and this was always undefined. That meant no row
-   * was ever marked current — no ring, no `aria-current` — and the j/k keys,
-   * which step from the current row, went to the first contact every time.
+   * was ever marked current — no selected look, no `aria-current` — and the
+   * j/k keys, which step from the current row, went to the first contact
+   * every time.
    */
   const id = useMatch("/contact/:id")?.params.id;
   const navigate = useNavigate();
@@ -497,6 +508,41 @@ export const ContactList = () => {
         .slice(0, recentLimit) as typeof contacts,
     [recentIds, contacts, recentLimit],
   );
+  /**
+   * Who the list itself shows. A Recent copy takes the selected look only
+   * for a contact missing from it, a ghost or one a filter leaves out, so the
+   * open contact is marked somewhere, and in one place.
+   */
+  const listedIds = useMemo(
+    () => new Set(filteredContacts.map((c) => c.id)),
+    [filteredContacts],
+  );
+
+  // ── The bulk bar's room ─────────────────────────────────────────────
+  // The bar floats over the end of the list. While it shows, the scroller
+  // keeps room under its last row for the bar and a gap, so a full scroll
+  // brings every row above it, and a row the keys move to stops above it
+  // too. Measured, not a class: the bar wraps to a second row in the
+  // narrow pane and on a phone, and sits over the tab bar there.
+  const [barRoom, setBarRoom] = useState(0);
+  const measureBar = useCallback((bar: HTMLDivElement | null) => {
+    if (!bar) return;
+    const observer = new ResizeObserver(() =>
+      setBarRoom(
+        bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0) + 8,
+      ),
+    );
+    observer.observe(bar, { box: "border-box" });
+    return () => {
+      observer.disconnect();
+      setBarRoom(0);
+    };
+  }, []);
+
+  // Select and Done trade places. Focus follows to the one that appears.
+  const selectButtonRef = useRef<HTMLButtonElement>(null);
+  const doneButtonRef = useRef<HTMLButtonElement>(null);
+  useSwapFocus(isSelectMode, doneButtonRef, selectButtonRef);
 
   // ── Density ─────────────────────────────────────────────────────────
   const { density, metrics } = useListDensity();
@@ -525,6 +571,8 @@ export const ContactList = () => {
     ),
     getScrollElement: () => scrollRef.current,
     scrollMargin,
+    // A jump to a row stops above the bulk bar, not under it.
+    scrollPaddingEnd: barRoom,
     // Only an estimate — rows are measured for real by `measureElement`
     // below — but it must track density or the scrollbar jumps as the user
     // scrolls into rows that have not been measured yet.
@@ -662,79 +710,126 @@ export const ContactList = () => {
     if (index >= 0) focusIndex(recentCount + index);
   }, [id, lastContactId, filteredContacts, recentCount, focusIndex]);
 
-  // One h1 per page: the list's title is the page heading on the Network
-  // page, and a section heading beside an open contact, whose name is the h1.
-  const TitleTag = id ? "h2" : "h1";
+  /**
+   * The open contact's row comes into view when the open id changes: a deep
+   * link to `/contact/:id`, the palette, a Pulse row. Its tint was off
+   * screen. `auto` scrolls the least that shows it, and nothing when it
+   * shows already. Once per id, so a person who scrolls away is left there,
+   * and not at all when the row was opened from the list itself, which is
+   * where the person is looking. A frame late, because the Recent strip's
+   * height reaches the virtualizer's margin in the commit after the
+   * contacts arrive, and a jump before it lands short.
+   */
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (openIndex < 0 || scrolledTo.current === id) return;
+    if (scrollRef.current?.contains(document.activeElement)) {
+      scrolledTo.current = id;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      scrolledTo.current = id;
+      rowVirtualizer.scrollToIndex(openIndex, { align: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [id, openIndex, rowVirtualizer, scrollRef]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {" "}
-      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
-        <div className="flex justify-between items-center">
-          {isSelectMode ? (
+      {/*
+        The pane is narrow, so it keeps `px-4` where a page has `PAGE_X`, and
+        its title starts at the same height as every other page's.
+
+        One h1 per page: the list's title is the page heading on the Network
+        page, and a section heading beside an open contact, whose name is the
+        h1.
+
+        The title stays the page's name in select mode. The count is the
+        first thing in the bulk bar, where it sits beside what it acts on.
+      */}
+      <PageHeader
+        title={NAMES.network.label}
+        titleAs={id ? "h2" : "h1"}
+        className={cn(
+          "px-4 pb-3 bg-surface-container-lowest sticky top-0 z-10",
+          PAGE_TOP,
+        )}
+        actions={
+          // Keyed, so Select and Done are new buttons and not the old ones
+          // relabelled: focus follows the mode to Done and back to Select
+          // (`useSwapFocus`), where it sat on "Select all" and "Import".
+          isSelectMode ? (
             <>
-              <TitleTag className={PAGE_TITLE}>
-                {selectedCount} selected
-              </TitleTag>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={
-                    selectedCount === filteredContacts.length
-                      ? clearSelection
-                      : selectAll
-                  }
-                  className="hit-area text-xs md:text-sm font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
-                >
-                  {selectedCount === filteredContacts.length
-                    ? "Deselect all"
-                    : "Select all"}
-                </button>
-                <button
-                  onClick={exitSelectMode}
-                  className="hit-area text-xs md:text-sm font-medium text-on-surface px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest transition-colors whitespace-nowrap"
-                >
-                  Done
-                </button>
-              </div>
+              <button
+                key="select-all"
+                type="button"
+                onClick={
+                  selectedCount === filteredContacts.length
+                    ? clearSelection
+                    : selectAll
+                }
+                className="btn-secondary btn-sm"
+              >
+                {selectedCount === filteredContacts.length
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+              <button
+                key="done"
+                ref={doneButtonRef}
+                type="button"
+                onClick={exitSelectMode}
+                className="btn-secondary btn-sm"
+              >
+                Done
+              </button>
             </>
           ) : (
             <>
-              <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
               {/*
-                Three icon buttons at every width. Each is named for a screen
-                reader and titled for a pointer, so the row costs one word of
-                space per action and still says what it does. The gap keeps
-                the three 44 px tap boxes apart.
+                Select and Import are icon buttons, and New is the page's
+                call to action. Each is named for a screen reader and titled
+                for a pointer, so the row costs one word of space per action
+                and still says what it does. The gap keeps the three 44 px
+                tap boxes apart.
               */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={enterSelectMode}
-                  className={ICON_BTN}
-                  aria-label="Select"
-                  title="Select"
-                >
-                  <Square className="w-5 h-5" aria-hidden="true" />
-                </button>
-                <button
-                  onClick={() => setIsImportOpen(true)}
-                  className={ICON_BTN}
-                  aria-label="Import"
-                  title="Import"
-                >
-                  <Upload className="w-5 h-5" aria-hidden="true" />
-                </button>
-                <ActionMenu
-                  label="New"
-                  title="New"
-                  icon={Plus}
-                  triggerClassName="hit-area p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
-                  items={newMenuItems}
-                />
-              </div>
+              <button
+                key="select"
+                ref={selectButtonRef}
+                type="button"
+                onClick={enterSelectMode}
+                className={ICON_BTN}
+                aria-label="Select"
+                title="Select"
+              >
+                <Square className="w-5 h-5" aria-hidden="true" />
+              </button>
+              <button
+                key="import"
+                type="button"
+                onClick={() => setIsImportOpen(true)}
+                className={ICON_BTN}
+                aria-label="Import"
+                title="Import"
+              >
+                <Upload className="w-5 h-5" aria-hidden="true" />
+              </button>
+              <ActionMenu
+                key="new"
+                label="New"
+                title="New"
+                icon={Plus}
+                variant="primary"
+                items={newMenuItems}
+              />
             </>
-          )}
-        </div>
-
+          )
+        }
+      >
         <div className="flex gap-1.5 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
@@ -742,11 +837,7 @@ export const ContactList = () => {
               aria-label="Search contacts"
               id="search-input"
               type="text"
-              placeholder={
-                isSelectMode
-                  ? `${selectedCount} selected — search to filter`
-                  : "Search..."
-              }
+              placeholder="Search..."
               value={inputValue}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -773,7 +864,7 @@ export const ContactList = () => {
             label={`Sort: ${currentSort.label}`}
             title="Sort the list"
             heading="Sort by"
-            triggerClassName="hit-area px-2.5 py-1.5 rounded-xl transition-all shrink-0 flex items-center justify-center gap-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+            triggerClassName="px-2.5 py-1.5 shrink-0 gap-1"
             triggerContent={
               <span className="flex items-center gap-1 text-xs md:text-sm font-medium">
                 <span className="truncate max-w-[120px] sm:max-w-[160px]">
@@ -799,9 +890,10 @@ export const ContactList = () => {
             <div
               id="filter-pills-row"
               // A scroller clips what sits outside its padding box, so the
-              // 8 px above and below give each pill's 44 px tap box room.
-              // The negative margins keep the row where it was.
-              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5"
+              // 8 px above and below give each pill's 44 px tap box room,
+              // and 4 px at each side give its focus ring room. The negative
+              // margins keep the row where it was.
+              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5 -mx-1 px-1"
             >
               <FilterButton
                 label="All"
@@ -831,9 +923,11 @@ export const ContactList = () => {
                   onDragEnd={handleDragEnd}
                   className={cn(
                     "transition-all cursor-grab active:cursor-grabbing shrink-0",
+                    // The drop target's dashed line, as on the Lists page. A
+                    // solid ring read as keyboard focus.
                     dragOverIdx === idx &&
                       dragIdx !== idx &&
-                      "ring-2 ring-primary/40 rounded-xl",
+                      "outline-2 outline-dashed outline-primary/60 rounded-xl",
                     dragIdx === idx && "opacity-40",
                   )}
                 >
@@ -860,7 +954,7 @@ export const ContactList = () => {
             </div>
           </div>
         )}
-      </div>
+      </PageHeader>
       {/*
         Contact list.
 
@@ -879,8 +973,16 @@ export const ContactList = () => {
           flips. The `dir="ltr"` child puts every row back the way it reads.
 
           With the rail on screen the scroller keeps a 2 rem gutter on the
-          right. Rows end before it, so a selected row's ring and a hover tint
-          stop short of the letters instead of running under them.
+          right. Rows end before it, so a selected row's tint and the hover
+          layer stop short of the letters instead of running under them.
+
+          The top padding is 4 px, the room the first row's focus ring needs,
+          and the header's own bottom padding is the rest of the space under
+          the chips. Two full paddings left 34 px of nothing above the first
+          row, where the rows themselves are 8 px apart.
+
+          While the bulk bar shows, the bottom padding is its room (see
+          `measureBar`), and so is the scroll padding a focused row keeps.
         */}
         <div
           ref={listScrollRef}
@@ -888,9 +990,14 @@ export const ContactList = () => {
           dir="rtl"
           {...roving.containerProps}
           className={cn(
-            "h-full overflow-y-auto nice-scrollbar p-4 pb-24 md:pb-4 overscroll-contain outline-none",
+            "h-full overflow-y-auto nice-scrollbar px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
             showAlphabetRail && "pr-8",
           )}
+          style={
+            barRoom
+              ? { paddingBottom: barRoom, scrollPaddingBottom: barRoom }
+              : undefined
+          }
         >
           <div dir="ltr" className="space-y-2">
             {/* Pull-to-refresh indicator — mobile only */}
@@ -988,14 +1095,13 @@ export const ContactList = () => {
               !searchQuery &&
               filterMode === "all" &&
               recentContacts.length > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                <div>
+                  <div className="flex items-center gap-1.5 px-1 mb-2">
                     <Clock className="w-3 h-3 text-on-surface-variant" />
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Recent
-                    </span>
+                    <span className={LABEL}>Recent</span>
                   </div>
-                  <div className="space-y-1">
+                  {/* 8 px apart, like the rows of the list under it. */}
+                  <div className="space-y-2">
                     {recentContacts.map((contact, index) => {
                       const item = roving.getItemProps(index);
                       return (
@@ -1007,6 +1113,7 @@ export const ContactList = () => {
                           active={id === contact.id}
                           isSelectMode={isSelectMode}
                           isSelected={selectedIds.has(contact.id)}
+                          showSelection={!listedIds.has(contact.id)}
                           onToggleSelect={toggleSelect}
                           rovingIndex={index}
                           tabIndex={item.tabIndex}
@@ -1016,7 +1123,13 @@ export const ContactList = () => {
                       );
                     })}
                   </div>
-                  <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+                  {/* Where Recent ends and everyone begins. A hairline said
+                      it, and this app divides a surface with words and
+                      space, not lines. */}
+                  <div className="flex items-center gap-1.5 px-1 mt-5">
+                    <Users className="w-3 h-3 text-on-surface-variant" />
+                    <span className={LABEL}>All contacts</span>
+                  </div>
                 </div>
               )}
 
@@ -1086,6 +1199,8 @@ export const ContactList = () => {
       <AnimatePresence>
         {isSelectMode && (
           <BulkActionToolbar
+            ref={measureBar}
+            selectedCount={selectedCount}
             isPending={isPending}
             onTrack={multiSelect.handleBulkTrack}
             selectionTracked={multiSelect.selectionTracked}

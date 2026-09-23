@@ -22,14 +22,15 @@ import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../../shared/scoreBand";
 import { useCompanyLogo } from "../../hooks/useCompanyLogo";
 import { formatDay } from "../../lib/datetime";
-import { listRow } from "../../lib/styles";
+import { listRow, TONE_TEXT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { Contact } from "../../types";
 import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
 import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
+import { describeFollowUp } from "../../lib/followUp";
 import { MapPin } from "lucide-react";
 
-import { isPast, isToday, formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 
 /**
  * "3mo" / "5d" / "—" — a recency stamp short enough to sit in a list row.
@@ -70,6 +71,14 @@ interface ContactListItemProps {
   active: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
+  /**
+   * False on the Recent strip when the same person is also a row in the list
+   * under it: one contact looks selected in one place, so that copy takes no
+   * tint. It keeps `aria-current` and its checkbox. A contact the list does
+   * not show (a ghost, or one a filter leaves out) has only its Recent copy,
+   * and that copy takes the tint.
+   */
+  showSelection?: boolean;
   /** `extend` is true for a shift-click: select the range, don't toggle. */
   onToggleSelect: (id: string, extend: boolean) => void;
   /**
@@ -90,6 +99,7 @@ const ContactListItemInner = ({
   active,
   isSelectMode,
   isSelected,
+  showSelection = true,
   onToggleSelect,
   rovingIndex,
   tabIndex,
@@ -110,18 +120,6 @@ const ContactListItemInner = ({
     },
     [contact.id],
   );
-
-  // ── Computed values ────────────────────────────────────────────────────────
-
-  let urgentColor = "";
-  if (contact.nextFollowUpAt) {
-    const due = new Date(contact.nextFollowUpAt);
-    if (isPast(due) || isToday(due)) {
-      urgentColor = "text-error";
-    } else {
-      urgentColor = "text-primary opacity-80";
-    }
-  }
 
   // ── Hover prefetch ─────────────────────────────────────────────────────────
   // Prefetch the full contact detail after 100ms hover so clicking is instant.
@@ -162,20 +160,34 @@ const ContactListItemInner = ({
 
   const compact = density === "compact";
   const metrics = DENSITY_METRICS[density];
+  const followUp = describeFollowUp(contact.nextFollowUpAt);
+  // One selected look: the open contact, or a row picked in select mode.
+  const selected = showSelection && (isSelectMode ? isSelected : active);
 
   // The row's name says the score in words, so the ring's colour is never the
   // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
   // middle part is the line printed under the name, the company or else the
   // role, and it is left out when the row prints neither. A contact nobody
   // tracks has no ring and no score words: "Betty Clark, Global Dynamics".
+  // The follow-up closes it, for the same reason the glyph's colour is not
+  // enough: "…, follow-up 3 days overdue".
   const view = scoreView(contact);
   const rowName = [
     contact.name,
     contact.company || contact.role,
     scoreWords(view, { sentence: true }),
+    followUp && followUp.text.charAt(0).toLowerCase() + followUp.text.slice(1),
   ]
     .filter(Boolean)
     .join(", ");
+  // The calendar glyph, in the tone of how late the follow-up is. Its words
+  // are the row's name and the tooltip of the box around it.
+  const followUpGlyph = followUp && (
+    <CalendarClock
+      aria-hidden="true"
+      className={cn("w-3.5 h-3.5", TONE_TEXT[followUp.tone])}
+    />
+  );
 
   return (
     <Link
@@ -191,14 +203,11 @@ const ContactListItemInner = ({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className={cn(
-        listRow(active && !isSelectMode),
+        listRow(selected),
         // Compact trims the padding, not the information: the same name and
         // company are shown, just in less vertical space.
         compact && "gap-2.5 p-2",
         isSelectMode && "cursor-pointer select-none",
-        isSelectMode &&
-          isSelected &&
-          "bg-primary/8 outline-2 outline-primary -outline-offset-2",
       )}
     >
       {/* Checkbox overlay in select mode */}
@@ -212,13 +221,13 @@ const ContactListItemInner = ({
           >
             <div
               className={cn(
-                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
                 isSelected
                   ? "bg-primary border-primary"
                   : "border-on-surface-variant/40 bg-surface-container-low",
               )}
             >
-              {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
+              {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
             </div>
           </motion.div>
         )}
@@ -251,21 +260,31 @@ const ContactListItemInner = ({
               The row is a link, and its name is already the link's name.
             */}
             <span
-              className={`block text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}
+              className={cn(
+                "block text-sm font-semibold truncate",
+                selected ? "text-on-primary-wash" : "text-on-surface",
+              )}
             >
               {contact.name}
             </span>
             {contact.isGhost ? (
-              <span title="Ghost Contact" className="shrink-0 flex">
+              <span title="Ghost contact" className="shrink-0 flex">
                 <Sparkles className="w-3.5 h-3.5 text-primary opacity-80" />
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 pl-2">
-            {contact.nextFollowUpAt && (
-              <CalendarClock className={cn("w-3.5 h-3.5", urgentColor)} />
-            )}
-          </div>
+          {/* The next follow-up in the tones of Pulse's due chips, and its
+              words for a pointer: the glyph alone said nothing. Between 768
+              and 1023 px it moves to its own slot in the column on the
+              right, where it no longer shifts with the city's width. */}
+          {followUp && (
+            <span
+              title={followUp.text}
+              className="flex shrink-0 pl-2 md:hidden lg:flex"
+            >
+              {followUpGlyph}
+            </span>
+          )}
         </div>
 
         {contact.company ? (
@@ -320,6 +339,11 @@ const ContactListItemInner = ({
             <span className="truncate">{contact.location}</span>
           </span>
         )}
+        {/* The follow-up's slot: the same width on every row, empty when
+            there is none, so the glyphs and the recency line up. */}
+        <span title={followUp?.text} className="flex w-3.5 shrink-0">
+          {followUpGlyph}
+        </span>
         <span
           className="w-14 text-right tabular-nums"
           title={

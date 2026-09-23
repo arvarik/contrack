@@ -662,6 +662,75 @@ describe("the narrow header", () => {
   });
 });
 
+describe("the follow-up banner", () => {
+  // The banner read "Pending follow-up alert", which said neither what was
+  // due nor when. It says the fact now, in calendar days, in the words and
+  // tones Pulse gives a due chip: overdue is the error red, today the
+  // primary, and a later day within the week neutral. Past the week the
+  // Details card has it.
+  const TUESDAY_NOON = new Date(2026, 8, 22, 12, 0);
+  /** 9 AM on a day of September 2026, in the reader's zone, as the API sends. */
+  const dueOn = (day: number) => new Date(2026, 8, day, 9, 0).toISOString();
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(TUESDAY_NOON);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The banner's words, or null when there is no banner. */
+  function banner(nextFollowUpAt: string | null) {
+    mount(
+      <ProfileHeader
+        {...makeProps({ contact: makeContact({ nextFollowUpAt }) })}
+      />,
+    );
+    return screen.queryByText(/^Follow-up /);
+  }
+
+  it("counts the days a late follow-up is overdue, in the error tone", () => {
+    const text = banner(dueOn(19));
+    expect(text?.textContent).toBe("Follow-up 3 days overdue");
+    expect(text?.parentElement?.className).toContain("text-error");
+    cleanup();
+    expect(banner(dueOn(21))?.textContent).toBe("Follow-up 1 day overdue");
+  });
+
+  it("says due today all day, in the primary tone", () => {
+    // Due at 9 AM, and it is noon: still today, not overdue.
+    const text = banner(dueOn(22));
+    expect(text?.textContent).toBe("Follow-up due today");
+    expect(text?.parentElement?.className).toContain("text-on-primary-wash");
+  });
+
+  it("names the day of a follow-up later this week, in the neutral tone", () => {
+    const text = banner(dueOn(23));
+    expect(text?.textContent).toBe("Follow-up due tomorrow");
+    expect(text?.parentElement?.className).toContain("text-on-surface-variant");
+    cleanup();
+    const friday = new Date(2026, 8, 25).toLocaleDateString(undefined, {
+      weekday: "long",
+    });
+    expect(banner(dueOn(25))?.textContent).toBe(`Follow-up due ${friday}`);
+  });
+
+  it("shows the banner a week out, the last day Pulse's This week holds", () => {
+    // Pulse's This week takes day 7, and the banner stopped at day 6.
+    const text = banner(dueOn(29));
+    expect(text?.textContent).toBe("Follow-up due in 7 days");
+    expect(text?.parentElement?.className).toContain("text-on-surface-variant");
+  });
+
+  it("shows no banner past the week, or with no follow-up, and never the old words", () => {
+    expect(banner(dueOn(30))).toBeNull();
+    cleanup();
+    expect(banner(null)).toBeNull();
+    expect(screen.queryByText("Pending follow-up alert")).toBeNull();
+  });
+});
+
 describe("the headline and the summary", () => {
   it("shows a headline that says something new, and the summary", () => {
     mount(

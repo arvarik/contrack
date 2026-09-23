@@ -21,7 +21,7 @@ export const ActivityCard = ({ activity }: ActivityCardProps) => {
 
   if (!activity) {
     return (
-      <CardFrame cardId="activity" title="Activity" compact>
+      <CardFrame cardId="activity" title="Activity">
         <div className="animate-pulse space-y-4 py-2" aria-busy="true">
           <div className="h-32 bg-surface-container-high rounded-xl" />
           <div className="h-10 bg-surface-container-high rounded-xl" />
@@ -31,7 +31,7 @@ export const ActivityCard = ({ activity }: ActivityCardProps) => {
   }
 
   return (
-    <CardFrame cardId="activity" title="Activity" compact>
+    <CardFrame cardId="activity" title="Activity">
       <div className="flex flex-col gap-4">
         <Heatmap
           days={activity.days}

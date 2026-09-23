@@ -34,6 +34,15 @@ import {
 import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
+import {
+  BTN_QUIET,
+  CARD,
+  LABEL,
+  SELECTED_ROW,
+  SELECTED_TINT,
+  TONE_WASH,
+} from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import type { Contact, PersistedDedupeSuggestion } from "../../../types";
 import { activateOnKey } from "../../../lib/a11y";
@@ -101,6 +110,13 @@ interface SuggestionCluster {
   maxConfidence: number;
   hasWeakLink: boolean;
 }
+
+/**
+ * The checkbox before a group. A 16 px glyph with the 44 px tap box, the
+ * hover layer and a rounded corner for it.
+ */
+const CHECKBOX_BUTTON =
+  "hit-area state-layer shrink-0 rounded-md text-on-surface-variant hover:text-on-surface transition-colors";
 
 // =============================================================================
 // Utility: pick best primary from a list of contacts
@@ -305,6 +321,10 @@ export const SuggestionReviewQueue = () => {
 
   // ─── Keyboard Navigation ───────────────────────────────────────────────
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  // Whether the arrow keys moved to the current group. Only then does it
+  // wear the ring: a click moves the current group without one, the way a
+  // browser draws no focus ring after a click.
+  const [movedByKey, setMovedByKey] = useState(false);
   const clusterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const setClusterRef = useCallback(
@@ -328,6 +348,7 @@ export const SuggestionReviewQueue = () => {
         case "j":
         case "ArrowDown": {
           e.preventDefault();
+          setMovedByKey(true);
           setFocusedIndex((prev) => {
             const next = Math.min(prev + 1, clusters.length - 1);
             clusterRefs.current
@@ -340,6 +361,7 @@ export const SuggestionReviewQueue = () => {
         case "k":
         case "ArrowUp": {
           e.preventDefault();
+          setMovedByKey(true);
           setFocusedIndex((prev) => {
             const next = Math.max(prev - 1, 0);
             clusterRefs.current
@@ -433,8 +455,9 @@ export const SuggestionReviewQueue = () => {
 
   return (
     <div className="space-y-3">
-      {/* Toolbar: select all / count / batch actions */}
-      <div className="flex flex-wrap items-center gap-3 mb-3 px-1">
+      {/* Toolbar: select all / count / batch actions. Its inset puts the
+          select-all box in the column of the groups' boxes. */}
+      <div className="flex flex-wrap items-center gap-3 mb-3 px-3">
         {/* Select all / none toggle */}
         <button
           onClick={
@@ -442,7 +465,7 @@ export const SuggestionReviewQueue = () => {
               ? selectNone
               : selectAll
           }
-          className="hit-area flex items-center gap-2 text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+          className={BTN_QUIET}
         >
           {hasSelection && selected.size === clusters.length ? (
             <CheckSquare className="w-4 h-4 text-primary" />
@@ -456,34 +479,37 @@ export const SuggestionReviewQueue = () => {
 
         <div className="flex-1" />
 
-        {/* Batch action buttons — appear when items are selected */}
+        {/* Batch action buttons, when a group is checked. The toolbar's
+            size, so a phone keeps each label on one line, and a fade: a
+            scale would grow the words. */}
         <AnimatePresence>
           {hasSelection && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: DURATION.fast, ease: EASE }}
               className="flex items-center gap-2 ml-auto"
             >
               <button
                 onClick={handleBatchDismiss}
                 disabled={isBatchProcessing}
-                className="btn-secondary"
+                className="btn-secondary btn-sm"
               >
                 <X className="w-3.5 h-3.5" />
-                Keep Separate ({selected.size})
+                Keep separate ({selected.size})
               </button>
               <button
                 onClick={handleBatchMerge}
                 disabled={isBatchProcessing}
-                className="btn-primary"
+                className="btn-primary btn-sm"
               >
                 {isBatchProcessing ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <GitMerge className="w-3.5 h-3.5" />
                 )}
-                Merge All ({selected.size})
+                Merge all ({selected.size})
               </button>
             </motion.div>
           )}
@@ -497,13 +523,26 @@ export const SuggestionReviewQueue = () => {
           ref={(el: HTMLDivElement | null) => setClusterRef(i, el)}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: Math.min(i * 0.04, 0.3) }}
+          transition={{
+            duration: DURATION.slow,
+            ease: EASE,
+            delay: Math.min(i * 0.04, 0.3),
+          }}
           className={cn(
-            "rounded-2xl transition-shadow",
+            "rounded-2xl",
+            // The group the arrow keys are on, drawn in the one focus ring's
+            // look. Inset, like a menu row's, because the groups sit close
+            // together. A checked group wears the selected row instead.
             focusedIndex === i &&
-              "ring-2 ring-inset ring-primary/40 shadow-md shadow-primary/5",
+              movedByKey &&
+              "outline-2 outline-offset-[-2px] outline-primary",
           )}
-          onClick={() => setFocusedIndex(i)}
+          // A click makes this the current group, so the keys go on from
+          // the group a person clicked, but it draws no ring.
+          onClick={() => {
+            setFocusedIndex(i);
+            setMovedByKey(false);
+          }}
         >
           {cluster.contacts.length === 2 ? (
             <PairRow
@@ -531,6 +570,27 @@ export const SuggestionReviewQueue = () => {
 // =============================================================================
 // PairRow — Simple 2-contact row (most common case)
 // =============================================================================
+
+/** One side of a pair: the avatar, the full name and the company. */
+function PairContact({ contact }: { contact: Contact }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <img
+        src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
+        alt={contact.name}
+        className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
+      />
+      <div className="min-w-0 break-words">
+        <div className="text-sm font-bold">{contact.name}</div>
+        {contact.company && (
+          <div className="text-xs text-on-surface-variant">
+            {contact.company}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PairRow({
   cluster,
@@ -586,17 +646,12 @@ function PairRow({
   };
 
   return (
-    <div
-      className={cn(
-        "bg-surface-container-lowest rounded-2xl shadow-sm transition-all ring-2 ring-inset",
-        isSelected ? "ring-primary/40" : "ring-transparent",
-      )}
-    >
+    <div className={cn(CARD, "p-0", isSelected && SELECTED_ROW)}>
       <div
         onKeyDown={activateOnKey(() => setExpanded((e) => !e))}
         tabIndex={0}
         role="button"
-        className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
+        className="state-layer flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
       >
         {/* Checkbox */}
@@ -607,7 +662,7 @@ function PairRow({
           }}
           aria-label="Select this pair"
           aria-pressed={isSelected}
-          className="hit-area shrink-0 text-on-surface-variant hover:text-primary transition-colors"
+          className={CHECKBOX_BUTTON}
         >
           {isSelected ? (
             <CheckSquare className="w-4 h-4 text-primary" />
@@ -616,82 +671,56 @@ function PairRow({
           )}
         </button>
 
-        {/* Primary */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <img
-            src={primary.avatarUrl || fallbackAvatarUrl(primary.name)}
-            alt={primary.name}
-            className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-bold truncate">{primary.name}</div>
-            {primary.company && (
-              <div className="text-[11px] text-on-surface-variant truncate">
-                {primary.company}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* The two contacts. Their names and companies wrap and are never
+            cut: two rows of "Elizabeth …" could not be told apart. */}
+        <PairContact contact={primary} />
 
         <span className="text-on-surface-variant/30 shrink-0 text-xs">⇄</span>
 
-        {/* Duplicate */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <img
-            src={duplicate.avatarUrl || fallbackAvatarUrl(duplicate.name)}
-            alt={duplicate.name}
-            className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-bold truncate">{duplicate.name}</div>
-            {duplicate.company && (
-              <div className="text-[11px] text-on-surface-variant truncate">
-                {duplicate.company}
-              </div>
-            )}
-          </div>
-        </div>
+        <PairContact contact={duplicate} />
 
-        {/* Badge */}
-        <div className="shrink-0 hidden sm:block">
+        {/* The badge, the actions and the chevron. Below lg they take a
+            line of their own under the pair: beside them the names had
+            about 87 px. From sm the line starts under the first avatar
+            (the checkbox and its gap are 28 px). A phone needs the whole
+            width for "Email match" and the two buttons. From lg the row is
+            wide enough for one line. */}
+        <div className="flex flex-wrap items-center gap-3 w-full sm:pl-7 lg:w-auto lg:pl-0 lg:shrink-0">
           <MatchBadge
             type={suggestion.matchType}
             confidence={suggestion.confidence}
           />
-        </div>
-
-        {/* Actions */}
-        <div className="shrink-0 flex items-center gap-1.5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleMerge();
-            }}
-            disabled={mergeSuggestion.isPending}
-            className="btn-primary px-3"
-          >
-            Merge
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDismiss();
-            }}
-            disabled={dismissSuggestion.isPending}
-            className="hit-area p-1.5 text-on-surface-variant hover:text-error hover:bg-rose-500/8 rounded-lg transition-colors"
-            title="Not the same person"
-            aria-label="Not the same person"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="shrink-0 text-on-surface-variant">
-          {expanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMerge();
+                }}
+                disabled={mergeSuggestion.isPending}
+                className="btn-primary btn-sm"
+              >
+                Merge
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDismiss();
+                }}
+                disabled={dismissSuggestion.isPending}
+                className="btn-secondary btn-sm"
+                title="Not the same person"
+                aria-label="Not the same person"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {expanded ? (
+              <ChevronUp className="w-4 h-4 text-on-surface-variant" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-on-surface-variant" />
+            )}
+          </div>
         </div>
       </div>
 
@@ -701,7 +730,7 @@ function PairRow({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
+            transition={{ duration: DURATION.slow, ease: EASE }}
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 space-y-4">
@@ -716,26 +745,34 @@ function PairRow({
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 relative">
                 <div className="min-w-0">
+                  {/* The keeper's own values are kept. Without `isPrimary`
+                      the card marked every one that differs "Discarded". */}
                   <ContactCard
                     contact={primary}
-                    label="Primary (Keeper)"
-                    labelColor="text-success bg-emerald-500/10"
+                    label="Primary (keeper)"
+                    labelColor={TONE_WASH.success}
                     other={duplicate}
+                    isPrimary
                   />
                 </div>
+                {/*
+                  Swap is an action, so it is a pressable button with an
+                  edge, which is also what lets it read over the seam
+                  between the two cards.
+                */}
                 <button
                   onClick={() => setSwapped((s) => !s)}
                   aria-label="Swap primary and duplicate"
-                  className="hit-area absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface-container-lowest rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
+                  className="btn-secondary btn-sm absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 hidden lg:flex"
                   title="Swap primary / duplicate"
                 >
-                  <ArrowLeftRight className="w-3.5 h-3.5 text-on-surface-variant hover:text-primary transition-colors" />
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
                 </button>
                 <div className="min-w-0">
                   <ContactCard
                     contact={duplicate}
-                    label="Duplicate (Merges In)"
-                    labelColor="text-warning bg-amber-500/10"
+                    label="Duplicate (merges in)"
+                    labelColor={TONE_WASH.warning}
                     other={primary}
                   />
                 </div>
@@ -743,10 +780,10 @@ function PairRow({
 
               <button
                 onClick={() => setSwapped((s) => !s)}
-                className="lg:hidden w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+                className="state-layer lg:hidden w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
-                Swap Primary / Duplicate
+                Swap primary / duplicate
               </button>
             </div>
           </motion.div>
@@ -826,19 +863,14 @@ function ClusterCard({
   };
 
   return (
-    <div
-      className={cn(
-        "bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-4 ring-2 ring-inset",
-        isSelected ? "ring-primary/40" : "ring-transparent",
-      )}
-    >
+    <div className={cn(CARD, "p-5 space-y-4", isSelected && SELECTED_ROW)}>
       {/* Cluster header with checkbox */}
       <div className="flex items-start gap-3">
         <button
           onClick={onToggleSelect}
           aria-label="Select this group"
           aria-pressed={isSelected}
-          className="hit-area shrink-0 mt-1 text-on-surface-variant hover:text-primary transition-colors"
+          className={cn(CHECKBOX_BUTTON, "mt-1")}
         >
           {isSelected ? (
             <CheckSquare className="w-4 h-4 text-primary" />
@@ -846,7 +878,7 @@ function ClusterCard({
             <Square className="w-4 h-4" />
           )}
         </button>
-        <div className="flex-1 bg-surface-container-low rounded-xl p-3 flex items-start gap-3">
+        <div className="flex-1 bg-surface-container-low rounded-xl p-3 flex flex-wrap items-start gap-3">
           <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-on-surface leading-relaxed">
@@ -854,12 +886,24 @@ function ClusterCard({
               person.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-bold text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-md tabular-nums">
+          {/* Under the sentence on a phone, which the two chips squeezed
+              to a word a line. */}
+          <div className="flex items-center gap-2 shrink-0 max-sm:w-full max-sm:pl-8">
+            <span
+              className={cn(
+                "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
+                TONE_WASH.neutral,
+              )}
+            >
               {cluster.contacts.length} contacts
             </span>
             {cluster.hasWeakLink && (
-              <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-md">
+              <span
+                className={cn(
+                  "text-xs font-bold px-2.5 py-1 rounded-md",
+                  TONE_WASH.warning,
+                )}
+              >
                 Weak link
               </span>
             )}
@@ -870,7 +914,7 @@ function ClusterCard({
       {/* Large cluster warning */}
       {cluster.contacts.length > 5 && (
         <div
-          className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3 ml-7"
+          className="flex items-start gap-3 bg-warning/10 rounded-xl p-3 sm:ml-7"
           role="alert"
         >
           <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
@@ -885,14 +929,14 @@ function ClusterCard({
 
       {/* Primary selection strip */}
       <div
-        className="space-y-2 ml-7"
+        className="space-y-2 sm:ml-7"
         role="radiogroup"
         aria-label="Select primary contact"
       >
-        <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant px-1">
-          Select Primary Contact
-        </div>
-        <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
+        <div className={cn(LABEL, "px-1")}>Select primary contact</div>
+        {/* The chips wrap. A strip that scrolled sideways was a second
+            scroller inside the page, and on a phone it caught the flick. */}
+        <div className="flex flex-wrap gap-2 p-1">
           {cluster.contacts.map((contact) => {
             const isContactSelected = contact.id === selectedPrimaryId;
             return (
@@ -902,10 +946,10 @@ function ClusterCard({
                 role="radio"
                 aria-checked={isContactSelected}
                 className={cn(
-                  "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all min-w-0",
+                  "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors min-w-0",
                   isContactSelected
-                    ? "bg-emerald-500/10 ring-2 ring-emerald-500/50 shadow-sm"
-                    : "bg-surface-container-low hover:bg-surface-container-high",
+                    ? SELECTED_TINT
+                    : "state-layer bg-surface-container-low",
                 )}
               >
                 <img
@@ -933,12 +977,12 @@ function ClusterCard({
       </div>
 
       {/* Side-by-side comparison */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 ml-7">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:ml-7">
         <div className="min-w-0">
           <ContactCard
             contact={primary}
-            label="Primary (Keeper)"
-            labelColor="text-success bg-emerald-500/10"
+            label="Primary (keeper)"
+            labelColor={TONE_WASH.success}
             isPrimary
           />
         </div>
@@ -947,8 +991,8 @@ function ClusterCard({
             <ContactCard
               key={dup.id}
               contact={dup}
-              label="Merges In"
-              labelColor="text-warning bg-amber-500/10"
+              label="Merges in"
+              labelColor={TONE_WASH.warning}
               other={primary}
               onSetPrimary={() => setSelectedPrimaryId(dup.id)}
             />
@@ -959,10 +1003,10 @@ function ClusterCard({
       {/* Evidence toggle */}
       <button
         onClick={() => setShowEvidence((s) => !s)}
-        className="w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant transition-colors ml-7 max-w-[calc(100%-1.75rem)]"
+        className="state-layer w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant transition-colors sm:ml-7 sm:max-w-[calc(100%-1.75rem)]"
       >
         <Link2 className="w-3.5 h-3.5" />
-        {showEvidence ? "Hide" : "Show"} Evidence ({cluster.suggestions.length}{" "}
+        {showEvidence ? "Hide" : "Show"} evidence ({cluster.suggestions.length}{" "}
         link{cluster.suggestions.length !== 1 ? "s" : ""})
         {showEvidence ? (
           <ChevronUp className="w-3.5 h-3.5" />
@@ -975,7 +1019,7 @@ function ClusterCard({
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
-          className="space-y-2 overflow-hidden ml-7"
+          className="space-y-2 overflow-hidden sm:ml-7"
         >
           {cluster.suggestions.map((s, i) => {
             const a = cluster.contacts.find((c) => c.id === s.contactIdA);
@@ -999,18 +1043,18 @@ function ClusterCard({
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 ml-7">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 sm:ml-7">
         <button
           onClick={handleDismissAll}
-          className="btn-secondary w-full sm:w-auto px-6"
+          className="btn-secondary w-full sm:w-auto"
         >
           <X className="w-5 h-5" />
-          Keep Separate
+          Keep separate
         </button>
         <button
           onClick={handleMergeAll}
           disabled={isMerging}
-          className="btn-primary w-full sm:w-auto px-6"
+          className="btn-primary w-full sm:w-auto"
         >
           {isMerging ? "Merging..." : `Merge ${cluster.contacts.length}`}
           {isMerging ? (

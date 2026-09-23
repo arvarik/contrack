@@ -15,10 +15,19 @@ import { toast } from "sonner";
 import { Loader2, Calendar } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { apiFetch } from "../../api/client";
-import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
+import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { RadioDot } from "../../components/ui/RadioDot";
 
 export type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
+
+/** The due date choices, in the order the toggles show them. */
+const PRESETS: { value: DueDatePreset; label: string }[] = [
+  { value: "tomorrow", label: "Tomorrow" },
+  { value: "3days", label: "3 days" },
+  { value: "nextweek", label: "Next week" },
+  { value: "pick", label: "Pick date" },
+];
 
 export function getPresetDate(
   preset: "tomorrow" | "3days" | "nextweek",
@@ -120,14 +129,14 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
 
   const count = contactIds.length;
   const modalTitle =
-    count === 1 ? "Add Follow-up" : `Add Follow-up (${count} selected)`;
+    count === 1 ? "Add follow-up" : `Add follow-up (${count} selected)`;
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={modalTitle}>
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         <div>
           <label htmlFor="followup-title" className={FORM_LABEL}>
-            Task Title *
+            Task title *
           </label>
           <input
             id="followup-title"
@@ -141,64 +150,38 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         </div>
 
         <div>
-          <span className={FORM_LABEL}>Due Date</span>
+          <span className={FORM_LABEL}>Due date</span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
-            <button
-              type="button"
-              onClick={() => setPreset("tomorrow")}
-              className={cn(
-                "hit-area py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center cursor-pointer",
-                preset === "tomorrow"
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-              )}
-            >
-              Tomorrow
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreset("3days")}
-              className={cn(
-                "hit-area py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center cursor-pointer",
-                preset === "3days"
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-              )}
-            >
-              3 days
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreset("nextweek")}
-              className={cn(
-                "hit-area py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center cursor-pointer",
-                preset === "nextweek"
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-              )}
-            >
-              Next week
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreset("pick")}
-              className={cn(
-                "hit-area py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center cursor-pointer flex items-center justify-center gap-1.5",
-                preset === "pick"
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-              )}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Pick date</span>
-            </button>
+            {/*
+              A selected preset is the tint and its ink, with a filled
+              `RadioDot`, so "chosen" is a shape as well as a hue, and
+              `aria-pressed` says it to a screen reader.
+            */}
+            {PRESETS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={preset === value}
+                onClick={() => setPreset(value)}
+                className={cn(
+                  "hit-area py-2 px-3 rounded-xl text-xs font-semibold transition-colors text-center cursor-pointer flex items-center justify-center gap-1.5",
+                  preset === value
+                    ? SELECTED_TINT
+                    : "state-layer bg-surface-container-high/60 text-on-surface",
+                )}
+              >
+                <RadioDot checked={preset === value} />
+                {value === "pick" && <Calendar className="w-3.5 h-3.5" />}
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
         {preset === "pick" && (
           <div>
             <label htmlFor="followup-custom-date" className={FORM_LABEL}>
-              Choose Date
+              Choose date
             </label>
             <input
               id="followup-custom-date"
@@ -216,14 +199,14 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="hit-area px-4 py-2 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+            className="btn-secondary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !title.trim()}
-            className="hit-area px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer flex items-center gap-2"
+            className="btn-primary"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>

@@ -29,6 +29,8 @@ import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { formatRelative } from "../../../lib/datetime";
+import { CARD, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import {
   useDeleteConnector,
   useSyncConnector,
@@ -65,7 +67,7 @@ function statusBadgeInfo(status: ConnectorStatus): {
     case "error":
       return { tone: "warning", label: "Error" };
     case "needs_reauth":
-      return { tone: "danger", label: "Needs Reauth" };
+      return { tone: "danger", label: "Needs reauth" };
     default:
       return { tone: "neutral", label: status };
   }
@@ -188,11 +190,16 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
 
   return (
     <>
-      <div className="rounded-2xl bg-surface-container border border-surface-container-high/60 p-4 transition-all hover:border-surface-container-highest space-y-3">
+      <div className={cn(CARD, "p-4 space-y-3")}>
         {/* Header row */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <div
+              className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                TONE_WASH.primary,
+              )}
+            >
               <Icon className="w-5 h-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -272,7 +279,10 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         {connector.status === "error" && connector.lastError && (
           <div
             role="alert"
-            className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-warning flex items-start justify-between gap-3"
+            className={cn(
+              "rounded-xl p-3 text-xs flex items-start justify-between gap-3",
+              TONE_WASH.warning,
+            )}
           >
             <div className="flex items-start gap-2 min-w-0">
               <AlertTriangle
@@ -281,7 +291,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               />
               <div className="min-w-0">
                 <p className="font-medium">Last sync failed</p>
-                <p className="text-[11px] text-warning/90 mt-0.5 font-mono break-all">
+                <p className="text-[11px] mt-0.5 font-mono break-all">
                   {connector.lastError}
                 </p>
               </div>
@@ -290,7 +300,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               type="button"
               onClick={handleSyncNow}
               disabled={isBusy}
-              className="hit-area shrink-0 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-xs font-medium text-warning transition-colors"
+              className="btn-secondary btn-sm shrink-0"
             >
               Retry now
             </button>
@@ -301,7 +311,10 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         {connector.status === "needs_reauth" && (
           <div
             role="alert"
-            className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-xs text-error flex items-start justify-between gap-3"
+            className={cn(
+              "rounded-xl p-3 text-xs flex items-start justify-between gap-3",
+              TONE_WASH.error,
+            )}
           >
             <div className="flex items-start gap-2 min-w-0">
               <KeyRound
@@ -310,7 +323,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               />
               <div className="min-w-0">
                 <p className="font-medium">Authentication expired</p>
-                <p className="text-[11px] text-error/90 mt-0.5 font-mono break-all">
+                <p className="text-[11px] mt-0.5 font-mono break-all">
                   {connector.lastError ||
                     "The server rejected credentials for this connector."}
                 </p>
@@ -321,7 +334,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               onClick={() =>
                 onReconnect ? onReconnect(connector) : onEdit(connector)
               }
-              className="hit-area shrink-0 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs font-medium text-error transition-colors"
+              className="btn-secondary btn-sm shrink-0"
             >
               Reconnect
             </button>
@@ -349,7 +362,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               type="checkbox"
               checked={deleteImported}
               onChange={(e) => setDeleteImported(e.target.checked)}
-              className="mt-0.5 rounded border-surface-container-high text-primary focus:ring-primary"
+              className="mt-0.5 rounded border-surface-container-high text-primary"
             />
             <span>
               Also delete all interactions and ghost contacts created by this

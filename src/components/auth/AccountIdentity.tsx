@@ -20,7 +20,14 @@ import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useDismissable } from "../../hooks/useDismissable";
 import { Badge } from "../ui/Badge";
 import { accountAvatarUrl } from "../../lib/avatar";
-import { MENU_ITEM, MENU_ITEM_DANGER, MENU_SEPARATOR } from "../../lib/styles";
+import {
+  CARD,
+  LABEL_PRIMARY,
+  MENU_ITEM,
+  MENU_ITEM_DANGER,
+  MENU_SEPARATOR,
+  SELECTED_TINT,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useAuth } from "./AuthGate";
 import type { AccountUser } from "../../api/auth";
@@ -146,16 +153,11 @@ export const SidebarIdentity = () => {
         aria-expanded={open}
         aria-label={`Signed in as ${label}. Account menu.`}
         className={cn(
-          "inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full",
-          "transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          open ? "bg-primary/15" : "hover:bg-surface-container-high",
+          "inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full transition-colors",
+          open ? SELECTED_TINT : "state-layer",
         )}
       >
-        <AccountAvatar
-          user={user}
-          size={32}
-          className={cn(open && "ring-2 ring-primary")}
-        />
+        <AccountAvatar user={user} size={32} />
       </button>
 
       {/*
@@ -183,7 +185,7 @@ export const SidebarIdentity = () => {
               name is the half that is the same on both.
             */}
             {instanceName && (
-              <p className="text-[11px] font-bold uppercase tracking-widest text-primary truncate mb-1">
+              <p className={cn(LABEL_PRIMARY, "truncate mb-1")}>
                 {instanceName}
               </p>
             )}
@@ -238,15 +240,10 @@ export const SettingsIdentityRow = () => {
 
   return (
     <section className="md:hidden">
-      <div
-        className={cn(
-          "bg-surface-container-lowest rounded-2xl shadow-sm",
-          "flex items-center gap-3 p-3",
-        )}
-      >
+      <div className={cn(CARD, "flex items-center gap-3 p-3")}>
         <Link
           to="/settings/account"
-          className="flex items-center gap-3 flex-1 min-w-0 rounded-xl py-1 -my-1"
+          className="state-layer flex items-center gap-3 flex-1 min-w-0 rounded-xl py-1 -my-1 transition-colors"
         >
           <AccountAvatar user={user} size={40} />
           <span className="flex-1 min-w-0">
@@ -268,7 +265,7 @@ export const SettingsIdentityRow = () => {
           className={cn(
             "shrink-0 inline-flex items-center justify-center",
             "min-w-[44px] min-h-[44px] rounded-full",
-            "text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors",
+            "state-layer text-on-surface-variant hover:text-error transition-colors",
           )}
         >
           <LogOut className="w-5 h-5" />

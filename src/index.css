@@ -12,16 +12,17 @@
    * THE CONTRACK DESIGN SYSTEM
    * ===================================================================
    * Primary Blue: #006A91 — the interactive anchor.
-   * Surface Hierarchy: physical stack of fine paper.
+   * Surface Hierarchy: physical stack of warm paper.
    * No‑Line Rule: boundaries through bg‑color shifts, never 1px borders.
-   * Glass & Gradient Rule: glassmorphism for floating UI, signature
-   *   gradient reserved only for branding (e.g. sidebar logo text).
+   *   A pressable button's edge is part of the control, not a boundary.
+   * Glass Rule: glassmorphism for floating UI only.
+   * Depth Rule: only a button that does something has an edge under it.
    *
    * ── Contrast contract ──────────────────────────────────────────────
    * Every colour below that is ever used as TEXT or as an ICON clears
    * WCAG AA (4.5:1) against every surface it actually lands on in this
    * app — measured, not assumed. The binding cases are not white cards;
-   * they are the pale tints (`bg-primary/15`, `bg-emerald-500/10`, …)
+   * they are the pale tints (`bg-primary/15`, `bg-success/10`, …)
    * that badges and pills are built from, where a colour sits on a wash
    * of itself.
    *
@@ -79,6 +80,14 @@
   --color-ai: #6f3fd0;
   --color-on-ai-wash: #6734c6;
 
+  /* ── The highlighter ────────────────────────────────────────────────
+   * The words a search matched, painted the way a person marks a page: a
+   * warm wash behind the text, never a second blue. Only `mark` wears it
+   * (see the base layer). The text on it is always `on-surface`, which
+   * reads at 10.4:1 here and 7.4:1 on the dark value, where the variant
+   * text colour would sit near the AA line. */
+  --color-highlight: #fce7a6;
+
   /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
   --color-secondary-container: #cfe6f2;
@@ -103,17 +112,24 @@
   --color-error: #bf1b1b; /* worst measured 4.87:1 */
   --color-on-error: #ffffff;
 
-  /* ── Surface Hierarchy (paper-stack) ────────────────────────────── */
-  --color-surface: #f5f6f9; /* Base layer */
+  /* ── Surface Hierarchy (paper-stack) ────────────────────────────────
+   * Warm paper. The greys used to lean blue (hue 250 in OKLCH), which read
+   * as a screen rather than a stack of paper. They now lean warm (hue 85)
+   * at a chroma of 0.005 to 0.010, with every lightness kept where it was
+   * measured, so each text colour clears AA on each surface by the same
+   * margin as before: the worst pair is still the primary on `highest`,
+   * 4.68:1. The ink (`on-surface`, `on-surface-variant`) stays a cool
+   * slate, the way ink sits on paper. The dark palette is unchanged. */
+  --color-surface: #f8f6f2; /* Base layer */
   --color-on-surface: #2a3437;
-  --color-surface-variant: #d9e4e8;
+  --color-surface-variant: #e5e2db;
   --color-on-surface-variant: #566164;
 
   --color-surface-container-lowest: #ffffff; /* Interactive/card */
-  --color-surface-container-low: #eff1f4; /* Sectional */
-  --color-surface-container: #e8eff1;
-  --color-surface-container-high: #e0e3e6; /* Elevated/emphasis */
-  --color-surface-container-highest: #d9e4e8;
+  --color-surface-container-low: #f2f1ed; /* Sectional */
+  --color-surface-container: #f1eeea;
+  --color-surface-container-high: #e7e5e1; /* Elevated/emphasis */
+  --color-surface-container-highest: #e5e2db;
 
   /*
     Hairline separator. Two files already reached for `outline-variant` — the
@@ -123,7 +139,7 @@
     separators in near-black text colour, which is what made them look wrong.
     Defining the token makes the intent land.
   */
-  --color-outline-variant: #c9d3d9;
+  --color-outline-variant: #d4d1cb;
 
   /* ── Radii ───────────────────────────────────────────────────────
    * One tight scale, and every `rounded-*` utility in the app reads it.
@@ -150,6 +166,18 @@
   --radius-2xl: 0.5rem;
   --radius-3xl: 0.75rem;
   --radius-4xl: 1rem;
+
+  /* ── Motion ─────────────────────────────────────────────────────────
+   * One curve and three durations for the whole app. The durations are
+   * `--dur-fast`, `--dur-base` and `--dur-slow` on `:root` below. Every
+   * `transition-*` utility without a `duration-*` class runs at the base
+   * duration on the one curve, so a call site writes `transition-colors`
+   * and nothing else. `ease-out` is the same curve, for the few places that
+   * name one. Tailwind's own default was 150 ms on a symmetric curve; four
+   * easings and five durations had grown around it. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --default-transition-duration: 160ms;
+  --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* =====================================================================
@@ -163,6 +191,24 @@
 
 :root {
   color-scheme: light;
+
+  /* The three durations (see "Motion" in the theme). Fast is a press or a
+     menu opening, base is a hover or a colour change, slow is something
+     arriving on the page. `src/lib/motion.ts` holds the same numbers for
+     `motion/react`. */
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 240ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* The secondary button's edge: a step darker than the hairline on light
+     paper. The dark palettes below use the hairline itself, because an edge
+     darker than a dark card would vanish into the page. */
+  --btn-secondary-edge: color-mix(
+    in oklab,
+    var(--color-outline-variant) 80%,
+    black
+  );
 }
 
 /* =====================================================================
@@ -209,6 +255,7 @@
     --color-ai: #bfa3f9;
     /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
     --color-on-ai-wash: #bfa3f9;
+    --color-highlight: #5a4116;
     --color-secondary: #b0c2ca;
     --color-secondary-container: #2d4049;
     --color-on-secondary-container: #cfe6f2;
@@ -227,6 +274,7 @@
     --color-surface-container-high: #242a2d;
     --color-surface-container-highest: #2b3235;
     --color-outline-variant: #394044;
+    --btn-secondary-edge: var(--color-outline-variant);
   }
 }
 
@@ -243,6 +291,7 @@
   --color-ai: #bfa3f9;
   /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
   --color-on-ai-wash: #bfa3f9;
+  --color-highlight: #5a4116;
   --color-secondary: #b0c2ca;
   --color-secondary-container: #2d4049;
   --color-on-secondary-container: #cfe6f2;
@@ -261,6 +310,7 @@
   --color-surface-container-high: #242a2d;
   --color-surface-container-highest: #2b3235;
   --color-outline-variant: #394044;
+  --btn-secondary-edge: var(--color-outline-variant);
 }
 
 /* Chosen light beats a dark machine, `color-scheme` included. */
@@ -280,8 +330,10 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     .glass-panel {
-      /* 80% white over a light page; the same idea over a dark one. */
-      background: rgba(25, 30, 33, 0.82);
+      /* 80% white over a light page; the same idea over a dark one. The
+         colour alone, not the shorthand: the shorthand would reset the
+         hover layer's background image on a glass control. */
+      background-color: rgba(25, 30, 33, 0.82);
     }
 
     /*
@@ -318,8 +370,10 @@
 
 :root[data-theme="dark"] {
   .glass-panel {
-    /* 80% white over a light page; the same idea over a dark one. */
-    background: rgba(25, 30, 33, 0.82);
+    /* 80% white over a light page; the same idea over a dark one. The
+       colour alone, not the shorthand: the shorthand would reset the hover
+       layer's background image on a glass control. */
+    background-color: rgba(25, 30, 33, 0.82);
   }
 
   /*
@@ -413,6 +467,58 @@
     ) {
     outline: none;
   }
+
+  /* ── One focus ring ───────────────────────────────────────────────────
+   * The ring above is the only focus indicator in the app: 2 px of the
+   * primary. It used to share the job with ten `focus:ring-*` variants at
+   * four strengths, so a person tabbing through a form saw a different ring
+   * on each field. There are two placements and one look:
+   *
+   *   - A control draws it 2 px outside, where a filled button cannot hide
+   *     it.
+   *   - A text field draws it on its own edge, inset, where it reads as the
+   *     field's border. A field has no fill that could hide a ring, and an
+   *     outside ring doubled the box.
+   *
+   * A composite field (an icon, an input and its buttons in one box, such
+   * as the Ask search box, or the note composer's editor in its card) puts
+   * `.focus-frame` on the box. The box draws the inset ring while its field
+   * has focus, and the field draws none. A text field shows its ring on any
+   * focus, the way a browser treats an input. A button inside the box keeps
+   * its own ring, so the ring always says which element Enter will act on. */
+  :where(
+    input:not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="color"],
+      [type="file"]
+    ),
+    textarea,
+    select
+  ):focus-visible {
+    outline-offset: -2px;
+  }
+  .focus-frame:has(:is(input, textarea, [contenteditable="true"]):focus) {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
+  .focus-frame :is(input, textarea, [contenteditable="true"]):focus {
+    outline: none;
+  }
+
+  /* ── The highlighter ──────────────────────────────────────────────────
+   * Every `mark` in the app: the words a search matched. A warm wash, the
+   * ink colour on it whatever the text around it is, and a tight box that
+   * follows a match across a line break. */
+  mark {
+    background-color: var(--color-highlight);
+    color: var(--color-on-surface);
+    border-radius: 0.125rem;
+    padding-inline: 0.125rem;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
 }
 
 /* =====================================================================
@@ -422,9 +528,11 @@
 @layer components {
   /* ── Glass Panel (modals, dropdowns, floating nav) ──────────────── */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.8);
+    /* Unprefixed only. With the -webkit- line after it, the minifier kept
+       the prefixed one and dropped this, and Chromium ignores the prefix,
+       so no glass panel blurred. The minifier writes the prefix itself. */
     backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
   }
 
   /* ── Menu panel (dropdown menus, context menus, comboboxes) ────────
@@ -464,7 +572,7 @@
   }
   .menu-enter {
     transform-origin: var(--menu-origin, top);
-    animation: menu-enter 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: menu-enter var(--dur-fast) var(--ease) both;
   }
   /* For a panel that Motion animates: MENU_PANEL includes the entrance, and
      this takes it back off. */
@@ -482,106 +590,206 @@
     }
   }
 
-  /* ── Signature Gradient (BRANDING ONLY — sidebar logo text) ─────── */
-  /* For buttons use bg-primary text-on-primary instead.               */
-  .signature-gradient {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary-dim) 0%,
-      var(--color-primary-container) 100%
-    );
-  }
-
-  /* ── Card — borderless surface elevation ────────────────────────── */
+  /* ── Card — the static surface ──────────────────────────────────────
+   * The white card on the page, with the soft shadow that says it is above
+   * it. A card is not a control, so it has no hover. `CARD` in
+   * `src/lib/styles.ts` is this class. */
   .card {
+    /* The same utilities `CARD` used to spell out, so a `ring-*` on a card
+       still adds to its shadow instead of replacing it. `--row-face` tells
+       `row-selected` what the card is made of (see there). */
     @apply bg-surface-container-lowest rounded-2xl p-6 shadow-sm;
-  }
-  .card-elevated {
-    @apply bg-surface-container-low rounded-2xl p-6 shadow-md;
+    --row-face: var(--color-surface-container-lowest);
   }
 
   /* ── Input — unified input styling ─────────────────────────────── */
   .input {
     @apply w-full bg-surface-container-low rounded-xl px-4 py-2.5 text-sm
-           text-on-surface placeholder:text-on-surface-variant/50
-           focus:ring-2 focus:ring-primary/40 transition-all;
+           text-on-surface placeholder:text-on-surface-variant/50 transition-colors;
   }
 
-  /* ── Buttons — the two call-to-action shapes ─────────────────────
-   * One shape for every CTA in the app: a rounded rectangle, bold 14 px,
-   * 44 px tall on a phone and 40 px from `sm`. The review counted five
-   * primary shapes (pills, rounded-xl, two disabled looks). Pills are for
-   * chips, filter pills and `Segmented`, and nothing else.
+  /* ── Buttons — pressable, with an edge ──────────────────────────────
+   * One family for every call to action: `.btn-primary`, `.btn-secondary`
+   * and `.btn-danger`, with `.btn-sm` for a toolbar. A rounded rectangle,
+   * bold 14 px, 44 px tall on a phone and 40 px from `sm`.
    *
-   * Written as plain CSS so a call site can still add `w-full`, `gap-3` or
-   * `px-8`: utilities sit in a later layer and win over these. */
+   * The depth is a darker edge under the face, the way a key sits on its
+   * base. The face is the button's own box. The edge is its 1 px border
+   * and a solid shadow drawn `--btn-lift` below it. On hover the face
+   * rises 1 px and the edge grows by 1 px. On press the face sinks until
+   * 1 px of edge is left. The edge's bottom line never moves, so the button
+   * reads as one object going up and down, and nothing around it shifts:
+   * a transform and a shadow take no layout space.
+   *
+   * Depth means "this does something". Chips, rows, tabs, menus and icon
+   * buttons stay flat, and a disabled button loses its edge, so a button a
+   * person cannot press no longer looks pressable. That also ends the old
+   * confusion where a disabled primary looked like a secondary.
+   *
+   * The edge colour is mixed from the face, so it follows a picked accent,
+   * a contact's vibe and the dark palette with no extra token. The border
+   * is part of the edge, not a sectioning line (see `.agent/STYLE.md`).
+   *
+   * Written as plain CSS so a call site can still add `w-full`, `flex-1` or
+   * a margin: utilities sit in a later layer and win over these. A call site
+   * never sets the fill, the shadow, the size or the disabled look. */
   .btn-primary,
-  .btn-secondary {
+  .btn-secondary,
+  .btn-danger {
+    --btn-lift: 3px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
     min-height: 44px;
     padding: 0.5rem 1.25rem;
+    border: 1px solid var(--btn-border, var(--btn-edge));
     border-radius: 0.375rem;
+    background-color: var(--btn-face);
+    box-shadow: 0 var(--btn-lift) 0 0 var(--btn-edge);
     font-size: 0.875rem;
     font-weight: 700;
     line-height: 1.25rem;
     transition:
-      background-color 0.2s ease,
-      box-shadow 0.2s ease,
-      transform 0.2s ease;
+      transform var(--dur-fast) var(--ease),
+      box-shadow var(--dur-fast) var(--ease),
+      background-color var(--dur-base) var(--ease),
+      color var(--dur-base) var(--ease);
     cursor: pointer;
   }
   @media (width >= 40rem) {
     .btn-primary,
-    .btn-secondary {
+    .btn-secondary,
+    .btn-danger {
       min-height: 40px;
     }
   }
 
   .btn-primary {
-    background-color: var(--color-primary);
+    --btn-face: var(--color-primary);
+    --btn-edge: color-mix(in oklab, var(--color-primary) 62%, black);
     color: var(--color-on-primary);
   }
-  .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 10px 15px -3px rgba(0, 113, 156, 0.25);
-  }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
+  /* The secondary's face is the card, ringed by the hairline, on an edge a
+     step darker than the hairline: a key on a white board. */
   .btn-secondary {
-    background-color: var(--color-surface-container-high);
+    --btn-face: var(--color-surface-container-lowest);
+    --btn-border: var(--color-outline-variant);
+    --btn-edge: var(--btn-secondary-edge);
     color: var(--color-on-surface);
   }
-  .btn-secondary:hover:not(:disabled) {
-    background-color: var(--color-surface-container-highest);
-  }
-  .btn-secondary:active:not(:disabled) {
-    transform: scale(0.98);
+  .btn-danger {
+    --btn-face: var(--color-error);
+    --btn-edge: color-mix(in oklab, var(--color-error) 62%, black);
+    color: var(--color-on-error);
   }
 
-  /* The one disabled look, for both. Not opacity: fading a filled button
-     fades its label into its own fill. Dim the chrome and keep the label
-     readable. */
+  /* Hover lifts only where a pointer can hover. On a phone a tap would
+     leave the button raised until the next tap somewhere else. */
+  @media (hover: hover) {
+    .btn-primary:hover:not(:disabled),
+    .btn-secondary:hover:not(:disabled),
+    .btn-danger:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 calc(var(--btn-lift) + 1px) 0 0 var(--btn-edge);
+    }
+  }
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-danger:active:not(:disabled) {
+    transform: translateY(calc(var(--btn-lift) - 1px));
+    box-shadow: 0 1px 0 0 var(--btn-edge);
+  }
+
+  /* The one disabled look, for all three. Flat, with no edge, and not
+     opacity: fading a filled button fades its label into its own fill. The
+     border keeps its width in transparent so nothing moves.
+
+     The ink is `!important` for one reason: a destructive secondary is
+     `btn-secondary text-error`, and the `text-error` utility sits in a later
+     layer than this rule, so a disabled "Remove" stayed red. Nothing else
+     on a `.btn-*` may come from the call site, so nothing else needs it. */
   .btn-primary:disabled,
-  .btn-secondary:disabled {
+  .btn-secondary:disabled,
+  .btn-danger:disabled {
     background-color: var(--color-surface-container-high);
-    color: var(--color-on-surface-variant);
+    border-color: transparent;
+    color: var(--color-on-surface-variant) !important;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
   }
 
-  /* ── Section divider — bg‑color shift, NEVER a 1px line ────────── */
-  .section-divider {
-    @apply h-px bg-surface-container-high my-4;
+  /* The small size, for toolbars and dense rows: 32 px of face with a
+     2 px edge, 13 px type, and the 44 px tap box of `.hit-area` built in.
+     It comes after the size rules above, so it wins at every width. */
+  .btn-sm {
+    --btn-lift: 2px;
+    position: relative;
+    min-height: 32px;
+    padding: 0.25rem 0.75rem;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+  /* An icon with no label: a square face. With `.btn-sm` and a 20 px glyph
+     it is 32 px each way, the height of the small button. */
+  .btn-icon {
+    padding: 0.375rem;
+  }
+  .btn-sm::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 
-  /* ── Elevated icon container ───────────────────────────────────── */
-  .icon-container {
-    @apply w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center shrink-0 shadow-xs;
+  /* ── Hover: one layer for every flat control ────────────────────────
+   * A row in a list, a ghost button, a filter pill, a nav item. On hover a
+   * 6 percent layer of the ink colour covers the element's own background,
+   * and on press a 10 percent one. A layer and not a second background
+   * colour, because the same row sits on a white card, on the page and on
+   * a wash, in two palettes, and "one surface step up" meant a different
+   * token in each of those. The layer is a background image, so a resting
+   * wash or a selected tint stays underneath it. No shadow, no motion. */
+  .state-layer {
+    --state-hover: color-mix(in srgb, var(--color-on-surface) 6%, transparent);
+    --state-press: color-mix(in srgb, var(--color-on-surface) 10%, transparent);
+  }
+  @media (hover: hover) {
+    .state-layer:hover:not(:disabled, [aria-disabled="true"]) {
+      background-image: linear-gradient(var(--state-hover), var(--state-hover));
+    }
+  }
+  .state-layer:active:not(:disabled, [aria-disabled="true"]) {
+    background-image: linear-gradient(var(--state-press), var(--state-press));
+  }
+
+  /* ── A card that is a control ───────────────────────────────────────
+   * A search result, a suggestion tile: the whole card is the button. On
+   * hover it rises 2 px, its shadow grows one step and its edge takes a
+   * light primary tint. On press it sets back down. No scale: scaling a
+   * card blurs its text. Put it beside the card's own surface classes. */
+  .card-interactive {
+    cursor: pointer;
+    transition:
+      transform var(--dur-base) var(--ease),
+      box-shadow var(--dur-base) var(--ease);
+  }
+  @media (hover: hover) {
+    .card-interactive:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 0 0 1px color-mix(in oklab, var(--color-primary) 30%, transparent),
+        0 8px 20px -8px rgb(0 0 0 / 0.18),
+        0 2px 6px -2px rgb(0 0 0 / 0.08);
+    }
+  }
+  .card-interactive:active {
+    transform: translateY(0);
+    transition-duration: var(--dur-fast);
   }
 
   /* ── Swipe Card Overlays (Dedupe Tinder-style) ─────────────────── */
@@ -674,21 +882,6 @@
     background-clip: padding-box;
   }
 
-  /** Fade-in for transient confirmations (e.g. EditableField save ✓) */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: scale(0.7);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  .animate-fade-in {
-    animation: fadeIn 0.15s ease-out forwards;
-  }
-
   /**
    * result-card-enter — GPU-composited opacity-only entrance for search result cards.
    *
@@ -709,7 +902,7 @@
     }
   }
   .result-card-enter {
-    animation: resultCardIn 0.22s ease-out both;
+    animation: resultCardIn var(--dur-slow) var(--ease) both;
   }
 
   /**
@@ -730,10 +923,10 @@
     }
   }
   .timeline-enter {
-    animation: resultCardIn 0.3s ease-out both;
+    animation: resultCardIn var(--dur-slow) var(--ease) both;
   }
   .timeline-entry {
-    animation: timelineEntryIn 0.35s ease-out both;
+    animation: timelineEntryIn var(--dur-slow) var(--ease) both;
   }
 
   /**
@@ -762,12 +955,12 @@
     }
   }
   .tile-enter {
-    animation: tileIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: tileIn var(--dur-slow) var(--ease) both;
   }
 
   /** Opacity-only crossfade for content that swaps inside a fixed slot. */
   .fade-enter {
-    animation: resultCardIn 0.2s ease-out both;
+    animation: resultCardIn var(--dur-base) var(--ease) both;
   }
 
   /* ── The corvid ───────────────────────────────────────────────────────
@@ -916,6 +1109,36 @@
   }
 }
 
+/* ── Selected: the row that is current ────────────────────────────────
+ * A 10 percent tint of the primary, the same tint a selected pill wears, and
+ * nothing else: no ring, which read as keyboard focus on every visit, and no
+ * bar down the leading edge, the stock accent of generated interfaces. The
+ * row's own text says the rest: its name takes `text-on-primary-wash`, and
+ * the page beside a list shows what is open. A selected pill or nav item
+ * takes the same tint (`SELECTED_TINT` in `src/lib/styles.ts`).
+ *
+ * A utility rather than a component class, so it takes a variant: the
+ * command palette's rows are current by `aria-selected`, which cmdk sets,
+ * and write `aria-selected:row-selected`. It sets no shadow, so a selected
+ * card keeps its own. */
+@utility row-selected {
+  background-color: color-mix(
+    in oklab,
+    var(--color-primary) 10%,
+    var(--row-face, transparent)
+  );
+}
+
+/* A selected card keeps what makes it a card. On a flat row the tint mixes
+   with transparent and the row stays flat. On a `.card` it mixes with the
+   card's own face, and the card keeps its shadow, so a checked card reads as
+   raised and chosen, not as a translucent hole in the page. The face does
+   not inherit, so a row inside a card mixes with transparent. */
+@property --row-face {
+  syntax: "*";
+  inherits: false;
+}
+
 /* =====================================================================
  * REDUCED MOTION
  * =====================================================================
@@ -1032,10 +1255,26 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group button:not(:disabled):hover {
   background-color: var(--color-surface-container-high);
 }
-/* The app's focus colour, inset because the group clips anything outside. */
-.contact-map .maplibregl-ctrl-group button:focus:focus-visible,
-.contact-map .maplibregl-ctrl-attrib-button:focus:focus-visible {
+/*
+ * MapLibre's own focus glow, a blue shadow, showed after a pointer click on
+ * the zoom buttons and on the credit's "i", and the dark palette's filter
+ * turned the "i"'s orange. Focus from a pointer draws nothing. The keyboard
+ * gets the app's ring: inset on a zoom button, because the group clips
+ * anything outside, and on the credit's pill around the "i", 2 px outside
+ * like every other control, because the dark palette draws the "i" through
+ * a filter that would recolour a ring on the button itself.
+ */
+.contact-map .maplibregl-ctrl-group button:focus,
+.contact-map .maplibregl-ctrl-attrib-button:focus {
+  box-shadow: none;
+}
+.contact-map .maplibregl-ctrl-group button:focus:focus-visible {
   box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+.contact-map
+  .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .contact-map .maplibregl-ctrl-attrib,
@@ -1097,6 +1336,37 @@ html[data-text-scale="large"] {
 }
 
 /*
+ * The credit sits on top of the zoom buttons, and opens there as a card no
+ * wider than 13rem, which wraps its words onto a second line. At the foot
+ * of the column it opened across the bottom of the map, over the stats
+ * strip at 800 and 1024 px and over the health legend on a phone. On top of
+ * the zoom buttons it opens above the strip, and beside the legend's row at
+ * most, where the legend leaves it room at every width.
+ *
+ * With a contact open, both keep to the map the contact leaves: MapView sets
+ * `--map-open`, the open width, and the corner's right edge is where the
+ * contact starts. The contact used to cover them, and the licence needs the
+ * credit on screen. When the open map is under MIN_OPEN_PX, MapView sets
+ * `data-cramped`: the zoom buttons step aside like the toolbar, and the
+ * credit stays. The open credit keeps inside the open map too: its width
+ * leaves MapLibre's 36 px of padding, its 10 px margin and 10 px on the
+ * left, and a long word breaks rather than run under the contact.
+ */
+.map-page .maplibregl-ctrl-bottom-right {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  right: calc(100% - var(--map-open, 100%));
+}
+.map-page .maplibregl-ctrl-attrib.maplibregl-compact-show {
+  max-width: min(13rem, calc(var(--map-open, 100vw) - 56px));
+  overflow-wrap: anywhere;
+}
+.map-page[data-cramped] .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+  display: none;
+}
+
+/*
  * On a phone the tab bar is fixed over the bottom of the map page. The zoom
  * buttons and the attribution sit above it, and the zoom buttons grow to the
  * 44 px tap floor.
@@ -1113,9 +1383,10 @@ html[data-text-scale="large"] {
 }
 
 @media (min-width: 1024px) {
-  .map-page:has([aria-label="Map insights"]) .maplibregl-ctrl-bottom-right {
-    right: 20.5rem;
-    transition: right 0.2s ease-in-out;
+  .map-page:has(aside[aria-label="Map insights"])
+    .maplibregl-ctrl-bottom-right {
+    right: max(20.5rem, calc(100% - var(--map-open, 100%)));
+    transition: right var(--dur-slow) var(--ease);
   }
 }
 
@@ -1139,5 +1410,5 @@ html[data-text-scale="large"] {
   }
 }
 .modal-fade[data-state="open"] {
-  animation: modal-fade-in 120ms ease-out;
+  animation: modal-fade-in var(--dur-fast) var(--ease);
 }

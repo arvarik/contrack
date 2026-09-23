@@ -2276,6 +2276,30 @@ sqlite.exec(`
   );
 `);
 
+/**
+ * Settings the app no longer reads. The Mapbox geocoder is gone (Nominatim
+ * is the one geocoder), and a key an admin stored before sat sealed in
+ * `geo.mapboxKey` with nothing to read it and no control to remove it, and
+ * rode along in every backup.
+ */
+export const RETIRED_SETTING_KEYS = ["geo.mapboxKey"] as const;
+
+/** Delete the retired settings. Runs on every boot, a no-op once they are gone. */
+export function deleteRetiredSettings(database: typeof sqlite): number {
+  const remove = database.prepare(`DELETE FROM app_settings WHERE key = ?`);
+  let removed = 0;
+  for (const key of RETIRED_SETTING_KEYS) removed += remove.run(key).changes;
+  return removed;
+}
+
+const removedSettings = deleteRetiredSettings(sqlite);
+if (removedSettings > 0) {
+  log.info(
+    "Database",
+    `Removed ${removedSettings} retired setting(s) from app_settings`,
+  );
+}
+
 // =============================================================================
 // 9i. Ownership guard
 // =============================================================================

@@ -260,12 +260,12 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
             setClusters([]);
             setQueued(false);
             const modeLabels: Record<string, string> = {
-              quick: "Quick Scan",
-              deep: "Smart Scan",
-              full: "Full Scan",
-              deterministic: "Quick Scan",
-              ai: "Smart Scan",
-              both: "Smart Scan",
+              quick: "Quick scan",
+              deep: "Smart scan",
+              full: "Full scan",
+              deterministic: "Quick scan",
+              ai: "Smart scan",
+              both: "Smart scan",
             };
             toast.success(`${modeLabels[mode] || "Scan"} started`);
           },

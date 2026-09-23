@@ -417,7 +417,6 @@ function isCloudMetadataOrLinkLocal(urlStr: string): boolean {
 /** Body for PUT /api/admin/integrations. Empty string clears. */
 export const adminIntegrationsSchema = z
   .object({
-    mapboxKey: z.string().optional(),
     searxngUrl: z
       .string()
       .trim()

@@ -26,7 +26,11 @@ import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { Modal } from "../../components/ui/Modal";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
+import { SECTION_HEADING, TONE_WASH } from "../../lib/styles";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
+
+/** The small caps heading over each group of bars. */
+const GROUP_HEADING = cn(SECTION_HEADING, "flex items-center gap-1.5");
 
 export interface MapInsightsPaneProps {
   isOpen: boolean;
@@ -76,7 +80,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
 
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+        <div className={GROUP_HEADING}>
           {icon}
           <span>{title}</span>
         </div>
@@ -89,10 +93,10 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                 type="button"
                 onClick={() => handleApplyFilter(field, item.name)}
                 aria-label={`Filter by ${field}: ${item.name} (${item.count})`}
-                className="hit-area w-full text-left p-1.5 rounded-lg hover:bg-surface-container transition-colors group cursor-pointer"
+                className="hit-area state-layer w-full text-left p-1.5 rounded-lg cursor-pointer"
               >
                 <div className="flex items-center justify-between text-xs font-medium mb-1">
-                  <span className="text-on-surface truncate pr-2 group-hover:text-primary transition-colors">
+                  <span className="text-on-surface truncate pr-2">
                     {item.name}
                   </span>
                   <span className="text-on-surface-variant font-bold tabular-nums shrink-0">
@@ -108,7 +112,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                   aria-label={`${item.name}: ${item.count}`}
                 >
                   <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    className="h-full rounded-full bg-primary transition-[width] duration-(--dur-slow)"
                     style={{ width: `${Math.max(4, pct)}%` }}
                   />
                 </div>
@@ -152,42 +156,43 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
           <span className="text-[11px] font-medium text-on-surface-variant">
             Overdue
           </span>
-          <span className="text-lg font-extrabold text-warning tabular-nums">
+          {/* The overdue tone, red, as on the strip and on Pulse. */}
+          <span className="text-lg font-extrabold text-error tabular-nums">
             {stats.overdue}
           </span>
         </div>
       </div>
 
-      {/* Top Industries */}
+      {/* Top industries */}
       {renderBarSection(
-        "Top Industries",
+        "Top industries",
         <Briefcase className="w-3.5 h-3.5 text-primary" />,
         "industry",
         stats.topIndustries,
       )}
 
-      {/* Top Companies */}
+      {/* Top companies */}
       {renderBarSection(
-        "Top Companies",
+        "Top companies",
         <Building className="w-3.5 h-3.5 text-primary" />,
         "company",
         stats.topCompanies,
       )}
 
-      {/* Top Tags */}
+      {/* Top tags */}
       {renderBarSection(
-        "Top Tags",
+        "Top tags",
         <Tag className="w-3.5 h-3.5 text-primary" />,
         "tag",
         stats.topTags,
       )}
 
-      {/* Time Zones Spread */}
+      {/* Time zone spread */}
       {stats.timeZones.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+          <div className={GROUP_HEADING}>
             <Clock className="w-3.5 h-3.5 text-primary" />
-            <span>Time Zones</span>
+            <span>Time zones</span>
           </div>
           <div className="space-y-1.5">
             {stats.timeZones.map((tz: TimeZoneBucket) => (
@@ -220,10 +225,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
           No contacts in view.
         </div>
       ) : (
-        <div
-          ref={virtualListRef}
-          className="flex-1 overflow-y-auto min-h-0 focus:outline-none"
-        >
+        <div ref={virtualListRef} className="flex-1 overflow-y-auto min-h-0">
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
@@ -256,11 +258,11 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                     type="button"
                     onClick={() => onSelectContact(contact)}
                     aria-label={`${contact.name}${contact.company ? `, ${contact.company}` : ""}`}
-                    className="w-full h-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-surface-container text-left transition-colors cursor-pointer border border-transparent hover:border-outline-variant/30 group"
+                    className="state-layer w-full h-full flex items-center gap-2.5 p-2 rounded-xl text-left cursor-pointer"
                   >
                     <ScoreRingAvatar contact={contact} size={36} decorative />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-on-surface truncate group-hover:text-primary transition-colors">
+                      <div className="text-xs font-semibold text-on-surface truncate">
                         {contact.name}
                       </div>
                       <div className="text-[11px] text-on-surface-variant truncate">
@@ -274,12 +276,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums shrink-0",
-                          view.band.token === "success" &&
-                            "bg-success/15 text-success",
-                          view.band.token === "warning" &&
-                            "bg-warning/15 text-warning",
-                          view.band.token === "error" &&
-                            "bg-error/15 text-error",
+                          TONE_WASH[view.band.token],
                         )}
                         title={describeScore(view.score)}
                       >
@@ -371,7 +368,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
             type="button"
             onClick={() => onToggle(false)}
             aria-label="Close insights"
-            className="hit-area p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container cursor-pointer transition-colors"
+            className="hit-area state-layer p-1 rounded-lg text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

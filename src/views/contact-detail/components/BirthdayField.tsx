@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
+import { TONE_WASH } from "../../../lib/styles";
 import { EditHint } from "./EditableField";
 import {
   toBirthdayInputValue,
@@ -60,7 +61,7 @@ export const BirthdayField = ({
             setIsEditing(false);
           }
         }}
-        className="min-h-[44px] sm:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
+        className="min-h-[44px] sm:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none w-full"
       />
     );
   }
@@ -77,7 +78,7 @@ export const BirthdayField = ({
         type="button"
         onClick={() => setIsEditing(true)}
         className={cn(
-          "group/edit hit-area inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-text transition-colors hover:bg-surface-container-high",
+          "group/edit hit-area state-layer inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-text transition-colors",
           display
             ? "text-on-surface"
             : // Italic rather than half-opacity: the same prompt measured
@@ -89,7 +90,12 @@ export const BirthdayField = ({
         <EditHint />
       </button>
       {upcomingDays !== null && (
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-warning shrink-0">
+        <span
+          className={cn(
+            "text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0",
+            TONE_WASH.warning,
+          )}
+        >
           {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}
         </span>
       )}

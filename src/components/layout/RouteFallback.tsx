@@ -10,6 +10,9 @@
  *
  * Each variant here mirrors the destination's real skeleton, so the chunk load
  * and the data load look like one continuous wait and the layout lands once.
+ * Every page's top is `PageHeader`, so every variant draws the same header
+ * silhouette (`PageHeaderSkeleton`) in the page's own padding, and Pulse's
+ * own skeleton borrows it.
  *
  * These are deliberately dependency-free: they are imported eagerly by App, so
  * anything they touch is pulled into the entry bundle. Approximating a shape
@@ -17,8 +20,21 @@
  */
 import React from "react";
 import { cn } from "../../lib/utils";
-import { CARD, PAGE_TITLE, SECTION_BG } from "../../lib/styles";
-// A file of class strings and a type import, so it adds no code the entry
+import {
+  CARD,
+  PAGE_DESCRIPTION,
+  PAGE_EYEBROW,
+  PAGE_TITLE,
+  PAGE_TITLE_SUFFIX,
+  PAGE_TOP,
+  PAGE_X,
+  TITLE_GRID,
+  TITLE_GRID_ACTIONS,
+  TITLE_GRID_DESCRIPTION,
+  TITLE_GRID_SUFFIX,
+  TITLE_GRID_TITLE,
+} from "../../lib/styles";
+// A file of class strings and type imports, so it adds no code the entry
 // bundle does not already have. The page and its skeleton read the same
 // constants, which is what keeps the three silhouettes one.
 import {
@@ -45,17 +61,159 @@ const Block = ({ className }: { className?: string }) => (
   />
 );
 
-/** Page chrome shared by the full-page routes, so the header never jumps. */
-const PageHeader = ({ width }: { width: string }) => (
-  <header className={cn(SECTION_BG, "px-4 sm:px-6 py-5 sm:py-6 shrink-0")}>
-    <div className={cn(PAGE_TITLE, "flex items-center gap-3")}>
-      <div className="w-10 h-10 rounded-xl bg-primary/10 animate-pulse shrink-0" />
-      <Bar className={cn("h-6", width)} />
-    </div>
-  </header>
+/**
+ * A bar one line of `type` tall. The box is set in the words' own type, so
+ * it takes the height a line of them will at every width, and the bar sits
+ * in it at about the height of the letters.
+ */
+const TextBar = ({
+  type,
+  width,
+  className,
+}: {
+  type: string;
+  width: string;
+  className?: string;
+}) => (
+  <div className={cn(type, "flex h-[1lh] items-center", className)}>
+    <Bar className={cn("h-[0.7em] max-w-full", width)} />
+  </div>
 );
 
-export type RouteFallbackVariant = "pulse" | "search" | "settings" | "map";
+/**
+ * `PageHeader` as bars: the back link, the title and its suffix, and the
+ * description in its slots, gaps and line heights, the controls at the right
+ * and whatever sits under them. Each text prop is the width of its bar, and
+ * a slot without one is left out.
+ */
+export const PageHeaderSkeleton = ({
+  back,
+  backClassName,
+  title,
+  suffix,
+  description,
+  actions,
+  actionsClassName,
+  children,
+  className,
+}: {
+  back?: string;
+  /** Classes on the back link's line: `hidden lg:flex` for a link only wide screens show. */
+  backClassName?: string;
+  title: string;
+  suffix?: string;
+  description?: string;
+  /** Blocks the size of the page's own controls. */
+  actions?: React.ReactNode;
+  /** Classes on the actions' box, as `PageHeader` takes them. */
+  actionsClassName?: string;
+  /** Blocks for what the page puts under its title block: a search box. */
+  children?: React.ReactNode;
+  className?: string;
+}) => (
+  // A size container, like `PageHeader`, so each bar takes the same size
+  // and place its text will.
+  <div className={cn("@container flex flex-col gap-4", className)}>
+    {suffix === undefined ? (
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-1 flex-col gap-1">
+          {back && (
+            <TextBar
+              type={PAGE_EYEBROW}
+              width={back}
+              className={backClassName}
+            />
+          )}
+          <TextBar type={PAGE_TITLE} width={title} />
+          {description && (
+            <TextBar type={PAGE_DESCRIPTION} width={description} />
+          )}
+        </div>
+        {actions && (
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-3 sm:shrink-0",
+              actionsClassName,
+            )}
+          >
+            {actions}
+          </div>
+        )}
+      </div>
+    ) : (
+      // The page header's grid: the suffix under the title and the actions
+      // in a narrow header, beside the title from `@2xl`.
+      <div className="flex flex-col gap-1">
+        {back && (
+          <TextBar type={PAGE_EYEBROW} width={back} className={backClassName} />
+        )}
+        <div className={TITLE_GRID}>
+          <TextBar
+            type={PAGE_TITLE}
+            width={title}
+            className={TITLE_GRID_TITLE}
+          />
+          <TextBar
+            type={PAGE_TITLE_SUFFIX}
+            width={suffix}
+            className={TITLE_GRID_SUFFIX}
+          />
+          {description && (
+            <TextBar
+              type={PAGE_DESCRIPTION}
+              width={description}
+              className={TITLE_GRID_DESCRIPTION}
+            />
+          )}
+          {actions && (
+            <div
+              className={cn(
+                "flex flex-wrap items-center gap-3",
+                TITLE_GRID_ACTIONS,
+              )}
+            >
+              {actions}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+    {children}
+  </div>
+);
+
+/**
+ * Pulse's masthead as bars: "Pulse" and the date on one line, the sentence,
+ * then Log note and the More menu. The route fallback and `PulseSkeleton`
+ * both draw this one.
+ *
+ * @param ask whether the Ask form is under the masthead. It is from `sm`
+ *   whenever AI is allowed, which is the default, so the route fallback,
+ *   which knows no preferences, draws it.
+ */
+export const PulseHeaderSkeleton = ({ ask = true }: { ask?: boolean }) => (
+  <PageHeaderSkeleton
+    title="w-16 md:w-20"
+    suffix="w-60 md:w-80"
+    description="w-72 sm:w-96"
+    actions={
+      <>
+        <Block className="w-30 h-11 sm:h-10 rounded-xl" />
+        <Block className="w-9 h-9 rounded-xl" />
+      </>
+    }
+  >
+    {ask && (
+      <div className="hidden sm:flex items-center gap-2 w-full max-w-xl">
+        <Block className="flex-1 h-10 rounded-xl" />
+        <Block className="w-18 h-10 rounded-xl" />
+      </div>
+    )}
+  </PageHeaderSkeleton>
+);
+
+export type RouteFallbackVariant =
+  "pulse" | "search" | "settings" | "tracked" | "map";
 
 /**
  * @param variant which destination is loading — picks the matching silhouette
@@ -73,44 +231,41 @@ export const RouteFallback = ({
   }
 
   if (variant === "pulse") {
-    // Mirrors PulseSkeleton: the masthead (label, date, sentence, actions)
-    // and the three columns from the same class constants as the page.
+    // Mirrors PulseSkeleton: the masthead and the three columns from the
+    // same class constants as the page.
     return (
       <div className="w-full h-full overflow-hidden bg-surface">
-        <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-            <div className="flex flex-col gap-2">
-              <Bar className="h-3 w-12" />
-              <Bar className="h-7 sm:h-9 w-64" />
-              <Bar className="h-4 w-80 mt-1" />
-            </div>
-            <div className="flex items-center gap-3">
-              <Block className="w-10 h-10 rounded-full" />
-              <Block className="w-28 h-10 rounded-xl" />
-              <Block className="w-10 h-10 rounded-xl" />
-            </div>
-          </div>
+        <div
+          className={cn(
+            "max-w-[1600px] mx-auto flex flex-col gap-6 sm:gap-8",
+            PAGE_X,
+            PAGE_TOP,
+          )}
+        >
+          <PulseHeaderSkeleton />
           <div className={GRID_CLASSES}>
             <div
               className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.focus)}
             >
-              <Block className="h-[400px]" />
-              <Block className="h-[60px]" />
+              <Block className="h-[400px] lg:min-h-[25rem] lg:h-[calc(100dvh-12rem)]" />
+              <Block className="h-[39px]" />
             </div>
             <div
               className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.intel)}
             >
-              <Block className="h-[140px] bg-primary/5" />
+              {/* Daily insight at the height PulseSkeleton gives a typical
+                  insight in this column at each width: a card with a key,
+                  the common case. A fixed 140 px block jumped to the card. */}
+              <Block className="h-[337px] lg:h-[247px] xl:h-[393px]" />
               <Block className="h-[160px]" />
               <Block className="h-[140px]" />
-              <Block className="h-[100px]" />
+              <Block className="h-[437px]" />
             </div>
             <div
               className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.network)}
             >
-              <Block className="h-[130px]" />
-              <Block className="h-[130px]" />
-              <Block className="h-[130px]" />
+              <Block className="h-[166px]" />
+              <Block className="h-[410px] lg:h-[466px] xl:h-[410px]" />
             </div>
           </div>
         </div>
@@ -119,15 +274,68 @@ export const RouteFallback = ({
   }
 
   if (variant === "search") {
+    // Ask Contrack: the title with the mode switch and the history button
+    // (the pair fills its own row on a phone), the search box, then "Try
+    // asking" and its chips, in the page's column. From `lg` the history
+    // pane, open by default, sits at the right edge.
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-surface">
-        <PageHeader width="w-44" />
-        <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-          <Block className="h-[68px] bg-surface-container-lowest" />
-          <Bar className="h-3 w-28" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Array.from({ length: 4 }, (_, i) => (
-              <Block key={i} className="h-12 bg-surface-container-lowest" />
+      <div className="h-full flex overflow-hidden bg-surface">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div
+            className={cn(
+              "max-w-3xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8",
+              PAGE_TOP,
+            )}
+          >
+            <PageHeaderSkeleton
+              title="w-44"
+              actionsClassName="max-sm:w-full"
+              actions={
+                <>
+                  <Block className="max-sm:flex-1 sm:w-36 h-13 sm:h-10 rounded-xl" />
+                  <Block className="w-11 h-11 rounded-xl" />
+                </>
+              }
+            />
+            <Block className="h-31 sm:h-20 rounded-2xl bg-surface-container-lowest" />
+            <div className="space-y-3">
+              <Bar className="h-3 w-20" />
+              <div className="flex flex-wrap gap-2">
+                {["w-80", "w-40", "w-76", "w-68", "w-60"].map((width) => (
+                  <Block
+                    key={width}
+                    className={cn(
+                      "h-9 rounded-md bg-surface-container-lowest max-w-full",
+                      width,
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="hidden lg:block w-[320px] shrink-0 bg-surface-container-low" />
+      </div>
+    );
+  }
+
+  if (variant === "tracked") {
+    // The Tracked contacts page: its header, the search row and the list,
+    // in one centred box.
+    return (
+      <div className="h-full overflow-hidden bg-surface">
+        <div className={cn(PAGE_X, PAGE_TOP, "max-w-4xl mx-auto space-y-5")}>
+          <PageHeaderSkeleton title="w-52" description="w-full sm:w-[36rem]" />
+          <Block className="h-11 sm:h-10 rounded-xl" />
+          <div className="space-y-2">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2">
+                <div className="w-9 h-9 rounded-full bg-surface-container-high/60 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Bar className="h-3.5 w-40" />
+                  <Bar className="h-3 w-56 max-w-full" />
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -135,27 +343,36 @@ export const RouteFallback = ({
     );
   }
 
-  // settings
+  // settings: the rail from lg, then the header and the page in the page's
+  // centred box. From lg the header has a back link to the Network.
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-surface">
-      <PageHeader width="w-36" />
-      <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8">
-        {[3, 2].map((rows, group) => (
-          <section key={group} className="space-y-2">
-            <Bar className="h-3 w-24" />
-            <div className={cn(CARD, "p-0 overflow-hidden")}>
-              {Array.from({ length: rows }, (_, i) => (
-                <div key={i} className="flex items-center gap-3.5 p-4 sm:p-5">
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 animate-pulse shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <Bar className="h-3.5 w-40" />
-                    <Bar className="h-3 w-3/4" />
+    <div className="h-full flex overflow-hidden bg-surface">
+      <div className="hidden lg:block w-[240px] shrink-0 h-full bg-surface-container-low" />
+      <div className="flex-1 min-w-0 h-full flex flex-col overflow-hidden">
+        <PageHeaderSkeleton
+          back="w-16"
+          backClassName="hidden lg:flex"
+          title="w-36"
+          className={cn(PAGE_X, PAGE_TOP, "w-full max-w-4xl mx-auto shrink-0")}
+        />
+        <div className={cn(PAGE_X, "pt-4 w-full max-w-4xl mx-auto space-y-8")}>
+          {[3, 2].map((rows, group) => (
+            <section key={group} className="space-y-2">
+              <Bar className="h-3 w-24" />
+              <div className={cn(CARD, "p-0 overflow-hidden")}>
+                {Array.from({ length: rows }, (_, i) => (
+                  <div key={i} className="flex items-center gap-3.5 p-4 sm:p-5">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Bar className="h-3.5 w-40" />
+                      <Bar className="h-3 w-3/4" />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );

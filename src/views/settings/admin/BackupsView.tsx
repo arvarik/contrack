@@ -34,6 +34,7 @@ import {
 import { useConnectors } from "../../../api/connectors";
 import { Badge } from "../../../components/ui/Badge";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
+import { TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import {
   AdminButton,
@@ -188,7 +189,12 @@ export const BackupsView = () => {
             )}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <span
+                className={cn(
+                  "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+                  TONE_WASH.primary,
+                )}
+              >
                 <HardDriveDownload className="w-[18px] h-[18px]" />
               </span>
               <span className="font-mono text-xs text-on-surface truncate">

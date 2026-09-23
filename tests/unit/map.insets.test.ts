@@ -13,6 +13,7 @@ import {
   MIN_OPEN_PX,
   insetsFor,
   measureInsets,
+  measureOpenWidth,
   paddingFor,
   samePadding,
 } from "../../src/views/map/insets";
@@ -224,5 +225,56 @@ describe("measureInsets", () => {
       right: 320,
       bottom: 0,
     });
+  });
+});
+
+describe("measureOpenWidth", () => {
+  // The map's toolbar and its bottom-left corner keep to the map an open
+  // contact leaves. The contact started at x 580 at 1440 px and covered the
+  // end of the toolbar, and at 1024 px it left 100 px.
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const page = (width: number) =>
+    sized(document.createElement("div"), { x: 64, y: 0, width, height: 900 });
+  const cover = (width: number, label?: string) => {
+    const panel = document.createElement(label ? "aside" : "section");
+    panel.setAttribute(COVERS_MAP_ATTR, "right");
+    if (label) panel.setAttribute("aria-label", label);
+    // Mid-slide: the rect is off to the right, the offset width is not.
+    return sized(
+      panel,
+      { x: 2000, y: 0, width, height: 900 },
+      { width, height: 900 },
+    );
+  };
+
+  it("is the page's width less the open contact's", () => {
+    const map = page(1376);
+    document.body.append(map, cover(860));
+    expect(measureOpenWidth(map)).toBe(516);
+  });
+
+  it("leaves out the insights pane, which is not a contact", () => {
+    const map = page(1376);
+    document.body.append(map, cover(320, "Map insights"));
+    expect(measureOpenWidth(map)).toBeNull();
+    document.body.append(cover(860));
+    expect(measureOpenWidth(map)).toBe(516);
+  });
+
+  it("is null with no contact, and never below zero", () => {
+    const map = page(960);
+    document.body.append(map);
+    expect(measureOpenWidth(map)).toBeNull();
+    document.body.append(cover(1200));
+    expect(measureOpenWidth(map)).toBe(0);
+    // 1024 px: the sliver the toolbar steps aside for.
+    document.body.innerHTML = "";
+    const narrow = page(960);
+    document.body.append(narrow, cover(860));
+    expect(measureOpenWidth(narrow)).toBe(100);
+    expect(measureOpenWidth(narrow)!).toBeLessThan(MIN_OPEN_PX);
   });
 });

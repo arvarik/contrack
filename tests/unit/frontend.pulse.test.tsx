@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -25,6 +26,8 @@ import { KeepingUpCard } from "../../src/views/pulse/cards/KeepingUpCard";
 import { CompositionCard } from "../../src/views/pulse/cards/CompositionCard";
 import { AskForm } from "../../src/views/pulse/components/AskForm";
 import type { DashboardPayload } from "../../src/api";
+import { PAGE_TITLE, PAGE_TITLE_SUFFIX } from "../../src/lib/styles";
+import { CHECK_RING_REST } from "../../src/views/pulse/lib/pulseStyles";
 
 vi.mock("../../src/views/dedupe/components", () => ({
   SuggestionReviewQueue: () => (
@@ -355,13 +358,37 @@ describe("frontend.pulse", () => {
     const listItems = screen.getAllByRole("listitem");
     expect(listItems[0].getAttribute("aria-current")).toBe("true");
 
-    // Press 'j' to move highlight down to index 1 ("act-2")
+    // The first 'j' only shows the current row: a key acts on a row the
+    // person can see.
+    fireEvent.keyDown(window, { key: "j" });
+    expect(listItems[0].getAttribute("aria-current")).toBe("true");
+    expect(listItems[0].className).toContain("row-selected");
+
+    // The next 'j' moves the highlight down to index 1 ("act-2")
     fireEvent.keyDown(window, { key: "j" });
     expect(listItems[1].getAttribute("aria-current")).toBe("true");
 
     // Press 'd' to complete highlighted item ("act-2")
     fireEvent.keyDown(window, { key: "d" });
     expect(mockCompleteMutate).toHaveBeenCalledWith("act-2");
+  });
+
+  it("never completes a row nobody can see: the first D only shows it", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    const listItems = screen.getAllByRole("listitem");
+    expect(listItems[0].className).not.toContain("row-selected");
+
+    fireEvent.keyDown(window, { key: "d" });
+    expect(mockCompleteMutate).not.toHaveBeenCalled();
+    expect(listItems[0].className).toContain("row-selected");
+
+    // Now the row shows, and D completes it.
+    fireEvent.keyDown(window, { key: "d" });
+    expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
   });
 
   it("renders Inbox as one line, 'Nothing to clean up.', when there is nothing to do", () => {
@@ -590,15 +617,13 @@ describe("frontend.pulse", () => {
         "Import contacts and log a note. Pulse fills itself from there.",
       ),
     ).toBeDefined();
-    // The welcome masthead is quiet: the date and the actions, no sentence.
+    // The welcome masthead is quiet: the title, the date and the actions, no
+    // sentence.
     expect(
       screen.getByRole("heading", { level: 1, name: "Pulse" }),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Log a note" })).toBeDefined();
-    expect(screen.queryByText(/Nothing due today/)).toBeNull();
-    expect(
-      screen.queryByRole("img", { name: /to do|done|Nothing due/ }),
-    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Log note" })).toBeDefined();
+    expect(screen.queryByText(/All caught up/)).toBeNull();
     expect(screen.getByText("Import contacts")).toBeDefined();
     expect(screen.getByText("Log your first note")).toBeDefined();
     expect(screen.getByText("Connect AI")).toBeDefined();
@@ -607,6 +632,55 @@ describe("frontend.pulse", () => {
   it("renders PulseSkeleton", () => {
     const { container } = render(<PulseSkeleton />);
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+
+  it("draws the skeleton's Daily insight as a card at its words' height, and as a line only when there is none", () => {
+    const line = "Add an AI key to get one. Open AI settings";
+    // On its way: the card, the likely answer with AI on, its paragraph as
+    // bars of an insight of a common length.
+    const { rerender } = render(<PulseSkeleton />);
+    expect(screen.getByText("Relationship maintenance")).toBeDefined();
+    expect(screen.queryByText(line)).toBeNull();
+
+    // Back: the card, with the insight's own words in a transparent ink,
+    // so the bars wrap where the paragraph will. A screen reader skips them.
+    rerender(<PulseSkeleton insight="Three people went quiet." />);
+    const words = screen.getByText("Three people went quiet.");
+    expect(words.getAttribute("aria-hidden")).toBe("true");
+    expect(words.className).toContain("text-transparent");
+
+    // None to draw: the line, in the loaded line's words.
+    rerender(<PulseSkeleton insight={null} />);
+    expect(screen.getByText(line).getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByText("Relationship maintenance")).toBeNull();
+  });
+
+  it("tells the skeleton what the page knows about the insight before the dashboard loads", () => {
+    mockDashboardData = null;
+    // The insight has come back, so the skeleton draws its words.
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText("Loading Pulse")).toBeDefined();
+    expect(
+      screen
+        .getByText("Strategic networking update.")
+        .getAttribute("aria-hidden"),
+    ).toBe("true");
+    unmount();
+
+    // With AI off the loaded card is a line, so the skeleton's is too.
+    mockAiAllowed = false;
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText("Add an AI key to get one. Open AI settings"),
+    ).toBeDefined();
   });
 
   it("renders DuplicatesPage with back link to Pulse", () => {
@@ -691,6 +765,12 @@ describe("frontend.pulse", () => {
       const chip = screen.getByText("12 days overdue");
       expect(chip.className).not.toContain("uppercase");
       expect(chip.className).not.toContain("border");
+      // The check's ring at rest is the measured one, a step under hover.
+      const check = screen.getByRole("button", {
+        name: 'Mark "Call Ada" done',
+      });
+      expect(check.className).toContain(CHECK_RING_REST);
+      expect(check.className).toContain("hover:border-current");
     });
 
     it("opens the contact from a click on the row, and not from a click on the check", async () => {
@@ -748,18 +828,46 @@ describe("frontend.pulse", () => {
       expect(screen.getAllByText(/^Last spoke /)).toHaveLength(1);
     });
 
-    it("wears the wash and the inset ring when selected, with no offset or scale", () => {
+    it("wears the selected row's tint when it looks selected, with no ring, offset or scale", () => {
+      const { rerender } = render(
+        <MemoryRouter>
+          <ActionRow item={followUp} isSelected looksSelected />
+        </MemoryRouter>,
+      );
+      const row = screen.getByRole("listitem");
+      expect(row.className).toContain("row-selected");
+      // The resting wash would paint over the tint, so it steps aside.
+      expect(row.className).not.toContain("bg-surface-container-low");
+      expect(row.className).not.toMatch(/(?<![-\w])ring-/);
+      expect(row.className).not.toContain("ring-offset");
+      expect(row.className).not.toContain("scale-");
+      expect(row.className).not.toContain("border-outline");
+
+      // Unselected, the row keeps its wash, and the hover is the state layer.
+      rerender(
+        <MemoryRouter>
+          <ActionRow item={followUp} />
+        </MemoryRouter>,
+      );
+      expect(row.className).not.toContain("row-selected");
+      expect(row.className).toContain("bg-surface-container-low/70");
+      expect(row.className).toContain("state-layer");
+      expect(row.className).not.toMatch(/hover:bg-/);
+    });
+
+    it("stays the current row without the tint when it only is selected", () => {
       render(
         <MemoryRouter>
           <ActionRow item={followUp} isSelected />
         </MemoryRouter>,
       );
       const row = screen.getByRole("listitem");
-      expect(row.className).toContain("ring-inset");
-      expect(row.className).toContain("bg-primary/10");
-      expect(row.className).not.toContain("ring-offset");
-      expect(row.className).not.toContain("scale-");
-      expect(row.className).not.toContain("border-outline");
+      // Current for the keys and a screen reader: the tab stop and aria-current.
+      expect(row.getAttribute("aria-current")).toBe("true");
+      expect(row.getAttribute("tabindex")).toBe("0");
+      // Painted like any other row.
+      expect(row.className).not.toContain("row-selected");
+      expect(row.className).toContain("bg-surface-container-low/70");
     });
 
     it("snoozes from the menu", () => {
@@ -872,7 +980,7 @@ describe("frontend.pulse", () => {
             isLoading={false}
             insight={{
               text: "Three people in Berlin went quiet this month. Two of them are founders you met at the summit.",
-              category: "Strategy",
+              category: "Relationship Maintenance",
               generatedAt: "2026-09-21T06:00:00.000Z",
             }}
           />
@@ -881,7 +989,12 @@ describe("frontend.pulse", () => {
       expect(
         screen.getByText(/Three people in Berlin went quiet/),
       ).toBeDefined();
-      expect(screen.getByText("Strategy")).toBeDefined();
+      // The model's category, whole and in sentence case, on its own line
+      // over the paragraph. The title's row holds the title alone.
+      expect(screen.getByText("Relationship maintenance")).toBeDefined();
+      expect(
+        screen.getByRole("heading", { level: 2 }).parentElement!.textContent,
+      ).toBe("Daily insight");
       expect(
         screen
           .getByRole("link", { name: "Ask about this insight" })
@@ -919,6 +1032,21 @@ describe("frontend.pulse", () => {
         screen.getByText("Your admin has not added an AI key yet."),
       ).toBeDefined();
       expect(screen.queryByRole("link")).toBeNull();
+    });
+
+    it("holds an insight's shape while the insight loads", () => {
+      const { container } = render(
+        <MemoryRouter>
+          <InsightCard isLoading />
+        </MemoryRouter>,
+      );
+      const section = container.querySelector(
+        'section[data-card-id="insight"]',
+      )!;
+      // The card the skeleton drew, so the page lands at its height.
+      expect(section.classList.contains("card")).toBe(true);
+      expect(screen.getByText("Relationship maintenance")).toBeDefined();
+      expect(screen.getByText("Loading").className).toContain("sr-only");
     });
 
     it("says AI is off, with the switch, when the account opted out", () => {
@@ -981,7 +1109,7 @@ describe("frontend.pulse", () => {
       overdue: 2,
       dueToday: 3,
       birthdaysThisWeek: 1,
-      completedToday: 2,
+      queued: 6,
       streak: 5,
     };
 
@@ -1004,15 +1132,14 @@ describe("frontend.pulse", () => {
       return { onJumpTo, onToggleCustomize };
     };
 
-    it("makes the day the headline under the Pulse label, with one sentence and the progress mark", () => {
+    it("titles the page Pulse with the day beside it, and one sentence", () => {
       const monday = new Date(2026, 8, 21, 9, 0, 0);
       vi.setSystemTime(monday);
       stubMatchMedia(true);
       renderMasthead();
 
-      expect(
-        screen.getByRole("heading", { level: 1, name: "Pulse" }),
-      ).toBeDefined();
+      const heading = screen.getByRole("heading", { level: 1, name: "Pulse" });
+      expect(heading.className).toContain(PAGE_TITLE);
       const weekday = new Intl.DateTimeFormat(undefined, {
         weekday: "long",
       }).format(monday);
@@ -1022,13 +1149,15 @@ describe("frontend.pulse", () => {
         p.textContent?.includes(weekday),
       );
       expect(dateLine).toBeDefined();
-      // The date is a paragraph in the headline face, not the h1.
-      expect(dateLine?.className).toContain("font-headline");
+      // The day continues the title line at the title's size in the variant
+      // ink. It is a paragraph, not part of the h1.
+      expect(dateLine?.className).toContain(PAGE_TITLE_SUFFIX);
+      expect(heading.contains(dateLine!)).toBe(false);
       expect(header.textContent).toContain(
         "2 overdue, 3 due today, 1 birthday this week. 5 days in a row.",
       );
-      expect(screen.getByRole("img", { name: "2 of 7 done" })).toBeDefined();
-      expect(screen.getByText("2 of 7 done")).toBeDefined();
+      // No progress ring: the sentence already says the counts.
+      expect(screen.queryByRole("img")).toBeNull();
     });
 
     it("renders each count as a button that jumps to its card from sm up", () => {
@@ -1063,14 +1192,14 @@ describe("frontend.pulse", () => {
       const names = screen
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label") ?? b.textContent?.trim());
-      expect(names).toEqual(["Log a note", "More"]);
+      expect(names).toEqual(["Log note", "More"]);
     });
 
-    it("keeps Log a note as the one primary, with New contact and Customize layout in the More menu", () => {
+    it("keeps Log note as the one primary, with New contact and Customize layout in the More menu", () => {
       stubMatchMedia(true);
       const { onToggleCustomize } = renderMasthead();
 
-      const logNote = screen.getByRole("button", { name: "Log a note" });
+      const logNote = screen.getByRole("button", { name: "Log note" });
       expect(logNote.className).toContain("btn-primary");
       expect(screen.queryByRole("button", { name: "New contact" })).toBeNull();
       expect(screen.queryByRole("button", { name: /^Customize/ })).toBeNull();
@@ -1094,16 +1223,20 @@ describe("frontend.pulse", () => {
       ).toBeDefined();
     });
 
-    it("leaves the sentence and the progress mark out when quiet", () => {
+    it("leaves the sentence out when quiet, and keeps the title, the day and the actions", () => {
+      const monday = new Date(2026, 8, 21, 9, 0, 0);
+      vi.setSystemTime(monday);
       stubMatchMedia(true);
       renderMasthead({ quiet: true });
       const header = screen.getByLabelText("Today summary");
       expect(header.textContent).not.toContain("overdue");
-      expect(screen.queryByRole("img")).toBeNull();
+      expect(header.textContent).toContain(
+        new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(monday),
+      );
       expect(
         screen.getByRole("heading", { level: 1, name: "Pulse" }),
       ).toBeDefined();
-      expect(screen.getByRole("button", { name: "Log a note" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Log note" })).toBeDefined();
     });
 
     it("renders children under the sentence", () => {
@@ -1177,6 +1310,127 @@ describe("frontend.pulse", () => {
       await new Promise((r) => setTimeout(r, 300));
       expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
       expect(screen.queryByTestId("contact-marker")).toBeNull();
+    });
+
+    it("tints the current row only after a queue key, and not after focus leaves the list", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      const tinted = () =>
+        rows.filter((row) => row.className.includes("row-selected"));
+
+      // On load the first row is current, and nothing looks selected.
+      expect(rows[0].getAttribute("aria-current")).toBe("true");
+      expect(rows[0].getAttribute("tabindex")).toBe("0");
+      expect(tinted()).toHaveLength(0);
+
+      // The first J shows the current row and does not move it. The next
+      // J moves it.
+      fireEvent.keyDown(window, { key: "j" });
+      expect(rows[0].getAttribute("aria-current")).toBe("true");
+      expect(tinted()).toEqual([rows[0]]);
+      fireEvent.keyDown(window, { key: "j" });
+      expect(rows[1].getAttribute("aria-current")).toBe("true");
+      expect(tinted()).toEqual([rows[1]]);
+
+      // Focus that leaves the list takes the tint with it. The row stays
+      // current.
+      act(() => rows[1].focus());
+      act(() => screen.getByRole("button", { name: "More" }).focus());
+      expect(tinted()).toHaveLength(0);
+      expect(rows[1].getAttribute("aria-current")).toBe("true");
+
+      // Focus that is not the keyboard's, the way a click puts it on the
+      // current row's check, does not light the row up. jsdom never matches
+      // `:focus-visible` for a scripted focus, so this is that focus.
+      const currentCheck = screen.getByRole("button", {
+        name: 'Mark "Prep coffee meeting" done',
+      });
+      expect(rows[1].contains(currentCheck)).toBe(true);
+      act(() => currentCheck.focus());
+      expect(tinted()).toHaveLength(0);
+    });
+
+    it("makes the row that focus enters current, and keyboard focus tints it and speaks it", () => {
+      stubMatchMedia(true);
+      // jsdom never matches `:focus-visible`, so the focused element stands
+      // in for keyboard focus here.
+      const matches = Element.prototype.matches;
+      const spy = vi
+        .spyOn(Element.prototype, "matches")
+        .mockImplementation(function (this: Element, selector: string) {
+          return selector === ":focus-visible"
+            ? this === document.activeElement
+            : matches.call(this, selector);
+        });
+      try {
+        renderPulseWithContactRoute();
+        const rows = screen.getAllByRole("listitem");
+        expect(rows[0].getAttribute("aria-current")).toBe("true");
+
+        // Tab walks past the first row's controls onto the second row's
+        // check. That row becomes the current row, the one J and K move.
+        const check = screen.getByRole("button", {
+          name: 'Mark "Prep coffee meeting" done',
+        });
+        act(() => check.focus());
+        expect(rows[1].getAttribute("aria-current")).toBe("true");
+        expect(rows[0].getAttribute("aria-current")).toBeNull();
+        expect(rows[1].getAttribute("tabindex")).toBe("0");
+        expect(rows[0].getAttribute("tabindex")).toBe("-1");
+        // The tint follows, with the name's ink, and the status says so.
+        expect(rows[1].className).toContain("row-selected");
+        expect(rows[0].className).not.toContain("row-selected");
+        expect(
+          within(rows[1])
+            .getByRole("link", { name: "Grace Hopper" })
+            .className.split(" "),
+        ).toContain("text-on-primary-wash");
+        expect(
+          screen.getByText("Row 2 of 3, Grace Hopper, today"),
+        ).toBeDefined();
+        // The row does not take focus back from its check.
+        expect(document.activeElement).toBe(check);
+
+        // J goes on from the row that focus is in.
+        fireEvent.keyDown(window, { key: "j" });
+        expect(rows[2].getAttribute("aria-current")).toBe("true");
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("takes the tint away on a pointer press outside the list, and keeps it for a press inside", () => {
+      stubMatchMedia(true);
+      renderPulseWithContactRoute();
+      const rows = screen.getAllByRole("listitem");
+      const tinted = () =>
+        rows.filter((row) => row.className.includes("row-selected"));
+
+      // J with focus on the page shows the current row, and a second J
+      // moves it.
+      fireEvent.keyDown(window, { key: "j" });
+      expect(tinted()).toEqual([rows[0]]);
+      fireEvent.keyDown(window, { key: "j" });
+      expect(tinted()).toEqual([rows[1]]);
+
+      // A press inside the list keeps it.
+      fireEvent.pointerDown(rows[2]);
+      expect(tinted()).toEqual([rows[1]]);
+
+      // A press anywhere else takes it away, as focus leaving the list
+      // does, and the row stays current. The status goes quiet with it.
+      fireEvent.pointerDown(
+        screen.getByRole("heading", { level: 1, name: "Pulse" }),
+      );
+      expect(tinted()).toHaveLength(0);
+      expect(rows[1].getAttribute("aria-current")).toBe("true");
+      expect(screen.queryByText(/^Row 2 of 3/)).toBeNull();
+
+      // The next queue key shows it again where it was, and moves nothing.
+      fireEvent.keyDown(window, { key: "k" });
+      expect(tinted()).toEqual([rows[1]]);
+      expect(rows[1].getAttribute("aria-current")).toBe("true");
     });
 
     it("leaves a key alone when a control inside the row has focus", () => {
@@ -1274,6 +1528,46 @@ describe("frontend.pulse", () => {
       expect(onMoveStep).toHaveBeenCalledWith("completed", 1);
       fireEvent.click(screen.getByRole("button", { name: "Hide Completed" }));
       expect(onHide).toHaveBeenCalledWith("completed");
+
+      // The words keep their place out of sight and the controls sit over
+      // the end of the title's row, so the line keeps its height.
+      expect(screen.getByText("Nothing completed yet.").className).toContain(
+        "invisible",
+      );
+      expect(
+        screen.getByRole("button", { name: "Hide Completed" }).parentElement!
+          .className,
+      ).toContain("absolute");
+    });
+
+    it("keeps a card's header the same height when the customize controls appear", () => {
+      render(
+        <CardCustomizeContext.Provider
+          value={{
+            isEditing: true,
+            cardId: "inbox",
+            column: "intel",
+            index: 0,
+            totalInColumn: 2,
+            onHide: vi.fn(),
+            onMoveToColumn: vi.fn(),
+            onMoveStep: vi.fn(),
+          }}
+        >
+          <CardFrame cardId="inbox" title="Inbox" count={2}>
+            <p>Body</p>
+          </CardFrame>
+        </CardCustomizeContext.Provider>,
+      );
+      // Every header's row is 24 px, the height of a header action, and
+      // the 32 px buttons give back 8 px of margin to fit it.
+      expect(
+        screen.getByRole("heading", { level: 2 }).parentElement!.className,
+      ).toContain("min-h-6");
+      expect(
+        screen.getByRole("button", { name: "Hide Inbox" }).parentElement!
+          .className,
+      ).toContain("-my-1");
     });
   });
 

@@ -46,7 +46,6 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
-import { isPast, isToday } from "date-fns";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 
@@ -56,7 +55,7 @@ import type {
   ContactUpdateData,
 } from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
-import { META_LINE } from "../../../lib/styles";
+import { META_LINE, TONE_WASH } from "../../../lib/styles";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 
 import {
@@ -74,6 +73,7 @@ import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactTags } from "./ContactTags";
 import { TrackButton } from "./TrackButton";
+import { BANNER_DAYS, describeFollowUp } from "../../../lib/followUp";
 import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
 
@@ -321,13 +321,11 @@ export const ContactIntro = ({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {headline}
+      {/* A model wrote the summary, so it wears the AI colour. */}
       {contact.aiSummary && (
-        <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 max-w-fit">
-          <Sparkles
-            aria-hidden="true"
-            className="w-4 h-4 text-primary mt-0.5 shrink-0"
-          />
-          <div className="text-sm text-primary font-medium leading-relaxed italic">
+        <div className="flex items-start gap-2 bg-ai/10 text-on-ai-wash rounded-xl p-3 max-w-fit">
+          <Sparkles aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="text-sm font-medium leading-relaxed italic">
             {contact.aiSummary}
           </div>
         </div>
@@ -492,6 +490,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   }
 
   const avatarSize = narrow ? 56 : 96;
+  const followUp = describeFollowUp(contact.nextFollowUpAt);
 
   // The score the ring draws, or null when there is none: nobody tracks this
   // contact, or nothing is logged yet. Only a scored ring explains itself.
@@ -511,7 +510,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             type="button"
             onClick={onClose}
             aria-label={backLabel ? `Back to ${backLabel}` : undefined}
-            className="hit-area flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
+            className="hit-area state-layer flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl transition-colors"
           >
             <ArrowLeft aria-hidden="true" className="w-5 h-5" />
             {backLabel ?? "Back"}
@@ -519,21 +518,27 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         </div>
       )}
 
-      {/* URGENCY BANNER */}
-      {contact.nextFollowUpAt &&
-        (isPast(new Date(contact.nextFollowUpAt)) ||
-          isToday(new Date(contact.nextFollowUpAt))) && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-error/15 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
-          >
-            <CalendarClock className="w-4 h-4 text-error shrink-0" />
-            <span className="text-sm font-bold text-error truncate">
-              Pending Follow-Up Alert
-            </span>
-          </motion.div>
-        )}
+      {/*
+        The next follow-up, when it is late, today or within the week, in
+        the words of the fact: "Follow-up 3 days overdue", "Follow-up due
+        Friday". It read "Pending follow-up alert", which said neither what
+        nor when. A week out is the last day Pulse's "This week" holds, so
+        the two show the same follow-ups. Details has the date too, but under
+        the fold, or behind a tab on a phone. A later follow-up is only there.
+      */}
+      {followUp && followUp.days <= BANNER_DAYS && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            "w-full px-6 py-3 flex items-center justify-center gap-2",
+            TONE_WASH[followUp.tone],
+          )}
+        >
+          <CalendarClock aria-hidden="true" className="w-4 h-4 shrink-0" />
+          <span className="text-sm font-bold truncate">{followUp.text}</span>
+        </motion.div>
+      )}
 
       <div
         className={cn(
@@ -572,8 +577,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 />
               </ScoreBreakdown>
             )}
+            {/* The warning ink on the card face, lifted off the avatar by its
+                shadow. White on a raw amber measured about 2 to 1. */}
             {!!contact.isArchived && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap z-20">
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-surface-container-lowest text-warning text-[11px] font-bold uppercase tracking-[0.08em] px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap z-20">
                 <Archive aria-hidden="true" className="w-2.5 h-2.5" />
                 Archived
               </div>
@@ -600,7 +607,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                       <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
                       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
                         <strong className="block text-primary mb-0.5">
-                          Ghost Profile
+                          Ghost profile
                         </strong>
                         {ghostText}
                       </div>
@@ -638,7 +645,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 <EditableField
                   value={contact.name}
                   onSave={(val) => onUpdate("name", val)}
-                  placeholder="Contact Name"
+                  placeholder="Contact name"
                 />
                 {contact.pronouns && (
                   <span
@@ -699,7 +706,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               <EditableField
                 value={contact.role}
                 onSave={(val) => onUpdate("role", val)}
-                placeholder="Role / Title"
+                placeholder="Role / title"
               />
               {narrow ? <MetaDot /> : <span>at</span>}
               <EditableField
@@ -769,7 +776,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     if (onClose) onClose();
                     navigate(`/contact/${contact.id}`);
                   }}
-                  className="flex items-center gap-2 min-h-[44px] sm:min-h-0 px-4 py-2 bg-primary/10 text-on-primary-wash rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
+                  className="btn-secondary"
                 >
                   <ArrowUpRight aria-hidden="true" className="w-4 h-4" />
                   Open in Network
