@@ -351,6 +351,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fast second arrow key in the Network list was lost.** The list's keydown listener was attached again in an effect after every change, and an effect runs after the browser paints. A second ArrowDown pressed in between ran the old listener, which still had no open contact, so it reopened the first row. The listener is attached once now and reads the latest values from a ref written in the commit.
 - **A link's platform came from anywhere in its text.** `detectPlatformFromUrl` matched `includes("x.com")`, so dropbox.com and netflix.com were saved as Twitter, and a LinkedIn address in a query string made any link LinkedIn. It reads the host now, the domain or a subdomain of it, and knows YouTube.
 - **Clearing a note search left its notes on screen.** The search kept the last answer while the next one loaded (`keepPreviousData`), and a cleared search asks nothing, so the old answer stayed for good. An empty search now holds no answer, and Clear and Escape empty the notes with the words and the filters.
 - **A note search recorded the answer to the question before it.** The history entry was written when the query reported success, and a new question reports the previous answer while its own loads. It is now written once, from the question's own answer.
