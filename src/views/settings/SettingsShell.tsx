@@ -2,26 +2,53 @@
  * SettingsShell — Two-pane settings shell on desktop, single-pane on mobile.
  *
  * Driven by registry.ts. From lg width, renders a 240px rail with search
- * and navigation groups beside a scrolling outlet. Below lg, renders the
- * familiar landing list and pages with a link back to it.
+ * and navigation groups beside the page. Below lg, renders the landing list
+ * and pages, with a link on each page back to the list.
  *
- * The page's header is `PageHeader`, drawn above the scrolling outlet so it
- * stays in place while the page scrolls under it.
+ * The page's header is `PageHeader`: the page's title, its one-line
+ * description from the registry, and the page's own actions at the right
+ * (`SettingsHeaderActions`).
+ *
+ * The back link. From lg there is none: the rail and the app's sidebar are
+ * both on screen, and a link above the title would only push every settings
+ * title 20 px below every other page's. Below lg a page has "Settings",
+ * back to the list, its parent, the way a phone's settings app does, and the
+ * list has none. The move between the list and a page slides (`slide.tsx`).
+ *
+ * Scrolling. A page that scrolls carries its header with it, the way Pulse
+ * and the Tracked page do, in the page's one scroller. A page that owns its
+ * scrolling (a full-width tool) keeps the header fixed above it. A page
+ * opens at its top, and the list comes back where it was left.
  */
-import React, { Suspense } from "react";
+import React, {
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { History, Loader2 } from "lucide-react";
-import { ActionMenu } from "../../components/ui/ActionMenu";
+import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { useDedupeOptional } from "../../contexts/DedupeContext";
 import {
+  SETTINGS_LIST_PATH,
   SETTINGS_PAGES,
   REDIRECTS,
+  findSettingsPage,
+  settingsBackLink,
   type SettingsPage,
   type RedirectTarget,
 } from "./registry";
 import { SettingsRail } from "./SettingsRail";
 import { SettingsHome } from "./SettingsHome";
+import { SettingsHeaderContext } from "./SettingsHeader";
+import {
+  holdSlide,
+  isPlainClick,
+  settleSlide,
+  useSlideNavigate,
+} from "./slide";
 import { RequireAdmin } from "../../components/auth/RequireAdmin";
 import { useAuth } from "../../components/auth/AuthGate";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
@@ -36,37 +63,43 @@ const UsersView = React.lazy(() =>
   import("./admin/UsersView").then((m) => ({ default: m.UsersView })),
 );
 
-/** A page on its way, in the page's own box, so its content lands in place. */
-const PageFallback = () => (
-  <div
-    className={cn(
-      SETTINGS_PAGE,
-      "flex items-center gap-2 text-sm text-on-surface-variant",
-    )}
-  >
-    <Loader2 className="w-4 h-4 animate-spin" />
-    Loading…
-  </div>
-);
-
-const AdminRoute = ({
-  children,
-  ownsScrolling = false,
-}: {
-  children: React.ReactNode;
-  ownsScrolling?: boolean;
-}) => (
-  <RequireAdmin>
+/**
+ * A page on its way, in the page's own box, so its content lands in place.
+ * While it shows, a slide waits for the page (`holdSlide`).
+ */
+const PageFallback = () => {
+  useLayoutEffect(() => holdSlide(), []);
+  return (
     <div
       className={cn(
-        "h-full",
-        ownsScrolling ? "overflow-hidden" : "overflow-y-auto",
+        SETTINGS_PAGE,
+        "flex items-center gap-2 text-sm text-on-surface-variant",
       )}
     >
-      <Suspense fallback={<PageFallback />}>{children}</Suspense>
+      <Loader2 className="w-4 h-4 animate-spin" />
+      Loading…
     </div>
-  </RequireAdmin>
-);
+  );
+};
+
+/**
+ * One page. A page that owns its scrolling fills the pane and scrolls
+ * itself; every other page is a block in the shell's one scroller.
+ */
+const PageRoute = ({
+  ownsScrolling = false,
+  children,
+}: {
+  ownsScrolling?: boolean;
+  children: React.ReactNode;
+}) => {
+  const page = <Suspense fallback={<PageFallback />}>{children}</Suspense>;
+  return ownsScrolling ? (
+    <div className="h-full overflow-hidden">{page}</div>
+  ) : (
+    page
+  );
+};
 
 const RedirectRoute = ({ to }: { to: RedirectTarget }) => {
   const { isAdmin } = useAuth();
@@ -91,61 +124,74 @@ function getLazyComponent(page: SettingsPage) {
 export const SettingsShell = () => {
   const location = useLocation();
   const isWide = useMediaQuery(WIDE_QUERY);
+  const slide = useSlideNavigate();
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Match subpage by longest matching path
-  const subpagesSorted = [...SETTINGS_PAGES].sort(
-    (a, b) => b.path.length - a.path.length,
-  );
-  const currentSubpage = subpagesSorted.find(
-    (page) =>
-      location.pathname === page.path ||
-      location.pathname.startsWith(`${page.path}/`),
-  );
-
+  const currentSubpage = findSettingsPage(location.pathname);
   const isSubpage = !!currentSubpage;
   const title = currentSubpage?.title ?? NAMES.settings.title;
   const ownsScrolling = currentSubpage?.ownsScrolling ?? false;
 
   usePageTitle(title);
 
-  // The back link names the page it goes to.
-  // On wide screens (lg and up) the rail is on screen, so it goes to "/",
-  // the Network.
-  // On narrow screens (< lg):
-  // - on the landing page (/settings): no back link (finding A14)
-  // - on subpages: it goes to "/settings", the landing list
-  const back = isWide
-    ? { to: "/", label: NAMES.network.label }
-    : isSubpage
-      ? { to: "/settings", label: NAMES.settings.label }
-      : undefined;
+  // The page's actions, drawn in the header (`SettingsHeaderActions`).
+  const [actionsTarget, setActionsTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [actionClaims, setActionClaims] = useState(0);
+  const claimActions = useCallback(() => {
+    setActionClaims((count) => count + 1);
+    return () => setActionClaims((count) => count - 1);
+  }, []);
+  const headerSlot = useMemo(
+    () => ({ target: actionsTarget, claim: claimActions }),
+    [actionsTarget, claimActions],
+  );
 
-  const dedupe = useDedupeOptional();
+  // A page opens at its top, and the list comes back where it was left.
+  // The list's place is kept as it scrolls: by the time a page is in the
+  // DOM the browser has already clamped `scrollTop` to the shorter page.
+  // Then a slide that waits for this route can take its picture.
+  const listScroll = useRef(0);
+  const onScrollerScroll = () => {
+    if (!isSubpage && scrollerRef.current) {
+      listScroll.current = scrollerRef.current.scrollTop;
+    }
+  };
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (scroller) scroller.scrollTop = isSubpage ? 0 : listScroll.current;
+    settleSlide(location.pathname);
+    // The path, not the hash: a hash scrolls to its row on its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
-  // A page that scrolls carries its header with it, the way Pulse and the
-  // Tracked page do, so text never slides under a fixed title. A page that
-  // owns its scrolling (a full-width tool) keeps the header fixed above it.
+  // Below lg a page links back to the list, its parent. From lg the rail is
+  // on screen, and a back link would say nothing it does not.
+  const back = settingsBackLink(location.pathname, isWide);
+
+  /**
+   * The back link slides the page away. `PageHeader` draws the link, so the
+   * stage catches its click on the way down, before the link navigates
+   * without the slide.
+   */
+  const onStageClickCapture = (event: React.MouseEvent) => {
+    if (!back || !isPlainClick(event)) return;
+    const link = (event.target as Element).closest?.("a");
+    if (link?.getAttribute("href") !== SETTINGS_LIST_PATH) return;
+    event.preventDefault();
+    event.stopPropagation();
+    slide(SETTINGS_LIST_PATH, "back");
+  };
+
   const header = (
     <PageHeader
       back={back}
       title={title}
+      description={currentSubpage?.description}
       actions={
-        // Below sm, Merge activity moves into an ActionMenu in the header
-        // for Duplicates.
-        currentSubpage?.id === "duplicates" ? (
-          <div className="sm:hidden">
-            <ActionMenu
-              label="Duplicates actions"
-              items={[
-                {
-                  id: "merge-activity",
-                  label: "Merge activity",
-                  icon: History,
-                  onSelect: () => dedupe?.setShowActivity(true),
-                },
-              ]}
-            />
-          </div>
+        actionClaims > 0 ? (
+          <div ref={setActionsTarget} className="contents" />
         ) : undefined
       }
       className={cn(
@@ -162,105 +208,105 @@ export const SettingsShell = () => {
   );
 
   return (
-    <div className="h-full flex overflow-hidden bg-surface text-on-surface">
-      {/* ── 240px Left Navigation Rail on desktop ── */}
-      <div className="hidden lg:block h-full shrink-0">
-        <SettingsRail />
-      </div>
+    <SettingsHeaderContext.Provider value={headerSlot}>
+      <div className="h-full flex overflow-hidden bg-surface text-on-surface">
+        {/* ── 240px Left Navigation Rail on desktop ── */}
+        <div className="hidden lg:block h-full shrink-0">
+          <SettingsRail />
+        </div>
 
-      {/* ── Content Area (Header + Outlet) ── */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {ownsScrolling && header}
-
-        <main
-          id="main-content"
-          className={cn(
-            "flex-1 min-h-0",
-            ownsScrolling ? "overflow-hidden" : "overflow-y-auto",
-          )}
+        {/* ── The stage: header and page. Below lg it is what slides, so it
+            has its own opaque surface for the picture. ── */}
+        <div
+          className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface"
+          onClickCapture={onStageClickCapture}
         >
-          {!ownsScrolling && header}
-          <Routes>
-            <Route path="/" element={<SettingsHome />} />
+          {/* Every page centres its header and its body in the same width:
+              the stage less a scrollbar's lane, kept whether or not the page
+              scrolls. Without it a title sat 5.5 px further left on a page
+              long enough to scroll. A page that owns its scrolling keeps
+              the lane in its own scroller, so its header keeps one here. */}
+          {ownsScrolling && (
+            <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
+              {header}
+            </div>
+          )}
 
-            {/* Special route for new user in Accounts */}
-            <Route
-              path="admin/users/new"
-              element={
-                <AdminRoute>
-                  <UsersView createOpen />
-                </AdminRoute>
-              }
-            />
+          {/* The page's one scroller. Not a second `main`: the app's layout
+              already draws the main landmark (and its `main-content` id)
+              around the whole shell. */}
+          <div
+            ref={scrollerRef}
+            onScroll={onScrollerScroll}
+            className={cn(
+              "flex-1 min-h-0",
+              ownsScrolling
+                ? "overflow-hidden"
+                : "overflow-y-auto [scrollbar-gutter:stable]",
+            )}
+          >
+            {!ownsScrolling && header}
+            <Routes>
+              <Route path="/" element={<SettingsHome />} />
 
-            {/* Registry driven pages */}
-            {SETTINGS_PAGES.map((page: SettingsPage) => {
-              const Component = getLazyComponent(page);
-              const relativePath = page.path.replace(/^\/settings\/?/, "");
+              {/* Special route for new user in Accounts */}
+              <Route
+                path="admin/users/new"
+                element={
+                  <RequireAdmin>
+                    <PageRoute>
+                      <UsersView createOpen />
+                    </PageRoute>
+                  </RequireAdmin>
+                }
+              />
 
-              if (page.admin) {
+              {/* Registry driven pages */}
+              {SETTINGS_PAGES.map((page: SettingsPage) => {
+                const Component = getLazyComponent(page);
+                const relativePath = page.path.replace(/^\/settings\/?/, "");
+                const element = (
+                  <PageRoute ownsScrolling={page.ownsScrolling}>
+                    <Component />
+                  </PageRoute>
+                );
                 return (
                   <Route
                     key={page.id}
                     path={relativePath}
                     element={
-                      <AdminRoute ownsScrolling={page.ownsScrolling}>
-                        <Component />
-                      </AdminRoute>
+                      page.admin ? (
+                        <RequireAdmin>{element}</RequireAdmin>
+                      ) : (
+                        element
+                      )
                     }
                   />
                 );
-              }
+              })}
 
-              if (page.ownsScrolling) {
+              {/* Registry driven redirects */}
+              {Object.entries(REDIRECTS).map(([from, to]) => {
+                const relativeFrom = from.replace(/^\/settings\/?/, "");
                 return (
                   <Route
-                    key={page.id}
-                    path={relativePath}
-                    element={
-                      <div className="h-full overflow-hidden">
-                        <Suspense fallback={<PageFallback />}>
-                          <Component />
-                        </Suspense>
-                      </div>
-                    }
+                    key={from}
+                    path={relativeFrom}
+                    element={<RedirectRoute to={to} />}
                   />
                 );
-              }
+              })}
 
-              return (
-                <Route
-                  key={page.id}
-                  path={relativePath}
-                  element={
-                    <div className="overflow-y-auto h-full">
-                      <Suspense fallback={<PageFallback />}>
-                        <Component />
-                      </Suspense>
-                    </div>
-                  }
-                />
-              );
-            })}
-
-            {/* Registry driven redirects */}
-            {Object.entries(REDIRECTS).map(([from, to]) => {
-              const relativeFrom = from.replace(/^\/settings\/?/, "");
-              return (
-                <Route
-                  key={from}
-                  path={relativeFrom}
-                  element={<RedirectRoute to={to} />}
-                />
-              );
-            })}
-
-            {/* Wildcard fallback to /settings */}
-            <Route path="*" element={<Navigate to="/settings" replace />} />
-          </Routes>
-        </main>
+              {/* Wildcard fallback to /settings */}
+              <Route
+                path="*"
+                element={<Navigate to={SETTINGS_LIST_PATH} replace />}
+              />
+            </Routes>
+          </div>
+        </div>
       </div>
-    </div>
+    </SettingsHeaderContext.Provider>
   );
 };
 

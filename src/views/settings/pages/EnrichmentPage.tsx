@@ -7,7 +7,7 @@
  * @module views/settings/pages/EnrichmentPage
  */
 import React, { useMemo, useState } from "react";
-import { ArrowRight, Gauge, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { AISearchView } from "../../ai-search";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
@@ -15,8 +15,8 @@ import { useContacts } from "../../../api";
 import { useGroundingCapacity } from "../../../api/enrichment";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useAuth } from "../../../components/auth/AuthGate";
-import { SETTINGS_PAGE } from "../layout";
-import { CARD, TONE_WASH } from "../../../lib/styles";
+import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
+import { SettingsCallout } from "../SettingsCallout";
 import { cn } from "../../../lib/utils";
 
 export const EnrichmentPage = () => {
@@ -45,71 +45,33 @@ export const EnrichmentPage = () => {
     // One box for the whole page, the enrichment list included, so every
     // card starts under the page title.
     <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Research contacts on the live web and fill in the gaps in their
-          profiles.
-        </p>
-      </div>
-
       {/* Never-enriched count banner */}
       {neverEnrichedContacts.length > 0 && (
-        <div
-          className={cn(
-            CARD,
-            "p-4 flex items-center justify-between gap-4 bg-primary/10",
-          )}
+        <SettingsCallout
+          icon={Sparkles}
+          title={`${neverEnrichedContacts.length} ${
+            neverEnrichedContacts.length === 1 ? "contact has" : "contacts have"
+          } never been enriched`}
+          body="Select them to research their work, websites, and bio."
         >
-          <div className="flex items-center gap-3">
-            <span className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}>
-              <Sparkles className="w-5 h-5" />
-            </span>
-            <div>
-              <p className="text-sm font-bold text-on-surface">
-                {neverEnrichedContacts.length}{" "}
-                {neverEnrichedContacts.length === 1
-                  ? "contact has"
-                  : "contacts have"}{" "}
-                never been enriched.
-              </p>
-              <p className="text-xs text-on-surface-variant">
-                Select and run research to fill in employment, websites, and bio
-                details.
-              </p>
-            </div>
-          </div>
           <button
             type="button"
             onClick={handleEnrichThem}
-            className="btn-primary btn-sm shrink-0"
+            className="btn-primary btn-sm"
           >
-            Enrich them
+            Select them
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
-        </div>
+        </SettingsCallout>
       )}
 
-      {/* Settings card */}
-      <div
-        className={cn(
-          CARD,
-          "p-4 sm:p-5 divide-y divide-surface-container-high",
-        )}
-      >
+      <div className={SETTINGS_CARD}>
         <SettingRow
           id="auto-enrich"
           title="Enrich new contacts automatically"
           prefKey="autoEnrich"
-          description={
-            <>
-              <span className="block">
-                Uses the Research capability for every contact you add.
-              </span>
-              <span className="block text-xs text-on-surface-variant mt-1">
-                Each run costs provider quota. Off by default.
-              </span>
-            </>
-          }
+          description="Researches every contact you add. Each run uses some of the provider's quota."
+          inline
         >
           <Switch
             label="Enrich new contacts automatically"
@@ -119,15 +81,16 @@ export const EnrichmentPage = () => {
         </SettingRow>
 
         {isAdmin && groundingCapacity && (
-          <div
+          <SettingRow
             id="grounding"
-            className="pt-4 flex items-center gap-2 text-xs text-on-surface-variant"
+            title="Web searches today"
+            description="The provider's daily limit for research on the web, for the whole instance."
+            inline
           >
-            <Gauge className="w-4 h-4 text-on-surface-variant shrink-0" />
-            <span>
-              Grounding today: {groundingUsed} of {groundingCapacity.limit} used
+            <span className="text-sm font-bold text-on-surface tabular-nums whitespace-nowrap">
+              {groundingUsed} of {groundingCapacity.limit}
             </span>
-          </div>
+          </SettingRow>
         )}
       </div>
 

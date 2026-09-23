@@ -226,6 +226,34 @@ const semantic = (sent: Sent[]) =>
 const synthesize = (sent: Sent[]) =>
   sent.filter((s) => s.url.endsWith("/search/synthesize"));
 
+const preferencePatches = (sent: Sent[]) =>
+  sent.filter((s) => s.url.includes("/preferences") && s.method === "PATCH");
+
+/** The history panel, from `lg`. */
+const panel = () => document.getElementById("search-history");
+
+/** A recorded People question, as the server lists it. */
+const historyEntry = (id: string, query: string) => ({
+  id,
+  ownerId: "user-1",
+  query,
+  normalizedQuery: query.toLowerCase(),
+  mode: "people" as const,
+  resultCount: 1,
+  resultIds: ["contact-1"],
+  fallback: false,
+  pinned: false,
+  runCount: 1,
+  createdAt: new Date().toISOString(),
+  lastRunAt: new Date().toISOString(),
+});
+
+const historyList = (entries: ReturnType<typeof historyEntry>[]) =>
+  new Response(
+    JSON.stringify({ entries, nextCursor: null, total: entries.length }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+
 const client = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
 
@@ -297,7 +325,7 @@ describe("asking the same question again", () => {
 
     ask(QUESTION);
     await waitFor(() => expect(semantic(sent)).toHaveLength(1));
-    expect(screen.getByText("Searching...")).toBeTruthy();
+    expect(screen.getByText("Searching…")).toBeTruthy();
 
     // Enter again, twice, while the first answer is still streaming.
     fireEvent.keyDown(input(), { key: "Enter" });
@@ -407,7 +435,7 @@ describe("the question the results belong to", () => {
   });
 });
 
-describe("the history pane", () => {
+describe("the history", () => {
   it("posts to /api/search/history exactly once after a completed search with the right body", async () => {
     const sent = stubFetch();
     renderView();
@@ -431,31 +459,9 @@ describe("the history pane", () => {
   });
 
   it("re-runs the search when clicking a fetched history entry", async () => {
-    const fakeEntry = {
-      id: "hist-123",
-      ownerId: "user-1",
-      query: "Who knows Python?",
-      normalizedQuery: "who knows python?",
-      mode: "people" as const,
-      resultCount: 2,
-      resultIds: ["contact-1", "contact-2"],
-      fallback: false,
-      pinned: false,
-      runCount: 1,
-      createdAt: new Date().toISOString(),
-      lastRunAt: new Date().toISOString(),
-    };
-
     const sent = stubFetch((s) => {
       if (s.url.includes("/search/history") && s.method === "GET") {
-        return new Response(
-          JSON.stringify({
-            entries: [fakeEntry],
-            nextCursor: null,
-            total: 1,
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        return historyList([historyEntry("hist-123", "Who knows Python?")]);
       }
     });
 
@@ -477,34 +483,8 @@ describe("the history pane", () => {
 
   it("narrows the visible list when typing into the history filter", async () => {
     const entries = [
-      {
-        id: "hist-1",
-        ownerId: "user-1",
-        query: "Who knows Python?",
-        normalizedQuery: "who knows python?",
-        mode: "people" as const,
-        resultCount: 1,
-        resultIds: ["contact-1"],
-        fallback: false,
-        pinned: false,
-        runCount: 1,
-        createdAt: new Date().toISOString(),
-        lastRunAt: new Date().toISOString(),
-      },
-      {
-        id: "hist-2",
-        ownerId: "user-1",
-        query: "Who likes green tea?",
-        normalizedQuery: "who likes green tea?",
-        mode: "people" as const,
-        resultCount: 1,
-        resultIds: ["contact-2"],
-        fallback: false,
-        pinned: false,
-        runCount: 1,
-        createdAt: new Date().toISOString(),
-        lastRunAt: new Date().toISOString(),
-      },
+      historyEntry("hist-1", "Who knows Python?"),
+      historyEntry("hist-2", "Who likes green tea?"),
     ];
 
     stubFetch((s) => {
@@ -514,169 +494,192 @@ describe("the history pane", () => {
         const filtered = qParam
           ? entries.filter((e) => e.normalizedQuery.includes(qParam))
           : entries;
-        return new Response(
-          JSON.stringify({
-            entries: filtered,
-            nextCursor: null,
-            total: filtered.length,
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        return historyList(filtered);
       }
     });
 
     renderView();
-    const historyAside = await screen.findByRole("complementary", {
-      name: "Search history",
-    });
-    await within(historyAside).findByText("Who knows Python?");
-    expect(within(historyAside).getByText("Who likes green tea?")).toBeTruthy();
+    const panel = await screen.findByRole("complementary", { name: "History" });
+    await within(panel).findByText("Who knows Python?");
+    expect(within(panel).getByText("Who likes green tea?")).toBeTruthy();
 
-    const filterInput = within(historyAside).getByLabelText("Filter history");
+    const filterInput = within(panel).getByLabelText("Filter history");
     fireEvent.change(filterInput, { target: { value: "tea" } });
 
     await waitFor(() => {
-      expect(within(historyAside).queryByText("Who knows Python?")).toBeNull();
-      expect(
-        within(historyAside).getByText("Who likes green tea?"),
-      ).toBeTruthy();
+      expect(within(panel).queryByText("Who knows Python?")).toBeNull();
+      expect(within(panel).getByText("Who likes green tea?")).toBeTruthy();
     });
   });
 
-  it("writes askHistoryOpen preference when clicking the history toggle button on desktop", async () => {
-    stubMatchMedia(true);
-    const sent = stubFetch();
+  it("puts the count and Clear in the panel's heading row, and draws no heading of its own", async () => {
+    stubFetch((s) => {
+      if (s.url.includes("/search/history") && s.method === "GET") {
+        return historyList([historyEntry("hist-1", "Who knows Python?")]);
+      }
+    });
     renderView();
 
-    // The pane is open, so the toggle is pressed. Its name stays "History"
-    // in both states: the pressed state says open or closed.
-    const toggleButton = await screen.findByRole("button", {
-      name: "History",
-      pressed: true,
-    });
-    expect(toggleButton.getAttribute("aria-controls")).toBe(
-      "search-history-aside",
-    );
-    expect(toggleButton.getAttribute("title")).toBe("History (H)");
-    fireEvent.click(toggleButton);
-
-    await waitFor(() => {
-      const patches = sent.filter(
-        (s) => s.url.includes("/preferences") && s.method === "PATCH",
-      );
-      expect(patches).toHaveLength(1);
-      expect(patches[0].body).toEqual({ askHistoryOpen: false });
-    });
-
-    // Closed: the same button opens it again, and controls nothing on the page.
-    const reopen = await screen.findByRole("button", {
-      name: "History",
-      pressed: false,
-    });
-    expect(reopen).toBe(toggleButton);
-    expect(reopen.hasAttribute("aria-controls")).toBe(false);
+    const panel = await screen.findByRole("complementary", { name: "History" });
+    await within(panel).findByText("Who knows Python?");
+    // One heading, the panel's. The pane's own heading row is the sheet's.
+    const headings = within(panel).getAllByRole("heading", { level: 2 });
+    expect(headings.map((h) => h.textContent)).toEqual(["History"]);
+    expect(within(panel).getByText("1")).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
     expect(
-      screen.queryByRole("complementary", { name: "Search history" }),
+      within(panel).queryByRole("button", { name: "Close history" }),
     ).toBeNull();
   });
 
-  it("hides the pane from the button in its own header, and hands focus to the header toggle", async () => {
-    stubMatchMedia(true);
-    const sent = stubFetch();
+  it("clears the history from the heading row's Clear, after asking", async () => {
+    const sent = stubFetch((s) => {
+      if (s.url.includes("/search/history") && s.method === "GET") {
+        return historyList([historyEntry("hist-1", "Who knows Python?")]);
+      }
+    });
     renderView();
 
-    const aside = await screen.findByRole("complementary", {
-      name: "Search history",
-    });
-    const hide = within(aside).getByRole("button", { name: "Hide history" });
-    // The shortcut that also toggles the pane is in the tooltip.
-    expect(hide.getAttribute("title")).toBe("Hide history (H)");
-    fireEvent.click(hide);
+    const panel = await screen.findByRole("complementary", { name: "History" });
+    await within(panel).findByText("Who knows Python?");
+    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
 
+    // It asks first, and a cancel sends nothing.
+    const dialog = await screen.findByRole("dialog", {
+      name: "Clear search history?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() =>
       expect(
-        screen.queryByRole("complementary", { name: "Search history" }),
+        screen.queryByRole("dialog", { name: "Clear search history?" }),
       ).toBeNull(),
     );
-    // The button that was pressed is gone, and the keyboard is on the one
-    // that brings the pane back.
-    const toggle = screen.getByRole("button", {
-      name: "History",
-      pressed: false,
-    });
-    expect(document.activeElement).toBe(toggle);
-    await waitFor(() => {
-      const patches = sent.filter(
-        (s) => s.url.includes("/preferences") && s.method === "PATCH",
+    const deletes = () =>
+      sent.filter(
+        (s) => s.url.includes("/search/history") && s.method === "DELETE",
       );
-      expect(patches).toHaveLength(1);
-      expect(patches[0].body).toEqual({ askHistoryOpen: false });
+    expect(deletes()).toHaveLength(0);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
+    const again = await screen.findByRole("dialog", {
+      name: "Clear search history?",
     });
+    fireEvent.click(
+      within(again).getByRole("button", { name: "Clear history" }),
+    );
+    await waitFor(() => expect(deletes()).toHaveLength(1));
   });
 
-  it("toggles the pane with the H key outside a text field", async () => {
-    stubMatchMedia(true);
+  it("opens and closes from the rail icon, the one History control on a wide screen", async () => {
     const sent = stubFetch();
     renderView();
 
-    await screen.findByRole("complementary", { name: "Search history" });
+    // A disclosure for the panel. The page header has no History button.
+    const icon = await screen.findByRole("button", { name: "History" });
+    expect(icon.getAttribute("aria-expanded")).toBe("true");
+    expect(icon.getAttribute("aria-controls")).toBe("search-history");
+    expect(icon.hasAttribute("aria-pressed")).toBe(false);
+    fireEvent.click(icon);
+
+    await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
+    expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
+    expect(icon.getAttribute("aria-expanded")).toBe("false");
+    expect(panel()?.hasAttribute("inert")).toBe(true);
+  });
+
+  it("hides from the panel's own button, and hands focus to the rail icon", async () => {
+    const sent = stubFetch();
+    renderView();
+
+    const aside = await screen.findByRole("complementary", { name: "History" });
+    const hide = within(aside).getByRole("button", { name: "Hide history" });
+    // The shortcut that also toggles the panel is in the tooltip.
+    expect(hide.getAttribute("title")).toBe("Hide history (H)");
+    // A press focuses the button in a browser. jsdom's click does not.
+    hide.focus();
+    fireEvent.click(hide);
+
+    await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
+    expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
+    expect(panel()?.hasAttribute("inert")).toBe(true);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "History" }),
+    );
+  });
+
+  it("toggles the panel with the H key outside a text field", async () => {
+    const sent = stubFetch();
+    renderView();
+
+    const icon = await screen.findByRole("button", { name: "History" });
     // The box has focus on arrival, and an h typed there is a letter.
     input().blur();
     fireEvent.keyDown(document.body, { key: "h" });
 
     await waitFor(() =>
-      expect(
-        screen.queryByRole("complementary", { name: "Search history" }),
-      ).toBeNull(),
+      expect(icon.getAttribute("aria-expanded")).toBe("false"),
     );
-    await waitFor(() => {
-      const patches = sent.filter(
-        (s) => s.url.includes("/preferences") && s.method === "PATCH",
-      );
-      expect(patches).toHaveLength(1);
-      expect(patches[0].body).toEqual({ askHistoryOpen: false });
-    });
+    await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
+    expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
   });
 
-  it("hands focus to the header toggle when H closes the pane from inside it", async () => {
-    stubMatchMedia(true);
+  it("hands focus to the rail icon when H closes the panel from inside it", async () => {
     stubFetch();
     renderView();
 
-    const aside = await screen.findByRole("complementary", {
-      name: "Search history",
-    });
+    const aside = await screen.findByRole("complementary", { name: "History" });
     const inside = within(aside).getByRole("button", { name: "Hide history" });
     inside.focus();
     fireEvent.keyDown(inside, { key: "h" });
 
+    const icon = screen.getByRole("button", { name: "History" });
     await waitFor(() =>
-      expect(
-        screen.queryByRole("complementary", { name: "Search history" }),
-      ).toBeNull(),
+      expect(icon.getAttribute("aria-expanded")).toBe("false"),
     );
+    expect(document.activeElement).toBe(icon);
+  });
+
+  it("clears the filter on Escape before Escape hides the panel", async () => {
+    stubFetch();
+    renderView();
+
+    const aside = await screen.findByRole("complementary", { name: "History" });
+    const filter = within(aside).getByLabelText(
+      "Filter history",
+    ) as HTMLInputElement;
+    fireEvent.change(filter, { target: { value: "tea" } });
+    filter.focus();
+    fireEvent.keyDown(filter, { key: "Escape" });
+    expect(filter.value).toBe("");
+    expect(panel()?.hasAttribute("inert")).toBe(false);
+
+    fireEvent.keyDown(filter, { key: "Escape" });
+    await waitFor(() => expect(panel()?.hasAttribute("inert")).toBe(true));
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "History", pressed: false }),
+      screen.getByRole("button", { name: "History" }),
     );
   });
 
-  it("opens the history sheet from the toggle on a phone, where the sheet's own close control is the way out", async () => {
+  it("opens the sheet from the header below lg, where the sheet's own close control is the way out", async () => {
     stubMatchMedia(false);
     stubFetch();
     renderView();
 
-    const toggle = await screen.findByRole("button", { name: "History" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(toggle.hasAttribute("aria-pressed")).toBe(false);
-    fireEvent.click(toggle);
+    // No rail below lg: the header's button opens a sheet.
+    const button = await screen.findByRole("button", { name: "History" });
+    expect(panel()).toBeNull();
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.getAttribute("aria-haspopup")).toBe("dialog");
+    fireEvent.click(button);
 
+    // The sheet draws the heading row itself, with a visible X.
     const sheet = await screen.findByRole("dialog", { name: "Search history" });
+    expect(
+      within(sheet).getByRole("heading", { name: "History" }),
+    ).toBeTruthy();
     expect(
       within(sheet).queryByRole("button", { name: "Hide history" }),
     ).toBeNull();
-    // The sheet closes from a visible X in the pane's header, and the
-    // keyboard goes back to the toggle.
     fireEvent.click(
       within(sheet).getByRole("button", { name: "Close history" }),
     );
@@ -685,12 +688,18 @@ describe("the history pane", () => {
         screen.queryByRole("dialog", { name: "Search history" }),
       ).toBeNull(),
     );
-    expect(document.activeElement).toBe(toggle);
+    expect(document.activeElement).toBe(button);
+
+    // H opens it again.
+    fireEvent.keyDown(button, { key: "h" });
+    expect(
+      await screen.findByRole("dialog", { name: "Search history" }),
+    ).toBeTruthy();
   });
 });
 
 describe("the page", () => {
-  it("is the title, its two controls and the search box: no description", async () => {
+  it("is the title, the mode switch and the search box: no description", async () => {
     stubFetch();
     renderView();
 

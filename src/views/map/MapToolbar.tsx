@@ -6,7 +6,7 @@
  * - Facet pills for locked filters (including `list:`, `near:`)
  * - Autocomplete dropdown for facet prefixes (including `list:` and `tag:`)
  * - "Go to" place search mode with `flyTo` zoom 10 and inline error
- * - "Fit all" button with bounds fitting and reduced motion support
+ * - "Fit all" button, which the page fits (F does the same)
  * - Mobile filter sheet via Modal below `lg` breakpoint
  * - "0 of N match" empty state with "Clear filters" button
  * - "Select" menu (box, lasso, all in view) as an `ActionMenu`, so it reads
@@ -38,8 +38,6 @@ import {
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
 import { ViewsMenu } from "./ViewsMenu";
-import type { MapContact } from "../../../shared/geo";
-import { isValidLatLng } from "../../../shared/geo";
 import type { FacetFilter } from "../../../shared/searchFacets";
 import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
 import { prefersReducedMotion } from "./flyTo";
@@ -50,7 +48,6 @@ import { SELECTED_TINT } from "../../lib/styles";
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
   { value: "heat", label: "Heat" },
-  { value: "health", label: "Health" },
 ];
 
 /**
@@ -63,13 +60,11 @@ const TOGGLE_OFF =
   "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30";
 
 export interface MapToolbarProps {
-  contacts: MapContact[];
   map: MapLibreMap | null;
   rawInput: string;
   setRawInput: (v: string) => void;
   tokenizer: ReturnType<typeof useQueryTokenizer>;
   effectiveFilters: FacetFilter[];
-  filteredContacts: MapContact[];
   totalCount: number;
   matchCount: number;
   hasActiveFilter: boolean;
@@ -90,7 +85,7 @@ export interface MapToolbarProps {
    * of the contact, and steps aside under `MIN_OPEN_PX`.
    */
   room?: number | null;
-  onFitAll?: () => void;
+  onFitAll: () => void;
   onToggleInsights?: () => void;
   onSelectInView?: () => void;
   onStartLasso?: () => void;
@@ -98,13 +93,11 @@ export interface MapToolbarProps {
 }
 
 export const MapToolbar: React.FC<MapToolbarProps> = ({
-  contacts,
   map,
   rawInput,
   setRawInput,
   tokenizer,
   effectiveFilters,
-  filteredContacts,
   totalCount,
   matchCount,
   hasActiveFilter,
@@ -120,7 +113,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onDeleteView,
   inputRef: externalInputRef,
   room = null,
-  onFitAll: externalFitAll,
+  onFitAll,
   onToggleInsights,
   onSelectInView,
   onStartLasso,
@@ -158,69 +151,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       onSelect: () => onSelectInView?.(),
     },
   ];
-
-  // Fit all logic
-  const handleFitAll = useCallback(() => {
-    if (externalFitAll) {
-      externalFitAll();
-      return;
-    }
-    if (!map) return;
-    const targetContacts = filteredContacts.some((c) =>
-      isValidLatLng(c.lat, c.lng),
-    )
-      ? filteredContacts
-      : contacts;
-    const valid = targetContacts.filter((c) => isValidLatLng(c.lat, c.lng));
-
-    if (valid.length === 0) {
-      map.flyTo({ center: [0, 20], zoom: 1.5 });
-      return;
-    }
-
-    const padding = paddingFor(
-      measureInsets(map.getContainer(), { contactOpen: false }),
-    );
-    const reduced = prefersReducedMotion();
-
-    if (valid.length === 1) {
-      const target = valid[0];
-      if (reduced) {
-        map.jumpTo({ center: [target.lng!, target.lat!], zoom: 10, padding });
-      } else {
-        map.flyTo({
-          center: [target.lng!, target.lat!],
-          zoom: 10,
-          duration: 800,
-          padding,
-        });
-      }
-      return;
-    }
-
-    let minLng = valid[0].lng!;
-    let maxLng = valid[0].lng!;
-    let minLat = valid[0].lat!;
-    let maxLat = valid[0].lat!;
-    for (const c of valid) {
-      if (c.lng! < minLng) minLng = c.lng!;
-      if (c.lng! > maxLng) maxLng = c.lng!;
-      if (c.lat! < minLat) minLat = c.lat!;
-      if (c.lat! > maxLat) maxLat = c.lat!;
-    }
-
-    map.fitBounds(
-      [
-        [minLng, minLat],
-        [maxLng, maxLat],
-      ],
-      {
-        padding,
-        maxZoom: 14,
-        duration: reduced ? 0 : 800,
-      },
-    );
-  }, [externalFitAll, map, filteredContacts, contacts]);
 
   // Go to place search
   const handleGoTo = useCallback(async () => {
@@ -357,7 +287,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         {/* Fit All Button */}
         <button
           type="button"
-          onClick={handleFitAll}
+          onClick={onFitAll}
           aria-label="Fit all"
           title="Fit all contacts in view (F)"
           className={cn(
@@ -556,7 +486,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           </button>
           <button
             type="button"
-            onClick={handleFitAll}
+            onClick={onFitAll}
             aria-label="Fit all"
             className="hit-area state-layer glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
           >

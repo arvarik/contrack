@@ -270,9 +270,9 @@ describe("Frontend Mail & Google Connectors Components", () => {
       renderWithClient(<GoogleFormModal isOpen={true} onClose={vi.fn()} />);
 
       expect(
-        screen.getByText(/Google OAuth client not configured/i),
+        screen.getByText(/Google sign-in is not set up yet/i),
       ).toBeTruthy();
-      expect(screen.getByText(/Configure in Settings → General/i)).toBeTruthy();
+      expect(screen.getByText(/Open Integrations in General/i)).toBeTruthy();
     });
   });
 
@@ -306,9 +306,9 @@ describe("Frontend Mail & Google Connectors Components", () => {
 
       renderWithClient(<CorrespondentsView />);
 
-      expect(screen.getByText(/No unreviewed correspondents/i)).toBeTruthy();
+      expect(screen.getByText("No one to review")).toBeTruthy();
       expect(
-        screen.getByText(/When your connectors sync emails or meetings/i),
+        screen.getByText(/When a connector syncs mail or meetings/i),
       ).toBeTruthy();
     });
 

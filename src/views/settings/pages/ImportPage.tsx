@@ -26,14 +26,13 @@ import {
   type ImportStatus,
 } from "../../../api/imports";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
-import {
-  CARD,
-  SECTION_HEADING,
-  TONE_WASH,
-  type Tone,
-} from "../../../lib/styles";
+import { CARD, TONE_WASH, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { SETTINGS_PAGE } from "../layout";
+import {
+  SETTINGS_CARD,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
 
 const statusBadges: Record<
   ImportStatus,
@@ -75,19 +74,13 @@ export const ImportPage = () => {
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Bring in contacts from vCard, CSV, Google, LinkedIn or Apple.
-        </p>
-      </div>
-
-      <div className={cn(CARD, "p-4 sm:p-6")}>
+      <div className={SETTINGS_CARD}>
         <ImportPanel />
       </div>
 
-      {/* Recent imports */}
-      <section className="space-y-3" aria-label="Recent imports">
-        <h2 className={SECTION_HEADING}>Recent imports</h2>
+      {/* Recent imports: one card, a row for each import. */}
+      <section aria-label="Recent imports">
+        <h2 className={SETTINGS_SECTION_HEADING}>Recent imports</h2>
 
         {isLoading ? (
           <div className="flex justify-center p-8">
@@ -97,10 +90,10 @@ export const ImportPage = () => {
           <EmptyState
             icon={UploadCloud}
             title="No recent imports"
-            body="Files you import will show up here with their status, counts, and retry options."
+            body="Each file you import shows up here, with what came in and a way to retry what failed."
           />
         ) : (
-          <div className="space-y-3">
+          <div className={cn(CARD, "p-0 py-2")}>
             {imports.map((item: ImportRecord) => {
               const badge = statusBadges[item.status] ?? statusBadges.complete;
               const Icon = badge.icon;
@@ -110,10 +103,7 @@ export const ImportPage = () => {
               return (
                 <div
                   key={item.id}
-                  className={cn(
-                    CARD,
-                    "p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4",
-                  )}
+                  className="px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">

@@ -1,9 +1,10 @@
 /**
  * Sidebar — Vertical icon nav with styled tooltips.
  *
- * Each nav item wraps with a custom Tooltip that appears to the right
- * of the icon after a 250ms hover delay — replacing the ugly native
- * browser `title` tooltip with a polished in-app version.
+ * Each nav item wraps with a `RailTooltip` that appears to the right of the
+ * icon after a 250 ms hover delay, in place of the browser's `title`
+ * tooltip. The right-hand panel rail (`SidePanel`) uses the same one,
+ * opening to the left.
  *
  * That tooltip is a hover-rendered <div>, so it is worth nothing to a screen
  * reader or to a keyboard user tabbing through: every link here is an icon
@@ -20,10 +21,8 @@ import {
   Activity,
   Keyboard,
 } from "lucide-react";
-import React, { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useRef, useCallback } from "react";
 import { navLink, SECTION_BG } from "../../lib/styles";
-import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
@@ -35,66 +34,7 @@ import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 import { NAMES } from "../../lib/names";
-
-// ---------------------------------------------------------------------------
-// SidebarTooltip — styled right-side tooltip with delay
-// ---------------------------------------------------------------------------
-
-const SidebarTooltip = ({
-  label,
-  shortcut,
-  children,
-  className,
-}: {
-  label: string;
-  shortcut?: string;
-  children: React.ReactNode;
-  className?: string;
-}) => {
-  const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const show = useCallback(() => {
-    timerRef.current = setTimeout(() => setVisible(true), 250);
-  }, []);
-
-  const hide = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(false);
-  }, []);
-
-  return (
-    <div
-      className={cn("relative flex items-center", className)}
-      onMouseEnter={show}
-      onMouseLeave={hide}
-    >
-      {children}
-      <AnimatePresence>
-        {visible && (
-          <motion.div
-            initial={{ opacity: 0, x: -6, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -4, scale: 0.95 }}
-            transition={{ duration: DURATION.fast, ease: EASE }}
-            className="absolute left-full ml-3 z-50 pointer-events-none"
-          >
-            <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
-              {label}
-              {shortcut && (
-                <span className="block text-[11px] font-mono font-normal text-on-surface-variant mt-0.5">
-                  {shortcut}
-                </span>
-              )}
-            </div>
-            {/* Caret */}
-            <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-0 h-0 border-t-4 border-b-4 border-r-4 border-t-transparent border-b-transparent border-r-surface-container-highest" />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+import { RailTooltip } from "../ui/RailTooltip";
 
 // ---------------------------------------------------------------------------
 // CorvidPerch — the mark, as the one button that navigates nowhere
@@ -230,7 +170,7 @@ export const Sidebar = () => {
       */}
       <CorvidPerch />
 
-      <SidebarTooltip label={NAMES.network.label} shortcut="⌘⇧H">
+      <RailTooltip label={NAMES.network.label} shortcut="⌘⇧H">
         <Link
           to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"}
           className={navLink(isHome)}
@@ -238,10 +178,10 @@ export const Sidebar = () => {
         >
           <LayoutDashboard className="w-6 h-6" />
         </Link>
-      </SidebarTooltip>
+      </RailTooltip>
 
       <div className="relative">
-        <SidebarTooltip label={pulseTooltip} shortcut="⌘⇧P">
+        <RailTooltip label={pulseTooltip} shortcut="⌘⇧P">
           <Link
             to="/pulse"
             className={navLink(isPulse, "relative")}
@@ -274,7 +214,7 @@ export const Sidebar = () => {
               </span>
             )}
           </Link>
-        </SidebarTooltip>
+        </RailTooltip>
 
         {pendingSuggestions > 0 && (
           <Link
@@ -294,13 +234,13 @@ export const Sidebar = () => {
         )}
       </div>
 
-      <SidebarTooltip label={NAMES.map.label} shortcut="⌘⇧M">
+      <RailTooltip label={NAMES.map.label} shortcut="⌘⇧M">
         <Link to="/map" className={navLink(isMap)} aria-label={NAMES.map.label}>
           <Map className="w-6 h-6" />
         </Link>
-      </SidebarTooltip>
+      </RailTooltip>
 
-      <SidebarTooltip label={NAMES.ask.label} shortcut="⌘⇧S">
+      <RailTooltip label={NAMES.ask.label} shortcut="⌘⇧S">
         <Link
           to="/search"
           className={navLink(isSearch)}
@@ -308,7 +248,7 @@ export const Sidebar = () => {
         >
           <Sparkles className="w-6 h-6" />
         </Link>
-      </SidebarTooltip>
+      </RailTooltip>
 
       {/* spacer to push the utility group to the bottom */}
       <div className="flex-1" />
@@ -326,7 +266,7 @@ export const Sidebar = () => {
         with keyboard shortcuts.
       */}
       <div className="flex flex-col items-center gap-2 w-full pt-3 pb-1 bg-surface-container/40 rounded-t-2xl">
-        <SidebarTooltip label="Keyboard shortcuts" shortcut="?">
+        <RailTooltip label="Keyboard shortcuts" shortcut="?">
           <button
             type="button"
             onClick={openKeyboardShortcuts}
@@ -335,9 +275,9 @@ export const Sidebar = () => {
           >
             <Keyboard className="w-6 h-6" />
           </button>
-        </SidebarTooltip>
+        </RailTooltip>
 
-        <SidebarTooltip label={NAMES.settings.label} shortcut="⌘⇧,">
+        <RailTooltip label={NAMES.settings.label} shortcut="⌘⇧,">
           <Link
             to="/settings"
             className={navLink(isCleanup)}
@@ -345,7 +285,7 @@ export const Sidebar = () => {
           >
             <SettingsIcon className="w-6 h-6" />
           </Link>
-        </SidebarTooltip>
+        </RailTooltip>
 
         {/*
           Who is signed in, last, below the app's own controls. It is the one

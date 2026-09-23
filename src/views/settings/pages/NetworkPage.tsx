@@ -16,9 +16,7 @@ import { Segmented } from "../../../components/ui/Segmented";
 import { Select } from "../../../components/ui/Select";
 import { Switch } from "../../../components/ui/Switch";
 import { SettingRow } from "../SettingRow";
-import { SETTINGS_PAGE } from "../layout";
-import { CARD } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 
 export const Stepper = ({
   value,
@@ -71,19 +69,13 @@ export const NetworkPage = () => {
     useRecentContactsLimit();
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Where Contrack opens, contacts list defaults, and weather.
-        </p>
-      </div>
-
-      <div className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}>
+    <div className={SETTINGS_PAGE}>
+      <div className={SETTINGS_CARD}>
         <SettingRow
           id="start-page"
           title="Where Contrack opens"
           prefKey="startPage"
-          description="Which page opens on the first visit of a browser session."
+          description="The page Contrack opens on in a new browser tab."
         >
           <Segmented
             label="Where Contrack opens"
@@ -100,7 +92,7 @@ export const NetworkPage = () => {
           id="list-sort"
           title="Default sort"
           prefKey="listSort"
-          description="How the contact list orders itself when you haven't chosen an override."
+          description="How the contact list sorts until you pick another order."
         >
           <Segmented
             label="Default sort"
@@ -117,7 +109,8 @@ export const NetworkPage = () => {
           id="recent-contacts"
           title="Recent contacts"
           prefKey="recentLimit"
-          description="How many recently visited contacts pin to the top of your Network. Set to 0 to hide the row."
+          description="How many recently visited contacts pin to the top of your Network. Set it to 0 to hide the row."
+          inline
         >
           <Stepper
             label="recent contacts"
@@ -158,6 +151,7 @@ export const NetworkPage = () => {
           title="Track new contacts"
           prefKey="trackNewContacts"
           description="Contacts you add by hand start tracked. Imports and connectors never do."
+          inline
         >
           <Switch
             label="Track new contacts"
@@ -170,7 +164,7 @@ export const NetworkPage = () => {
           id="week-start"
           title="Week starts on"
           prefKey="weekStart"
-          description="Sets the first day of the week for timeline grouping and activity charts."
+          description="The first day of the week on the timeline and in activity charts."
         >
           <Segmented
             label="Week starts on"
@@ -185,12 +179,13 @@ export const NetworkPage = () => {
 
         <SettingRow
           id="weather"
-          title="Local time and weather"
+          title="Weather"
           prefKey="showWeather"
-          description="Show local weather on a contact's card. Fetches conditions from Open-Meteo using the contact's coordinates."
+          description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is."
+          inline
         >
           <Switch
-            label="Local time and weather"
+            label="Weather"
             checked={preferences.showWeather}
             onChange={(next) => setPreference("showWeather", next)}
           />
@@ -200,7 +195,7 @@ export const NetworkPage = () => {
           id="temp-unit"
           title="Temperature unit"
           prefKey="tempUnit"
-          description="How weather reads on a contact's local-time badge."
+          description="How the weather reads on a contact's card."
         >
           <Segmented
             label="Temperature unit"

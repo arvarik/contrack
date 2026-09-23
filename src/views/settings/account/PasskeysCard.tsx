@@ -26,16 +26,9 @@ import {
 import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { CARD, TONE_WASH } from "../../../lib/styles";
+import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-
-/** Save and cancel beside the name field: flat, with the one hover layer. */
-const EDIT_ACTION =
-  "state-layer p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded transition-colors";
-
-/** Rename and remove at the end of a passkey's row. */
-const ROW_ACTION =
-  "state-layer p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant rounded-lg transition-colors";
+import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -118,11 +111,8 @@ export const PasskeysCard = () => {
     const currentOrigin =
       typeof window !== "undefined" ? window.location.origin : "";
     return (
-      <div className={cn(CARD, "p-4 sm:p-6 space-y-3")}>
-        <div className="flex items-center gap-2">
-          <KeyRound className="w-5 h-5 text-on-surface-variant" />
-          <h3 className="text-base font-bold text-on-surface">Passkeys</h3>
-        </div>
+      <div className={cn(SETTINGS_CARD, "space-y-1")}>
+        <h3 className="text-sm font-bold text-on-surface">Passkeys</h3>
         <p className="text-sm text-on-surface-variant text-pretty">
           Passkeys need HTTPS or localhost. This page is open at{" "}
           <code>{currentOrigin}</code>.
@@ -132,13 +122,12 @@ export const PasskeysCard = () => {
   }
 
   return (
-    <div className={cn(CARD, "p-4 sm:p-6 space-y-4")}>
+    <div className={cn(SETTINGS_CARD, "space-y-4")}>
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-bold text-on-surface">Passkeys</h3>
-          <p className="text-xs text-on-surface-variant">
-            Sign in to this Contrack with Face ID, Touch ID, or your security
-            key.
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-on-surface">Passkeys</h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+            Sign in to this Contrack with Face ID, Touch ID, or a security key.
           </p>
         </div>
         {passkeys.length > 0 && (
@@ -173,11 +162,11 @@ export const PasskeysCard = () => {
           level={3}
         />
       ) : (
-        <ul className="divide-y divide-surface-container">
+        <ul className="space-y-4">
           {passkeys.map((passkey) => (
             <li
               key={passkey.id}
-              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              className="flex items-center justify-between gap-3"
             >
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 <span
@@ -190,7 +179,7 @@ export const PasskeysCard = () => {
                 </span>
                 <div className="flex-1 min-w-0">
                   {editingId === passkey.id ? (
-                    <div className="flex items-center gap-1.5 max-w-sm">
+                    <div className="flex items-center gap-2 max-w-sm">
                       <input
                         type="text"
                         value={editingName}
@@ -199,15 +188,16 @@ export const PasskeysCard = () => {
                           if (e.key === "Enter") submitRename(passkey.id);
                           if (e.key === "Escape") setEditingId(null);
                         }}
+                        aria-label={`Rename passkey ${passkey.name}`}
                         // eslint-disable-next-line jsx-a11y/no-autofocus
                         autoFocus
-                        className="px-2 py-1 rounded bg-surface-container-highest text-sm text-on-surface flex-1"
+                        className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
                       />
                       <button
                         type="button"
                         onClick={() => submitRename(passkey.id)}
                         disabled={renameMutation.isPending}
-                        className={cn(EDIT_ACTION, "text-primary")}
+                        className="btn-primary btn-sm btn-icon"
                         aria-label="Save name"
                       >
                         <Check className="w-4 h-4" />
@@ -215,10 +205,7 @@ export const PasskeysCard = () => {
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className={cn(
-                          EDIT_ACTION,
-                          "text-on-surface-variant hover:text-on-surface",
-                        )}
+                        className="btn-secondary btn-sm btn-icon"
                         aria-label="Cancel rename"
                       >
                         <X className="w-4 h-4" />
@@ -246,20 +233,22 @@ export const PasskeysCard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => startEditing(passkey)}
-                  className={cn(ROW_ACTION, "hover:text-on-surface")}
+                  className={ICON_BTN}
                   aria-label={`Rename ${passkey.name}`}
+                  title="Rename"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(passkey)}
-                  className={cn(ROW_ACTION, "hover:text-error")}
+                  className={cn(ICON_BTN, "hover:text-error")}
                   aria-label={`Remove ${passkey.name}`}
+                  title="Remove"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -276,7 +265,7 @@ export const PasskeysCard = () => {
           if (deleteTarget) removeMutation.mutate(deleteTarget.id);
         }}
         title="Remove passkey"
-        description="Remove this passkey? You won't be able to sign in with it anymore."
+        description={`You can no longer sign in with ${deleteTarget?.name ?? "it"}.`}
         confirmLabel="Remove passkey"
         tone="danger"
         busy={removeMutation.isPending}

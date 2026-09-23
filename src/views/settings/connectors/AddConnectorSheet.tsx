@@ -4,6 +4,10 @@
  * Reads supported kinds from `/api/connectors/kinds` and presents each option
  * with icon, description, and platform availability notes.
  *
+ * Each kind is a tile (`ConnectorKindTile`) that opens its form as a whole,
+ * so it lifts on hover (`lift`, "Elevation" in `.agent/STYLE.md`). The
+ * Connectors page shows the same tiles when nothing is connected yet.
+ *
  * @module views/settings/connectors/AddConnectorSheet
  */
 
@@ -28,10 +32,51 @@ interface AddConnectorSheetProps {
   onSelectKind: (kind: ConnectorKind) => void;
 }
 
-const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
+export const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
   ics: Calendar,
   imap: Mail,
   google: Globe,
+};
+
+/** One kind of connector: a tile that opens its form. */
+const ConnectorKindTile = ({
+  kind,
+  onChoose,
+}: {
+  kind: KindInfo;
+  onChoose: (kind: ConnectorKind) => void;
+}) => {
+  const Icon = KIND_ICONS[kind.kind] ?? Calendar;
+  return (
+    <button
+      type="button"
+      onClick={() => onChoose(kind.kind)}
+      className="lift state-layer w-full text-left flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low cursor-pointer"
+    >
+      <span
+        className={cn(
+          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+          TONE_WASH.primary,
+        )}
+      >
+        <Icon className="w-5 h-5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-on-surface">
+          {kind.label}
+        </span>{" "}
+        {/* The space keeps the name "Calendar Sync meetings…" for a
+            reader that ignores the blocks' own break. */}
+        <span className="block text-xs text-on-surface-variant mt-0.5 text-pretty">
+          {kind.description}
+        </span>
+      </span>
+      <ChevronRight
+        className="w-4 h-4 text-on-surface-variant shrink-0 mt-2.5"
+        aria-hidden="true"
+      />
+    </button>
+  );
 };
 
 export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
@@ -41,65 +86,34 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
 }) => {
   const { data: kinds, isLoading } = useConnectorKinds();
 
-  const handleChoose = (kind: KindInfo) => {
-    onSelectKind(kind.kind);
-  };
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add a connector" size="md">
       <div className="space-y-4 pt-2">
-        <p className="text-xs text-on-surface-variant leading-relaxed">
-          Choose a service to sync your interactions. Contrack connects directly
-          from your server — your data is never shared with third parties.
+        <p className="text-sm text-on-surface-variant text-pretty">
+          Choose a service to sync who you talk to. Contrack connects to it from
+          your own server, and shares your data with no one.
         </p>
 
         {isLoading && (
           <div className="flex items-center justify-center py-8 text-on-surface-variant">
             <Loader2 className="w-5 h-5 animate-spin mr-2" aria-hidden="true" />
-            <span className="text-sm">Loading available connectors…</span>
+            <span className="text-sm">Loading connectors…</span>
           </div>
         )}
 
         {!isLoading && kinds && (
           <div className="grid gap-2">
-            {kinds.map((k) => {
-              const Icon = KIND_ICONS[k.kind] ?? Calendar;
-              return (
-                <button
-                  key={k.kind}
-                  type="button"
-                  onClick={() => handleChoose(k)}
-                  className="hit-area state-layer w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-colors bg-surface-container border-surface-container-high cursor-pointer"
-                >
-                  <div
-                    className={cn(
-                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
-                      TONE_WASH.primary,
-                    )}
-                  >
-                    <Icon className="w-5 h-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-on-surface">
-                        {k.label}
-                      </span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant mt-0.5 leading-normal">
-                      {k.description}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    className="w-4 h-4 text-on-surface-variant shrink-0 mt-2"
-                    aria-hidden="true"
-                  />
-                </button>
-              );
-            })}
+            {kinds.map((k) => (
+              <ConnectorKindTile
+                key={k.kind}
+                kind={k}
+                onChoose={onSelectKind}
+              />
+            ))}
           </div>
         )}
 
-        <div className="flex justify-end pt-3 border-t border-surface-container-high/40">
+        <div className="flex justify-end pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>

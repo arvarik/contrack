@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiJson, jsonBody } from "./client";
 import { STALE_TIMES } from "../lib/queryConfig";
 
-export type MapLayer = "pins" | "heat" | "health";
+export type MapLayer = "pins" | "heat";
 export type MapBounds = [
   west: number,
   south: number,

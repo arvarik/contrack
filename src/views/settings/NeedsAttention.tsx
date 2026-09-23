@@ -8,38 +8,62 @@
  *
  * Completely omitted when all three counts are zero.
  *
+ * Each item is a tile that opens one page as a whole, so it lifts on hover
+ * (`lift`, "Elevation" in `.agent/STYLE.md`) and takes the hover layer on
+ * its face. The rail's count pills read the same numbers from
+ * `useAttentionCounts`.
+ *
  * @module views/settings/NeedsAttention
  */
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { ChevronRight, Copy, Sparkles, UploadCloud } from "lucide-react";
 import { useDedupeCount, useContacts } from "../../api";
 import { useImports } from "../../api/imports";
-import { SECTION_HEADING, TONE_WASH } from "../../lib/styles";
+import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { SETTINGS_SECTION_HEADING } from "./layout";
+import { SlideLink } from "./slide";
 
-export const NeedsAttention = () => {
+/** Failed imports count for this long. */
+const FAILED_IMPORT_WINDOW_MS = 30 * 86_400_000;
+
+/**
+ * The three things Settings can ask a person to do: possible duplicates to
+ * review, contacts never enriched, and imports that failed in the last 30
+ * days. The landing strip and the rail's count pills share them.
+ */
+export function useAttentionCounts() {
   const { data: dedupeData } = useDedupeCount();
-  const dedupeCount =
-    typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
   const { data: contacts = [] } = useContacts();
   const { data: imports = [] } = useImports();
 
-  const failedImportCount = useMemo(() => {
-    const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
-    return imports.filter(
-      (imp) =>
-        new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
-        (imp.status === "failed" || imp.failed > 0),
-    ).length;
-  }, [imports]);
+  const duplicates =
+    typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
 
-  const neverEnrichedCount = useMemo(
+  const neverEnriched = useMemo(
     () =>
       contacts.filter((c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost)
         .length,
     [contacts],
   );
+
+  const failedImports = useMemo(() => {
+    const since = Date.now() - FAILED_IMPORT_WINDOW_MS;
+    return imports.filter(
+      (imp) =>
+        new Date(imp.createdAt).getTime() >= since &&
+        (imp.status === "failed" || imp.failed > 0),
+    ).length;
+  }, [imports]);
+
+  return { duplicates, neverEnriched, failedImports };
+}
+
+const plural = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
+
+export const NeedsAttention = () => {
+  const { duplicates, neverEnriched, failedImports } = useAttentionCounts();
 
   const items: {
     path: string;
@@ -47,26 +71,26 @@ export const NeedsAttention = () => {
     icon: React.ComponentType<{ className?: string }>;
   }[] = [];
 
-  if (dedupeCount > 0) {
+  if (duplicates > 0) {
     items.push({
       path: "/settings/duplicates",
-      label: `Review ${dedupeCount} possible duplicate${dedupeCount === 1 ? "" : "s"}`,
+      label: `Review ${plural(duplicates, "possible duplicate", "possible duplicates")}`,
       icon: Copy,
     });
   }
 
-  if (neverEnrichedCount > 0) {
+  if (neverEnriched > 0) {
     items.push({
       path: "/settings/enrichment",
-      label: `Enrich ${neverEnrichedCount} contact${neverEnrichedCount === 1 ? "" : "s"}`,
+      label: `Enrich ${plural(neverEnriched, "contact", "contacts")}`,
       icon: Sparkles,
     });
   }
 
-  if (failedImportCount > 0) {
+  if (failedImports > 0) {
     items.push({
       path: "/settings/import",
-      label: `Retry ${failedImportCount} failed import${failedImportCount === 1 ? "" : "s"}`,
+      label: `Retry ${plural(failedImports, "failed import", "failed imports")}`,
       icon: UploadCloud,
     });
   }
@@ -76,16 +100,16 @@ export const NeedsAttention = () => {
   }
 
   return (
-    <section aria-label="Needs attention" className="space-y-2.5">
-      <h2 className={cn(SECTION_HEADING, "px-1")}>Needs attention</h2>
+    <section aria-label="Needs attention">
+      <h2 className={SETTINGS_SECTION_HEADING}>Needs attention</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {items.map((item) => {
           const Icon = item.icon;
           return (
-            <Link
+            <SlideLink
               key={item.path}
               to={item.path}
-              className="state-layer flex items-center gap-3 p-3.5 rounded-xl bg-primary/10 text-on-surface transition-colors min-h-[44px]"
+              className="lift state-layer flex items-center gap-3 p-3.5 rounded-xl bg-primary/10 text-on-surface min-h-[44px]"
             >
               <span
                 className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}
@@ -96,7 +120,7 @@ export const NeedsAttention = () => {
                 {item.label}
               </span>
               <ChevronRight className="w-4 h-4 text-primary shrink-0" />
-            </Link>
+            </SlideLink>
           );
         })}
       </div>

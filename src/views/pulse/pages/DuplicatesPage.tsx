@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { PAGE_TOP, PAGE_X } from "../../../lib/styles";
 import { NAMES } from "../../../lib/names";
@@ -15,7 +15,7 @@ export const DuplicatesPage = () => {
   usePageTitle(NAMES.possibleDuplicates.title);
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
+    <div className="w-full h-full overflow-y-auto bg-surface relative">
       <div
         className={cn(
           "max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8 pb-32",

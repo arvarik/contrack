@@ -7,23 +7,74 @@
  * - Copyable setup snippets for Claude Code, Claude Desktop, Cursor, and curl
  * - Live tools table reflecting the canonical MCP registry
  *
+ * Three sections, each a heading over a card, as on every settings page. A
+ * Copy is an action, so it is a `.btn-secondary`. The code wraps rather than
+ * scrolling sideways, so nothing is cut off at a card's edge, and a copy
+ * takes the exact text whatever the wrap.
+ *
  * @module views/settings/mcp/McpView
  */
 
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Copy, Check, ExternalLink, KeyRound } from "lucide-react";
+import { Copy, Check, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { Badge } from "../../../components/ui/Badge";
+import { useAuth } from "../../../components/auth/AuthGate";
 import { MCP_TOOLS } from "../../../../shared/mcpTools";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { SETTINGS_PAGE } from "../layout";
+import {
+  SETTINGS_CARD,
+  SETTINGS_INPUT,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
 
-/** A Copy button beside a value: flat, on a resting wash, with the hover layer. */
-const COPY_BUTTON =
-  "hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container text-on-surface transition-colors shrink-0 min-h-[44px] min-w-[44px]";
+/** A value or a snippet, on the card's wash, in the code face. */
+const CODE_BOX =
+  "rounded-xl bg-surface-container-highest px-3 py-2.5 font-mono text-xs text-on-surface whitespace-pre-wrap break-all";
+
+/** Copy, and "Copied" for two seconds after. */
+const CopyButton = ({
+  text,
+  label,
+  what,
+}: {
+  text: string;
+  /** The accessible name: "Copy Claude Code snippet". */
+  label: string;
+  /** What the toast says was copied. */
+  what: string;
+}) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await copyToClipboard(text);
+      setCopied(true);
+      toast.success(`${what} copied`);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error(CLIPBOARD_DENIED);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={label}
+      className="btn-secondary btn-sm shrink-0"
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5 text-success" aria-hidden="true" />
+      ) : (
+        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+      )}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+};
 
 interface SnippetBlockProps {
   id: string;
@@ -37,81 +88,34 @@ const SnippetBlock: React.FC<SnippetBlockProps> = ({
   title,
   description,
   code,
-}) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await copyToClipboard(code);
-      setCopied(true);
-      toast.success(`${title} snippet copied`);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error(CLIPBOARD_DENIED);
-    }
-  };
-
-  return (
-    <div className="space-y-2" id={id}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold text-on-surface">{title}</h3>
-          <p className="text-xs text-on-surface-variant">{description}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label={`Copy ${title} snippet`}
-          className={COPY_BUTTON}
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-success" aria-hidden="true" />
-              <span>Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy
-                className="w-3.5 h-3.5 text-on-surface-variant"
-                aria-hidden="true"
-              />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+}) => (
+  <div className="space-y-2 scroll-mt-20" id={id}>
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <h3 className="text-sm font-bold text-on-surface">{title}</h3>
+        <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+          {description}
+        </p>
       </div>
-      <div
-        tabIndex={0}
-        role="region"
-        aria-label={`${title} code snippet`}
-        className="relative rounded-xl bg-surface-container p-3 font-mono text-xs text-on-surface overflow-x-auto border border-surface-container-high/40"
-      >
-        <pre className="whitespace-pre">
-          <code>{code}</code>
-        </pre>
-      </div>
+      <CopyButton
+        text={code}
+        label={`Copy ${title} snippet`}
+        what={`${title} snippet`}
+      />
     </div>
-  );
-};
+    <pre className={CODE_BOX}>
+      <code>{code}</code>
+    </pre>
+  </div>
+);
 
 export const McpView: React.FC = () => {
+  const { authRequired } = useAuth();
   const [token, setToken] = useState("");
-  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const endpointUrl = `${origin}/api/mcp`;
   const displayToken = token.trim() || "<your-token>";
-
-  const handleCopyUrl = async () => {
-    try {
-      await copyToClipboard(endpointUrl);
-      setCopiedUrl(true);
-      toast.success("Endpoint URL copied");
-      setTimeout(() => setCopiedUrl(false), 2000);
-    } catch {
-      toast.error(CLIPBOARD_DENIED);
-    }
-  };
 
   const claudeCodeSnippet = `claude mcp add --transport http contrack ${endpointUrl} --header "Authorization: Bearer ${displayToken}"`;
 
@@ -141,73 +145,52 @@ export const McpView: React.FC = () => {
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'`;
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      {/* Endpoint & Token Card */}
-      <div className={cn(CARD, "space-y-6")} id="endpoint">
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 className={cn(SECTION_HEADING, "mb-1")}>
-                MCP server endpoint
-              </h2>
-              <p className="text-xs text-on-surface-variant">
-                Streamable HTTP transport endpoint for all MCP hosts and
-                scripts.
-              </p>
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
+      {/* Endpoint and token */}
+      <section aria-labelledby="mcp-endpoint-heading">
+        <h2 id="mcp-endpoint-heading" className={SETTINGS_SECTION_HEADING}>
+          Endpoint
+        </h2>
+        <div className={cn(SETTINGS_CARD, "space-y-6")}>
+          <div id="endpoint" className="space-y-2 scroll-mt-20">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-on-surface">
+                  MCP endpoint URL
+                </h3>
+                <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+                  The one address every MCP client and script uses, over
+                  streamable HTTP.
+                </p>
+              </div>
+              <CopyButton
+                text={endpointUrl}
+                label="Copy MCP endpoint URL"
+                what="Endpoint URL"
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <span
-                id="mcp-endpoint"
-                className="font-mono text-xs px-2.5 py-1.5 rounded-lg bg-surface-container text-on-surface border border-surface-container-high/50 select-all"
-              >
-                {endpointUrl}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyUrl}
-                aria-label="Copy MCP endpoint URL"
-                className={COPY_BUTTON}
-              >
-                {copiedUrl ? (
-                  <>
-                    <Check
-                      className="w-3.5 h-3.5 text-success"
-                      aria-hidden="true"
-                    />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy
-                      className="w-3.5 h-3.5 text-on-surface-variant"
-                      aria-hidden="true"
-                    />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <p id="mcp-endpoint" className={cn(CODE_BOX, "select-all")}>
+              {endpointUrl}
+            </p>
           </div>
 
-          <div
-            className="pt-4 border-t border-surface-container space-y-3"
-            id="token"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <div id="token" className="space-y-2 scroll-mt-20">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
               <label
                 htmlFor="mcp-token-input"
-                className="text-sm font-semibold text-on-surface flex items-center gap-1.5"
+                className="flex items-center gap-1.5 text-sm font-bold text-on-surface"
               >
                 <KeyRound className="w-4 h-4 text-primary" aria-hidden="true" />
                 Personal API token
               </label>
-              <Link
-                to="/settings/account"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <span>Create a token in Account</span>
-                <ExternalLink className="w-3 h-3" aria-hidden="true" />
-              </Link>
+              {authRequired && (
+                <Link
+                  to="/settings/account#tokens"
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  Create a token in Account
+                </Link>
+              )}
             </div>
 
             <input
@@ -217,109 +200,107 @@ export const McpView: React.FC = () => {
               spellCheck="false"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste your ctk_... token to preview snippets"
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-container border border-surface-container-high/60 text-on-surface text-sm placeholder:text-on-surface-variant/50 min-h-[44px]"
+              placeholder="Paste a token"
+              aria-describedby="mcp-token-hint"
+              className={cn(SETTINGS_INPUT, "font-mono placeholder:font-body")}
             />
-            <p className="text-xs text-on-surface-variant">
-              Your token is never saved or sent to the server. It is only used
-              in memory to format the copyable snippets below.
+            <p
+              id="mcp-token-hint"
+              className="text-xs text-on-surface-variant text-pretty"
+            >
+              {authRequired
+                ? "The token stays on this page. It is never saved or sent anywhere, only put into the snippets below."
+                : "This Contrack does not ask anyone to sign in, so a client connects without a token. A token pasted here only fills in the snippets."}
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Host Snippets Card */}
-      <div className={cn(CARD, "space-y-6")} id="snippets">
-        <div>
-          <h2 className={cn(SECTION_HEADING, "mb-1")}>Host configuration</h2>
-          <p className="text-xs text-on-surface-variant">
-            Copy the configuration or command for your preferred MCP client.
+      {/* Host snippets */}
+      <section aria-labelledby="mcp-snippets-heading">
+        <h2 id="mcp-snippets-heading" className={SETTINGS_SECTION_HEADING}>
+          Connect a client
+        </h2>
+        <div className={cn(SETTINGS_CARD, "space-y-8")} id="snippets">
+          <SnippetBlock
+            id="claude-code"
+            title="Claude Code"
+            description="Adds Contrack to the Claude Code command line."
+            code={claudeCodeSnippet}
+          />
+          <SnippetBlock
+            id="claude-desktop"
+            title="Claude Desktop and Cursor"
+            description="Goes in the mcpServers part of the client's config, through the mcp-remote bridge."
+            code={desktopSnippet}
+          />
+          <SnippetBlock
+            id="curl"
+            title="curl"
+            description="Sends one request, to check that the endpoint answers."
+            code={curlSnippet}
+          />
+        </div>
+      </section>
+
+      {/* Tools */}
+      <section aria-labelledby="mcp-tools-heading" id="tools">
+        <h2 id="mcp-tools-heading" className={SETTINGS_SECTION_HEADING}>
+          Tools
+        </h2>
+        <div className={cn(SETTINGS_CARD, "space-y-4")}>
+          <p className="text-sm text-on-surface-variant text-pretty">
+            {MCP_TOOLS.length} tools a client can call. A read-only tool changes
+            nothing.
           </p>
-        </div>
-
-        <div className="space-y-6 divide-y divide-surface-container">
-          <div className="pt-0">
-            <SnippetBlock
-              id="claude-code"
-              title="Claude Code"
-              description="Register the HTTP transport with the Claude Code CLI."
-              code={claudeCodeSnippet}
-            />
-          </div>
-
-          <div className="pt-6">
-            <SnippetBlock
-              id="claude-desktop"
-              title="Claude Desktop and Cursor"
-              description="Add to your mcpServers configuration using the standard mcp-remote bridge."
-              code={desktopSnippet}
-            />
-          </div>
-
-          <div className="pt-6">
-            <SnippetBlock
-              id="curl"
-              title="curl (HTTP test)"
-              description="Send an initialize request directly to test connectivity."
-              code={curlSnippet}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Tools Table Card */}
-      <div className={cn(CARD, "space-y-4")} id="tools">
-        <div>
-          <h2 className={cn(SECTION_HEADING, "mb-1")}>Tools</h2>
-          <p className="text-xs text-on-surface-variant">
-            {MCP_TOOLS.length} tools exposed to MCP hosts. Read-only tools do
-            not mutate data.
-          </p>
-        </div>
-
-        <div
-          tabIndex={0}
-          role="region"
-          aria-label="MCP tools list"
-          className="overflow-x-auto -mx-6 sm:mx-0"
-        >
-          <table className="w-full text-left text-xs border-collapse">
+          {/* A table with no lines: the columns and the space between rows
+              hold it. On a phone the access badge moves under the tool's
+              name, so the two columns left fit with no sideways scroll. */}
+          <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-surface-container-high text-on-surface-variant font-medium">
-                <th scope="col" className="py-2.5 px-4 sm:px-3 font-semibold">
+              <tr className={SECTION_HEADING}>
+                <th scope="col" className="pb-2 pr-4 font-bold">
                   Tool
                 </th>
-                <th scope="col" className="py-2.5 px-4 sm:px-3 font-semibold">
-                  Description
+                <th scope="col" className="pb-2 pr-4 font-bold">
+                  What it does
                 </th>
                 <th
                   scope="col"
-                  className="py-2.5 px-4 sm:px-3 font-semibold text-right"
+                  className="pb-2 font-bold text-right hidden sm:table-cell"
                 >
                   Access
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-surface-container">
-              {MCP_TOOLS.map((tool) => (
-                <tr key={tool.name}>
-                  <td className="py-3 px-4 sm:px-3 font-mono font-medium text-primary whitespace-nowrap">
-                    {tool.name}
-                  </td>
-                  <td className="py-3 px-4 sm:px-3 text-on-surface max-w-md">
-                    {tool.description}
-                  </td>
-                  <td className="py-3 px-4 sm:px-3 text-right whitespace-nowrap">
-                    <Badge tone={tool.readOnly ? "primary" : "neutral"}>
-                      {tool.readOnly ? "Read-only" : "Read / write"}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {MCP_TOOLS.map((tool) => {
+                const access = (
+                  <Badge tone={tool.readOnly ? "primary" : "neutral"}>
+                    {tool.readOnly ? "Read-only" : "Read and write"}
+                  </Badge>
+                );
+                return (
+                  <tr key={tool.name} className="align-top">
+                    <td className="py-2 pr-4 w-2/5 sm:w-56">
+                      <span className="font-mono text-xs font-semibold text-on-primary-wash break-all">
+                        {tool.name}
+                      </span>
+                      <span className="block mt-1 sm:hidden">{access}</span>
+                    </td>
+                    <td className="py-2 pr-4 text-sm text-on-surface text-pretty">
+                      {tool.description}
+                    </td>
+                    <td className="py-2 text-right whitespace-nowrap hidden sm:table-cell">
+                      {access}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

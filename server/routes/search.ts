@@ -223,18 +223,24 @@ router.post(
       })
       .parse(req.body);
     const ids = [...new Set(contactIds)];
-    const contacts = sqlite
-      .prepare(
-        `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c
-           WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
-      )
-      .all(scope.ownerId, JSON.stringify(ids)) as {
-      id: string;
-      name: string;
-      role?: string;
-      company?: string;
-      location?: string;
-    }[];
+    // The facts the brief may use. Industry is one of them: a question such
+    // as "who works in fintech" is answered from it, and without it the
+    // model said nobody did. Read twice, before and after the model runs.
+    const readContacts = () =>
+      sqlite
+        .prepare(
+          `SELECT c.id,c.name,c.role,c.company,c.industry,c.location FROM contacts c
+             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+        )
+        .all(scope.ownerId, JSON.stringify(ids)) as {
+        id: string;
+        name: string;
+        role?: string;
+        company?: string;
+        industry?: string;
+        location?: string;
+      }[];
+    const contacts = readContacts();
     // A contact id the caller does not own is missing as far as this owner is
     // concerned, so it takes the same 409 a deleted id has always taken. The
     // two answers are identical, which is what rule 4 asks for.
@@ -267,13 +273,7 @@ router.post(
         10_000,
         controller.signal,
       );
-      const current = sqlite
-        .prepare(
-          `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c
-             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
-        )
-        .all(scope.ownerId, JSON.stringify(ids));
-      if (JSON.stringify(current) !== source)
+      if (JSON.stringify(readContacts()) !== source)
         throw new Error("Contacts changed. Generate a new summary.");
       if (!res.destroyed)
         res.write(JSON.stringify({ phase: "complete", text }) + "\n");

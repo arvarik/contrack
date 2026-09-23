@@ -9,7 +9,6 @@
 import tzlookup from "tz-lookup";
 import { isPastDay } from "../../../shared/dates";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
-import { scoreView } from "../../../shared/scoreBand";
 import { boundsContain } from "./mapMath";
 
 export interface TopBucket {
@@ -27,21 +26,10 @@ export interface TimeZoneBucket {
 export interface MapStats {
   /** Contacts in view (inside map bounds and passing filter). */
   inView: number;
-  /** Total contacts matching the filter query. */
+  /** Contacts matching the filter, in view or not. */
   matching: number;
-  /** Total contacts in dataset before filtering. */
-  total: number;
-  /**
-   * In-view contacts in the At risk band (a score under 40). Only a tracked
-   * contact has a score, so an untracked pin counts for nobody.
-   */
-  atRisk: number;
   /** In-view contacts whose next follow-up's day is before today. */
   overdue: number;
-  /** In-view contacts who have never been contacted. */
-  neverContacted: number;
-  /** The mean score of the in-view contacts that have one, or null for none. */
-  avgScore: number | null;
   /** Top 5 industries in view, sorted by count descending then name ascending. */
   topIndustries: TopBucket[];
   /** Top 5 companies in view, sorted by count descending then name ascending. */
@@ -100,15 +88,12 @@ export function getInViewContacts(
  * @param contacts Contacts matching current filter (or all placed contacts).
  * @param bounds Viewport bounding box (null means treat all placed contacts as in view).
  * @param now Current clock time for overdue / time zone calculations.
- * @param totalCount Optional total contact count before filtering (defaults to contacts.length).
  */
 export function computeMapStats(
   contacts: readonly MapContact[],
   bounds?: MapBounds | null,
   now: Date = new Date(),
-  totalCount?: number,
 ): MapStats {
-  const total = totalCount ?? contacts.length;
   const matching = contacts.length;
 
   const inViewContacts = getInViewContacts(contacts, bounds);
@@ -117,11 +102,7 @@ export function computeMapStats(
     return {
       inView: 0,
       matching,
-      total,
-      atRisk: 0,
       overdue: 0,
-      neverContacted: 0,
-      avgScore: null,
       topIndustries: [],
       topCompanies: [],
       topTags: [],
@@ -129,11 +110,7 @@ export function computeMapStats(
     };
   }
 
-  let atRisk = 0;
   let overdue = 0;
-  let neverContacted = 0;
-  let scoreSum = 0;
-  let scoredCount = 0;
 
   const industryCounts = new Map<string, number>();
   const companyCounts = new Map<string, number>();
@@ -144,31 +121,10 @@ export function computeMapStats(
   >();
 
   for (const c of inViewContacts) {
-    // The score and the band. A contact nobody tracks has no score, and one
-    // nobody has met yet has none either. Neither counts as At risk and
-    // neither moves the average: the pane used to count both, so a fresh
-    // import read as an address book in trouble.
-    const view = scoreView(c);
-    if (view.kind === "scored") {
-      scoreSum += view.score;
-      scoredCount++;
-      if (view.band.band === "at-risk") {
-        atRisk++;
-      }
-    }
-
     // Overdue: the follow-up's day is before today, as the contact page's
     // banner counts it. Compared as instants, a follow-up set to "Tomorrow"
     // was one overdue by 6 PM in Los Angeles.
     if (isPastDay(c.nextFollowUpAt, now)) overdue++;
-
-    // Never contacted
-    if (
-      !c.lastContactedAt &&
-      (!c.interactionCount || c.interactionCount === 0)
-    ) {
-      neverContacted++;
-    }
 
     // Industry
     if (c.industry && c.industry.trim()) {
@@ -222,8 +178,6 @@ export function computeMapStats(
     }
   }
 
-  const avgScore = scoredCount > 0 ? Math.round(scoreSum / scoredCount) : null;
-
   const timeZones: TimeZoneBucket[] = Array.from(tzBuckets.entries())
     .map(([offset, data]) => ({
       offset,
@@ -236,11 +190,7 @@ export function computeMapStats(
   return {
     inView,
     matching,
-    total,
-    atRisk,
     overdue,
-    neverContacted,
-    avgScore,
     topIndustries: topFive(industryCounts),
     topCompanies: topFive(companyCounts),
     topTags: topFive(tagCounts),

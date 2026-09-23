@@ -21,7 +21,6 @@ import { ContactList } from "../../types";
 import { ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
 import {
-  CARD,
   ICON_BTN,
   SECTION_HEADING,
   SELECTED_TINT,
@@ -170,18 +169,26 @@ export const ListDetailPanel = ({
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    // A size container: the panel is a card beside the lists, as narrow as
+    // 360 px on a 1024 px window, so its header reads its own width.
+    <div className="@container h-full flex flex-col overflow-hidden">
       {/* ── Panel Header ─────────────────────────────────────────────────── */}
       {!hideMobileHeader && (
         <div className="p-5 bg-surface-container-low shrink-0 flex items-center gap-3">
-          <button onClick={onClose} className={ICON_BTN} title="Close">
-            <X className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={onClose}
+            className={ICON_BTN}
+            aria-label="Close list"
+            title="Close"
+          >
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
           <div className="flex-1 min-w-0">
             <h3 className="font-bold font-headline text-base leading-tight truncate">
               {list.name}
             </h3>
-            <p className="text-xs text-on-surface-variant mt-0.5">
+            <p className="text-xs text-on-surface-variant mt-0.5 whitespace-nowrap">
               {members.length} {members.length === 1 ? "contact" : "contacts"}
             </p>
           </div>
@@ -192,8 +199,8 @@ export const ListDetailPanel = ({
             title="View filtered in Network page"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">View in Network</span>
-            <span className="sm:hidden">Network</span>
+            <span className="hidden @md:inline">View in Network</span>
+            <span className="@md:hidden">Network</span>
           </button>
         </div>
       )}
@@ -220,7 +227,7 @@ export const ListDetailPanel = ({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto nice-scrollbar">
+      <div className="flex-1 overflow-y-auto">
         {/* ── Icon Picker ──────────────────────────────────────────────────── */}
         <section className="p-5 space-y-4">
           <h4 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
@@ -323,7 +330,9 @@ export const ListDetailPanel = ({
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 20, height: 0 }}
-                  className={cn(CARD, "flex items-center gap-3 p-3 group")}
+                  // A row on the wash, on the panel's white surface, and not
+                  // a card on a card.
+                  className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 group"
                 >
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-surface-container-low">

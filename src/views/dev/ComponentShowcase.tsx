@@ -386,9 +386,9 @@ export const ComponentShowcase = () => {
               ))}
             </div>
           </Group>
-          <Group title="Cards: CARD and CARD_INTERACTIVE">
+          <Group title="Cards: CARD, CARD_INTERACTIVE and lift">
             {/* On the page's own paper, where a card sits in the app. */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl bg-surface p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 rounded-2xl bg-surface p-4">
               <div className={CARD}>
                 <Token>CARD</Token>
                 <p className="text-sm text-on-surface mt-2">
@@ -402,6 +402,15 @@ export const ComponentShowcase = () => {
                 <Token>CARD_INTERACTIVE</Token>
                 <p className="text-sm text-on-surface mt-2">
                   A card that is a control. It rises on hover.
+                </p>
+              </button>
+              <button
+                type="button"
+                className="state-layer lift self-start rounded-xl bg-surface-container-low p-4 text-left"
+              >
+                <Token>lift</Token>
+                <p className="text-sm text-on-surface mt-2">
+                  A tile that is a control, smaller than a card. It rises 1 px.
                 </p>
               </button>
               <div className="glass-panel rounded-2xl p-6 shadow-xl">

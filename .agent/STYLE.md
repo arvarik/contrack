@@ -256,13 +256,14 @@ contact's vibe and the dark palette.
   fails on a class string with a solid `bg-primary`, `rounded-full` and
   `px-2` or more outside its allow-list.
 
-### Hover: three kinds of surface
+### Hover: four kinds of surface
 
-| Surface                                                   | Hover                                             |
-| --------------------------------------------------------- | ------------------------------------------------- |
-| A flat control: a row, a ghost button, a pill, a nav item | `state-layer`: a 6 percent ink layer, 10 on press |
-| A card that is a control: a search result, a tile         | `CARD_INTERACTIVE`: rises 2 px, shadow a step up  |
-| A static card                                             | None                                              |
+| Surface                                                              | Hover                                             |
+| -------------------------------------------------------------------- | ------------------------------------------------- |
+| A flat control: a row in a list, a ghost button, a pill, a nav item  | `state-layer`: a 6 percent ink layer, 10 on press |
+| A tile that is a control: a chip on the page, a row on a card's wash | `lift`: rises 1 px, a soft shadow, down on press  |
+| A card that is a control: a search result                            | `CARD_INTERACTIVE`: rises 2 px, shadow a step up  |
+| A static card, a static row                                          | None                                              |
 
 The layer is a background image, so a resting wash or a selected tint stays
 under it, on any surface and in both palettes. "One surface step up" meant a
@@ -275,6 +276,60 @@ recipes had grown on three pages.
 - ❌ A `shadow-*`, `ring-*`, `scale-*` or `translate-*` hover on a card. The
   card class owns its hover.
 - ❌ Scaling anything that holds text. A swatch or an avatar may scale.
+
+### Elevation: when a thing lifts
+
+A lift says "this whole thing opens something". It is earned, not
+decoration, so the rule is short:
+
+1. **It lifts when it is a self-contained surface that acts as one
+   control**: it has its own face (a card, a tile, a chip, a row on a wash
+   with space around it) and a press anywhere on it opens or runs one thing.
+   A card lifts 2 px (`card-interactive`), and anything smaller lifts 1 px
+   (`lift`).
+2. **It never lifts when it is one row in a list of rows** (the contact
+   list, the Up next queue, a menu, the history, the settings rail). Rows
+   touch or nearly touch, and a lift would stack one over its neighbour.
+   They take the state layer.
+3. **It never lifts when it is a button.** A button has its own edge and
+   press (`.btn-*`) or the state layer (`ICON_BTN`, `BTN_QUIET`).
+4. **It never lifts when it is static** (a card that only shows), or when
+   it holds text a person reads while the pointer rests on it.
+
+- ✅ `lift` carries its own transition. Add no `transition-*` class beside
+  it, or the transform snaps.
+- ✅ `lift` and `state-layer` may sit together: the tile rises and its face
+  takes the layer.
+- ❌ A hand-rolled `hover:-translate-y-*` or `hover:shadow-*`.
+
+### Scrollbars: one bar
+
+Every scroller draws the same thin bar: the hairline token for the thumb,
+no track (the base layer in `src/index.css`, for all elements). Add no
+scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
+scrolls sideways. The Network list keeps its bar on the left edge
+(`dir="rtl"`), away from the letter rail.
+
+### The right-hand panel: one rail, one panel
+
+A page with a side panel (Ask Contrack's history, the map's insights) uses
+`SidePanel` (`src/components/layout/SidePanel.tsx`), the left nav's mirror:
+
+- A rail, 64 px, the nav's width and surface, in the layout at the right
+  edge. It holds the panel's icon, a disclosure (`aria-expanded`,
+  `aria-controls`) with a `RailTooltip` that opens to the left.
+- The panel, 320 px, slides out from under the rail over the page (an
+  overlay, with a soft shadow on its open edge, `.side-panel`), so opening
+  it moves nothing on the page. Its heading row: the title, a count, the
+  actions, then Hide (`PanelRightClose`). However it closes (Hide, Escape
+  inside it, the page's own key), a keyboard inside it lands on the rail
+  icon. A closed panel is `inert`.
+- The page keeps the panel's 320 px clear of what matters under it where it
+  can. Ask Contrack places its column so the open panel never covers the
+  search box (`ASK_COLUMN`), and the map fits its pins beside the panel.
+- From `lg`. Below it the page opens the same content in a bottom sheet.
+- ❌ A panel that pushes the page's content aside, a floating button that
+  stands in for the rail, or a second header style for a panel.
 
 ### Selected: one look
 
@@ -365,6 +420,22 @@ children (a search box, filters, a form)
   in small type (`PAGE_EYEBROW`). Its text is the parent's name and its
   accessible name is "Back to …", like every back control in the app,
   because the sidebar has a link with the bare name too.
+- A back link names the page's real parent, and only where nothing else on
+  screen already leads there. Settings shows none from `lg`: the rail and
+  the sidebar are both on screen, and the link pushed every settings title
+  20 px below every other page's. Below `lg` a settings page has
+  "‹ Settings", back to the list, and the list has none: the tab bar is the
+  way out. `settingsBackLink` in `src/views/settings/registry.ts` is the
+  rule.
+- Below `lg` the move between the settings list and a page slides: in from
+  the right going down, out to the right going back, at the slow duration
+  on the curve (`src/views/settings/slide.tsx`, the View Transitions API,
+  and the block at the end of `src/index.css`). Reduced motion, from the
+  system or the Motion row, navigates at once.
+- A settings page's description is its registry `description`, drawn by
+  the shell, and its buttons go through `SettingsHeaderActions` into the
+  header's actions. ❌ A page that writes its own intro paragraph under
+  the header, or its own row of buttons above its first card.
 - The title block shrinks to its longest word, so the actions stay at the
   right and the description wraps beside them, and they drop under the
   block only on a phone. The title is 24 px on a phone and 30 px from `md`
@@ -892,7 +963,7 @@ page's title.
 `CardFrame` draws no line between its header and its body and carries no
 icon. The `h2` is the title, and the count follows it as muted text inside
 the `h2` after a screen-reader-only comma, so the section is named "Up next,
-10". `badge` and `headerAction` keep their places.
+10". `headerAction` keeps its place at the header's end.
 
 ### An empty card is a line
 
@@ -971,14 +1042,17 @@ padding.
 
 Every list row on a Pulse card that is not the queue (Inbox, Coming up) is
 `PULSE_ROW` from `lib/pulseStyles.ts`: `rounded-xl px-3 py-2.5` on
-`bg-surface-container-low/70`, 44 px tall at least, no border, the state
-layer on hover, and the whole row is the link. An Inbox row's icon sits in a
-small tile in its tone: new people `success`, possible duplicates `warning`,
-correspondents `primary`, the hygiene rows `neutral`. The count in a row's
-sentence is bold (`4 without a company`). A fact at the right edge is
-`PULSE_CHIP_NEUTRAL`, "In 10 days". Two more type roles: `figure` for the
-one large number on a card (Keeping up's "31") and `insight` for the
-insight's paragraph at 15 px.
+`bg-surface-container-low/70`, 44 px tall at least, no border, and the
+whole row is the link. It has its own face and space around it, so it lifts
+on hover (`lift`) and its face takes the state layer. The Ghosts row lifts
+while it is closed. Open, the item holds the names too, so the button takes
+the state layer alone, and each name is a chip that lifts. An Inbox row's
+icon sits in a small tile in its tone: new people `success`, possible
+duplicates `warning`, correspondents `primary`, the hygiene rows `neutral`.
+The count in a row's sentence is bold (`4 without a company`). A fact at
+the right edge is `PULSE_CHIP_NEUTRAL`, "In 10 days". Two more type roles:
+`figure` for the one large number on a card (Keeping up's "31") and
+`insight` for the insight's paragraph at 15 px.
 
 - ✅ Inbox with nothing to do, Coming up with nothing in two weeks, Daily
   insight without a key: `variant="line"`, one sentence, at most one link.
@@ -992,7 +1066,7 @@ insight's paragraph at 15 px.
 - ✅ One hue for a part-of-whole chart: `COMPOSITION_RAMP`, the primary at
   six steps of opacity, Other in the neutral track tone.
 - ❌ `--color-ai` on a chart of people. It marks AI-derived data only, and
-  the insight's badge is the one place on Pulse that is.
+  the sparkle on the insight's category is the one place on Pulse that is.
 - ❌ A native `title` as the one way to read a value. The heatmap's tooltip
   opens on hover and on a tap, and its words are in a hidden list too.
 - ❌ A line that promises a feature ("shows after four weeks"). Say the

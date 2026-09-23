@@ -35,7 +35,7 @@ const CREDITED_STYLE = {
 
 /**
  * The default basemap's credit, as long as it is. A short credit fits
- * anywhere, and this one ran over the stats strip at 800 and 1024 px.
+ * anywhere, and this one ran over the bottom line at 800 and 1024 px.
  */
 const LONG_CREDIT_STYLE = {
   ...CREDITED_STYLE,
@@ -156,7 +156,7 @@ test.describe("map", () => {
     const pins = page.getByRole("button", { name: /, / });
     const before = await pins.count();
     const cluster = page.getByRole("button", {
-      name: "3 contacts, 0 at risk, zoom in",
+      name: "3 contacts, zoom in",
     });
     await expect(cluster).toBeVisible();
     await cluster.click();
@@ -189,14 +189,13 @@ test.describe("map", () => {
     await stubBasemap(page);
     await page.goto("/map");
 
-    // Close insights pane so Tokyo cluster on the right edge is unobstructed
-    const pane = page.getByRole("complementary", { name: "Map insights" });
-    await pane.getByRole("button", { name: "Close insights" }).click();
-    await expect(pane).toHaveCount(0);
+    // Hide the insights, so the Tokyo cluster at the right edge is clear.
+    await page.getByRole("button", { name: "Hide map insights" }).click();
+    await expect(
+      page.getByRole("button", { name: "Map insights", exact: true }),
+    ).toHaveAttribute("aria-expanded", "false");
 
-    await page
-      .getByRole("button", { name: "2 contacts, 0 at risk, zoom in" })
-      .click();
+    await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
     const list = page.getByRole("list", { name: "People at this place" });
     await expect(list.getByRole("button")).toHaveCount(2);
     await list
@@ -478,8 +477,10 @@ test.describe("map", () => {
     // Closed, the pin glides to the middle of the open map.
     await page.mouse.click(120, 500);
     await expect(page).toHaveURL(/\/map$/);
+    // The open insights panel covers the map's right edge, and a closed one
+    // is in the page but covers nothing.
     const paneCount = await page
-      .getByRole("complementary", { name: "Map insights" })
+      .locator('[aria-label="Map insights"][data-covers-map="right"]')
       .count();
     const rightCover = paneCount > 0 ? 320 : 0;
     await expect
@@ -611,14 +612,15 @@ test.describe("map", () => {
         );
       return {
         card: above(".contact-map .maplibregl-popup"),
-        pin: above(".contact-map .maplibregl-marker"),
+        // A pin, not a cluster: the first marker can be either.
+        pin: above(".contact-map .maplibregl-marker:has([data-contact-id])"),
       };
     });
     expect(stacking.card).toBeGreaterThan(stacking.pin);
     expect(stacking.pin).toBeGreaterThanOrEqual(1);
   });
 
-  test("keeps the toolbar and the stats strip clear of an open contact", async ({
+  test("keeps the toolbar and the bottom line clear of an open contact", async ({
     page,
     seed,
   }) => {
@@ -645,13 +647,99 @@ test.describe("map", () => {
       page.getByRole("textbox", { name: "Filter contacts" }),
       page.getByRole("button", { name: "Fit all" }),
       page.getByRole("button", { name: "Select contacts" }),
-      page.getByRole("region", { name: "Map viewport statistics" }),
+      page.getByRole("region", { name: "In view" }),
     ];
     for (const control of clear) {
       await expect(control).toBeVisible();
       const box = (await control.boundingBox())!;
       expect(box.x + box.width).toBeLessThanOrEqual(panel.x);
     }
+  });
+
+  test("keeps the insights on a rail beside the map, and its panel over it", async ({
+    page,
+  }) => {
+    // The panel pushed nothing aside, and a floating Insights button stood
+    // in for a way to open it. The rail's icon opens and closes it now.
+    await stubBasemap(page);
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toHaveAttribute("data-map-ready", "true");
+    const icon = page.getByRole("button", {
+      name: "Map insights",
+      exact: true,
+    });
+    const panel = page.locator("#map-insights");
+    await expect(icon).toHaveAttribute("aria-expanded", "true");
+    await expect(panel).toHaveAttribute("data-covers-map", "right");
+
+    // The map ends at the rail, and MapLibre drew its canvas to fit.
+    const width = page.viewportSize()!.width;
+    const mapBox = (await map.boundingBox())!;
+    expect(Math.round(mapBox.x + mapBox.width)).toBe(width - 64);
+    const canvas = (await map.locator("canvas").first().boundingBox())!;
+    expect(Math.round(canvas.width)).toBe(Math.round(mapBox.width));
+    // The zoom buttons keep clear of the open panel.
+    const zoom = (await map
+      .getByRole("button", { name: "Zoom in", exact: true })
+      .boundingBox())!;
+    expect(zoom.x + zoom.width).toBeLessThanOrEqual(
+      (await panel.boundingBox())!.x,
+    );
+
+    await page.getByRole("button", { name: "Hide map insights" }).click();
+    await expect(icon).toHaveAttribute("aria-expanded", "false");
+    await expect(icon).toBeFocused();
+    await expect(panel).not.toHaveAttribute("data-covers-map", "right");
+    // It slid over the map, so the map kept its width.
+    expect(Math.round((await map.boundingBox())!.width)).toBe(
+      Math.round(mapBox.width),
+    );
+
+    await page.keyboard.press("i");
+    await expect(icon).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("draws the heat for the pins over the world, with its legend", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.goto("/map?layer=heat");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toHaveAttribute("data-map-ready", "true");
+    await expect(page.getByRole("radio", { name: "Heat" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    const line = page.getByRole("region", { name: "In view" });
+    await expect(line).toContainText("FewerMore");
+    // Pins over the heat they stood for made Heat look like Pins.
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toHaveCount(0);
+  });
+
+  test("brings the pins back close in, and zooms back out to the heat", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        "contrack.map.lastView",
+        JSON.stringify({ longitude: -0.1278, latitude: 51.5074, zoom: 10 }),
+      ),
+    );
+    await page.goto("/map?layer=heat");
+    const map = page.getByRole("region", { name: "Contact map" });
+    const ada = map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" });
+    // Past zoom 9 the heat has faded, and the pins say more.
+    await expect(ada).toBeVisible();
+    const line = page.getByRole("region", { name: "In view" });
+    await expect(line).not.toContainText("Fewer");
+
+    await line.getByRole("button", { name: "Zoom out for heat" }).click();
+    await expect(line).toContainText("FewerMore");
+    await expect(ada).toHaveCount(0);
   });
 
   test("draws MapLibre's focus glow for no pointer, and the app's ring for the keyboard", async ({
@@ -705,9 +793,9 @@ test.describe("map", () => {
       await expect(
         page.getByRole("textbox", { name: "Filter contacts" }),
       ).toHaveCount(0);
-      await expect(
-        page.getByRole("region", { name: "Map viewport statistics" }),
-      ).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "In view" })).toHaveCount(
+        0,
+      );
 
       // They come back with the whole map.
       await page.keyboard.press("Escape");
@@ -715,12 +803,10 @@ test.describe("map", () => {
       await expect(
         page.getByRole("textbox", { name: "Filter contacts" }),
       ).toBeVisible();
-      await expect(
-        page.getByRole("region", { name: "Map viewport statistics" }),
-      ).toBeVisible();
+      await expect(page.getByRole("region", { name: "In view" })).toBeVisible();
     });
 
-    test("opens the credit clear of the stats strip and the health legend", async ({
+    test("opens the credit clear of the bottom line and the open insights", async ({
       page,
     }) => {
       await page.route(OPENFREEMAP_ROUTE, (route) =>
@@ -730,15 +816,16 @@ test.describe("map", () => {
           body: JSON.stringify(LONG_CREDIT_STYLE),
         }),
       );
-      await page.goto("/map?layer=health");
+      // The heat's legend makes the line its longest.
+      await page.goto("/map?layer=heat");
       const map = page.getByRole("region", { name: "Contact map" });
       await expect(map).toHaveAttribute("data-map-ready", "true");
-      const strip = page.getByRole("region", {
-        name: "Map viewport statistics",
-      });
-      const legend = page.getByRole("group", { name: "Health legend" });
-      await expect(strip).toBeVisible();
-      await expect(legend).toBeVisible();
+      const line = page.getByRole("region", { name: "In view" });
+      await expect(line).toContainText("Fewer");
+      const panel = page.locator(
+        '[aria-label="Map insights"][data-covers-map="right"]',
+      );
+      await expect(panel).toHaveCount(1);
 
       await map.locator(".maplibregl-ctrl-attrib-button").click();
       await expect(map.locator(".maplibregl-ctrl-attrib-inner")).toContainText(
@@ -747,9 +834,8 @@ test.describe("map", () => {
       const credit = (await map
         .locator(".maplibregl-ctrl-attrib")
         .boundingBox())!;
-      for (const other of [strip, legend]) {
-        expect(overlaps(credit, (await other.boundingBox())!)).toBe(false);
-      }
+      expect(overlaps(credit, (await line.boundingBox())!)).toBe(false);
+      expect(overlaps(credit, (await panel.boundingBox())!)).toBe(false);
     });
   });
 });
@@ -810,12 +896,12 @@ test.describe("map on a phone", () => {
       .toBeLessThan(40);
   });
 
-  test("keeps the credit clear of the stats strip, shut and open", async ({
+  test("keeps the credit clear of the bottom line, shut and open", async ({
     page,
   }) => {
-    // The credit's "i" sat under the right end of the stats strip, which
-    // took its taps, and the credit it opens ran under the strip. On a
-    // phone the zoom buttons and the credit start one strip higher.
+    // The credit's "i" sat under the right end of the bottom line, which
+    // took its taps, and the credit it opens ran under the line. On a
+    // phone the zoom buttons and the credit start one line higher.
     await page.route(OPENFREEMAP_ROUTE, (route) =>
       route.fulfill({
         status: 200,
@@ -826,7 +912,7 @@ test.describe("map on a phone", () => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toHaveAttribute("data-map-ready", "true");
-    const strip = page.getByRole("region", { name: "Map viewport statistics" });
+    const strip = page.getByRole("region", { name: "In view" });
     await expect(strip).toBeVisible();
     const credit = map.locator(".maplibregl-ctrl-attrib");
 

@@ -6,7 +6,7 @@
  * A number alone asks the reader to know where "good" starts. The bands give
  * the number a word and a colour, and every place that shows a score reads
  * them here: the ring around an avatar, the list row's accessible name, the
- * command palette, and later the map's health layer and Pulse.
+ * command palette, Pulse, and the map's hover card and insights.
  *
  * | Band      | Score     | Label     | Token     |
  * | --------- | --------- | --------- | --------- |

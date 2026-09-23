@@ -34,7 +34,7 @@ import {
 import { useConnectors } from "../../../api/connectors";
 import { Badge } from "../../../components/ui/Badge";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
-import { TONE_WASH } from "../../../lib/styles";
+import { SELECTED_ROW, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import {
   AdminButton,
@@ -107,7 +107,6 @@ export const BackupsView = () => {
 
   return (
     <AdminPage
-      lead="A snapshot copies the whole database, so it holds every account's contacts. Each one is opened again and checked as soon as it is written. Older snapshots are rotated out automatically."
       actions={
         <AdminButton
           busy={create.isPending}
@@ -144,13 +143,11 @@ export const BackupsView = () => {
         isError={isError}
         onRetry={() => void refetch()}
         isEmpty={!isLoading && !isError && (backups?.length ?? 0) === 0}
-        empty={
-          <span className="flex items-start gap-2">
-            <Database className="w-4 h-4 shrink-0 mt-0.5" />
-            No snapshots yet. Take one now, or check that the scheduled backup
-            is switched on in the server configuration.
-          </span>
-        }
+        empty={{
+          icon: Database,
+          title: "No snapshots yet",
+          body: "Take one now, or turn on scheduled snapshots in General.",
+        }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
             <span>File</span>
@@ -162,10 +159,11 @@ export const BackupsView = () => {
         footer={
           <div className="space-y-2">
             <p className="text-xs text-on-surface-variant text-pretty">
-              A verified snapshot opened cleanly, passed SQLite&rsquo;s
-              integrity check, and holds rows in every table this database does.
-              Snapshots live in the server&rsquo;s data directory, and copying
-              them somewhere else is what makes them a backup, which Contrack
+              A snapshot holds the whole database, every account&rsquo;s
+              contacts included, and the oldest go on a schedule. Verified means
+              it opened, passed SQLite&rsquo;s integrity check, and has rows in
+              every table. Snapshots stay in the server&rsquo;s data folder:
+              copy them somewhere else to make them a backup, which Contrack
               cannot do for you.
             </p>
             {connectors && connectors.length > 0 && (
@@ -184,9 +182,9 @@ export const BackupsView = () => {
           <AdminRow
             key={backup.filename}
             columns={COLUMNS}
-            className={cn(
-              backup.filename === latest && "ring-2 ring-inset ring-primary/40",
-            )}
+            // The one just taken wears the selected tint, not a ring: a ring
+            // is the focus ring's look.
+            className={cn(backup.filename === latest && SELECTED_ROW)}
           >
             <div className="flex items-center gap-3 min-w-0">
               <span

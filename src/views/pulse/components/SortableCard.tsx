@@ -49,7 +49,6 @@ export const SortableCard = ({
   const contextValue = useMemo(
     () => ({
       isEditing,
-      cardId,
       column,
       index,
       totalInColumn,
@@ -61,7 +60,6 @@ export const SortableCard = ({
     }),
     [
       isEditing,
-      cardId,
       column,
       index,
       totalInColumn,

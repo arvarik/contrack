@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import {
   cleanup,
@@ -11,6 +11,8 @@ import {
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MapToolbar } from "../../src/views/map/MapToolbar";
+import { StatsStrip } from "../../src/views/map/StatsStrip";
+import { computeMapStats } from "../../src/views/map/mapStats";
 import { useMapFilter } from "../../src/views/map/useMapFilter";
 import type { MapContact } from "../../shared/geo";
 
@@ -76,8 +78,8 @@ function TestComponent({
   room?: number | null;
   contacts?: MapContact[];
   map?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  layer?: "pins" | "heat" | "health";
-  onLayerChange?: (next: "pins" | "heat" | "health") => void;
+  layer?: "pins" | "heat";
+  onLayerChange?: (next: "pins" | "heat") => void;
   views?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   onSelectView?: (view: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
   onOpenSaveModal?: () => void;
@@ -88,13 +90,11 @@ function TestComponent({
 
   return (
     <MapToolbar
-      contacts={contacts}
       map={map}
       rawInput={filter.rawInput}
       setRawInput={filter.setRawInput}
       tokenizer={filter.tokenizer}
       effectiveFilters={filter.effectiveFilters}
-      filteredContacts={filter.filteredContacts}
       totalCount={filter.totalCount}
       matchCount={filter.matchCount}
       hasActiveFilter={filter.hasActiveFilter}
@@ -102,6 +102,7 @@ function TestComponent({
       clearFilters={filter.clearFilters}
       layer={layer}
       onLayerChange={onLayerChange}
+      onFitAll={() => {}}
       views={views}
       onSelectView={onSelectView}
       onOpenSaveModal={onOpenSaveModal}
@@ -179,13 +180,11 @@ describe("MapToolbar and useMapFilter", () => {
       return (
         <div>
           <MapToolbar
-            contacts={mockContacts}
             map={null}
             rawInput={filter.rawInput}
             setRawInput={filter.setRawInput}
             tokenizer={filter.tokenizer}
             effectiveFilters={filter.effectiveFilters}
-            filteredContacts={filter.filteredContacts}
             totalCount={filter.totalCount}
             matchCount={filter.matchCount}
             hasActiveFilter={filter.hasActiveFilter}
@@ -193,6 +192,7 @@ describe("MapToolbar and useMapFilter", () => {
             clearFilters={filter.clearFilters}
             layer="pins"
             onLayerChange={() => {}}
+            onFitAll={() => {}}
           />
           <div data-testid="matches">
             {filter.filteredContacts.map((c) => c.name).join(", ")}
@@ -214,13 +214,11 @@ describe("MapToolbar and useMapFilter", () => {
       return (
         <div>
           <MapToolbar
-            contacts={mockContacts}
             map={null}
             rawInput={filter.rawInput}
             setRawInput={filter.setRawInput}
             tokenizer={filter.tokenizer}
             effectiveFilters={filter.effectiveFilters}
-            filteredContacts={filter.filteredContacts}
             totalCount={filter.totalCount}
             matchCount={filter.matchCount}
             hasActiveFilter={filter.hasActiveFilter}
@@ -228,6 +226,7 @@ describe("MapToolbar and useMapFilter", () => {
             clearFilters={filter.clearFilters}
             layer="pins"
             onLayerChange={() => {}}
+            onFitAll={() => {}}
           />
           <div data-testid="matches">
             {filter.filteredContacts.map((c) => c.name).join(", ")}
@@ -352,17 +351,21 @@ describe("MapToolbar and useMapFilter", () => {
     });
   });
 
-  it("switches map layers via the segmented control", () => {
+  it("switches between the two layers, pins and heat", () => {
     const handleLayerChange = vi.fn();
 
     renderWithProviders(
       <TestComponent layer="pins" onLayerChange={handleLayerChange} />,
     );
 
-    const healthOption = screen.getByRole("radio", { name: "Health" });
-    expect(healthOption).toBeTruthy();
-    fireEvent.click(healthOption);
-    expect(handleLayerChange).toHaveBeenCalledWith("health");
+    const layers = screen.getByRole("radiogroup", { name: "Map layer" });
+    expect(
+      Array.from(layers.querySelectorAll('[role="radio"]')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(["Pins", "Heat"]);
+    fireEvent.click(screen.getByRole("radio", { name: "Heat" }));
+    expect(handleLayerChange).toHaveBeenCalledWith("heat");
   });
 
   it("renders ViewsMenu and allows selecting a saved view", () => {
@@ -371,7 +374,7 @@ describe("MapToolbar and useMapFilter", () => {
         id: "view-1",
         name: "London Hub",
         query: "London",
-        layer: "health" as const,
+        layer: "heat" as const,
         bounds: [-0.5, 51.3, 0.2, 51.7] as [number, number, number, number],
         sortOrder: 0,
         createdAt: "2026-09-19T00:00:00.000Z",
@@ -426,5 +429,96 @@ describe("MapToolbar and useMapFilter", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "All in view" }));
     expect(handleInView).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
+/** A day `days` before today, as the date a follow-up is stored with. */
+const daysAgo = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** The toolbar and the bottom line over one filter, as the map page has them. */
+function OverdueHarness({ contacts }: { contacts: MapContact[] }) {
+  const filter = useMapFilter(contacts);
+  return (
+    <>
+      <MapToolbar
+        map={null}
+        rawInput={filter.rawInput}
+        setRawInput={filter.setRawInput}
+        tokenizer={filter.tokenizer}
+        effectiveFilters={filter.effectiveFilters}
+        totalCount={filter.totalCount}
+        matchCount={filter.matchCount}
+        hasActiveFilter={filter.hasActiveFilter}
+        resolveNearFilters={filter.resolveNearFilters}
+        clearFilters={filter.clearFilters}
+        layer="pins"
+        onLayerChange={() => {}}
+        onFitAll={() => {}}
+      />
+      <StatsStrip
+        stats={computeMapStats(filter.filteredContacts)}
+        overdueOnly={filter.overdueOnly}
+        onOverdueOnlyChange={filter.setOverdueOnly}
+      />
+      <ul aria-label="On the map">
+        {filter.filteredContacts.map((contact) => (
+          <li key={contact.id}>{contact.name}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// No facet filters by follow-up, so overdue is a filter of its own, pressed
+// on the bottom line, and Clear filters clears it with the query.
+describe("the overdue filter", () => {
+  const people: MapContact[] = [
+    { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
+    { ...mockContacts[1], nextFollowUpAt: null },
+  ];
+  const shown = () =>
+    Array.from(
+      screen.getByRole("list", { name: "On the map" }).querySelectorAll("li"),
+    ).map((item) => item.textContent);
+
+  afterEach(() => cleanup());
+
+  it("narrows the map to the overdue, and lets everyone back", () => {
+    renderWithProviders(<OverdueHarness contacts={people} />);
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
+    expect(shown()).toEqual(["Ada Lovelace"]);
+    expect(
+      screen
+        .getByRole("button", { name: "1 overdue" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
+  });
+
+  it("clears with the query when nobody matches both", () => {
+    renderWithProviders(<OverdueHarness contacts={people} />);
+    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter contacts" }), {
+      target: { value: "Hopper" },
+    });
+    expect(shown()).toEqual([]);
+    expect(screen.getByText("0 of 2 match")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
+    expect(screen.queryByRole("button", { name: /overdue/ })).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "1 overdue" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 });

@@ -26,7 +26,6 @@
 import React, { useState } from "react";
 import {
   AlertTriangle,
-  Brain,
   BrainCircuit,
   Check,
   Dna,
@@ -44,7 +43,7 @@ import {
   type AISettings,
   type CapabilityAssignment,
 } from "../../api/aiSettings";
-import { CARD, SECTION_HEADING } from "../../lib/styles";
+import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
 import { cn } from "../../lib/utils";
 import { Select, type SelectOption } from "../../components/ui/Select";
 
@@ -388,55 +387,54 @@ export const CapabilitiesCard = ({ settings }: { settings: AISettings }) => {
   const hasAnyProvider = settings.providers.length > 0;
 
   return (
-    <section className={cn(CARD, "space-y-5 p-4 sm:p-6")}>
-      <div>
-        <h3 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
-          <Brain className="w-5 h-5 text-primary" />
-          What powers each task
-        </h3>
-        <p className="text-sm text-on-surface-variant mt-1.5 text-pretty">
+    <section>
+      <h2 className={SETTINGS_SECTION_HEADING}>What powers each task</h2>
+      <div className={cn(SETTINGS_CARD, "space-y-5")}>
+        <p className="text-sm text-on-surface-variant text-pretty">
           Contrack uses three different kinds of AI, and they are not
           interchangeable. Each section below explains one kind and lets you
-          choose what runs it — or leave it on <strong>Automatic</strong>, which
+          choose what runs it, or leave it on <strong>Automatic</strong>, which
           picks the best option from whatever you have connected.
         </p>
+
+        {!hasAnyProvider && (
+          <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 rounded-xl p-3">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="text-pretty">
+              No providers connected, so the language-model and web-research
+              features are off. Semantic search still works — it runs on the
+              built-in local embedding model.
+            </span>
+          </div>
+        )}
+
+        {GROUPS.map((group) => (
+          <div
+            key={group.id}
+            className="rounded-2xl bg-surface-container-low p-4"
+          >
+            <div className="flex items-center gap-2">
+              {group.icon}
+              <h3 className="text-sm font-bold text-on-surface">
+                {group.title}
+              </h3>
+            </div>
+            <p className="text-xs text-on-surface-variant mt-1 text-pretty">
+              {group.blurb}
+            </p>
+
+            <div className="mt-3 divide-y divide-surface-container-high">
+              {group.capabilities.map((meta) => (
+                <CapabilityRow
+                  key={meta.key}
+                  meta={meta}
+                  state={settings.capabilities[meta.key]}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-
-      {!hasAnyProvider && (
-        <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 rounded-xl p-3">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="text-pretty">
-            No providers connected, so the language-model and web-research
-            features are off. Semantic search still works — it runs on the
-            built-in local embedding model.
-          </span>
-        </div>
-      )}
-
-      {GROUPS.map((group) => (
-        <div
-          key={group.id}
-          className="rounded-2xl bg-surface-container-low p-4"
-        >
-          <div className="flex items-center gap-2">
-            {group.icon}
-            <h4 className="text-sm font-bold text-on-surface">{group.title}</h4>
-          </div>
-          <p className="text-xs text-on-surface-variant mt-1 text-pretty">
-            {group.blurb}
-          </p>
-
-          <div className="mt-3 divide-y divide-surface-container-high">
-            {group.capabilities.map((meta) => (
-              <CapabilityRow
-                key={meta.key}
-                meta={meta}
-                state={settings.capabilities[meta.key]}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
     </section>
   );
 };

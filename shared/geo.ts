@@ -11,9 +11,6 @@
  * @module shared/geo
  */
 
-import { isPastDay } from "./dates";
-import { scoreView } from "./scoreBand";
-
 /**
  * The basemap style URL for each palette, as `GET /api/auth/status` reports
  * it in `map`. An absolute `https://` URL or a root-relative path.
@@ -46,8 +43,8 @@ export interface MapContact {
   lastContactedAt?: string | null;
   /**
    * A person chose to keep up with this contact. Only a tracked contact has
-   * a score, so the health layer and the stats both ask this first. The
-   * field is required, so the compiler names every builder of a map row.
+   * a score, so the score on a card asks this first. The field is required,
+   * so the compiler names every builder of a map row.
    */
   isTracked: boolean;
   nextFollowUpAt?: string | null;
@@ -71,11 +68,7 @@ export interface ContactPointProperties {
   company?: string;
   avatarUrl?: string;
   location?: string;
-  /** The score, left out for a contact with none: untracked, or never met. */
-  score?: number;
-  /** 1 for a scored contact in the At risk band, and 0 for anybody else. */
-  atRisk: number;
-  overdue: number;
+  /** The contact's interaction count, which the heat weighs. */
   weight: number;
 }
 
@@ -137,29 +130,15 @@ export function haversineKm(
  */
 export function toFeatureCollection(
   contacts: readonly MapContact[],
-  now: Date = new Date(),
 ): ContactFeatureCollection {
   const features: ContactPointFeature[] = [];
   for (const contact of contacts) {
     if (!isValidLatLng(contact.lat, contact.lng)) continue;
-    // An untracked contact has no score, and a contact nobody has met yet
-    // has none either. Neither one is At risk: the band needs a score.
-    const view = scoreView(contact);
-    const atRisk =
-      view.kind === "scored" && view.band.band === "at-risk" ? 1 : 0;
-    // By the calendar day, as the contact page's banner counts. The instant
-    // said a follow-up set to "Tomorrow" was late by the evening before.
-    const overdue = isPastDay(contact.nextFollowUpAt, now) ? 1 : 0;
-    const weight = contact.interactionCount ?? 0;
-
     const properties: ContactPointProperties = {
       id: contact.id,
       name: contact.name,
-      atRisk,
-      overdue,
-      weight,
+      weight: contact.interactionCount ?? 0,
     };
-    if (view.kind === "scored") properties.score = view.score;
     if (contact.company) properties.company = contact.company;
     if (contact.avatarUrl) properties.avatarUrl = contact.avatarUrl;
     if (contact.location) properties.location = contact.location;

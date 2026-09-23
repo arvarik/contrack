@@ -63,10 +63,9 @@ MapLibre groups nearby contacts into clusters. The map's GeoJSON source sets
 
 - Large clusters break into smaller groups
 - Individual pins appear at high zoom levels
-- Cluster badges show the number of contacts in each group
-- An outer SVG ring renders a proportional red error arc for the share of the cluster that is At risk. Only a tracked, scored contact counts toward it.
+- Cluster badges show the number of contacts in each group. A cluster says nothing about scores: the red At risk arc around it went with the Health layer.
 
-A cluster is a button named `"<n> contacts, <m> at risk, zoom in"`. A click zooms to the
+A cluster is a button named `"<n> contacts, zoom in"`. A click zooms to the
 level where that cluster splits.
 
 Some clusters never split. The geocoder gives every contact in one city the
@@ -75,27 +74,59 @@ such a cluster opens a list of the people instead, up to fifty of them, and
 each name in the list is a button. Escape closes the list. A stacked pin stays
 reachable this way.
 
-### Stats Strip
+### The Bottom Line
 
-Floating at the bottom-left corner of the map, the **Stats Strip** aggregates live metrics for contacts currently in the viewport (debounced 150ms on camera movement):
+One line in the bottom-left corner says who is in view, and offers what to
+do about it. It counts the people who match the filter inside the visible
+bounds, 150 ms after the camera stops:
 
-- **In view**: Count of contacts placed within the visible bounding box.
-- **At risk**: Count of tracked in-view contacts whose score is under 40. A contact nobody tracks has no score, and neither has one nobody has met yet, so neither is counted. Clicking this chip appends `score:<40` to the active search filter.
-- **Overdue**: Count of contacts whose next follow-up's day is before today, counted by the calendar day as the contact page's banner counts it. It is a fact in the error ink on a resting chip, not a button: no facet filters by follow-up.
-- **Average score**: Mean score of the in-view contacts that have one.
-- **Time zones**: Number of distinct time zones spanned by in-view contacts.
+- **In view**: "30 in view", or "12 of 30 in view" when some of the people
+  who match are off screen. "No one in view" when nobody is.
+- **Overdue**: the people in view whose next follow-up's day is before
+  today, counted by the calendar day as the contact page's banner counts
+  it. It is a filter to press (`aria-pressed`): it shows only them, and a
+  second press shows everyone again. No facet filters by follow-up, so it
+  is not a query token, and **Clear filters** clears it with the query. It
+  is hidden when nobody in view is overdue, unless it is on.
+- **Fit all**: when nobody is in view, so an empty map has a way back.
+- **The heat's legend**: with the Heat layer on, the ramp from "Fewer" to
+  "More", as the map paints it. Zoomed in past the heat, a **Zoom out for
+  heat** button stands in its place.
 
-When no contacts fall within the visible bounds, the strip displays a compact empty state ("No contacts in this area") with a **Fit all** button. Updates to the strip are announced to screen readers via an accessible live status region (`role="status"`).
+The line is a region named "In view", and each change is announced in a
+polite live region. It keeps clear of the open insights panel, of an open
+contact, and of the tab bar on a phone. On a phone MapLibre's zoom buttons
+and credit sit over it, lifted by its measured height, so a line that wraps
+to a second row never runs under them.
 
-### Map Insights Pane
+It held five chips until v2: at risk, overdue, an average score and a count
+of time zones as well. At risk and the average score went with the Health
+layer, and the time zones are in the insights panel, by name.
 
-A dedicated insights drawer slides in from the right edge on desktop (320px wide) or opens as an accessible modal sheet on mobile:
+### Map Insights
 
-- **Desktop & Mobile**: Toggled via the **Insights** toolbar button or keyboard shortcut `i` / `I`. Its open/closed state on desktop persists across visits through the `mapPaneOpen` account preference (defaults to `true`).
-- **Map Control Insets**: The drawer carries `data-covers-map="right"`, automatically offsetting MapLibre's zoom and attribution controls on wide viewports (`@media (min-width: 1024px)`) so they stay completely visible and unobstructed.
-- **Tabs**:
-  - **Stats Tab**: Displays summary cards (In view, Avg score, At risk, Overdue) and horizontal distribution bar charts for **Top Industries**, **Top Companies**, and **Top Tags**. Clicking any bar immediately filters the map by that facet. Also lists the distinct time zones present in the viewport.
-  - **People Tab**: A virtualized list (powered by `@tanstack/react-virtual`) showing all contacts currently in view, including their avatar, health score ring, name, company, and location. Clicking any contact in the list flies the map camera to their pin and opens their detail panel.
+From the `lg` breakpoint the insights are the page's side panel
+(`SidePanel`, the same one Ask Contrack's history uses). A 64 px rail at the
+page's right edge holds the insights icon, and the map ends where the rail
+starts. The icon opens a 320 px panel that slides over the map from under
+the rail, so opening it moves nothing on the map. Below `lg` the toolbar's
+**Insights** button opens the same content in a bottom sheet.
+
+- **Opening and closing**: the rail's icon (a disclosure, with a tooltip
+  that names the `I` key), Hide in the panel's heading row, Escape inside
+  the panel, and `i` / `I` anywhere on the page. Hide and Escape give focus
+  back to the rail's icon. The open state on a wide screen persists through
+  the `mapPaneOpen` account preference (defaults to `true`).
+- **Map insets**: the open panel carries `data-covers-map="right"`, so a
+  fly-to centres its pin in the part of the map the panel leaves, and the
+  zoom buttons and the credit move clear of it with its slide. A closed
+  panel is `inert` and covers nothing.
+- **Summary**: the top industries, companies and tags of the people in
+  view, as bars. A press on a bar adds its facet to the filter. Under them,
+  the time zones the people in view are in.
+- **People**: a virtualised list (`@tanstack/react-virtual`) of everyone in
+  view, with their avatar, score ring, name and company. A press flies the
+  map to the pin.
 
 ### Selection and Bulk Actions
 
@@ -145,13 +176,49 @@ The map toolbar provides layer switching and a saved views dropdown for quick na
 
 #### Map Layers
 
-A segmented toggle control (`aria-label="Map layer"`) lets users switch between three visual representations:
+A segmented control (`aria-label="Map layer"`) switches between two layers:
 
-- **Pins**: The standard view showing contact avatars and cluster markers.
-- **Heat**: Renders a client-side MapLibre heatmap layer with radius 30 and zoom-based weight calculated from each contact's interaction count. Heat draws no pin markers at any zoom, so the layer reads on its own.
-- **Health**: Pin markers display ring borders tinted by relationship score bands using theme color tokens: `ring-success` for Strong (scores 70 and up), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores under 40). A pin with no score takes `ring-on-surface-variant`, a ring in the variant ink: a contact nobody tracks, and one nobody has met yet. Both used to be painted red. A floating legend chip in the bottom-left corner, over the stats strip, names all four, with a text label beside each mark, so colour is never the only signal. The three bands are dots in their tones, and "Not tracked" is a hollow ring in the variant ink, the ring those pins wear.
+- **Pins**: contact avatars and cluster markers.
+- **Heat**: where the network gathers, as a MapLibre heatmap
+  (`src/views/map/heat.ts`). What makes it read, from MapLibre's own
+  heatmap example and the cartography on colour ramps:
+  - **Density, not clusters.** The heat reads its own copy of the contacts
+    with no clustering. On the pins' clustered source a cluster of twelve
+    people added what one person added.
+  - **Every person counts.** Each weighs 1, rising to 2 for a relationship
+    with 25 or more notes. The weight was the note count alone, so a person
+    with no notes added no heat.
+  - **A scale from the network.** The intensity puts the densest place (the
+    heaviest 1 degree cell, capped at 128 people) at full density, and each
+    stop of the ramp is double the density of the one before it, from 1/128
+    to all of it. Thirty people and three thousand both use the whole ramp,
+    and one person still shows beside a city of fifty.
+  - **A radius that grows with the zoom**, from 16 px over the world to 44 px
+    at zoom 9, and an intensity that eases up with it.
+  - **A ramp that turns with the basemap.** Over the light map the most is
+    the darkest colour, over the dark map the brightest, so the most always
+    has the most contrast with the land. Both run in OKLCH between the
+    accent's deep tone and a warm yellow, and the least is transparent. The
+    default accent draws CARTO's BluYl on the light map (pale yellow, green,
+    teal, the accent) and a viridis-like ramp on the dark one (the accent,
+    teal, green, yellow). A picked accent draws its own ramp, and the ramp
+    follows the palette and the accent the way every class does.
+  - **Under the labels.** The heat is drawn under the basemap's labels, so a
+    city's name reads over its own heat.
+  - **It gives way to the pins.** From zoom 7 the heat fades, the pins come
+    back from zoom 8, and at zoom 9 the heat is gone. The geocoder gives a
+    city one point, so close in the heat is one blob per city, and a pin's
+    count says more.
 
-Changing the layer updates the `?layer=` URL parameter and persists to the user's `mapLayer` account preference.
+Changing the layer updates the `?layer=` URL parameter and persists to the
+user's `mapLayer` account preference.
+
+Health was a third layer until v2: pins ringed by their score band, with a
+legend. A stored `mapLayer` of `"health"`, a saved view with it, and an old
+`?layer=health` link all read as Pins. The server maps the value in
+`userPreferencesService` (a zod preprocess) and in `mapViewService`, so an
+old value never fails to load and a save from a page loaded before v2 is
+stored as `"pins"`.
 
 #### Saved Views
 
@@ -256,8 +323,8 @@ click away, where MapLibre puts it after a drag.
 
 On the map page the "i" sits on top of the zoom buttons, and the credit it
 opens is a card no wider than 13rem that wraps its words. At the foot of the
-column it opened across the bottom of the map, over the stats strip at 800
-and 1024 px and over the health legend on a phone. A pointer click on the
+column it opened across the bottom of the map, over the bottom line at 800
+and 1024 px. A pointer click on the
 "i" or a zoom button draws no focus glow. Focus from the keyboard draws the
 app's ring: inset on a zoom button, and 2 px outside the credit's pill.
 
@@ -619,8 +686,8 @@ What makes the map fast to open, in the order a visit meets it:
 - Every cluster is a real `<button>` named `"<n> contacts, <m> at risk, zoom in"`
 - Tab reaches a pin, focus from a keyboard opens its hover card on any
   device, and Enter opens the contact
-- The stats strip includes a live status announcement region (`role="status"`) so screen reader users hear viewport summary updates on camera movements
-- Map insights pane tabs follow standard tab navigation, and virtualized contact rows support keyboard activation
+- The bottom line is a region named "In view" with a polite live region, so a screen reader hears who is in view after a move. Overdue is a toggle button with `aria-pressed`
+- The insights rail's icon is a disclosure (`aria-expanded`, `aria-controls`). The panel is a landmark named "Map insights", `inert` while closed, and its Summary and People views are a `Segmented` radio group
 - The zoom buttons sit in MapLibre's navigation control
 - In the Adjust pin dialog the pin is a `<button>` that the arrow keys move,
   and the coordinates line is a live region, so the dialog works with no
@@ -644,7 +711,7 @@ a 390 pixel phone for the tap-target and text-size floors. See
 | --------- | ---------------------------------------------------- |
 | `/`       | Focus the map filter search input                    |
 | `F`       | Fit all matching contacts within the viewport        |
-| `i` / `I` | Toggle the Map insights pane open or closed          |
+| `i` / `I` | Open or close the map insights panel                 |
 | `L`       | Activate freehand lasso selection mode               |
 | `Space`   | Pin hover card into dialog mode when pin is focused  |
 | `Escape`  | Close card or clear selection or dismiss modal sheet |

@@ -10,7 +10,7 @@
  * Under the line, two facts: the last four weeks against the four before,
  * and what this week holds by type. The streak is the masthead's.
  */
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useElementWidth } from "../../../hooks/useElementWidth";
 import { TONE_TEXT, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";

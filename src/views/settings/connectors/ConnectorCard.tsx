@@ -13,17 +13,14 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Calendar,
-  Globe,
   History,
   KeyRound,
   Loader2,
-  Mail,
   Pause,
   Pencil,
   Play,
   RefreshCw,
   Trash2,
-  type LucideIcon,
 } from "lucide-react";
 import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
@@ -41,6 +38,7 @@ import type {
   ConnectorStatus,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { KIND_ICONS } from "./AddConnectorSheet";
 
 interface ConnectorCardProps {
   connector: ConnectorSummary;
@@ -48,12 +46,6 @@ interface ConnectorCardProps {
   onShowRuns: (connector: ConnectorSummary) => void;
   onReconnect?: (connector: ConnectorSummary) => void;
 }
-
-const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
-  ics: Calendar,
-  imap: Mail,
-  google: Globe,
-};
 
 function statusBadgeInfo(status: ConnectorStatus): {
   tone: BadgeTone;
@@ -67,7 +59,7 @@ function statusBadgeInfo(status: ConnectorStatus): {
     case "error":
       return { tone: "warning", label: "Error" };
     case "needs_reauth":
-      return { tone: "danger", label: "Needs reauth" };
+      return { tone: "danger", label: "Signed out" };
     default:
       return { tone: "neutral", label: status };
   }
@@ -118,7 +110,9 @@ function formatStats(
     );
   }
   if (stats.ghosts)
-    parts.push(`${stats.ghosts} new ghost${stats.ghosts === 1 ? "" : "s"}`);
+    parts.push(
+      `${stats.ghosts} new ${stats.ghosts === 1 ? "person" : "people"} seen`,
+    );
   if (stats.errors)
     parts.push(`${stats.errors} error${stats.errors === 1 ? "" : "s"}`);
   return parts.length > 0 ? parts.join(" · ") : null;
@@ -270,9 +264,9 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
 
         {/* Last run stats */}
         {statsLine && !sync.isPending && (
-          <div className="text-xs font-mono text-on-surface-variant bg-surface-container-high/40 rounded-lg px-2.5 py-1.5 inline-block">
-            {statsLine}
-          </div>
+          <p className="text-xs text-on-surface-variant">
+            Last sync: {statsLine}
+          </p>
         )}
 
         {/* Error state */}
@@ -291,7 +285,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               />
               <div className="min-w-0">
                 <p className="font-medium">Last sync failed</p>
-                <p className="text-[11px] mt-0.5 font-mono break-all">
+                <p className="mt-0.5 font-mono break-all">
                   {connector.lastError}
                 </p>
               </div>
@@ -322,8 +316,8 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 aria-hidden="true"
               />
               <div className="min-w-0">
-                <p className="font-medium">Authentication expired</p>
-                <p className="text-[11px] mt-0.5 font-mono break-all">
+                <p className="font-medium">Sign-in expired</p>
+                <p className="mt-0.5 font-mono break-all">
                   {connector.lastError ||
                     "The server rejected credentials for this connector."}
                 </p>
@@ -352,21 +346,22 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         tone="danger"
         busy={remove.isPending}
       >
-        <div className="space-y-3 pt-2">
-          <p className="text-xs text-on-surface-variant">
-            This will stop future syncs for this connector.
+        <div className="space-y-3">
+          <p className="text-sm text-on-surface-variant text-pretty">
+            {connector.name} stops syncing. What it brought in stays unless you
+            delete it too.
           </p>
 
-          <label className="flex items-start gap-2 text-xs text-on-surface cursor-pointer select-none">
+          <label className="flex items-start gap-2.5 text-sm text-on-surface cursor-pointer select-none">
             <input
               type="checkbox"
               checked={deleteImported}
               onChange={(e) => setDeleteImported(e.target.checked)}
-              className="mt-0.5 rounded border-surface-container-high text-primary"
+              className="mt-0.5 w-4 h-4 shrink-0 accent-primary"
             />
-            <span>
-              Also delete all interactions and ghost contacts created by this
-              connector.
+            <span className="text-pretty">
+              Also delete the interactions it brought in, and the people it
+              found who are not contacts
             </span>
           </label>
         </div>

@@ -15,7 +15,7 @@ import {
   isPastDay,
   parseServerTime,
 } from "../../shared/dates";
-import { toFeatureCollection, type MapContact } from "../../shared/geo";
+import type { MapContact } from "../../shared/geo";
 import { computeMapStats } from "../../src/views/map/mapStats";
 
 beforeAll(() => {
@@ -56,10 +56,6 @@ describe("overdue on the map", () => {
       pin("none", null),
     ];
     expect(computeMapStats(pins, null, SIX_PM).overdue).toBe(2);
-    const overdue = toFeatureCollection(pins, SIX_PM)
-      .features.filter((f) => f.properties.overdue === 1)
-      .map((f) => f.id);
-    expect(overdue).toEqual(["yesterday", "late last night"]);
   });
 
   it("agrees with isPastDay, the rule the banner's days come from", () => {

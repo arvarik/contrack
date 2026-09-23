@@ -19,8 +19,6 @@
 import { memo, useRef, useState } from "react";
 import { Marker } from "@vis.gl/react-maplibre";
 import type { MapContact } from "../../../shared/geo";
-import { scoreView } from "../../../shared/scoreBand";
-import type { MapLayer } from "../../api/mapViews";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
 
@@ -55,7 +53,6 @@ interface ContactMarkerProps {
   contact: MapContact;
   selected: boolean;
   multiSelected?: boolean;
-  layer?: MapLayer;
   onSelect: (id: string) => void;
   /** Called with the contact id on hover and focus, and null on leave and blur. */
   onPreview: (id: string | null) => void;
@@ -67,7 +64,6 @@ export const ContactMarker = memo(function ContactMarker({
   contact,
   selected,
   multiSelected = false,
-  layer = "pins",
   onSelect,
   onPreview,
   onPinCard,
@@ -79,28 +75,6 @@ export const ContactMarker = memo(function ContactMarker({
   const touched = useRef(false);
 
   const isHighlighted = selected || multiSelected;
-
-  // The health layer paints the band. A contact with no score takes the
-  // neutral ring in the variant ink: a pin nobody tracks, and a pin for
-  // somebody never met, both used to be painted red, which said a
-  // relationship was failing when there was no relationship to measure. The
-  // hairline tone it wore next measured about 1.5 to 1 on the map, and the
-  // legend draws the same ring (`HealthLegend`).
-  const view = scoreView(contact);
-  const healthRing =
-    view.kind !== "scored"
-      ? "ring-on-surface-variant"
-      : view.band.band === "strong"
-        ? "ring-success"
-        : view.band.band === "fading"
-          ? "ring-warning"
-          : "ring-error";
-
-  const ringClass = isHighlighted
-    ? "ring-4 ring-primary -translate-y-1 shadow-lg"
-    : layer === "health"
-      ? cn("ring-[3px]", healthRing)
-      : "ring-[3px] ring-primary";
 
   return (
     <Marker
@@ -143,7 +117,9 @@ export const ContactMarker = memo(function ContactMarker({
         className={cn(
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
           "bg-surface-container-lowest shadow-md",
-          ringClass,
+          isHighlighted
+            ? "ring-4 ring-primary -translate-y-1 shadow-lg"
+            : "ring-[3px] ring-primary",
           // The lift on hover and on selection runs at the base duration.
           "transition-transform hover:-translate-y-1",
         )}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstSentence, sentenceCase } from "../../src/views/pulse/lib/insight";
+import { sentenceCase } from "../../src/views/pulse/lib/insight";
 
 describe("pulse.insight", () => {
   it("puts the model's Title Case category in sentence case", () => {
@@ -22,15 +22,5 @@ describe("pulse.insight", () => {
     expect(sentenceCase("Follow Up With CRM Data")).toBe(
       "Follow up with CRM data",
     );
-  });
-
-  it("asks the first sentence, cut at a word near 120 characters", () => {
-    expect(firstSentence("Three went quiet. Two are founders.")).toBe(
-      "Three went quiet",
-    );
-    const long = `${"word ".repeat(40)}end.`;
-    const question = firstSentence(long);
-    expect(question.length).toBeLessThanOrEqual(120);
-    expect(question.endsWith("word")).toBe(true);
   });
 });

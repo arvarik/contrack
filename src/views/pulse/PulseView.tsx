@@ -65,7 +65,6 @@ import { getUpcomingBirthdays } from "./lib/birthdays";
 import { jumpToGroup } from "./lib/jumpToGroup";
 import { COLUMN_CLASSES, GRID_CLASSES } from "./lib/pulseStyles";
 import { Masthead, type JumpTarget } from "./components/Masthead";
-import { AskForm } from "./components/AskForm";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
 import { SortableCard } from "./components/SortableCard";
@@ -204,9 +203,9 @@ const PulseOffice = () => {
   );
 
   const handleShowCard = useCallback(
-    (cardId: string, column?: PulseColumn) => {
+    (cardId: string) => {
       const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
-      const next = pulseLayoutReducer(raw, { type: "show", cardId, column });
+      const next = pulseLayoutReducer(raw, { type: "show", cardId });
       setPreference("pulseLayout", next);
       const title = CARD_TITLES[cardId as PulseCardId] || cardId;
       setAnnouncement(`Restored ${title}`);
@@ -348,16 +347,9 @@ const PulseOffice = () => {
 
   // Map of contacts for fast lookup (e.g. meeting attendee avatars)
   const contactsMap = useMemo(() => {
-    const map = new Map<
-      string,
-      { name: string; avatarUrl?: string | null; themeColor?: string }
-    >();
+    const map = new Map<string, { name: string; avatarUrl?: string | null }>();
     for (const c of contacts) {
-      map.set(c.id, {
-        name: c.name,
-        avatarUrl: c.avatarUrl,
-        themeColor: c.themeColor,
-      });
+      map.set(c.id, { name: c.name, avatarUrl: c.avatarUrl });
     }
     return map;
   }, [contacts]);
@@ -643,7 +635,6 @@ const PulseOffice = () => {
     // when there is no insight to draw: AI is off, or it came back empty.
     return (
       <PulseSkeleton
-        ask={aiAllowed}
         insight={
           !aiAllowed || (!isInsightLoading && !insight) ? null : insight?.text
         }
@@ -654,7 +645,7 @@ const PulseOffice = () => {
   const isZeroContacts = dashboard.metrics.totalActive === 0;
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
+    <div className="w-full h-full overflow-y-auto bg-surface relative">
       {/* Screen reader live announcements */}
       <div role="status" aria-live="polite" className="sr-only">
         {liveStatus}
@@ -683,11 +674,7 @@ const PulseOffice = () => {
           onToggleCustomize={handleToggleCustomize}
           onJumpTo={handleJumpTo}
           quiet={isZeroContacts}
-        >
-          {/* Ask about your network: only when AI is allowed and there is a
-              network to ask about. Hidden below sm inside the form. */}
-          {aiAllowed && !isZeroContacts && <AskForm />}
-        </Masthead>
+        />
 
         {/* Hidden Cards Tray in Customize Mode, only when a card is hidden */}
         {isEditing && resolvedLayout.hidden.length > 0 && (
@@ -706,32 +693,30 @@ const PulseOffice = () => {
               </span>
             </div>
 
-            {resolvedLayout.hidden.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                {resolvedLayout.hidden.map((cardId) => {
-                  const title = CARD_TITLES[cardId] || cardId;
-                  const defaultCol = getDefaultColumnForCard(cardId);
-                  return (
-                    <div
-                      key={cardId}
-                      data-card-id={cardId}
-                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high text-xs sm:text-sm font-medium text-on-surface"
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              {resolvedLayout.hidden.map((cardId) => {
+                const title = CARD_TITLES[cardId] || cardId;
+                const defaultCol = getDefaultColumnForCard(cardId);
+                return (
+                  <div
+                    key={cardId}
+                    data-card-id={cardId}
+                    className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high text-xs sm:text-sm font-medium text-on-surface"
+                  >
+                    <span>{title}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleShowCard(cardId)}
+                      aria-label={`Show ${title}`}
+                      title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
+                      className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
                     >
-                      <span>{title}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleShowCard(cardId)}
-                        aria-label={`Show ${title}`}
-                        title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
-                        className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 

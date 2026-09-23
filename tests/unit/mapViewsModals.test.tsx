@@ -4,20 +4,8 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SaveViewModal } from "../../src/views/map/SaveViewModal";
 import { RenameViewModal } from "../../src/views/map/RenameViewModal";
-import { HealthLegend } from "../../src/views/map/HealthLegend";
 import { ViewsMenu } from "../../src/views/map/ViewsMenu";
 import type { MapView } from "../../src/api/mapViews";
-
-describe("HealthLegend", () => {
-  it("renders Strong, Fading, and At risk labels with role group", () => {
-    render(<HealthLegend />);
-    const group = screen.getByRole("group", { name: "Health legend" });
-    expect(group).toBeTruthy();
-    expect(screen.getByText("Strong")).toBeTruthy();
-    expect(screen.getByText("Fading")).toBeTruthy();
-    expect(screen.getByText("At risk")).toBeTruthy();
-  });
-});
 
 describe("SaveViewModal", () => {
   it("disables save button when name is empty and validates length", async () => {
@@ -30,7 +18,7 @@ describe("SaveViewModal", () => {
         onClose={handleClose}
         onSave={handleSave}
         currentQuery="company:Navy"
-        currentLayer="health"
+        currentLayer="heat"
       />,
     );
 
@@ -38,7 +26,7 @@ describe("SaveViewModal", () => {
       screen.getByRole("dialog", { name: "Save current view" }),
     ).toBeTruthy();
     expect(screen.getByText("company:Navy")).toBeTruthy();
-    expect(screen.getByText("Health")).toBeTruthy();
+    expect(screen.getByText("Heat")).toBeTruthy();
 
     const saveButton = screen.getByRole("button", {
       name: "Save view",

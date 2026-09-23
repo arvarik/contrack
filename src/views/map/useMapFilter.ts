@@ -6,6 +6,10 @@
  * `near:` coordinates via `/api/geo/search` on Enter, and filters MapContact
  * rows using `matchesFacet` and `scoreContactMatch`.
  *
+ * Overdue is a filter of its own, pressed on the map's bottom line rather
+ * than typed: no facet filters by follow-up. It narrows whatever the query
+ * leaves, and Clear filters clears it with the query.
+ *
  * @module views/map/useMapFilter
  */
 import {
@@ -19,6 +23,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { searchPlace } from "../../api/geo";
 import { scoreContactMatch } from "../../lib/contactMatch";
+import { isPastDay } from "../../../shared/dates";
 import { matchesFacet, type FacetFilter } from "../../../shared/searchFacets";
 import type { MapContact } from "../../../shared/geo";
 import { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
@@ -45,6 +50,16 @@ export function useMapFilter(
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInternalUpdateRef = useRef(false);
+
+  // Only the people whose follow-up's day has passed.
+  const [overdueOnly, setOverdueOnlyState] = useState(false);
+  const setOverdueOnly = useCallback(
+    (next: boolean) => {
+      setOverdueOnlyState(next);
+      options?.onClearActiveView?.();
+    },
+    [options],
+  );
 
   // Near resolution cache by "value" or "value/km"
   const [nearResolutions, setNearResolutions] = useState<
@@ -190,7 +205,9 @@ export function useMapFilter(
 
   // Apply filters
   const filteredContacts = useMemo(() => {
+    const now = new Date();
     return contacts.filter((contact) => {
+      if (overdueOnly && !isPastDay(contact.nextFollowUpAt, now)) return false;
       // 1. Facets
       for (const filter of effectiveFilters) {
         if (!matchesFacet(contact, filter)) return false;
@@ -201,11 +218,12 @@ export function useMapFilter(
       }
       return true;
     });
-  }, [contacts, effectiveFilters, deferredFreeText]);
+  }, [contacts, effectiveFilters, deferredFreeText, overdueOnly]);
 
   // Clear all filters
   const clearFilters = useCallback(() => {
     setRawInputState("");
+    setOverdueOnlyState(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     (options?.onClearActiveView ?? options?.onFilterChange)?.();
     isInternalUpdateRef.current = true;
@@ -231,7 +249,10 @@ export function useMapFilter(
   ]);
 
   const hasActiveFilter = Boolean(
-    rawInput.trim() || parsed.filters.length > 0 || parsed.freeText,
+    rawInput.trim() ||
+    parsed.filters.length > 0 ||
+    parsed.freeText ||
+    overdueOnly,
   );
 
   return {
@@ -245,5 +266,7 @@ export function useMapFilter(
     hasActiveFilter,
     resolveNearFilters,
     clearFilters,
+    overdueOnly,
+    setOverdueOnly,
   };
 }

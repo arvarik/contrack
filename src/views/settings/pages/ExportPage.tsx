@@ -1,7 +1,8 @@
 /**
  * ExportPage — Download your contacts in standard formats.
  *
- * vCard, CSV, and JSON exports.
+ * vCard, CSV, and JSON exports. An admin also gets the way to a copy of the
+ * whole database.
  */
 import React from "react";
 import { Link } from "react-router-dom";
@@ -14,23 +15,18 @@ export const ExportPage = () => {
   const { isAdmin } = useAuth();
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Take your contacts and interactions with you.
-        </p>
-      </div>
-
+    <div className={cn(SETTINGS_PAGE, "space-y-4")}>
       <ExportCard />
 
       {isAdmin && (
-        <p className="text-xs text-on-surface-variant px-1">
-          Looking for full database snapshots? Administrators can manage{" "}
+        <p className="text-xs sm:text-sm text-on-surface-variant px-1 text-pretty">
+          For a copy of the whole database, every account included, take a
+          snapshot on the{" "}
           <Link
             to="/settings/admin/backups"
-            className="text-primary underline font-medium"
+            className="font-semibold text-primary underline underline-offset-2"
           >
-            database backups
+            Backups page
           </Link>
           .
         </p>

@@ -217,7 +217,6 @@ export interface InstanceHealth {
 
 export const adminKeys = {
   users: ["admin", "users"] as const,
-  user: (id: string) => ["admin", "users", id] as const,
   invitations: ["admin", "invitations"] as const,
   settings: ["admin", "settings"] as const,
   audit: ["admin", "audit"] as const,
@@ -239,18 +238,6 @@ export const useAdminUsers = () =>
         (data) => data.users,
       ),
     staleTime: 15_000,
-  });
-
-/** One account with what it owns. Used by the delete confirmation. */
-export const useAdminUser = (id: string | null) =>
-  useQuery({
-    queryKey: adminKeys.user(id ?? ""),
-    queryFn: ({ signal }) =>
-      apiJson<{ user: AdminUser; counts: OwnedCounts }>(
-        `/admin/users/${encodeURIComponent(id!)}`,
-        { signal },
-      ),
-    enabled: !!id,
   });
 
 /**

@@ -209,17 +209,13 @@ describe("index.css and theme.ts hold the same palettes", () => {
     );
   });
 
-  it("gives the frosted panel and the swipe overlays a dark value", () => {
-    // Three literals that no token describes. Each appears twice: once for a
-    // dark machine, once for a chosen dark theme.
-    for (const selector of [
-      ".glass-panel",
-      ".swipe-approve-overlay",
-      ".swipe-reject-overlay",
-    ]) {
-      const occurrences = css.split(selector).length - 1;
-      expect(occurrences, selector).toBeGreaterThanOrEqual(3);
-    }
+  it("gives the frosted panel a dark value", () => {
+    // The one literal that no token describes. It appears for the light
+    // palette, once for a dark machine and once for a chosen dark theme. The
+    // swipe overlays were literals too, and are the status tokens now.
+    const occurrences = css.split(".glass-panel").length - 1;
+    expect(occurrences).toBeGreaterThanOrEqual(3);
+    expect(css).not.toContain(".swipe-approve-overlay");
   });
 });
 

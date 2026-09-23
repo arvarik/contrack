@@ -15,15 +15,24 @@ import {
   isCombination,
   type Shortcut,
 } from "../../../lib/shortcuts";
-import { SETTINGS_PAGE } from "../layout";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import {
+  SETTINGS_CARD,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
+import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
+/** One key, as a keycap. */
 const Kbd = ({ children }: { children: React.ReactNode }) => (
-  <kbd className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 bg-surface-container-high rounded-md text-[11px] font-mono font-bold text-on-surface shadow-[0_1px_0_0_rgba(0,0,0,0.12)] border border-black/8">
+  <kbd className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 bg-surface-container-high rounded-md text-[11px] font-mono font-bold text-on-surface shadow-sm">
     {children}
   </kbd>
 );
+
+/** The chip after a shortcut's name. */
+const CHIP =
+  "text-[11px] font-semibold px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant";
 
 export const KeyboardPage = () => {
   const { preferences, setPreference } = usePreferences();
@@ -31,19 +40,14 @@ export const KeyboardPage = () => {
   const groups = groupedShortcuts();
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Single-key shortcuts and keyboard reference table.
-        </p>
-      </div>
-
-      <div className={cn(CARD, "p-4 sm:p-6")}>
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
+      <div className={SETTINGS_CARD}>
         <SettingRow
           id="single-key-shortcuts"
           title="Single-key shortcuts"
           prefKey="singleKeyShortcuts"
-          description="Use bare keys like /, N, V, J, and K without holding a modifier. Turn off if you frequently trigger shortcuts by mistake."
+          description="Use keys like /, N, V, J, and K without holding a modifier. Turn this off if you set them off by mistake."
+          inline
         >
           <Switch
             label="Single-key shortcuts"
@@ -53,25 +57,23 @@ export const KeyboardPage = () => {
         </SettingRow>
       </div>
 
-      <div className={cn(CARD, "p-4 sm:p-6 space-y-8")}>
-        <div className="border-b border-surface-container pb-4">
-          <h2 className={SECTION_HEADING}>Shortcuts reference</h2>
-          <p className="text-xs text-on-surface-variant mt-1">
-            Keys marked with &ldquo;Single key&rdquo; are turned off when the
-            single-key shortcuts switch above is disabled.
+      <section aria-labelledby="all-shortcuts">
+        <h2 id="all-shortcuts" className={SETTINGS_SECTION_HEADING}>
+          All shortcuts
+        </h2>
+        <div className={cn(SETTINGS_CARD, "space-y-6")}>
+          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+            The switch above turns off every key marked &ldquo;Single
+            key&rdquo;.
           </p>
-        </div>
 
-        {groups.map((group) => (
-          <section
-            key={group.group}
-            aria-label={group.group}
-            className="space-y-3"
-          >
-            <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
-              {group.group}
-            </h3>
-            <div className="divide-y divide-surface-container/60">
+          {groups.map((group) => (
+            <section
+              key={group.group}
+              aria-label={group.group}
+              className="space-y-1"
+            >
+              <h3 className={cn(SECTION_HEADING, "mb-2")}>{group.group}</h3>
               {group.shortcuts.map((s: Shortcut) => {
                 const isAffected = s.bareLetter && !s.alwaysOn;
                 const isDeactivated = isAffected && !singleKeysEnabled;
@@ -80,7 +82,7 @@ export const KeyboardPage = () => {
                   <div
                     key={`${group.group}-${s.keys.join("+")}-${s.description}`}
                     className={cn(
-                      "flex items-center justify-between gap-4 py-2.5 transition-opacity",
+                      "flex items-center justify-between gap-4 py-1.5 transition-opacity",
                       isDeactivated && "opacity-50",
                     )}
                   >
@@ -89,22 +91,11 @@ export const KeyboardPage = () => {
                         {s.description}
                       </span>
                       {isAffected && (
-                        <span
-                          className={cn(
-                            "text-[11px] font-semibold px-2 py-0.5 rounded-md",
-                            singleKeysEnabled
-                              ? "bg-surface-container text-on-surface-variant"
-                              : "bg-error/10 text-error",
-                          )}
-                        >
+                        <span className={CHIP}>
                           {singleKeysEnabled ? "Single key" : "Off"}
                         </span>
                       )}
-                      {s.alwaysOn && (
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant">
-                          Always on
-                        </span>
-                      )}
+                      {s.alwaysOn && <span className={CHIP}>Always on</span>}
                     </div>
 
                     <div className="shrink-0 flex items-center gap-1">
@@ -130,10 +121,10 @@ export const KeyboardPage = () => {
                   </div>
                 );
               })}
-            </div>
-          </section>
-        ))}
-      </div>
+            </section>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

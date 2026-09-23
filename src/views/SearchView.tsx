@@ -25,6 +25,7 @@ import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
 import {
+  ASK_COLUMN,
   BTN_QUIET,
   CARD,
   ICON_BTN,
@@ -38,6 +39,7 @@ import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { CorvidThinking } from "../components/brand/CorvidThinking";
 import { PageHeader } from "../components/layout/PageHeader";
+import { SidePanel } from "../components/layout/SidePanel";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { NAMES } from "../lib/names";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
@@ -118,10 +120,12 @@ export const SearchView = () => {
 
   const navigate = useNavigate();
   const { preferences, setPreference } = usePreferences();
+  /** The side panel, from `lg`: open or closed is an account preference. */
   const askHistoryOpen = preferences.askHistoryOpen;
   const isWide = useMediaQuery(WIDE_QUERY);
-  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
-  const historyToggleRef = useRef<HTMLButtonElement>(null);
+  /** The sheet, below `lg`, where the header's History button opens it. */
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
   const singleKeys = useSingleKeyShortcuts();
   const aiAllowed = useAiAllowed();
   const recordSearch = useRecordSearch();
@@ -177,31 +181,14 @@ export const SearchView = () => {
     if (submittedQuery) handleSearch(submittedQuery);
   }, [submittedQuery, handleSearch]);
 
-  const handleToggleHistory = useCallback(() => {
-    if (isWide) {
-      setPreference("askHistoryOpen", !askHistoryOpen);
-    } else {
-      setMobileHistoryOpen((prev) => !prev);
-    }
-  }, [isWide, askHistoryOpen, setPreference]);
+  const setHistoryOpen = useCallback(
+    (open: boolean) => setPreference("askHistoryOpen", open),
+    [setPreference],
+  );
 
-  /**
-   * Close the side pane from the button in its own header. Focus moves to
-   * the page header's toggle, which stays on the page and opens the pane
-   * again, so the keyboard keeps its place when the button it pressed goes.
-   */
-  const handleHideHistory = useCallback(() => {
-    setPreference("askHistoryOpen", false);
-    historyToggleRef.current?.focus();
-  }, [setPreference]);
+  /** Close the sheet. The sheet hands focus back to the History button. */
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
 
-  /** Close the phone's sheet. The sheet hands focus back to the toggle. */
-  const closeMobileHistory = useCallback(() => {
-    setMobileHistoryOpen(false);
-  }, []);
-
-  /** Whether the history is showing: the side pane, or the phone's sheet. */
-  const historyOpen = isWide ? askHistoryOpen : mobileHistoryOpen;
   /** The key that toggles the history, while single-key shortcuts are on. */
   const historyShortcut = singleKeys ? "H" : undefined;
 
@@ -305,25 +292,20 @@ export const SearchView = () => {
         !e.altKey
       ) {
         e.preventDefault();
-        // With focus inside the side pane, H is its Hide history button:
-        // the pane goes, and the keyboard moves to the toggle that brings it
-        // back instead of falling onto the body.
-        const inPane =
-          document.activeElement instanceof Element &&
-          document.activeElement.closest("#search-history-aside") !== null;
-        if (isWide && askHistoryOpen && inPane) handleHideHistory();
-        else handleToggleHistory();
+        // The sheet is a dialog, and a key pressed in it is its own, so
+        // below `lg` H only opens it.
+        if (!isWide) {
+          setSheetOpen(true);
+          return;
+        }
+        // With focus inside the panel, H is its Hide button: `SidePanel`
+        // moves the keyboard to the rail icon that brings it back.
+        setHistoryOpen(!askHistoryOpen);
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [
-    singleKeys,
-    isWide,
-    askHistoryOpen,
-    handleToggleHistory,
-    handleHideHistory,
-  ]);
+  }, [singleKeys, isWide, askHistoryOpen, setHistoryOpen]);
 
   // Built from the network, which the Network list has most often loaded
   // already (the two share one cache). The list waits for the network to
@@ -356,7 +338,7 @@ export const SearchView = () => {
 
   /**
    * The one sentence a screen reader hears about this search. The thinking
-   * bird, the "Searching..." line and the count pill below are what a
+   * bird, the "Searching…" line and the count pill below are what a
    * sighted person sees; none of them is announced. See
    * lib/searchAnnouncements.
    */
@@ -370,387 +352,375 @@ export const SearchView = () => {
     fallback: isFallback,
   });
 
+  /** What the history marks as the question on screen. */
+  const historyQuery =
+    mode === "notes" ? (searchParams.get("q") ?? "") : answeredQuery || query;
+
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-surface">
-      {/* Primary column: the header, then the body that scrolls under it */}
-      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-        {/*
-          The page scrolls as one column: the header, then the search and its
-          results, in one box with one pair of gutters, so the title's left
-          edge is the search box's left edge with any scrollbar. The header
-          scrolls away with the page, as it does on Pulse. The scroll padding
-          keeps a card that Tab brings into view clear of the edge, so its
-          focus ring is never cut.
-        */}
-        <div className="flex-1 overflow-y-auto scroll-py-2">
-          <div
-            className={cn(
-              "max-w-3xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8 pb-28 md:pb-8",
-              PAGE_TOP,
-            )}
-          >
-            {/* The title and its two controls, nothing else: the search box
-                under it says what the page is for. */}
-            <PageHeader
-              title={NAMES.ask.label}
-              // The controls are the same two in both modes, so the switch stays
-              // where the person clicked it. On a phone they fill the row under
-              // the title, the switch growing beside the history button.
-              actionsClassName="max-sm:w-full"
-              actions={
-                <>
-                  <Segmented
-                    options={MODES}
-                    value={mode}
-                    onChange={setMode}
-                    label="What to search"
-                    className="max-sm:w-auto max-sm:flex-1"
-                  />
-                  {/* One name, "History", and the state says the rest: a
-                      pressed toggle for the side pane, an expanded opener
-                      for the phone's sheet. A name that flipped between
-                      Show and Hide on a pressed toggle would say the state
-                      twice, and a screen reader would read "Hide history,
-                      pressed". The side pane also closes from its own
-                      header, and this is the way to open it again. */}
+    <div className="h-full flex overflow-hidden bg-surface">
+      {/*
+        The page scrolls as one column: the header, then the search and its
+        results, in one box with one pair of gutters, so the title's left
+        edge is the search box's left edge. The header scrolls away with the
+        page, as it does on Pulse. The scroll padding keeps a card that Tab
+        brings into view clear of the edge, so its focus ring is never cut.
+        The bar's lane is kept while nothing scrolls, so the column does not
+        move when the results make the page scroll.
+      */}
+      <div className="flex-1 min-w-0 h-full overflow-y-auto scroll-py-2 [scrollbar-gutter:stable]">
+        <div
+          className={cn(
+            ASK_COLUMN,
+            "px-4 sm:px-6 space-y-6 sm:space-y-8 pb-28 md:pb-8",
+            PAGE_TOP,
+          )}
+        >
+          {/* The title and the mode switch, nothing else: the search box
+              under it says what the page is for. */}
+          <PageHeader
+            title={NAMES.ask.label}
+            // The switch is the same in both modes, so it stays where the
+            // person clicked it. On a phone the controls fill the row
+            // under the title, the switch growing beside History.
+            actionsClassName="max-sm:w-full"
+            actions={
+              <>
+                <Segmented
+                  options={MODES}
+                  value={mode}
+                  onChange={setMode}
+                  label="What to search"
+                  className="max-sm:w-auto max-sm:flex-1"
+                />
+                {/* From `lg` the rail's icon opens the history. Below it
+                    there is no rail, and this opens the sheet. */}
+                {!isWide && (
                   <IconButton
-                    ref={historyToggleRef}
+                    ref={historyButtonRef}
                     aria-label="History"
                     title={
                       historyShortcut
                         ? `History (${historyShortcut})`
                         : "History"
                     }
-                    aria-pressed={isWide ? askHistoryOpen : undefined}
-                    aria-expanded={isWide ? undefined : mobileHistoryOpen}
-                    aria-haspopup={isWide ? undefined : "dialog"}
-                    aria-controls={
-                      isWide && askHistoryOpen
-                        ? "search-history-aside"
-                        : undefined
-                    }
-                    onClick={handleToggleHistory}
-                    tone={historyOpen ? "primary" : "ghost"}
+                    aria-haspopup="dialog"
+                    aria-expanded={sheetOpen}
+                    onClick={() => setSheetOpen(true)}
                   >
                     <HistoryIcon className="w-5 h-5" aria-hidden="true" />
                   </IconButton>
-                </>
-              }
-            />
-            {mode === "notes" ? (
-              <InteractionSearchPanel />
-            ) : (
-              <>
-                <LiveStatus message={status} label="Search status" />
-
-                {/*
-                  The search box, and under it the index's one line while
-                  People search cannot read the whole network yet.
-                */}
-                <div className="space-y-3">
-                  {/*
-                    The search box is one field: the glyph, the input, Clear
-                    and Search in one card. The card draws the focus ring
-                    while the input has focus (`focus-frame`). The button
-                    drops below the field on phones, with the card's side
-                    padding under it. It is the one raised surface on the
-                    page, and 80 px tall from `sm`, the same as the Notes
-                    box, so switching modes moves nothing.
-                  */}
-                  <div
-                    className={cn(
-                      CARD,
-                      "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-6 pt-2 pb-4 sm:py-5",
-                    )}
-                  >
-                    {isLoading ? (
-                      // Decorative: the "Searching..." line under the box says
-                      // the same thing in words, and the status region reads it.
-                      <CorvidThinking
-                        decorative
-                        size={20}
-                        className="text-primary shrink-0"
-                      />
-                    ) : (
-                      <Sparkles className="w-5 h-5 text-primary shrink-0" />
-                    )}
-                    <input
-                      ref={inputRef}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      // Short enough to survive a 390px viewport without the
-                      // placeholder being clipped mid-word.
-                      placeholder="Ask about your network…"
-                      aria-label="Ask anything about your network"
-                      // 44px tall on a phone, the touch floor, and the Search
-                      // button's 40 px from `sm`.
-                      className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
-                    />
-                    {/*
-                      Reserved slot, not an AnimatePresence exit. Mounting and
-                      unmounting the clear button changed the row's width
-                      mid-typing and nudged the caret; now the space is always
-                      there and only the button's opacity changes.
-                    */}
-                    <button
-                      onClick={handleClear}
-                      tabIndex={query.length > 0 ? 0 : -1}
-                      aria-hidden={query.length === 0}
-                      className={cn(
-                        ICON_BTN,
-                        "p-1.5 shrink-0 transition-opacity",
-                        query.length === 0 && "opacity-0 pointer-events-none",
-                      )}
-                      aria-label="Clear search"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleSearch()}
-                      disabled={query.trim().length < 3 || isLoading}
-                      className="btn-primary w-full sm:w-auto shrink-0"
-                    >
-                      <Search className="w-4 h-4" />
-                      Search
-                    </button>
-                  </div>
-                  <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
-                </div>
-
-                {/* Suggested questions, before the first search. A press
-                    fills the box and asks. */}
-                {!hasSearched && !isLoading && !contactsPending && (
-                  <div className="space-y-3">
-                    <h2 id={suggestionsId} className={SECTION_HEADING}>
-                      Try asking
-                    </h2>
-                    <ul
-                      aria-labelledby={suggestionsId}
-                      className="flex flex-wrap gap-2"
-                    >
-                      {suggestions.map((q, i) => (
-                        <li
-                          key={q}
-                          className="tile-enter"
-                          style={{ animationDelay: tileDelay(i) }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleExampleClick(q)}
-                            className={SUGGESTION_CHIP}
-                          >
-                            {q}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
                 )}
+              </>
+            }
+          />
+          {mode === "notes" ? (
+            <InteractionSearchPanel />
+          ) : (
+            <>
+              <LiveStatus message={status} label="Search status" />
 
+              {/*
+                The search box, and under it the index's one line while
+                People search cannot read the whole network yet.
+              */}
+              <div className="space-y-3">
                 {/*
-            Shimmer and results share one keyed slot and crossfade with CSS.
-
-            This used to be `<AnimatePresence mode="popLayout">`, which yanks the
-            exiting shimmer into `position: absolute` for the length of its exit
-            — and for those frames the shimmer sits on top of the incoming cards
-            at a stale width. A keyed `.fade-enter` swaps in one commit: the
-            outgoing tree is gone before the new one paints, so there is nothing
-            to overlap.
-          */}
-                {isLoading ? (
-                  <div key="shimmer" className="fade-enter space-y-3">
-                    <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
-                      {/* Decorative: the word beside it says the same thing. */}
-                      <CorvidThinking decorative size={16} />
-                      Searching...
-                    </div>
-                    <ShimmerCard delay={0} />
-                    <ShimmerCard delay={0.08} />
-                    <ShimmerCard delay={0.16} />
-                  </div>
-                ) : results.length > 0 ? (
-                  <div key="results" className="fade-enter space-y-3">
-                    {/* Results header — wraps rather than crushes on narrow screens */}
-                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                      <div className="flex items-center gap-2">
-                        {/* A label in the muted ink, like "Try asking": blue
-                            would read as a link. */}
-                        <span className={SECTION_HEADING}>
-                          {isFallback
-                            ? isEnriching
-                              ? "Keyword candidates"
-                              : "Keyword results"
-                            : "Search results"}
-                        </span>
-                        <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
-                          {results.length} match
-                          {results.length !== 1 ? "es" : ""}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {isEnriching && (
-                          <div className="flex items-center gap-1.5 text-xs text-primary">
-                            {/* Decorative: the words beside it say it. */}
-                            <CorvidThinking decorative size={16} />
-                            <span>Enriching with AI…</span>
-                          </div>
-                        )}
-                        {isFallback && !isEnriching && (
-                          <div className="flex items-center gap-1.5 text-xs text-warning">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span>
-                              AI unavailable — showing keyword matches
-                            </span>
-                          </div>
-                        )}
-                        {/*
-                    Re-asks the question these results answer, whatever the
-                    input says by now. Disabled while an answer is streaming,
-                    which is the same rule the Search button follows.
+                  The search box is one field: the glyph, the input, Clear
+                  and Search in one card. The card draws the focus ring
+                  while the input has focus (`focus-frame`). The button
+                  drops below the field on phones, with the card's side
+                  padding under it. It is the one raised surface on the
+                  page, and 80 px tall from `sm`, the same as the Notes
+                  box, so switching modes moves nothing.
+                */}
+                <div
+                  className={cn(
+                    CARD,
+                    "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-6 pt-2 pb-4 sm:py-5",
+                  )}
+                >
+                  {isLoading ? (
+                    // Decorative: the "Searching…" line under the box says
+                    // the same thing in words, and the status region reads it.
+                    <CorvidThinking
+                      decorative
+                      size={20}
+                      className="text-primary shrink-0"
+                    />
+                  ) : (
+                    <Sparkles className="w-5 h-5 text-primary shrink-0" />
+                  )}
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    // Short enough to survive a 390px viewport without the
+                    // placeholder being clipped mid-word.
+                    placeholder="Ask about your network…"
+                    aria-label="Ask anything about your network"
+                    // 44px tall on a phone, the touch floor, and the Search
+                    // button's 40 px from `sm`.
+                    className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+                  />
+                  {/*
+                    Reserved slot, not an AnimatePresence exit. Mounting and
+                    unmounting the clear button changed the row's width
+                    mid-typing and nudged the caret; now the space is always
+                    there and only the button's opacity changes.
                   */}
-                        <button
-                          onClick={handleRerun}
-                          disabled={isPending || !answeredQuery}
-                          aria-label="Refresh results"
-                          title="Ask this question again"
-                          // A quiet text button, like the status row's:
-                          // it is a button, not a link.
-                          className={cn(
-                            BTN_QUIET,
-                            "disabled:opacity-50 disabled:cursor-not-allowed",
-                          )}
-                        >
-                          <RefreshCw
-                            className="w-3.5 h-3.5 shrink-0"
-                            aria-hidden="true"
-                          />
-                          Refresh
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Synthesis executive brief (Feature 6) */}
-                    {aiAllowed && !isFallback && (
-                      <SynthesisBar
-                        query={answeredQuery}
-                        contacts={results}
-                        resultCount={results.length}
-                      />
+                  <button
+                    onClick={handleClear}
+                    tabIndex={query.length > 0 ? 0 : -1}
+                    aria-hidden={query.length === 0}
+                    className={cn(
+                      ICON_BTN,
+                      "p-1.5 shrink-0 transition-opacity",
+                      query.length === 0 && "opacity-0 pointer-events-none",
                     )}
+                    aria-label="Clear search"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => handleSearch()}
+                    disabled={query.trim().length < 3 || isLoading}
+                    className="btn-primary w-full sm:w-auto shrink-0"
+                  >
+                    <Search className="w-4 h-4" />
+                    Search
+                  </button>
+                </div>
+                <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
+              </div>
 
-                    {/* Cards — CSS stagger, no per-card Framer Motion */}
-                    <div className="space-y-2">
-                      {results.map((match, i) => (
-                        <ResultCard
-                          key={match.id}
-                          match={match}
-                          index={i}
-                          isFallback={isFallback}
-                          onClick={() => setFloatingContactId(match.id)}
+              {/* Suggested questions, before the first search. A press
+                  fills the box and asks. */}
+              {!hasSearched && !isLoading && !contactsPending && (
+                <div className="space-y-3">
+                  <h2 id={suggestionsId} className={SECTION_HEADING}>
+                    Try asking
+                  </h2>
+                  <ul
+                    aria-labelledby={suggestionsId}
+                    className="flex flex-wrap gap-2"
+                  >
+                    {suggestions.map((q, i) => (
+                      <li
+                        key={q}
+                        className="tile-enter"
+                        style={{ animationDelay: tileDelay(i) }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleExampleClick(q)}
+                          className={SUGGESTION_CHIP}
+                        >
+                          {q}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/*
+                Shimmer and results share one keyed slot and crossfade with
+                CSS.
+
+                This used to be `<AnimatePresence mode="popLayout">`, which
+                yanks the exiting shimmer into `position: absolute` for the
+                length of its exit — and for those frames the shimmer sits on
+                top of the incoming cards at a stale width. A keyed
+                `.fade-enter` swaps in one commit: the outgoing tree is gone
+                before the new one paints, so there is nothing to overlap.
+              */}
+              {isLoading ? (
+                <div key="shimmer" className="fade-enter space-y-3">
+                  <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
+                    {/* Decorative: the word beside it says the same thing. */}
+                    <CorvidThinking decorative size={16} />
+                    Searching…
+                  </div>
+                  <ShimmerCard delay={0} />
+                  <ShimmerCard delay={0.08} />
+                  <ShimmerCard delay={0.16} />
+                </div>
+              ) : results.length > 0 ? (
+                <div key="results" className="fade-enter space-y-3">
+                  {/* Results header — wraps rather than crushes on narrow screens */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                    <div className="flex items-center gap-2">
+                      {/* A label in the muted ink, like "Try asking": blue
+                          would read as a link. */}
+                      <span className={SECTION_HEADING}>
+                        {isFallback
+                          ? isEnriching
+                            ? "Keyword candidates"
+                            : "Keyword results"
+                          : "Search results"}
+                      </span>
+                      <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
+                        {results.length} match
+                        {results.length !== 1 ? "es" : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isEnriching && (
+                        <div className="flex items-center gap-1.5 text-xs text-primary">
+                          {/* Decorative: the words beside it say it. */}
+                          <CorvidThinking decorative size={16} />
+                          <span>Enriching with AI…</span>
+                        </div>
+                      )}
+                      {isFallback && !isEnriching && (
+                        <div className="flex items-center gap-1.5 text-xs text-warning">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>AI unavailable — showing keyword matches</span>
+                        </div>
+                      )}
+                      {/*
+                        Re-asks the question these results answer, whatever the
+                        input says by now. Disabled while an answer is streaming,
+                        which is the same rule the Search button follows.
+                      */}
+                      <button
+                        onClick={handleRerun}
+                        disabled={isPending || !answeredQuery}
+                        aria-label="Refresh results"
+                        title="Ask this question again"
+                        // A quiet text button, like the status row's:
+                        // it is a button, not a link.
+                        className={cn(
+                          BTN_QUIET,
+                          "disabled:opacity-50 disabled:cursor-not-allowed",
+                        )}
+                      >
+                        <RefreshCw
+                          className="w-3.5 h-3.5 shrink-0"
+                          aria-hidden="true"
                         />
-                      ))}
+                        Refresh
+                      </button>
                     </div>
                   </div>
-                ) : null}
 
-                {/* No results. When the index is not complete, the line
-                    under the search box already says so. */}
-                {!isLoading &&
-                  hasSearched &&
-                  results.length === 0 &&
-                  !semanticSearch.isError && (
-                    <EmptyState
-                      icon={SearchX}
-                      title="No one matches"
-                      body="Try other words."
-                      className="tile-enter"
+                  {/* Synthesis executive brief (Feature 6) */}
+                  {aiAllowed && !isFallback && (
+                    <SynthesisBar
+                      query={answeredQuery}
+                      contacts={results}
+                      resultCount={results.length}
                     />
                   )}
 
-                {/*
-                  Error state. `role="alert"` so the failure is announced the
-                  moment it appears (WCAG 4.1.3, technique ARIA19). The status
-                  region above says nothing for an error, so it is spoken
-                  once. The question that failed is kept by the hook, so Retry
-                  asks it again without reading the input, which may have
-                  moved on. Asking clears the error, so the button is gone
-                  before a second press could send the question twice.
-                */}
-                {semanticSearch.isError && (
-                  <div role="alert" className="tile-enter">
-                    <EmptyState
-                      icon={AlertTriangle}
-                      tone="error"
-                      title="Search failed"
-                      body={
-                        (semanticSearch.error as Error)?.message ||
-                        "An unexpected error occurred."
-                      }
-                      action={
-                        submittedQuery
-                          ? {
-                              label: "Retry",
-                              onClick: handleRerun,
-                              icon: RotateCw,
-                            }
-                          : undefined
-                      }
-                    />
+                  {/* Cards — CSS stagger, no per-card Framer Motion */}
+                  <div className="space-y-2">
+                    {results.map((match, i) => (
+                      <ResultCard
+                        key={match.id}
+                        match={match}
+                        index={i}
+                        isFallback={isFallback}
+                        onClick={() => setFloatingContactId(match.id)}
+                      />
+                    ))}
                   </div>
+                </div>
+              ) : null}
+
+              {/* No results. When the index is not complete, the line
+                  under the search box already says so. */}
+              {!isLoading &&
+                hasSearched &&
+                results.length === 0 &&
+                !semanticSearch.isError && (
+                  <EmptyState
+                    icon={SearchX}
+                    title="No one matches"
+                    body="Try other words."
+                    className="tile-enter"
+                  />
                 )}
-              </>
-            )}
-          </div>
+
+              {/*
+                Error state. `role="alert"` so the failure is announced the
+                moment it appears (WCAG 4.1.3, technique ARIA19). The status
+                region above says nothing for an error, so it is spoken
+                once. The question that failed is kept by the hook, so Retry
+                asks it again without reading the input, which may have
+                moved on. Asking clears the error, so the button is gone
+                before a second press could send the question twice.
+              */}
+              {semanticSearch.isError && (
+                <div role="alert" className="tile-enter">
+                  <EmptyState
+                    icon={AlertTriangle}
+                    tone="error"
+                    title="Search failed"
+                    body={
+                      (semanticSearch.error as Error)?.message ||
+                      "An unexpected error occurred."
+                    }
+                    action={
+                      submittedQuery
+                        ? {
+                            label: "Retry",
+                            onClick: handleRerun,
+                            icon: RotateCw,
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* Desktop History Aside (on lg and up when askHistoryOpen is true) */}
-      {askHistoryOpen && (
-        <aside
-          id="search-history-aside"
-          aria-label="Search history"
-          className="hidden lg:flex flex-col w-[320px] shrink-0 bg-surface-container-low overflow-y-auto"
+      {/* The history. From `lg`, the rail at the right edge and the panel it
+          opens over the page, which moves nothing in the column. Below it,
+          a sheet. */}
+      {isWide ? (
+        <HistoryPane
+          currentQuery={historyQuery}
+          currentMode={mode}
+          onSelect={handleSelectHistoryEntry}
         >
-          {/* `PAGE_TOP` above the pane's title, so it starts level with the page's. */}
+          {({ count, actions, body }) => (
+            <SidePanel
+              id="search-history"
+              title="History"
+              icon={HistoryIcon}
+              open={askHistoryOpen}
+              onOpenChange={setHistoryOpen}
+              shortcut={historyShortcut}
+              count={count}
+              actions={actions}
+            >
+              {body}
+            </SidePanel>
+          )}
+        </HistoryPane>
+      ) : (
+        <Modal
+          isOpen={sheetOpen}
+          onClose={closeSheet}
+          ariaLabel="Search history"
+          returnFocusRef={historyButtonRef}
+        >
           <HistoryPane
-            className={cn("flex flex-col h-full px-4 pb-4 space-y-4", PAGE_TOP)}
-            currentQuery={
-              mode === "notes"
-                ? (searchParams.get("q") ?? "")
-                : answeredQuery || query
-            }
+            currentQuery={historyQuery}
             currentMode={mode}
-            onSelect={handleSelectHistoryEntry}
-            onHide={handleHideHistory}
-            hideShortcut={historyShortcut}
-          />
-        </aside>
-      )}
-
-      {/* Mobile History Bottom Sheet (below lg) */}
-      <Modal
-        isOpen={mobileHistoryOpen}
-        onClose={closeMobileHistory}
-        ariaLabel="Search history"
-        returnFocusRef={historyToggleRef}
-      >
-        <div className="p-2 -m-2">
-          <HistoryPane
-            currentQuery={
-              mode === "notes"
-                ? (searchParams.get("q") ?? "")
-                : answeredQuery || query
-            }
-            currentMode={mode}
-            onClose={closeMobileHistory}
+            onClose={closeSheet}
             onSelect={(entry) => {
-              setMobileHistoryOpen(false);
+              closeSheet();
               handleSelectHistoryEntry(entry);
             }}
           />
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Floating Contact Card overlay */}
       <FloatingContactCard

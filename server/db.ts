@@ -1623,8 +1623,8 @@ sqlite.exec(`
   END;
 `);
 
-// Every reader of the score, Pulse and the map's health layer asks for one
-// account's tracked contacts. The partial index holds only those rows.
+// Every reader of the score and Pulse asks for one account's tracked
+// contacts. The partial index holds only those rows.
 // tenant-lint: allow boot migration
 sqlite.exec(
   `CREATE INDEX IF NOT EXISTS idx_contacts_owner_tracked

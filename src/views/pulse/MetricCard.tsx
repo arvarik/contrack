@@ -1,4 +1,3 @@
-import React from "react";
 import { cn } from "../../lib/utils";
 import { CARD_COMPACT, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
 import { LucideIcon } from "lucide-react";
@@ -11,7 +10,6 @@ interface MetricCardProps {
   /** CSS entrance delay from `tileDelay(index)`. */
   delay?: string;
   highlight?: boolean;
-  onClick?: () => void;
 }
 
 export const MetricCard = ({
@@ -21,22 +19,14 @@ export const MetricCard = ({
   icon: Icon,
   delay,
   highlight = false,
-  onClick,
 }: MetricCardProps) => {
-  const Component = onClick ? "button" : "div";
-
   return (
     // The entrance runs on a wrapper. `tile-enter` holds its last `transform`
-    // after it ends, which would cancel the card's hover lift.
+    // after it ends. The tile is static, so it has no hover.
     <div className="tile-enter" style={{ animationDelay: delay }}>
-      <Component
-        onClick={onClick}
+      <div
         className={cn(
           CARD_COMPACT,
-          // A tile that is a control rises on hover (`.card-interactive`), and
-          // the class times its own transform and shadow. A static tile has no
-          // hover at all.
-          onClick && "card-interactive",
           "w-full h-full flex flex-col relative text-left overflow-hidden",
           // Reserve the tile's height up front so the row does not resize when
           // the numbers land. Matches the skeleton's 8rem on desktop; tighter on
@@ -81,12 +71,11 @@ export const MetricCard = ({
 
         {/* A highlighted tile says so in its ink and this faint wash. No
             ring and no fill on the card: a ring utility replaces the card's
-            shadow and its hover shadow, and a `bg-*` utility replaces its
-            white face. */}
+            shadow, and a `bg-*` utility replaces its white face. */}
         {highlight && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
         )}
-      </Component>
+      </div>
     </div>
   );
 };

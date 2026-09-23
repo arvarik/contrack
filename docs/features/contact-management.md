@@ -367,7 +367,7 @@ Uploaded avatars are processed by Sharp (resized, optimized) and stored in `uplo
 
 ## Tracking
 
-The relationship score, Pulse and the map's health layer are about the people you chose to keep up with. Tracking is that choice. One word for it everywhere: the action is **Track**, the state is **Tracked**, the reverse is **Untrack**, and everyone else is **Not tracked**. Every contact starts untracked, including everyone from an import or a connector, whatever the preference says.
+The relationship score and Pulse are about the people you chose to keep up with. Tracking is that choice. One word for it everywhere: the action is **Track**, the state is **Tracked**, the reverse is **Untrack**, and everyone else is **Not tracked**. Every contact starts untracked, including everyone from an import or a connector, whatever the preference says.
 
 ### Track, on the contact page
 

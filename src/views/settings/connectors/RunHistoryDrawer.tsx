@@ -11,6 +11,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { Check, Copy, History, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { useConnectorRuns } from "../../../api/connectors";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
@@ -65,7 +66,9 @@ function formatStats(stats: Record<string, number> | null): string {
     );
   }
   if (stats.ghosts)
-    parts.push(`${stats.ghosts} new ghost${stats.ghosts === 1 ? "" : "s"}`);
+    parts.push(
+      `${stats.ghosts} new ${stats.ghosts === 1 ? "person" : "people"} seen`,
+    );
   if (stats.errors)
     parts.push(`${stats.errors} error${stats.errors === 1 ? "" : "s"}`);
   if (stats.skipped) parts.push(`${stats.skipped} skipped`);
@@ -98,7 +101,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={connector ? `${connector.name} — Run history` : "Run history"}
+      title={connector ? `Run history for ${connector.name}` : "Run history"}
       size="lg"
     >
       <div className="space-y-4 pt-2">
@@ -110,23 +113,21 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
         )}
 
         {!isLoading && (!runs || runs.length === 0) && (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-on-surface-variant">
-            <History className="w-8 h-8 opacity-40 mb-2" aria-hidden="true" />
-            <p className="text-sm font-medium text-on-surface">
-              No sync runs recorded
-            </p>
-            <p className="text-xs text-on-surface-variant mt-1">
-              Sync history will appear here once the connector runs.
-            </p>
-          </div>
+          <EmptyState
+            icon={History}
+            title="No syncs yet"
+            body="Each sync shows up here once the connector runs."
+            level={3}
+          />
         )}
 
+        {/* A tile for each run, on the dialog's wash: no line between. */}
         {!isLoading && runs && runs.length > 0 && (
-          <div className="divide-y divide-surface-container-high/40 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
             {runs.map((run) => (
               <div
                 key={run.id}
-                className="py-3 first:pt-0 last:pb-0 space-y-1.5"
+                className="rounded-xl bg-surface-container-low p-3 space-y-1.5"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
@@ -188,7 +189,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
           </div>
         )}
 
-        <div className="flex justify-end pt-3 border-t border-surface-container-high/40">
+        <div className="flex justify-end pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">
             Close
           </button>

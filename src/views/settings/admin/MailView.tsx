@@ -6,14 +6,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  Loader2,
-  Mail,
-  Send,
-  Server,
-  Trash2,
-  TriangleAlert,
-} from "lucide-react";
+import { AlertCircle, Loader2, Send, Trash2 } from "lucide-react";
 import {
   useMailConfig,
   useUpdateMailConfig,
@@ -21,26 +14,34 @@ import {
   useSendTestMail,
 } from "../../../api/admin";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import { EmptyState } from "../../../components/ui/EmptyState";
+import { Switch } from "../../../components/ui/Switch";
 import { cn } from "../../../lib/utils";
-import { NAMES } from "../../../lib/names";
-import { SETTINGS_PAGE } from "../layout";
+import {
+  SETTINGS_CARD,
+  SETTINGS_INPUT,
+  SETTINGS_LABEL,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
 
-/** A field in the SMTP form. */
-const FIELD =
-  "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm";
-
-/** Shown in place of the form when reading mail configuration failed. */
-const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
-  <div className={cn(CARD, "space-y-3")}>
-    <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
-      <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-      Mail settings could not be loaded. Nothing has changed.
-    </p>
-    <button type="button" onClick={onRetry} className="btn-secondary">
-      Try again
-    </button>
+/** One field of the form: its name over it. */
+const Field = ({
+  id,
+  label,
+  className,
+  ...props
+}: {
+  id: string;
+  label: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) => (
+  <div className={cn("space-y-1.5", className)}>
+    <label htmlFor={id} className={SETTINGS_LABEL}>
+      {label}
+    </label>
+    <input id={id} className={SETTINGS_INPUT} {...props} />
   </div>
 );
 
@@ -74,8 +75,14 @@ export const MailView = () => {
 
   if (isError) {
     return (
-      <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-        <ReadFailed onRetry={() => void refetch()} />
+      <div className={SETTINGS_PAGE}>
+        <EmptyState
+          icon={AlertCircle}
+          tone="error"
+          title="Mail settings did not load"
+          body="Nothing has changed. Try again in a moment."
+          action={{ label: "Try again", onClick: () => void refetch() }}
+        />
       </div>
     );
   }
@@ -144,254 +151,174 @@ export const MailView = () => {
     });
   };
 
-  const statusText = isEnv
-    ? "Configured by the environment (SMTP_URL). Edit the environment to change it."
+  const status: { tone: BadgeTone; label: string } = isEnv
+    ? { tone: "primary", label: "Set by the environment" }
     : isSettings
-      ? "Configured here"
-      : "Not configured";
+      ? { tone: "success", label: "Set up here" }
+      : { tone: "neutral", label: "Not set up" };
+  const locked = isEnv || isLoading;
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-      <section className="space-y-4">
-        <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>
-          <span className="inline-flex items-center gap-1.5">
-            <Server className="w-3.5 h-3.5" />
-            SMTP server
-          </span>
+    <div className={SETTINGS_PAGE}>
+      <section aria-labelledby="smtp-heading">
+        <h2 id="smtp-heading" className={SETTINGS_SECTION_HEADING}>
+          SMTP server
         </h2>
 
-        <div className={cn(CARD, "space-y-4")}>
-          <div className="space-y-1">
-            <p className="text-sm text-on-surface-variant">
-              {NAMES.outgoingMail.description}
-            </p>
-            <p
-              className={cn(
-                "text-xs font-medium",
-                isConfigured ? "text-primary" : "text-on-surface-variant",
-              )}
-            >
-              Status: {statusText}
-            </p>
+        <form
+          onSubmit={handleSubmit}
+          className={cn(SETTINGS_CARD, "space-y-5")}
+        >
+          <div className="flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+            <span className="font-bold text-on-surface">Status</span>
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {isEnv && (
+              <span className="text-pretty">
+                SMTP_URL in the environment sets it. Change it there.
+              </span>
+            )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2 space-y-1">
-                <label
-                  htmlFor="mail-host"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  Host
-                </label>
-                <input
-                  id="mail-host"
-                  type="text"
-                  required
-                  disabled={isEnv || isLoading}
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  placeholder="smtp.example.com"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field
+              id="mail-host"
+              label="Host"
+              className="sm:col-span-2"
+              type="text"
+              required
+              disabled={locked}
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              placeholder="smtp.example.com"
+            />
+            <Field
+              id="mail-port"
+              label="Port"
+              type="text"
+              inputMode="numeric"
+              required
+              disabled={locked}
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              placeholder="587"
+            />
+          </div>
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="mail-port"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  Port
-                </label>
-                <input
-                  id="mail-port"
-                  type="text"
-                  required
-                  disabled={isEnv || isLoading}
-                  value={port}
-                  onChange={(e) => setPort(e.target.value)}
-                  placeholder="587"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-on-surface">Use TLS</p>
+              <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+                Connects over TLS from the start. Port 465 usually needs it.
+                Port 587 usually does not.
+              </p>
             </div>
+            <Switch
+              id="mail-tls"
+              label="Use TLS"
+              checked={secure}
+              disabled={locked}
+              onChange={setSecure}
+            />
+          </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                id="mail-tls"
-                type="checkbox"
-                disabled={isEnv || isLoading}
-                checked={secure}
-                onChange={(e) => setSecure(e.target.checked)}
-                className={cn(
-                  "w-4 h-4 rounded text-primary",
-                  isEnv && "opacity-60 cursor-not-allowed",
-                )}
-              />
-              <label
-                htmlFor="mail-tls"
-                className={cn(
-                  "text-sm font-medium text-on-surface cursor-pointer",
-                  isEnv && "opacity-60 cursor-not-allowed",
-                )}
-              >
-                Use TLS (secure)
-              </label>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field
+              id="mail-user"
+              label="Username"
+              type="text"
+              disabled={locked}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="off"
+            />
+            <Field
+              id="mail-pass"
+              label="Password"
+              type="password"
+              disabled={locked}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={
+                data?.hasPassword
+                  ? "Leave it empty to keep the current one"
+                  : undefined
+              }
+              autoComplete="new-password"
+            />
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label
-                  htmlFor="mail-user"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  Username
-                </label>
-                <input
-                  id="mail-user"
-                  type="text"
-                  disabled={isEnv || isLoading}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="off"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field
+              id="mail-from"
+              label="From address"
+              type="email"
+              required
+              disabled={locked}
+              value={fromAddress}
+              onChange={(e) => setFromAddress(e.target.value)}
+              placeholder="noreply@example.com"
+            />
+            <Field
+              id="mail-reply"
+              label="Reply-to"
+              type="email"
+              disabled={locked}
+              value={replyTo}
+              onChange={(e) => setReplyTo(e.target.value)}
+              placeholder="support@example.com"
+            />
+          </div>
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="mail-pass"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  Password
-                </label>
-                <input
-                  id="mail-pass"
-                  type="password"
-                  disabled={isEnv || isLoading}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={
-                    data?.hasPassword
-                      ? "Leave blank to keep the current one"
-                      : "Enter password"
-                  }
-                  autoComplete="new-password"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label
-                  htmlFor="mail-from"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  From address
-                </label>
-                <input
-                  id="mail-from"
-                  type="email"
-                  required
-                  disabled={isEnv || isLoading}
-                  value={fromAddress}
-                  onChange={(e) => setFromAddress(e.target.value)}
-                  placeholder="noreply@example.com"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label
-                  htmlFor="mail-reply"
-                  className="block text-xs font-bold text-on-surface"
-                >
-                  Reply-to
-                </label>
-                <input
-                  id="mail-reply"
-                  type="email"
-                  disabled={isEnv || isLoading}
-                  value={replyTo}
-                  onChange={(e) => setReplyTo(e.target.value)}
-                  placeholder="support@example.com"
-                  className={cn(
-                    FIELD,
-                    isEnv && "opacity-60 cursor-not-allowed",
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              {!isEnv && (
-                <button
-                  type="submit"
-                  disabled={isLoading || updateMail.isPending}
-                  className="btn-primary"
-                >
-                  {updateMail.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Mail className="w-4 h-4" />
-                  )}
-                  Save
-                </button>
-              )}
+          {/* The destructive act on the left, apart from the others. Save,
+              the form's one call to action, ends the row. */}
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+            {isSettings && (
               <button
                 type="button"
-                onClick={handleSendTest}
-                disabled={!isConfigured || sendTest.isPending}
-                className="btn-secondary"
+                onClick={() => setShowClearConfirm(true)}
+                disabled={deleteMail.isPending}
+                className="btn-secondary text-error sm:mr-auto"
               >
-                {sendTest.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-                {adminEmail
-                  ? `Send a test message to ${adminEmail}`
-                  : "Send a test message"}
+                <Trash2 className="w-4 h-4" />
+                Clear settings
               </button>
-              {isSettings && (
-                <button
-                  type="button"
-                  onClick={() => setShowClearConfirm(true)}
-                  disabled={deleteMail.isPending}
-                  className="btn-secondary text-error ml-auto"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Clear configuration
-                </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={!isConfigured || sendTest.isPending}
+              className="btn-secondary"
+            >
+              {sendTest.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
               )}
-            </div>
-          </form>
-        </div>
+              {adminEmail ? `Send a test to ${adminEmail}` : "Send a test"}
+            </button>
+            {!isEnv && (
+              <button
+                type="submit"
+                disabled={isLoading || updateMail.isPending}
+                className="btn-primary"
+              >
+                {updateMail.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Save
+              </button>
+            )}
+          </div>
+        </form>
       </section>
 
       <ConfirmDialog
         isOpen={showClearConfirm}
         onClose={() => setShowClearConfirm(false)}
         onConfirm={handleClear}
-        title="Clear mail configuration?"
-        description="Outgoing mail will be disabled until configured again. Unsent invitations and password resets will not be sent by email."
-        confirmLabel="Clear configuration"
+        title="Clear the mail settings?"
+        description="Contrack stops sending mail until someone sets it up again. Invitations and password resets are then not sent by email."
+        confirmLabel="Clear settings"
         tone="danger"
         busy={deleteMail.isPending}
       />

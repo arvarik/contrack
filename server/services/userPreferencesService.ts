@@ -120,7 +120,14 @@ export const preferenceSchemas = {
   pulseLayout: pulseLayoutSchema,
   askHistoryOpen: z.boolean(),
   mapPaneOpen: z.boolean(),
-  mapLayer: z.enum(["pins", "heat", "health"]),
+  /**
+   * Health was a third layer until v2. A stored "health", and a PATCH from a
+   * page loaded before v2, read as Pins, so neither fails to load.
+   */
+  mapLayer: z.preprocess(
+    (value) => (value === "health" ? "pins" : value),
+    z.enum(["pins", "heat"]),
+  ),
   startPage: z.enum(["network", "pulse"]),
   listSort: z.enum(["name", "recent"]),
   defaultCadenceDays: z.union([

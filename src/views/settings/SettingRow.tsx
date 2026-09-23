@@ -2,7 +2,17 @@
  * SettingRow — an addressable row for one setting or preference.
  *
  * Each setting sits in a SettingRow with an id. Hash links scroll to the row
- * and flash its background once for 1.2 seconds.
+ * and flash its background once for 1.2 seconds: the selected tint, with no
+ * ring, since a ring is the focus ring's look.
+ *
+ * Rows sit on a card and space themselves apart: 32 px between two rows and
+ * no line, since "Lines are a failure of hierarchy". The flash reaches 12 px
+ * past the text on each side, so the words do not touch its edge.
+ *
+ * The control sits at the row's right edge from `sm`. On a phone a wide
+ * control (a `Segmented`, a `Select`) drops under the text and takes the
+ * row's width, and a small one (a `Switch`, a stepper) stays beside the
+ * title when the row is `inline`, the way a phone's own settings draw it.
  *
  * A preference with a stored key is not at its default. The row says so in
  * two quiet places instead of a line of its own under the description, which
@@ -33,10 +43,44 @@ export interface SettingRowProps {
   control?: React.ReactNode;
   /** Key in Preferences if this row controls an account preference. */
   prefKey?: keyof Preferences;
+  /**
+   * The control is small (a switch, a stepper), so on a phone it stays at
+   * the right of the title instead of dropping under the text.
+   */
+  inline?: boolean;
   className?: string;
 }
 
 export const CHANGED_LABEL = "Changed from the default";
+
+/**
+ * The target of a settings search result: when the location's hash is `id`,
+ * scroll the element into view, give it focus for a screen reader, and
+ * flash it for 1.2 seconds. `SettingRow` uses it, and so does any other
+ * element a search result links to (an Account section, a General card).
+ * Give the element `tabIndex={-1}` so it can take the focus.
+ */
+export function useHashTarget<T extends HTMLElement>(id: string) {
+  const location = useLocation();
+  const ref = useRef<T>(null);
+  const [flashing, setFlashing] = useState(false);
+
+  useEffect(() => {
+    const targetHash = `#${id}`;
+    if (location.hash === targetHash || window.location.hash === targetHash) {
+      setFlashing(true);
+      ref.current?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "nearest",
+      });
+      ref.current?.focus?.({ preventScroll: true });
+      const timer = setTimeout(() => setFlashing(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [id, location.hash]);
+
+  return { ref, flashing };
+}
 
 export const SettingRow = ({
   id,
@@ -45,29 +89,14 @@ export const SettingRow = ({
   children,
   control,
   prefKey,
+  inline = false,
   className,
 }: SettingRowProps) => {
-  const location = useLocation();
   const { stored, resetPreference } = usePreferences();
-  const [flashing, setFlashing] = useState(false);
-  const rowRef = useRef<HTMLDivElement>(null);
+  const { ref: rowRef, flashing } = useHashTarget<HTMLDivElement>(id);
 
   const isChanged = prefKey ? stored.includes(prefKey) : false;
   const controlNode = control ?? children;
-
-  useEffect(() => {
-    const targetHash = `#${id}`;
-    if (location.hash === targetHash || window.location.hash === targetHash) {
-      setFlashing(true);
-      rowRef.current?.scrollIntoView?.({
-        behavior: "smooth",
-        block: "nearest",
-      });
-      rowRef.current?.focus?.();
-      const timer = setTimeout(() => setFlashing(false), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [id, location.hash]);
 
   return (
     <div
@@ -79,12 +108,20 @@ export const SettingRow = ({
         // screen reader, not a control, and the flash below is its
         // highlight.
         "scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
-        "py-4 first:pt-0 last:pb-0",
-        flashing && "flash ring-2 ring-primary/40 bg-primary/10",
+        // 12 px of room each side for the flash, taken back by the margin,
+        // and 32 px between two rows. The first and the last row keep 8 px
+        // above and below for the flash, inside the card's own padding.
+        "-mx-3 px-3 py-4 first:-mt-2 first:pt-2 last:-mb-2 last:pb-2",
+        flashing && "flash bg-primary/10",
         className,
       )}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div
+        className={cn(
+          "flex gap-3 sm:flex-row sm:items-center sm:justify-between",
+          inline ? "flex-row items-start justify-between" : "flex-col",
+        )}
+      >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-sm text-on-surface">{title}</h3>

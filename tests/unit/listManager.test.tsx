@@ -8,7 +8,13 @@
  * the focus ring looks like: it is dashed now.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ContactList } from "../../src/types";
 
@@ -17,10 +23,25 @@ const state = vi.hoisted(() => ({
   isLoading: true,
 }));
 
+const calls = vi.hoisted(() => ({
+  update: vi.fn(async () => ({})),
+  remove: vi.fn(async () => ({})),
+}));
+
 vi.mock("../../src/api", () => ({
   useLists: () => ({ data: state.lists, isLoading: state.isLoading }),
   useReorderLists: () => ({ mutate: vi.fn() }),
   useCreateList: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateList: () => ({ mutateAsync: calls.update, isPending: false }),
+  useDeleteList: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRemoveFromList: () => ({ mutateAsync: calls.remove, isPending: false }),
+  useListContacts: () => ({
+    data: [
+      { id: "c1", name: "Ada Lovelace", role: "Engineer", company: "Babbage" },
+      { id: "c2", name: "Grace Hopper", role: null, company: "Navy" },
+    ],
+    isLoading: false,
+  }),
 }));
 
 const { ListManagerView } =
@@ -63,5 +84,44 @@ describe("the Lists page", () => {
     fireEvent.dragOver(rowOf(dinner));
     expect(rowOf(dinner).className).toContain("outline-dashed");
     expect(rowOf(dinner).className).not.toMatch(/\bring-/);
+  });
+
+  it("opens a list as a second card beside the lists, with its members on the wash", async () => {
+    state.lists = [list("a", "Investors"), list("b", "Dinner")];
+    state.isLoading = false;
+    const { container } = mount();
+    const [investors] = screen.getAllByText("Investors");
+    fireEvent.click(investors.closest('[role="button"]')!);
+
+    // From md: two cards in the settings box. (The phone's stack keeps its
+    // last picture while it slides away, so the checks stay in this box.)
+    const desktop = container.querySelector<HTMLElement>(".md\\:block > div")!;
+    expect(desktop.querySelectorAll(":scope > .card")).toHaveLength(2);
+    // Beside an open list the column is narrow, and the grips say "drag".
+    expect(within(desktop).queryByText(/drag to reorder/)).toBeNull();
+    expect(within(desktop).getByText("2 lists")).toBeTruthy();
+
+    // A member is a row on the wash, not a card on the card.
+    const [ada] = await screen.findAllByText("Ada Lovelace");
+    const row = ada.closest(".rounded-xl")!;
+    expect(row.className).toContain("bg-surface-container-low");
+    expect(row.classList.contains("card")).toBe(false);
+
+    // Remove a member.
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: "Remove Grace Hopper from list",
+      })[0],
+    );
+    expect(calls.remove).toHaveBeenCalledWith({
+      listId: "a",
+      contactId: "c2",
+    });
+
+    // Close the list: the lists fill the box again.
+    fireEvent.click(
+      within(desktop).getByRole("button", { name: "Close list" }),
+    );
+    expect(within(desktop).getByText("2 lists · drag to reorder")).toBeTruthy();
   });
 });

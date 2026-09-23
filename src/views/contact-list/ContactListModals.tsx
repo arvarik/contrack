@@ -5,7 +5,6 @@
  * data wiring. Each modal is a self-contained render block with its own props.
  *
  * Modals included:
- * - Bulk Delete Confirmation
  * - Add to List picker
  * - Bulk Edit Field
  * - New Contact form (with Smart Paste AI extraction flow)
@@ -13,7 +12,7 @@
  * - Create List
  * - Import Contacts
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FileText, Sparkles } from "lucide-react";
@@ -36,7 +35,6 @@ import { fallbackAvatarUrl } from "../../lib/avatar";
 // =============================================================================
 
 interface ContactListModalsProps {
-  // Bulk delete
   // Add to list
   selectedCount: number;
   isAddToListOpen: boolean;
@@ -49,13 +47,21 @@ interface ContactListModalsProps {
   onCloseBulkEdit: () => void;
   onBulkEditApply: (field: string, value: string | number) => void;
   isBulkEditPending: boolean;
+  /**
+   * The control that opened New contact or Add from text. Both dialogs give
+   * focus back to it, and so does the form a successful extraction opens.
+   */
+  returnFocusRef: RefObject<HTMLElement | null>;
   // New contact
   isModalOpen: boolean;
   onCloseModal: () => void;
   onContactCreated: (id: string) => void;
   // Smart paste
   isSmartPasteOpen: boolean;
+  /** The X, Escape or the overlay: close Add from text, and nothing else. */
   onCloseSmartPaste: () => void;
+  /** The text was read: close Add from text and open the form, filled in. */
+  onSmartPasteExtracted: () => void;
   // Create list
   isCreateListOpen: boolean;
   onCloseCreateList: () => void;
@@ -81,11 +87,13 @@ export const ContactListModals = ({
   onCloseBulkEdit,
   onBulkEditApply,
   isBulkEditPending,
+  returnFocusRef,
   isModalOpen,
   onCloseModal,
   onContactCreated,
   isSmartPasteOpen,
   onCloseSmartPaste,
+  onSmartPasteExtracted,
   isCreateListOpen,
   onCloseCreateList,
   onCreateList,
@@ -100,9 +108,40 @@ export const ContactListModals = ({
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
 
-  // NOTE: parsedData is shared between the Smart Paste modal and the New Contact
-  // modal — when AI extraction succeeds, we close Smart Paste and open New Contact
-  // with the fields pre-filled.
+  // What an extraction found, shared with the New contact form: when it
+  // succeeds, Add from text closes and the form opens with these fields.
+  const pd = parsedData;
+
+  /**
+   * Whether Add from text is still open when an extraction returns. A person
+   * who closed it while the model read the text has cancelled, so the form
+   * stays shut and no toast reports the result.
+   */
+  const smartPasteOpen = useRef(isSmartPasteOpen);
+  useEffect(() => {
+    smartPasteOpen.current = isSmartPasteOpen;
+  }, [isSmartPasteOpen]);
+  // Leaving the page with the dialog open cancels too: a result that
+  // arrives after the list is gone shows no toast on the next page.
+  useEffect(
+    () => () => {
+      smartPasteOpen.current = false;
+    },
+    [],
+  );
+
+  const handleExtract = async () => {
+    try {
+      const res = await parseContactText.mutateAsync(smartPasteText);
+      if (!smartPasteOpen.current) return;
+      setParsedData(res);
+      onSmartPasteExtracted();
+      toast.success("Contact details extracted — review and save");
+    } catch {
+      if (!smartPasteOpen.current) return;
+      toast.error("Extraction failed. Is your API key configured?");
+    }
+  };
 
   const handleCreateContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -111,7 +150,6 @@ export const ContactListModals = ({
     const emailValue = data.email as string;
     const phoneValue = data.phone as string;
     try {
-      const pd = parsedData;
       const newContact = await createContact.mutateAsync({
         name: data.name as string,
         role: data.role as string,
@@ -139,9 +177,6 @@ export const ContactListModals = ({
       toast.error(`Failed to create contact: ${message}`);
     }
   };
-
-  // Derived: use parsedData for default values in the form
-  const pd = parsedData;
 
   return (
     <>
@@ -174,6 +209,7 @@ export const ContactListModals = ({
           setParsedData(null);
         }}
         title="New contact"
+        returnFocusRef={returnFocusRef}
       >
         <form onSubmit={handleCreateContact} className="space-y-4 pt-2">
           <div>
@@ -290,6 +326,7 @@ export const ContactListModals = ({
         isOpen={isSmartPasteOpen}
         onClose={onCloseSmartPaste}
         title="Add from text"
+        returnFocusRef={returnFocusRef}
       >
         <div className="space-y-4 pt-2">
           {parseContactText.isPending ? (
@@ -338,21 +375,8 @@ export const ContactListModals = ({
           )}
           <div className="flex justify-end pt-2">
             <button
-              onClick={async () => {
-                try {
-                  const res =
-                    await parseContactText.mutateAsync(smartPasteText);
-                  setParsedData(res);
-                  onCloseSmartPaste();
-                  // NOTE: The parent must detect parsedData change and open the new contact modal.
-                  // We signal via onContactCreated pattern — but for smart paste, we re-open modal
-                  // by calling the parent's modal setter directly via onCloseSmartPaste + onOpenNewContact.
-                  // For now, the parent wires this: when smart paste closes with parsedData, it opens the modal.
-                  toast.success("Contact details extracted — review and save");
-                } catch {
-                  toast.error("Extraction failed. Is your API key configured?");
-                }
-              }}
+              type="button"
+              onClick={handleExtract}
               disabled={!smartPasteText.trim() || parseContactText.isPending}
               className="btn-primary"
             >

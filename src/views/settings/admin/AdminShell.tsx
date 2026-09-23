@@ -1,10 +1,11 @@
 /**
  * The frame every administration page shares.
  *
- * Five pages, one shape: a sentence saying what the page is for, an action or
- * two on the right, and a list. The pieces live here so the five cannot drift
- * into five layouts, and so the mobile rule — a row becomes a card, it does
- * not become a horizontal scroll — is written once.
+ * Five pages, one shape: the shell's header says what the page is for and
+ * holds the page's action or two at the right (`SettingsHeaderActions`), and
+ * a list follows. The pieces live here so the five cannot drift into five
+ * layouts, and so the mobile rule — a row becomes a card, it does not become
+ * a horizontal scroll — is written once.
  *
  * There is no `<table>` anywhere in this codebase and this does not introduce
  * one. A table would need a horizontal scroll on a phone, and a row a reader
@@ -13,38 +14,36 @@
  * and a table row depending on the width.
  */
 import React, { type ReactNode } from "react";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { AlertCircle, Loader2, type LucideIcon } from "lucide-react";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { SETTINGS_PAGE } from "../layout";
+import { SettingsHeaderActions } from "../SettingsHeader";
 
 /**
- * One administration page: a lead sentence, optional actions, and content.
- * The settings page box, so the list starts under the shell's title.
+ * One administration page: optional actions, drawn in the header, and
+ * content. The settings page box, so the list starts under the shell's title.
  */
 export const AdminPage = ({
-  lead,
   actions,
   children,
 }: {
-  lead: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) => (
   <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-      <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
-        {lead}
-      </p>
-      {actions && (
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {actions}
-        </div>
-      )}
-    </div>
+    {actions && <SettingsHeaderActions>{actions}</SettingsHeaderActions>}
     {children}
   </div>
 );
+
+/** What an empty list says: its icon, a title, and one sentence. */
+export interface AdminEmpty {
+  icon: LucideIcon;
+  title: string;
+  body: ReactNode;
+}
 
 /**
  * A framed list.
@@ -72,7 +71,7 @@ export const AdminList = ({
   isError?: boolean;
   onRetry?: () => void;
   isEmpty?: boolean;
-  empty: ReactNode;
+  empty: AdminEmpty;
   children: ReactNode;
   footer?: ReactNode;
 }) => (
@@ -87,7 +86,8 @@ export const AdminList = ({
       "p-0 [&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl",
     )}
   >
-    {header && (
+    {/* Column names name columns: none over a message. */}
+    {header && !isLoading && !isError && !isEmpty && (
       <div
         className={cn(
           SECTION_HEADING,
@@ -107,21 +107,15 @@ export const AdminList = ({
       // a rendering. A failed read leaves `isLoading` false and `data`
       // undefined, so without this branch a 500 or a dropped connection
       // reported an empty instance in reassuring copy.
-      <div className="px-4 sm:px-6 py-8 space-y-3">
-        <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
-          <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-          This did not load. It is not empty, and nothing here has changed.
-        </p>
-        {onRetry && (
-          <AdminButton tone="secondary" onClick={onRetry}>
-            Try again
-          </AdminButton>
-        )}
-      </div>
+      <EmptyState
+        icon={AlertCircle}
+        tone="error"
+        title="This did not load"
+        body="It is not empty, and nothing here has changed."
+        action={onRetry && { label: "Try again", onClick: onRetry }}
+      />
     ) : isEmpty ? (
-      <div className="px-4 sm:px-6 py-8 text-sm text-on-surface-variant text-pretty">
-        {empty}
-      </div>
+      <EmptyState icon={empty.icon} title={empty.title} body={empty.body} />
     ) : (
       <div>{children}</div>
     )}

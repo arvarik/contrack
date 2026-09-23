@@ -11,9 +11,9 @@ import React, { useState, useMemo } from "react";
 import {
   AlertCircle,
   Check,
-  FolderGit2,
   Hash,
   Loader2,
+  Merge,
   Pencil,
   Search,
   Tag,
@@ -35,17 +35,16 @@ import {
   FORM_INPUT,
   FORM_LABEL,
   SEARCH_INPUT,
-  TONE_WASH,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { SETTINGS_PAGE } from "../layout";
+import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
 const ROW_ACTION =
   "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
 
 export const TagsPage = () => {
-  const { data: tags = [], isLoading, isError } = useTagSummary();
+  const { data: tags = [], isLoading, isError, refetch } = useTagSummary();
   const renameMutation = useRenameTag();
   const deleteMutation = useDeleteTag();
 
@@ -133,28 +132,19 @@ export const TagsPage = () => {
   };
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-      <div className="space-y-1">
-        <p className="text-sm text-on-surface-variant">
-          Organise contacts with labels. Rename, merge, or delete tags across
-          your network.
-        </p>
-      </div>
-
+    <div className={SETTINGS_PAGE}>
       {isLoading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       ) : isError ? (
-        <div
-          className={cn(
-            "p-4 rounded-xl flex items-center gap-3 text-sm font-medium",
-            TONE_WASH.error,
-          )}
-        >
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          Failed to load tags.
-        </div>
+        <EmptyState
+          icon={AlertCircle}
+          tone="error"
+          title="Tags did not load"
+          body="Nothing has changed. Try again in a moment."
+          action={{ label: "Try again", onClick: () => void refetch() }}
+        />
       ) : tags.length === 0 ? (
         <EmptyState
           icon={Tag}
@@ -170,26 +160,27 @@ export const TagsPage = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter tags…"
+                placeholder="Filter tags"
                 className={SEARCH_INPUT}
                 aria-label="Filter tags"
               />
             </div>
           )}
 
-          <div
-            className={cn(
-              CARD,
-              "divide-y divide-surface-container-high overflow-hidden p-0",
+          {/* One card, a row for each tag, spaced apart with no line. */}
+          <div className={cn(CARD, "p-0 py-2")}>
+            {filteredTags.length === 0 && (
+              <p className="px-4 sm:px-6 py-4 text-sm text-on-surface-variant">
+                No tag matches &ldquo;{searchQuery.trim()}&rdquo;.
+              </p>
             )}
-          >
             {filteredTags.map((item) => {
               const isEditing = editingTag === item.tag;
 
               return (
                 <div
                   key={item.tag}
-                  className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5"
+                  className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <span className="p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
@@ -211,13 +202,17 @@ export const TagsPage = () => {
                           onKeyDown={(e) => {
                             if (e.key === "Escape") cancelEditing();
                           }}
-                          className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-surface-container border border-primary/50 text-on-surface min-h-[38px]"
+                          className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
                           aria-label={`Rename tag ${item.tag}`}
+                          // The Rename button that opened the field is gone,
+                          // so the field takes the focus it had.
+                          // eslint-disable-next-line jsx-a11y/no-autofocus
+                          autoFocus
                         />
                         <button
                           type="submit"
                           disabled={renameMutation.isPending}
-                          className="btn-primary btn-sm"
+                          className="btn-primary btn-sm btn-icon"
                           aria-label="Save tag name"
                         >
                           <Check className="w-4 h-4" />
@@ -225,7 +220,7 @@ export const TagsPage = () => {
                         <button
                           type="button"
                           onClick={cancelEditing}
-                          className="btn-secondary btn-sm"
+                          className="btn-secondary btn-sm btn-icon"
                           aria-label="Cancel rename"
                         >
                           <X className="w-4 h-4" />
@@ -268,7 +263,7 @@ export const TagsPage = () => {
                         aria-label={`Merge ${item.tag} into another tag`}
                         title="Merge into…"
                       >
-                        <FolderGit2 className="w-4 h-4" />
+                        <Merge className="w-4 h-4" />
                       </button>
 
                       <button

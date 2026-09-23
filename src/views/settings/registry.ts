@@ -80,7 +80,17 @@ export interface SettingsPage {
    * so the title starts at the same place as on every other settings page.
    */
   boxed?: boolean;
-  badge?: () => number | null;
+  /**
+   * A door to a page outside Settings: its route steps over to that page.
+   * A link to it navigates at once, with no slide.
+   */
+  door?: boolean;
+  /**
+   * An admin reaches the same page under Administration, where it covers
+   * every account, so the rail, the list and the search leave this one out
+   * for an admin.
+   */
+  memberOnly?: boolean;
 }
 
 export interface SettingsSearchHit {
@@ -101,7 +111,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "account",
     path: "/settings/account",
     title: "Account",
-    description: "Your profile, password, and the devices you're signed in on.",
+    description: "Your profile, how you sign in, your devices, and API tokens.",
     icon: UserRound,
     group: "you",
     needsAccount: true,
@@ -254,7 +264,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "network",
     path: "/settings/network",
     title: "Network and contacts",
-    description: "Where Contrack opens, contacts list defaults, and weather.",
+    description:
+      "Where Contrack opens, the contact list, cadence, and weather.",
     icon: Users,
     group: "you",
     keywords: [
@@ -346,7 +357,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "weather",
-        label: "Local time and weather",
+        label: "Weather",
         keywords: [
           "weather",
           "local time",
@@ -373,7 +384,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "keyboard",
     path: "/settings/keyboard",
     title: "Keyboard",
-    description: "Single-key shortcuts and keyboard reference table.",
+    description: "Single-key shortcuts, and every shortcut in one list.",
     icon: Keyboard,
     group: "you",
     keywords: [
@@ -403,7 +414,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "privacy",
     path: "/settings/privacy",
     title: "Privacy and AI",
-    description: "AI opt-out, data handling, and available capabilities.",
+    description:
+      "Whether Contrack uses AI for you, and what stays on this machine.",
     icon: Shield,
     group: "you",
     keywords: [
@@ -445,11 +457,10 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "ai-usage",
     path: "/settings/ai-usage",
     title: "AI usage",
-    description:
-      "Invocations, token spend, cache hit rate, and approximate cost.",
+    description: "How much AI your account used, and what it cost.",
     icon: Gauge,
     group: "you",
-    admin: false,
+    memberOnly: true,
     keywords: ["ai usage", "stats", "tokens", "cost", "cache", "invocations"],
     load: () => import("../ai-stats").then((m) => ({ default: m.AIStatsView })),
   },
@@ -459,8 +470,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "import",
     path: "/settings/import",
     title: "Import",
-    description:
-      "Bring in contacts from vCard, CSV, Google, LinkedIn or Apple.",
+    description: "Bring in contacts from Apple, LinkedIn, Google or Facebook.",
     icon: UploadCloud,
     group: "tools",
     keywords: [
@@ -472,6 +482,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "google contacts",
       "linkedin",
       "apple",
+      "facebook",
       "contacts",
       "upload",
     ],
@@ -560,8 +571,14 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "grounding",
-        label: "Grounding capacity",
-        keywords: ["grounding", "grounding capacity", "quota", "used"],
+        label: "Web searches today",
+        keywords: [
+          "web searches",
+          "grounding",
+          "grounding capacity",
+          "quota",
+          "used",
+        ],
       },
     ],
     load: () => import("./pages/EnrichmentPage"),
@@ -596,6 +613,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: List,
     group: "data",
     ownsScrolling: true,
+    boxed: true,
     keywords: ["lists", "groups", "members", "reorder"],
     load: () =>
       import("../lists").then((m) => ({ default: m.ListManagerView })),
@@ -649,6 +667,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: NAMES.tracked.description,
     icon: Radar,
     group: "data",
+    door: true,
     keywords: [
       "tracked",
       "track",
@@ -679,7 +698,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "trash",
     path: "/settings/trash",
     title: "Trash",
-    description: "Recently deleted contacts. Empties itself after 30 days.",
+    description: "Deleted contacts, until they are removed for good.",
     icon: Trash2,
     tone: "error",
     group: "data",
@@ -813,7 +832,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/admin/general",
     title: "General",
     description:
-      "Who can join, how long a sign-in lasts, and instance settings.",
+      "Who can join, how long a sign-in lasts, Trash, backups, and integrations.",
     icon: ServerCog,
     group: "admin",
     admin: true,
@@ -882,7 +901,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/admin/users",
     title: "Accounts",
     description:
-      "Everyone with an account here. Create, invite, disable, and remove.",
+      "Everyone with an account here. Each account sees only its own contacts.",
     icon: Users,
     group: "admin",
     admin: true,
@@ -928,7 +947,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-ai",
     path: "/settings/admin/ai",
     title: "AI providers",
-    description: "Connect provider API keys and configure AI capabilities.",
+    description: "Provider keys, and which model does each kind of work.",
     icon: Brain,
     group: "admin",
     admin: true,
@@ -950,8 +969,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-ai-usage",
     path: "/settings/admin/ai-usage",
     title: "AI usage",
-    description:
-      "Invocations, token spend, cache hit rate, and approximate cost.",
+    description: "How much AI each account used, and what it cost.",
     icon: Gauge,
     group: "admin",
     admin: true,
@@ -970,7 +988,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-backups",
     path: "/settings/admin/backups",
     title: "Backups",
-    description: "Snapshots of the whole database, and taking one now.",
+    description:
+      "Snapshots of the whole database, each one checked as it is taken.",
     icon: DatabaseBackup,
     group: "admin",
     admin: true,
@@ -996,7 +1015,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-health",
     path: "/settings/admin/health",
     title: "Instance health",
-    description: "Schema, database, backups, queues, and the AI provider.",
+    description: "What this instance reports about itself, every 15 seconds.",
     icon: Activity,
     group: "admin",
     admin: true,
@@ -1026,6 +1045,63 @@ export const REDIRECTS: Record<string, RedirectTarget> = {
   "/settings/admin/instance": "/settings/admin/general",
 };
 
+/** Who is looking: an admin, and whether this instance asks anyone to sign in. */
+export interface SettingsViewer {
+  isAdmin?: boolean;
+  /** Undefined when the caller does not know, which shows the page. */
+  authRequired?: boolean;
+}
+
+/**
+ * Whether a page is offered to this person. The rail, the list, and the
+ * search ask this one question, so the three never disagree.
+ */
+export function isSettingsPageVisible(
+  page: SettingsPage,
+  viewer: SettingsViewer = {},
+): boolean {
+  if (page.admin && !viewer.isAdmin) return false;
+  if (page.memberOnly && viewer.isAdmin) return false;
+  if (page.needsAccount && viewer.authRequired === false) return false;
+  return true;
+}
+
+/**
+ * The page a path belongs to: the page with the longest path that the path
+ * is or sits under. `/settings/connectors/people` is Correspondents, not
+ * Connectors.
+ */
+export function findSettingsPage(pathname: string): SettingsPage | undefined {
+  let found: SettingsPage | undefined;
+  for (const page of SETTINGS_PAGES) {
+    const matches =
+      pathname === page.path || pathname.startsWith(`${page.path}/`);
+    if (matches && (!found || page.path.length > found.path.length)) {
+      found = page;
+    }
+  }
+  return found;
+}
+
+/** The settings list's own path, the parent of every settings page. */
+export const SETTINGS_LIST_PATH = "/settings";
+
+/**
+ * The link above a settings page's title, or none.
+ *
+ * From `lg` there is none: the rail and the app's sidebar are both on
+ * screen, so a back link would say nothing they do not, and it pushed every
+ * settings title below every other page's. Below `lg` a page links back to
+ * the settings list, its parent, and the list itself has none.
+ */
+export function settingsBackLink(
+  pathname: string,
+  isWide: boolean,
+): { to: string; label: string } | undefined {
+  if (isWide || !findSettingsPage(pathname)) return undefined;
+  return { to: SETTINGS_LIST_PATH, label: NAMES.settings.label };
+}
+
 /**
  * Search the registry for settings rows matching the query.
  *
@@ -1034,7 +1110,7 @@ export const REDIRECTS: Record<string, RedirectTarget> = {
  */
 export function findRows(
   query: string,
-  opts?: { isAdmin?: boolean },
+  opts?: SettingsViewer,
 ): SettingsSearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -1043,7 +1119,7 @@ export function findRows(
   const seenPaths = new Set<string>();
 
   for (const page of SETTINGS_PAGES) {
-    if (!opts?.isAdmin && page.admin) continue;
+    if (!isSettingsPageVisible(page, opts)) continue;
 
     let matchedRowOnThisPage = false;
 

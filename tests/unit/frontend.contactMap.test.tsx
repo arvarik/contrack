@@ -11,11 +11,12 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
-  within,
+  waitFor,
 } from "@testing-library/react";
 import type { MapContact } from "../../shared/geo";
 import type { VisibleFeature } from "../../src/views/map/useClusterFeatures";
@@ -33,6 +34,9 @@ vi.mock("../../src/views/map/maplibreWorker", () => ({
 
 /** The props the map was created with, for the tests that read them. */
 const mapProps = vi.fn<(props: Record<string, unknown>) => void>();
+/** The sources and layers the map was given. */
+const sourceProps = vi.fn<(props: Record<string, unknown>) => void>();
+const layerProps = vi.fn<(props: Record<string, unknown>) => void>();
 
 vi.mock("@vis.gl/react-maplibre", () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (
@@ -44,12 +48,22 @@ vi.mock("@vis.gl/react-maplibre", () => {
     mapProps(props);
     return <div data-testid="map">{props.children}</div>;
   };
+  const Source = (
+    props: Record<string, unknown> & { children?: React.ReactNode },
+  ) => {
+    sourceProps(props);
+    return <div>{props.children}</div>;
+  };
+  const Layer = (props: Record<string, unknown>) => {
+    layerProps(props);
+    return null;
+  };
   return {
     Map,
     Marker: Passthrough,
     Popup: Passthrough,
-    Source: Passthrough,
-    Layer: () => null,
+    Source,
+    Layer,
     NavigationControl: () => null,
   };
 });
@@ -71,7 +85,6 @@ vi.mock("../../src/views/map/useClusterFeatures", () => ({
 
 // Imported after the mocks, which is what vi.mock hoisting expects.
 const { ContactMap } = await import("../../src/views/map/ContactMap");
-const { HealthLegend } = await import("../../src/views/map/HealthLegend");
 
 const person = (id: string, name: string, company: string): MapContact => ({
   id,
@@ -113,7 +126,7 @@ const createdWith = () =>
   };
 
 /** A MapLibre map as `onLoad` sees it: a container, and the two rotation handlers. */
-function loadedMap() {
+function loadedMap(zoom = 1) {
   const container = document.createElement("div");
   const strip = document.createElement("details");
   strip.className =
@@ -129,12 +142,18 @@ function loadedMap() {
     off: vi.fn(),
     getSource: () => undefined,
     isStyleLoaded: () => true,
+    getZoom: () => zoom,
+    getLayer: () => undefined,
+    getLayersOrder: () => [],
+    moveLayer: vi.fn(),
   };
 }
 
 beforeEach(() => {
   visible.mockReturnValue([]);
   mapProps.mockClear();
+  sourceProps.mockClear();
+  layerProps.mockClear();
   window.localStorage.clear();
 });
 
@@ -173,16 +192,13 @@ describe("ContactMap", () => {
         key: "cluster:7",
         clusterId: 7,
         count: 12,
-        atRisk: 3,
-        overdue: 1,
-        scoreSum: 600,
         longitude: -0.12,
         latitude: 51.5,
       },
     ]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
     const button = screen.getByRole("button", {
-      name: "12 contacts, 3 at risk, zoom in",
+      name: "12 contacts, zoom in",
     });
     expect(button.textContent).toBe("12");
   });
@@ -335,34 +351,69 @@ describe("ContactMap", () => {
   });
 });
 
-describe("the health layer's neutral ring", () => {
-  // A pin nobody tracks wore the hairline tone, and the legend a filled dot
-  // in it: about 1.5 to 1, and it looked like a fourth band. Both are a ring
-  // in the variant ink now, the legend's hollow.
-  it("rings a pin nobody tracks in the variant ink", () => {
-    const stranger = {
-      ...person("c9", "Nobody Tracked", "Acme"),
-      isTracked: false,
-    };
-    visible.mockReturnValue([point(stranger)]);
-    render(
-      <ContactMap contacts={[stranger]} onSelect={() => {}} layer="health" />,
+describe("the heat layer", () => {
+  // The heat reads the accent off the page, as the page paints it. jsdom
+  // has no ResizeObserver, which the loaded map's resize path uses.
+  beforeEach(() => {
+    document.documentElement.style.setProperty("--color-primary", "#006a91");
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
     );
-    const pin = screen.getByRole("button", { name: "Nobody Tracked, Acme" });
-    expect(pin.className).toContain("ring-on-surface-variant");
-    expect(pin.className).not.toContain("ring-outline-variant");
+  });
+  afterEach(() => {
+    document.documentElement.style.removeProperty("--color-primary");
+    vi.unstubAllGlobals();
   });
 
-  it("names it in the legend with a hollow ring of the same ink", () => {
-    render(<HealthLegend />);
-    const legend = screen.getByRole("group", { name: "Health legend" });
-    const mark = within(legend).getByText("Not tracked")
-      .previousElementSibling as HTMLElement;
-    expect(mark.className).toContain("border-on-surface-variant");
-    expect(mark.className).not.toMatch(/\bbg-/);
-    // The three bands keep their filled dots.
-    const strong = within(legend).getByText("Strong")
-      .previousElementSibling as HTMLElement;
-    expect(strong.className).toContain("bg-success");
+  it("reads its own unclustered copy of the contacts", async () => {
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
+    await waitFor(() =>
+      expect(
+        layerProps.mock.calls.some(([props]) => props.type === "heatmap"),
+      ).toBe(true),
+    );
+    // A cluster is one point to a heatmap, so twelve people in a city
+    // added what one person added.
+    const heat = sourceProps.mock.calls
+      .map(([props]) => props)
+      .find((props) => props.id === "contacts-heat")!;
+    expect(heat.cluster).toBeUndefined();
+    expect(
+      (heat.data as { features: unknown[] }).features.map(
+        (feature) => (feature as { id: string }).id,
+      ),
+    ).toEqual(["c1", "c2", "c3"]);
+    const layer = layerProps.mock.calls
+      .map(([props]) => props)
+      .find((props) => props.type === "heatmap")!;
+    expect(layer.maxzoom).toBe(9);
+  });
+
+  it("draws no heat while the pins are on", async () => {
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    await screen.findByTestId("map");
+    expect(
+      sourceProps.mock.calls.some(([props]) => props.id === "contacts-heat"),
+    ).toBe(false);
+  });
+
+  it("keeps the pins off the heat until it fades", async () => {
+    visible.mockReturnValue(PEOPLE.map(point));
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
+    await screen.findByTestId("map");
+    act(() => createdWith().onLoad({ target: loadedMap(5) }));
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("brings the pins back where the heat fades", async () => {
+    visible.mockReturnValue(PEOPLE.map(point));
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
+    await screen.findByTestId("map");
+    act(() => createdWith().onLoad({ target: loadedMap(8.5) }));
+    expect(screen.getAllByRole("button")).toHaveLength(3);
   });
 });

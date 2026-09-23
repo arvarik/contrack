@@ -1,7 +1,7 @@
 /**
  * Pulse Office — Playwright e2e spec.
  *
- * Walks the Pulse view, the masthead and its Ask form, Up next keyboard
+ * Walks the Pulse view, the masthead, Up next keyboard
  * navigation (J/K/D, the arrows and Enter on a focused row), the Enter guard
  * on other controls, the Inbox, Keeping up, Activity and Composition cards,
  * duplicate queue redirection, customize mode, the phone, and accessibility.
@@ -9,7 +9,6 @@
 import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
-import { answerPeopleSearch, personMatch } from "./fixtures/search";
 import type { ContrackInstance } from "./fixtures/instance";
 import type { Page } from "@playwright/test";
 
@@ -580,28 +579,14 @@ test.describe("Pulse Office", () => {
     await expect(page.locator(`#contact-row-${ada.id}`)).toHaveCount(0);
   });
 
-  test("the Ask form under the masthead sends the question to /search, and the insight is one line with the next step", async ({
+  test("the masthead holds no form, and the insight is one line with the next step", async ({
     page,
-    seed,
   }) => {
-    const ada = seed.byName("Ada Lovelace");
-    await answerPeopleSearch(page, [
-      personMatch(ada, { company: "Babbage & Co" }),
-    ]);
-
     await page.goto("/pulse");
+    // The masthead is the title, the day, the sentence and the actions.
     const masthead = page.getByLabel("Today summary");
-    const form = masthead.getByRole("search", {
-      name: "Ask about your network",
-    });
-    await expect(form).toBeVisible();
-    // Under the sentence: the form starts below the date line.
-    const dateBottom = await masthead
-      .locator("p")
-      .first()
-      .evaluate((el) => el.getBoundingClientRect().bottom);
-    const formTop = await form.evaluate((el) => el.getBoundingClientRect().top);
-    expect(formTop).toBeGreaterThan(dateBottom);
+    await expect(masthead).toBeVisible();
+    await expect(masthead.locator("form, input")).toHaveCount(0);
 
     // The instance has no AI key, so the insight is a line that names the
     // next step by role, on the page surface and not in a card.
@@ -611,23 +596,6 @@ test.describe("Pulse Office", () => {
     );
     const insightSurface = await insight.evaluate((el) => el.className);
     expect(insightSurface).not.toContain("bg-surface-container-lowest");
-
-    const ask = form.getByRole("button", { name: "Ask" });
-    await expect(ask).toBeDisabled();
-    const input = form.getByRole("searchbox", {
-      name: "Ask about your network",
-    });
-    await input.fill("wh");
-    await expect(ask).toBeDisabled();
-    await input.fill("who works in London");
-    await expect(ask).toBeEnabled();
-    await ask.click();
-
-    await expect(page).toHaveURL(/\/search/);
-    await expect(
-      page.getByRole("textbox", { name: "Ask anything about your network" }),
-    ).toHaveValue("who works in London");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
   });
 
   test("the heatmap fills the Activity card with month labels and a tooltip on hover, and the sparkline draws at its width", async ({
@@ -1135,18 +1103,13 @@ test.describe("Pulse on a phone", () => {
     await expect(page).toHaveURL(new RegExp(`/contact/${ada.id}$`));
   });
 
-  test("no Ask form, a tap shows a heatmap tooltip and a second tap hides it, the New people row is 44 px, the legend wraps, and the cards come in order", async ({
+  test("a tap shows a heatmap tooltip and a second tap hides it, the New people row is 44 px, the legend wraps, and the cards come in order", async ({
     page,
     seed,
   }) => {
     void seed;
     await page.goto("/pulse");
     await expect(page.locator('[data-card-id="up-next"]')).toBeVisible();
-
-    // The phone has Ask Contrack in the tab bar, so no form here.
-    await expect(
-      page.getByRole("search", { name: "Ask about your network" }),
-    ).toHaveCount(0);
 
     // The one-column order: Focus, Network, Intelligence.
     const order = await page.evaluate(() =>

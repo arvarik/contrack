@@ -23,6 +23,7 @@ import {
   Database,
   HardDriveDownload,
   Layers,
+  Loader2,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -33,6 +34,7 @@ import {
   type InstanceHealth,
 } from "../../../api/admin";
 import { Badge } from "../../../components/ui/Badge";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -64,7 +66,7 @@ const Card = ({
   note?: ReactNode;
   children?: ReactNode;
 }) => (
-  <section className={cn(CARD, "p-5 space-y-3")}>
+  <section className={cn(CARD, "p-4 sm:p-5 space-y-3")}>
     <header className="flex items-center gap-2.5">
       <span
         className={cn(
@@ -74,10 +76,10 @@ const Card = ({
       >
         {icon}
       </span>
-      <h2 className="text-sm font-bold text-on-surface flex-1 min-w-0 truncate">
+      <h2 className="text-sm font-bold text-on-surface flex-1 min-w-0 break-words">
         {title}
       </h2>
-      {badge}
+      {badge && <span className="shrink-0">{badge}</span>}
     </header>
     {Children.toArray(children).length > 0 && (
       <dl className="space-y-2">{children}</dl>
@@ -129,6 +131,32 @@ function formatUptime(seconds: number): string {
 
 const account = (who: HealthAccount | null): string =>
   who?.username ?? "Nobody";
+
+/** The AI cache's tiers, in words. A tier added later reads from its key. */
+const CACHE_TIER_NAMES: Record<string, string> = {
+  rerank: "Reranking results",
+  dailyInsight: "Daily insight",
+  queryParse: "Reading a question",
+};
+
+/** "dailyInsight" as "Daily insight", "FREE" as "Free". */
+/**
+ * The provider's tier, as the server names it. "N/A" is the answer with no
+ * provider, and `words` would have made it "N/a".
+ */
+const AI_TIER_NAMES: Record<string, string> = {
+  FREE: "Free",
+  PAID: "Paid",
+  "N/A": "No provider",
+};
+
+function words(key: string): string {
+  const spaced = key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 // ---------------------------------------------------------------------------
 // The cards
@@ -276,10 +304,10 @@ const QueuesCard = ({ health }: { health: InstanceHealth }) => {
   const { dedupe, aiSearch } = health.queues;
   return (
     <Card title="Queues" icon={<Copy className="w-4 h-4" />}>
-      <Row label="Dedupe scan" tone={dedupe.running ? "warning" : "normal"}>
+      <Row label="Duplicate scan" tone={dedupe.running ? "warning" : "normal"}>
         {account(dedupe.running)}
       </Row>
-      <Row label="Waiting behind it">
+      <Row label="Waiting for it">
         {dedupe.pending.length > 0
           ? dedupe.pending.map((who) => who.username).join(", ")
           : "Nobody"}
@@ -344,8 +372,10 @@ const ProviderCard = ({ health }: { health: InstanceHealth }) => {
         ) : undefined
       }
     >
-      <Row label="Tier">{provider.aiTier}</Row>
-      <Row label="Grounding today">
+      <Row label="Tier">
+        {AI_TIER_NAMES[provider.aiTier] ?? provider.aiTier}
+      </Row>
+      <Row label="Web searches today">
         {grounding.rpd} of {grounding.limit}
       </Row>
       <Row
@@ -377,7 +407,7 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
       }
     >
       {tiers.map(([tier, stats]) => (
-        <Row key={tier} label={tier}>
+        <Row key={tier} label={CACHE_TIER_NAMES[tier] ?? words(tier)}>
           {Math.round(stats.hitRate * 100)}% of {stats.hits + stats.misses}
         </Row>
       ))}
@@ -391,33 +421,34 @@ export const HealthView = () => {
   const { data: health, isLoading, isError, refetch } = useInstanceHealth();
 
   return (
-    <AdminPage lead="Everything this instance can tell you about itself. Nothing here is written and nothing here is secret, so it is safe to leave open. It refreshes every fifteen seconds.">
+    <AdminPage>
       {isLoading && (
-        <p className="text-sm text-on-surface-variant">Reading the instance…</p>
+        <p className="flex items-center gap-2 text-sm text-on-surface-variant">
+          <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
+          Reading the instance…
+        </p>
       )}
 
       {isError && (
-        <div className={cn(CARD, "p-5 space-y-3")}>
-          <p className="text-sm text-error">
-            The instance could not be read. That is itself worth knowing.
-          </p>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="btn-secondary"
-          >
-            Try again
-          </button>
-        </div>
+        <EmptyState
+          icon={AlertTriangle}
+          tone="error"
+          title="The instance could not be read"
+          body="That is itself worth knowing. Nothing here has changed."
+          action={{ label: "Try again", onClick: () => void refetch() }}
+        />
       )}
 
       {health && (
         <>
-          <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-            <Clock className="w-3.5 h-3.5" />
-            Started {formatRelative(health.startedAt, "unknown")}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <p className="flex items-center gap-2 text-xs text-on-surface-variant">
+            <Clock aria-hidden="true" className="w-3.5 h-3.5" />
+            Started {formatRelative(health.startedAt, "unknown")}. Nothing here
+            is secret, so the page is safe to leave open.
+          </p>
+          {/* Two columns in the settings box: three left a card too narrow
+              for its title beside its badge. */}
+          <div className="grid gap-4 sm:grid-cols-2">
             <SchemaCard health={health} />
             <DatabaseCard health={health} />
             <BackupCard health={health} />

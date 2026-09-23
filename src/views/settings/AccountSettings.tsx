@@ -55,20 +55,27 @@ import { accountAvatarUrl } from "../../lib/avatar";
 import { Modal } from "../../components/ui/Modal";
 import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { SecretReveal } from "../../components/ui/SecretReveal";
 import {
   CARD,
   LABEL_PRIMARY,
-  SECTION_HEADING,
   SELECTED_TINT,
   TONE_WASH,
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { radioKeys, radioTabIndex } from "../../lib/a11y";
 import { RadioDot } from "../../components/ui/RadioDot";
-import { tileDelay } from "../../lib/motion";
 import { describeDevice } from "../../lib/devices";
 import { PasskeysCard } from "./account/PasskeysCard";
-import { SETTINGS_PAGE } from "./layout";
+import { useHashTarget } from "./SettingRow";
+import {
+  SETTINGS_CARD,
+  SETTINGS_INPUT,
+  SETTINGS_LABEL,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "./layout";
 
 /** The tile beside a session or a token: the primary wash with its ink. */
 const ROW_ICON = cn(
@@ -82,9 +89,36 @@ const MIN_PASSWORD_LENGTH = 8;
 // Building blocks
 // ---------------------------------------------------------------------------
 
-const GroupHeading = ({ children }: { children: React.ReactNode }) => (
-  <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
-);
+/**
+ * One section: a heading over its cards. The id is the search's deep link
+ * (`/settings/account#tokens`), so a result lands on its section.
+ */
+const Section = ({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) => {
+  // Scrolled to and focused; a section has no face of its own to flash.
+  const { ref } = useHashTarget<HTMLElement>(id);
+  return (
+    <section
+      id={id}
+      ref={ref}
+      tabIndex={-1}
+      aria-labelledby={`${id}-heading`}
+      className="scroll-mt-20 outline-none"
+    >
+      <h2 id={`${id}-heading`} className={SETTINGS_SECTION_HEADING}>
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+};
 
 /**
  * A labelled input that can also be wrong.
@@ -153,7 +187,7 @@ const Field = ({
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-xs font-bold text-on-surface">
+      <label htmlFor={id} className={SETTINGS_LABEL}>
         {label}
       </label>
       <div className="relative">
@@ -166,10 +200,8 @@ const Field = ({
           onKeyUp={handleKeyUp}
           onBlur={handleBlur}
           className={cn(
-            "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
+            SETTINGS_INPUT,
             revealable && "pr-12",
-            // 16px on mobile: anything less and iOS Safari zooms on focus.
-            "text-base sm:text-sm",
             error && "ring-2 ring-error",
           )}
           {...props}
@@ -288,9 +320,9 @@ const PhotoCard = () => {
         e.preventDefault();
         handleUpload();
       }}
-      className={cn(CARD, "p-4 sm:p-6 space-y-4")}
+      className={cn(SETTINGS_CARD, "space-y-4")}
     >
-      <h3 className="text-base font-bold text-on-surface">Photo</h3>
+      <h3 className="text-sm font-bold text-on-surface">Photo</h3>
       <AccountPhotoField
         value={file}
         currentUrl={user?.avatarUrl ?? null}
@@ -345,7 +377,7 @@ const ProfileCard = () => {
         e.preventDefault();
         if (dirty) save.mutate();
       }}
-      className={cn(CARD, "p-4 sm:p-6 space-y-4")}
+      className={cn(SETTINGS_CARD, "space-y-4")}
     >
       <Field
         id="account-displayName"
@@ -418,7 +450,7 @@ const PasswordCard = () => {
         e.preventDefault();
         if (ready) save.mutate();
       }}
-      className={cn(CARD, "p-4 sm:p-6 space-y-4")}
+      className={cn(SETTINGS_CARD, "space-y-4")}
     >
       <Field
         id="account-current-password"
@@ -468,7 +500,7 @@ const PasswordCard = () => {
 };
 
 const SessionRow = ({ session }: { session: SessionSummary }) => (
-  <li className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+  <li className="flex items-start gap-3">
     <span className={ROW_ICON}>
       <Monitor className="w-[18px] h-[18px]" />
     </span>
@@ -512,11 +544,11 @@ const SessionsCard = () => {
   const others = sessions.filter((s) => !s.current).length;
 
   return (
-    <div className={cn(CARD, "p-4 sm:p-6 space-y-4")}>
+    <div className={cn(SETTINGS_CARD, "space-y-4")}>
       {isLoading ? (
         <p className="text-sm text-on-surface-variant">Loading devices…</p>
       ) : (
-        <ul className="divide-y divide-surface-container">
+        <ul className="space-y-4">
           {sessions.map((session) => (
             <SessionRow key={session.id} session={session} />
           ))}
@@ -716,15 +748,13 @@ const CreateTokenModal = ({
             autoFocus
           />
           <div className="space-y-1.5">
-            <span className="block text-xs font-bold text-on-surface">
-              Expires
-            </span>
+            <span className={SETTINGS_LABEL}>Expires</span>
             <div
               role="radiogroup"
               aria-label="Expires"
               className="grid grid-cols-2 sm:grid-cols-4 gap-2"
             >
-              {TOKEN_EXPIRY_PRESETS.map((preset) => {
+              {TOKEN_EXPIRY_PRESETS.map((preset, index) => {
                 const active = preset.days === expiresInDays;
                 return (
                   <button
@@ -732,6 +762,14 @@ const CreateTokenModal = ({
                     type="button"
                     role="radio"
                     aria-checked={active}
+                    tabIndex={radioTabIndex(
+                      active,
+                      index,
+                      TOKEN_EXPIRY_PRESETS.some(
+                        (p) => p.days === expiresInDays,
+                      ),
+                    )}
+                    onKeyDown={radioKeys}
                     onClick={() => setExpiresInDays(preset.days)}
                     className={cn(
                       "flex items-center justify-center gap-2 px-3 py-3 sm:py-2.5 rounded-xl text-sm font-bold transition-colors",
@@ -790,8 +828,8 @@ const ApiTokensCard = () => {
   const tokens = data?.tokens ?? [];
 
   return (
-    <div className={cn(CARD, "p-0 overflow-hidden")}>
-      <div className="px-4 sm:px-6 py-4 bg-surface-container-low space-y-3">
+    <div className={cn(CARD, "p-0")}>
+      <div className="px-4 sm:px-6 py-4 bg-surface-container-low rounded-t-2xl space-y-3">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
             A token lets a script or an MCP client act as you, and reach only
@@ -884,54 +922,46 @@ export const AccountSettings = () => {
   if (!authRequired || !user) {
     return (
       <div className={SETTINGS_PAGE}>
-        <div className={cn(CARD, "p-6 space-y-2 text-center")}>
-          <span
-            className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
-              TONE_WASH.neutral,
-            )}
-          >
-            <UserRound className="w-6 h-6" />
-          </span>
-          <h2 className="font-bold text-on-surface">No account needed</h2>
-          <p className="text-sm text-on-surface-variant text-pretty max-w-prose mx-auto">
-            This Contrack isn't asking anyone to sign in, so there's no account
-            to manage. Set <code>AUTH_REQUIRED=true</code> on the server to
-            require a sign-in — you'll be walked through creating an account,
-            and everything already here comes with you.
-          </p>
-        </div>
+        <EmptyState
+          icon={UserRound}
+          tone="neutral"
+          title="No account needed"
+          body={
+            <>
+              This Contrack does not ask anyone to sign in, so there is no
+              account to manage. Set <code>AUTH_REQUIRED=true</code> on the
+              server to ask for one. You will be walked through making an
+              account, and everything here comes with you.
+            </>
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-      <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
-        <GroupHeading>Profile</GroupHeading>
+      <Section id="profile" title="Profile">
         <div className="space-y-4">
           <PhotoCard />
           <ProfileCard />
         </div>
-      </section>
+      </Section>
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
-        <GroupHeading>Sign-in methods</GroupHeading>
+      <Section id="password" title="Sign-in methods">
         <div className="space-y-4">
           <PasswordCard />
           <PasskeysCard />
         </div>
-      </section>
+      </Section>
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
-        <GroupHeading>Devices</GroupHeading>
+      <Section id="devices" title="Devices">
         <SessionsCard />
-      </section>
+      </Section>
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
-        <GroupHeading>API tokens</GroupHeading>
+      <Section id="tokens" title="API tokens">
         <ApiTokensCard />
-      </section>
+      </Section>
 
       {/*
         Session length used to be a card here. It decides how long *everyone's*
@@ -941,15 +971,11 @@ export const AccountSettings = () => {
         disappearance; a member never had the ability and gets nothing.
       */}
       {isAdmin && (
-        <section
-          className="tile-enter"
-          style={{ animationDelay: tileDelay(4) }}
-        >
-          <GroupHeading>Session length</GroupHeading>
+        <Section id="session-length" title="Session length">
           <div
             className={cn(
-              CARD,
-              "p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
+              SETTINGS_CARD,
+              "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
             )}
           >
             <p className="text-sm text-on-surface-variant text-pretty">
@@ -957,22 +983,21 @@ export const AccountSettings = () => {
               instance, so it is set under Administration.
             </p>
             <Link
-              to="/settings/admin/general"
+              to="/settings/admin/general#session-length"
               className="btn-secondary shrink-0"
             >
               <ServerCog className="w-4 h-4" />
               Instance settings
             </Link>
           </div>
-        </section>
+        </Section>
       )}
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(5) }}>
-        <GroupHeading>Session</GroupHeading>
+      <Section id="session" title="Session">
         <div
           className={cn(
-            CARD,
-            "p-4 sm:p-6 flex justify-between items-center gap-4",
+            SETTINGS_CARD,
+            "flex justify-between items-center gap-4",
           )}
         >
           <p className="text-sm text-on-surface-variant text-pretty">
@@ -987,7 +1012,7 @@ export const AccountSettings = () => {
             Sign out
           </button>
         </div>
-      </section>
+      </Section>
     </div>
   );
 };

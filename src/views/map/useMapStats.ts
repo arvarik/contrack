@@ -7,17 +7,25 @@
  *
  * @module views/map/useMapStats
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
 import { computeMapStats, getInViewContacts, type MapStats } from "./mapStats";
+import { clearBounds } from "./insets";
 
 export const MOVEEND_DEBOUNCE_MS = 150;
 
 export interface UseMapStatsOptions {
   contacts: readonly MapContact[];
   map: MapLibreMap | null;
-  totalCount?: number;
+  /** A contact is open over the map's right side. */
+  contactOpen?: boolean;
+  /**
+   * Changes whenever a cover opens or closes (the insights panel, a
+   * contact). Opening one does not always move the map, and the count reads
+   * the part of the map it leaves clear.
+   */
+  covers?: string;
 }
 
 export interface UseMapStatsResult {
@@ -28,16 +36,23 @@ export interface UseMapStatsResult {
 export function useMapStats({
   contacts,
   map,
-  totalCount,
+  contactOpen = false,
+  covers = "",
 }: UseMapStatsOptions): UseMapStatsResult {
-  const [stats, setStats] = useState<MapStats>(() =>
-    computeMapStats(
-      contacts,
-      map ? map.getBounds() : null,
-      new Date(),
-      totalCount,
-    ),
+  /** The part of the map a person can see: what no panel covers. */
+  const visible = useCallback(
+    () => (map ? clearBounds(map, { contactOpen }) : null),
+    [map, contactOpen],
   );
+  // One reading of the view gives both the numbers and the people.
+  const read = useCallback((): UseMapStatsResult => {
+    const bounds = visible();
+    return {
+      stats: computeMapStats(contacts, bounds),
+      inViewContacts: getInViewContacts(contacts, bounds),
+    };
+  }, [contacts, visible]);
+  const [result, setResult] = useState<UseMapStatsResult>(read);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -45,26 +60,18 @@ export function useMapStats({
       clearTimeout(timerRef.current);
     }
 
-    const updateStats = () => {
-      const bounds = map ? map.getBounds() : null;
-      setStats(computeMapStats(contacts, bounds, new Date(), totalCount));
-    };
+    const update = () => setResult(read());
 
-    if (!map) {
-      updateStats();
-      return;
-    }
-
-    // Compute stats on map ready or contacts change
-    updateStats();
+    // On map ready, when the contacts change and when a cover opens or
+    // closes.
+    update();
+    if (!map) return;
 
     const handleMoveEnd = () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
-      timerRef.current = setTimeout(() => {
-        updateStats();
-      }, MOVEEND_DEBOUNCE_MS);
+      timerRef.current = setTimeout(update, MOVEEND_DEBOUNCE_MS);
     };
 
     map.on("moveend", handleMoveEnd);
@@ -75,13 +82,7 @@ export function useMapStats({
       }
       map.off("moveend", handleMoveEnd);
     };
-  }, [map, contacts, totalCount]);
+  }, [map, read, covers]);
 
-  const inViewContacts = useMemo(() => {
-    if (!stats) return [];
-    const bounds = map ? map.getBounds() : null;
-    return getInViewContacts(contacts, bounds);
-  }, [contacts, map, stats]);
-
-  return { stats, inViewContacts };
+  return result;
 }

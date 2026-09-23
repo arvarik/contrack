@@ -67,7 +67,7 @@ export const Switch = ({
       className={cn(
         "flex items-center justify-center rounded-full",
         // The app's curve and base duration (index.css, "Motion").
-        "transition-[transform,width,height,background-color]",
+        "transition-[translate,width,height,background-color]",
         "group-active:scale-110 group-disabled:scale-100",
         checked
           ? "w-5 h-5 translate-x-[22px] bg-on-primary text-primary"

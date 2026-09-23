@@ -112,8 +112,6 @@ const GROUP_ORDER: readonly TrackedGroupId[] = [
   "not-tracked",
 ];
 
-export { TRACKED_INTRO };
-
 /** Past this many rows the list is virtualised. */
 const VIRTUAL_ROWS = 200;
 
@@ -541,7 +539,7 @@ export const TrackedContactsView = () => {
   return (
     <div
       ref={scrollRef}
-      className="h-full overflow-y-auto nice-scrollbar"
+      className="h-full overflow-y-auto"
       style={barRoom ? { scrollPaddingBottom: barRoom } : undefined}
     >
       <div

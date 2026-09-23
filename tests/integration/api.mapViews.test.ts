@@ -42,7 +42,7 @@ describe("Map Views API (/api/map/views)", () => {
         .send({
           name: "London Tech",
           query: "industry:Technology",
-          layer: "health",
+          layer: "heat",
           bounds: [-0.5, 51.3, 0.2, 51.7],
         }),
     );
@@ -51,7 +51,7 @@ describe("Map Views API (/api/map/views)", () => {
       id: expect.any(String),
       name: "London Tech",
       query: "industry:Technology",
-      layer: "health",
+      layer: "heat",
       bounds: [-0.5, 51.3, 0.2, 51.7],
       sortOrder: 0,
     });
@@ -107,7 +107,7 @@ describe("Map Views API (/api/map/views)", () => {
         .send({
           name: "Updated Name",
           query: "updated:query",
-          layer: "health",
+          layer: "heat",
           bounds: [-2, 49, 2, 53],
         }),
     );
@@ -116,7 +116,7 @@ describe("Map Views API (/api/map/views)", () => {
       id: viewId,
       name: "Updated Name",
       query: "updated:query",
-      layer: "health",
+      layer: "heat",
       bounds: [-2, 49, 2, 53],
     });
   });
@@ -278,5 +278,102 @@ describe("Map Views API (/api/map/views)", () => {
       request(app).delete(`/api/map/views/${aliceViewId}`),
     );
     expect(delRes.status).toBe(404);
+  });
+
+  // Health was a third layer until v2. A view saved with it, a save from a
+  // page loaded before v2, and the account's layer preference all read as
+  // Pins, so an old value never fails to load.
+  describe("a layer saved as health", () => {
+    it("opens a stored health view on pins", async () => {
+      const created = await asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({ name: "Old health view", bounds: [-10, 40, 10, 60] }),
+      );
+      sqlite
+        .prepare("UPDATE map_views SET layer = 'health' WHERE id = ?")
+        .run(created.body.id);
+
+      const list = await asUser(alice)(request(app).get("/api/map/views"));
+      expect(list.status).toBe(200);
+      expect(list.body.views[0].layer).toBe("pins");
+    });
+
+    it("saves health from an old page as pins", async () => {
+      const created = await asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({
+            name: "From an old tab",
+            layer: "health",
+            bounds: [-10, 40, 10, 60],
+          }),
+      );
+      expect(created.status).toBe(201);
+      expect(created.body.layer).toBe("pins");
+
+      const patched = await asUser(alice)(
+        request(app)
+          .patch(`/api/map/views/${created.body.id}`)
+          .send({ layer: "health" }),
+      );
+      expect(patched.status).toBe(200);
+      expect(patched.body.layer).toBe("pins");
+      const row = sqlite
+        .prepare("SELECT layer FROM map_views WHERE id = ?")
+        .get(created.body.id) as { layer: string };
+      expect(row.layer).toBe("pins");
+    });
+
+    it("reads the layer preference stored as health as pins", async () => {
+      sqlite
+        .prepare(
+          `INSERT INTO user_settings (userId, key, value) VALUES (?, ?, ?)
+           ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value`,
+        )
+        .run(alice.user.id, "pref.mapLayer", '"health"');
+
+      const res = await asUser(alice)(
+        request(app).get("/api/auth/preferences"),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.preferences.mapLayer).toBe("pins");
+      expect(res.body.stored).toContain("mapLayer");
+    });
+
+    it("stores a health layer preference from an old page as pins", async () => {
+      const res = await asUser(alice)(
+        request(app)
+          .patch("/api/auth/preferences")
+          .send({ mapLayer: "health" }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.preferences.mapLayer).toBe("pins");
+      const row = sqlite
+        .prepare(
+          "SELECT value FROM user_settings WHERE userId = ? AND key = 'pref.mapLayer'",
+        )
+        .get(alice.user.id) as { value: string };
+      expect(JSON.parse(row.value)).toBe("pins");
+    });
+
+    it("still refuses a layer that never existed", async () => {
+      const view = await asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({
+            name: "Satellite",
+            layer: "satellite",
+            bounds: [0, 0, 1, 1],
+          }),
+      );
+      expect(view.status).toBe(400);
+      const pref = await asUser(alice)(
+        request(app)
+          .patch("/api/auth/preferences")
+          .send({ mapLayer: "satellite" }),
+      );
+      expect(pref.status).toBe(400);
+    });
   });
 });

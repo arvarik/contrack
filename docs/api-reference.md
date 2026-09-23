@@ -576,7 +576,7 @@ curl http://localhost:3210/api/map/views
     "id": "view_123",
     "name": "Virginia",
     "query": "company:Navy",
-    "layer": "health",
+    "layer": "heat",
     "bounds": [-77.2, 38.8, -76.3, 39.1],
     "sortOrder": 0,
     "createdAt": "2026-09-19T12:00:00.000Z",
@@ -597,7 +597,7 @@ curl -X POST http://localhost:3210/api/map/views \
   -d '{
     "name": "Virginia",
     "query": "company:Navy",
-    "layer": "health",
+    "layer": "heat",
     "bounds": [-77.2, 38.8, -76.3, 39.1]
   }'
 ```
@@ -606,7 +606,7 @@ curl -X POST http://localhost:3210/api/map/views \
 
 - `name` (string, required): 1 to 60 characters
 - `query` (string, optional, default empty string): 0 to 200 characters
-- `layer` (enum: "pins", "heat", "health", optional, default "pins")
+- `layer` (enum: "pins", "heat", optional, default "pins"). A `"health"` layer from before v2 is read as `"pins"`, in a request and in a stored view.
 - `bounds` (array of 4 numbers `[west, south, east, north]`, required): `west` and `east` in `[-180, 180]`, `south` and `north` in `[-90, 90]`, `south < north`
 
 **Error codes:**

@@ -21,9 +21,9 @@
 import React from "react";
 import { cn } from "../../lib/utils";
 import {
+  ASK_COLUMN,
   CARD,
   PAGE_DESCRIPTION,
-  PAGE_EYEBROW,
   PAGE_TITLE,
   PAGE_TITLE_SUFFIX,
   PAGE_TOP,
@@ -81,14 +81,14 @@ const TextBar = ({
 );
 
 /**
- * `PageHeader` as bars: the back link, the title and its suffix, and the
- * description in its slots, gaps and line heights, the controls at the right
- * and whatever sits under them. Each text prop is the width of its bar, and
- * a slot without one is left out.
+ * `PageHeader` as bars: the title and its suffix, and the description in
+ * their slots, gaps and line heights, the controls at the right and whatever
+ * sits under them. Each text prop is the width of its bar, and a slot
+ * without one is left out. No skeleton draws a back link: the one page that
+ * has one, a settings page below `lg`, cannot be told from the settings
+ * list while the chunk loads, and the list has none.
  */
 export const PageHeaderSkeleton = ({
-  back,
-  backClassName,
   title,
   suffix,
   description,
@@ -97,9 +97,6 @@ export const PageHeaderSkeleton = ({
   children,
   className,
 }: {
-  back?: string;
-  /** Classes on the back link's line: `hidden lg:flex` for a link only wide screens show. */
-  backClassName?: string;
   title: string;
   suffix?: string;
   description?: string;
@@ -117,13 +114,6 @@ export const PageHeaderSkeleton = ({
     {suffix === undefined ? (
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="flex flex-1 flex-col gap-1">
-          {back && (
-            <TextBar
-              type={PAGE_EYEBROW}
-              width={back}
-              className={backClassName}
-            />
-          )}
           <TextBar type={PAGE_TITLE} width={title} />
           {description && (
             <TextBar type={PAGE_DESCRIPTION} width={description} />
@@ -143,39 +133,30 @@ export const PageHeaderSkeleton = ({
     ) : (
       // The page header's grid: the suffix under the title and the actions
       // in a narrow header, beside the title from `@2xl`.
-      <div className="flex flex-col gap-1">
-        {back && (
-          <TextBar type={PAGE_EYEBROW} width={back} className={backClassName} />
+      <div className={TITLE_GRID}>
+        <TextBar type={PAGE_TITLE} width={title} className={TITLE_GRID_TITLE} />
+        <TextBar
+          type={PAGE_TITLE_SUFFIX}
+          width={suffix}
+          className={TITLE_GRID_SUFFIX}
+        />
+        {description && (
+          <TextBar
+            type={PAGE_DESCRIPTION}
+            width={description}
+            className={TITLE_GRID_DESCRIPTION}
+          />
         )}
-        <div className={TITLE_GRID}>
-          <TextBar
-            type={PAGE_TITLE}
-            width={title}
-            className={TITLE_GRID_TITLE}
-          />
-          <TextBar
-            type={PAGE_TITLE_SUFFIX}
-            width={suffix}
-            className={TITLE_GRID_SUFFIX}
-          />
-          {description && (
-            <TextBar
-              type={PAGE_DESCRIPTION}
-              width={description}
-              className={TITLE_GRID_DESCRIPTION}
-            />
-          )}
-          {actions && (
-            <div
-              className={cn(
-                "flex flex-wrap items-center gap-3",
-                TITLE_GRID_ACTIONS,
-              )}
-            >
-              {actions}
-            </div>
-          )}
-        </div>
+        {actions && (
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-3",
+              TITLE_GRID_ACTIONS,
+            )}
+          >
+            {actions}
+          </div>
+        )}
       </div>
     )}
     {children}
@@ -186,12 +167,8 @@ export const PageHeaderSkeleton = ({
  * Pulse's masthead as bars: "Pulse" and the date on one line, the sentence,
  * then Log note and the More menu. The route fallback and `PulseSkeleton`
  * both draw this one.
- *
- * @param ask whether the Ask form is under the masthead. It is from `sm`
- *   whenever AI is allowed, which is the default, so the route fallback,
- *   which knows no preferences, draws it.
  */
-export const PulseHeaderSkeleton = ({ ask = true }: { ask?: boolean }) => (
+export const PulseHeaderSkeleton = () => (
   <PageHeaderSkeleton
     title="w-16 md:w-20"
     suffix="w-60 md:w-80"
@@ -202,14 +179,7 @@ export const PulseHeaderSkeleton = ({ ask = true }: { ask?: boolean }) => (
         <Block className="w-9 h-9 rounded-xl" />
       </>
     }
-  >
-    {ask && (
-      <div className="hidden sm:flex items-center gap-2 w-full max-w-xl">
-        <Block className="flex-1 h-10 rounded-xl" />
-        <Block className="w-18 h-10 rounded-xl" />
-      </div>
-    )}
-  </PageHeaderSkeleton>
+  />
 );
 
 export type RouteFallbackVariant =
@@ -256,7 +226,7 @@ export const RouteFallback = ({
               {/* Daily insight at the height PulseSkeleton gives a typical
                   insight in this column at each width: a card with a key,
                   the common case. A fixed 140 px block jumped to the card. */}
-              <Block className="h-[337px] lg:h-[247px] xl:h-[393px]" />
+              <Block className="h-[293px] lg:h-[252px] xl:h-[349px]" />
               <Block className="h-[160px]" />
               <Block className="h-[140px]" />
               <Block className="h-[437px]" />
@@ -274,16 +244,18 @@ export const RouteFallback = ({
   }
 
   if (variant === "search") {
-    // Ask Contrack: the title with the mode switch and the history button
+    // Ask Contrack: the title with the mode switch, and History below `lg`
     // (the pair fills its own row on a phone), the search box, then "Try
-    // asking" and its chips, in the page's column. From `lg` the history
-    // pane, open by default, sits at the right edge.
+    // asking" and its chips, in the page's column and with the scroller's
+    // bar lane. From `lg` the history rail is at the right edge. Its panel
+    // opens over the page, so the column is where it lands either way.
     return (
       <div className="h-full flex overflow-hidden bg-surface">
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex-1 min-w-0 overflow-hidden [scrollbar-gutter:stable]">
           <div
             className={cn(
-              "max-w-3xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8",
+              ASK_COLUMN,
+              "px-4 sm:px-6 space-y-6 sm:space-y-8",
               PAGE_TOP,
             )}
           >
@@ -293,7 +265,7 @@ export const RouteFallback = ({
               actions={
                 <>
                   <Block className="max-sm:flex-1 sm:w-36 h-13 sm:h-10 rounded-xl" />
-                  <Block className="w-11 h-11 rounded-xl" />
+                  <Block className="w-11 h-11 rounded-xl lg:hidden" />
                 </>
               }
             />
@@ -314,7 +286,7 @@ export const RouteFallback = ({
             </div>
           </div>
         </div>
-        <div className="hidden lg:block w-[320px] shrink-0 bg-surface-container-low" />
+        <div className="hidden lg:block w-16 shrink-0 bg-surface-container-low" />
       </div>
     );
   }
@@ -344,14 +316,12 @@ export const RouteFallback = ({
   }
 
   // settings: the rail from lg, then the header and the page in the page's
-  // centred box. From lg the header has a back link to the Network.
+  // centred box. The list has no back link, and from lg no page has one.
   return (
     <div className="h-full flex overflow-hidden bg-surface">
       <div className="hidden lg:block w-[240px] shrink-0 h-full bg-surface-container-low" />
       <div className="flex-1 min-w-0 h-full flex flex-col overflow-hidden">
         <PageHeaderSkeleton
-          back="w-16"
-          backClassName="hidden lg:flex"
           title="w-36"
           className={cn(PAGE_X, PAGE_TOP, "w-full max-w-4xl mx-auto shrink-0")}
         />

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Trash2, ArchiveRestore, AlertTriangle } from "lucide-react";
+import { ArchiveRestore, Loader2, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useTrash, useRestoreContact, usePurgeTrashedContact } from "../api";
-import { Modal } from "../components/ui/Modal";
-import { CARD, ICON_BTN, TONE_WASH } from "../lib/styles";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { CARD, ICON_BTN, SECTION_HEADING } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
@@ -14,6 +14,10 @@ import { SETTINGS_PAGE } from "./settings/layout";
 
 // ---------------------------------------------------------------------------
 // TrashView — recently deleted contacts with restore + permanent delete
+//
+// The same shape as Archived contacts: one card, a strip that counts what is
+// in it, and a row for each contact with Restore and Delete forever. Delete
+// forever asks first, with the red button and the verb repeated.
 // ---------------------------------------------------------------------------
 
 function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
@@ -29,6 +33,8 @@ function deletedLabel(deletedAt: string): string {
   if (days === 1) return "Deleted yesterday";
   return `Deleted ${days} days ago`;
 }
+
+const days = (count: number) => `${count} ${count === 1 ? "day" : "days"}`;
 
 export const TrashView = () => {
   const { data, isLoading } = useTrash();
@@ -54,7 +60,7 @@ export const TrashView = () => {
     purge.mutate(id, {
       onSuccess: () => {
         setPurgeTarget(null);
-        toast.success(`Permanently deleted ${name}`);
+        toast.success(`Deleted ${name} forever`);
       },
       onError: (err) =>
         toast.error(
@@ -65,8 +71,11 @@ export const TrashView = () => {
 
   if (isLoading) {
     return (
-      <div className={cn(SETTINGS_PAGE, "text-sm text-on-surface-variant")}>
-        Loading trash…
+      <div className={cn(SETTINGS_PAGE, "flex justify-center py-12")}>
+        <Loader2
+          aria-label="Loading Trash"
+          className="w-6 h-6 animate-spin text-primary"
+        />
       </div>
     );
   }
@@ -77,113 +86,102 @@ export const TrashView = () => {
         No number in the sentence. The server's window is TRASH_RETENTION_DAYS
         (30 by default), and the client cannot read what an instance set.
       */
-      <EmptyState
-        illustration={<CorvidMark size={64} className="text-primary/60" />}
-        title="Trash is empty"
-        body="You can restore a deleted contact from here until it is removed for good."
-      />
+      <div className={SETTINGS_PAGE}>
+        <EmptyState
+          illustration={<CorvidMark size={64} className="text-primary/60" />}
+          title="Trash is empty"
+          body="You can restore a deleted contact from here until it is removed for good."
+        />
+      </div>
     );
   }
 
   return (
-    <div className={cn(SETTINGS_PAGE, "space-y-4")}>
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-on-surface-variant">
-          {items.length} contact{items.length !== 1 ? "s" : ""} in the trash.
-          Each is removed forever {retentionDays} days after deletion.
+    <div className={SETTINGS_PAGE}>
+      <div className={cn(CARD, "p-0")}>
+        <p
+          className={cn(
+            SECTION_HEADING,
+            "px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl",
+          )}
+        >
+          {items.length} {items.length === 1 ? "contact" : "contacts"} · removed
+          for good {days(retentionDays)} after deletion
         </p>
+        <div className="py-2">
+          <AnimatePresence initial={false}>
+            {items.map((item) => {
+              const daysLeft = daysUntilPurge(item.deletedAt, retentionDays);
+              return (
+                <motion.div
+                  key={item.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -24 }}
+                  className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5"
+                >
+                  <img
+                    src={item.avatarUrl || fallbackAvatarUrl(item.name)}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover bg-surface-container-high grayscale opacity-70 shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-on-surface truncate">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-on-surface-variant truncate">
+                      {item.company ? `${item.company} · ` : ""}
+                      {deletedLabel(item.deletedAt)} · gone for good in{" "}
+                      {days(daysLeft)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(item)}
+                    disabled={restore.isPending}
+                    className="btn-secondary btn-sm shrink-0"
+                    aria-label={`Restore ${item.name}`}
+                  >
+                    <ArchiveRestore
+                      aria-hidden="true"
+                      className="w-3.5 h-3.5"
+                    />
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurgeTarget(item)}
+                    disabled={purge.isPending}
+                    className={cn(ICON_BTN, "hover:text-error shrink-0")}
+                    title="Delete forever"
+                    aria-label={`Delete ${item.name} forever`}
+                  >
+                    <Trash2 aria-hidden="true" className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <AnimatePresence initial={false}>
-          {items.map((item) => (
-            <motion.div
-              key={item.id}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -24 }}
-              className={cn(CARD, "flex items-center gap-4 py-3")}
-            >
-              <img
-                src={item.avatarUrl || fallbackAvatarUrl(item.name)}
-                alt={item.name}
-                className="w-10 h-10 rounded-full object-cover bg-surface-container-high grayscale opacity-70"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="font-bold truncate">{item.name}</div>
-                <div className="text-xs text-on-surface-variant truncate">
-                  {item.company ? `${item.company} · ` : ""}
-                  {(() => {
-                    const daysLeft = daysUntilPurge(
-                      item.deletedAt,
-                      retentionDays,
-                    );
-                    return `${deletedLabel(item.deletedAt)} · purges in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`;
-                  })()}
-                </div>
-              </div>
-              <button
-                onClick={() => handleRestore(item)}
-                disabled={restore.isPending}
-                className={cn(ICON_BTN, "text-success")}
-                title="Restore contact"
-                aria-label={`Restore ${item.name}`}
-              >
-                <ArchiveRestore className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPurgeTarget(item)}
-                disabled={purge.isPending}
-                className={cn(ICON_BTN, "text-error")}
-                title="Delete forever"
-                aria-label={`Permanently delete ${item.name}`}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      <Modal
+      <ConfirmDialog
         isOpen={!!purgeTarget}
         onClose={() => setPurgeTarget(null)}
-        title="Delete forever?"
-      >
-        <div className="space-y-5">
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "w-10 h-10 shrink-0 rounded-full flex items-center justify-center",
-                TONE_WASH.error,
-              )}
-            >
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <p className="text-sm text-on-surface-variant">
-              <strong className="text-on-surface">{purgeTarget?.name}</strong>{" "}
-              and their entire history (interactions, notes, action items) will
-              be permanently deleted. This cannot be undone.
-            </p>
-          </div>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setPurgeTarget(null)}
-              className="btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handlePurge}
-              disabled={purge.isPending}
-              className="btn-danger"
-            >
-              {purge.isPending ? "Deleting…" : "Delete forever"}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handlePurge}
+        title={`Delete ${purgeTarget?.name ?? "this contact"} forever?`}
+        description={
+          <p>
+            <strong className="text-on-surface">{purgeTarget?.name}</strong> and
+            their whole history, with every interaction, note, and action item,
+            are deleted. This cannot be undone.
+          </p>
+        }
+        confirmLabel="Delete forever"
+        tone="danger"
+        busy={purge.isPending}
+      />
     </div>
   );
 };

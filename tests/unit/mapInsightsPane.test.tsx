@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+/**
+ * The map's insights: the page's side panel from `lg`, a bottom sheet below
+ * it, a summary whose bars are filters, and the people in view.
+ */
+import type { ComponentProps } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MapInsightsPane } from "../../src/views/map/MapInsightsPane";
 import type { MapStats } from "../../src/views/map/mapStats";
 import type { MapContact } from "../../shared/geo";
@@ -11,13 +16,13 @@ vi.mock("@tanstack/react-virtual", async (importOriginal) => {
   return {
     ...actual,
     useVirtualizer: (options: { count: number }) => ({
-      getTotalSize: () => options.count * 64,
+      getTotalSize: () => options.count * 56,
       getVirtualItems: () =>
         Array.from({ length: options.count }, (_, index) => ({
           index,
-          start: index * 64,
-          size: 64,
-          end: (index + 1) * 64,
+          start: index * 56,
+          size: 56,
+          end: (index + 1) * 56,
           key: index,
         })),
       scrollToOffset: vi.fn(),
@@ -41,173 +46,149 @@ function stubMatchMedia(wide = true) {
   );
 }
 
+const stats: MapStats = {
+  inView: 2,
+  matching: 2,
+  overdue: 0,
+  topIndustries: [{ name: "Computing", count: 2 }],
+  topCompanies: [{ name: "Babbage & Co", count: 1 }],
+  topTags: [{ name: "pioneer", count: 2 }],
+  timeZones: [{ offset: "GMT+1", label: "GMT+1", count: 2, offsetMinutes: 60 }],
+};
+
+const people: MapContact[] = [
+  {
+    id: "c1",
+    name: "Ada Lovelace",
+    company: "Babbage & Co",
+    role: "Analyst",
+    location: "London, UK",
+    avatarUrl: null,
+    isTracked: true,
+    lat: 51.5074,
+    lng: -0.1278,
+    relationshipScore: 85,
+    lastContactedAt: "2026-06-01T12:00:00.000Z",
+    tags: ["pioneer"],
+    lists: [],
+  },
+  {
+    id: "c2",
+    name: "Alan Turing",
+    company: "Codebreakers Ltd",
+    role: "Cryptanalyst",
+    location: "London, UK",
+    avatarUrl: null,
+    isTracked: true,
+    lat: 52.0,
+    lng: -0.7,
+    relationshipScore: 35,
+    tags: ["pioneer"],
+    lists: [],
+  },
+];
+
+const renderPane = (
+  props: Partial<ComponentProps<typeof MapInsightsPane>> = {},
+) =>
+  render(
+    <MapInsightsPane
+      isOpen
+      onToggle={vi.fn()}
+      stats={stats}
+      inViewContacts={people}
+      onApplyFacet={vi.fn()}
+      onSelectContact={vi.fn()}
+      {...props}
+    />,
+  );
+
+beforeEach(() => stubMatchMedia(true));
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
 describe("MapInsightsPane", () => {
-  beforeEach(() => {
-    stubMatchMedia(true);
-  });
-  const mockStats: MapStats = {
-    inView: 2,
-    matching: 2,
-    total: 10,
-    atRisk: 1,
-    overdue: 0,
-    neverContacted: 0,
-    avgScore: 75,
-    topIndustries: [{ name: "Computing", count: 2 }],
-    topCompanies: [{ name: "Babbage & Co", count: 1 }],
-    topTags: [{ name: "pioneer", count: 2 }],
-    timeZones: [
-      { offset: "GMT+1", label: "GMT+1", count: 2, offsetMinutes: 60 },
-    ],
-  };
+  it("is the side panel from lg, covering the map only while it is open", () => {
+    const { rerender } = renderPane();
+    const panel = screen.getByRole("complementary", { name: "Map insights" });
+    expect(panel.getAttribute("data-covers-map")).toBe("right");
+    // The rail's icon discloses it, and its heading counts who is in view.
+    const icon = screen.getByRole("button", { name: "Map insights" });
+    expect(icon.getAttribute("aria-expanded")).toBe("true");
+    expect(icon.getAttribute("aria-controls")).toBe(panel.id);
+    const heading = screen.getByRole("heading", { name: "Map insights" });
+    expect(heading.nextElementSibling?.textContent).toBe("2");
 
-  const mockContacts: MapContact[] = [
-    {
-      id: "c1",
-      name: "Ada Lovelace",
-      company: "Babbage & Co",
-      role: "Analyst",
-      location: "London, UK",
-      avatarUrl: null,
-      isTracked: true,
-      lat: 51.5074,
-      lng: -0.1278,
-      relationshipScore: 85,
-      lastContactedAt: "2026-06-01T12:00:00.000Z",
-      tags: ["pioneer"],
-      lists: [],
-    },
-    {
-      id: "c2",
-      name: "Alan Turing",
-      company: "Codebreakers Ltd",
-      role: "Cryptanalyst",
-      location: "London, UK",
-      avatarUrl: null,
-      isTracked: true,
-      lat: 52.0,
-      lng: -0.7,
-      relationshipScore: 35,
-      tags: ["pioneer"],
-      lists: [],
-    },
-  ];
-
-  it("renders when open with data-covers-map='right' and aria-label='Map insights'", () => {
-    render(
+    rerender(
       <MapInsightsPane
-        isOpen={true}
+        isOpen={false}
         onToggle={vi.fn()}
-        stats={mockStats}
-        inViewContacts={mockContacts}
+        stats={stats}
+        inViewContacts={people}
         onApplyFacet={vi.fn()}
         onSelectContact={vi.fn()}
       />,
     );
-
-    const aside = screen.getByRole("complementary", { name: "Map insights" });
-    expect(aside).toBeDefined();
-    expect(aside.getAttribute("data-covers-map")).toBe("right");
+    // Closed, it is inert and covers nothing, so the map keeps its width.
+    expect(panel.hasAttribute("inert")).toBe(true);
+    expect(panel.hasAttribute("data-covers-map")).toBe(false);
   });
 
-  it("says Overdue in the overdue tone, red as on the strip", () => {
-    render(
-      <MapInsightsPane
-        isOpen={true}
-        onToggle={vi.fn()}
-        stats={{ ...mockStats, overdue: 2 }}
-        inViewContacts={mockContacts}
-        onApplyFacet={vi.fn()}
-        onSelectContact={vi.fn()}
-      />,
-    );
-    const figure = screen.getByText("Overdue").nextElementSibling!;
-    expect(figure.textContent).toBe("2");
-    expect(figure.className).toContain("text-error");
-    expect(figure.className).not.toContain("text-warning");
-  });
-
-  it("calls onApplyFacet when clicking a bar in the Stats tab", () => {
-    const onApplyFacet = vi.fn();
-    render(
-      <MapInsightsPane
-        isOpen={true}
-        onToggle={vi.fn()}
-        stats={mockStats}
-        inViewContacts={mockContacts}
-        onApplyFacet={onApplyFacet}
-        onSelectContact={vi.fn()}
-      />,
-    );
-
-    const industryBar = screen.getByRole("button", {
-      name: "Filter by industry: Computing (2)",
-    });
-    fireEvent.click(industryBar);
-    expect(onApplyFacet).toHaveBeenCalledWith("industry:Computing");
-
-    const companyBar = screen.getByRole("button", {
-      name: "Filter by company: Babbage & Co (1)",
-    });
-    fireEvent.click(companyBar);
-    expect(onApplyFacet).toHaveBeenCalledWith('company:"Babbage & Co"');
-  });
-
-  it("switches to People tab and calls onSelectContact on click", () => {
-    const onSelectContact = vi.fn();
-    render(
-      <MapInsightsPane
-        isOpen={true}
-        onToggle={vi.fn()}
-        stats={mockStats}
-        inViewContacts={mockContacts}
-        onApplyFacet={vi.fn()}
-        onSelectContact={onSelectContact}
-      />,
-    );
-
-    const peopleTab = screen.getByRole("tab", { name: /People/ });
-    fireEvent.click(peopleTab);
-
-    expect(screen.getByText("Ada Lovelace")).toBeDefined();
-    const adaRow = screen.getByRole("button", {
-      name: "Ada Lovelace, Babbage & Co",
-    });
-    fireEvent.click(adaRow);
-    expect(onSelectContact).toHaveBeenCalledWith(mockContacts[0]);
-  });
-
-  it("calls onToggle(false) when close button is clicked", () => {
+  it("hides from its heading row and opens from the rail", () => {
     const onToggle = vi.fn();
-    render(
-      <MapInsightsPane
-        isOpen={true}
-        onToggle={onToggle}
-        stats={mockStats}
-        inViewContacts={mockContacts}
-        onApplyFacet={vi.fn()}
-        onSelectContact={vi.fn()}
-      />,
-    );
-
-    const closeBtn = screen.getByRole("button", { name: "Close insights" });
-    fireEvent.click(closeBtn);
-    expect(onToggle).toHaveBeenCalledWith(false);
+    const { unmount } = renderPane({ onToggle });
+    fireEvent.click(screen.getByRole("button", { name: "Hide map insights" }));
+    expect(onToggle).toHaveBeenLastCalledWith(false);
+    unmount();
+    renderPane({ onToggle, isOpen: false });
+    fireEvent.click(screen.getByRole("button", { name: "Map insights" }));
+    expect(onToggle).toHaveBeenLastCalledWith(true);
   });
 
-  it("renders mobile modal sheet when screen is narrow", () => {
-    stubMatchMedia(false);
-    render(
-      <MapInsightsPane
-        isOpen={true}
-        onToggle={vi.fn()}
-        stats={mockStats}
-        inViewContacts={mockContacts}
-        onApplyFacet={vi.fn()}
-        onSelectContact={vi.fn()}
-      />,
+  it("filters by a bar in the summary, quoting a value with a space", () => {
+    const onApplyFacet = vi.fn();
+    renderPane({ onApplyFacet });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Filter by industry: Computing (2)" }),
     );
+    expect(onApplyFacet).toHaveBeenCalledWith("industry:Computing");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Filter by company: Babbage & Co (1)",
+      }),
+    );
+    expect(onApplyFacet).toHaveBeenCalledWith('company:"Babbage & Co"');
+    expect(screen.getByText("2 people")).toBeTruthy();
+  });
 
-    expect(screen.getByRole("dialog", { name: "Map insights" })).toBeDefined();
+  it("lists the people in view, and flies to the one pressed", () => {
+    const onSelectContact = vi.fn();
+    renderPane({ onSelectContact });
+    fireEvent.click(screen.getByRole("radio", { name: "People" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    );
+    expect(onSelectContact).toHaveBeenCalledWith(people[0]);
+  });
+
+  it("says so when nobody is in view", () => {
+    renderPane({
+      stats: { ...stats, inView: 0, topIndustries: [], topCompanies: [] },
+      inViewContacts: [],
+    });
+    expect(
+      screen.getByRole("heading", { level: 3, name: "No one in view" }),
+    ).toBeTruthy();
+  });
+
+  it("opens in a bottom sheet below lg", () => {
+    stubMatchMedia(false);
+    renderPane();
+    expect(screen.getByRole("dialog", { name: "Map insights" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Filter by tag: pioneer (2)" }),
+    ).toBeTruthy();
   });
 });

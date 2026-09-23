@@ -232,7 +232,7 @@ export function AISearchView({
               </div>
 
               {/* Contact rows — reduced max height to avoid scrolling on 14" */}
-              <div className="max-h-[360px] overflow-y-auto nice-scrollbar">
+              <div className="max-h-[360px] overflow-y-auto">
                 {filteredContacts.length === 0 &&
                   (searchQuery || dataFilter !== "all") && (
                     <div className="px-6 py-6 text-center text-sm text-on-surface-variant">

@@ -75,7 +75,7 @@ export const NAMES = {
   connectors: {
     label: "Connectors",
     title: "Connectors",
-    description: "Calendar, mailbox, Google, messages. Sync who you talk to.",
+    description: "Calendar, mailbox and Google. Sync who you talk to.",
   },
   correspondents: {
     label: "Correspondents",
@@ -92,8 +92,9 @@ export const NAMES = {
 export type DestinationKey = keyof typeof NAMES;
 
 /**
- * The sentence under the Tracked contacts heading, and the body of the
- * Keeping up card's empty state. One sentence, said the same in both places.
+ * The sentence under the Tracked contacts heading, and the body of the empty
+ * states of the Keeping up card and the Network list's Tracked filter. One
+ * sentence, said the same in every place.
  */
 export const TRACKED_INTRO =
-  "Track the people you want to keep up with. Their score, their catch-ups and the map's health layer follow.";
+  "Track the people you want to keep up with. Their score and their catch-ups follow.";

@@ -53,7 +53,7 @@ export interface Preferences {
   pulseLayout: PulseLayout;
   askHistoryOpen: boolean;
   mapPaneOpen: boolean;
-  mapLayer: "pins" | "heat" | "health";
+  mapLayer: "pins" | "heat";
   startPage: StartPage;
   listSort: ListSort;
   defaultCadenceDays: CadenceDays;

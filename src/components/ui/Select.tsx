@@ -48,6 +48,7 @@ import React, {
 } from "react";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { focusOnPointer } from "../../lib/a11y";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import {
   usePanelPlacement,
@@ -337,6 +338,7 @@ export function Select<T extends string = string>({
                     aria-disabled={option.disabled || undefined}
                     tabIndex={-1}
                     data-value={option.value}
+                    onPointerMove={focusOnPointer}
                     onClick={() => choose(option)}
                     className={cn(
                       MENU_ITEM,

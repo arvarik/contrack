@@ -3,14 +3,16 @@
  *
  * Used in both the left rail and the landing page.
  * Results are grouped by page. Enter opens the first match, Escape clears.
- * Row results link directly to path#rowId.
+ * Row results link directly to path#rowId, and on a phone the page slides
+ * in over the list (`useSlideNavigate`).
  */
 import React, { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { Search, X } from "lucide-react";
 import { findRows, type SettingsSearchHit } from "./registry";
 import { useAuth } from "../../components/auth/AuthGate";
+import { SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { SlideLink, useSlideNavigate } from "./slide";
 
 export interface SettingsSearchProps {
   value?: string;
@@ -32,12 +34,12 @@ export const SettingsSearch = ({
   const query = isControlled ? controlledValue : internalQuery;
   const setQuery = isControlled ? controlledOnChange! : setInternalQuery;
 
-  const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const slide = useSlideNavigate();
+  const { isAdmin, authRequired } = useAuth();
 
   const results = useMemo(() => {
-    return findRows(query, { isAdmin });
-  }, [query, isAdmin]);
+    return findRows(query, { isAdmin, authRequired });
+  }, [query, isAdmin, authRequired]);
 
   // Group hits by page
   const groupedResults = useMemo(() => {
@@ -54,24 +56,29 @@ export const SettingsSearch = ({
     return Array.from(map.values());
   }, [results]);
 
+  const isRail = variant === "rail";
+
+  /**
+   * The rail stays on screen beside the page it opened, so its search
+   * clears. The list slides away with its results still showing, and a
+   * cleared search would flash the whole list in the picture first.
+   */
+  const picked = () => {
+    if (!isRail) return;
+    setQuery("");
+    onSelect?.();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && results.length > 0) {
       e.preventDefault();
-      const first = results[0];
-      navigate(first.path);
-      setQuery("");
-      onSelect?.();
+      slide(results[0].path, "forward");
+      picked();
     } else if (e.key === "Escape") {
       e.preventDefault();
       setQuery("");
     }
   };
-
-  const handleClear = () => {
-    setQuery("");
-  };
-
-  const isRail = variant === "rail";
 
   return (
     <div className={cn("flex flex-col", className)}>
@@ -85,16 +92,17 @@ export const SettingsSearch = ({
           placeholder="Search settings"
           aria-label="Search settings"
           className={cn(
-            "w-full pl-10 pr-9 py-2.5 rounded-xl min-h-[44px]",
-            isRail
-              ? "bg-surface-container-highest text-on-surface text-sm placeholder:text-on-surface-variant"
-              : "bg-surface-container-highest text-on-surface text-base sm:text-sm placeholder:text-on-surface-variant",
+            "w-full pl-10 pr-9 py-2.5 rounded-xl min-h-[44px] bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant",
+            // The clear button below is the one clear control; the
+            // browser's own would draw a second one beside it.
+            "[&::-webkit-search-cancel-button]:appearance-none",
+            isRail ? "text-sm" : "text-base sm:text-sm",
           )}
         />
         {query && (
           <button
             type="button"
-            onClick={handleClear}
+            onClick={() => setQuery("")}
             aria-label="Clear search"
             className="hit-area state-layer absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-on-surface-variant hover:text-on-surface transition-colors"
           >
@@ -118,30 +126,25 @@ export const SettingsSearch = ({
               const Icon = page.icon;
               return (
                 <div key={page.id} className="space-y-1">
-                  <div className="px-2 py-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
+                  <div
+                    className={cn(
+                      SECTION_HEADING,
+                      "px-2 py-1 flex items-center gap-2",
+                    )}
+                  >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">{page.title}</span>
                   </div>
                   <div className="space-y-0.5">
                     {hits.map((hit) => (
-                      <Link
+                      <SlideLink
                         key={hit.path}
                         to={hit.path}
-                        onClick={() => {
-                          setQuery("");
-                          onSelect?.();
-                        }}
-                        className="state-layer flex items-center justify-between px-3 py-2 rounded-xl text-on-surface transition-colors min-h-[44px] sm:min-h-0"
+                        onClick={picked}
+                        className="state-layer flex items-center px-3 py-2 rounded-xl text-on-surface font-semibold transition-colors min-h-[44px] sm:min-h-0"
                       >
-                        <span className="font-semibold truncate">
-                          {hit.label}
-                        </span>
-                        {hit.row && (
-                          <span className="text-[11px] text-on-surface-variant ml-2 shrink-0">
-                            #{hit.row.id}
-                          </span>
-                        )}
-                      </Link>
+                        <span className="truncate">{hit.label}</span>
+                      </SlideLink>
                     ))}
                   </div>
                 </div>

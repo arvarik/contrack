@@ -174,7 +174,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         {/* Privacy line */}
-        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant border border-surface-container-high/40 leading-relaxed">
+        <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Only event times, titles, and participant
             email addresses are imported. Event notes and descriptions remain on
@@ -242,7 +242,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
               )}
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-on-surface-variant">
+          <p className="mt-1 text-xs text-on-surface-variant">
             From Google, Apple iCloud, Fastmail, or Outlook. Look for
             &quot;Secret address in iCal format&quot; in your calendar settings.
           </p>
@@ -266,13 +266,13 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           />
         </div>
 
-        {/* Initial lookback (for first run or backfill) */}
+        {/* How far back the first sync goes */}
         <div>
           <span className="block text-xs font-semibold text-on-surface mb-1">
-            Initial history lookback
+            First sync goes back
           </span>
           <Segmented<number>
-            label="Initial lookback"
+            label="First sync goes back"
             value={lookbackDays}
             onChange={setLookbackDays}
             options={[
@@ -315,7 +315,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
               htmlFor="connector-ghost-threshold"
               className="block text-xs font-semibold text-on-surface mb-1"
             >
-              Ghost contact threshold
+              Suggest a new person after
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -334,9 +334,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
                 }
                 className={cn(FORM_INPUT, "w-24")}
               />
-              <span className="text-xs text-on-surface-variant">
-                interactions
-              </span>
+              <span className="text-xs text-on-surface-variant">meetings</span>
             </div>
           </div>
         </div>
@@ -347,7 +345,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             <span className="block text-xs font-semibold text-on-surface">
               Include event descriptions
             </span>
-            <span className="block text-[11px] text-on-surface-variant">
+            <span className="block text-xs text-on-surface-variant">
               Imports agenda and notes text into interaction bodies.
             </span>
           </div>
@@ -372,7 +370,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-3 pt-4 border-t border-surface-container-high/40">
+        <div className="flex items-center justify-between gap-3 pt-2">
           <button
             type="button"
             onClick={handleTest}
