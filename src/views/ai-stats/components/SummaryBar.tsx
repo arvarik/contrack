@@ -45,7 +45,7 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
 
 function buildSummaryText(s: AIStatsSummary): string {
   const { session, tier } = s;
-  if (session.totalInvocations === 0) return "No AI activity recorded yet.";
+  if (session.totalInvocations === 0) return "No AI activity recorded yet";
 
   const parts: string[] = [];
   parts.push(

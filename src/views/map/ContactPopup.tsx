@@ -124,7 +124,7 @@ export const StackPopup = ({ stack, onSelect, onClose }: StackPopupProps) => {
         </ul>
         {hidden > 0 && (
           <p className="px-2 pt-1 text-xs text-on-surface-variant">
-            Showing {stack.contacts.length} of {stack.total}.
+            Showing {stack.contacts.length} of {stack.total}
           </p>
         )}
       </div>

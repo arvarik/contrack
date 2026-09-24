@@ -104,7 +104,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setFormError("Connector name cannot be empty.");
+      setFormError("Enter a name for this connector");
       return;
     }
 
@@ -150,7 +150,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
           <p>
             <strong>Privacy:</strong> Contrack connects directly to Google
             Workspace to sync contacts, email headers, and calendar events.
-            Nothing leaves this server unless you enable AI summaries.
+            Nothing leaves this server unless you enable AI summaries
           </p>
         </div>
 
@@ -174,8 +174,8 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth client ID and secret under Integrations in General first."
-                    : "Ask an administrator to add a Google OAuth client under Integrations in General."}
+                    ? "Add a Google OAuth client ID and secret under Integrations in General first"
+                    : "Ask an administrator to add a Google OAuth client under Integrations in General"}
                 </p>
               </div>
             </div>
@@ -207,7 +207,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </p>
                 <p className="text-xs text-on-surface-variant mt-0.5">
                   {connector?.lastError ||
-                    "Google no longer accepts this connection. Connect your account again."}
+                    "Google no longer accepts this connection. Connect your account again"}
                 </p>
               </div>
             </div>
@@ -232,7 +232,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 <span className="text-xs text-on-surface-variant block mt-0.5">
                   Summaries require reading email message bodies (gmail.readonly
                   scope). Without summaries, only message metadata headers are
-                  requested.
+                  requested
                 </span>
               </div>
               <Switch
@@ -321,7 +321,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </span>
                 <span className="text-xs text-on-surface-variant block mt-0.5">
                   Extracts brief notes from messages exchanged with known
-                  contacts.
+                  contacts
                 </span>
               </div>
               <Switch
@@ -338,6 +338,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               </span>
               <Segmented<number>
                 label="Sync schedule"
+                className="sm:w-fit"
                 value={intervalMinutes}
                 onChange={setIntervalMinutes}
                 options={[
@@ -356,6 +357,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               </span>
               <Segmented<number>
                 label="First sync goes back"
+                className="sm:w-fit"
                 value={lookbackDays}
                 onChange={setLookbackDays}
                 options={[
@@ -374,7 +376,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </span>
                 <span className="text-xs text-on-surface-variant block mt-0.5">
                   Consolidates daily emails with a contact into a single
-                  timeline row.
+                  timeline row
                 </span>
               </div>
               <Switch

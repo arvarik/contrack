@@ -171,7 +171,7 @@ export const ComponentShowcase = () => {
       >
         <PageHeader
           title="🎨 Design system showcase"
-          description="Living reference for the tokens, patterns and components. Dev-only, not included in production builds."
+          description="Living reference for the tokens, patterns and components. Dev-only, not included in production builds"
         />
 
         {/* ── Typography ────────────────────────────────────── */}
@@ -207,7 +207,7 @@ export const ComponentShowcase = () => {
               Body text uses <strong>Inter</strong> at{" "}
               <code className={KBD}>font-body</code> weight medium. This
               paragraph demonstrates the default reading style for all content
-              areas.
+              areas
             </p>
           </div>
         </Section>
@@ -277,7 +277,7 @@ export const ComponentShowcase = () => {
           <p className="text-sm text-on-surface-variant">
             A call to action has an edge under its face. It rises on hover and
             sinks on press, and a disabled one goes flat. The call site adds
-            layout only.
+            layout only
           </p>
           <div className="space-y-4">
             {BUTTONS.map(({ variant, label }) => (
@@ -347,7 +347,7 @@ export const ComponentShowcase = () => {
             Three kinds of surface, three hovers. A flat control takes the state
             layer, a card that is a control rises, and a static card has no
             hover. One selected look: the primary tint, on a row, a pill or a
-            nav item alike. No ring and no bar down the leading edge.
+            nav item alike. No ring and no bar down the leading edge
           </p>
           <Group title="Rows: state-layer and SELECTED_ROW">
             <div className="space-y-1 max-w-sm">
@@ -392,7 +392,7 @@ export const ComponentShowcase = () => {
               <div className={CARD}>
                 <Token>CARD</Token>
                 <p className="text-sm text-on-surface mt-2">
-                  A static card. No hover.
+                  A static card. No hover
                 </p>
               </div>
               <button
@@ -401,7 +401,7 @@ export const ComponentShowcase = () => {
               >
                 <Token>CARD_INTERACTIVE</Token>
                 <p className="text-sm text-on-surface mt-2">
-                  A card that is a control. It rises on hover.
+                  A card that is a control. It rises on hover
                 </p>
               </button>
               <button
@@ -410,13 +410,13 @@ export const ComponentShowcase = () => {
               >
                 <Token>lift</Token>
                 <p className="text-sm text-on-surface mt-2">
-                  A tile that is a control, smaller than a card. It rises 1 px.
+                  A tile that is a control, smaller than a card. It rises 1 px
                 </p>
               </button>
               <div className="glass-panel rounded-2xl p-6 shadow-xl">
                 <Token>glass-panel</Token>
                 <p className="text-sm text-on-surface mt-2">
-                  Floating UI only: modals and overlays.
+                  Floating UI only: modals and overlays
                 </p>
               </div>
             </div>
@@ -427,7 +427,7 @@ export const ComponentShowcase = () => {
         <Section title="Tones">
           <p className="text-sm text-on-surface-variant">
             A colour that means something comes from one map. A group&apos;s
-            dot, its rows&apos; glyph and its chips read from the same tone.
+            dot, its rows&apos; glyph and its chips read from the same tone
           </p>
           <div className="space-y-3">
             {TONES.map(({ tone, means }) => (
@@ -458,7 +458,7 @@ export const ComponentShowcase = () => {
                 Added by enrichment
               </span>
               <span className="text-sm text-on-surface-variant">
-                Marks what a model wrote. Never a selection.
+                Marks what a model wrote. Never a selection
               </span>
             </div>
           </Group>
@@ -488,7 +488,7 @@ export const ComponentShowcase = () => {
             <code className={KBD}>PAGE_X</code> and{" "}
             <code className={KBD}>PAGE_TOP</code>, so every title starts at the
             same height. A <code className={KBD}>suffix</code> continues the
-            title line in the variant ink: Pulse&apos;s day.
+            title line in the variant ink: Pulse&apos;s day
           </p>
         </Section>
 
@@ -498,14 +498,14 @@ export const ComponentShowcase = () => {
             <p className="text-sm text-on-surface">
               Ada met Charles <mark>Babbage</mark> at a party in 1833. A match
               is a plain <code className={KBD}>mark</code>, and the base layer
-              paints it.
+              paints it
             </p>
           </Group>
           <Group title="One focus ring">
             <p className="text-sm text-on-surface-variant mb-3">
               Tab through these. A control draws 2 px of the primary outside
               itself, and a text field draws it on its own edge. A composite
-              field puts <code className={KBD}>focus-frame</code> on the box.
+              field puts <code className={KBD}>focus-frame</code> on the box
             </p>
             <div className="focus-frame flex items-center gap-2 bg-surface-container-low rounded-xl pl-3 pr-1.5 py-1.5 max-w-md">
               <Search
@@ -617,7 +617,7 @@ export const ComponentShowcase = () => {
             level={3}
             icon={Search}
             title="No results"
-            body="Try another word, or clear the filters."
+            body="Try another word, or clear the filters"
           />
         </Section>
 
@@ -670,7 +670,7 @@ export const ComponentShowcase = () => {
           <div className="space-y-4">
             <p className="text-sm text-on-surface-variant">
               This modal has a built-in header with title and close button.
-              Focus is trapped — Tab cycles within the dialog.
+              Focus is trapped — Tab cycles within the dialog
             </p>
             <div>
               <label htmlFor="demo-focus" className={FORM_LABEL}>
@@ -724,7 +724,7 @@ export const ComponentShowcase = () => {
             <p className="text-sm text-on-surface-variant mb-4">
               Headless mode — children fill the entire modal. Consumer provides
               their own header. Demonstrates the{" "}
-              <code className={KBD}>size="lg"</code> variant (max-w-2xl).
+              <code className={KBD}>size="lg"</code> variant (max-w-2xl)
             </p>
             <button
               type="button"

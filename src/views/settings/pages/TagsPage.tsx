@@ -2,12 +2,14 @@
  * TagsPage — Manage, rename, merge, and delete contact tags.
  *
  * Lists all tags across the account's unarchived contacts with contact counts.
- * Supports inline renaming, merging tags into another, and deleting tags
- * across all contacts with confirmation.
+ * A tag's name is a link to the Network list filtered to it (`?tag=`), so a
+ * person can see who has it. Supports inline renaming, merging tags into
+ * another, and deleting tags across all contacts with confirmation.
  *
  * @module views/settings/pages/TagsPage
  */
 import React, { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertCircle,
   Check,
@@ -37,6 +39,7 @@ import {
   SEARCH_INPUT,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
@@ -142,15 +145,11 @@ export const TagsPage = () => {
           icon={AlertCircle}
           tone="error"
           title="Tags did not load"
-          body="Nothing has changed. Try again in a moment."
+          body="Nothing has changed. Try again in a moment"
           action={{ label: "Try again", onClick: () => void refetch() }}
         />
       ) : tags.length === 0 ? (
-        <EmptyState
-          icon={Tag}
-          title="No tags yet"
-          body="Tags you add to your contacts will appear here so you can rename, merge, or remove them."
-        />
+        <EmptyState icon={Tag} title="No tags yet" />
       ) : (
         <div className="space-y-4">
           {tags.length > 5 && (
@@ -171,7 +170,7 @@ export const TagsPage = () => {
           <div className={cn(CARD, "p-0 py-2")}>
             {filteredTags.length === 0 && (
               <p className="px-4 sm:px-6 py-4 text-sm text-on-surface-variant">
-                No tag matches &ldquo;{searchQuery.trim()}&rdquo;.
+                No tag matches &ldquo;{searchQuery.trim()}&rdquo;
               </p>
             )}
             {filteredTags.map((item) => {
@@ -227,17 +226,21 @@ export const TagsPage = () => {
                         </button>
                       </form>
                     ) : (
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className="font-semibold text-sm text-on-surface truncate">
+                      // The name and its count are one link, to the
+                      // Network list showing the contacts with the tag.
+                      <Link
+                        to={tagFilterPath(item.tag)}
+                        aria-label={`${item.tag}, ${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
+                        title="See who has this tag"
+                        className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
+                      >
+                        <span className="font-semibold text-sm text-on-surface truncate underline-offset-2 group-hover/tag:underline">
                           {item.tag}
                         </span>
-                        <span
-                          className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0"
-                          aria-label={`${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
-                        >
+                        <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
                           {item.count}
                         </span>
-                      </div>
+                      </Link>
                     )}
                   </div>
 
@@ -303,7 +306,7 @@ export const TagsPage = () => {
               All {mergeSource.count}{" "}
               {mergeSource.count === 1 ? "contact" : "contacts"} tagged with{" "}
               <strong>{mergeSource.tag}</strong> will be updated to the target
-              tag, and <strong>{mergeSource.tag}</strong> will be removed.
+              tag, and <strong>{mergeSource.tag}</strong> will be removed
             </p>
 
             <div>
@@ -364,7 +367,7 @@ export const TagsPage = () => {
           onClose={() => setTagToDelete(null)}
           onConfirm={handleConfirmDelete}
           title={`Delete tag "${tagToDelete.tag}"?`}
-          description={`Removes "${tagToDelete.tag}" from ${tagToDelete.count} ${tagToDelete.count === 1 ? "contact" : "contacts"}. The contacts themselves will not be deleted.`}
+          description={`Removes "${tagToDelete.tag}" from ${tagToDelete.count} ${tagToDelete.count === 1 ? "contact" : "contacts"}. The contacts themselves will not be deleted`}
           confirmLabel="Delete tag"
           tone="danger"
           busy={deleteMutation.isPending}

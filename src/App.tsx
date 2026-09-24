@@ -3,6 +3,7 @@ import {
   Routes,
   Route,
   Link,
+  Navigate,
   useMatch,
   useLocation,
 } from "react-router-dom";
@@ -21,12 +22,7 @@ import { Toaster } from "sonner";
 import { CorvidFlight } from "./components/brand/CorvidFlight";
 import React, { useState, useEffect, Suspense } from "react";
 
-import {
-  ContactList,
-  LIST_WIDTH,
-  LIST_WIDTH_KEY,
-  LIST_WIDTH_PROPERTY,
-} from "./views/contact-list";
+import { ContactList } from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
 import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
@@ -59,14 +55,10 @@ const SearchView = React.lazy(() =>
 const PulseView = React.lazy(() =>
   import("./views/pulse").then((m) => ({ default: m.PulseView || m.default })),
 );
-const TrackedContactsView = React.lazy(() =>
-  import("./views/TrackedContactsView").then((m) => ({
-    default: m.TrackedContactsView,
-  })),
-);
 
 import { Sidebar } from "./components/layout/Sidebar";
 import { ResizeHandle } from "./components/layout/ResizeHandle";
+import { LEFT_PANE } from "./components/layout/paneWidth";
 import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
 import { RouteFallback } from "./components/layout/RouteFallback";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
@@ -237,21 +229,28 @@ const ResponsiveLayout = () => {
   );
 
   const isDev = import.meta.env.DEV && location.pathname.startsWith("/dev");
-  // The Tracked contacts page is a Network sub-page with the whole main
-  // area, the way Pulse's duplicates page is. Network stays lit for it.
-  const isTrackedPage = location.pathname.startsWith("/tracked");
 
-  // Full-page views (cleanup, search, pulse, tracked, dev) take the full main area
-  if (isCleanup || isSearch || isPulse || isTrackedPage || isDev) {
+  // The Tracked contacts page is a settings page. Its old path, from
+  // bookmarks and from links made before it moved, leads there with its
+  // hash (`#at-risk`), so the group it named is still where it lands.
+  if (location.pathname === "/tracked") {
+    return (
+      <Navigate
+        to={{ pathname: "/settings/tracked", hash: location.hash }}
+        replace
+      />
+    );
+  }
+
+  // Full-page views (cleanup, search, pulse, dev) take the full main area
+  if (isCleanup || isSearch || isPulse || isDev) {
     const pageName = isCleanup
       ? NAMES.settings.label
       : isSearch
         ? NAMES.ask.label
         : isPulse
           ? NAMES.pulse.label
-          : isTrackedPage
-            ? NAMES.tracked.label
-            : "Component showcase";
+          : "Component showcase";
     return (
       <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <SkipLink />
@@ -292,16 +291,6 @@ const ResponsiveLayout = () => {
                   <RouteErrorBoundary viewName="Dashboard">
                     <Suspense fallback={<RouteFallback variant="pulse" />}>
                       <PulseView />
-                    </Suspense>
-                  </RouteErrorBoundary>
-                }
-              />
-              <Route
-                path="/tracked"
-                element={
-                  <RouteErrorBoundary viewName="TrackedContacts">
-                    <Suspense fallback={<RouteFallback variant="tracked" />}>
-                      <TrackedContactsView />
                     </Suspense>
                   </RouteErrorBoundary>
                 }
@@ -358,8 +347,9 @@ const ResponsiveLayout = () => {
         Below `lg` the list fills the row beside the sidebar rail (`flex-1`).
         It was `w-full`, the whole row, so from 768 px it ran 64 px past the
         window and cut off Import, New and the sort menu. From `lg` its width
-        is `--list-width`, which the handle after it sets before the first
-        paint and on each frame of a drag (`LIST_WIDTH` has the bounds).
+        is `--pane-width`, which the handle after it sets before the first
+        paint and on each frame of a drag (`LEFT_PANE` has the bounds, and
+        the Settings list shares them).
       */}
       <section
         id={
@@ -379,7 +369,7 @@ const ResponsiveLayout = () => {
         tabIndex={-1}
         className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
-        ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--list-width) bg-surface-container-lowest z-10 lg:z-[15]"}
+        ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--pane-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
       >
@@ -422,11 +412,9 @@ const ResponsiveLayout = () => {
             menu opens across the list. */}
         {!isMapActive && (
           <ResizeHandle
-            property={LIST_WIDTH_PROPERTY}
-            storageKey={LIST_WIDTH_KEY}
+            {...LEFT_PANE}
             label="Resize the contact list"
             className="hidden lg:block absolute inset-y-0 right-0"
-            {...LIST_WIDTH}
           />
         )}
       </section>

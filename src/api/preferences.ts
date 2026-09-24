@@ -123,6 +123,32 @@ export const DEFAULT_PREFERENCES: Preferences = {
   autoEnrich: false,
 };
 
+/**
+ * Whether a value is the default for its key.
+ *
+ * A setting a person changed and then set back by hand is stored again, at
+ * the default, so "stored" alone does not say "changed". Strings compare
+ * without case, since an accent can arrive in either, and objects by their
+ * JSON.
+ *
+ * @param key - The preference.
+ * @param value - Its value now.
+ * @returns True when the value is the default.
+ */
+export function isDefaultValue<K extends keyof Preferences>(
+  key: K,
+  value: Preferences[K],
+): boolean {
+  const fallback = DEFAULT_PREFERENCES[key];
+  if (typeof value === "string" && typeof fallback === "string") {
+    return value.toLowerCase() === fallback.toLowerCase();
+  }
+  if (typeof value === "object" || typeof fallback === "object") {
+    return JSON.stringify(value) === JSON.stringify(fallback);
+  }
+  return value === fallback;
+}
+
 export const fetchPreferences = (): Promise<PreferencesResponse> =>
   apiJson<PreferencesResponse>("/auth/preferences");
 

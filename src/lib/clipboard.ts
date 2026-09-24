@@ -35,4 +35,4 @@ export function copyToClipboard(text: string): Promise<void> {
 
 /** The message to show when the clipboard refuses. */
 export const CLIPBOARD_DENIED =
-  "Clipboard access denied — select the text and copy it by hand.";
+  "Clipboard access denied — select the text and copy it by hand";

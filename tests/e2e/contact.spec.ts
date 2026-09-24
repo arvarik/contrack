@@ -663,7 +663,7 @@ test.describe("the contact header", () => {
     await field.fill("zoe");
     await field.press("Enter");
     await expect(page.getByRole("alert")).toHaveText(
-      "That is not a web address.",
+      "That is not a web address",
     );
     await expect(field).toBeVisible();
 
@@ -682,7 +682,7 @@ test.describe("the contact header", () => {
     await field.fill("https://dropbox.com/s/zoe/");
     await field.press("Enter");
     await expect(page.getByRole("alert")).toHaveText(
-      "This contact already has that link.",
+      "This contact already has that link",
     );
     await field.press("Escape");
     await expect(add).toBeFocused();
@@ -968,7 +968,7 @@ test.describe("tracking", () => {
     test("puts the bulk bar in the column of cards, clear of the rail", async ({
       page,
     }) => {
-      await page.goto("/tracked");
+      await page.goto("/settings/tracked");
       const main = page.getByRole("main");
       await main.getByRole("button", { name: "Select", exact: true }).click();
       await expect(main.getByRole("button", { name: "Done" })).toBeFocused();

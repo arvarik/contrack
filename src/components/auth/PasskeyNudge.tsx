@@ -27,7 +27,7 @@ export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to add passkey. Try again.",
+            : "Failed to add passkey. Try again",
         );
       }
       setBusy(false);
@@ -47,7 +47,7 @@ export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
     <AuthShell
       icon={<KeyRound className="w-6 h-6" />}
       title="Sign in faster next time"
-      subtitle="Add a passkey and this device signs you in with Face ID, Touch ID or Windows Hello. Your password still works."
+      subtitle="Add a passkey and this device signs you in with Face ID, Touch ID or Windows Hello. Your password still works"
       onSubmit={(e) => {
         e.preventDefault();
         void handleAddPasskey();

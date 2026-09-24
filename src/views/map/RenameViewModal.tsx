@@ -35,7 +35,7 @@ export const RenameViewModal: React.FC<RenameViewModalProps> = ({
     if (!view) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Please enter a name for the view");
+      setError("Enter a name for the view");
       return;
     }
     if (trimmed.length > 60) {

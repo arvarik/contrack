@@ -830,7 +830,7 @@ export const CommandPalette = () => {
                         AI query mode
                       </p>
                       <p className="text-xs mb-4">
-                        Ask anything about your network in plain English.
+                        Ask anything about your network in plain English
                       </p>
                       <div className="space-y-1.5 text-left max-w-xs mx-auto">
                         {EXAMPLE_QUERIES.map((q) => (
@@ -969,7 +969,7 @@ export const CommandPalette = () => {
                   {semanticSearch.isError && (
                     <div role="alert" className="px-4 py-3 text-sm text-error">
                       {semanticSearch.error?.message ||
-                        "Search failed. Please try again."}
+                        "Search failed. Try again"}
                     </div>
                   )}
                   {aiQuery.length >= 3 &&
@@ -983,7 +983,7 @@ export const CommandPalette = () => {
                           No matches found
                         </p>
                         <p className="text-xs">
-                          Try rephrasing your query, or use the regular search.
+                          Try rephrasing your query, or use the regular search
                         </p>
                       </Command.Empty>
                     )}
@@ -1056,7 +1056,7 @@ export const CommandPalette = () => {
                   <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
                     {instantSearch.isFtsLoading
                       ? "Searching..."
-                      : "No results found."}
+                      : "No results found"}
                   </Command.Empty>
 
                   {instantSearch.results.length > 0 && (

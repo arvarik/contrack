@@ -15,6 +15,7 @@ import {
 } from "./localEmbeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
+import { roleVariants } from "../../ai/queryConstraints.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 
@@ -131,7 +132,10 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
 
   const locRe = buildMatcherRegex(plan.must.locationMatchers ?? []);
   const coRe = buildMatcherRegex(plan.must.companyMatchers ?? []);
-  const roleRe = buildMatcherRegex(plan.must.roleMatchers ?? []);
+  // A role also matches its other forms: "engineer" finds Engineering.
+  const roleRe = buildMatcherRegex(
+    (plan.must.roleMatchers ?? []).flatMap(roleVariants),
+  );
   const indRe = buildMatcherRegex(plan.must.industryMatchers ?? []);
   const temporal = plan.must.temporal;
 

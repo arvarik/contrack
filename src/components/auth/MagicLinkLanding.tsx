@@ -49,7 +49,7 @@ export const MagicLinkLanding = ({
             : (rateLimitMessage(err) ??
                 (err instanceof Error
                   ? err.message
-                  : "This sign-in link is no longer valid.")),
+                  : "This sign-in link is no longer valid")),
         );
       });
 
@@ -65,13 +65,13 @@ export const MagicLinkLanding = ({
         title="This sign-in link is no longer valid"
         subtitle={
           error ??
-          "The link has already been used or has expired. Sign-in links work for 15 minutes and can only be used once."
+          "The link has already been used or has expired. Sign-in links work for 15 minutes and can only be used once"
         }
         onSubmit={(event) => {
           event.preventDefault();
           onCancel();
         }}
-        footer="Sign-in links work once. You can request a new one from the sign-in screen."
+        footer="Sign-in links work once. You can request a new one from the sign-in screen"
       >
         <AuthSubmit>Back to sign in</AuthSubmit>
       </AuthShell>
@@ -81,7 +81,7 @@ export const MagicLinkLanding = ({
   return (
     <AuthShell
       title="Signing you in…"
-      subtitle="Verifying your sign-in link and preparing your session."
+      subtitle="Verifying your sign-in link and preparing your session"
       onSubmit={(e) => e.preventDefault()}
     >
       <div className="flex justify-center py-8">

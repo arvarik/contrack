@@ -155,8 +155,8 @@ export const AdjustPinModal = ({
       <div className="space-y-4">
         <p id={hintId} className="text-sm text-on-surface-variant text-pretty">
           {pin
-            ? "Drag the pin, tap or click the map, or move the pin with the arrow keys."
-            : "Tap or click the map to place the pin."}
+            ? "Drag the pin, tap or click the map, or move the pin with the arrow keys"
+            : "Tap or click the map to place the pin"}
         </p>
         <div className="h-[480px] max-h-[50dvh] w-full overflow-hidden rounded-2xl border border-surface-container-highest">
           <ContactMap

@@ -432,10 +432,10 @@ export const parseLinkedInCSV = (
 
           resolve(parsed);
         } catch {
-          reject(new Error("Failed to parse LinkedIn CSV structure."));
+          reject(new Error("Failed to parse LinkedIn CSV structure"));
         }
       },
-      error: () => reject(new Error("Failed to read CSV file.")),
+      error: () => reject(new Error("Failed to read CSV file")),
     });
   });
 };
@@ -480,7 +480,7 @@ export const parseFacebookJSON = (jsonData: string): ImportedContact[] => {
 
     if (friends.length === 0) {
       throw new Error(
-        'Could not find friends data in the JSON file. Expected a "friends_v2" or "friends" array.',
+        'Could not find friends data in the JSON file. Expected a "friends_v2" or "friends" array',
       );
     }
 
@@ -515,7 +515,7 @@ export const parseFacebookJSON = (jsonData: string): ImportedContact[] => {
     if ((e instanceof Error ? e.message : String(e)).includes("Could not find"))
       throw e;
     throw new Error(
-      "Failed to parse Facebook JSON. Ensure you uploaded the correct friends data file.",
+      "Failed to parse Facebook JSON. Ensure you uploaded the correct friends data file",
     );
   }
 };
@@ -600,10 +600,10 @@ export const parseGoogleCSV = (csvData: string): Promise<ImportedContact[]> => {
 
           resolve(parsed);
         } catch {
-          reject(new Error("Failed to parse Google Contacts CSV structure."));
+          reject(new Error("Failed to parse Google Contacts CSV structure"));
         }
       },
-      error: () => reject(new Error("Failed to read CSV file.")),
+      error: () => reject(new Error("Failed to read CSV file")),
     });
   });
 };
@@ -649,10 +649,10 @@ export const parseGenericCSV = (
 
           resolve(parsed);
         } catch {
-          reject(new Error("Failed to parse CSV structure."));
+          reject(new Error("Failed to parse CSV structure"));
         }
       },
-      error: () => reject(new Error("Failed to read CSV file.")),
+      error: () => reject(new Error("Failed to read CSV file")),
     });
   });
 };

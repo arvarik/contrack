@@ -46,10 +46,12 @@
  * `tests/e2e/contact.spec.ts` measures the box before and after.
  *
  * **Size.** 32 px tall, the height of `.btn-sm`, with tight sides, 13 px
- * bold type, a 14 px chevron and the 44 px tap box of `hit-area`. It is flat
- * and hovers with the one state layer, because it is a toggle's face, not a
- * call to action. The narrow header has room for the glyph and the chevron:
- * the word moves into the accessible name and the tooltip.
+ * bold type, a 12 px chevron and the 44 px tap box of `hit-area`: about
+ * 110 px wide at its widest word. It is flat and hovers with the one state
+ * layer, because it is a toggle's face, not a call to action. The menu is
+ * as slim as its words (11 rem, where other menus start at 13). The narrow
+ * header has room for the glyph and the chevron: the word moves into the
+ * accessible name and the tooltip.
  *
  * The `t` key stays a one-key toggle at the account's default cadence
  * (`useTrackShortcut`), as the palette's row is. The ring around the avatar
@@ -99,10 +101,11 @@ export const trackingLabel = (cadenceDays: number) =>
 const SIZER_WORDS = ["Track", ...CADENCE_DAYS.map(shortCadence)];
 
 /**
- * The shape: 32 px tall, 4 px corners, 13 px bold. The trigger's own padding
- * goes, and the sides are set here, a little tighter after the chevron.
+ * The shape: 32 px tall, 4 px corners, 13 px bold, 4 px between the parts.
+ * The trigger's own padding goes, and the sides are set here, a little
+ * tighter after the chevron.
  */
-const SHAPE = "h-8 gap-1.5 p-0 rounded-md text-[13px] leading-none font-bold";
+const SHAPE = "h-8 gap-1 p-0 rounded-md text-[13px] leading-none font-bold";
 
 /**
  * On: the selected tint. The ink stays on hover and while the menu is open,
@@ -178,9 +181,10 @@ export const TrackButton = ({
       items={items}
       align="end"
       className={className}
+      panelClassName="min-w-44"
       triggerClassName={cn(
         SHAPE,
-        compact ? "px-2" : "pl-2.5 pr-2",
+        compact ? "px-2" : "pl-2 pr-1.5",
         on ? ON : OFF,
       )}
       triggerContent={
@@ -207,7 +211,7 @@ export const TrackButton = ({
               </span>
             </span>
           )}
-          <ChevronDown aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+          <ChevronDown aria-hidden="true" className="w-3 h-3 shrink-0" />
         </>
       }
     />

@@ -25,17 +25,17 @@ export const NAMES = {
   network: {
     label: "Network",
     title: "Network",
-    description: "Everyone you keep in touch with.",
+    description: "Everyone you keep in touch with",
   },
   pulse: {
     label: "Pulse",
     title: "Pulse",
-    description: "Follow-ups that are due and relationships that need you.",
+    description: "Follow-ups that are due and relationships that need you",
   },
   map: {
     label: "Map",
     title: "Map",
-    description: "Your network by where people live and work.",
+    description: "Your network by where people live and work",
   },
   ask: {
     label: "Ask Contrack",
@@ -45,47 +45,47 @@ export const NAMES = {
   settings: {
     label: "Settings",
     title: "Settings",
-    description: "Your preferences, your data and this instance.",
+    description: "Your preferences, your data and this instance",
   },
   duplicates: {
     label: "Duplicates",
     title: "Duplicates",
-    description: "Find and merge contacts that are the same person.",
+    description: "Find and merge contacts that are the same person",
   },
   possibleDuplicates: {
     label: "Possible duplicates",
     title: "Possible duplicates",
-    description: "Pairs that may be the same person, waiting for a decision.",
+    description: "Pairs that may be the same person, waiting for a decision",
   },
   enrichment: {
     label: "Contact enrichment",
     title: "Contact enrichment",
-    description: "Research contacts on the web to fill in missing details.",
+    description: "Research contacts on the web to fill in missing details",
   },
   outgoingMail: {
     label: "Outgoing mail",
     title: "Outgoing mail",
-    description: "The mail server that sends invitations and password resets.",
+    description: "The mail server that sends invitations and password resets",
   },
   mcp: {
     label: "MCP and API",
     title: "MCP and API",
-    description: "Let Claude, Cursor and scripts use your CRM.",
+    description: "Let Claude, Cursor and scripts use your CRM",
   },
   connectors: {
     label: "Connectors",
     title: "Connectors",
-    description: "Calendar, mailbox and Google. Sync who you talk to.",
+    description: "Calendar, mailbox and Google. Sync who you talk to",
   },
   correspondents: {
     label: "Correspondents",
     title: "Correspondents",
-    description: "People you talk to who are not in Contrack yet.",
+    description: "People you talk to who are not in Contrack yet",
   },
   tracked: {
     label: "Tracked contacts",
     title: "Tracked contacts",
-    description: "Who you keep up with, and who you don't.",
+    description: "Who you keep up with, and who you don't",
   },
 } as const satisfies Record<string, DestinationName>;
 
@@ -97,4 +97,4 @@ export type DestinationKey = keyof typeof NAMES;
  * sentence, said the same in every place.
  */
 export const TRACKED_INTRO =
-  "Track the people you want to keep up with. Their score and their catch-ups follow.";
+  "Track the people you want to keep up with. Their score and their catch-ups follow";

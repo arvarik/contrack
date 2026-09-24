@@ -579,7 +579,7 @@ export const SearchView = () => {
                   <EmptyState
                     icon={SearchX}
                     title="No one matches"
-                    body="Try other words."
+                    body="Try other words"
                     className="tile-enter"
                   />
                 )}
@@ -601,7 +601,7 @@ export const SearchView = () => {
                     title="Search failed"
                     body={
                       (semanticSearch.error as Error)?.message ||
-                      "An unexpected error occurred."
+                      "An unexpected error occurred"
                     }
                     action={
                       submittedQuery

@@ -134,7 +134,7 @@ export const AISettingsView = () => {
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
             Add the services you have keys for. Keys are stored in this app's
-            local database and only ever sent to the provider they belong to.
+            local database and only ever sent to the provider they belong to
           </p>
 
           <div className="space-y-2">
@@ -339,7 +339,7 @@ export const AISettingsView = () => {
         <div className="space-y-4">
           <p className="text-sm text-on-surface-variant">
             Your key is stored locally in this app's database and never leaves
-            your machine except to call {keyModalProvider?.label}.
+            your machine except to call {keyModalProvider?.label}
           </p>
           <input
             type="password"
@@ -379,7 +379,7 @@ export const AISettingsView = () => {
         <div className="space-y-3">
           <p className="text-sm text-on-surface-variant">
             Works with Ollama, vLLM, LM Studio, llama.cpp, xAI, DeepSeek,
-            Mistral — anything speaking the OpenAI API format.
+            Mistral — anything speaking the OpenAI API format
           </p>
           {/* The two mistakes that make a working server look broken. Both
               produce the same "could not reach endpoint" error, and neither is
@@ -388,13 +388,13 @@ export const AISettingsView = () => {
             <li>
               End the URL with <code className="font-mono">/v1</code> — Ollama
               serves its OpenAI API at{" "}
-              <code className="font-mono">:11434/v1</code>, not at the root.
+              <code className="font-mono">:11434/v1</code>, not at the root
             </li>
             <li>
               Running Contrack in Docker?{" "}
               <code className="font-mono">localhost</code> means the container.
               Use <code className="font-mono">host.docker.internal</code> or the
-              machine&rsquo;s LAN address to reach a server on your host.
+              machine&rsquo;s LAN address to reach a server on your host
             </li>
           </ul>
           {(

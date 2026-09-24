@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </h1>
             <p className="text-on-surface-variant mb-6 text-sm">
               The application encountered an unexpected error. This has been
-              logged for review.
+              logged for review
             </p>
             {this.state.error && (
               <div className="bg-surface-container-highest p-4 rounded-xl text-left mb-6 overflow-x-auto text-xs font-mono text-error">

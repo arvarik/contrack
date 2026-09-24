@@ -5,7 +5,7 @@ export async function readNdjson(
   signal?: AbortSignal,
 ): Promise<void> {
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("The server returned an empty response.");
+  if (!reader) throw new Error("The server returned an empty response");
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
   let total = 0;
@@ -30,7 +30,7 @@ export async function readNdjson(
       }
       total += value.byteLength;
       if (total > 16 * 1024 * 1024)
-        throw new Error("The search response is too large.");
+        throw new Error("The search response is too large");
       buffer += decoder.decode(value, { stream: true });
       let newline: number;
       while ((newline = buffer.indexOf("\n")) !== -1) {
@@ -39,7 +39,7 @@ export async function readNdjson(
         consume(line);
       }
       if (buffer.length > 4 * 1024 * 1024)
-        throw new Error("The search response is too large.");
+        throw new Error("The search response is too large");
     }
   } finally {
     signal?.removeEventListener("abort", cancel);

@@ -38,12 +38,12 @@ export const ConnectionBanner = () => {
             <Icon className="w-4 h-4 shrink-0 text-warning" />
             <p className="flex-1 min-w-0 text-sm text-on-surface">
               <span className="font-bold">
-                {offline ? "You're offline." : "Can't reach Contrack."}
+                {offline ? "You're offline" : "Can't reach Contrack"}.
               </span>{" "}
               <span className="text-on-surface-variant">
                 {offline
-                  ? "Showing the last data loaded."
-                  : "The server may be restarting."}
+                  ? "Showing the last data loaded"
+                  : "The server may be restarting"}
               </span>
             </p>
             <button

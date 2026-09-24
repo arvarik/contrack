@@ -26,7 +26,7 @@ export const DuplicatesPage = () => {
         <PageHeader
           back={{ to: "/pulse", label: NAMES.pulse.label }}
           title={NAMES.possibleDuplicates.label}
-          description="Contacts that may be the same person. Merge or dismiss suggestions."
+          description="Contacts that may be the same person. Merge or dismiss suggestions"
         />
 
         <div className="w-full">

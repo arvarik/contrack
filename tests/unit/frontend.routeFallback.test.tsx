@@ -17,16 +17,13 @@ import { ASK_COLUMN } from "../../src/lib/styles";
 afterEach(cleanup);
 
 describe("RouteFallback", () => {
-  it.each<RouteFallbackVariant>([
-    "pulse",
-    "search",
-    "settings",
-    "tracked",
-    "map",
-  ])("draws the %s silhouette", (variant) => {
-    const { container } = render(<RouteFallback variant={variant} />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
-  });
+  it.each<RouteFallbackVariant>(["pulse", "search", "settings", "map"])(
+    "draws the %s silhouette",
+    (variant) => {
+      const { container } = render(<RouteFallback variant={variant} />);
+      expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    },
+  );
 
   it("draws Ask Contrack in the page's column, with the History button in the corner and no rail", () => {
     const { container } = render(<RouteFallback variant="search" />);

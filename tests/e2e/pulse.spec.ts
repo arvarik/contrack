@@ -601,7 +601,7 @@ test.describe("Pulse Office", () => {
     // next step by role, on the page surface and not in a card.
     const insight = page.locator('[data-card-id="insight"]');
     await expect(insight).toHaveText(
-      /Add an AI key to get one\.|Your admin has not added an AI key yet\./,
+      /Add an AI key to get one\.|Your admin has not added an AI key yet/,
     );
     const insightSurface = await insight.evaluate((el) => el.className);
     expect(insightSurface).not.toContain("bg-surface-container-lowest");
@@ -841,7 +841,7 @@ test.describe("Pulse Office", () => {
     await expect(card.getByText(/four weeks/)).toHaveCount(0);
     await expect(card.getByText(/in the last 30 days/)).toHaveCount(0);
     const manage = card.getByRole("link", { name: "Manage" });
-    await expect(manage).toHaveAttribute("href", "/tracked");
+    await expect(manage).toHaveAttribute("href", "/settings/tracked");
 
     // "1 to catch up" scrolls the queue to its Catch up heading.
     await card.getByRole("button", { name: "1 to catch up" }).click();
@@ -1150,7 +1150,7 @@ test.describe("Pulse on a phone", () => {
     await expect(page.getByTestId("hidden-cards-tray")).toHaveCount(0);
     await expect(
       page.getByText(
-        "Hold a card's handle, then drag it. Use the eye to hide one.",
+        "Hold a card's handle, then drag it. Use the eye to hide one",
       ),
     ).toBeVisible();
     await page.getByRole("button", { name: "Hide Keeping up" }).click();

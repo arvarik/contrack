@@ -77,6 +77,66 @@ const industryFamilies = [
   { pattern: /\bmaritime\b/i, aliases: ["Maritime"] },
 ] as const;
 
+/**
+ * The forms a role's last word takes in a job title, so the word a person
+ * asks with finds the word a title uses.
+ *
+ * The planner keeps a role only when its words are in the question, and the
+ * filters then matched them as whole words. So "engineer" never found a
+ * contact whose role is Engineering, "designers" never found Design, and
+ * "who works in marketing" never found a Marketer. Three pairs cover the
+ * titles people write:
+ *
+ *   - a person and a field: engineer and engineering, designer and design,
+ *     marketer and marketing, consultant and consulting;
+ *   - the plural of each;
+ *   - nothing for an acronym or a short word ("CEO", "GP", "VP").
+ *
+ * The first words of a phrase stay as they are: "Software Engineer" finds
+ * Software Engineering, and not every engineer. A field never takes its bare
+ * stem, so "accounting" does not find an Account Executive.
+ *
+ * @param matcher - A role matcher from the plan, such as "Designer".
+ * @returns The matcher and its other forms, lowercased, the matcher first.
+ */
+export function roleVariants(matcher: string): string[] {
+  const words = matcher.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const last = words.pop();
+  if (!last) return [];
+  const prefix = words.length ? `${words.join(" ")} ` : "";
+  const forms = new Set<string>([last]);
+  const isAcronym = matcher.trim().split(/\s+/).pop() === last.toUpperCase();
+  if (last.length > 3 && !isAcronym) {
+    const base = /[^s]s$/.test(last) ? last.slice(0, -1) : last;
+    forms.add(base);
+    if (base.endsWith("eer")) {
+      // engineer: engineering
+      forms.add(`${base}ing`);
+    } else if (base.endsWith("er")) {
+      // designer: design, designing
+      const root = base.slice(0, -2);
+      forms.add(root);
+      forms.add(`${root}ing`);
+    } else if (base.endsWith("ant")) {
+      // consultant: consulting
+      forms.add(`${base.slice(0, -3)}ing`);
+    } else if (base.endsWith("ing")) {
+      // engineering: engineer. marketing: marketer. consulting: consultant.
+      const root = base.slice(0, -3);
+      if (root.endsWith("eer")) forms.add(root);
+      forms.add(`${root}er`);
+      forms.add(`${root}ant`);
+    } else {
+      // design: designer
+      forms.add(`${base}er`);
+    }
+  }
+  const all = [...forms].flatMap((form) =>
+    /(?:s|ing)$/.test(form) ? [form] : [form, `${form}s`],
+  );
+  return [...new Set(all)].map((form) => `${prefix}${form}`);
+}
+
 function normalize(value: string): string {
   return value
     .toLowerCase()

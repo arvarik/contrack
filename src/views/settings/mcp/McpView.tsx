@@ -160,7 +160,7 @@ export const McpView: React.FC = () => {
                 </h3>
                 <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
                   The one address every MCP client and script uses, over
-                  streamable HTTP.
+                  streamable HTTP
                 </p>
               </div>
               <CopyButton
@@ -209,8 +209,8 @@ export const McpView: React.FC = () => {
               className="text-xs text-on-surface-variant text-pretty"
             >
               {authRequired
-                ? "The token stays on this page. It is never saved or sent anywhere, only put into the snippets below."
-                : "This Contrack does not ask anyone to sign in, so a client connects without a token. A token pasted here only fills in the snippets."}
+                ? "The token stays on this page. It is never saved or sent anywhere, only put into the snippets below"
+                : "This Contrack does not ask anyone to sign in, so a client connects without a token. A token pasted here only fills in the snippets"}
             </p>
           </div>
         </div>
@@ -225,19 +225,19 @@ export const McpView: React.FC = () => {
           <SnippetBlock
             id="claude-code"
             title="Claude Code"
-            description="Adds Contrack to the Claude Code command line."
+            description="Adds Contrack to the Claude Code command line"
             code={claudeCodeSnippet}
           />
           <SnippetBlock
             id="claude-desktop"
             title="Claude Desktop and Cursor"
-            description="Goes in the mcpServers part of the client's config, through the mcp-remote bridge."
+            description="Goes in the mcpServers part of the client's config, through the mcp-remote bridge"
             code={desktopSnippet}
           />
           <SnippetBlock
             id="curl"
             title="curl"
-            description="Sends one request, to check that the endpoint answers."
+            description="Sends one request, to check that the endpoint answers"
             code={curlSnippet}
           />
         </div>
@@ -251,7 +251,7 @@ export const McpView: React.FC = () => {
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
             {MCP_TOOLS.length} tools a client can call. A read-only tool changes
-            nothing.
+            nothing
           </p>
           {/* A table with no lines: the columns and the space between rows
               hold it. On a phone the access badge moves under the tool's
@@ -289,7 +289,10 @@ export const McpView: React.FC = () => {
                       <span className="block mt-1 sm:hidden">{access}</span>
                     </td>
                     <td className="py-2 pr-4 text-sm text-on-surface text-pretty">
-                      {tool.description}
+                      {/* The server writes each description for an AI
+                          client, in sentences. On this page it is a
+                          statement, so its last period goes. */}
+                      {tool.description.replace(/\.$/, "")}
                     </td>
                     <td className="py-2 text-right whitespace-nowrap hidden sm:table-cell">
                       {access}

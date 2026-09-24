@@ -53,19 +53,19 @@ describe("Frontend Connectors Components", () => {
       kind: "ics",
       label: "Calendar",
       description:
-        "Sync meetings and see what is coming up from a private ICS URL.",
+        "Sync meetings and see what is coming up from a private ICS URL",
       capabilities: { schedule: true },
     },
     {
       kind: "imap",
       label: "Mailbox (IMAP)",
-      description: "Sync sent and received mail headers from any IMAP account.",
+      description: "Sync sent and received mail headers from any IMAP account",
       capabilities: { schedule: true },
     },
     {
       kind: "google",
       label: "Google Workspace",
-      description: "Sync contacts, mail and calendar with Google.",
+      description: "Sync contacts, mail and calendar with Google",
       capabilities: { schedule: true },
     },
   ];
@@ -326,7 +326,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(testBtn);
 
       expect(
-        screen.getByText("Enter an ICS calendar URL before testing."),
+        screen.getByText("Enter an ICS calendar URL before testing"),
       ).toBeTruthy();
     });
 
@@ -486,7 +486,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.submit(form);
 
       expect(screen.getByRole("alert").textContent).toContain(
-        "Please enter a name for this connector.",
+        "Enter a name for this connector",
       );
 
       fireEvent.change(nameInput, { target: { value: "Valid Name" } });
@@ -495,7 +495,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.submit(form);
 
       expect(screen.getByRole("alert").textContent).toContain(
-        "Please enter a private ICS calendar URL.",
+        "Enter a private ICS calendar URL",
       );
     });
 
@@ -1068,7 +1068,7 @@ describe("Frontend Connectors Components", () => {
 
       expect(screen.getByText("No syncs yet")).toBeTruthy();
       expect(
-        screen.getByText("Each sync shows up here once the connector runs."),
+        screen.getByText("Each sync shows up here once the connector runs"),
       ).toBeTruthy();
     });
 

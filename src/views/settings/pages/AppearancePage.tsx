@@ -34,8 +34,8 @@ export const AppearancePage = () => {
           prefKey="theme"
           description={
             preferences.theme === "system"
-              ? `Following this device, which is currently ${mode}.`
-              : `Always ${preferences.theme}, whatever this device is set to.`
+              ? `Following this device, which is currently ${mode}`
+              : `Always ${preferences.theme}, whatever this device is set to`
           }
         >
           <Segmented
@@ -54,7 +54,7 @@ export const AppearancePage = () => {
           id="accent"
           title="Accent colour"
           prefKey="accent"
-          description="The colour of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark."
+          description="The colour of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
         >
           <AccentPicker
             value={preferences.accent}
@@ -69,8 +69,8 @@ export const AppearancePage = () => {
           prefKey="textScale"
           description={
             preferences.textScale === "large"
-              ? "One step larger everywhere, for easier reading."
-              : "The standard size."
+              ? "One step larger everywhere, for easier reading"
+              : "The standard size"
           }
         >
           <Segmented
@@ -90,8 +90,8 @@ export const AppearancePage = () => {
           prefKey="motion"
           description={
             preferences.motion === "reduced"
-              ? "Keeps animation to a minimum across the app."
-              : "Follows this device's reduced motion setting."
+              ? "Keeps animation to a minimum across the app"
+              : "Follows this device's reduced motion setting"
           }
         >
           <Segmented
@@ -109,18 +109,12 @@ export const AppearancePage = () => {
           id="mascot-motion"
           title="Corvid motion"
           prefKey="mascotMotion"
+          // The last sentence takes no period, so the one before it takes
+          // one only when the reduced motion sentence follows it.
           description={
-            <>
-              The bird blinks, hops and flies when you click it. Subtle keeps
-              the blinks and drops the flights.
-              {motionIsReduced && (
-                <>
-                  {" "}
-                  Motion is reduced, so the corvid stays still whatever you
-                  choose here.
-                </>
-              )}
-            </>
+            motionIsReduced
+              ? "The bird blinks, hops and flies when you click it. Subtle keeps the blinks and drops the flights. Motion is reduced, so the corvid stays still whatever you choose here"
+              : "The bird blinks, hops and flies when you click it. Subtle keeps the blinks and drops the flights"
           }
         >
           <Segmented
@@ -141,8 +135,8 @@ export const AppearancePage = () => {
           prefKey="listDensity"
           description={
             density === "compact"
-              ? "More contacts on a screen, with the same details."
-              : "Roomier rows that are easier to scan."
+              ? "More contacts on a screen, with the same details"
+              : "Roomier rows that are easier to scan"
           }
         >
           <Segmented

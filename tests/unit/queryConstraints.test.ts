@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { compileQueryPlan } from "../../server/ai/queryConstraints.ts";
+import {
+  compileQueryPlan,
+  roleVariants,
+} from "../../server/ai/queryConstraints.ts";
 import type { QueryPlan } from "../../server/ai/types.ts";
 
 function plan(must: QueryPlan["must"] = {}): QueryPlan {
@@ -413,5 +416,34 @@ describe("query constraint compilation", () => {
     expect(
       compileQueryPlan("People I have never contacted", plan()).must.temporal,
     ).toEqual({ type: "neverContacted" });
+  });
+});
+
+describe("role variants", () => {
+  it("finds a field from a person and a person from a field", () => {
+    expect(roleVariants("Engineer")).toContain("engineering");
+    expect(roleVariants("Engineering")).toContain("engineer");
+    expect(roleVariants("Designers")).toEqual(
+      expect.arrayContaining(["designer", "design"]),
+    );
+    expect(roleVariants("Design")).toContain("designer");
+    expect(roleVariants("Marketing")).toContain("marketer");
+    expect(roleVariants("Consultant")).toContain("consulting");
+  });
+
+  it("keeps the first words of a phrase, so a qualifier still narrows", () => {
+    const forms = roleVariants("Software Engineer");
+    expect(forms).toContain("software engineering");
+    expect(forms.every((form) => form.startsWith("software "))).toBe(true);
+  });
+
+  it("leaves an acronym and a short word with their plural alone", () => {
+    expect(roleVariants("CEO")).toEqual(["ceo", "ceos"]);
+    expect(roleVariants("GP")).toEqual(["gp", "gps"]);
+  });
+
+  it("never offers a field's bare stem", () => {
+    expect(roleVariants("Accounting")).not.toContain("account");
+    expect(roleVariants("Accounting")).toContain("accountant");
   });
 });

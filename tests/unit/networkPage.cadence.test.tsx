@@ -24,6 +24,7 @@ vi.mock("../../src/contexts/PreferencesContext", () => ({
   usePreferences: () => ({
     preferences: prefs.value,
     stored: [],
+    changed: [],
     setPreference: prefs.setPreference,
     resetPreference: vi.fn(),
   }),

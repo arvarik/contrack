@@ -85,6 +85,22 @@ const fixtures = [
     companies: ["Stripe", "Meta"],
     headlines: ["Payments", "Former Stripe engineer"],
   },
+  // A role word finds its other forms in a title: the person asks for
+  // engineers, and the contact's role is Engineering.
+  {
+    query: "Engineers at Acme",
+    roles: ["Engineering", "Sales"],
+    locations: ["London", "London"],
+    must: { roleMatchers: ["Engineer"], companyMatchers: ["Acme"] },
+    companies: ["Acme", "Acme"],
+  },
+  {
+    query: "Designers at Aperture",
+    roles: ["Design", "Marketing"],
+    locations: ["London", "London"],
+    must: { roleMatchers: ["Designer"], companyMatchers: ["Aperture"] },
+    companies: ["Aperture Science", "Aperture Science"],
+  },
   {
     query: "Fintech leaders in London",
     roles: ["Staff Software Engineer", "Junior Software Engineer"],

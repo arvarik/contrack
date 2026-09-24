@@ -50,7 +50,7 @@ export const Register = ({
       );
       if (photoFailed) {
         toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+          "Your account is ready. The photo did not upload. Add it in Settings > Account",
         );
       }
       onRegistered();
@@ -61,7 +61,7 @@ export const Register = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not create the account.")),
+                : "Could not create the account")),
       );
       setBusy(false);
     }
@@ -70,7 +70,7 @@ export const Register = ({
   return (
     <AuthShell
       title="Create an account"
-      subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs."
+      subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs"
       onSubmit={handleSubmit}
       footer={
         <>

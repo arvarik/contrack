@@ -272,7 +272,7 @@ const BackupCard = ({ health }: { health: InstanceHealth }) => {
         !backup ? (
           <p className="text-xs text-on-surface-variant text-pretty">
             No snapshot has been taken. Check that scheduled backups are
-            switched on, or take one from the Backups page.
+            switched on, or take one from the Backups page
           </p>
         ) : verification?.problem ? (
           <p className="text-xs text-error text-pretty">
@@ -339,7 +339,7 @@ const EmbeddingsCard = ({ health }: { health: InstanceHealth }) => {
       note={
         byUser.length === 0 ? (
           <p className="text-xs text-on-surface-variant">
-            No account owns a contact yet.
+            No account owns a contact yet
           </p>
         ) : undefined
       }
@@ -401,7 +401,7 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
       note={
         tiers.length === 0 ? (
           <p className="text-xs text-on-surface-variant">
-            Nothing has been cached since this process started.
+            Nothing has been cached since this process started
           </p>
         ) : undefined
       }
@@ -434,7 +434,7 @@ export const HealthView = () => {
           icon={AlertTriangle}
           tone="error"
           title="The instance could not be read"
-          body="That is itself worth knowing. Nothing here has changed."
+          body="That is itself worth knowing. Nothing here has changed"
           action={{ label: "Try again", onClick: () => void refetch() }}
         />
       )}
@@ -444,7 +444,7 @@ export const HealthView = () => {
           <p className="flex items-center gap-2 text-xs text-on-surface-variant">
             <Clock aria-hidden="true" className="w-3.5 h-3.5" />
             Started {formatRelative(health.startedAt, "unknown")}. Nothing here
-            is secret, so the page is safe to leave open.
+            is secret, so the page is safe to leave open
           </p>
           {/* Two columns in the settings box: three left a card too narrow
               for its title beside its badge. */}

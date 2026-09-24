@@ -159,7 +159,7 @@ export function extractGmailBody(
 export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
   kind: "google",
   label: "Google Workspace",
-  description: "Sync contacts, mail and calendar with Google.",
+  description: "Sync contacts, mail and calendar with Google",
   capabilities: {
     schedule: true,
     oauth: true,

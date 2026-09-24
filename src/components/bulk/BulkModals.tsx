@@ -57,7 +57,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
           </p>
           {lists.length === 0 && (
             <p className="text-sm text-on-surface-variant text-center py-4">
-              No lists yet. Create one first.
+              No lists yet. Create one first
             </p>
           )}
           {lists.map((list) => (

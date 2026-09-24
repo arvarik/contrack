@@ -309,6 +309,121 @@ describe("InteractionSearchPanel", () => {
     expect(screen.queryByText("Searching…")).toBeNull();
   });
 
+  it("keeps the last answer in place while the next loads, and swaps the cards once", async () => {
+    const KIM = {
+      ...HIT,
+      id: "note-2",
+      contactId: "contact-2",
+      title: "Lunch with Kim",
+      contact: { ...HIT.contact, id: "contact-2", name: "Kim Lee" },
+    };
+    let release: () => void = () => {};
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (!url.includes("/search/interactions"))
+          return Promise.resolve(answer());
+        calls += 1;
+        if (calls === 1) return Promise.resolve(answer());
+        return new Promise<Response>((resolve) => {
+          release = () => resolve(answer({ hits: [KIM] }));
+        });
+      }),
+    );
+    const { container } = mount("/search?mode=notes&q=hiring");
+    const card = (await screen.findByText("Sam Rivera")).closest("button");
+
+    fireEvent.change(screen.getByLabelText("Search your notes"), {
+      target: { value: "lunch" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    // The old card is the same element: it was not remounted to fade in
+    // again, and nothing says "Searching…" or spins for a wait this short.
+    expect(screen.getByText("Sam Rivera").closest("button")).toBe(card);
+    expect(screen.queryByText("Searching…")).toBeNull();
+    expect(container.querySelector("form .animate-spin")).toBeNull();
+
+    release();
+    await screen.findByText("Kim Lee");
+    expect(screen.queryByText("Sam Rivera")).toBeNull();
+  });
+
+  it("dims the old answer and spins the glyph only when the next is slow", async () => {
+    let release: () => void = () => {};
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (!url.includes("/search/interactions"))
+          return Promise.resolve(answer());
+        calls += 1;
+        if (calls === 1) return Promise.resolve(answer());
+        return new Promise<Response>((resolve) => {
+          release = () => resolve(answer({ total: 0, hits: [] }));
+        });
+      }),
+    );
+    const { container } = mount("/search?mode=notes&q=hiring");
+    await screen.findByText("Sam Rivera");
+    fireEvent.change(screen.getByLabelText("Search your notes"), {
+      target: { value: "zzqx" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() =>
+      expect(container.querySelector('[aria-busy="true"]')).not.toBeNull(),
+    );
+    expect(container.querySelector("form .animate-spin")).not.toBeNull();
+    // Still the old answer, dimmed, and no shimmer in its place.
+    expect(screen.getByText("Sam Rivera")).toBeTruthy();
+    expect(screen.queryByText("Searching…")).toBeNull();
+
+    release();
+    await screen.findByRole("heading", { name: "No notes match" });
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelector("form .animate-spin")).toBeNull();
+  });
+
+  it("starts a new question on the first page, with one request", async () => {
+    const urls = stubFetch(() => answer({ total: 45 }));
+    mount("/search?mode=notes&q=hiring");
+    await screen.findByText("Sam Rivera");
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(params(urls.at(-1)!).get("offset")).toBe("20"));
+
+    fireEvent.change(screen.getByLabelText("Search your notes"), {
+      target: { value: "coffee" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(params(urls.at(-1)!).get("q")).toBe("coffee"));
+    const forCoffee = urls.filter((url) => params(url).get("q") === "coffee");
+    expect(forCoffee).toHaveLength(1);
+    expect(params(forCoffee[0]).get("offset")).toBe("0");
+  });
+
+  it("does not ask for a stem, which the index finds by itself", async () => {
+    stubFetch(() =>
+      answer({
+        total: 0,
+        hits: [],
+        query: {
+          text: "hiring",
+          tokens: ["hiring"],
+          mode: "all",
+          phrase: null,
+          range: null,
+          timeZone: "America/Los_Angeles",
+        },
+      }),
+    );
+    mount("/search?mode=notes&q=hiring");
+    await screen.findByRole("heading", { name: "No notes match" });
+    expect(screen.getByText("Try fewer or other words")).toBeTruthy();
+    expect(screen.queryByText(/stem/)).toBeNull();
+  });
+
   it("announces a failure as an alert with the reason", async () => {
     stubFetch(
       () =>

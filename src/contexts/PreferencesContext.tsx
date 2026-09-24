@@ -40,6 +40,7 @@ import {
   DEFAULT_PREFERENCES,
   deletePreference,
   fetchPreferences,
+  isDefaultValue,
   savePreferences,
   type Preferences,
   type PreferencesResponse,
@@ -73,10 +74,17 @@ interface PreferencesContextValue {
   mode: ResolvedMode;
   /** The keys this account has actually chosen. */
   stored: (keyof Preferences)[];
+  /**
+   * The chosen keys whose value is not the default. A key set back to its
+   * default by hand is stored, and not changed.
+   */
+  changed: (keyof Preferences)[];
   setPreference: <K extends keyof Preferences>(
     key: K,
     value: Preferences[K],
   ) => void;
+  /** Set several keys in one request, such as an Undo of a reset. */
+  setPreferences: (patch: Partial<Preferences>) => void;
   resetPreference: (key: keyof Preferences) => void;
 }
 
@@ -85,7 +93,9 @@ const PreferencesContext = createContext<PreferencesContextValue>({
   isLoaded: false,
   mode: "light",
   stored: [],
+  changed: [],
   setPreference: () => {},
+  setPreferences: () => {},
   resetPreference: () => {},
 });
 
@@ -131,6 +141,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     [data?.preferences, fallback],
   );
   const stored = useMemo(() => data?.stored ?? [], [data?.stored]);
+  const changed = useMemo(
+    () => stored.filter((key) => !isDefaultValue(key, preferences[key])),
+    [stored, preferences],
+  );
 
   const mutation = useMutation({
     mutationFn: savePreferences,
@@ -159,7 +173,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Failed to save preference. Changes reverted.",
+          : "Failed to save preference. Changes reverted",
       );
     },
     onSuccess: (response) => {
@@ -200,7 +214,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Failed to reset preference. Changes reverted.",
+          : "Failed to reset preference. Changes reverted",
       );
     },
     onSuccess: (response) => {
@@ -219,18 +233,24 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   });
 
   const { mutate } = mutation;
-  const setPreference = useCallback(
-    <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
-      mutate({ [key]: value } as Partial<Preferences>);
-    },
+  const setPreferences = useCallback(
+    (patch: Partial<Preferences>) => mutate(patch),
     [mutate],
   );
-
-  const resetPreference = useCallback(
-    (key: keyof Preferences) => {
-      resetMutation.mutate(key);
+  const setPreference = useCallback(
+    <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+      setPreferences({ [key]: value } as Partial<Preferences>);
     },
-    [resetMutation],
+    [setPreferences],
+  );
+
+  // `mutate` is stable, the mutation object is not: a callback that closed
+  // over the object changed on every state of every reset, and with it the
+  // context value every consumer reads.
+  const { mutate: resetMutate } = resetMutation;
+  const resetPreference = useCallback(
+    (key: keyof Preferences) => resetMutate(key),
+    [resetMutate],
   );
 
   // ── The one-time move out of localStorage ────────────────────────────────
@@ -291,10 +311,21 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       isLoaded: isSuccess,
       mode,
       stored,
+      changed,
       setPreference,
+      setPreferences,
       resetPreference,
     }),
-    [preferences, isSuccess, mode, stored, setPreference, resetPreference],
+    [
+      preferences,
+      isSuccess,
+      mode,
+      stored,
+      changed,
+      setPreference,
+      setPreferences,
+      resetPreference,
+    ],
   );
 
   return (

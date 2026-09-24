@@ -120,7 +120,7 @@ export const useSemanticSearch = (externalState?: {
             const chunk = searchChunkSchema.parse(value);
             if (chunk.phase === "error") throw new Error(chunk.error);
             if (complete)
-              throw new Error("The server sent data after search completed.");
+              throw new Error("The server sent data after search completed");
             setData({
               query,
               matches:
@@ -134,9 +134,7 @@ export const useSemanticSearch = (externalState?: {
           controller.signal,
         );
         if (!complete)
-          throw new Error(
-            "The search connection ended early. Please try again.",
-          );
+          throw new Error("The search connection ended early. Try again");
       } catch (cause) {
         if (current()) {
           setError(cause instanceof Error ? cause : new Error("Search failed"));

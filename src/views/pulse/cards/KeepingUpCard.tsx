@@ -121,7 +121,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
           body={TRACKED_INTRO}
           action={{
             label: "Choose people",
-            onClick: () => navigate("/tracked"),
+            onClick: () => navigate("/settings/tracked"),
           }}
         />
       </CardFrame>
@@ -140,7 +140,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
       title="Keeping up"
       count={count}
       headerAction={
-        <Link to="/tracked" className={BTN_QUIET}>
+        <Link to="/settings/tracked" className={BTN_QUIET}>
           Manage
         </Link>
       }
@@ -168,7 +168,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
               bands[s.key] > 0 ? (
                 <li key={s.key}>
                   <Link
-                    to={`/tracked#${s.hash}`}
+                    to={`/settings/tracked#${s.hash}`}
                     className="hit-area inline-flex items-center gap-1.5 font-medium hover:text-primary transition-colors"
                   >
                     <span

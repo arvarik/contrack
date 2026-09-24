@@ -225,7 +225,7 @@ export const LocationMiniMap = ({
             <InfoTip label="About Placed by hand">
               A person put this pin here, so the geocoder will not move it. It
               reads the address again only when the address changes, or when you
-              choose "Use address again" under Adjust pin.
+              choose "Use address again" under Adjust pin
             </InfoTip>
           </span>
         )}

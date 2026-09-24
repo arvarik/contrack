@@ -91,7 +91,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
   const handleTest = async () => {
     setFormError(null);
     if (!url.trim()) {
-      setFormError("Enter an ICS calendar URL before testing.");
+      setFormError("Enter an ICS calendar URL before testing");
       return;
     }
     try {
@@ -121,11 +121,11 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     const trimmedUrl = url.trim();
 
     if (!trimmedName) {
-      setFormError("Please enter a name for this connector.");
+      setFormError("Enter a name for this connector");
       return;
     }
     if (!trimmedUrl) {
-      setFormError("Please enter a private ICS calendar URL.");
+      setFormError("Enter a private ICS calendar URL");
       return;
     }
 
@@ -178,7 +178,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           <p>
             <strong>Privacy:</strong> Only event times, titles, and participant
             email addresses are imported. Event notes and descriptions remain on
-            your device unless you opt in below.
+            your device unless you opt in below
           </p>
         </div>
 
@@ -244,7 +244,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </div>
           <p className="mt-1 text-xs text-on-surface-variant">
             From Google, Apple iCloud, Fastmail, or Outlook. Look for
-            &quot;Secret address in iCal format&quot; in your calendar settings.
+            &quot;Secret address in iCal format&quot; in your calendar settings
           </p>
         </div>
 
@@ -255,6 +255,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </span>
           <Segmented<number>
             label="Sync schedule"
+            className="sm:w-fit"
             value={intervalMinutes}
             onChange={setIntervalMinutes}
             options={[
@@ -273,6 +274,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </span>
           <Segmented<number>
             label="First sync goes back"
+            className="sm:w-fit"
             value={lookbackDays}
             onChange={setLookbackDays}
             options={[
@@ -346,7 +348,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
               Include event descriptions
             </span>
             <span className="block text-xs text-on-surface-variant">
-              Imports agenda and notes text into interaction bodies.
+              Imports agenda and notes text into interaction bodies
             </span>
           </div>
           <Switch

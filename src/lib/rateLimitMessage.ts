@@ -25,9 +25,9 @@ import { ApiError, rateLimitFacts } from "../api/client";
 export type LimitedWork = "scan" | "enrichment" | "request";
 
 const OTHERS_WORK: Record<LimitedWork, string> = {
-  scan: "Another user's scan is running.",
-  enrichment: "Another user's enrichment is running.",
-  request: "Another user is using this right now.",
+  scan: "Another user's scan is running",
+  enrichment: "Another user's enrichment is running",
+  request: "Another user is using this right now",
 };
 
 /**
@@ -54,11 +54,11 @@ export function rateLimitMessage(
 
   if (!facts.yours) {
     return facts.queued
-      ? `${OTHERS_WORK[work]} Yours will start automatically.`
-      : `${OTHERS_WORK[work]} Try again in a moment.`;
+      ? `${OTHERS_WORK[work]}. Yours will start automatically`
+      : `${OTHERS_WORK[work]}. Try again in a moment`;
   }
 
   const seconds = facts.retryAfterSeconds;
-  if (seconds === undefined) return "Too many requests. Try again shortly.";
-  return `Too many requests. Try again in ${seconds} second${seconds === 1 ? "" : "s"}.`;
+  if (seconds === undefined) return "Too many requests. Try again shortly";
+  return `Too many requests. Try again in ${seconds} second${seconds === 1 ? "" : "s"}`;
 }

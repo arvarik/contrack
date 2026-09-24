@@ -63,10 +63,10 @@ export const SkeletonWords = ({
 /**
  * An insight of a common length, the shape of the paragraph before its words
  * arrive. The model writes one or two sentences, and they run to about 300
- * characters: this one is 308, the one it wrote on the seed data 320.
+ * characters: this one is 307, the one it wrote on the seed data 320.
  */
 const TYPICAL_INSIGHT =
-  "Most of the people you added this month have no follow-up yet, and your time goes to the same few names while three of your strongest ties, all founders you met at the spring summit, have been quiet for more than two months. A short note to each of them this week would keep those ties warm before they fade.";
+  "Most of the people you added this month have no follow-up yet, and your time goes to the same few names while three of your strongest ties, all founders you met at the spring summit, have been quiet for more than two months. A short note to each of them this week would keep those ties warm before they fade";
 
 /**
  * The body of the insight card before its words arrive: the category and the

@@ -743,7 +743,7 @@ describe("the page", () => {
       name: "No one matches",
     });
     const state = heading.parentElement as HTMLElement;
-    expect(within(state).getByText("Try other words.")).toBeTruthy();
+    expect(within(state).getByText("Try other words")).toBeTruthy();
     expect(within(state).queryByRole("button")).toBeNull();
   });
 });

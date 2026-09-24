@@ -1,8 +1,35 @@
 /**
- * DuplicatesPage — Find and merge duplicate contacts, automatically or by hand.
+ * DuplicatesPage — find and merge contacts that are the same person.
  *
- * Wraps DedupeView with the review strip, auto-merge sensitivity, and automatic
- * duplicate checking switches above the deduplication engine.
+ * The tool comes first, and what runs by itself comes after it, the way
+ * Google Contacts, HubSpot and Dex lay out their duplicates pages:
+ *
+ * ```
+ * Duplicates                                              [ ⟲ ]
+ * Find and merge contacts that are the same person
+ *
+ * ┌ 4 possible duplicates ─────────────────── Review them → ┐   when any wait
+ * [ Scan | Manual merge ]
+ * ┌──────────────────────────────────────────────────────────┐
+ * │ ◉ Quick scan     ○ Smart scan     ○ Full scan            │
+ * │                                            [ Scan now ]  │
+ * └──────────────────────────────────────────────────────────┘
+ * AUTOMATIC MERGING
+ * ┌──────────────────────────────────────────────────────────┐
+ * │ Auto-merge sensitivity           [Cautious|Balanced|Eager] │
+ * │ Check new contacts automatically                     (•) │
+ * │ Check imports automatically                          (•) │
+ * └──────────────────────────────────────────────────────────┘
+ * ```
+ *
+ * The three settings used to sit in a card above the tool, and the tool
+ * opened on a hero with a large icon that repeated the page's title. Merge
+ * activity, the history of what was merged and undone, is the square button
+ * in the header's corner at every width, the way Ask Contrack's History is.
+ *
+ * The page is a block in the shell's one scroller, like every settings
+ * page, so the shell draws Reset to defaults under it while a setting here
+ * is changed.
  *
  * @module views/settings/pages/DuplicatesPage
  */
@@ -12,41 +39,27 @@ import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
 import { SettingRow } from "../SettingRow";
 import { SettingsHeaderActions } from "../SettingsHeader";
-import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useDedupeOptional } from "../../../contexts/DedupeContext";
 import { useDedupeCount } from "../../../api";
-import { PAGE_X } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { SETTINGS_CARD } from "../layout";
+import {
+  SETTINGS_CARD,
+  SETTINGS_PAGE,
+  SETTINGS_SECTION_HEADING,
+} from "../layout";
 import { SettingsCallout } from "../SettingsCallout";
 
 const DEDUPE_PRESET_COPY = {
   conservative:
-    "Auto-merges only pairs at 97%+ confidence. Fewest merges; most left for review.",
-  default: "Auto-merges pairs at 93%+ confidence.",
+    "Merges a pair by itself at 97% confidence or more, and leaves the most for you",
+  default: "Merges a pair by itself at 93% confidence or more",
   aggressive:
-    "Auto-merges pairs at 88%+ confidence. Fewer to review; more misfires to undo.",
+    "Merges a pair by itself at 88% confidence or more, with more to undo",
 } as const;
-
-/**
- * The page's one column: the settings box's width, centred, as the shell's
- * header is (`boxed` in the registry), so the title and the cards start at
- * the same place as on every other settings page. The settings card and the
- * dedupe tool both sit in it, so the page has one left edge and one width at
- * every size. The page still owns its scrolling: its scroller spans the
- * pane, so the sticky controls stick to the screen.
- *
- * The page is one scroller at every width: the settings card and the tool
- * scroll together. From `sm` the card used to stay put and the tool scrolled
- * under it, which at 900 px tall left the manual merge's contact list about
- * 150 px, two rows, in a box inside a box. On a phone the card had scrolled
- * on its own before that, and a flick caught one box and the page stopped.
- */
-const COLUMN = "max-w-4xl w-full mx-auto";
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
@@ -57,57 +70,45 @@ export const DuplicatesPage = () => {
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
 
   return (
-    // The scroller keeps its bar's lane, as the shell's does, so the cards
-    // sit under the title whether or not the page scrolls.
-    <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
-      {/* Below sm the tool's Merge activity button gives way to this menu
-          in the header, beside the title. */}
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <SettingsHeaderActions>
-        <div className="sm:hidden">
-          <ActionMenu
-            label="Duplicates actions"
-            items={[
-              {
-                id: "merge-activity",
-                label: "Merge activity",
-                icon: History,
-                onSelect: () => dedupe?.setShowActivity(true),
-              },
-            ]}
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => dedupe?.setShowActivity(true)}
+          aria-label="Merge activity"
+          title="Merge activity"
+          aria-haspopup="dialog"
+          className="btn-secondary btn-icon shrink-0"
+        >
+          <History className="w-5 h-5" aria-hidden="true" />
+        </button>
       </SettingsHeaderActions>
 
-      <div className={cn(PAGE_X, COLUMN, "pt-4 pb-4")}>
-        {/* Review strip */}
-        {dedupeCount > 0 && (
-          <SettingsCallout
-            icon={Copy}
-            title={`${dedupeCount} possible duplicate${dedupeCount === 1 ? "" : "s"}`}
-            body="Pairs that may be the same person, waiting for you to decide."
-            className="mb-4"
-          >
-            <Link to="/pulse/duplicates" className="btn-primary btn-sm">
-              Review them
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </SettingsCallout>
-        )}
+      {dedupeCount > 0 && (
+        <SettingsCallout
+          icon={Copy}
+          title={`${dedupeCount} possible duplicate${dedupeCount === 1 ? "" : "s"}`}
+          body="Pairs that may be the same person, waiting for you to decide"
+        >
+          <Link to="/pulse/duplicates" className="btn-primary btn-sm">
+            Review them
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </SettingsCallout>
+      )}
 
+      <DedupeView />
+
+      <section aria-labelledby="automatic-merging">
+        <h2 id="automatic-merging" className={SETTINGS_SECTION_HEADING}>
+          Automatic merging
+        </h2>
         <div className={SETTINGS_CARD}>
           <SettingRow
             id="sensitivity"
             title="Auto-merge sensitivity"
             prefKey="dedupePreset"
-            description={
-              <>
-                <span className="block">{DEDUPE_PRESET_COPY[preset]}</span>
-                <span className="block mt-1">
-                  Applies to scans you start, to imports, and to the check that
-                  runs after you add a contact. Every auto-merge is undoable.
-                </span>
-              </>
-            }
+            description={`${DEDUPE_PRESET_COPY[preset]}. It applies to scans, imports and new contacts, and every merge can be undone`}
           >
             <Segmented
               label="Auto-merge sensitivity"
@@ -125,7 +126,7 @@ export const DuplicatesPage = () => {
             id="dedupe-on-create"
             title="Check new contacts automatically"
             prefKey="dedupeOnCreate"
-            description="Runs a few seconds after you add one."
+            description="A few seconds after you add one"
             inline
           >
             <Switch
@@ -139,7 +140,7 @@ export const DuplicatesPage = () => {
             id="dedupe-on-import"
             title="Check imports automatically"
             prefKey="dedupeOnImport"
-            description="Scans every import when it finishes."
+            description="When each import finishes"
             inline
           >
             <Switch
@@ -149,13 +150,7 @@ export const DuplicatesPage = () => {
             />
           </SettingRow>
         </div>
-      </div>
-
-      {/* The same column. The tool's rows carry their own gutters, and it
-          takes its own height, so the page scrolls it. */}
-      <div className={cn(COLUMN, "relative")}>
-        <DedupeView />
-      </div>
+      </section>
     </div>
   );
 };

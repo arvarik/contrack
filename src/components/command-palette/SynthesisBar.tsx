@@ -134,9 +134,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         controller.signal,
       );
       if (!complete)
-        throw new Error(
-          "The summary connection ended early. Please try again.",
-        );
+        throw new Error("The summary connection ended early. Try again");
     } catch (err: unknown) {
       if (!controller.signal.aborted && abortRef.current === controller) {
         setErrorMessage(

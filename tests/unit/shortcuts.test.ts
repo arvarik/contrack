@@ -7,20 +7,30 @@
 // two actions on the same keys, a row with nothing to press, a switch that
 // gates the wrong shortcuts, and a destination under an old name.
 // =============================================================================
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import {
+  COMMON_GROUPS,
   SHORTCUTS,
   SHORTCUT_GROUP_ORDER,
   groupedShortcuts,
   isCombination,
+  isOnPage,
+  pageShortcutGroups,
   type Shortcut,
 } from "../../src/lib/shortcuts";
 import { KeyboardShortcutsModal } from "../../src/components/KeyboardShortcutsModal";
 
+const keys = vi.hoisted(() => ({ single: true }));
+vi.mock("../../src/hooks/useSingleKeyShortcuts", () => ({
+  useSingleKeyShortcuts: () => keys.single,
+}));
+
 afterEach(() => {
   cleanup();
+  keys.single = true;
 });
 
 const MODIFIERS = ["⌘", "⇧", "⌥", "⌃", "ctrl", "alt"];
@@ -137,22 +147,99 @@ describe("the shortcuts table", () => {
   });
 });
 
+describe("the shortcuts for a page", () => {
+  it("keeps the list on screen beside a contact, and the contact over the map", () => {
+    expect(isOnPage("/", "/")).toBe(true);
+    expect(isOnPage("/", "/contact/ada")).toBe(true);
+    expect(isOnPage("/contact/:id", "/contact/ada")).toBe(true);
+    expect(isOnPage("/contact/:id", "/map/contact/ada")).toBe(true);
+    expect(isOnPage("/map", "/map/contact/ada")).toBe(true);
+    expect(isOnPage("/pulse", "/pulse/duplicates")).toBe(false);
+    expect(isOnPage("/", "/pulse")).toBe(false);
+  });
+
+  it("puts the open contact's group first", () => {
+    const groups = (path: string) =>
+      pageShortcutGroups(path).map(({ group }) => group);
+    expect(groups("/contact/ada")).toEqual(["Contact", "Network"]);
+    expect(groups("/map/contact/ada")).toEqual(["Contact", "Map"]);
+    expect(groups("/pulse")).toEqual(["Pulse"]);
+    expect(groups("/pulse/duplicates")).toEqual(["Possible duplicates"]);
+    expect(groups("/settings/duplicates")).toEqual(["Duplicates"]);
+    expect(groups("/settings/appearance")).toEqual([]);
+  });
+
+  it("gives every page shortcut a page it can be found on", () => {
+    for (const entry of SHORTCUTS) {
+      if (!entry.page) {
+        expect(COMMON_GROUPS, entry.description).toContain(entry.group);
+        continue;
+      }
+      const sample = entry.page.replace(":id", "ada");
+      expect(isOnPage(entry.page, sample), entry.description).toBe(true);
+    }
+  });
+});
+
 describe("the shortcuts dialog", () => {
-  it("shows every group heading from the table when open", () => {
+  const open = (path: string) =>
     render(
-      React.createElement(KeyboardShortcutsModal, {
-        isOpen: true,
-        onClose: () => {},
-      }),
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: [path] },
+        React.createElement(KeyboardShortcutsModal, {
+          isOpen: true,
+          onClose: () => {},
+        }),
+      ),
     );
-    const list = within(screen.getByRole("dialog")).getByRole("region", {
+  const list = () =>
+    within(screen.getByRole("dialog")).getByRole("region", {
       name: "Shortcut list",
     });
-    for (const group of SHORTCUT_GROUP_ORDER) {
-      expect(within(list).getByText(group)).toBeTruthy();
+
+  it("shows the shortcuts that work everywhere, and the page's own", () => {
+    open("/");
+    for (const group of [...COMMON_GROUPS, "Network"]) {
+      expect(within(list()).getByText(group)).toBeTruthy();
     }
     expect(
-      within(list).getByText("Move through the contact list"),
+      within(list()).getByText("Move through the contact list"),
     ).toBeTruthy();
+    // Another page's keys are not on this one.
+    expect(within(list()).queryByText("Pulse")).toBeNull();
+    expect(within(list()).queryByText("Fit all in view")).toBeNull();
+  });
+
+  it("changes its page column with the page", () => {
+    open("/map");
+    expect(within(list()).getByText("Fit all in view")).toBeTruthy();
+    expect(within(list()).queryByText("New contact")).toBeNull();
+  });
+
+  it("says a page with no keys of its own has none", () => {
+    open("/settings/appearance");
+    expect(within(list()).getByText("No shortcuts of its own")).toBeTruthy();
+    expect(within(list()).getByText("Go to Network")).toBeTruthy();
+  });
+
+  it("links to every shortcut in Settings, Keyboard", () => {
+    open("/");
+    expect(
+      screen.getByRole("link", { name: "All shortcuts" }).getAttribute("href"),
+    ).toBe("/settings/keyboard");
+  });
+
+  it("dims the single keys when the switch is off, and says how to turn them on", () => {
+    keys.single = false;
+    open("/");
+    const row = within(list())
+      .getByText(/^New contact/)
+      .closest("div")!;
+    expect(row.className).toContain("opacity-50");
+    expect(row.textContent).toContain("off");
+    expect(
+      screen.getByRole("link", { name: "Turn them on" }).getAttribute("href"),
+    ).toBe("/settings/keyboard#single-key-shortcuts");
   });
 });

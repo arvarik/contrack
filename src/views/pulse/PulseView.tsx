@@ -546,7 +546,7 @@ const PulseOffice = () => {
           icon={HeartPulse}
           tone="error"
           title="System disconnected"
-          body="Failed to load the relationship pulse dashboard."
+          body="Failed to load the relationship pulse dashboard"
         />
       </div>
     );
@@ -680,11 +680,11 @@ const PulseOffice = () => {
               <span className="text-on-surface-variant">
                 {" · "}
                 <span className="hidden sm:inline">
-                  Drag a card by its handle to move it. Use the eye to hide one.
+                  Drag a card by its handle to move it. Use the eye to hide one
                 </span>
                 <span className="sm:hidden">
                   Hold a card&apos;s handle, then drag it. Use the eye to hide
-                  one.
+                  one
                 </span>
               </span>
             </p>

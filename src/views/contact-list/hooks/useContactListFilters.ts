@@ -8,6 +8,9 @@
  *    Uses `useDeferredValue` so the expensive scoring pass never blocks the input.
  * 2. **List filter** — URL-persisted via `?list=` param. The value `tracked`
  *    is not a list: it keeps the contacts a person tracks (the Tracked chip).
+ *    `?tag=` keeps the contacts with one tag, which is where a tag on the
+ *    Tags settings page leads. The tag is one more filter mode
+ *    (`tag:investor`), so every other chip replaces it.
  * 3. **Sort** — One of the sort menu's four choices, kept for the session.
  *
  * @returns Filtered, sorted contacts + all state setters for the UI to wire up.
@@ -68,6 +71,26 @@ export const SESSION_SORT_KEY = "contrack.network_sort";
 /** The `filterMode` of the Tracked chip: the people a person keeps up with. */
 export const TRACKED_FILTER = "tracked";
 
+/** The `filterMode` of one tag, `tag:investor`, read from `?tag=investor`. */
+export const TAG_FILTER_PREFIX = "tag:";
+
+/**
+ * The link to the Network list filtered to one tag.
+ *
+ * @param tag - The tag, as it is written on the contacts.
+ * @returns A path with the tag in `?tag=`.
+ */
+export const tagFilterPath = (tag: string) =>
+  `/?tag=${encodeURIComponent(tag)}`;
+
+/** Whether a contact has the tag, in any case. */
+export const hasTag = (contact: Contact, tag: string) => {
+  const wanted = tag.toLowerCase();
+  return (contact.tags ?? []).some(
+    (entry) => entry.tag.toLowerCase() === wanted,
+  );
+};
+
 function getSessionSort(): SortOption | null {
   try {
     const raw = sessionStorage.getItem(SESSION_SORT_KEY);
@@ -93,14 +116,19 @@ export function useContactListFilters(contacts: Contact[]) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── URL-persisted list filter ─────────────────────────────────────────
-  const filterMode = searchParams.get("list") ?? "all";
+  const tag = searchParams.get("tag");
+  const filterMode = tag
+    ? `${TAG_FILTER_PREFIX}${tag}`
+    : (searchParams.get("list") ?? "all");
 
   const setFilterMode = useCallback(
     (mode: string) => {
       setSearchParams(
         (prev) => {
           const params: Record<string, string> = {};
-          if (mode !== "all") params.list = mode;
+          if (mode.startsWith(TAG_FILTER_PREFIX)) {
+            params.tag = mode.slice(TAG_FILTER_PREFIX.length);
+          } else if (mode !== "all") params.list = mode;
           // Preserve existing search query when changing filters
           const q = prev.get("q");
           if (q) params.q = q;
@@ -226,9 +254,12 @@ export function useContactListFilters(contacts: Contact[]) {
       (contact) => !contact.isArchived && !contact.isGhost,
     );
 
-    // 1. Apply the Tracked chip, or a list filter
+    // 1. Apply the Tracked chip, a tag, or a list filter
     if (filterMode === TRACKED_FILTER) {
       result = result.filter((contact) => contact.isTracked);
+    } else if (filterMode.startsWith(TAG_FILTER_PREFIX)) {
+      const wanted = filterMode.slice(TAG_FILTER_PREFIX.length);
+      result = result.filter((contact) => hasTag(contact, wanted));
     } else if (filterMode !== "all") {
       result = result.filter((contact) =>
         contact.lists?.some((l) => l.id === filterMode),

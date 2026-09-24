@@ -1,7 +1,7 @@
 /**
  * usePaneWidth: the width of a pane a person can resize, kept per device.
  *
- * The width lives in a CSS custom property on the pane (`--list-width`), and
+ * The width lives in a CSS custom property on the pane (`--pane-width`), and
  * the pane's own class reads it. So a new width is one style write: nothing
  * in the pane re-renders while a drag runs, and React sees one state update
  * when the drag ends.
@@ -62,7 +62,15 @@ export interface PaneWidth {
 const clamp = (value: number, low: number, high: number) =>
   Math.min(Math.max(Math.round(value), low), high);
 
-function readStored(key: string, bounds: PaneWidthBounds): number {
+/**
+ * The width stored under `key`, held inside the bounds, or `initial` when
+ * nothing usable is stored or storage throws.
+ *
+ * @param key - The `localStorage` key.
+ * @param bounds - The pane's bounds.
+ * @returns A width in px.
+ */
+export function readPaneWidth(key: string, bounds: PaneWidthBounds): number {
   try {
     // `parseFloat`, not `Number`: an empty string is not 0 px.
     const stored = Number.parseFloat(localStorage.getItem(key) ?? "");
@@ -80,7 +88,7 @@ export function usePaneWidth(options: PaneWidthOptions): PaneWidth {
   // nothing renders from it.
   const stored = useRef<number | null>(null);
   if (stored.current === null) {
-    stored.current = readStored(storageKey, { initial, min, max, keep });
+    stored.current = readPaneWidth(storageKey, { initial, min, max, keep });
   }
   const [state, setState] = useState(() => ({
     width: stored.current ?? initial,

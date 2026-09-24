@@ -46,7 +46,7 @@ export const ForgotPassword = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not request password reset.")),
+                : "Could not request password reset")),
       );
     } finally {
       setBusy(false);
@@ -57,7 +57,7 @@ export const ForgotPassword = ({
     return (
       <AuthShell
         title="Reset your password"
-        subtitle="This Contrack cannot send email."
+        subtitle="This Contrack cannot send email"
         onSubmit={handleSubmit}
         footer={
           <button
@@ -73,14 +73,14 @@ export const ForgotPassword = ({
         <div className="space-y-3 text-sm text-on-surface-variant">
           <p>
             This Contrack cannot send email. An administrator can reset your
-            password from Settings, Accounts.
+            password from Settings, Accounts
           </p>
           <p>
             If you run the server,{" "}
             <code className="px-1.5 py-0.5 rounded bg-surface-container font-mono text-xs text-on-surface">
               npx tsx scripts/reset-password.ts &lt;username&gt;
             </code>{" "}
-            prints a temporary password.
+            prints a temporary password
           </p>
         </div>
         <div className="pt-2">
@@ -100,7 +100,7 @@ export const ForgotPassword = ({
     return (
       <AuthShell
         title="Reset your password"
-        subtitle="If that address has an account, a link is on its way. It works for one hour."
+        subtitle="If that address has an account, a link is on its way. It works for one hour"
         onSubmit={(e) => {
           e.preventDefault();
           onBack();
@@ -132,7 +132,7 @@ export const ForgotPassword = ({
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="Enter your email address and we'll send you a link to reset your password."
+      subtitle="Enter your email address and we'll send you a link to reset your password"
       onSubmit={handleSubmit}
       footer={
         <button

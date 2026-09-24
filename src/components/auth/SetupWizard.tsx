@@ -60,7 +60,7 @@ export const SetupWizard = ({
       );
       if (photoFailed) {
         toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+          "Your account is ready. The photo did not upload. Add it in Settings > Account",
         );
       }
       onCreated();
@@ -70,7 +70,7 @@ export const SetupWizard = ({
           ? "Can't reach the Contrack server. Is it running?"
           : err instanceof Error
             ? err.message
-            : "Could not create the account.",
+            : "Could not create the account",
       );
       setBusy(false);
     }
@@ -90,21 +90,21 @@ export const SetupWizard = ({
               <>
                 The{" "}
                 <strong className="text-on-surface">{contacts} contacts</strong>{" "}
-                already here stay with it.
+                already here stay with it
               </>
             ) : (
-              "Everything already here stays with it."
+              "Everything already here stays with it"
             )}
           </>
         ) : (
-          "This instance is protected. Create the account you'll sign in with — you're the only one who can, and it becomes the admin."
+          "This instance is protected. Create the account you'll sign in with — you're the only one who can, and it becomes the admin"
         )
       }
       onSubmit={handleSubmit}
       footer={
         localOwnerPresent
-          ? "Nothing is moved or re-imported. The account that already owns this data becomes yours, keeping its id and everything attached to it."
-          : "You're the only one who can create this account. It becomes the admin."
+          ? "Nothing is moved or re-imported. The account that already owns this data becomes yours, keeping its id and everything attached to it"
+          : "You're the only one who can create this account. It becomes the admin"
       }
     >
       <div className="space-y-4">

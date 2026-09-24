@@ -63,10 +63,8 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
-import { SELECTED_TINT } from "../../../lib/styles";
-import { RadioDot } from "../../../components/ui/RadioDot";
+import { ChoiceGroup } from "../../../components/ui/ChoiceGroup";
 import { cn } from "../../../lib/utils";
-import { radioKeys } from "../../../lib/a11y";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
   AdminButton,
@@ -74,50 +72,8 @@ import {
   AdminList,
   AdminPage,
   AdminRow,
+  RolePicker,
 } from "./AdminShell";
-
-/**
- * One option in a radio group: the selected tint, or the hover layer, with a
- * `RadioDot` before its label, so "chosen" is a shape as well as a hue.
- */
-const RadioOption = ({
-  checked,
-  onSelect,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onSelect: () => void;
-  label: string;
-  hint: string;
-}) => (
-  <button
-    type="button"
-    role="radio"
-    aria-checked={checked}
-    // Each group here always has a choice, so the checked option is its
-    // one Tab stop, and the arrows move the choice.
-    tabIndex={checked ? 0 : -1}
-    onKeyDown={radioKeys}
-    onClick={onSelect}
-    className={cn(
-      "flex w-full items-start gap-3 text-left px-4 py-3 rounded-xl transition-colors",
-      checked ? SELECTED_TINT : "state-layer bg-surface-container-highest",
-    )}
-  >
-    <RadioDot checked={checked} className="mt-0.5" />
-    <span className="min-w-0">
-      <span
-        className={cn("block text-sm font-bold", !checked && "text-on-surface")}
-      >
-        {label}
-      </span>
-      <span className="block text-xs text-on-surface-variant mt-0.5">
-        {hint}
-      </span>
-    </span>
-  </button>
-);
 
 /** Name, role, holdings, last seen, and the row menu. */
 const COLUMNS =
@@ -210,42 +166,6 @@ const RowMenu = ({
 // ---------------------------------------------------------------------------
 // Dialogs
 // ---------------------------------------------------------------------------
-
-const ROLE_OPTIONS: { value: UserRole; label: string; hint: string }[] = [
-  {
-    value: "member",
-    label: "Member",
-    hint: "Their own contacts, and nothing else.",
-  },
-  {
-    value: "admin",
-    label: "Admin",
-    hint: "Also manages accounts, instance settings and AI configuration.",
-  },
-];
-
-const RolePicker = ({
-  value,
-  onChange,
-}: {
-  value: UserRole;
-  onChange: (next: UserRole) => void;
-}) => (
-  <div className="space-y-1.5">
-    <span className={SETTINGS_LABEL}>Role</span>
-    <div role="radiogroup" aria-label="Role" className="grid gap-2">
-      {ROLE_OPTIONS.map((option) => (
-        <RadioOption
-          key={option.value}
-          checked={option.value === value}
-          onSelect={() => onChange(option.value)}
-          label={option.label}
-          hint={option.hint}
-        />
-      ))}
-    </div>
-  </div>
-);
 
 const AdminField = ({
   id,
@@ -358,7 +278,7 @@ const CreateUserModal = ({
               {created.user.displayName || created.user.username}
             </strong>
             . They will have to replace it before they can use anything, and
-            nothing else works for them until they do.
+            nothing else works for them until they do
           </p>
           <SecretReveal
             value={created.temporaryPassword}
@@ -377,7 +297,7 @@ const CreateUserModal = ({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            hint="Used to sign in."
+            hint="Used to sign in"
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
@@ -392,7 +312,7 @@ const CreateUserModal = ({
             label="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            hint="Lowercase letters, numbers, dots, dashes, underscores."
+            hint="Lowercase letters, numbers, dots, dashes, underscores"
             maxLength={32}
             autoComplete="off"
             autoCapitalize="none"
@@ -405,7 +325,7 @@ const CreateUserModal = ({
             label="Display name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            hint="Optional. Shown in the app."
+            hint="Optional. Shown in the app"
             // The server stores 100 characters and accepts 200, so a longer
             // name is taken and then silently cut in half.
             maxLength={100}
@@ -501,7 +421,7 @@ const EditUserModal = ({
         */}
         <p className="text-xs text-on-surface-variant text-pretty">
           The email and username are {user.username}&rsquo;s own to change,
-          under their account settings.
+          under their account settings
         </p>
         <div className="flex justify-end">
           <AdminButton
@@ -575,7 +495,7 @@ const DeleteUserDialog = ({
         <>
           <p>
             Everything this account owns goes with it, and none of it can be
-            recovered from inside Contrack.
+            recovered from inside Contrack
           </p>
           <ul className="grid grid-cols-2 gap-2 not-italic">
             {holdings.map(([count, noun]) => (
@@ -620,7 +540,7 @@ const DeleteUserDialog = ({
             className="w-5 h-5 shrink-0 rounded accent-[var(--color-error)]"
           />
           <span className="text-sm text-on-surface text-pretty">
-            I understand this cannot be undone.
+            I understand this cannot be undone
           </span>
         </label>
       </div>
@@ -708,7 +628,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         empty={{
           icon: Users,
           title: "No accounts yet",
-          body: "Create one, or send an invitation.",
+          body: "Create one, or send an invitation",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
@@ -804,9 +724,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
 
       {me && (
         <p className="text-xs text-on-surface-variant px-1 text-pretty">
-          You cannot disable or delete your own account, and the last remaining
-          admin cannot be removed. An instance nobody can administer is an
-          instance nobody can fix.
+          You cannot disable or delete your own account, or remove the last
+          admin
         </p>
       )}
 
@@ -833,7 +752,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
             <p>
               They are signed out everywhere and every token they made stops
               working. You will get a temporary password to hand over, and they
-              must replace it before anything works for them.
+              must replace it before anything works for them
             </p>
           }
           onConfirm={() =>
@@ -857,27 +776,26 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
           <div className="space-y-4">
             <p className="text-sm text-on-surface-variant text-pretty">
               They are signed out everywhere and every token they made stops
-              working. Choose how to deliver the new password.
+              working. Choose how to deliver the new password
             </p>
 
-            <div
-              role="radiogroup"
-              aria-label="How to deliver the new password"
-              className="grid gap-2"
-            >
-              <RadioOption
-                checked={resetMethod === "email"}
-                onSelect={() => setResetMethod("email")}
-                label="Email a reset link"
-                hint={`Sends a one-time link to ${resetting?.email ?? "their email"}. It works for 24 hours.`}
-              />
-              <RadioOption
-                checked={resetMethod === "temporary"}
-                onSelect={() => setResetMethod("temporary")}
-                label="Show a temporary password"
-                hint="Shows a password once, for you to hand over."
-              />
-            </div>
+            <ChoiceGroup
+              label="How to deliver the new password"
+              value={resetMethod}
+              options={[
+                {
+                  value: "email",
+                  label: "Email a reset link",
+                  hint: `Sends a one-time link to ${resetting?.email ?? "their email"}. It works for 24 hours`,
+                },
+                {
+                  value: "temporary",
+                  label: "Show a temporary password",
+                  hint: "Shows a password once, for you to hand over",
+                },
+              ]}
+              onChange={setResetMethod}
+            />
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <AdminButton
@@ -896,7 +814,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                       onSuccess: (res) => {
                         setResetting(null);
                         toast.success(
-                          `Sent to ${res.sentTo}. The link works for 24 hours.`,
+                          `Sent to ${res.sentTo}. The link works for 24 hours`,
                         );
                       },
                       onError: (error: Error) => toast.error(error.message),
@@ -930,7 +848,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         <div className="space-y-4">
           <p className="text-sm text-on-surface-variant text-pretty">
             Hand this over however you already talk to them. Contrack cannot
-            show it again.
+            show it again
           </p>
           {temporaryPassword && (
             <SecretReveal

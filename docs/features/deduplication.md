@@ -83,7 +83,7 @@ The scan streams progress via SSE through these phases:
 
 ## Sensitivity Presets
 
-Configure auto-merge behavior in **Settings → Duplicates → Auto-merge sensitivity**:
+Configure auto-merge behavior in **Settings → Duplicates → Automatic merging → Auto-merge sensitivity** (Cautious, Balanced and Eager on the page):
 
 | Preset           | Auto-merge threshold | Behavior                                      |
 | ---------------- | -------------------- | --------------------------------------------- |
@@ -218,11 +218,29 @@ curl -X POST http://localhost:3000/api/contacts/merge-cluster \
 
 ---
 
+## The Duplicates Page
+
+**Settings → Duplicates** puts the tool first and what runs by itself under
+it, the way Google Contacts, HubSpot and Dex lay out their duplicates pages:
+
+1. **Possible duplicates**, when any wait: a strip with the count and
+   **Review them**, to the review queue on Pulse.
+2. **The tool.** A segmented control, **Scan** or **Manual merge**. Scan
+   opens on one card: the three scans as one radio group (**Quick scan**,
+   **Smart scan**, **Full scan**, each with one line under it) and
+   **Scan now**. The scan's progress and its results take the card's place.
+3. **Automatic merging**, a section under the tool: Auto-merge sensitivity,
+   Check new contacts automatically, and Check imports automatically. While
+   one is off its default, the page ends with **Reset to defaults**.
+
+**Merge activity**, the history of merges and their undo, is the square
+button with the history glyph in the header's corner at every width, the
+way Ask Contrack's History is. The settings used to sit in a card above
+the tool, and the tool opened on a hero with a large icon that repeated the
+page's title.
+
 ## Responsive Layout on Phones
 
-The dedupe experience is optimized for narrow phone screens:
-
-- **Mode switcher:** A full-width segmented control toggles between Auto scan and Manual merge in sentence case.
-- **Header actions:** On narrow screens below 640 px, Merge activity moves out of the main row into the page header action menu. This prevents clipping and keeps the title row clean.
-- **Form controls:** Scan mode selection cards and manual merge rows place their radio or checkbox on the left beside the icon, avatar, or title, keeping the hit target close to the text.
-- **Content width:** Mode options, lists, and empty states are constrained to a comfortable reading width of 48 rem (max-w-3xl) with centered alignment.
+- **Mode switcher:** A full-width segmented control toggles between Scan and Manual merge in sentence case.
+- **One column:** the tool, then Automatic merging, in the page's one scroller. The scans stack as one tile each, and **Scan now** takes the card's width.
+- **Form controls:** Manual merge rows place their checkbox on the left beside the avatar, keeping the hit target close to the text.

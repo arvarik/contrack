@@ -69,7 +69,7 @@ const lockedByOthers = () =>
     queued: false,
   });
 
-const MESSAGE = "Another user's enrichment is running. Try again in a moment.";
+const MESSAGE = "Another user's enrichment is running. Try again in a moment";
 
 afterEach(() => {
   cleanup();

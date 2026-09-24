@@ -5,12 +5,9 @@
  * the search box, the registry groups and destination cards, and the storage footer.
  *
  * Below `lg` this is the list a person opens every page from, and a page
- * slides in over it (`SlideLink`). A door to a page outside Settings (the
- * Tracked contacts page) opens at once, since there is no settings page to
- * slide in.
+ * slides in over it (`SlideLink`).
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
@@ -38,23 +35,19 @@ import { flyCorvid } from "../../lib/corvid";
  */
 const SettingsLink = ({
   to,
-  door = false,
   icon: Icon,
   title,
   description,
   tone = "primary",
 }: {
   to: string;
-  /** A door out of Settings: it opens at once, with no slide. */
-  door?: boolean;
   icon: LucideIcon;
   title: string;
   description: string;
   tone?: Tone;
 }) => {
-  const LinkKind = door ? Link : SlideLink;
   return (
-    <LinkKind
+    <SlideLink
       to={to}
       className={cn(CARD_INTERACTIVE, "flex items-start gap-3.5 p-4 sm:p-5")}
     >
@@ -73,7 +66,7 @@ const SettingsLink = ({
         </span>
       </span>
       <ChevronRight className="w-4 h-4 text-on-surface-variant shrink-0 mt-1" />
-    </LinkKind>
+    </SlideLink>
   );
 };
 
@@ -170,7 +163,6 @@ export const SettingsHome = () => {
                     <SettingsLink
                       key={page.id}
                       to={page.path}
-                      door={page.door}
                       icon={page.icon}
                       title={
                         page.id === "account"
@@ -190,7 +182,7 @@ export const SettingsHome = () => {
 
       <p className="flex items-center gap-1.5 text-xs text-on-surface-variant px-1">
         <HardDrive className="w-3.5 h-3.5" />
-        Everything here is stored on this machine.
+        Everything here is stored on this machine
         <PhonePerch />
       </p>
     </div>

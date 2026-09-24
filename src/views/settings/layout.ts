@@ -19,10 +19,11 @@ import { cn } from "../../lib/utils";
 export const SETTINGS_BOX = cn(PAGE_X, "w-full max-w-4xl mx-auto");
 
 /**
- * A settings page: the box, a little room under the header, and room at the
- * end for the phone's tab bar.
+ * A settings page: the box and a little room under the header. The shell
+ * draws the page's end under it: Reset to defaults, and the room for the
+ * phone's tab bar.
  */
-export const SETTINGS_PAGE = cn(SETTINGS_BOX, "pt-4 pb-28 md:pb-10");
+export const SETTINGS_PAGE = cn(SETTINGS_BOX, "pt-4");
 
 /** A settings card: the card surface, 16 px in on a phone and 24 px from `sm`. */
 export const SETTINGS_CARD = cn(CARD, "p-4 sm:p-6");

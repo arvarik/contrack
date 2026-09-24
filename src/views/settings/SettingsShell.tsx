@@ -1,9 +1,10 @@
 /**
  * SettingsShell — Two-pane settings shell on desktop, single-pane on mobile.
  *
- * Driven by registry.ts. From lg width, renders a 240px rail with search
- * and navigation groups beside the page. Below lg, renders the landing list
- * and pages, with a link on each page back to the list.
+ * Driven by registry.ts. From lg width, renders the rail (search and the
+ * navigation groups, the left pane's width, which a person can drag) beside
+ * the page. Below lg, renders the landing list and pages, with a link on
+ * each page back to the list.
  *
  * The page's header is `PageHeader`: the page's title, its one-line
  * description from the registry, and the page's own actions at the right
@@ -16,9 +17,13 @@
  * list has none. The move between the list and a page slides (`slide.tsx`).
  *
  * Scrolling. A page that scrolls carries its header with it, the way Pulse
- * and the Tracked page do, in the page's one scroller. A page that owns its
- * scrolling (a full-width tool) keeps the header fixed above it. A page
+ * does, in the page's one scroller. A page that owns its scrolling (the
+ * Lists manager, Tracked contacts) keeps the header fixed above it. A page
  * opens at its top, and the list comes back where it was left.
+ *
+ * The end of a page. Under the page, in its box, the shell draws "Reset to
+ * defaults" while a preference on the page is off its default
+ * (`ResetToDefaults`), and the room for the phone's tab bar.
  */
 import React, {
   Suspense,
@@ -43,6 +48,11 @@ import {
 import { SettingsRail } from "./SettingsRail";
 import { SettingsHome } from "./SettingsHome";
 import { SettingsHeaderContext } from "./SettingsHeader";
+import {
+  ResetScopeProvider,
+  ResetToDefaults,
+  useResetScope,
+} from "./ResetToDefaults";
 import {
   holdSlide,
   isPlainClick,
@@ -134,6 +144,9 @@ export const SettingsShell = () => {
 
   usePageTitle(title);
 
+  // The preferences the page's rows hold, for its Reset to defaults.
+  const { scope: resetScope, entries: resetEntries } = useResetScope();
+
   // The page's actions, drawn in the header (`SettingsHeaderActions`).
   const [actionsTarget, setActionsTarget] = useState<HTMLDivElement | null>(
     null,
@@ -209,103 +222,112 @@ export const SettingsShell = () => {
 
   return (
     <SettingsHeaderContext.Provider value={headerSlot}>
-      <div className="h-full flex overflow-hidden bg-surface text-on-surface">
-        {/* ── 240px Left Navigation Rail on desktop ── */}
-        <div className="hidden lg:block h-full shrink-0">
+      <ResetScopeProvider value={resetScope}>
+        <div className="h-full flex overflow-hidden bg-surface text-on-surface">
+          {/* The rail, from lg. A child of this row itself: the handle on
+            its edge measures the room beside it from the row. */}
           <SettingsRail />
-        </div>
 
-        {/* ── The stage: header and page. Below lg it is what slides, so it
+          {/* ── The stage: header and page. Below lg it is what slides, so it
             has its own opaque surface for the picture. ── */}
-        <div
-          className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface"
-          onClickCapture={onStageClickCapture}
-        >
-          {/* Every page centres its header and its body in the same width:
+          <div
+            className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface"
+            onClickCapture={onStageClickCapture}
+          >
+            {/* Every page centres its header and its body in the same width:
               the stage less a scrollbar's lane, kept whether or not the page
               scrolls. Without it a title sat 5.5 px further left on a page
               long enough to scroll. A page that owns its scrolling keeps
               the lane in its own scroller, so its header keeps one here. */}
-          {ownsScrolling && (
-            <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
-              {header}
-            </div>
-          )}
+            {ownsScrolling && (
+              <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
+                {header}
+              </div>
+            )}
 
-          {/* The page's one scroller. Not a second `main`: the app's layout
+            {/* The page's one scroller. Not a second `main`: the app's layout
               already draws the main landmark (and its `main-content` id)
               around the whole shell. */}
-          <div
-            ref={scrollerRef}
-            onScroll={onScrollerScroll}
-            className={cn(
-              "flex-1 min-h-0",
-              ownsScrolling
-                ? "overflow-hidden"
-                : "overflow-y-auto [scrollbar-gutter:stable]",
-            )}
-          >
-            {!ownsScrolling && header}
-            <Routes>
-              <Route path="/" element={<SettingsHome />} />
+            <div
+              ref={scrollerRef}
+              onScroll={onScrollerScroll}
+              className={cn(
+                "flex-1 min-h-0",
+                ownsScrolling
+                  ? "overflow-hidden"
+                  : "overflow-y-auto [scrollbar-gutter:stable]",
+              )}
+            >
+              {!ownsScrolling && header}
+              <Routes>
+                <Route path="/" element={<SettingsHome />} />
 
-              {/* Special route for new user in Accounts */}
-              <Route
-                path="admin/users/new"
-                element={
-                  <RequireAdmin>
-                    <PageRoute>
-                      <UsersView createOpen />
+                {/* Special route for new user in Accounts */}
+                <Route
+                  path="admin/users/new"
+                  element={
+                    <RequireAdmin>
+                      <PageRoute>
+                        <UsersView createOpen />
+                      </PageRoute>
+                    </RequireAdmin>
+                  }
+                />
+
+                {/* Registry driven pages */}
+                {SETTINGS_PAGES.map((page: SettingsPage) => {
+                  const Component = getLazyComponent(page);
+                  const relativePath = page.path.replace(/^\/settings\/?/, "");
+                  const element = (
+                    <PageRoute ownsScrolling={page.ownsScrolling}>
+                      <Component />
                     </PageRoute>
-                  </RequireAdmin>
-                }
-              />
+                  );
+                  return (
+                    <Route
+                      key={page.id}
+                      path={relativePath}
+                      element={
+                        page.admin ? (
+                          <RequireAdmin>{element}</RequireAdmin>
+                        ) : (
+                          element
+                        )
+                      }
+                    />
+                  );
+                })}
 
-              {/* Registry driven pages */}
-              {SETTINGS_PAGES.map((page: SettingsPage) => {
-                const Component = getLazyComponent(page);
-                const relativePath = page.path.replace(/^\/settings\/?/, "");
-                const element = (
-                  <PageRoute ownsScrolling={page.ownsScrolling}>
-                    <Component />
-                  </PageRoute>
-                );
-                return (
-                  <Route
-                    key={page.id}
-                    path={relativePath}
-                    element={
-                      page.admin ? (
-                        <RequireAdmin>{element}</RequireAdmin>
-                      ) : (
-                        element
-                      )
-                    }
-                  />
-                );
-              })}
+                {/* Registry driven redirects */}
+                {Object.entries(REDIRECTS).map(([from, to]) => {
+                  const relativeFrom = from.replace(/^\/settings\/?/, "");
+                  return (
+                    <Route
+                      key={from}
+                      path={relativeFrom}
+                      element={<RedirectRoute to={to} />}
+                    />
+                  );
+                })}
 
-              {/* Registry driven redirects */}
-              {Object.entries(REDIRECTS).map(([from, to]) => {
-                const relativeFrom = from.replace(/^\/settings\/?/, "");
-                return (
-                  <Route
-                    key={from}
-                    path={relativeFrom}
-                    element={<RedirectRoute to={to} />}
-                  />
-                );
-              })}
-
-              {/* Wildcard fallback to /settings */}
-              <Route
-                path="*"
-                element={<Navigate to={SETTINGS_LIST_PATH} replace />}
-              />
-            </Routes>
+                {/* Wildcard fallback to /settings */}
+                <Route
+                  path="*"
+                  element={<Navigate to={SETTINGS_LIST_PATH} replace />}
+                />
+              </Routes>
+              {/* The page's end, in its box: Reset to defaults when a value
+                on the page is changed, and the room for the phone's tab
+                bar. A page that owns its scrolling has its own end. */}
+              {!ownsScrolling && (
+                <div className={cn(SETTINGS_BOX, "pb-28 md:pb-10")}>
+                  <ResetToDefaults entries={resetEntries} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </ResetScopeProvider>
     </SettingsHeaderContext.Provider>
   );
 };

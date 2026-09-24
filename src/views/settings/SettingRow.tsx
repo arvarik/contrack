@@ -13,26 +13,26 @@
  * control (a `Segmented`, a `Select`) drops under the text and takes the
  * row's width, and a small one (a `Switch`, a stepper) stays beside the
  * title when the row is `inline`, the way a phone's own settings draw it.
+ * A control too wide for the edge at any width (a grid of choices, a field
+ * and its button) sits under the text when the row is `below`.
  *
- * A preference with a stored key is not at its default. The row says so in
- * two quiet places instead of a line of its own under the description, which
- * used to change the row's height and read like a footnote:
- *
- * 1. A 6 px accent dot after the title (`CHANGED_MARK`), named "Changed from
- *    the default" for a screen reader and a pointer.
- * 2. A "Reset" text button (`BTN_QUIET`) at the start of the control cluster,
- *    so the control itself keeps its place on the row's right edge whether
- *    the button is there or not.
+ * A preference whose value is not its default says so with one quiet mark:
+ * a 6 px accent dot after the title (`CHANGED_MARK`), named "Changed from
+ * the default" for a screen reader and a pointer. The row tells the page
+ * which key it holds (`useResetScopeKey`), and the page ends with one
+ * "Reset to defaults" button while any of its keys is changed
+ * (`ResetToDefaults`). A value set back to its default by hand takes its
+ * dot away, and the button goes with the last one.
  *
  * That pair is the app's one way of showing a value that is off its default.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { RotateCcw } from "lucide-react";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import type { Preferences } from "../../api/preferences";
 import { cn } from "../../lib/utils";
-import { BTN_QUIET, CHANGED_MARK } from "../../lib/styles";
+import { CHANGED_MARK } from "../../lib/styles";
+import { useResetScopeKey } from "./ResetToDefaults";
 
 export interface SettingRowProps {
   /** Stable kebab-case fragment id. */
@@ -48,6 +48,8 @@ export interface SettingRowProps {
    * the right of the title instead of dropping under the text.
    */
   inline?: boolean;
+  /** The control is wide, so it sits under the text at every width. */
+  below?: boolean;
   className?: string;
 }
 
@@ -90,12 +92,14 @@ export const SettingRow = ({
   control,
   prefKey,
   inline = false,
+  below = false,
   className,
 }: SettingRowProps) => {
-  const { stored, resetPreference } = usePreferences();
+  const { changed } = usePreferences();
   const { ref: rowRef, flashing } = useHashTarget<HTMLDivElement>(id);
+  useResetScopeKey(prefKey, rowRef);
 
-  const isChanged = prefKey ? stored.includes(prefKey) : false;
+  const isChanged = prefKey ? changed.includes(prefKey) : false;
   const controlNode = control ?? children;
 
   return (
@@ -118,8 +122,13 @@ export const SettingRow = ({
     >
       <div
         className={cn(
-          "flex gap-3 sm:flex-row sm:items-center sm:justify-between",
-          inline ? "flex-row items-start justify-between" : "flex-col",
+          "flex gap-3",
+          below
+            ? "flex-col"
+            : cn(
+                "sm:flex-row sm:items-center sm:justify-between",
+                inline ? "flex-row items-start justify-between" : "flex-col",
+              ),
         )}
       >
         <div className="min-w-0 flex-1">
@@ -138,22 +147,14 @@ export const SettingRow = ({
             {description}
           </div>
         </div>
-        {(controlNode || isChanged) && (
-          <div className="shrink-0 sm:ml-4 flex items-center gap-2">
-            {isChanged && prefKey && (
-              <button
-                type="button"
-                onClick={() => resetPreference(prefKey)}
-                className={BTN_QUIET}
-                title={`Reset ${title} to default`}
-              >
-                <RotateCcw aria-hidden="true" className="w-3.5 h-3.5" />
-                Reset
-              </button>
-            )}
-            {controlNode}
-          </div>
-        )}
+        {controlNode &&
+          (below ? (
+            <div className="min-w-0">{controlNode}</div>
+          ) : (
+            <div className="shrink-0 sm:ml-4 flex items-center gap-2">
+              {controlNode}
+            </div>
+          ))}
       </div>
     </div>
   );

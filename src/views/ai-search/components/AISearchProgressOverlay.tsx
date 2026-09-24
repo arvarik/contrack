@@ -172,7 +172,7 @@ export function AISearchProgressOverlay({
             <span role="status">
               {connectionError
                 ? "Reconnecting to research status…"
-                : "Completed updates save as research continues."}
+                : "Completed updates save as research continues"}
             </span>
             <button
               onClick={onCancel}
@@ -283,7 +283,7 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
       )}
       {job.status === "error" && (
         <p className="w-full pl-6 text-xs text-error break-words">
-          {job.error || "Research failed. Open this contact to retry."}
+          {job.error || "Research failed. Open this contact to retry"}
         </p>
       )}
     </div>

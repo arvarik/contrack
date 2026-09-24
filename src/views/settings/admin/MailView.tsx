@@ -80,7 +80,7 @@ export const MailView = () => {
           icon={AlertCircle}
           tone="error"
           title="Mail settings did not load"
-          body="Nothing has changed. Try again in a moment."
+          body="Nothing has changed. Try again in a moment"
           action={{ label: "Try again", onClick: () => void refetch() }}
         />
       </div>
@@ -98,7 +98,7 @@ export const MailView = () => {
 
     const parsedPort = parseInt(port, 10);
     if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      toast.error("Please enter a valid port between 1 and 65535.");
+      toast.error("Enter a port between 1 and 65535");
       return;
     }
 
@@ -174,7 +174,7 @@ export const MailView = () => {
             <Badge tone={status.tone}>{status.label}</Badge>
             {isEnv && (
               <span className="text-pretty">
-                SMTP_URL in the environment sets it. Change it there.
+                SMTP_URL in the environment sets it. Change it there
               </span>
             )}
           </div>
@@ -209,7 +209,7 @@ export const MailView = () => {
               <p className="text-sm font-bold text-on-surface">Use TLS</p>
               <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
                 Connects over TLS from the start. Port 465 usually needs it.
-                Port 587 usually does not.
+                Port 587 usually does not
               </p>
             </div>
             <Switch
@@ -317,7 +317,7 @@ export const MailView = () => {
         onClose={() => setShowClearConfirm(false)}
         onConfirm={handleClear}
         title="Clear the mail settings?"
-        description="Contrack stops sending mail until someone sets it up again. Invitations and password resets are then not sent by email."
+        description="Contrack stops sending mail until someone sets it up again. Invitations and password resets are then not sent by email"
         confirmLabel="Clear settings"
         tone="danger"
         busy={deleteMail.isPending}

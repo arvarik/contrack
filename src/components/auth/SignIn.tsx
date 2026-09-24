@@ -30,14 +30,14 @@ const HEADINGS: Record<
   expired: {
     title: "Signed out",
     subtitle:
-      "Your session expired, so Contrack signed you out. Sign in to pick up where you left off.",
+      "Your session expired, so Contrack signed you out. Sign in to pick up where you left off",
   },
   // Deliberately not "sign in again". This account is closed, and the one
   // thing a sign-in form invites is the one thing that cannot work.
   disabled: {
     title: "This account is disabled",
     subtitle:
-      "An administrator has closed this account. Ask them to enable it, or sign in with a different one.",
+      "An administrator has closed this account. Ask them to enable it, or sign in with a different one",
   },
 };
 
@@ -158,7 +158,7 @@ export const SignIn = ({
       const errName = (err as { name?: string })?.name;
       if (errName !== "AbortError" && errName !== "NotAllowedError") {
         setError(
-          "That passkey did not work. Try again, or sign in with your password.",
+          "That passkey did not work. Try again, or sign in with your password",
         );
       }
       setPasskeyBusy(false);
@@ -195,7 +195,7 @@ export const SignIn = ({
             // not a wrong password, and saying "incorrect" would send
             // somebody hunting for a password that was right.
             (rateLimitMessage(err) ??
-              (err instanceof Error ? err.message : "Sign-in failed.")),
+              (err instanceof Error ? err.message : "Sign-in failed")),
       );
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
@@ -230,7 +230,7 @@ export const SignIn = ({
     <AuthShell
       title={reason ? HEADINGS[reason].title : "Welcome back"}
       subtitle={
-        reason ? HEADINGS[reason].subtitle : "Sign in to your Contrack account."
+        reason ? HEADINGS[reason].subtitle : "Sign in to your Contrack account"
       }
       onSubmit={handleSubmit}
       footer={
@@ -395,7 +395,7 @@ const MagicLinkRequest = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not send sign-in link.")),
+                : "Could not send sign-in link")),
       );
     } finally {
       setBusy(false);
@@ -406,7 +406,7 @@ const MagicLinkRequest = ({
     return (
       <AuthShell
         title="Check your email"
-        subtitle="If that address has an account, a link is on its way. It works for 15 minutes."
+        subtitle="If that address has an account, a link is on its way. It works for 15 minutes"
         onSubmit={(e) => {
           e.preventDefault();
           onBack();
@@ -438,7 +438,7 @@ const MagicLinkRequest = ({
   return (
     <AuthShell
       title="Sign in with email"
-      subtitle="Enter your email address and we'll send you a link that signs you right in."
+      subtitle="Enter your email address and we'll send you a link that signs you right in"
       onSubmit={handleSubmit}
       footer={
         <button

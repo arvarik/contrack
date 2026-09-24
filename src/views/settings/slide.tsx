@@ -93,11 +93,7 @@ export function useSlideNavigate() {
   return useCallback(
     (to: string, direction: SlideDirection) => {
       const doc = document as ViewTransitionDocument;
-      // A door (Tracked contacts) leaves Settings: there is no settings page
-      // to slide in, only a redirect, so it opens at once, from a search hit
-      // as from the list.
-      const door = findSettingsPage(to.split(/[?#]/)[0])?.door;
-      if (door || !wantsSlide(doc)) {
+      if (!wantsSlide(doc)) {
         navigate(to);
         return;
       }

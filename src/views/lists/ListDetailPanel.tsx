@@ -420,7 +420,7 @@ export const ListDetailPanel = ({
                     <span className="font-bold text-on-surface">
                       "{list.name}"
                     </span>
-                    ? Contacts kept.
+                    ? Contacts kept
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button

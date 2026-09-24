@@ -55,9 +55,8 @@ describe("TagsPage", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "No tags yet" }),
     ).toBeTruthy();
-    expect(
-      screen.getByText(/Tags you add to your contacts will appear here/i),
-    ).toBeTruthy();
+    // A simple place says it in the title, with no sentence under it.
+    expect(screen.queryByText(/Tags you add/i)).toBeNull();
   });
 
   it("renders tag list with counts alphabetically", () => {
@@ -75,6 +74,30 @@ describe("TagsPage", () => {
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getByText("work")).toBeTruthy();
     expect(screen.getByText("12")).toBeTruthy();
+  });
+
+  it("links each tag to the Network list filtered to it", () => {
+    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
+      data: [
+        { tag: "close friend", count: 1 },
+        { tag: "work", count: 12 },
+      ],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
+
+    renderComponent();
+    expect(
+      screen
+        .getByRole("link", { name: "work, 12 contacts" })
+        .getAttribute("href"),
+    ).toBe("/?tag=work");
+    // A tag with a space keeps it: the filter matches the whole tag.
+    expect(
+      screen
+        .getByRole("link", { name: "close friend, 1 contact" })
+        .getAttribute("href"),
+    ).toBe("/?tag=close%20friend");
   });
 
   it("allows inline rename of a tag", async () => {

@@ -19,17 +19,17 @@ import type { ContrackInstance } from "./fixtures/instance";
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
 test.describe("Settings — Desktop", () => {
-  test("shows the 240px rail, no back link, and the active page", async ({
+  test("shows the rail at the Network list's width, no back link, and the active page", async ({
     page,
   }) => {
     await page.goto("/settings");
     const rail = page.getByRole("navigation", { name: "Settings" });
     await expect(rail).toBeVisible();
 
-    // Verify rail width is 240px (w-60 in Tailwind)
+    // The left pane's width, the Network list's: 350 px to open.
     const box = await rail.boundingBox();
     expect(box).not.toBeNull();
-    expect(Math.abs(box!.width - 240)).toBeLessThan(2);
+    expect(Math.abs(box!.width - 350)).toBeLessThan(2);
 
     // From lg the rail and the sidebar are on screen, so no page draws a
     // back link above its title.
@@ -46,7 +46,7 @@ test.describe("Settings — Desktop", () => {
     const heading = page.getByRole("heading", { name: "Appearance", level: 1 });
     await expect(heading).toBeVisible();
     await expect(
-      page.getByText("How Contrack looks on this account."),
+      page.getByText("How Contrack looks on this account"),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: /^Back to/ })).toHaveCount(0);
 
@@ -138,37 +138,46 @@ test.describe("Settings — Desktop", () => {
     await expect(tempUnitRow).not.toHaveClass(/ring-2/);
   });
 
-  test("SettingRow shows modified dot and reset button when preference is stored", async ({
+  test("a changed setting wears the dot, and Reset to defaults at the page's end puts it back", async ({
     page,
   }) => {
     await page.goto("/settings/appearance");
 
     const themeRow = page.locator("#theme");
     await expect(themeRow).toBeVisible();
-
-    // Initially with default system theme, no modified dot and no reset button
-    const resetBtn = themeRow.getByRole("button", {
-      name: "Reset",
-    });
-    await expect(resetBtn).toBeHidden();
-
-    // Click "Dark" radio to change theme preference
-    const darkRadio = themeRow.getByRole("radio", { name: "Dark" });
-    await darkRadio.click();
-
-    // Reset button and the changed mark after the title should now be visible
     const mark = themeRow.getByRole("img", {
       name: "Changed from the default",
     });
-    await expect(resetBtn).toBeVisible();
-    await expect(mark).toBeVisible();
+    const reset = page.getByRole("button", { name: "Reset to defaults" });
 
-    // Click Reset to default
-    await resetBtn.click();
-
-    // Preference is reset: reset button and the mark disappear
-    await expect(resetBtn).toBeHidden();
+    // At the default: no dot, no button, and no Reset in the row.
     await expect(mark).toBeHidden();
+    await expect(reset).toBeHidden();
+    await expect(themeRow.getByRole("button", { name: /Reset/ })).toHaveCount(
+      0,
+    );
+
+    // Off the default: the dot after the title, and the page's button.
+    await themeRow.getByRole("radio", { name: "Dark" }).click();
+    await expect(mark).toBeVisible();
+    await expect(reset).toBeVisible();
+
+    // Set back by hand, the dot and the button go.
+    await themeRow.getByRole("radio", { name: "System" }).click();
+    await expect(mark).toBeHidden();
+    await expect(reset).toBeHidden();
+
+    // Off again, and Reset to defaults puts it back with an Undo.
+    await themeRow.getByRole("radio", { name: "Dark" }).click();
+    await reset.click();
+    await expect(
+      themeRow.getByRole("radio", { name: "System" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(mark).toBeHidden();
+    await expect(reset).toBeHidden();
+    await expect(
+      page.getByText("1 setting is back to its default"),
+    ).toBeVisible();
   });
 
   test("old URLs redirect to their new paths", async ({ page }) => {
@@ -447,9 +456,7 @@ test.describe("Settings — Tools and Data", () => {
     await expect(
       page.getByRole("heading", { name: "Tags", level: 1 }),
     ).toBeVisible();
-    await expect(
-      page.getByText(/Organise contacts with labels/i),
-    ).toBeVisible();
+    await expect(page.getByText(/The labels on your contacts/i)).toBeVisible();
   });
 
   test("duplicates page displays sensitivity and automatic check switches", async ({
@@ -509,22 +516,28 @@ test.describe("Tracked contacts", () => {
     }
   });
 
-  test("Settings, Your data lists the page and steps over to it, and the old path does too", async ({
+  test("Settings, Your data opens the page beside the rail, and the old path leads there", async ({
     page,
   }) => {
     await page.goto("/settings");
     const rail = page.getByRole("navigation", { name: "Settings" });
     await rail.getByRole("link", { name: "Tracked contacts" }).click();
-    await expect(page).toHaveURL(/\/tracked$/);
+    await expect(page).toHaveURL(/\/settings\/tracked$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
     ).toBeVisible();
+    // The rail stays beside the page, as it does beside every settings page.
+    await expect(
+      rail.getByRole("link", { name: "Tracked contacts" }),
+    ).toHaveAttribute("aria-current", "page");
 
-    await page.goto("/settings/tracked");
-    await expect(page).toHaveURL(/\/tracked$/);
+    // The old path, with the group it named.
+    await page.goto("/tracked#fading");
+    await expect(page).toHaveURL(/\/settings\/tracked#fading$/);
+    await expect(rail).toBeVisible();
   });
 
-  test("the page groups people by their ring, a row toggle tracks, and Network stays lit", async ({
+  test("the page groups people by their ring, a row toggle tracks, and Settings stays lit", async ({
     page,
     instance,
     seed,
@@ -535,7 +548,7 @@ test.describe("Tracked contacts", () => {
     });
     created.push({ instance, id });
 
-    await page.goto("/tracked");
+    await page.goto("/settings/tracked");
     await expect(
       page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
     ).toBeVisible();
@@ -564,10 +577,10 @@ test.describe("Tracked contacts", () => {
     await expect(
       page.locator("[data-contact-id]", { hasText: "Linus Torvalds" }),
     ).not.toContainText("every");
-    // The sidebar keeps Network lit: this is a Network sub-page. A selected
+    // The sidebar keeps Settings lit: this is a settings page. A selected
     // nav item wears the selected tint (`SELECTED_TINT`).
     await expect(
-      page.locator("aside").getByRole("link", { name: "Network" }),
+      page.getByRole("link", { name: "Settings", exact: true }),
     ).toHaveClass(/(?:^|\s)bg-primary\/10(?:\s|$)/);
     await expect(
       page.getByRole("link", { name: "Ada Lovelace" }),
@@ -629,23 +642,26 @@ test.describe("Tracked contacts", () => {
     await page.getByRole("option", { name: "Yearly" }).click();
     touched.push({ instance, key: "defaultCadenceDays" });
     await expect(cadence).toHaveText(/Yearly/);
-    // Off its default: the dot and the Reset beside the control.
-    await page
-      .locator("#cadence")
-      .getByRole("button", { name: /^Reset/ })
-      .click();
-    await expect(cadence).toHaveText(/Quarterly/);
+    // Off its default: the dot after the title.
+    await expect(
+      page
+        .locator("#cadence")
+        .getByRole("img", { name: "Changed from the default" }),
+    ).toBeVisible();
 
     const trackNew = page.getByRole("switch", { name: "Track new contacts" });
     await expect(trackNew).toHaveAttribute("aria-checked", "false");
     await trackNew.click();
     touched.push({ instance, key: "trackNewContacts" });
     await expect(trackNew).toHaveAttribute("aria-checked", "true");
-    await page
-      .locator("#track-new")
-      .getByRole("button", { name: /^Reset/ })
-      .click();
+
+    // One Reset to defaults, at the page's end, puts both back.
+    await page.getByRole("button", { name: "Reset to defaults" }).click();
+    await expect(cadence).toHaveText(/Quarterly/);
     await expect(trackNew).toHaveAttribute("aria-checked", "false");
+    await expect(
+      page.getByText("2 settings are back to their defaults"),
+    ).toBeVisible();
   });
 });
 

@@ -35,18 +35,18 @@ const TIER_LABELS: Record<string, string> = {
  */
 const TIER_DESCRIPTIONS: Record<string, string> = {
   briefing:
-    "Catch me up summaries written for a single contact. A hit means the summary was reused instead of asking the model for it again.",
+    "Catch me up summaries written for a single contact. A hit means the summary was reused instead of asking the model for it again",
   rerank:
-    "AI reordering of search results by relevance. A hit means this query was ranked before, so no model call was needed.",
+    "AI reordering of search results by relevance. A hit means this query was ranked before, so no model call was needed",
   synthesis:
-    "The written answer to an Ask Contrack question. A hit means the same question had already been answered.",
+    "The written answer to an Ask Contrack question. A hit means the same question had already been answered",
   mentions:
-    "Finding the people named inside a note you wrote. A hit means that exact note text was already parsed.",
+    "Finding the people named inside a note you wrote. A hit means that exact note text was already parsed",
   dailyInsight:
-    "The daily observation shown on the Pulse page. A hit means today's insight was already generated.",
+    "The daily observation shown on the Pulse page. A hit means today's insight was already generated",
   queryParse:
-    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. A hit means this question was read before.",
-  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. A hit means the same question was expanded before.",
+    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. A hit means this question was read before",
+  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. A hit means the same question was expanded before",
 };
 
 function formatTTL(ms: number): string {

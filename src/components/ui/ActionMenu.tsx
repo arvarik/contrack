@@ -108,6 +108,11 @@ export interface ActionMenuProps {
   triggerRef?: React.Ref<HTMLButtonElement>;
   /** Extra classes for the wrapper, which positions the menu. */
   className?: string;
+  /**
+   * Extra classes for the open panel, such as a narrower `min-w-*` for a
+   * menu of single words (the Track menu).
+   */
+  panelClassName?: string;
   /** Custom trigger content replacing the default icon-only trigger. */
   triggerContent?: React.ReactNode;
   /** A tooltip for a pointer, for a trigger that shows a glyph and no text. */
@@ -148,6 +153,7 @@ export const ActionMenu = ({
   onOpenChange,
   triggerRef,
   className,
+  panelClassName,
   triggerContent,
   title,
   heading,
@@ -396,7 +402,11 @@ export const ActionMenu = ({
           tabIndex={-1}
           onKeyDown={onMenuKeyDown}
           {...placement.panelProps}
-          className={cn(placement.panelProps.className, MENU_PANEL)}
+          className={cn(
+            placement.panelProps.className,
+            MENU_PANEL,
+            panelClassName,
+          )}
         >
           {heading && (
             <div role="presentation" className={MENU_HEADING}>

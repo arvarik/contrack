@@ -82,7 +82,7 @@ export const PrivacyPage = () => {
           id="ai-assist"
           title="Use AI for this account"
           prefKey="aiAssist"
-          description="Lets Contrack use the AI providers set up here for summaries, enrichment, briefings, and insights. When it is off, Contrack sends nothing to an AI provider for you."
+          description="Lets Contrack use the AI providers set up here for summaries, enrichment, briefings, and insights. When it is off, Contrack sends nothing to an AI provider for you"
           inline
         >
           <Switch
@@ -95,7 +95,7 @@ export const PrivacyPage = () => {
         <SettingRow
           id="search-history"
           title="Search history"
-          description="What you ask in Ask Contrack and the command palette is kept, so you can ask it again."
+          description="What you ask in Ask Contrack and the command palette is kept, so you can ask it again"
         >
           <div className="flex items-center gap-3">
             <span className="text-xs sm:text-sm text-on-surface-variant whitespace-nowrap">
@@ -119,20 +119,20 @@ export const PrivacyPage = () => {
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
-            Contrack runs on your own server. Your contacts, notes, timelines,
-            and searches are kept there, in its SQLite database.
+            Contrack runs on your own server, and keeps your contacts, notes and
+            searches in its own database
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Fact icon={ShieldCheck} title="Search runs here">
               Full-text search and search by meaning run on this server, with no
-              call to anyone else.
+              call to anyone else
             </Fact>
             <Fact
               icon={ShieldCheck}
               title="AI providers hear only what you ask"
             >
               A provider hears from Contrack only when you use an AI feature.
-              With AI off above, it hears nothing.
+              With AI off above, it hears nothing
             </Fact>
           </div>
         </div>
@@ -144,12 +144,12 @@ export const PrivacyPage = () => {
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
-            An administrator sets these up for everyone here.
+            An administrator sets these up for everyone here
           </p>
           <AiCapabilitiesList />
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="text-sm text-on-surface-variant text-pretty">
-              How much AI you used, and what it cost.
+              How much AI you used, and what it cost
             </p>
             <Link to={usagePath} className="btn-secondary btn-sm shrink-0">
               View usage
@@ -164,7 +164,7 @@ export const PrivacyPage = () => {
         onClose={() => setClearDialogOpen(false)}
         onConfirm={handleClearHistory}
         title="Clear search history?"
-        description={`This deletes all ${questions} you asked. It cannot be undone.`}
+        description={`This deletes all ${questions} you asked. It cannot be undone`}
         confirmLabel="Clear history"
         busy={clearMutation.isPending}
       />

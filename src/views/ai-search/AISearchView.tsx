@@ -143,7 +143,7 @@ export function AISearchView({
       {!hideHeaderDescription && (
         <p className="text-sm text-on-surface-variant">
           Research contacts on the live web and fill in the gaps in their
-          profiles.
+          profiles
         </p>
       )}
 
@@ -162,7 +162,7 @@ export function AISearchView({
           <EmptyState
             icon={Sparkles}
             title="No contacts available"
-            body="Add contacts to your network to start using contact enrichment."
+            body="Add contacts to your network to start using contact enrichment"
           />
         )}
 

@@ -96,7 +96,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (stream.error instanceof ApiError && stream.error.status === 404) {
       toast.error(
-        "Research status is no longer available. The server may have restarted. Completed contact updates remain saved.",
+        "Research status is no longer available. The server may have restarted. Completed contact updates remain saved",
       );
       setBatchId(null);
       setBatch(null);

@@ -150,7 +150,7 @@ export const ClusterList = ({
       <EmptyState
         icon={CheckCircle2}
         title="All clean"
-        body="No duplicate clusters remaining."
+        body="No duplicate clusters remaining"
       />
     );
   }
@@ -403,9 +403,9 @@ export const ClusterList = ({
                             <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                             <p className="text-xs text-warning leading-relaxed">
                               <span className="font-bold">
-                                Large cluster ({cluster.size} contacts).
+                                Large cluster ({cluster.size} contacts)
                               </span>{" "}
-                              Review carefully — merging is irreversible.
+                              Check that they are all the same person
                             </p>
                           </div>
                         )}
@@ -418,9 +418,9 @@ export const ClusterList = ({
                           >
                             <Shield className="w-4 h-4 text-on-surface-variant shrink-0 mt-0.5" />
                             <p className="text-xs text-on-surface-variant leading-relaxed">
-                              <span className="font-bold">Weak link.</span> At
+                              <span className="font-bold">Weak link</span> At
                               least one connection has {"<"}60% confidence.
-                              Check evidence below.
+                              Check evidence below
                             </p>
                           </div>
                         )}

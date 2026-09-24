@@ -10,11 +10,8 @@ import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
-import {
-  groupedShortcuts,
-  isCombination,
-  type Shortcut,
-} from "../../../lib/shortcuts";
+import { groupedShortcuts, type Shortcut } from "../../../lib/shortcuts";
+import { ShortcutKeys } from "../../../components/ui/ShortcutKeys";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -22,13 +19,6 @@ import {
 } from "../layout";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-
-/** One key, as a keycap. */
-const Kbd = ({ children }: { children: React.ReactNode }) => (
-  <kbd className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 bg-surface-container-high rounded-md text-[11px] font-mono font-bold text-on-surface shadow-sm">
-    {children}
-  </kbd>
-);
 
 /** The chip after a shortcut's name. */
 const CHIP =
@@ -46,7 +36,7 @@ export const KeyboardPage = () => {
           id="single-key-shortcuts"
           title="Single-key shortcuts"
           prefKey="singleKeyShortcuts"
-          description="Use keys like /, N, V, J, and K without holding a modifier. Turn this off if you set them off by mistake."
+          description="Use keys like /, N, V, J and K without holding a modifier. Turn this off if you set them off by mistake"
           inline
         >
           <Switch
@@ -63,8 +53,7 @@ export const KeyboardPage = () => {
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-6")}>
           <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
-            The switch above turns off every key marked &ldquo;Single
-            key&rdquo;.
+            The switch above turns off every key marked &ldquo;Single key&rdquo;
           </p>
 
           {groups.map((group) => (
@@ -98,25 +87,8 @@ export const KeyboardPage = () => {
                       {s.alwaysOn && <span className={CHIP}>Always on</span>}
                     </div>
 
-                    <div className="shrink-0 flex items-center gap-1">
-                      {s.keys.map((k, i) => (
-                        <React.Fragment key={i}>
-                          <Kbd>{k}</Kbd>
-                          {i < s.keys.length - 1 &&
-                            (isCombination(s.keys) ? (
-                              <span
-                                className="text-[11px] text-on-surface-variant mx-0.5"
-                                aria-hidden="true"
-                              >
-                                +
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-on-surface-variant mx-0.5">
-                                or
-                              </span>
-                            ))}
-                        </React.Fragment>
-                      ))}
+                    <div className="shrink-0">
+                      <ShortcutKeys keys={s.keys} />
                     </div>
                   </div>
                 );

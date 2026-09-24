@@ -125,7 +125,7 @@ function send(
       publish();
       toast.error(
         entry.errorMessage ??
-          "Could not delete the interaction. It is back on the timeline.",
+          "Could not delete the interaction. It is back on the timeline",
       );
     },
   );

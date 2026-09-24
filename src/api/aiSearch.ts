@@ -49,7 +49,7 @@ export const useAISearchStatusPoll = (batchId: string | null) => {
       );
       const batch = aiSearchBatchSchema.parse(await res.json());
       if (batch.id !== batchId)
-        throw new Error("The server returned a different research batch.");
+        throw new Error("The server returned a different research batch");
       return batch;
     },
     enabled: !!batchId,

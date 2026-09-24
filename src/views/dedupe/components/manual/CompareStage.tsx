@@ -77,7 +77,7 @@ export const CompareStage = ({
             </div>
             <p className="text-xs text-on-surface-variant">
               Two contacts will be merged sequentially into the primary. All
-              data from both duplicates will be preserved and combined.
+              data from both duplicates will be preserved and combined
             </p>
           </div>
         </div>

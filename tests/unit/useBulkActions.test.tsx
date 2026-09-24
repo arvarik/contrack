@@ -314,7 +314,7 @@ describe("useBulkActions", () => {
         mockBulkUpdateMutate.mock.calls.at(-1)![1].onSuccess({ count: 1 });
       });
       expect(toastMock.success).toHaveBeenLastCalledWith(
-        "Tracking 1 contact again, at the default cadence.",
+        "Tracking 1 contact again, at the default cadence",
       );
     });
 

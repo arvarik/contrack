@@ -29,8 +29,7 @@ export const SelectStage = ({
           Select contacts to merge
         </h3>
         <p className="text-xs text-on-surface-variant">
-          Choose 2–5 contacts you want to merge. All their data will be
-          combined.
+          Choose 2 to 5 contacts to merge. All their data is combined
         </p>
       </div>
 

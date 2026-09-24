@@ -58,7 +58,7 @@ export function kindsFor(
       kind: "ics",
       label: "Calendar",
       description:
-        "Sync meetings and see what is coming up from a private ICS URL.",
+        "Sync meetings and see what is coming up from a private ICS URL",
       capabilities: {
         schedule: true,
       },
@@ -66,7 +66,7 @@ export function kindsFor(
     {
       kind: "imap",
       label: "Mailbox (IMAP)",
-      description: "Sync sent and received mail headers from any IMAP account.",
+      description: "Sync sent and received mail headers from any IMAP account",
       capabilities: {
         schedule: true,
         summaries: true,
@@ -75,7 +75,7 @@ export function kindsFor(
     {
       kind: "google",
       label: "Google Workspace",
-      description: "Sync contacts, mail and calendar with Google.",
+      description: "Sync contacts, mail and calendar with Google",
       configured: options.googleConfigured ?? false,
       capabilities: {
         schedule: true,

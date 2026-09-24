@@ -79,7 +79,7 @@ export const NetworkPage = () => {
           id="start-page"
           title="Where Contrack opens"
           prefKey="startPage"
-          description="The page Contrack opens on in a new browser tab."
+          description="The page Contrack opens on in a new browser tab"
         >
           <Segmented
             label="Where Contrack opens"
@@ -96,7 +96,7 @@ export const NetworkPage = () => {
           id="list-sort"
           title="Default sort"
           prefKey="listSort"
-          description="How the contact list sorts until you pick another order."
+          description="How the contact list sorts until you pick another order"
         >
           <Segmented
             label="Default sort"
@@ -113,7 +113,7 @@ export const NetworkPage = () => {
           id="recent-contacts"
           title="Recent contacts"
           prefKey="recentLimit"
-          description="How many recently visited contacts pin to the top of your Network. Set it to 0 to hide the row."
+          description="How many recently visited contacts pin to the top of your Network. Set it to 0 to hide the row"
           inline
         >
           <Stepper
@@ -134,7 +134,7 @@ export const NetworkPage = () => {
           id="cadence"
           title="Default cadence"
           prefKey="defaultCadenceDays"
-          description="How often you want to keep up with a contact you track. Each contact can have its own."
+          description="How often you want to keep up with a contact you track. Each contact can have its own"
         >
           <Select
             label="Default cadence"
@@ -159,7 +159,7 @@ export const NetworkPage = () => {
           id="track-new"
           title="Track new contacts"
           prefKey="trackNewContacts"
-          description="Contacts you add by hand start tracked. Imports and connectors never do."
+          description="Contacts you add by hand start tracked. Imports and connectors never do"
           inline
         >
           <Switch
@@ -173,7 +173,7 @@ export const NetworkPage = () => {
           id="week-start"
           title="Week starts on"
           prefKey="weekStart"
-          description="The first day of the week on the timeline and in activity charts."
+          description="The first day of the week on the timeline and in activity charts"
         >
           <Segmented
             label="Week starts on"
@@ -190,7 +190,7 @@ export const NetworkPage = () => {
           id="weather"
           title="Weather"
           prefKey="showWeather"
-          description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is."
+          description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is"
           inline
         >
           <Switch
@@ -204,7 +204,7 @@ export const NetworkPage = () => {
           id="temp-unit"
           title="Temperature unit"
           prefKey="tempUnit"
-          description="How the weather reads on a contact's card."
+          description="How the weather reads on a contact's card"
         >
           <Segmented
             label="Temperature unit"

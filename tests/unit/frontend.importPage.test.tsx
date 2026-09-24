@@ -35,7 +35,7 @@ describe("ImportPage", () => {
       </QueryClientProvider>,
     );
 
-  it("renders ImportPanel and empty state when no imports", () => {
+  it("renders the ImportPanel alone before the first import", () => {
     vi.mocked(importsApi.useImports).mockReturnValue({
       data: [],
       isLoading: false,
@@ -43,9 +43,10 @@ describe("ImportPage", () => {
 
     renderComponent();
     expect(screen.getByTestId("import-panel")).toBeTruthy();
-    expect(
-      screen.getByRole("heading", { level: 2, name: "No recent imports" }),
-    ).toBeTruthy();
+    // No section over nothing: the heading and "No recent imports" said the
+    // same thing twice.
+    expect(screen.queryByText("Recent imports")).toBeNull();
+    expect(screen.queryByText("No recent imports")).toBeNull();
   });
 
   it("renders recent imports with counts and status badges", () => {

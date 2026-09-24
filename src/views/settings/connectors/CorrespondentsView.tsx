@@ -111,7 +111,7 @@ export const CorrespondentsView: React.FC = () => {
           icon={AlertCircle}
           tone="error"
           title="Correspondents did not load"
-          body="Nothing has changed. Try again in a moment."
+          body="Nothing has changed. Try again in a moment"
           action={{ label: "Try again", onClick: () => void refetch() }}
         />
       )}
@@ -215,7 +215,7 @@ export const CorrespondentsView: React.FC = () => {
         <EmptyState
           icon={UserCheck}
           title="No one to review"
-          body="When a connector syncs mail or meetings with someone who is not a contact yet, they show up here."
+          body="When a connector syncs mail or meetings with someone who is not a contact yet, they show up here"
           action={{
             label: "Open connectors",
             onClick: () => navigate("/settings/connectors"),

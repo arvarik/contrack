@@ -404,24 +404,24 @@ describe("the sentence shown for a 429", () => {
   it("names the other account when the lock is not the reader's", () => {
     expect(
       rateLimitMessage(limited({ yours: false, queued: true }), "scan"),
-    ).toBe("Another user's scan is running. Yours will start automatically.");
+    ).toBe("Another user's scan is running. Yours will start automatically");
     expect(
       rateLimitMessage(limited({ yours: false, queued: false }), "enrichment"),
-    ).toBe("Another user's enrichment is running. Try again in a moment.");
+    ).toBe("Another user's enrichment is running. Try again in a moment");
   });
 
   it("counts the seconds when the limit is the reader's own", () => {
     expect(rateLimitMessage(limited({ retryAfterSeconds: 30 }))).toBe(
-      "Too many requests. Try again in 30 seconds.",
+      "Too many requests. Try again in 30 seconds",
     );
     expect(rateLimitMessage(limited({ retryAfterSeconds: 1 }))).toBe(
-      "Too many requests. Try again in 1 second.",
+      "Too many requests. Try again in 1 second",
     );
   });
 
   it("says nothing precise when the server gave no estimate", () => {
     expect(rateLimitMessage(limited({}))).toBe(
-      "Too many requests. Try again shortly.",
+      "Too many requests. Try again shortly",
     );
   });
 

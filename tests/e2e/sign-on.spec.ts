@@ -120,7 +120,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   // Empty state appears
   await expect(
     page.getByText(
-      "No passkeys yet. Add one to sign in without typing a password.",
+      "No passkeys yet. Add one to sign in without typing a password",
     ),
   ).toBeVisible();
 
@@ -141,7 +141,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   const alert = page.getByRole("alert");
   await expect(alert).toHaveText(
-    "That passkey did not work. Try again, or sign in with your password.",
+    "That passkey did not work. Try again, or sign in with your password",
   );
   await cdp.send("WebAuthn.setAutomaticPresenceSimulation", {
     authenticatorId,
@@ -158,7 +158,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
     page.getByRole("heading", { name: "Reset your password" }),
   ).toBeVisible();
   await expect(
-    page.getByText("This Contrack cannot send email.", { exact: true }),
+    page.getByText("This Contrack cannot send email", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("scripts/reset-password.ts")).toBeVisible();
   await expectPageAccessible(page, testInfo, "forgot-password-panel");

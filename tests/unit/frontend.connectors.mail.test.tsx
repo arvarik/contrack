@@ -55,13 +55,13 @@ describe("Frontend Mail & Google Connectors Components", () => {
     {
       kind: "imap",
       label: "Mailbox (IMAP)",
-      description: "Sync sent and received mail headers from any IMAP account.",
+      description: "Sync sent and received mail headers from any IMAP account",
       capabilities: { schedule: true },
     },
     {
       kind: "google",
       label: "Google Workspace",
-      description: "Sync contacts, mail and calendar with Google.",
+      description: "Sync contacts, mail and calendar with Google",
       capabilities: { schedule: true, oauth: true },
       configured: true,
     },
@@ -158,9 +158,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
       fireEvent.click(saveBtn);
 
       await waitFor(() => {
-        expect(
-          screen.getByText("Please enter an IMAP server host."),
-        ).toBeTruthy();
+        expect(screen.getByText("Enter the IMAP server's host")).toBeTruthy();
       });
     });
 
@@ -259,7 +257,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
           {
             kind: "google",
             label: "Google Workspace",
-            description: "Sync contacts, mail and calendar with Google.",
+            description: "Sync contacts, mail and calendar with Google",
             capabilities: { schedule: true, oauth: true },
             configured: false,
           },

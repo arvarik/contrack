@@ -166,7 +166,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         <EmptyState
           icon={MessageSquare}
           title="No interactions yet"
-          body="Log a note, a call, a meeting or an email above."
+          body="Log a note, a call, a meeting or an email above"
         />
       )}
 

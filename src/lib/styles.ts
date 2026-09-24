@@ -280,7 +280,8 @@ export const BTN_QUIET =
 /**
  * The mark on a setting that is not at its default: a 6 px accent dot after
  * the title. `SettingRow` draws it with a name for a screen reader and a
- * tooltip, and puts a `BTN_QUIET` "Reset" beside the control.
+ * tooltip, and the page ends with one "Reset to defaults" button while any
+ * of its settings wears it (`ResetToDefaults`).
  */
 export const CHANGED_MARK =
   "inline-block w-1.5 h-1.5 rounded-full bg-primary shrink-0";

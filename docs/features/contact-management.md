@@ -81,7 +81,7 @@ The three actions are icon buttons at every width. Each has an accessible name a
 2. **Import** (the upload arrow): opens the contact import dialog.
 3. **+** (named "New"): opens a menu with New contact, Add from text (smart paste) and New list.
 4. **Sort menu**: a menu button whose label is the current sort choice, named "Sort: A to Z" for a screen reader. The list orders by one of two things, each read both ways, which is the whole menu: **A to Z**, **Z to A**, **Newest**, **Oldest**. The active choice carries a check mark. It starts from the `listSort` account preference (Name or Recent), and a choice holds for the browsing session. A fifth choice ordered by the relationship score. It needed a sentence to explain it, the score is already on every row as the ring around the avatar, and Pulse ranks by score for a reader who wants that.
-5. **The filter row**: **All**, then **Tracked**, then one chip per list. The Tracked chip carries the count of tracked contacts and keeps the list to them. While it is active, a **Manage** link at the end of the row opens the [Tracked contacts page](#tracking). The Recent row hides under it, as it does under a list. The row shows with no lists at all, because the Tracked chip is the way into tracking.
+5. **The filter row**: **All**, then **Tracked**, then one chip per list. The Tracked chip carries the count of tracked contacts and keeps the list to them. While it is active, a **Manage** link at the end of the row opens the [Tracked contacts page](#tracking). The Recent row hides under it, as it does under a list. The row shows with no lists at all, because the Tracked chip is the way into tracking. A tag's name on **Settings → Tags** links to `/?tag=<tag>`: the row then shows the tag as a pressed chip after **All**, "# investor 7", and the list keeps the contacts with that whole tag, in any case. Pressing the chip, **All** or any other chip shows everyone again.
 
 ### The List
 
@@ -385,9 +385,9 @@ The relationship score and Pulse are about the people you chose to keep up with.
 
 ### The Tracked contacts page
 
-`/tracked` is a Network sub-page: the sidebar keeps Network lit. Three doors reach it: the Tracked chip's **Manage** link, the Keeping up card on Pulse, and **Settings → Your data → Tracked contacts**, which steps straight over to it. From the top:
+`/settings/tracked` is a settings page, under **Your data**: the Settings rail stays beside it as it does beside every settings page, and the sidebar keeps Settings lit. Two more doors reach it: the Tracked chip's **Manage** link and the Keeping up card on Pulse. The old `/tracked` path leads there, with its hash. The page scrolls itself, so its virtualised list has its own scroller, and **Select** sits in the page header's actions. From the top:
 
-1. The heading and one sentence.
+1. The heading and one sentence, the shell's, as on every settings page.
 2. A search box that narrows every group by name, company or role, and the order: **Name**, or **Recently tracked** (by the moment of tracking, newest first).
 3. The groups, each with a heading and a count, in this order: **At risk**, **Fading**, **Strong**, **No interactions yet**, **Not tracked**. The first four are the tracked contacts by their ring state. The last is A to Z. An empty group is left out. The headings carry ids (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`), so a link can land on a group.
 4. A row: the ring, the name as a link, the company, the cadence in words, and how far past it the contact is ("3 weeks past due") when it is. The clock is the last interaction, or the moment of tracking when nothing is logged yet. At the end, a 44 px toggle named "Untrack Ada Lovelace" or "Track Ada Lovelace".

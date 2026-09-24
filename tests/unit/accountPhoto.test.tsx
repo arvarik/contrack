@@ -145,7 +145,7 @@ describe("AccountPhotoField", () => {
 
     // Inline error text must be displayed
     await waitFor(() => {
-      expect(screen.getByText("Image must be under 10 MB.")).toBeTruthy();
+      expect(screen.getByText("Image must be under 10 MB")).toBeTruthy();
     });
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -172,7 +172,7 @@ describe("AccountPhotoField", () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith(validFile);
     });
-    expect(screen.queryByText("Image must be under 10 MB.")).toBeNull();
+    expect(screen.queryByText("Image must be under 10 MB")).toBeNull();
   });
 
   it("creates and revokes object URLs properly", () => {
@@ -372,7 +372,7 @@ describe("AccountFields with photo", () => {
     render(<FormWrapper />);
 
     expect(
-      screen.getByText("Optional. You can add or change it later in Settings."),
+      screen.getByText("Optional. You can add or change it later in Settings"),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Choose a profile photo" }),

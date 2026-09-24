@@ -35,21 +35,21 @@ const FORMATS: {
     icon: Contact,
     title: "vCard (.vcf)",
     description:
-      "Opens in Apple Contacts, Google Contacts, Outlook, and any phone. Import it back here at any time.",
+      "Opens in Apple Contacts, Google Contacts, Outlook, and any phone. Import it back here at any time",
   },
   {
     href: "/api/export/csv",
     icon: FileSpreadsheet,
     title: "Spreadsheet (.csv)",
     description:
-      "One row per contact, for a spreadsheet. Emails, phones and tags are joined into single cells.",
+      "One row per contact, for a spreadsheet. Emails, phones and tags are joined into single cells",
   },
   {
     href: "/api/export/json",
     icon: FileJson,
     title: "Everything (.json)",
     description:
-      "Every contact, interaction, list, action item and merge. The complete copy.",
+      "Every contact, interaction, list, action item and merge. The complete copy",
   },
 ];
 
@@ -57,7 +57,7 @@ export const ExportCard = () => (
   <div className={cn(SETTINGS_CARD, "space-y-4")}>
     <p className="text-sm text-on-surface-variant text-pretty">
       Your data is yours. Each file holds your own contacts only, never anyone
-      else&rsquo;s on this instance.
+      else&rsquo;s on this instance
     </p>
 
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

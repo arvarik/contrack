@@ -7,10 +7,12 @@
  * goes stale the first time somebody changes only one of them.
  *
  * So every plan that binds a key registers it here. The `?` dialog renders
- * from this table, and so will the Keyboard settings page. The unit test
- * reads it too, and it fails when two shortcuts in one group claim the same
- * keys, which is the collision a person would otherwise find by pressing a
- * key and getting the wrong action.
+ * from this table: the shortcuts that work everywhere on its left, and the
+ * ones for the page it opened on at its right (`pageShortcutGroups`). The
+ * Keyboard settings page lists the whole table. The unit test reads it too,
+ * and it fails when two shortcuts in one group claim the same keys, which is
+ * the collision a person would otherwise find by pressing a key and getting
+ * the wrong action.
  *
  * Destination names come from `lib/names`, so the dialog calls a page what
  * the sidebar calls it.
@@ -72,9 +74,12 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   NAMES.map.label,
   "Contact",
   NAMES.ask.label,
-  "Notes",
   NAMES.duplicates.label,
+  NAMES.possibleDuplicates.label,
 ];
+
+/** The groups that work on every page: the dialog's left column. */
+export const COMMON_GROUPS: readonly string[] = ["Navigation", "Global"];
 
 export const SHORTCUTS: readonly Shortcut[] = [
   // Pulse office
@@ -370,7 +375,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     page: "/contact/:id",
   },
 
-  // Ask Contrack
+  // Ask Contrack, in both modes: People and Notes share the box and the keys.
   {
     group: NAMES.ask.label,
     keys: ["/"],
@@ -385,13 +390,11 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: true,
     page: "/search",
   },
-
-  // Notes
   {
-    group: "Notes",
-    keys: ["/"],
-    description: "Focus search",
-    bareLetter: true,
+    group: NAMES.ask.label,
+    keys: ["Esc"],
+    description: "Clear the search",
+    bareLetter: false,
     page: "/search",
   },
 
@@ -400,46 +403,134 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.duplicates.label,
     keys: ["→", "L"],
-    description: "Merge into primary",
+    description: "Merge into the primary",
     bareLetter: true,
     page: "/settings/duplicates",
   },
   {
     group: NAMES.duplicates.label,
     keys: ["←", "H"],
-    description: "Keep separate (skip)",
+    description: "Keep separate",
     bareLetter: true,
     page: "/settings/duplicates",
   },
   {
     group: NAMES.duplicates.label,
     keys: ["↓", "J"],
-    description: "Next suggestion",
+    description: "Next group",
     bareLetter: true,
     page: "/settings/duplicates",
   },
   {
     group: NAMES.duplicates.label,
     keys: ["↑", "K"],
-    description: "Previous suggestion",
+    description: "Previous group",
     bareLetter: true,
     page: "/settings/duplicates",
   },
   {
     group: NAMES.duplicates.label,
     keys: ["⌘", "Z"],
-    description: "Undo last dismiss",
+    description: "Undo the last skip",
     bareLetter: false,
     page: "/settings/duplicates",
   },
+
+  // The Possible duplicates queue, one pair of rows at a time.
+  {
+    group: NAMES.possibleDuplicates.label,
+    keys: ["↓", "J"],
+    description: "Next pair",
+    bareLetter: true,
+    page: "/pulse/duplicates",
+  },
+  {
+    group: NAMES.possibleDuplicates.label,
+    keys: ["↑", "K"],
+    description: "Previous pair",
+    bareLetter: true,
+    page: "/pulse/duplicates",
+  },
+  {
+    group: NAMES.possibleDuplicates.label,
+    keys: ["→", "L"],
+    description: "Merge the pair",
+    bareLetter: true,
+    page: "/pulse/duplicates",
+  },
+  {
+    group: NAMES.possibleDuplicates.label,
+    keys: ["←", "H"],
+    description: "Keep them separate",
+    bareLetter: true,
+    page: "/pulse/duplicates",
+  },
+  {
+    group: NAMES.possibleDuplicates.label,
+    keys: ["Space"],
+    description: "Select the pair",
+    bareLetter: false,
+    page: "/pulse/duplicates",
+  },
 ];
+
+/** Shortcuts under one heading. */
+export interface ShortcutGroup {
+  group: string;
+  shortcuts: Shortcut[];
+}
 
 /** The shortcuts under their group headings, in `SHORTCUT_GROUP_ORDER`. */
 export function groupedShortcuts(
   entries: readonly Shortcut[] = SHORTCUTS,
-): { group: string; shortcuts: Shortcut[] }[] {
+): ShortcutGroup[] {
   return SHORTCUT_GROUP_ORDER.map((group) => ({
     group,
     shortcuts: entries.filter((entry) => entry.group === group),
   })).filter(({ shortcuts }) => shortcuts.length > 0);
+}
+
+/**
+ * Whether the page a shortcut belongs to is on screen at `pathname`.
+ *
+ * Three pages are on screen at more than their own path: the Network list
+ * stays beside an open contact, a contact also opens over the map, and the
+ * map keeps its keys while it does.
+ *
+ * @param page - A shortcut's `page`, for example `/` or `/contact/:id`.
+ * @param pathname - The location's path, with no query or hash.
+ * @returns True when the shortcut's keys work at that path.
+ */
+export function isOnPage(page: string, pathname: string): boolean {
+  switch (page) {
+    case "/":
+      return pathname === "/" || pathname.startsWith("/contact/");
+    case "/contact/:id":
+      return /^\/(map\/)?contact\//.test(pathname);
+    case "/map":
+      return pathname === "/map" || pathname.startsWith("/map/");
+    default:
+      return pathname === page;
+  }
+}
+
+/**
+ * The shortcuts of the page at `pathname`, for the dialog's right column.
+ *
+ * Every group whose shortcuts work at that path, in `SHORTCUT_GROUP_ORDER`,
+ * except that an open contact's group comes first: the contact is what the
+ * person is looking at, and the list or the map is beside or behind it.
+ *
+ * @param pathname - The location's path, with no query or hash.
+ * @returns The groups, empty on a page with no keys of its own.
+ */
+export function pageShortcutGroups(pathname: string): ShortcutGroup[] {
+  const groups = groupedShortcuts(
+    SHORTCUTS.filter(
+      (entry) => entry.page !== undefined && isOnPage(entry.page, pathname),
+    ),
+  );
+  const contact = groups.findIndex(({ group }) => group === "Contact");
+  if (contact > 0) groups.unshift(...groups.splice(contact, 1));
+  return groups;
 }

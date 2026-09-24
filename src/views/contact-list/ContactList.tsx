@@ -34,7 +34,9 @@ import {
   Copy,
   ChevronDown,
   ArrowRight,
+  Hash,
   Radar,
+  Tag,
 } from "lucide-react";
 import {
   useContacts,
@@ -81,7 +83,9 @@ import { ListIcon } from "./CreateListModal";
 import { ContactListModals } from "./ContactListModals";
 import {
   useContactListFilters,
+  hasTag,
   SORT_CHOICES,
+  TAG_FILTER_PREFIX,
   TRACKED_FILTER,
 } from "./hooks/useContactListFilters";
 import { useMultiSelect } from "./hooks/useMultiSelect";
@@ -500,6 +504,19 @@ export const ContactList = () => {
     () =>
       contacts.filter((c) => c.isTracked && !c.isArchived && !c.isGhost).length,
     [contacts],
+  );
+  /** The tag a link from the Tags page filters by, and its chip's count. */
+  const tagFilter = filterMode.startsWith(TAG_FILTER_PREFIX)
+    ? filterMode.slice(TAG_FILTER_PREFIX.length)
+    : null;
+  const tagContactCount = useMemo(
+    () =>
+      tagFilter
+        ? contacts.filter(
+            (c) => !c.isArchived && !c.isGhost && hasTag(c, tagFilter),
+          ).length
+        : 0,
+    [contacts, tagFilter],
   );
 
   const recentContacts = useMemo(
@@ -929,6 +946,18 @@ export const ContactList = () => {
                 active={filterMode === "all"}
                 onClick={() => setFilterMode("all")}
               />
+              {/* A tag, from a tag on the Tags settings page. The chip is
+                  there only while it filters, and pressing it shows
+                  everyone again, as pressing a pressed list chip does. */}
+              {tagFilter && (
+                <FilterButton
+                  label={tagFilter}
+                  icon={<Hash className="w-3.5 h-3.5" />}
+                  count={tagContactCount}
+                  active
+                  onClick={() => setFilterMode("all")}
+                />
+              )}
               <FilterButton
                 label="Tracked"
                 icon={<Radar className="w-3.5 h-3.5" />}
@@ -972,7 +1001,10 @@ export const ContactList = () => {
               {/* Under the Tracked chip, the door to the page that groups
                   everyone by their ring state and tracks in bulk. */}
               {filterMode === TRACKED_FILTER && (
-                <Link to="/tracked" className={cn(BTN_QUIET, "shrink-0")}>
+                <Link
+                  to="/settings/tracked"
+                  className={cn(BTN_QUIET, "shrink-0")}
+                >
                   Manage
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </Link>
@@ -1072,7 +1104,7 @@ export const ContactList = () => {
                   <CorvidMark size={64} className="text-primary/60" />
                 }
                 title="Your network is empty"
-                body="Bring in the people you already have, or add one by hand."
+                body="Bring in the people you already have, or add one by hand"
                 action={{
                   label: "Import",
                   icon: Upload,
@@ -1090,7 +1122,7 @@ export const ContactList = () => {
                 <EmptyState
                   icon={SearchX}
                   title={`Nobody matches "${searchQuery}"`}
-                  body="Try fewer letters, or search a company or a tag."
+                  body="Try fewer letters, or search a company or a tag"
                   action={{
                     label: "Clear search",
                     onClick: () => setSearchQuery(""),
@@ -1104,7 +1136,17 @@ export const ContactList = () => {
                   body={TRACKED_INTRO}
                   action={{
                     label: "Choose people",
-                    onClick: () => navigate("/tracked"),
+                    onClick: () => navigate("/settings/tracked"),
+                  }}
+                  level={id ? 3 : 2}
+                />
+              ) : tagFilter ? (
+                <EmptyState
+                  icon={Tag}
+                  title={`Nobody has the tag "${tagFilter}"`}
+                  action={{
+                    label: "Show everyone",
+                    onClick: () => setFilterMode("all"),
                   }}
                   level={id ? 3 : 2}
                 />
@@ -1112,7 +1154,7 @@ export const ContactList = () => {
                 <EmptyState
                   icon={ListPlus}
                   title="No contacts in this list"
-                  body="Add people from their contact page, or select several and choose List."
+                  body="Add people from their contact page, or select several and choose List"
                   level={id ? 3 : 2}
                 />
               ))}

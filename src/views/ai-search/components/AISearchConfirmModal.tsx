@@ -39,7 +39,7 @@ export function AISearchConfirmModal({
         <p className="text-sm text-on-surface-variant leading-relaxed">
           You're about to research{" "}
           <span className="font-bold text-on-surface">{total}</span> contact
-          {total !== 1 ? "s" : ""} using AI-powered internet search.
+          {total !== 1 ? "s" : ""} using AI-powered internet search
         </p>
 
         {/* Info bullets */}
@@ -62,8 +62,7 @@ export function AISearchConfirmModal({
           <p className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl p-3 leading-relaxed">
             <span className="font-bold">{previouslySearched}</span> of these
             contact{previouslySearched !== 1 ? "s have" : " has"} been
-            previously searched. New information will be added to their
-            profiles.
+            previously searched. New information will be added to their profiles
           </p>
         )}
 
@@ -90,7 +89,7 @@ export function AISearchConfirmModal({
 
         {/* Safety note */}
         <p className="text-[11px] text-on-surface-variant text-center leading-relaxed">
-          New data fills empty fields. Your existing data is never overwritten.
+          New data fills empty fields. Your existing data is never overwritten
         </p>
       </div>
     </Modal>

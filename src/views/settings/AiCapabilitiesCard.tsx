@@ -23,18 +23,18 @@ const CAPABILITIES: { key: AICapability; label: string; does: string }[] = [
   {
     key: "quick",
     label: "Quick tasks",
-    does: "Reading a signature, summaries, short answers.",
+    does: "Reading a signature, summaries, short answers",
   },
   {
     key: "deep",
     label: "Deep tasks",
-    does: "Judging duplicates, and longer reasoning.",
+    does: "Judging duplicates, and longer reasoning",
   },
-  { key: "research", label: "Web research", does: "Enrichment from the web." },
+  { key: "research", label: "Web research", does: "Enrichment from the web" },
   {
     key: "embeddings",
     label: "Embeddings",
-    does: "Search by meaning, and matching duplicates.",
+    does: "Search by meaning, and matching duplicates",
   },
 ];
 

@@ -11,7 +11,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { usePaneWidth } from "../../src/hooks/usePaneWidth";
-import { LIST_WIDTH } from "../../src/views/contact-list/listWidth";
+import { LEFT_PANE_WIDTH as LIST_WIDTH } from "../../src/components/layout/paneWidth";
 
 const KEY = "test.listWidth";
 const PROPERTY = "--list-width";

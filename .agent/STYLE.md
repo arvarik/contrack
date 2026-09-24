@@ -154,6 +154,27 @@ Missing". Product and destination names from `src/lib/names.ts` (Contrack,
 Ask Contrack, Pulse, Network, Map), brand names and acronyms keep their
 spelling.
 
+#### A statement ends without a period (REQUIRED)
+
+The line under a page's title, a row's description, a field's hint, an
+empty state's sentence, a card's subtitle, a dialog's description, a toast
+and a button are statements, and they end without a period: "Find and
+merge contacts that are the same person". A statement of several sentences
+keeps the periods between them and drops the last one. An ellipsis
+("Searching…") is not a period.
+
+- ✅ "Choose 2 to 5 contacts to merge. All their data is combined"
+- ❌ "Runs a few seconds after you add one."
+- ✅ Words a person only hears keep the period, because a speech engine
+  ends a sentence on it: an `aria-` name or description, a live region's
+  words (`lib/searchAnnouncements.ts`) and the drag announcements
+  (`PulseGrid`). A string that copies another system's words exactly keeps
+  them too, such as the server's sign-in error.
+- `tests/unit/copy.periods.test.ts` fails on a statement prop, on the text
+  before a closing tag and on any sentence written as a string under `src/`
+  that ends with one, and on a settings page's or a destination's
+  description that does.
+
 #### 11 px type floor (REQUIRED)
 
 No text a person reads is smaller than 11 px, anywhere. Body text is 14 px,
@@ -320,8 +341,23 @@ decoration, so the rule is short:
 Every scroller draws the same thin bar: the hairline token for the thumb,
 no track (the base layer in `src/index.css`, for all elements). Add no
 scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
-scrolls sideways. The Network list keeps its bar on the left edge
-(`dir="rtl"`), away from the letter rail.
+scrolls sideways. The two left panes, the Network list and the Settings
+rail, keep their bar on the left edge (`dir="rtl"` on the scroller, `ltr`
+inside it): away from the list's letter rail, and on the sidebar's side of
+the rail.
+
+### The left pane: one width
+
+From `lg` the Network list beside a contact and the Settings rail beside a
+settings page are one pane: 350 px to open, 300 to 480 px by the edge a
+person drags (`ResizeHandle`), and one width stored for both
+(`LEFT_PANE` in `src/components/layout/paneWidth.ts`). Moving between
+Network and Settings leaves the page beside the pane where it was. The
+pane's class reads the width (`w-(--pane-width)`), and the handle sits
+inside the pane, which is a child of the row it shares with the page.
+
+- ❌ A second resizable pane with bounds of its own, or a fixed width on a
+  left pane.
 
 ### The right-hand panel: one button, one panel
 
@@ -374,12 +410,17 @@ A page with a side panel (Ask Contrack's history, the map's insights) uses
   wears it looks assembled rather than designed. `styles.floor.test.ts`
   fails on it. A tone goes on a dot, a chip or the text.
 - ❌ A ring on a selected row. It reads as keyboard focus, on every visit.
-- ✅ An option in a radio group (a preset tile, a role, an expiry) takes the
-  tint and a `RadioDot` (`src/components/ui/RadioDot.tsx`) beside its label:
-  a ring on every option, filled with a centre dot on the chosen one. The
-  tint alone says "chosen" by hue, about 1.1 to 1 against the other options,
-  which WCAG 1.4.1 does not accept as the only cue. The option carries
-  `role="radio"` and `aria-checked`, or `aria-pressed`.
+- ✅ An option in a radio group (a preset tile, a role, a scan, a reset's
+  delivery) takes the tint and a `RadioDot`
+  (`src/components/ui/RadioDot.tsx`) beside its label: a ring on every
+  option, filled with a centre dot on the chosen one. The tint alone says
+  "chosen" by hue, about 1.1 to 1 against the other options, which WCAG
+  1.4.1 does not accept as the only cue. `ChoiceGroup`
+  (`src/components/ui/ChoiceGroup.tsx`) draws the group: `role="radiogroup"`
+  and `role="radio"` with `aria-checked`, one Tab stop, the arrow keys, a
+  hint under a label, `pending` while a change saves and `locked` when the
+  environment sets the value, both by `aria-disabled` so focus stays.
+- ❌ A radio group written by hand. Settings had ten.
 - ✅ A short exclusive choice with no hint is a `Segmented`, which keeps its
   raised option in a trough, radio semantics and the arrow keys.
 - ✅ The chosen swatch in a picker of colours, icons or avatars is
@@ -475,6 +516,25 @@ children (a search box, filters, a form)
 - ❌ A band behind the header, a border under it, or an icon tile beside the
   title.
 
+### The shortcuts dialog: the page's own
+
+`?` and the sidebar's keyboard button open `KeyboardShortcutsModal`, two
+columns from `sm` and one below it:
+
+- The left column is the shortcuts that work everywhere (`COMMON_GROUPS`:
+  Navigation and Global), the same on every page.
+- The right column is the page's own (`pageShortcutGroups(pathname)`): a
+  contact's and the list's beside it on a contact, the map's on the map,
+  the queue's on Pulse. A page with none says "No shortcuts of its own".
+- With single-key shortcuts off, the letters that switch turns off are
+  dimmed and named "off", and the footer says so with a link to turn them
+  on. Otherwise the footer says `?` opens the dialog anywhere and links to
+  **All shortcuts**, Settings, Keyboard, which lists the whole table.
+- Every key a page binds is a row in `SHORTCUTS` (`src/lib/shortcuts.ts`)
+  with the page it works on (`page`, matched by `isOnPage`), and obeys the
+  single-key switch. The caps are `ShortcutKeys`: a combination side by
+  side, alternatives with "or" between them.
+
 ### Menus and dropdowns
 
 One look, three components, no native `<select>`:
@@ -514,14 +574,21 @@ in the top layer, or in a portal at `document.body` like `ContextMenu`.
   box. Off: the highest container tone inside a hairline, a 16 px knob in
   `on-surface-variant`. On: the accent, a 20 px knob in `on-primary` with a
   check in it. Never a hand-rolled `role="switch"`.
-- ✅ A setting that is not at its default says so in two quiet places, and
-  nowhere else: a 6 px accent dot after the title (`CHANGED_MARK`, named
-  "Changed from the default" for a screen reader and a pointer) and a
-  "Reset" text button (`BTN_QUIET`, a `RotateCcw` glyph and the word) at the
-  start of the control cluster, so the control keeps its place on the row's
-  right edge. `SettingRow` draws both from `prefKey`.
-- ❌ A line of text under the description for the changed state, a coloured
-  bar down the row's left edge, or a "Reset" link with an underline.
+- ✅ A setting that is not at its default says so with a 6 px accent dot
+  after the title (`CHANGED_MARK`, named "Changed from the default" for a
+  screen reader and a pointer). "Not at its default" is the value, not the
+  storage: a value set back by hand is stored and takes its dot away
+  (`changed` in `PreferencesContext`).
+- ✅ While any setting on a page is changed, the page ends with one
+  **Reset to defaults** button, in the look of Pulse's Log note
+  (`.btn-primary` with a `RotateCcw` glyph), right-aligned under the last
+  card and the full width on a phone. It resets every changed setting on
+  the page, says how many in a toast with Undo, and puts the keyboard on the
+  first row it reset. `SettingRow` tells the page which key it holds, and
+  the shell draws the button (`ResetToDefaults`).
+- ❌ A "Reset" on each row, a line of text under the description for the
+  changed state, a coloured bar down the row's left edge, or a "Reset" link
+  with an underline.
 
 ## 3. Component Patterns
 
@@ -604,6 +671,10 @@ A screen with nothing to show renders `<EmptyState>`
   `error` for a place that failed to load), a 16 px bold title, one
   sentence at 14 px, and at most one action drawn as `.btn-primary`. `action`
   is one object, so a second button cannot be passed.
+- The sentence is for a place whose emptiness needs explaining. A simple
+  place says it in the title and takes none: "No lists yet" with New list
+  under it, "No tags yet", "Trash is empty". A section with nothing in it
+  and nothing to do (Recent imports before the first import) is not drawn.
 - The title is an `h2`. Inside a card that has its own `h2`, pass `level={3}`.
 - `illustration` replaces the icon tile. The corvid mark goes there.
 - The copy says what happened and what to do next, in one sentence each. The
@@ -916,7 +987,9 @@ Rules that follow from it:
   once.
 - **The Track button.** One control sets the flag on a contact page:
   `TrackButton`, a menu button (`ActionMenu`) with the `Radar` glyph, one
-  word and a chevron, 32 px tall, flat, with the state layer. Untracked it
+  word and a 12 px chevron, 32 px tall and about 110 px wide at its widest
+  word, flat, with the state layer. Its menu is as slim as its words, 11 rem
+  (`panelClassName`), where other menus start at 13. Untracked it
   reads Track on the container fill. Tracked it reads the cadence, one
   word ("Quarterly", or "2 months" for a value off the list), in the
   selected tint, with the glyph in `text-primary`. Narrow, the glyph and

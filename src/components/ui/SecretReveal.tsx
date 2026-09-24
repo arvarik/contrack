@@ -37,7 +37,7 @@ export const SecretReveal = ({
   label,
   /** Break the value into readable groups. For values a person will type. */
   grouped = false,
-  note = "Copy it now. It will not be shown again.",
+  note = "Copy it now. It will not be shown again",
 }: {
   value: string;
   /** Names the value in the copy confirmation, e.g. "Token". */

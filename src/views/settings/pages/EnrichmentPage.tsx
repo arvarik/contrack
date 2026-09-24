@@ -52,7 +52,7 @@ export const EnrichmentPage = () => {
           title={`${neverEnrichedContacts.length} ${
             neverEnrichedContacts.length === 1 ? "contact has" : "contacts have"
           } never been enriched`}
-          body="Select them to research their work, websites, and bio."
+          body="Select them to research their work, websites, and bio"
         >
           <button
             type="button"
@@ -70,7 +70,7 @@ export const EnrichmentPage = () => {
           id="auto-enrich"
           title="Enrich new contacts automatically"
           prefKey="autoEnrich"
-          description="Researches every contact you add. Each run uses some of the provider's quota."
+          description="Researches every contact you add. Each run uses some of the provider's quota"
           inline
         >
           <Switch
@@ -84,7 +84,7 @@ export const EnrichmentPage = () => {
           <SettingRow
             id="grounding"
             title="Web searches today"
-            description="The provider's daily limit for research on the web, for the whole instance."
+            description="The provider's daily limit for research on the web, for the whole instance"
             inline
           >
             <span className="text-sm font-bold text-on-surface tabular-nums whitespace-nowrap">

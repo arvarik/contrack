@@ -87,7 +87,7 @@ export const ActivityFeed = () => {
       const res = await undoMerge.mutateAsync(id);
       if (res?.conflicts && res.conflicts.length > 0) {
         toast.warning(
-          `Restored "${name}" with ${res.conflicts.length} conflict(s): survivor edits were retained.`,
+          `Restored "${name}" with ${res.conflicts.length} conflict(s): survivor edits were retained`,
         );
       } else {
         toast.success(`Restored "${name}"`);
@@ -114,7 +114,7 @@ export const ActivityFeed = () => {
         level={3}
         icon={Clock}
         title="No merge activity yet"
-        body="Merged contacts will appear here."
+        body="Merged contacts will appear here"
       />
     );
   }

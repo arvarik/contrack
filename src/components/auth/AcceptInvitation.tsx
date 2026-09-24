@@ -58,7 +58,7 @@ export const AcceptInvitation = ({
       );
       if (photoFailed) {
         toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+          "Your account is ready. The photo did not upload. Add it in Settings > Account",
         );
       }
       onAccepted();
@@ -73,7 +73,7 @@ export const AcceptInvitation = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not accept the invitation.")),
+                : "Could not accept the invitation")),
       );
       setBusy(false);
     }
@@ -86,13 +86,13 @@ export const AcceptInvitation = ({
         title="This invitation is no longer valid"
         subtitle={
           formError ??
-          "The link has been used, revoked, or has expired. Ask whoever invited you for a new one."
+          "The link has been used, revoked, or has expired. Ask whoever invited you for a new one"
         }
         onSubmit={(event) => {
           event.preventDefault();
           onCancel();
         }}
-        footer="An invitation link works once. A new one takes an administrator a few seconds to make."
+        footer="An invitation link works once. A new one takes an administrator a few seconds to make"
       >
         <AuthSubmit>Go to sign-in</AuthSubmit>
       </AuthShell>
@@ -102,7 +102,7 @@ export const AcceptInvitation = ({
   return (
     <AuthShell
       title="You've been invited"
-      subtitle="Choose how you'll sign in. Your account starts empty — an invitation gives you a place on this Contrack, not access to anybody else's contacts."
+      subtitle="Choose how you'll sign in. Your account starts empty — an invitation gives you a place on this Contrack, not access to anybody else's contacts"
       onSubmit={handleSubmit}
       footer={
         <>
