@@ -141,7 +141,7 @@ export const UpNextCard = ({
             level={3}
             icon={PartyPopper}
             title="Nothing due today"
-            body="Log a note to keep the streak."
+            body="Log a note to keep the streak"
             action={{
               label: "Log note",
               icon: PenLine,

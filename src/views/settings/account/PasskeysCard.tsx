@@ -115,7 +115,7 @@ export const PasskeysCard = () => {
         <h3 className="text-sm font-bold text-on-surface">Passkeys</h3>
         <p className="text-sm text-on-surface-variant text-pretty">
           Passkeys need HTTPS or localhost. This page is open at{" "}
-          <code>{currentOrigin}</code>.
+          <code>{currentOrigin}</code>
         </p>
       </div>
     );
@@ -127,7 +127,7 @@ export const PasskeysCard = () => {
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-on-surface">Passkeys</h3>
           <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
-            Sign in to this Contrack with Face ID, Touch ID, or a security key.
+            Sign in to this Contrack with Face ID, Touch ID, or a security key
           </p>
         </div>
         {passkeys.length > 0 && (
@@ -153,7 +153,7 @@ export const PasskeysCard = () => {
         <EmptyState
           icon={KeyRound}
           title="No passkeys yet"
-          body="No passkeys yet. Add one to sign in without typing a password."
+          body="No passkeys yet. Add one to sign in without typing a password"
           action={{
             label: isAdding ? "Waiting for device…" : "Add a passkey",
             onClick: handleAddPasskey,
@@ -265,7 +265,7 @@ export const PasskeysCard = () => {
           if (deleteTarget) removeMutation.mutate(deleteTarget.id);
         }}
         title="Remove passkey"
-        description={`You can no longer sign in with ${deleteTarget?.name ?? "it"}.`}
+        description={`You can no longer sign in with ${deleteTarget?.name ?? "it"}`}
         confirmLabel="Remove passkey"
         tone="danger"
         busy={removeMutation.isPending}

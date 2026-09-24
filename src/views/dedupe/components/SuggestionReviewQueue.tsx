@@ -47,6 +47,8 @@ import { fallbackAvatarUrl } from "../../../lib/avatar";
 import type { Contact, PersistedDedupeSuggestion } from "../../../types";
 import { activateOnKey, radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
+import { isTypingTarget } from "../../../lib/keyboard";
 
 // =============================================================================
 // Lightweight Union-Find for frontend cluster grouping
@@ -219,6 +221,7 @@ export const SuggestionReviewQueue = () => {
   const mergeCluster = useMergeCluster();
   const dismissSuggestion = useDismissSuggestion();
   const navigate = useNavigate();
+  const singleKeys = useSingleKeyShortcuts();
 
   const clusters = useMemo(
     () => buildSuggestionClusters(suggestions),
@@ -339,10 +342,11 @@ export const SuggestionReviewQueue = () => {
     if (clusters.length === 0) return;
 
     const handler = (e: KeyboardEvent) => {
-      // Don't intercept when typing in inputs
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if ((e.target as HTMLElement)?.isContentEditable) return;
+      if (isTypingTarget(e)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // The letters are single-key shortcuts, and the switch in Settings,
+      // Keyboard turns them off. The arrows and Space stay.
+      if (!singleKeys && /^[hjkl]$/.test(e.key)) return;
 
       switch (e.key) {
         case "j":
@@ -403,12 +407,21 @@ export const SuggestionReviewQueue = () => {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             const cluster = clusters[focusedIndex];
-            for (const s of cluster.suggestions) {
-              dismissSuggestion.mutateAsync(s.id).catch(() => {});
-            }
-            toast("Kept separate", {
-              icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
-            });
+            Promise.all(
+              cluster.suggestions.map((s) =>
+                dismissSuggestion.mutateAsync(s.id),
+              ),
+            )
+              .then(() =>
+                toast("Kept separate", {
+                  icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
+                }),
+              )
+              .catch((err: unknown) =>
+                toast.error(
+                  `Dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+              );
           }
           break;
         }
@@ -424,7 +437,14 @@ export const SuggestionReviewQueue = () => {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [clusters, focusedIndex, mergeCluster, dismissSuggestion, toggleSelect]);
+  }, [
+    clusters,
+    focusedIndex,
+    mergeCluster,
+    dismissSuggestion,
+    toggleSelect,
+    singleKeys,
+  ]);
 
   if (isLoading) {
     return (
@@ -441,7 +461,7 @@ export const SuggestionReviewQueue = () => {
         level={3}
         icon={CheckCircle2}
         title="No duplicates found"
-        body="Run a scan after an import to check again."
+        body="Run a scan after an import to check again"
         action={{
           label: "Scan now",
           icon: ScanSearch,
@@ -883,7 +903,7 @@ function ClusterCard({
           <div className="flex-1 min-w-0">
             <p className="text-sm text-on-surface leading-relaxed">
               These {cluster.contacts.length} contacts may represent the same
-              person.
+              person
             </p>
           </div>
           {/* Under the sentence on a phone, which the two chips squeezed
@@ -920,9 +940,9 @@ function ClusterCard({
           <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
           <p className="text-xs text-warning leading-relaxed">
             <span className="font-bold">
-              Large cluster ({cluster.contacts.length} contacts).
+              Large cluster ({cluster.contacts.length} contacts)
             </span>{" "}
-            Review carefully — merging many contacts is harder to undo.
+            Review carefully — merging many contacts is harder to undo
           </p>
         </div>
       )}

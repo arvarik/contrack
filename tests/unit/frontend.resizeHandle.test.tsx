@@ -24,7 +24,7 @@ import {
   RESIZE_STEP,
   RESIZE_STEP_LARGE,
 } from "../../src/components/layout/ResizeHandle";
-import { LIST_WIDTH } from "../../src/views/contact-list/listWidth";
+import { LEFT_PANE_WIDTH as LIST_WIDTH } from "../../src/components/layout/paneWidth";
 
 const KEY = "test.listWidth";
 const PROPERTY = "--list-width";

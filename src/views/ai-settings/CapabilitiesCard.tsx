@@ -85,23 +85,23 @@ const GROUPS: CapabilityGroup[] = [
     title: "Language models",
     icon: <MessageSquareText className="w-4 h-4 text-primary" />,
     blurb:
-      "Reading and writing text — parsing a pasted signature, summarising an email, deciding whether two contacts are the same person. Contrack splits this in two so routine work runs on a cheap fast model and the hard work runs on a stronger one.",
+      "Reading and writing text — parsing a pasted signature, summarising an email, deciding whether two contacts are the same person. Contrack splits this in two so routine work runs on a cheap fast model and the hard work runs on a stronger one",
     capabilities: [
       {
         key: "quick",
         label: "Quick tasks",
         icon: <Zap className="w-4 h-4 text-warning" />,
-        summary: "High volume, low complexity. Favours cheap, fast models.",
+        summary: "High volume, low complexity. Favours cheap, fast models",
         detail:
-          "Magic Paste contact parsing, @mention extraction, search understanding and result verification, daily insights, and search expansion.",
+          "Magic Paste contact parsing, @mention extraction, search understanding and result verification, daily insights, and search expansion",
       },
       {
         key: "deep",
         label: "Deep tasks",
         icon: <BrainCircuit className="w-4 h-4 text-primary" />,
-        summary: "Lower volume, harder reasoning. Favours stronger models.",
+        summary: "Lower volume, harder reasoning. Favours stronger models",
         detail:
-          "Email (.eml) summarisation, duplicate adjudication, and structured extraction from research results.",
+          "Email (.eml) summarisation, duplicate adjudication, and structured extraction from research results",
       },
     ],
   },
@@ -110,19 +110,19 @@ const GROUPS: CapabilityGroup[] = [
     title: "Embeddings",
     icon: <Dna className="w-4 h-4 text-success" />,
     blurb:
-      "A different kind of model: instead of writing text it turns each contact into a list of numbers, so Contrack can compare people by meaning rather than spelling. This is what makes “who works in climate tech?” find someone whose profile never says those words.",
+      "A different kind of model: instead of writing text it turns each contact into a list of numbers, so Contrack can compare people by meaning rather than spelling. This is what makes “who works in climate tech?” find someone whose profile never says those words",
     capabilities: [
       {
         key: "embeddings",
         label: "Embedding model",
         icon: <Dna className="w-4 h-4 text-success" />,
         summary:
-          "Powers semantic search ranking and duplicate similarity detection.",
+          "Powers semantic search ranking and duplicate similarity detection",
         detail:
-          "The built-in model runs locally, costs nothing, and works offline. A hosted model can rank better on large networks, at the cost of sending contact text to that provider.",
+          "The built-in model runs locally, costs nothing, and works offline. A hosted model can rank better on large networks, at the cost of sending contact text to that provider",
         specialMode: { mode: "auto", label: "Built-in (local, recommended)" },
         warning:
-          "Saving a different embedding model re-embeds every contact and rebuilds both vector indexes in the background. Search results will be incomplete until that finishes.",
+          "Saving a different embedding model re-embeds every contact and rebuilds both vector indexes in the background. Search results will be incomplete until that finishes",
       },
     ],
   },
@@ -131,16 +131,16 @@ const GROUPS: CapabilityGroup[] = [
     title: "Web research",
     icon: <Globe className="w-4 h-4 text-info" />,
     blurb:
-      "Looking things up on the live internet. Only some models can do this — it needs a built-in search tool, so the list below is much shorter than the language-model lists above. A self-hosted SearXNG instance can stand in for it.",
+      "Looking things up on the live internet. Only some models can do this — it needs a built-in search tool, so the list below is much shorter than the language-model lists above. A self-hosted SearXNG instance can stand in for it",
     capabilities: [
       {
         key: "research",
         label: "Research model",
         icon: <Globe className="w-4 h-4 text-info" />,
         summary:
-          "Powers contact enrichment, which researches people on the web.",
+          "Powers contact enrichment, which researches people on the web",
         detail:
-          "Only models with a first-party web-search tool are listed. Custom OpenAI-compatible endpoints never appear here: the compat API has no search standard.",
+          "Only models with a first-party web-search tool are listed. Custom OpenAI-compatible endpoints never appear here: the compat API has no search standard",
         specialMode: { mode: "disabled", label: "Off — never research online" },
       },
     ],
@@ -273,9 +273,9 @@ const CapabilityRow = ({
       <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
       <span className="text-warning">
         {saved.mode === "disabled"
-          ? "Turned off. Contrack will not use this capability."
+          ? "Turned off. Contrack will not use this capability"
           : (state?.unavailableReason ??
-            "Nothing available for this capability.")}
+            "Nothing available for this capability")}
       </span>
     </>
   );
@@ -363,8 +363,8 @@ const CapabilityRow = ({
       {!modelsLoading && modelCount === 0 && (
         <p className="text-xs text-on-surface-variant mt-1.5">
           {meta.key === "research"
-            ? "None of your connected providers offer a web-search model."
-            : "No connected provider has models for this yet — add a key above, or refresh a provider's model list."}
+            ? "None of your connected providers offer a web-search model"
+            : "No connected provider has models for this yet — add a key above, or refresh a provider's model list"}
         </p>
       )}
 
@@ -394,7 +394,7 @@ export const CapabilitiesCard = ({ settings }: { settings: AISettings }) => {
           Contrack uses three different kinds of AI, and they are not
           interchangeable. Each section below explains one kind and lets you
           choose what runs it, or leave it on <strong>Automatic</strong>, which
-          picks the best option from whatever you have connected.
+          picks the best option from whatever you have connected
         </p>
 
         {!hasAnyProvider && (
@@ -403,7 +403,7 @@ export const CapabilitiesCard = ({ settings }: { settings: AISettings }) => {
             <span className="text-pretty">
               No providers connected, so the language-model and web-research
               features are off. Semantic search still works — it runs on the
-              built-in local embedding model.
+              built-in local embedding model
             </span>
           </div>
         )}

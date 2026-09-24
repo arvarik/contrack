@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { compileQueryPlan } from "../queryConstraints.ts";
+import { compileQueryPlan, roleVariants } from "../queryConstraints.ts";
 import { matchesQueryLocations } from "../searchLocations.ts";
 const QUERY_PLAN_VERSION = 3;
 import { AppError } from "../../utils/AppError.ts";
@@ -283,11 +283,12 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       }
     }
     if (plan?.must.roleMatchers?.length) {
+      // The same forms the retrieval's filter accepts (`roleVariants`), or
+      // a candidate it let in would be dropped here.
+      const role =
+        cand.role?.trim() || ((candAsRecord["headline"] as string) ?? "");
       const ok = plan.must.roleMatchers.some((mat) =>
-        wordBoundaryMatch(
-          cand.role?.trim() || ((candAsRecord["headline"] as string) ?? ""),
-          mat,
-        ),
+        roleVariants(mat).some((form) => wordBoundaryMatch(role, form)),
       );
       if (!ok) {
         droppedHardConstraint++;

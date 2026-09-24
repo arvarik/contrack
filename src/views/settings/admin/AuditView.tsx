@@ -267,7 +267,6 @@ export const AuditView = () => {
         empty={{
           icon: ScrollText,
           title: group ? "Nothing of this kind yet" : "Nothing recorded yet",
-          body: "Administrative actions and sign-ins show up here as they happen.",
         }}
         footer={
           query.hasNextPage ? (
@@ -282,7 +281,7 @@ export const AuditView = () => {
             </AdminButton>
           ) : entries.length > 0 ? (
             <p className="text-xs text-on-surface-variant">
-              That is the whole log.
+              That is the whole log
             </p>
           ) : undefined
         }
@@ -294,7 +293,7 @@ export const AuditView = () => {
 
       <p className="text-xs text-on-surface-variant px-1 text-pretty">
         Passwords, tokens and invitation secrets are never written here.
-        Contrack deletes an entry after 90 days.
+        Contrack deletes an entry after 90 days
       </p>
     </AdminPage>
   );

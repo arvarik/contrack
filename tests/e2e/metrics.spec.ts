@@ -56,7 +56,7 @@ const SCREENS: Screen[] = [
   },
   {
     name: "tracked contacts",
-    path: () => "/tracked",
+    path: () => "/settings/tracked",
     ready: async (page) => {
       await expect(
         page.getByRole("heading", { level: 1, name: "Tracked contacts" }),

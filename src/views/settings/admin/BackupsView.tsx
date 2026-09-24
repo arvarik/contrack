@@ -146,7 +146,7 @@ export const BackupsView = () => {
         empty={{
           icon: Database,
           title: "No snapshots yet",
-          body: "Take one now, or turn on scheduled snapshots in General.",
+          body: "Take one now, or turn on scheduled snapshots in General",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
@@ -164,7 +164,7 @@ export const BackupsView = () => {
               it opened, passed SQLite&rsquo;s integrity check, and has rows in
               every table. Snapshots stay in the server&rsquo;s data folder:
               copy them somewhere else to make them a backup, which Contrack
-              cannot do for you.
+              cannot do for you
             </p>
             {connectors && connectors.length > 0 && (
               <p className="text-xs text-on-surface-variant text-pretty">
@@ -172,7 +172,7 @@ export const BackupsView = () => {
                 <code className="font-mono text-on-surface">
                   DATA_DIR/secret.key
                 </code>
-                . Keep it with your backups.
+                . Keep it with your backups
               </p>
             )}
           </div>

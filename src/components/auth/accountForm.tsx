@@ -266,7 +266,7 @@ export const AccountFields = ({
       <AuthField
         id="email"
         label="Email"
-        hint="Used to sign in. Contrack never sends mail."
+        hint="Used to sign in. Contrack never sends mail"
         type="email"
         inputMode="email"
         value={form.values.email}

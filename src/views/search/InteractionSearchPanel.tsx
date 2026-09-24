@@ -7,15 +7,28 @@
  * the same question over the same notes gives the same page every time.
  *
  * The page has People's shape and feel: the same search box with the same
- * search button, the same "Searching…" line and shimmer while an answer is
- * on its way, and the same results header. Enter or the button searches, as
- * on People. The box used to search as the words were typed, with no button
- * to press, which People had.
+ * search button, the same "Searching…" line and shimmer while a first answer
+ * is on its way, and the same results header. Enter or the button searches,
+ * as on People. The box used to search as the words were typed, with no
+ * button to press, which People had.
  *
  * The state lives in the URL (`q`, `from`, `to`, `type`), so Back returns to
  * the same search and a link to it can be shared. The input is the one thing
  * kept locally, and it reaches `q` when it is searched. The filters under the
  * box, the kind and the period, apply the moment they change.
+ *
+ * **What stays on screen while an answer loads.** The last answer, notes or
+ * "No notes match", stays where it is until the next one arrives, and the
+ * next one replaces it in place: a card that is in both answers stays put,
+ * and only a new card fades in. A search slower than 150 ms dims the old
+ * answer and turns the box's glyph into a spinner (`useLoadingShown`), and
+ * the new answer ends both at once. Only a first search, with nothing on
+ * screen yet, shows the "Searching…" line and the shimmer, and they stay at
+ * least 400 ms so they never blink. The panel used to remount the old cards
+ * the moment the words changed, so they vanished and faded back in before
+ * the answer came, to drop the answer on screen for a shimmer after 150 ms,
+ * to hold a slow answer back behind the shimmer, and to spin the glyph for
+ * one frame on every fast search.
  */
 import React, {
   useCallback,
@@ -287,7 +300,14 @@ export const InteractionSearchPanel = () => {
   const [text, setText] = useState(q);
   const [mode, setMode] = useState<"auto" | "all" | "any">("auto");
   const [sort, setSort] = useState<"relevance" | "date">("relevance");
-  const [offset, setOffset] = useState(0);
+  // The page of results belongs to one search: a new question or filter
+  // starts from the first page. Worked out as the panel renders, so the
+  // query never runs once with the old offset first, which an effect that
+  // reset it after the render did.
+  const searchKey = [q, from, to, type, mode, sort].join("\u0000");
+  const [page, setPage] = useState({ key: searchKey, offset: 0 });
+  const offset = page.key === searchKey ? page.offset : 0;
+  const setOffset = (next: number) => setPage({ key: searchKey, offset: next });
   /**
    * Whether the reader asked for the date fields. Dates that happen to equal
    * a preset are shown as that preset until Custom is chosen, and Custom
@@ -323,11 +343,6 @@ export const InteractionSearchPanel = () => {
       setText(q);
     }
   }, [q]);
-
-  // A new question or filter starts from the first page.
-  useEffect(() => {
-    setOffset(0);
-  }, [q, from, to, type, mode, sort]);
 
   /**
    * Focus the question on arrival, unless the reader arrived by arrow key on
@@ -384,15 +399,19 @@ export const InteractionSearchPanel = () => {
   const showModeToggle = (result?.query.tokens.length ?? 0) >= 2;
 
   /**
-   * The results on screen belong to an earlier search while this one
-   * loads: the query keeps them (`keepPreviousData`) so a filter change
-   * does not blank the page. Past a short wait the page says it is
-   * searching instead, the way People does, and never for an answer fast
-   * enough to flash.
+   * The answer on screen belongs to an earlier search while this one
+   * loads: the query keeps it (`keepPreviousData`), so a new question or
+   * filter does not blank the page. Past 150 ms the old answer dims and
+   * the glyph spins. With nothing on screen yet, the shimmer shows instead,
+   * and it holds for 400 ms once it shows, so it never blinks: the answer
+   * waits for it, and it goes up only once per wait.
    */
-  const pending =
-    hasSearch && search.isFetching && (search.isPlaceholderData || !result);
-  const searching = useLoadingShown(pending);
+  const busy = useLoadingShown(hasSearch && search.isFetching);
+  const stale = Boolean(result) && search.isPlaceholderData;
+  const [shimmer, setShimmer] = useState(false);
+  if (busy && !result && !shimmer) setShimmer(true);
+  if (!busy && shimmer) setShimmer(false);
+  const dimmed = busy && stale;
 
   const recordSearch = useRecordSearch();
   const lastRecordedNotesQueryRef = useRef<string | null>(null);
@@ -447,7 +466,7 @@ export const InteractionSearchPanel = () => {
 
   const first = total === 0 ? 0 : offset + 1;
   const last = Math.min(offset + hits.length, total);
-  const showResults = !searching && hasSearch && hits.length > 0;
+  const showAnswer = !shimmer && hasSearch && result !== undefined;
 
   /**
    * The one sentence a screen reader hears about this search. The loading
@@ -485,7 +504,7 @@ export const InteractionSearchPanel = () => {
           canSubmit={text.trim().length > 0}
           icon={FileText}
           busyMark={
-            search.isFetching ? (
+            shimmer || dimmed ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : undefined
           }
@@ -579,12 +598,12 @@ export const InteractionSearchPanel = () => {
       </div>
 
       {/*
-        Searching, past a short wait: the line and the shimmer that People
-        shows, in one keyed slot with the results, so one swaps for the
+        A first search, past a short wait: the line and the shimmer that
+        People shows, in one slot with the answer, so one swaps for the
         other in a single commit.
       */}
-      {searching ? (
-        <div key="shimmer" className="fade-enter space-y-3">
+      {shimmer && (
+        <div className="fade-enter space-y-3">
           <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
             {/* Decorative: the word beside it says the same thing. */}
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -594,129 +613,125 @@ export const InteractionSearchPanel = () => {
           <ShimmerCard delay={0.08} />
           <ShimmerCard delay={0.16} />
         </div>
-      ) : (
-        <>
+      )}
+
+      {/* The last answer: the header, the notes, the pages or the empty
+          state. It dims while a slow search replaces it. */}
+      {showAnswer && result && (
+        <div
+          aria-busy={dimmed || undefined}
+          className={cn("space-y-6 transition-opacity", dimmed && "opacity-60")}
+        >
           {/* What the server understood, in the results' header: the count
               in the pill People uses, the date range it read, and the ways
               to match and order. With no notes found, only what still
               helps stays: the range it read, and the way back from "All
               words" a person chose. */}
-          {hasSearch &&
-            result &&
-            (total > 0 ||
-              result.query.range ||
-              (showModeToggle && mode === "all")) && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-                {total > 0 && (
-                  <div className="flex items-center gap-2">
-                    {/* A label in the muted ink, as on People: blue would
+          {(total > 0 ||
+            result.query.range ||
+            (showModeToggle && mode === "all")) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+              {total > 0 && (
+                <div className="flex items-center gap-2">
+                  {/* A label in the muted ink, as on People: blue would
                         read as a link. */}
-                    <span className={SECTION_HEADING}>Search results</span>
-                    <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
-                      {total} note{total === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                )}
-                {result.query.range && (
-                  <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
-                    <CalendarDays
-                      className="w-3 h-3 text-primary"
-                      aria-hidden
-                    />
-                    {result.query.phrase &&
-                    result.query.range.source === "phrase"
-                      ? `“${result.query.phrase}” → `
-                      : ""}
-                    {describeRange(
-                      result.query.range.from,
-                      result.query.range.to,
-                    )}
+                  <span className={SECTION_HEADING}>Search results</span>
+                  <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
+                    {total} note{total === 1 ? "" : "s"}
+                  </span>
+                </div>
+              )}
+              {result.query.range && (
+                <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
+                  <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
+                  {result.query.phrase && result.query.range.source === "phrase"
+                    ? `“${result.query.phrase}” → `
+                    : ""}
+                  {describeRange(
+                    result.query.range.from,
+                    result.query.range.to,
+                  )}
+                </span>
+              )}
+              {total > 0 &&
+                result.query.mode === "any" &&
+                showModeToggle &&
+                mode === "auto" && (
+                  <span className="inline-flex items-center gap-1 text-warning">
+                    <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
+                    No note has every word, showing notes with any of them
                   </span>
                 )}
-                {total > 0 &&
-                  result.query.mode === "any" &&
-                  showModeToggle &&
-                  mode === "auto" && (
-                    <span className="inline-flex items-center gap-1 text-warning">
-                      <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
-                      No note has every word, showing notes with any of them
-                    </span>
-                  )}
-                {showModeToggle && (total > 0 || mode === "all") && (
-                  <div
-                    className="inline-flex items-center gap-1 ml-auto"
-                    role="group"
-                    aria-label="How to match the words"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setMode(mode === "all" ? "auto" : "all")}
-                      className={cn(
-                        filterPill(result.query.mode === "all"),
-                        "min-h-[44px] sm:min-h-[36px]",
-                      )}
-                      aria-pressed={result.query.mode === "all"}
-                    >
-                      All words
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode(mode === "any" ? "auto" : "any")}
-                      className={cn(
-                        filterPill(result.query.mode === "any"),
-                        "min-h-[44px] sm:min-h-[36px]",
-                      )}
-                      aria-pressed={result.query.mode === "any"}
-                    >
-                      Any word
-                    </button>
-                  </div>
-                )}
-                {total > 0 && result.query.mode !== "none" && (
-                  <div
+              {showModeToggle && (total > 0 || mode === "all") && (
+                <div
+                  className="inline-flex items-center gap-1 ml-auto"
+                  role="group"
+                  aria-label="How to match the words"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === "all" ? "auto" : "all")}
                     className={cn(
-                      "inline-flex items-center gap-1",
-                      !showModeToggle && "ml-auto",
+                      filterPill(result.query.mode === "all"),
+                      "min-h-[44px] sm:min-h-[36px]",
                     )}
-                    role="group"
-                    aria-label="Order"
+                    aria-pressed={result.query.mode === "all"}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setSort("relevance")}
-                      className={cn(
-                        filterPill(sort === "relevance"),
-                        "min-h-[44px] sm:min-h-[36px]",
-                      )}
-                      aria-pressed={sort === "relevance"}
-                    >
-                      Best match
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSort("date")}
-                      className={cn(
-                        filterPill(sort === "date"),
-                        "min-h-[44px] sm:min-h-[36px]",
-                      )}
-                      aria-pressed={sort === "date"}
-                    >
-                      Newest
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-          {/* Results */}
-          {showResults && (
-            <div
-              key={`${q}|${from}|${to}|${type}|${offset}`}
-              className={cn(
-                "fade-enter space-y-2 transition-opacity",
-                search.isPlaceholderData && "opacity-70",
+                    All words
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === "any" ? "auto" : "any")}
+                    className={cn(
+                      filterPill(result.query.mode === "any"),
+                      "min-h-[44px] sm:min-h-[36px]",
+                    )}
+                    aria-pressed={result.query.mode === "any"}
+                  >
+                    Any word
+                  </button>
+                </div>
               )}
-            >
+              {total > 0 && result.query.mode !== "none" && (
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1",
+                    !showModeToggle && "ml-auto",
+                  )}
+                  role="group"
+                  aria-label="Order"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSort("relevance")}
+                    className={cn(
+                      filterPill(sort === "relevance"),
+                      "min-h-[44px] sm:min-h-[36px]",
+                    )}
+                    aria-pressed={sort === "relevance"}
+                  >
+                    Best match
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSort("date")}
+                    className={cn(
+                      filterPill(sort === "date"),
+                      "min-h-[44px] sm:min-h-[36px]",
+                    )}
+                    aria-pressed={sort === "date"}
+                  >
+                    Newest
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* The notes. A card that is in the next answer too stays put,
+              and only a new one fades in. */}
+          {hits.length > 0 && (
+            <div className="space-y-2">
               {hits.map((hit, i) => (
                 <HitCard key={hit.id} hit={hit} index={i} onOpen={open} />
               ))}
@@ -724,7 +739,7 @@ export const InteractionSearchPanel = () => {
           )}
 
           {/* Pages */}
-          {showResults && total > PAGE_SIZE && (
+          {hits.length > 0 && total > PAGE_SIZE && (
             <div className="flex items-center justify-between text-xs text-on-surface-variant">
               <span>
                 Showing {first}–{last} of {total}
@@ -750,33 +765,32 @@ export const InteractionSearchPanel = () => {
             </div>
           )}
 
-          {/* Nothing */}
-          {hasSearch &&
-            search.isSuccess &&
-            !search.isPlaceholderData &&
-            total === 0 && (
-              <EmptyState
-                icon={SearchX}
-                title="No notes match"
-                body={
-                  result?.query.range
-                    ? "Try a wider period, or fewer words."
-                    : "Try fewer words, or a stem such as hire for hiring."
-                }
-                // A chosen kind is the narrowest filter, and the one a
-                // person forgets they set. One press widens it again.
-                action={
-                  type
-                    ? {
-                        label: "Search all kinds",
-                        onClick: () => update({ type: "" }),
-                      }
-                    : undefined
-                }
-                className="tile-enter"
-              />
-            )}
-        </>
+          {/* Nothing. The words are stemmed and every word longer than a
+              letter matches as a prefix, so "hire" already finds hiring:
+              the way on is fewer words, or a wider period. */}
+          {total === 0 && (
+            <EmptyState
+              icon={SearchX}
+              title="No notes match"
+              body={
+                result.query.range
+                  ? "Try a wider period, or fewer words"
+                  : "Try fewer or other words"
+              }
+              // A chosen kind is the narrowest filter, and the one a
+              // person forgets they set. One press widens it again.
+              action={
+                type
+                  ? {
+                      label: "Search all kinds",
+                      onClick: () => update({ type: "" }),
+                    }
+                  : undefined
+              }
+              className="tile-enter"
+            />
+          )}
+        </div>
       )}
 
       {/*
@@ -792,7 +806,7 @@ export const InteractionSearchPanel = () => {
             body={
               search.error instanceof Error
                 ? search.error.message
-                : "An unexpected error occurred."
+                : "An unexpected error occurred"
             }
           />
         </div>

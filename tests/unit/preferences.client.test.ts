@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { DEFAULT_PREFERENCES } from "../../src/api/preferences";
+import { isDefaultValue, DEFAULT_PREFERENCES } from "../../src/api/preferences";
 import {
   LEGACY_KEYS,
   takeLocalPreferences,
@@ -158,5 +158,21 @@ describe("takeLocalPreferences", () => {
     // migrate a real history from another browser.
     localStorage.setItem(LEGACY_KEYS.searchHistory, "[]");
     expect(takeLocalPreferences([])).toEqual({});
+  });
+});
+
+describe("isDefaultValue", () => {
+  it("compares strings without case, numbers and flags exactly, and objects by content", () => {
+    expect(isDefaultValue("theme", "system")).toBe(true);
+    expect(isDefaultValue("theme", "dark")).toBe(false);
+    expect(isDefaultValue("accent", "#006A91")).toBe(true);
+    expect(isDefaultValue("defaultCadenceDays", 90)).toBe(true);
+    expect(isDefaultValue("defaultCadenceDays", 30)).toBe(false);
+    expect(isDefaultValue("aiAssist", true)).toBe(true);
+    expect(isDefaultValue("aiAssist", false)).toBe(false);
+    expect(isDefaultValue("pulseLayout", { hidden: [], order: {} })).toBe(true);
+    expect(
+      isDefaultValue("pulseLayout", { hidden: ["inbox"], order: {} }),
+    ).toBe(false);
   });
 });

@@ -35,13 +35,20 @@ the box apply the moment they change.
   messages. A chosen kind shows its glyph and its name ("Calls") in the
   selected tint. The period chips follow. On a phone the periods fold into
   one chip of the same kind, **Any time**, so both filters fit on one row.
-- **Searching.** An answer that takes longer than a moment shows the
-  "Searching…" line and three shimmer cards, as People does. A fast answer
-  never flashes them, and once shown they stay long enough to read.
+- **Searching.** The last answer stays where it is until the next one
+  arrives, and the next one replaces it in place: a note in both answers
+  keeps its card, and only a new card fades in. An answer slower than
+  150 ms dims the old one and turns the box's glyph into a spinner, and the
+  new answer ends both at once. Only a first search, with nothing on screen
+  yet, shows the "Searching…" line and three shimmer cards, as People does,
+  and once shown they stay 400 ms, so they never blink. A new question or
+  filter starts from the first page, in one request.
 - **Results.** The header reads "Search results" with the count in a pill,
   the period the words set, and the order and word-matching switches.
-- **Nothing found.** "No notes match", with a hint. With a kind chosen, one
-  press on **Search all kinds** widens the search again.
+- **Nothing found.** "No notes match", with a hint: fewer or other words,
+  or a wider period. Words are already stemmed and matched as prefixes, so
+  the hint never asks for a stem. With a kind chosen, one press on
+  **Search all kinds** widens the search again.
 - **Clear** and Escape empty the box and every filter, and the notes they
   found go with them.
 - There are no suggested questions before a search.

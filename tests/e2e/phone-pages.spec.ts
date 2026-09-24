@@ -3,8 +3,8 @@
  *
  * Checks:
  * 1. /settings/duplicates:
- *    - Full-width Segmented control ("Auto scan" and "Manual merge") unclipped and unwrapped.
- *    - "Merge activity" moves into an ActionMenu in the header below sm.
+ *    - Full-width Segmented control ("Scan" and "Manual merge") unclipped and unwrapped.
+ *    - "Merge activity" is the square button in the header's corner.
  *    - expectPageAccessible and expectFloors hold.
  * 2. /search:
  *    - The coverage row is shown under the search box before a search when < 100%.
@@ -44,7 +44,7 @@ test.describe("phone pages (390 px)", () => {
     await ensureScreenshotDir();
   });
 
-  test("duplicates on phone: segmented tabs unclipped, action menu opens merge activity, accessible", async ({
+  test("duplicates on phone: segmented tabs unclipped, the header button opens merge activity, accessible", async ({
     page,
   }, testInfo) => {
     await page.goto("/settings/duplicates");
@@ -53,7 +53,7 @@ test.describe("phone pages (390 px)", () => {
     ).toBeVisible();
 
     // Segmented tab controls
-    const autoScan = page.getByRole("radio", { name: "Auto scan" });
+    const autoScan = page.getByRole("radio", { name: "Scan", exact: true });
     const manualMerge = page.getByRole("radio", { name: "Manual merge" });
 
     await expect(autoScan).toBeVisible();
@@ -81,18 +81,13 @@ test.describe("phone pages (390 px)", () => {
     );
     expect(scrollers).toBe(1);
 
-    // Below sm, "Merge activity" moves into an ActionMenu in the header
-    const actionMenuBtn = page.getByRole("button", {
-      name: "Duplicates actions",
-    });
-    await expect(actionMenuBtn).toBeVisible();
-
-    await actionMenuBtn.click();
-    const mergeActivityItem = page.getByRole("menuitem", {
+    // Merge activity is the square button in the header's corner, at
+    // every width, as Ask Contrack's History is.
+    const activityButton = page.getByRole("button", {
       name: "Merge activity",
     });
-    await expect(mergeActivityItem).toBeVisible();
-    await mergeActivityItem.click();
+    await expect(activityButton).toBeVisible();
+    await activityButton.click();
 
     // Merge activity slide-out opens
     await expect(

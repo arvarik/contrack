@@ -1,17 +1,23 @@
 /**
  * SettingsRail — The left navigation rail for wide screens (lg and up).
  *
- * Fixed at 240px wide. Contains the search box at top, group headings in
- * SECTION_HEADING, and rows with icon, label and optional count pill.
- * The active row has aria-current="page" and wears the selected row's
- * tint, with its label in the tint's ink. One row is active: the page the
- * path belongs to (`findSettingsPage`), so Correspondents, under the
- * Connectors path, does not light Connectors too.
+ * The left pane, the way the Network list is: the same width, the same
+ * edge to drag between 300 and 480 px, and one stored width for both
+ * (`LEFT_PANE`), so moving between Network and Settings leaves the page
+ * beside the pane where it was. It holds the search box at the top, group
+ * headings in SECTION_HEADING, and rows with an icon, a label and an
+ * optional count pill. The active row has aria-current="page" and wears the
+ * selected row's tint, with its label in the tint's ink. One row is active:
+ * the page the path belongs to (`findSettingsPage`), so Correspondents,
+ * under the Connectors path, does not light Connectors too.
+ *
+ * The rows scroll with their bar on the left edge, as the Network list's
+ * do (`dir="rtl"` on the scroller, `ltr` inside it), so the bar sits on the
+ * sidebar's side and away from the page.
  *
  * The rail's own surface sets it apart from the page, with no line between
  * them. The label keeps one weight in both states, so the selected row's
- * label is as wide as it was and "Contact enrichment" still fits beside its
- * count.
+ * label is as wide as it was.
  */
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -25,6 +31,8 @@ import {
 import { SettingsSearch } from "./SettingsSearch";
 import { useAuth } from "../../components/auth/AuthGate";
 import { useAttentionCounts } from "./NeedsAttention";
+import { ResizeHandle } from "../../components/layout/ResizeHandle";
+import { LEFT_PANE } from "../../components/layout/paneWidth";
 import { SECTION_HEADING, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -54,7 +62,10 @@ export const SettingsRail = () => {
   const activeId = findSettingsPage(location.pathname)?.id;
 
   return (
-    <aside className="w-[240px] shrink-0 bg-surface-container-low flex flex-col h-full overflow-hidden">
+    // Not `overflow-hidden`: the handle's grip reaches past the rail's edge,
+    // over the page, and a clip would cut it off. The rail paints over the
+    // page (z 10) for the same reason.
+    <aside className="relative z-10 hidden lg:flex flex-col w-(--pane-width) shrink-0 h-full bg-surface-container-low">
       {/* The same 8 px sides as the rows below, so the box and a selected
           row share one width. */}
       <div className="px-2 pt-3 pb-2 shrink-0">
@@ -69,81 +80,89 @@ export const SettingsRail = () => {
       {!isSearching && (
         <nav
           aria-label="Settings"
-          // 8 px sides and 10 px inside a row, so the longest name beside
-          // its count ("Contact enrichment", 30) fits the 240 px rail
-          // without an ellipsis. A row the keyboard reaches scrolls into
-          // view with 12 px to spare, not flush with the rail's edge.
-          className="flex-1 overflow-y-auto px-2 py-2 space-y-4 scroll-py-3"
+          dir="rtl"
+          // 8 px sides and 10 px inside a row. A row the keyboard reaches
+          // scrolls into view with 12 px to spare, not flush with the
+          // rail's edge.
+          className="flex-1 min-h-0 overflow-y-auto px-2 py-2 scroll-py-3"
         >
-          {SETTINGS_GROUPS.map((group) => {
-            const pages = SETTINGS_PAGES.filter(
-              (page) =>
-                page.group === group.id &&
-                isSettingsPageVisible(page, { isAdmin, authRequired }),
-            );
+          <div dir="ltr" className="space-y-4">
+            {SETTINGS_GROUPS.map((group) => {
+              const pages = SETTINGS_PAGES.filter(
+                (page) =>
+                  page.group === group.id &&
+                  isSettingsPageVisible(page, { isAdmin, authRequired }),
+              );
 
-            if (pages.length === 0) return null;
+              if (pages.length === 0) return null;
 
-            return (
-              <div key={group.id} className="space-y-1">
-                <h2 className={cn(SECTION_HEADING, "px-2 py-1")}>
-                  {group.title}
-                </h2>
-                <div className="space-y-0.5">
-                  {pages.map((page: SettingsPage) => {
-                    const isActive = page.id === activeId;
-                    const badgeCount = badgeFor(page.id);
-                    const Icon = page.icon;
+              return (
+                <div key={group.id} className="space-y-1">
+                  <h2 className={cn(SECTION_HEADING, "px-2 py-1")}>
+                    {group.title}
+                  </h2>
+                  <div className="space-y-0.5">
+                    {pages.map((page: SettingsPage) => {
+                      const isActive = page.id === activeId;
+                      const badgeCount = badgeFor(page.id);
+                      const Icon = page.icon;
 
-                    return (
-                      <Link
-                        key={page.id}
-                        to={page.path}
-                        aria-current={isActive ? "page" : undefined}
-                        aria-label={
-                          badgeCount
-                            ? `${page.title}, ${badgeCount} waiting`
-                            : page.title
-                        }
-                        className={cn(
-                          "state-layer flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium transition-colors",
-                          isActive
-                            ? cn(SELECTED_ROW, "text-on-primary-wash")
-                            : "text-on-surface",
-                        )}
-                      >
-                        <Icon
+                      return (
+                        <Link
+                          key={page.id}
+                          to={page.path}
+                          aria-current={isActive ? "page" : undefined}
+                          aria-label={
+                            badgeCount
+                              ? `${page.title}, ${badgeCount} waiting`
+                              : page.title
+                          }
                           className={cn(
-                            "w-4 h-4 shrink-0",
-                            !isActive && "text-on-surface-variant",
+                            "state-layer flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium transition-colors",
+                            isActive
+                              ? cn(SELECTED_ROW, "text-on-primary-wash")
+                              : "text-on-surface",
                           )}
-                        />
-                        <span className="truncate flex-1">{page.title}</span>
-                        {badgeCount > 0 && (
-                          // On the selected row the pill takes the card
-                          // face: its own tint over the row's measured
-                          // 4.2 to 1.
-                          <span
-                            aria-hidden="true"
+                        >
+                          <Icon
                             className={cn(
-                              "shrink-0 px-1 py-0.5 rounded-md text-xs font-bold text-on-primary-wash tabular-nums",
-                              isActive
-                                ? "bg-surface-container-lowest"
-                                : "bg-primary/20",
+                              "w-4 h-4 shrink-0",
+                              !isActive && "text-on-surface-variant",
                             )}
-                          >
-                            {badgeCount}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
+                          />
+                          <span className="truncate flex-1">{page.title}</span>
+                          {badgeCount > 0 && (
+                            // On the selected row the pill takes the card
+                            // face: its own tint over the row's measured
+                            // 4.2 to 1.
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "shrink-0 px-1 py-0.5 rounded-md text-xs font-bold text-on-primary-wash tabular-nums",
+                                isActive
+                                  ? "bg-surface-container-lowest"
+                                  : "bg-primary/20",
+                              )}
+                            >
+                              {badgeCount}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </nav>
       )}
+
+      <ResizeHandle
+        {...LEFT_PANE}
+        label="Resize the settings list"
+        className="absolute inset-y-0 right-0"
+      />
     </aside>
   );
 };

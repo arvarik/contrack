@@ -122,15 +122,15 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
   const handleTest = async () => {
     setFormError(null);
     if (!host.trim()) {
-      setFormError("Enter an IMAP server host before testing.");
+      setFormError("Enter an IMAP server host before testing");
       return;
     }
     if (!username.trim()) {
-      setFormError("Enter your username or email address before testing.");
+      setFormError("Enter your username or email address before testing");
       return;
     }
     if (!isEditing && !password) {
-      setFormError("Enter your app password before testing.");
+      setFormError("Enter your app password before testing");
       return;
     }
 
@@ -170,19 +170,19 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     const trimmedUsername = username.trim();
 
     if (!trimmedName) {
-      setFormError("Please enter a name for this connector.");
+      setFormError("Enter a name for this connector");
       return;
     }
     if (!trimmedHost) {
-      setFormError("Please enter an IMAP server host.");
+      setFormError("Enter the IMAP server's host");
       return;
     }
     if (!trimmedUsername) {
-      setFormError("Please enter your IMAP username or email.");
+      setFormError("Enter your IMAP username or email");
       return;
     }
     if (!isEditing && !password) {
-      setFormError("Please enter your app password.");
+      setFormError("Enter your app password");
       return;
     }
 
@@ -243,7 +243,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           <p>
             <strong>Privacy:</strong> Headers only by default (From, To, Cc,
             Date, Subject). Bodies are read only to generate summaries for
-            messages that match a contact.
+            messages that match a contact
           </p>
         </div>
 
@@ -365,7 +365,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </div>
           <p className="text-xs text-on-surface-variant mt-1">
             Generate an app-specific password in your mail provider settings
-            (Gmail, iCloud, Fastmail, etc.).
+            (Gmail, iCloud, Fastmail, etc.)
           </p>
         </div>
 
@@ -386,7 +386,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             className={FORM_INPUT}
           />
           <p className="text-xs text-on-surface-variant mt-1">
-            Comma-separated list of mailboxes to scan (e.g. INBOX, Sent).
+            Comma-separated list of mailboxes to scan (e.g. INBOX, Sent)
           </p>
         </div>
 
@@ -407,7 +407,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             className={FORM_INPUT}
           />
           <p className="text-xs text-on-surface-variant mt-1">
-            Outgoing mail from these aliases will be counted as sent by you.
+            Outgoing mail from these aliases will be counted as sent by you
           </p>
         </div>
 
@@ -418,6 +418,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </span>
           <Segmented<number>
             label="Sync schedule"
+            className="sm:w-fit"
             value={intervalMinutes}
             onChange={setIntervalMinutes}
             options={[
@@ -436,6 +437,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </span>
           <Segmented<number>
             label="First sync goes back"
+            className="sm:w-fit"
             value={lookbackDays}
             onChange={setLookbackDays}
             options={[
@@ -454,7 +456,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             </span>
             <span className="text-xs text-on-surface-variant block mt-0.5">
               Consolidates multiple daily emails with the same person into one
-              timeline entry.
+              timeline entry
             </span>
           </div>
           <Switch
@@ -472,7 +474,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             </span>
             <span className="text-xs text-on-surface-variant block mt-0.5">
               Fetches email bodies for matched contacts to generate concise
-              interaction notes.
+              interaction notes
             </span>
           </div>
           <Switch

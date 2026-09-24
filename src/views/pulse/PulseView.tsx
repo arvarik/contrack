@@ -546,7 +546,7 @@ const PulseOffice = () => {
           icon={HeartPulse}
           tone="error"
           title="System disconnected"
-          body="Failed to load the relationship pulse dashboard."
+          body="Failed to load the relationship pulse dashboard"
         />
       </div>
     );

@@ -474,3 +474,39 @@ describe("text scale and motion attributes", () => {
     });
   });
 });
+
+describe("a value off its default", () => {
+  it("is changed only while it differs from the default, stored or not", async () => {
+    // Stored at the default: a person set it back by hand.
+    stored = { listDensity: "comfortable", theme: "dark" };
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.stored).toEqual(
+      expect.arrayContaining(["listDensity", "theme"]),
+    );
+    expect(result.current.changed).toEqual(["theme"]);
+
+    act(() => result.current.setPreference("theme", "system"));
+    await waitFor(() => expect(result.current.changed).toEqual([]));
+  });
+
+  it("sets several keys in one request", async () => {
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    act(() =>
+      result.current.setPreferences({ theme: "dark", listDensity: "compact" }),
+    );
+    await waitFor(() =>
+      expect(result.current.changed).toEqual(
+        expect.arrayContaining(["theme", "listDensity"]),
+      ),
+    );
+    const patches = calls.filter((call) => call.method === "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0].body).toEqual({ theme: "dark", listDensity: "compact" });
+  });
+});

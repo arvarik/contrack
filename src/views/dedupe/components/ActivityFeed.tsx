@@ -114,7 +114,7 @@ export const ActivityFeed = () => {
         level={3}
         icon={Clock}
         title="No merge activity yet"
-        body="Merged contacts will appear here."
+        body="Merged contacts will appear here"
       />
     );
   }

@@ -50,6 +50,15 @@ This progressive approach ensures the UI feels instant while AI enrichment loads
 | "Jane's coworkers at Stripe"              | Contacts who share Stripe as their company             |
 | "engineers who went to Stanford"          | Contacts with matching education + role                |
 
+A role in the question finds the other forms of its word in a title
+(`roleVariants` in `server/ai/queryConstraints.ts`): "engineers" finds a
+contact whose role is Engineering, "designers" finds Design, and "who works
+in marketing" finds a Marketer. The first words of a role stay as they are,
+so "software engineers" still means software. The hard filter and the check
+after the rerank read the same forms, so a contact the filter lets in is not
+dropped later. They matched whole words only, and "engineer" found nobody in
+an Engineering role.
+
 **API:** `POST /api/search/semantic`
 
 ---

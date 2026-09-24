@@ -41,6 +41,7 @@ import {
   COLUMN_CLASSES,
   GRID_CLASSES,
 } from "../../views/pulse/lib/pulseStyles";
+import { storedLeftPaneWidth } from "./paneWidth";
 
 /** Neutral pulsing block. */
 const Bar = ({ className }: { className?: string }) => (
@@ -182,8 +183,7 @@ export const PulseHeaderSkeleton = () => (
   />
 );
 
-export type RouteFallbackVariant =
-  "pulse" | "search" | "settings" | "tracked" | "map";
+export type RouteFallbackVariant = "pulse" | "search" | "settings" | "map";
 
 /**
  * @param variant which destination is loading — picks the matching silhouette
@@ -291,35 +291,14 @@ export const RouteFallback = ({
     );
   }
 
-  if (variant === "tracked") {
-    // The Tracked contacts page: its header, the search row and the list,
-    // in one centred box.
-    return (
-      <div className="h-full overflow-hidden bg-surface">
-        <div className={cn(PAGE_X, PAGE_TOP, "max-w-4xl mx-auto space-y-5")}>
-          <PageHeaderSkeleton title="w-52" description="w-full sm:w-[36rem]" />
-          <Block className="h-11 sm:h-10 rounded-xl" />
-          <div className="space-y-2">
-            {Array.from({ length: 5 }, (_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
-                <div className="w-9 h-9 rounded-full bg-surface-container-high/60 animate-pulse shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Bar className="h-3.5 w-40" />
-                  <Bar className="h-3 w-56 max-w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // settings: the rail from lg, then the header and the page in the page's
   // centred box. The list has no back link, and from lg no page has one.
   return (
     <div className="h-full flex overflow-hidden bg-surface">
-      <div className="hidden lg:block w-[240px] shrink-0 h-full bg-surface-container-low" />
+      <div
+        className="hidden lg:block shrink-0 h-full bg-surface-container-low"
+        style={{ width: storedLeftPaneWidth() }}
+      />
       <div className="flex-1 min-w-0 h-full flex flex-col overflow-hidden">
         <PageHeaderSkeleton
           title="w-36"

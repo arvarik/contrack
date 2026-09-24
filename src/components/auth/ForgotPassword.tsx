@@ -57,7 +57,7 @@ export const ForgotPassword = ({
     return (
       <AuthShell
         title="Reset your password"
-        subtitle="This Contrack cannot send email."
+        subtitle="This Contrack cannot send email"
         onSubmit={handleSubmit}
         footer={
           <button
@@ -100,7 +100,7 @@ export const ForgotPassword = ({
     return (
       <AuthShell
         title="Reset your password"
-        subtitle="If that address has an account, a link is on its way. It works for one hour."
+        subtitle="If that address has an account, a link is on its way. It works for one hour"
         onSubmit={(e) => {
           e.preventDefault();
           onBack();
@@ -132,7 +132,7 @@ export const ForgotPassword = ({
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="Enter your email address and we'll send you a link to reset your password."
+      subtitle="Enter your email address and we'll send you a link to reset your password"
       onSubmit={handleSubmit}
       footer={
         <button

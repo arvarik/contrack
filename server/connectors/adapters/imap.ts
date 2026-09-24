@@ -139,7 +139,7 @@ function isAuthError(err: unknown): boolean {
 export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
   kind: "imap",
   label: "Mailbox (IMAP)",
-  description: "Sync sent and received mail headers from any IMAP account.",
+  description: "Sync sent and received mail headers from any IMAP account",
   capabilities: {
     schedule: true,
     summaries: true,

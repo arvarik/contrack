@@ -130,7 +130,6 @@ export const ListManagerView = () => {
           <EmptyState
             icon={List}
             title="No lists yet"
-            body="A list groups people for a reason: a project, a city, a dinner."
             action={{
               label: "New list",
               icon: Plus,

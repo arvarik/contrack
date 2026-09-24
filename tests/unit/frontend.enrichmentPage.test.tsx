@@ -52,6 +52,7 @@ describe("EnrichmentPage", () => {
         autoEnrich: false,
       },
       stored: [],
+      changed: [],
       resetPreference: vi.fn(),
       setPreference: mockSetPreference,
     } as unknown as ReturnType<typeof prefContext.usePreferences>);

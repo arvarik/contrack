@@ -1,14 +1,16 @@
 /**
  * TrackedContactsView: the people you keep up with, and the people you don't.
  *
- * One page, two doors: the Tracked chip's Manage link on the Network page
- * and the Keeping up card on Pulse. Settings, Data lists it too. It is a
- * Network sub-page at `/tracked`, a full page the way `/pulse/duplicates`
- * is, and the sidebar keeps Network lit.
+ * A settings page, under Your data, at `/settings/tracked`: the rail stays
+ * beside it, the way it does beside every other settings page. It has two
+ * more doors, the Tracked chip's Manage link on the Network page and the
+ * Keeping up card on Pulse, and the old `/tracked` path leads here too. It
+ * scrolls itself, so the virtualised list has its own scroller, and the
+ * shell draws its header with Select in the header's actions.
  *
  * From the top:
  *
- * 1. The heading and one sentence.
+ * 1. The shell's heading and one sentence.
  * 2. A search box that narrows every group by name, company or role, and
  *    the order: Name, or Recently tracked (by `trackedAt`, newest first,
  *    tracked groups only).
@@ -58,22 +60,18 @@ import { useContacts } from "../api";
 import { ActionMenu } from "../components/ui/ActionMenu";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Segmented } from "../components/ui/Segmented";
-import { PageHeader } from "../components/layout/PageHeader";
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { useBulkActions } from "../components/bulk/useBulkActions";
 import { useSwapFocus } from "../components/bulk/useSwapFocus";
-import { usePageTitle } from "../hooks/usePageTitle";
 import { useTrackToggle, type TrackableContact } from "../hooks/useTrackToggle";
 import { describePastDue, parseServerTime } from "../lib/datetime";
-import { NAMES, TRACKED_INTRO } from "../lib/names";
+import { TRACKED_INTRO } from "../lib/names";
 import {
   BAR_BUTTON,
   BAR_LABEL,
   BTN_QUIET,
   CARD,
   ICON_BTN,
-  PAGE_TOP,
-  PAGE_X,
   SEARCH_INPUT,
   SECTION_HEADING,
   SELECTED_ROW,
@@ -82,6 +80,8 @@ import {
 import { cn } from "../lib/utils";
 import type { Contact } from "../types";
 import { SelectedCount } from "./contact-list/BulkActionToolbar";
+import { SettingsHeaderActions } from "./settings/SettingsHeader";
+import { SETTINGS_BOX } from "./settings/layout";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The groups
@@ -372,7 +372,6 @@ type Item =
   { kind: "heading"; group: TrackedGroup } | { kind: "row"; contact: Contact };
 
 export const TrackedContactsView = () => {
-  usePageTitle(NAMES.tracked.title);
   const location = useLocation();
   const { data: contacts = [], isLoading } = useContacts();
 
@@ -484,7 +483,12 @@ export const TrackedContactsView = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  // Off until the list is long enough to need it. An enabled virtualizer
+  // takes over the scroller when it attaches and puts it back at its own
+  // offset, which sent a hash link's group (`#fading`) back to the top
+  // when the page opened with the contacts already loaded.
   const virtualizer = useVirtualizer({
+    enabled: virtual,
     count: virtual ? items.length : 0,
     getScrollElement: () => scrollRef.current,
     scrollMargin,
@@ -542,53 +546,45 @@ export const TrackedContactsView = () => {
   );
 
   return (
+    // The page's scroller keeps its bar's lane, as the shell's does, so the
+    // cards sit under the title whether or not the page scrolls.
     <div
       ref={scrollRef}
-      className="h-full overflow-y-auto"
+      className="h-full overflow-y-auto [scrollbar-gutter:stable]"
       style={barRoom ? { scrollPaddingBottom: barRoom } : undefined}
     >
-      <div
-        className={cn(
-          PAGE_X,
-          PAGE_TOP,
-          "max-w-4xl mx-auto pb-24 md:pb-6 space-y-5",
+      {/* Select sits with the title, in the header's actions, as on the
+          Network list. In the row below it wrapped to a line of its own on
+          a phone, under the full-width order control. */}
+      <SettingsHeaderActions>
+        {selectMode ? (
+          // The count is in the bar, once.
+          <button
+            key="done"
+            ref={doneButtonRef}
+            type="button"
+            onClick={exitSelectMode}
+            className="btn-secondary btn-sm"
+          >
+            Done
+          </button>
+        ) : (
+          <button
+            key="select"
+            ref={selectButtonRef}
+            type="button"
+            onClick={() => setSelectMode(true)}
+            disabled={visible.length === 0}
+            className={cn(ICON_BTN, "disabled:opacity-40")}
+            aria-label="Select"
+            title="Select"
+          >
+            <Square className="w-5 h-5" aria-hidden="true" />
+          </button>
         )}
-      >
-        {/* Select sits with the title, as on the Network list. In the row
-            below it wrapped to a line of its own on a phone, under the
-            full-width order control. */}
-        <PageHeader
-          title={NAMES.tracked.title}
-          description={TRACKED_INTRO}
-          actions={
-            selectMode ? (
-              // The count is in the bar, once.
-              <button
-                key="done"
-                ref={doneButtonRef}
-                type="button"
-                onClick={exitSelectMode}
-                className="btn-secondary btn-sm"
-              >
-                Done
-              </button>
-            ) : (
-              <button
-                key="select"
-                ref={selectButtonRef}
-                type="button"
-                onClick={() => setSelectMode(true)}
-                disabled={visible.length === 0}
-                className={cn(ICON_BTN, "disabled:opacity-40")}
-                aria-label="Select"
-                title="Select"
-              >
-                <Square className="w-5 h-5" aria-hidden="true" />
-              </button>
-            )
-          }
-        />
+      </SettingsHeaderActions>
 
+      <div className={cn(SETTINGS_BOX, "pt-4 pb-24 md:pb-6 space-y-5")}>
         {/* Search and the order */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[12rem]">
@@ -646,7 +642,7 @@ export const TrackedContactsView = () => {
           <EmptyState
             icon={SearchX}
             title={`Nobody matches "${query}"`}
-            body="Try fewer letters, or search a company or a role."
+            body="Try fewer letters, or search a company or a role"
             action={{ label: "Clear search", onClick: () => setQuery("") }}
           />
         )}

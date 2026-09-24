@@ -15,10 +15,12 @@
  */
 import React, { type ReactNode } from "react";
 import { AlertCircle, Loader2, type LucideIcon } from "lucide-react";
+import type { UserRole } from "../../../api/admin";
+import { ChoiceGroup, type Choice } from "../../../components/ui/ChoiceGroup";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { SETTINGS_PAGE } from "../layout";
+import { SETTINGS_LABEL, SETTINGS_PAGE } from "../layout";
 import { SettingsHeaderActions } from "../SettingsHeader";
 
 /**
@@ -38,11 +40,11 @@ export const AdminPage = ({
   </div>
 );
 
-/** What an empty list says: its icon, a title, and one sentence. */
+/** What an empty list says: its icon, a title, and a sentence if one helps. */
 export interface AdminEmpty {
   icon: LucideIcon;
   title: string;
-  body: ReactNode;
+  body?: ReactNode;
 }
 
 /**
@@ -111,7 +113,7 @@ export const AdminList = ({
         icon={AlertCircle}
         tone="error"
         title="This did not load"
-        body="It is not empty, and nothing here has changed."
+        body="It is not empty, and nothing here has changed"
         action={onRetry && { label: "Try again", onClick: onRetry }}
       />
     ) : isEmpty ? (
@@ -214,3 +216,38 @@ export const AdminButton = ({
     </button>
   );
 };
+
+const ROLES: readonly Choice<UserRole>[] = [
+  {
+    value: "member",
+    label: "Member",
+    hint: "Their own contacts, and nothing else",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    hint: "Also manages accounts, instance settings and AI configuration",
+  },
+];
+
+/**
+ * The role a new account or an invitation gives, with what each role may
+ * do. One picker, so the two dialogs say the same thing about a role.
+ */
+export const RolePicker = ({
+  value,
+  onChange,
+}: {
+  value: UserRole;
+  onChange: (next: UserRole) => void;
+}) => (
+  <div className="space-y-1.5">
+    <span className={SETTINGS_LABEL}>Role</span>
+    <ChoiceGroup
+      label="Role"
+      value={value}
+      options={ROLES}
+      onChange={onChange}
+    />
+  </div>
+);

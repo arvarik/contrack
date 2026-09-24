@@ -51,7 +51,7 @@ export function toastUndoableDelete({
   const subject = name ?? `${count} contact${count === 1 ? "" : "s"}`;
 
   toast.success(`${subject} moved to Trash`, {
-    description: "Restorable for 30 days.",
+    description: "Restorable for 30 days",
     duration: UNDO_DURATION_MS,
     action: {
       label: "Undo",

@@ -57,15 +57,9 @@ import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SecretReveal } from "../../components/ui/SecretReveal";
-import {
-  CARD,
-  LABEL_PRIMARY,
-  SELECTED_TINT,
-  TONE_WASH,
-} from "../../lib/styles";
+import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
+import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { radioKeys, radioTabIndex } from "../../lib/a11y";
-import { RadioDot } from "../../components/ui/RadioDot";
 import { describeDevice } from "../../lib/devices";
 import { PasskeysCard } from "./account/PasskeysCard";
 import { useHashTarget } from "./SettingRow";
@@ -125,7 +119,7 @@ const Section = ({
  *
  * The `error` half matches `AuthField` on the sign-in screens deliberately.
  * This component used to route validation messages through `hint`, so "These
- * don't match." rendered in the same muted grey as "At least 8 characters" —
+ * don't match" rendered in the same muted grey as "At least 8 characters" —
  * indistinguishable from ordinary help, with no `aria-invalid` for anybody
  * not reading the colour. The identical sentence on the forced-password
  * screen was red and announced.
@@ -391,7 +385,7 @@ const ProfileCard = () => {
         label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        hint="You can sign in with this or your email."
+        hint="You can sign in with this or your email"
         autoComplete="username"
         autoCapitalize="none"
         autoCorrect="off"
@@ -468,10 +462,10 @@ const PasswordCard = () => {
         type="password"
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
         error={
           tooShort
-            ? `Use at least ${MIN_PASSWORD_LENGTH} characters.`
+            ? `Use at least ${MIN_PASSWORD_LENGTH} characters`
             : undefined
         }
         autoComplete="new-password"
@@ -484,7 +478,7 @@ const PasswordCard = () => {
         type="password"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        error={mismatch ? "These don't match." : undefined}
+        error={mismatch ? "These don't match" : undefined}
         autoComplete="new-password"
         revealable
         capsLockHint
@@ -584,13 +578,16 @@ const SessionsCard = () => {
  * with no expiry is a credential that outlives the reason it was made, and
  * the script it was made for is usually still running long after the person
  * who wrote it stopped thinking about it.
+ *
+ * In days. Never is 0, because `Segmented` takes a number, and the request
+ * sends it as `null`.
  */
-const TOKEN_EXPIRY_PRESETS = [
-  { days: 30, label: "30 days" },
-  { days: 90, label: "90 days" },
-  { days: 365, label: "1 year" },
-  { days: null, label: "Never" },
-] as const;
+const TOKEN_EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
+  { value: 30, label: "30 days" },
+  { value: 90, label: "90 days" },
+  { value: 365, label: "1 year" },
+  { value: 0, label: "Never" },
+];
 
 type TokenState = "active" | "revoked" | "expired";
 
@@ -680,11 +677,15 @@ const CreateTokenModal = ({
 }) => {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [expiresInDays, setExpiresInDays] = useState<number | null>(90);
+  const [expiresInDays, setExpiresInDays] = useState(90);
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
 
   const create = useMutation({
-    mutationFn: () => createApiToken({ name: name.trim(), expiresInDays }),
+    mutationFn: () =>
+      createApiToken({
+        name: name.trim(),
+        expiresInDays: expiresInDays || null,
+      }),
     onSuccess: (token) => {
       setCreated(token);
       queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
@@ -718,7 +719,7 @@ const CreateTokenModal = ({
             <code className="font-mono text-on-surface">
               Authorization: Bearer …
             </code>
-            . It acts as your account and reaches only your data.
+            . It acts as your account and reaches only your data
           </p>
           <SecretReveal value={created.token} label="Token" />
           <div className="flex justify-end">
@@ -738,7 +739,7 @@ const CreateTokenModal = ({
           <Field
             id="token-name"
             label="What is it for"
-            hint="Shown in this list. Name the machine or the script, not the person."
+            hint="Shown in this list. Name the machine or the script, not the person"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
@@ -749,45 +750,17 @@ const CreateTokenModal = ({
           />
           <div className="space-y-1.5">
             <span className={SETTINGS_LABEL}>Expires</span>
-            <div
-              role="radiogroup"
-              aria-label="Expires"
-              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
-            >
-              {TOKEN_EXPIRY_PRESETS.map((preset, index) => {
-                const active = preset.days === expiresInDays;
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    tabIndex={radioTabIndex(
-                      active,
-                      index,
-                      TOKEN_EXPIRY_PRESETS.some(
-                        (p) => p.days === expiresInDays,
-                      ),
-                    )}
-                    onKeyDown={radioKeys}
-                    onClick={() => setExpiresInDays(preset.days)}
-                    className={cn(
-                      "flex items-center justify-center gap-2 px-3 py-3 sm:py-2.5 rounded-xl text-sm font-bold transition-colors",
-                      active
-                        ? SELECTED_TINT
-                        : "state-layer bg-surface-container-highest text-on-surface",
-                    )}
-                  >
-                    <RadioDot checked={active} />
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-            {expiresInDays === null && (
+            <Segmented
+              label="Expires"
+              className="sm:w-fit"
+              value={expiresInDays}
+              options={TOKEN_EXPIRY_PRESETS}
+              onChange={setExpiresInDays}
+            />
+            {expiresInDays === 0 && (
               <p className="text-xs text-warning text-pretty">
                 A token that never expires outlives the reason it was made.
-                Prefer a date you will remember to renew.
+                Prefer a date you will remember to renew
               </p>
             )}
           </div>
@@ -834,7 +807,7 @@ const ApiTokensCard = () => {
           <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
             A token lets a script or an MCP client act as you, and reach only
             your data. Sign-in cookies cannot be used that way, which is what
-            these are for.
+            these are for
           </p>
           <button
             type="button"
@@ -860,7 +833,7 @@ const ApiTokensCard = () => {
               This instance still uses the environment{" "}
               <code className="font-mono">API_TOKEN</code>, which acts as the
               first administrator for anyone who holds it. Create a personal
-              token, point your scripts at it, and remove the variable.
+              token, point your scripts at it, and remove the variable
             </p>
           </div>
         )}
@@ -872,7 +845,7 @@ const ApiTokensCard = () => {
         </p>
       ) : tokens.length === 0 ? (
         <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant text-pretty">
-          No tokens yet. Create one when you connect an MCP client or a script.
+          No tokens yet. Create one when you connect an MCP client or a script
         </p>
       ) : (
         <ul>
@@ -899,11 +872,11 @@ const ApiTokensCard = () => {
             <p>
               <strong className="text-on-surface">{revoking?.name}</strong>{" "}
               stops working immediately. Anything using it — a script, an MCP
-              client — starts failing on its next request.
+              client — starts failing on its next request
             </p>
             <p>
               The entry stays in this list, marked revoked, so you can see what
-              happened later.
+              happened later
             </p>
           </>
         }
@@ -930,8 +903,7 @@ export const AccountSettings = () => {
             <>
               This Contrack does not ask anyone to sign in, so there is no
               account to manage. Set <code>AUTH_REQUIRED=true</code> on the
-              server to ask for one. You will be walked through making an
-              account, and everything here comes with you.
+              server to ask for one, and everything here comes with you
             </>
           }
         />
@@ -980,7 +952,7 @@ export const AccountSettings = () => {
           >
             <p className="text-sm text-on-surface-variant text-pretty">
               How long a sign-in lasts applies to every account on this
-              instance, so it is set under Administration.
+              instance, so it is set under Administration
             </p>
             <Link
               to="/settings/admin/general#session-length"
@@ -1001,7 +973,7 @@ export const AccountSettings = () => {
           )}
         >
           <p className="text-sm text-on-surface-variant text-pretty">
-            Sign out of Contrack on this device.
+            Sign out of Contrack on this device
           </p>
           <button
             type="button"

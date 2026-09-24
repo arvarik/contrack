@@ -108,8 +108,8 @@ export const AIStatsView = () => {
     <div className="flex items-center justify-between gap-3">
       <p className="text-xs text-on-surface-variant text-pretty">
         {scope === "all"
-          ? "Every account on this instance. One provider key pays for all of it."
-          : "Your own AI use."}
+          ? "Every account on this instance. One provider key pays for all of it"
+          : "Your own AI use"}
       </p>
       <Segmented
         label="Whose AI usage"
@@ -272,7 +272,7 @@ export const AIStatsView = () => {
             <EmptyState
               icon={Activity}
               title="No AI activity yet"
-              body="Briefings, searches and scans show up here."
+              body="Briefings, searches and scans show up here"
             />
           )}
         </div>

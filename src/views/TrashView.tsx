@@ -90,7 +90,6 @@ export const TrashView = () => {
         <EmptyState
           illustration={<CorvidMark size={64} className="text-primary/60" />}
           title="Trash is empty"
-          body="You can restore a deleted contact from here until it is removed for good."
         />
       </div>
     );
@@ -175,7 +174,7 @@ export const TrashView = () => {
           <p>
             <strong className="text-on-surface">{purgeTarget?.name}</strong> and
             their whole history, with every interaction, note, and action item,
-            are deleted. This cannot be undone.
+            are deleted. This cannot be undone
           </p>
         }
         confirmLabel="Delete forever"

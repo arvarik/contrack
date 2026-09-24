@@ -841,7 +841,7 @@ test.describe("Pulse Office", () => {
     await expect(card.getByText(/four weeks/)).toHaveCount(0);
     await expect(card.getByText(/in the last 30 days/)).toHaveCount(0);
     const manage = card.getByRole("link", { name: "Manage" });
-    await expect(manage).toHaveAttribute("href", "/tracked");
+    await expect(manage).toHaveAttribute("href", "/settings/tracked");
 
     // "1 to catch up" scrolls the queue to its Catch up heading.
     await card.getByRole("button", { name: "1 to catch up" }).click();

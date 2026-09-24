@@ -3,14 +3,12 @@ import { isTypingTarget } from "../../lib/keyboard";
 import {
   CheckCircle2,
   Sparkles,
-  Zap,
   Shield,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   Loader2,
   ScanSearch,
-  Brain,
   Undo2,
   List,
   Layers,
@@ -28,11 +26,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import {
   CARD,
-  CARD_INTERACTIVE,
-  EMPTY_HERO,
   ICON_BTN,
-  PAGE_X,
-  SELECTED_ROW,
   TAB_CONTAINER,
   TONE_WASH,
   tabItem,
@@ -47,33 +41,47 @@ import {
 } from "./components";
 import { useDedupe } from "../../contexts/DedupeContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
-import { NAMES } from "../../lib/names";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { CorvidMark } from "../../components/brand/CorvidMark";
 import { Segmented } from "../../components/ui/Segmented";
-import { RadioDot } from "../../components/ui/RadioDot";
+import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
+import { SETTINGS_CARD } from "../settings/layout";
 
 // =============================================================================
-// DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
+// DedupeView — scan for duplicate contacts, or merge chosen ones by hand
 // =============================================================================
 
 type DedupeTab = "auto" | "manual";
 type ResultView = "swipe" | "list";
 
-/** "Merge activity": a quiet button that opens the activity panel. */
-const ACTIVITY_BUTTON =
-  "hit-area state-layer hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low rounded-xl transition-colors shrink-0";
-
 /** The previous and next arrows over the swipe card. */
 const STEP_BUTTON =
   "hit-area state-layer p-1.5 rounded-lg transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed";
 
+/** The three scans, one tile each, in the order they cost. */
+const SCAN_MODES: readonly Choice<DedupeScanMode>[] = [
+  {
+    value: "quick",
+    label: "Quick scan",
+    hint: "The same email, phone or name",
+  },
+  {
+    value: "deep",
+    label: "Smart scan",
+    hint: "Adds AI, for duplicates that are not obvious",
+  },
+  {
+    value: "full",
+    label: "Full scan",
+    hint: "Like Smart, after rereading every contact",
+  },
+];
+
 /**
- * The Duplicates page's body. It always renders inside the Settings shell,
- * which draws the page's header and, below `sm`, its Merge activity menu.
- * The page sets its width (`DuplicatesPage`'s column) and each row here adds
- * the gutters, so the content fills that column and shares the settings
- * card's left edge. A narrower cap here would start it off that edge.
+ * The Duplicates page's tool. It renders inside the Settings shell, in the
+ * page's box, which draws the header and the Merge activity button. The
+ * tabs come first, then the tab's body: the scan's picker, its progress or
+ * its results, or the manual merge.
  */
 export const DedupeView = () => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
@@ -266,68 +274,21 @@ export const DedupeView = () => {
     setResultView("swipe");
   };
 
-  // Scan mode options
-  const scanModes: {
-    mode: DedupeScanMode;
-    icon: React.ReactNode;
-    title: string;
-    desc: string;
-  }[] = [
-    {
-      mode: "quick",
-      icon: <Shield className="w-5 h-5 text-success" />,
-      title: "Quick scan",
-      desc: "Finds contacts with the same email, phone, or name.",
-    },
-    {
-      mode: "deep",
-      icon: <Sparkles className="w-5 h-5 text-primary" />,
-      title: "Smart scan",
-      desc: "Uses AI to catch duplicates that aren\u2019t obvious.",
-    },
-    {
-      mode: "full",
-      icon: <Zap className="w-5 h-5 text-warning" />,
-      title: "Full scan",
-      desc: "Reanalyzes your entire network from scratch.",
-    },
-  ];
-
   return (
-    // The settings page is the one scroller at every width, so the tool
-    // takes its own height and clips only sideways (for the tabs' slide).
-    // A clip on both axes would stop a sticky control inside it, Compare in
-    // the manual tab, from sticking to the screen.
-    <div className="flex flex-col overflow-x-clip bg-surface">
-      {/* Segmented Mode Selector */}
-      <div className={cn("shrink-0 pt-4 bg-surface", PAGE_X)}>
-        <div className="flex items-center justify-between gap-3">
-          <Segmented
-            label="Dedupe mode"
-            value={activeTab}
-            onChange={setActiveTab}
-            options={[
-              { value: "auto", label: "Auto scan" },
-              { value: "manual", label: "Manual merge" },
-            ]}
-            className="w-full sm:w-auto"
-          />
-
-          {/*
-            The Settings shell draws the header and puts Merge activity in
-            its menu below sm. From sm up this button is the one control, so
-            every width has one.
-          */}
-          <button
-            type="button"
-            onClick={() => setShowActivity(true)}
-            className={ACTIVITY_BUTTON}
-          >
-            <History className="w-4 h-4" />
-            Merge activity
-          </button>
-        </div>
-      </div>
+    // The settings page scrolls, so the tool takes its own height and clips
+    // only sideways (for the tabs' slide). A clip on both axes would stop a
+    // sticky control inside it, Compare in the manual tab, from sticking.
+    <div className="flex flex-col overflow-x-clip">
+      <Segmented
+        label="Dedupe mode"
+        value={activeTab}
+        onChange={setActiveTab}
+        options={[
+          { value: "auto", label: "Scan" },
+          { value: "manual", label: "Manual merge" },
+        ]}
+        className="w-full sm:w-auto sm:self-start"
+      />
 
       {/* Tab Content */}
       <AnimatePresence mode="wait">
@@ -341,7 +302,7 @@ export const DedupeView = () => {
           >
             {/* Results header (swipe view) */}
             {hasResults && resultView === "swipe" && totalActive > 0 && (
-              <div className={cn("shrink-0 pt-4", PAGE_X)}>
+              <div className="shrink-0 pt-4">
                 {/* Stats bar */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-4">
@@ -411,12 +372,7 @@ export const DedupeView = () => {
 
             {/* Results view switcher */}
             {hasResults && (
-              <div
-                className={cn(
-                  "shrink-0 pt-3 flex items-center justify-between",
-                  PAGE_X,
-                )}
-              >
+              <div className="shrink-0 pt-3 flex items-center justify-between">
                 <div className={cn(TAB_CONTAINER, "w-fit")}>
                   <button
                     onClick={() => setResultView("swipe")}
@@ -451,82 +407,34 @@ export const DedupeView = () => {
               </div>
             )}
 
-            {/* Body. The page scrolls it. The bottom padding clears the
-                phone tab bar below md. */}
-            <div className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}>
-              {/* ═══ Phase 1: Pre-scan — mode selector ═══ */}
+            {/* Body. The page scrolls it, and the shell keeps the room
+                for the phone's tab bar under the page. */}
+            <div className="pt-4">
+              {/* ═══ Phase 1: Pre-scan — the scan's picker ═══ */}
               {preScan && (
-                <div className={cn(EMPTY_HERO, "h-auto py-4 max-w-none")}>
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                    className="p-6 bg-primary/8 rounded-3xl mb-6 shrink-0"
-                  >
-                    <Brain className="w-16 h-16 text-primary" />
-                  </motion.div>
-                  <h2 className="text-xl font-headline font-bold mb-3">
-                    {NAMES.duplicates.label}
-                  </h2>
-                  <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
-                    Clean your network by merging duplicate contacts
-                  </p>
-
-                  {/*
-                    Scan mode selector. Each mode is a card that is a
-                    control. The chosen one is the selected row, which mixes
-                    its tint onto the card's white face and keeps the card's
-                    shadow, and it wears a filled `RadioDot`, so it is chosen
-                    by shape as well as by hue.
-                  */}
-                  <div className="w-full space-y-2 mb-8">
-                    {scanModes.map(({ mode, icon, title, desc }) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={selectedMode === mode}
-                        onClick={() => setSelectedMode(mode)}
-                        className={cn(
-                          CARD_INTERACTIVE,
-                          "w-full flex items-center gap-4 p-4 text-left",
-                          selectedMode === mode && SELECTED_ROW,
-                        )}
-                      >
-                        <RadioDot checked={selectedMode === mode} />
-                        <div
-                          className={cn(
-                            "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
-                            selectedMode === mode
-                              ? "bg-primary/15"
-                              : "bg-surface-container-low",
-                          )}
-                        >
-                          {icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-on-surface">
-                            {title}
-                          </div>
-                          <div className="text-xs text-on-surface-variant">
-                            {desc}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                <div className={cn(SETTINGS_CARD, "space-y-4")}>
+                  <ChoiceGroup
+                    label="Scan"
+                    value={selectedMode}
+                    options={SCAN_MODES}
+                    onChange={setSelectedMode}
+                    className="sm:grid-cols-3"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleStartScan}
+                      disabled={isStarting}
+                      className="btn-primary max-sm:w-full"
+                    >
+                      {isStarting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ScanSearch className="w-4 h-4" />
+                      )}
+                      Scan now
+                    </button>
                   </div>
-
-                  <button
-                    onClick={handleStartScan}
-                    disabled={isStarting}
-                    className="btn-primary"
-                  >
-                    {isStarting ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <ScanSearch className="w-5 h-5" />
-                    )}
-                    Begin scan
-                  </button>
                 </div>
               )}
 
@@ -558,11 +466,11 @@ export const DedupeView = () => {
                       </h3>
                       <p className="text-sm text-on-surface-variant text-pretty">
                         Another user's scan is running. Yours is booked and will
-                        start automatically — you can leave this page.
+                        start automatically — you can leave this page
                       </p>
                       <p className="text-xs text-on-surface-variant">
                         Only one scan runs at a time, because a scan reads every
-                        contact it owns and shares one AI budget.
+                        contact it owns and shares one AI budget
                       </p>
                     </div>
                   </motion.div>
@@ -734,7 +642,7 @@ export const DedupeView = () => {
                   <EmptyState
                     icon={CheckCircle2}
                     title="No duplicates found"
-                    body="Run a scan after an import to check again."
+                    body="Run a scan after an import to check again"
                     action={{
                       label: "Scan again",
                       icon: ScanSearch,
@@ -772,7 +680,7 @@ export const DedupeView = () => {
                           <>
                             {mergedIds.size > 0
                               ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine.`
-                              : "All clusters have been reviewed."}
+                              : "All clusters have been reviewed"}
                             {dismissed.size > 0 && (
                               <span className="block text-xs mt-1">
                                 ({dismissed.size} cluster
@@ -821,9 +729,7 @@ export const DedupeView = () => {
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 10 }}
-            // The bottom padding clears the phone tab bar, like the auto
-            // tab's body, so the last contact and Compare scroll above it.
-            className={cn("pt-6 pb-24 md:pb-6", PAGE_X)}
+            className="pt-4"
           >
             <ManualMerge />
           </motion.div>

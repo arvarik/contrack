@@ -109,7 +109,7 @@ export const ForcedPasswordChange = ({
         <AuthField
           id="current-password"
           label="Temporary password"
-          hint="The one you were given."
+          hint="The one you were given"
           type="password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
@@ -124,7 +124,7 @@ export const ForcedPasswordChange = ({
         <AuthField
           id="new-password"
           label="New password"
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble.`}
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble`}
           type="password"
           value={next}
           onChange={(e) => setNext(e.target.value)}

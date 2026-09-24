@@ -153,7 +153,7 @@ export const HistoryPane = ({
       startPendingDelete({
         id,
         message: "Question deleted",
-        errorMessage: "Could not delete question.",
+        errorMessage: "Could not delete question",
         flushUrl: `/search/history/${encodeURIComponent(id)}`,
         send: () => deleteMutation.mutateAsync(id),
       });
@@ -243,8 +243,11 @@ export const HistoryPane = ({
               aria-labelledby={`history-group-${group.key}`}
               className="space-y-1"
             >
+              {/* Keyed by the question, not the id: a question just asked
+                  shows under a stand-in id until the server answers with
+                  its own, and a key on the id remounted the row then. */}
               {group.entries.map((entry) => (
-                <li key={entry.id}>
+                <li key={`${entry.mode}:${entry.normalizedQuery}`}>
                   <HistoryEntryRow
                     entry={entry}
                     isCurrent={isCurrent(entry)}
@@ -277,14 +280,14 @@ export const HistoryPane = ({
               <EmptyState
                 icon={SearchX}
                 title="No questions match"
-                body="Try adjusting your filter or mode."
+                body="Try adjusting your filter or mode"
                 level={3}
               />
             ) : (
               <EmptyState
                 icon={Sparkles}
                 title="Your questions will appear here"
-                body="Questions you ask across People and Notes will be saved here."
+                body="Questions you ask across People and Notes will be saved here"
                 level={3}
               />
             )}
@@ -299,7 +302,7 @@ export const HistoryPane = ({
         // The same words as Clear history in Privacy and AI: one action,
         // one dialog.
         title="Clear search history?"
-        description={`This deletes all ${totalCount} ${totalCount === 1 ? "question" : "questions"} you asked. It cannot be undone.`}
+        description={`This deletes all ${totalCount} ${totalCount === 1 ? "question" : "questions"} you asked. It cannot be undone`}
         confirmLabel="Clear history"
       />
     </div>

@@ -12,6 +12,7 @@
 // give the same page.
 // =============================================================================
 
+import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import { scopedMatch } from "./search/lexical.ts";
@@ -141,6 +142,30 @@ const CLOSE = "\u0002";
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/**
+ * Compiled statements, by their SQL. The SQL changes only with which
+ * filters are set and with the order, so the cache holds a few dozen at
+ * most, and a search compiles nothing after its first run.
+ */
+const statements = new Map<string, Database.Statement>();
+
+function prepare(sql: string): Database.Statement {
+  let statement = statements.get(sql);
+  if (!statement) {
+    statement = sqlite.prepare(sql);
+    statements.set(sql, statement);
+  }
+  return statement;
+}
+
+/**
+ * The body text a hit reads when nothing in the body matched: its opening,
+ * one character past what `opening` shows, so it can tell a longer body
+ * and add the ellipsis. A long email's whole body used to come back for
+ * every hit on its title.
+ */
+const OPENING_SQL = `substr(f.content, 1, ${OPENING_LENGTH + 1})`;
 
 interface RawHit {
   id: string;
@@ -328,7 +353,7 @@ export function searchInteractions(
     JOIN interactions i ON i.rowid = f.rowid AND i.ownerId = ?
     JOIN contacts c ON c.id = i.contactId AND c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
     WHERE interactions_fts MATCH ? ${filters.sql}`;
-  const count = sqlite.prepare(`SELECT COUNT(*) AS n ${from}`);
+  const count = prepare(`SELECT COUNT(*) AS n ${from}`);
   const countFor = (expression: string): number =>
     (
       count.get(
@@ -362,26 +387,24 @@ export function searchInteractions(
     params.sort === "date"
       ? `${INSTANT_SQL} DESC, rank, i.id`
       : `rank, ${INSTANT_SQL} DESC, i.id`;
-  const rows = sqlite
-    .prepare(
-      `SELECT i.id, i.contactId, i.type, i.title, i.date,
+  const rows = prepare(
+    `SELECT i.id, i.contactId, i.type, i.title, i.date,
               c.name AS contactName, c.avatarUrl, c.themeColor, c.company, c.role,
               highlight(interactions_fts, ${INTERACTION_FTS_TITLE_COLUMN}, char(1), char(2)) AS markedTitle,
               snippet(interactions_fts, ${INTERACTION_FTS_CONTENT_COLUMN}, char(1), char(2), '…', ${SNIPPET_TOKENS}) AS markedExcerpt,
-              f.content AS plainContent,
+              ${OPENING_SQL} AS plainContent,
               bm25(interactions_fts, ${INTERACTION_WEIGHTS}) AS rank
        ${from}
        ORDER BY ${order}
        LIMIT ? OFFSET ?`,
-    )
-    .all(
-      scope.ownerId,
-      scope.ownerId,
-      scopedMatch(scope, expression),
-      ...filters.params,
-      limit,
-      offset,
-    ) as RawHit[];
+  ).all(
+    scope.ownerId,
+    scope.ownerId,
+    scopedMatch(scope, expression),
+    ...filters.params,
+    limit,
+    offset,
+  ) as RawHit[];
 
   return { query, total, limit, offset, hits: rows.map(toHit) };
 }
@@ -404,29 +427,29 @@ function browse(
     LEFT JOIN interactions_fts f ON f.rowid = i.rowid
     WHERE i.ownerId = ? ${filters.sql}`;
   const total = (
-    sqlite
-      .prepare(`SELECT COUNT(*) AS n ${from}`)
-      .get(scope.ownerId, scope.ownerId, ...filters.params) as { n: number }
+    prepare(`SELECT COUNT(*) AS n ${from}`).get(
+      scope.ownerId,
+      scope.ownerId,
+      ...filters.params,
+    ) as { n: number }
   ).n;
   if (total === 0 || offset >= total)
     return { query, total, limit, offset, hits: [] };
 
-  const rows = sqlite
-    .prepare(
-      `SELECT i.id, i.contactId, i.type, i.title, i.date,
+  const rows = prepare(
+    `SELECT i.id, i.contactId, i.type, i.title, i.date,
               c.name AS contactName, c.avatarUrl, c.themeColor, c.company, c.role,
               NULL AS markedTitle, NULL AS markedExcerpt,
-              f.content AS plainContent
+              ${OPENING_SQL} AS plainContent
        ${from}
        ORDER BY ${INSTANT_SQL} DESC, i.id
        LIMIT ? OFFSET ?`,
-    )
-    .all(
-      scope.ownerId,
-      scope.ownerId,
-      ...filters.params,
-      limit,
-      offset,
-    ) as RawHit[];
+  ).all(
+    scope.ownerId,
+    scope.ownerId,
+    ...filters.params,
+    limit,
+    offset,
+  ) as RawHit[];
   return { query, total, limit, offset, hits: rows.map(toHit) };
 }

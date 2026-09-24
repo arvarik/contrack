@@ -195,7 +195,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
           </div>
           <p className="text-xs text-on-surface-variant leading-relaxed">
             The following fields differ between contacts. The primary contact's
-            value will be kept; duplicate values will be discarded.
+            value will be kept; duplicate values will be discarded
           </p>
           <div className="rounded-lg bg-surface-container-low/60 p-2 text-xs space-y-4">
             {conflicts.map((c, i) => (

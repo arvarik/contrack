@@ -85,7 +85,7 @@ export const ResetPassword = ({
   return (
     <AuthShell
       title="Choose a new password"
-      subtitle="Enter a new password for your Contrack account."
+      subtitle="Enter a new password for your Contrack account"
       onSubmit={handleSubmit}
       footer="Once you set a new password, all other active sessions will be signed out."
     >

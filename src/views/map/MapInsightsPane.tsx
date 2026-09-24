@@ -157,7 +157,7 @@ const InsightsContent = ({
           icon={Users}
           level={3}
           title="No one in view"
-          body="Zoom out or clear the filters to see who is here."
+          body="Zoom out or clear the filters to see who is here"
         />
       ) : view === "summary" ? (
         <Summary stats={stats} onApplyFacet={onApplyFacet} />

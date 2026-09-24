@@ -28,7 +28,6 @@ export const ExportPage = () => {
           >
             Backups page
           </Link>
-          .
         </p>
       )}
     </div>

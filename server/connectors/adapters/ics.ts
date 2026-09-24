@@ -183,8 +183,7 @@ function parseParticipants(event: VEvent): Participant[] {
 export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
   kind: "ics",
   label: "Calendar",
-  description:
-    "Sync meetings and see what is coming up from a private ICS URL.",
+  description: "Sync meetings and see what is coming up from a private ICS URL",
   capabilities: {
     schedule: true,
   },

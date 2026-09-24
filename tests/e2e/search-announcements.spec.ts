@@ -70,7 +70,7 @@ test.describe("people", () => {
     ).toBeVisible();
     // One sentence and no coverage card inside it: the row under the search
     // box speaks for the index.
-    await expect(page.getByText("Try other words.")).toBeVisible();
+    await expect(page.getByText("Try other words")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Semantic search coverage" }),
     ).toHaveCount(0);

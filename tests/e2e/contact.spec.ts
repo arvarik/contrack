@@ -968,7 +968,7 @@ test.describe("tracking", () => {
     test("puts the bulk bar in the column of cards, clear of the rail", async ({
       page,
     }) => {
-      await page.goto("/tracked");
+      await page.goto("/settings/tracked");
       const main = page.getByRole("main");
       await main.getByRole("button", { name: "Select", exact: true }).click();
       await expect(main.getByRole("button", { name: "Done" })).toBeFocused();

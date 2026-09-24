@@ -171,7 +171,7 @@ export const ComponentShowcase = () => {
       >
         <PageHeader
           title="🎨 Design system showcase"
-          description="Living reference for the tokens, patterns and components. Dev-only, not included in production builds."
+          description="Living reference for the tokens, patterns and components. Dev-only, not included in production builds"
         />
 
         {/* ── Typography ────────────────────────────────────── */}
@@ -617,7 +617,7 @@ export const ComponentShowcase = () => {
             level={3}
             icon={Search}
             title="No results"
-            body="Try another word, or clear the filters."
+            body="Try another word, or clear the filters"
           />
         </Section>
 

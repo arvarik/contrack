@@ -169,7 +169,7 @@ export const ConnectorsView: React.FC = () => {
           icon={AlertCircle}
           tone="error"
           title="Connectors did not load"
-          body="Nothing has changed. Try again in a moment."
+          body="Nothing has changed. Try again in a moment"
           action={{ label: "Try again", onClick: () => void refetch() }}
         />
       )}
@@ -196,7 +196,7 @@ export const ConnectorsView: React.FC = () => {
           <div className={cn(SETTINGS_CARD, "space-y-4")}>
             <p className="text-sm text-on-surface-variant text-pretty">
               Contrack learns who you talk to from your calendar and your mail.
-              Nothing leaves this server unless you turn on AI summaries.
+              Nothing leaves this server unless you turn on AI summaries
             </p>
             {/* A row for each kind, with its own Connect: three equal
                 choices, so none of them is the page's one primary. */}

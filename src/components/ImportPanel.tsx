@@ -211,7 +211,7 @@ export const ImportPanel = ({
             return;
           }
           if (record.status === "failed") {
-            setError(record.error ?? "The import did not finish.");
+            setError(record.error ?? "The import did not finish");
             setPhase("failed");
             setProgress(null);
             return;
@@ -238,11 +238,11 @@ export const ImportPanel = ({
             forgetImport(accountId);
             setProgress(null);
             if (pendingRef.current?.id === id) {
-              setError("The server never received this import.");
+              setError("The server never received this import");
               setPhase("failed");
             } else {
               setError(
-                "That import is no longer on the server. Choose the file again.",
+                "That import is no longer on the server. Choose the file again",
               );
               setPhase("idle");
             }
@@ -308,7 +308,7 @@ export const ImportPanel = ({
         }
         setError(
           (err instanceof Error ? err.message : String(err)) ||
-            "Failed to process file.",
+            "Failed to process file",
         );
         setPhase("idle");
         setProgress(null);
@@ -369,22 +369,20 @@ export const ImportPanel = ({
           newContacts = parseFacebookJSON(text);
         } else {
           throw new Error(
-            "JSON import is only supported for Facebook data exports.",
+            "JSON import is only supported for Facebook data exports",
           );
         }
       } else {
-        throw new Error(
-          "Unsupported file format. Please upload a .vcf, .csv, or .json file.",
-        );
+        throw new Error("Choose a .vcf, .csv or .json file");
       }
 
       if (newContacts.length === 0) {
-        throw new Error("No valid contacts found in the file.");
+        throw new Error("No valid contacts found in the file");
       }
     } catch (err: unknown) {
       setError(
         (err instanceof Error ? err.message : String(err)) ||
-          "Failed to process file.",
+          "Failed to process file",
       );
       setPhase("idle");
       setProgress(null);
@@ -672,7 +670,7 @@ export const ImportPanel = ({
                         could not be imported
                       </p>
                       <p className="text-xs text-on-surface-variant">
-                        Kept on the server with the reason. Retry them below.
+                        Kept on the server with the reason. Retry them below
                       </p>
                     </div>
                   </div>
@@ -862,12 +860,12 @@ export const ImportPanel = ({
                 Import did not finish
               </h3>
               <p className="text-sm text-on-surface-variant mt-1">
-                {fileName ? `Nothing from ${fileName} was saved.` : ""}
+                {fileName ? `Nothing from ${fileName} was saved` : ""}
               </p>
             </div>
             <div className={ERROR_BANNER}>
               <AlertCircle className="w-5 h-5 shrink-0" />
-              {error ?? "The import did not finish."}
+              {error ?? "The import did not finish"}
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               {canTryAgain ? (
@@ -881,7 +879,7 @@ export const ImportPanel = ({
                 </button>
               ) : (
                 <p className="flex-1 text-xs text-on-surface-variant">
-                  The file is no longer in memory. Choose it again to import.
+                  The file is no longer in memory. Choose it again to import
                 </p>
               )}
               <button type="button" onClick={dismiss} className="btn-secondary">
@@ -900,7 +898,7 @@ export const ImportPanel = ({
               </h3>
               <p className="text-sm text-on-surface-variant mt-1">
                 Your import may still be running. Check again when you are back
-                online. Nothing is imported twice.
+                online. Nothing is imported twice
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -976,34 +974,34 @@ export const ImportPanel = ({
             {activeTab === "apple" && (
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
-                  Open the <strong>Contacts</strong> app on your Mac.
+                  Open the <strong>Contacts</strong> app on your Mac
                 </li>
                 <li>
-                  Select the contacts you want to export (or Cmd+A for all).
+                  Select the contacts you want to export (or Cmd+A for all)
                 </li>
                 <li>
                   Go to <strong>File &gt; Export &gt; Export vCard...</strong>
                 </li>
                 <li>
-                  Save the <strong>.vcf</strong> file and upload it above.
+                  Save the <strong>.vcf</strong> file and upload it above
                 </li>
               </ol>
             )}
             {activeTab === "linkedin" && (
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
-                  Go to LinkedIn <strong>Settings & Privacy</strong>.
+                  Go to LinkedIn <strong>Settings & Privacy</strong>
                 </li>
                 <li>
                   Select <strong>Data Privacy</strong> &gt;{" "}
-                  <strong>Get a copy of your data</strong>.
+                  <strong>Get a copy of your data</strong>
                 </li>
                 <li>
-                  Choose <strong>Connections</strong> and request archive.
+                  Choose <strong>Connections</strong> and request archive
                 </li>
                 <li>
                   Download the archive, extract it, and upload the{" "}
-                  <strong>Connections.csv</strong> file above.
+                  <strong>Connections.csv</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
                   Fields imported: name, company, position, email, profile URL,
@@ -1014,17 +1012,17 @@ export const ImportPanel = ({
             {activeTab === "google" && (
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
-                  Go to <strong>contacts.google.com</strong>.
+                  Go to <strong>contacts.google.com</strong>
                 </li>
                 <li>
-                  Click <strong>Export</strong> in the left sidebar.
+                  Click <strong>Export</strong> in the left sidebar
                 </li>
                 <li>
                   Select <strong>Google CSV</strong> format and click{" "}
-                  <strong>Export</strong>.
+                  <strong>Export</strong>
                 </li>
                 <li>
-                  Upload the downloaded <strong>.csv</strong> file above.
+                  Upload the downloaded <strong>.csv</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
                   Fields imported: name, multiple emails & phones, company,
@@ -1036,26 +1034,26 @@ export const ImportPanel = ({
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
                   Go to Facebook <strong>Settings & Privacy</strong> &gt;{" "}
-                  <strong>Settings</strong>.
+                  <strong>Settings</strong>
                 </li>
                 <li>
                   Navigate to <strong>Accounts Center</strong> &gt;{" "}
-                  <strong>Your information and permissions</strong>.
+                  <strong>Your information and permissions</strong>
                 </li>
                 <li>
-                  Select <strong>Download your information</strong>.
+                  Select <strong>Download your information</strong>
                 </li>
                 <li>
                   Choose <strong>JSON</strong> format and select the{" "}
-                  <strong>Friends and Followers</strong> category.
+                  <strong>Friends and Followers</strong> category
                 </li>
                 <li>
                   Download, extract, and upload the{" "}
-                  <strong>friends.json</strong> file above.
+                  <strong>friends.json</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
                   Note: Facebook only exports friend names and connection dates
-                  — no emails or phone numbers.
+                  — no emails or phone numbers
                 </li>
               </ol>
             )}

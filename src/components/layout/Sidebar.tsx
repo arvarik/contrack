@@ -114,10 +114,7 @@ export const Sidebar = () => {
     !isCleanup &&
     !isSearch &&
     !isPulse &&
-    (location.pathname === "/" ||
-      location.pathname.startsWith("/contact/") ||
-      // The Tracked contacts page is a Network sub-page.
-      location.pathname.startsWith("/tracked"));
+    (location.pathname === "/" || location.pathname.startsWith("/contact/"));
 
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;

@@ -91,7 +91,7 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
       <div className="space-y-4 pt-2">
         <p className="text-sm text-on-surface-variant text-pretty">
           Choose a service to sync who you talk to. Contrack connects to it from
-          your own server, and shares your data with no one.
+          your own server, and shares your data with no one
         </p>
 
         {isLoading && (

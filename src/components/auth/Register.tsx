@@ -70,7 +70,7 @@ export const Register = ({
   return (
     <AuthShell
       title="Create an account"
-      subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs."
+      subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs"
       onSubmit={handleSubmit}
       footer={
         <>

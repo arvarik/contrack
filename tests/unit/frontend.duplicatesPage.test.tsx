@@ -36,6 +36,7 @@ describe("DuplicatesPage", () => {
         dedupeOnImport: true,
       },
       stored: [],
+      changed: [],
       resetPreference: vi.fn(),
       setPreference: mockSetPreference,
     } as unknown as ReturnType<typeof prefContext.usePreferences>);
@@ -91,5 +92,68 @@ describe("DuplicatesPage", () => {
     });
     fireEvent.click(onImportSwitch);
     expect(mockSetPreference).toHaveBeenCalledWith("dedupeOnImport", false);
+  });
+});
+
+describe("DuplicatesPage, the order of the page", () => {
+  beforeEach(() => {
+    vi.mocked(prefContext.usePreferences).mockReturnValue({
+      preferences: {
+        dedupePreset: "default",
+        dedupeOnCreate: true,
+        dedupeOnImport: true,
+      },
+      stored: [],
+      changed: [],
+      resetPreference: vi.fn(),
+      setPreference: vi.fn(),
+    } as unknown as ReturnType<typeof prefContext.usePreferences>);
+    vi.mocked(api.useDedupeCount).mockReturnValue({
+      data: 0,
+    } as unknown as ReturnType<typeof api.useDedupeCount>);
+  });
+
+  const renderPage = () =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <DuplicatesPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+  it("puts the tool first and what runs by itself under it", () => {
+    renderPage();
+    const tool = screen.getByTestId("dedupe-engine");
+    const section = screen.getByRole("heading", {
+      level: 2,
+      name: "Automatic merging",
+    });
+    expect(
+      tool.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      section.compareDocumentPosition(
+        screen.getByText("Auto-merge sensitivity"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("opens Merge activity from one button, at every width", () => {
+    renderPage();
+    expect(
+      screen.queryByRole("button", { name: "Duplicates actions" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Merge activity" }).className,
+    ).toContain("btn-icon");
+  });
+
+  it("writes its lines without a closing period", () => {
+    renderPage();
+    expect(
+      screen.getByText(/^Merges a pair by itself at 93% confidence or more/)
+        .textContent,
+    ).not.toMatch(/\.$/);
   });
 });

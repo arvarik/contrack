@@ -116,7 +116,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
           <EmptyState
             icon={History}
             title="No syncs yet"
-            body="Each sync shows up here once the connector runs."
+            body="Each sync shows up here once the connector runs"
             level={3}
           />
         )}

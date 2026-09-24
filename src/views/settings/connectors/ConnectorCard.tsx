@@ -319,7 +319,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 <p className="font-medium">Sign-in expired</p>
                 <p className="mt-0.5 font-mono break-all">
                   {connector.lastError ||
-                    "The server rejected credentials for this connector."}
+                    "The server rejected credentials for this connector"}
                 </p>
               </div>
             </div>
@@ -349,7 +349,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         <div className="space-y-3">
           <p className="text-sm text-on-surface-variant text-pretty">
             {connector.name} stops syncing. What it brought in stays unless you
-            delete it too.
+            delete it too
           </p>
 
           <label className="flex items-start gap-2.5 text-sm text-on-surface cursor-pointer select-none">

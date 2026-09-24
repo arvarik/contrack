@@ -29,10 +29,11 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatDay, formatWhen } from "../../../lib/datetime";
-import { SELECTED_TINT } from "../../../lib/styles";
-import { RadioDot } from "../../../components/ui/RadioDot";
+import {
+  Segmented,
+  type SegmentedOption,
+} from "../../../components/ui/Segmented";
 import { cn } from "../../../lib/utils";
-import { radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { Switch } from "../../../components/ui/Switch";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
@@ -41,6 +42,7 @@ import {
   AdminList,
   AdminPage,
   AdminRow,
+  RolePicker,
 } from "./AdminShell";
 
 const COLUMNS = "sm:grid-cols-[minmax(0,2fr)_120px_minmax(0,1fr)_auto]";
@@ -55,23 +57,11 @@ const STATE_TONES: Record<
   expired: { tone: "neutral", label: "Expired" },
 };
 
-/**
- * One option in a radio group: the selected tint, or the hover layer, with a
- * `RadioDot` before its label so "chosen" is a shape as well as a hue.
- */
-const choiceClass = (active: boolean) =>
-  cn(
-    "flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-colors",
-    active
-      ? SELECTED_TINT
-      : "state-layer bg-surface-container-highest text-on-surface",
-  );
-
-const EXPIRY_PRESETS = [
-  { days: 3, label: "3 days" },
-  { days: 7, label: "7 days" },
-  { days: 30, label: "30 days" },
-] as const;
+const EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
+  { value: 3, label: "3 days" },
+  { value: 7, label: "7 days" },
+  { value: 30, label: "30 days" },
+];
 
 const NewInvitationModal = ({
   isOpen,
@@ -118,7 +108,7 @@ const NewInvitationModal = ({
         <div className="space-y-4">
           <p className="text-sm text-on-surface-variant text-pretty">
             Anyone who opens this link can create one account with it, once.
-            Send it the way you would send a password.
+            Send it the way you would send a password
           </p>
           <SecretReveal value={createdResult.link} label="Invitation link" />
           {createdResult.sent && createdResult.email && (
@@ -128,7 +118,7 @@ const NewInvitationModal = ({
           )}
           {createdResult.sendAttempted && !createdResult.sent && (
             <p className="text-xs text-warning font-medium">
-              Sending failed. Copy the link instead.
+              Sending failed. Copy the link instead
             </p>
           )}
           <div className="flex justify-end">
@@ -192,7 +182,7 @@ const NewInvitationModal = ({
               className="text-xs text-on-surface-variant"
             >
               Optional, and only a reminder of who this was for. Whoever opens
-              the link picks their own email.
+              the link picks their own email
             </p>
           </div>
 
@@ -213,65 +203,17 @@ const NewInvitationModal = ({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <span className={SETTINGS_LABEL}>Role</span>
-            <div role="radiogroup" aria-label="Role" className="flex gap-2">
-              {(
-                [
-                  { value: "member", label: "Member" },
-                  { value: "admin", label: "Admin" },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={role === option.value}
-                  tabIndex={role === option.value ? 0 : -1}
-                  onKeyDown={radioKeys}
-                  onClick={() => setRole(option.value)}
-                  className={cn(
-                    "flex-1 px-4",
-                    choiceClass(role === option.value),
-                  )}
-                >
-                  <RadioDot checked={role === option.value} />
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <RolePicker value={role} onChange={setRole} />
 
           <div className="space-y-1.5">
             <span className={SETTINGS_LABEL}>Expires</span>
-            <div
-              role="radiogroup"
-              aria-label="Expires"
-              className="grid grid-cols-3 gap-2"
-            >
-              {EXPIRY_PRESETS.map((preset, index) => (
-                <button
-                  key={preset.days}
-                  type="button"
-                  role="radio"
-                  aria-checked={expiresInDays === preset.days}
-                  tabIndex={radioTabIndex(
-                    expiresInDays === preset.days,
-                    index,
-                    EXPIRY_PRESETS.some((p) => p.days === expiresInDays),
-                  )}
-                  onKeyDown={radioKeys}
-                  onClick={() => setExpiresInDays(preset.days)}
-                  className={cn(
-                    "px-3",
-                    choiceClass(expiresInDays === preset.days),
-                  )}
-                >
-                  <RadioDot checked={expiresInDays === preset.days} />
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Expires"
+              className="sm:w-fit"
+              value={expiresInDays}
+              options={EXPIRY_PRESETS}
+              onChange={setExpiresInDays}
+            />
           </div>
 
           <div className="flex justify-end">
@@ -326,7 +268,7 @@ export const InvitationsView = () => {
         empty={{
           icon: MailPlus,
           title: "No invitations yet",
-          body: "Create one to add someone without setting their password yourself.",
+          body: "Create one to add someone without setting their password yourself",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
@@ -392,7 +334,7 @@ export const InvitationsView = () => {
       <p className="flex items-start gap-2 text-xs text-on-surface-variant px-1 text-pretty">
         <Link2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         Deleting the admin who created a pending invitation revokes it. Issue
-        replacements from an account that is staying.
+        replacements from an account that is staying
       </p>
 
       <NewInvitationModal
@@ -409,7 +351,7 @@ export const InvitationsView = () => {
         description={
           <p>
             The link stops working immediately. Anyone who still has it sees
-            that it is no longer valid, and nothing tells them why.
+            that it is no longer valid, and nothing tells them why
           </p>
         }
         onConfirm={() =>

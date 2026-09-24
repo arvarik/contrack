@@ -401,14 +401,14 @@ function ProviderConfirmModal({
               Refreshing will generate embeddings for{" "}
               <strong>{count > 0 ? count : "all missing"}</strong> contact(s),
               which may consume API quota or incur usage costs with your
-              provider.
+              provider
             </p>
           </div>
         </div>
 
         <p className="text-xs text-on-surface-variant">
           Contrack keeps paid provider indexing explicit so you never incur
-          unexpected API costs after editing contacts.
+          unexpected API costs after editing contacts
         </p>
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
@@ -459,12 +459,12 @@ function FailedInspectModal({
         <p className="text-xs text-on-surface-variant">
           The following contacts encountered errors while generating semantic
           search embeddings. They have exceeded the maximum retry attempts and
-          require inspection.
+          require inspection
         </p>
 
         {failedItems.length === 0 ? (
           <div className="p-6 text-center text-xs text-on-surface-variant bg-surface-container-low rounded-xl">
-            No failed tasks to inspect.
+            No failed tasks to inspect
           </div>
         ) : (
           <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
@@ -494,7 +494,7 @@ function FailedInspectModal({
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-outline-variant/20">
           <p className="text-[11px] text-on-surface-variant">
-            Clicking Retry will re-enqueue these contacts for indexing.
+            Clicking Retry will re-enqueue these contacts for indexing
           </p>
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="btn-secondary">

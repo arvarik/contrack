@@ -81,7 +81,7 @@ export const MagicLinkLanding = ({
   return (
     <AuthShell
       title="Signing you in…"
-      subtitle="Verifying your sign-in link and preparing your session."
+      subtitle="Verifying your sign-in link and preparing your session"
       onSubmit={(e) => e.preventDefault()}
     >
       <div className="flex justify-center py-8">

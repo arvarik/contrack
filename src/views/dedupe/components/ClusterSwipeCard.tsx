@@ -256,10 +256,10 @@ export const ClusterSwipeCard = ({
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
               <p className="text-xs text-warning leading-relaxed">
                 <span className="font-bold">
-                  Large cluster ({cluster.size} contacts).
+                  Large cluster ({cluster.size} contacts)
                 </span>{" "}
                 Review carefully — merging many contacts is irreversible.
-                Consider dismissing and re-scanning after partial merges.
+                Consider dismissing and re-scanning after partial merges
               </p>
             </div>
           )}
@@ -272,9 +272,9 @@ export const ClusterSwipeCard = ({
             >
               <Shield className="w-4 h-4 text-on-surface-variant shrink-0 mt-0.5" />
               <p className="text-xs text-on-surface-variant leading-relaxed">
-                <span className="font-bold">Weak link detected.</span> At least
+                <span className="font-bold">Weak link detected</span> At least
                 one connection in this cluster has confidence below 60%. Check
-                the evidence panel to verify.
+                the evidence panel to verify
               </p>
             </div>
           )}
@@ -399,7 +399,7 @@ export const ClusterSwipeCard = ({
                     .slice(0, 3)
                     .join(", ")}
                   {conflicts.length > 3 ? ` +${conflicts.length - 3} more` : ""}
-                  . Primary values will be kept.
+                  . Primary values will be kept
                 </span>
               </div>
             </div>
@@ -433,7 +433,7 @@ export const ClusterSwipeCard = ({
                     <p className="text-xs text-on-surface-variant mt-0.5">
                       This cluster contains {cluster.size} contacts. Merging
                       this many records is irreversible. Please double-check
-                      before proceeding.
+                      before proceeding
                     </p>
                   </div>
                 </div>

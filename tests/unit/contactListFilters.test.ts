@@ -46,6 +46,52 @@ describe("useContactListFilters", () => {
   beforeEach(() => {
     sessionStorage.clear();
     mockSearchParams.delete("list");
+    mockSearchParams.delete("tag");
+    mockSetSearchParams.mockClear();
+  });
+
+  // A tag on the Tags settings page links to `/?tag=<tag>`. It is one more
+  // filter mode: the whole tag, in any case, and any other chip replaces it.
+  it("keeps the contacts with the tag a link names, the whole tag in any case", () => {
+    mockPreferences = { listSort: "name" };
+    mockSearchParams.set("tag", "close friend");
+    const people = [
+      { ...sampleContacts[0], tags: [{ id: "t1", tag: "Close Friend" }] },
+      { ...sampleContacts[1], tags: [{ id: "t2", tag: "close friends" }] },
+      { ...sampleContacts[2], tags: [] },
+    ];
+    const { result } = renderHook(() =>
+      useContactListFilters(people as Contact[]),
+    );
+
+    expect(result.current.filterMode).toBe("tag:close friend");
+    expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
+      "Charlie",
+    ]);
+
+    act(() => result.current.setFilterMode("all"));
+    const update = mockSetSearchParams.mock.calls.at(-1)![0] as (
+      prev: URLSearchParams,
+    ) => Record<string, string>;
+    expect(update(new URLSearchParams("tag=close+friend"))).toEqual({});
+  });
+
+  it("writes a tag filter to `?tag=`, and a list chip clears it", () => {
+    mockPreferences = { listSort: "name" };
+    const { result } = renderHook(() =>
+      useContactListFilters(sampleContacts as Contact[]),
+    );
+    act(() => result.current.setFilterMode("tag:investor"));
+    let update = mockSetSearchParams.mock.calls.at(-1)![0] as (
+      prev: URLSearchParams,
+    ) => Record<string, string>;
+    expect(update(new URLSearchParams("q=ada"))).toEqual({
+      tag: "investor",
+      q: "ada",
+    });
+    act(() => result.current.setFilterMode("l1"));
+    update = mockSetSearchParams.mock.calls.at(-1)![0] as typeof update;
+    expect(update(new URLSearchParams("tag=investor"))).toEqual({ list: "l1" });
   });
 
   // The Tracked chip is `?list=tracked`. It is not a list: it keeps the

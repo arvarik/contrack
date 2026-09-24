@@ -257,14 +257,10 @@ describe("pastDue", () => {
 });
 
 describe("the Tracked contacts page", () => {
-  it("has the heading, the sentence, and the five groups with their ids and counts", () => {
+  // The heading and its sentence are the Settings shell's, as on every
+  // settings page. The page draws the groups under them.
+  it("has the five groups with their ids and counts", () => {
     mount();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Tracked contacts" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/Track the people you want to keep up with/),
-    ).toBeTruthy();
     for (const [id, name, count] of [
       ["at-risk", /^At risk/, "1"],
       ["fading", /^Fading/, "1"],
@@ -451,9 +447,9 @@ describe("the Tracked contacts page", () => {
 
   it("keeps the bar's room as scroll padding while it shows, so Tab stops above it", async () => {
     mount();
-    const scroller = screen
-      .getByRole("heading", { level: 1 })
-      .closest(".overflow-y-auto") as HTMLElement;
+    const scroller = heading(/^At risk/).closest(
+      ".overflow-y-auto",
+    ) as HTMLElement;
     expect(scroller.style.scrollPaddingBottom).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
     expect(scroller.style.scrollPaddingBottom).toMatch(/px$/);

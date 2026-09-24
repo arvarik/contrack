@@ -601,7 +601,7 @@ describe("frontend.pulse", () => {
     expect(within(card).queryByText(/in the last 30 days/)).toBeNull();
     expect(
       screen.getByRole("link", { name: "Manage" }).getAttribute("href"),
-    ).toBe("/tracked");
+    ).toBe("/settings/tracked");
 
     // "1 to catch up" scrolls the queue to the Catch up heading.
     const scrolled: Element[] = [];
@@ -1772,9 +1772,9 @@ describe("frontend.pulse", () => {
         }),
       ).toBeDefined();
       const legend = [
-        ["30 Strong", "/tracked#strong"],
-        ["8 Fading", "/tracked#fading"],
-        ["4 At risk", "/tracked#at-risk"],
+        ["30 Strong", "/settings/tracked#strong"],
+        ["8 Fading", "/settings/tracked#fading"],
+        ["4 At risk", "/settings/tracked#at-risk"],
       ] as const;
       for (const [name, href] of legend) {
         expect(screen.getByRole("link", { name }).getAttribute("href")).toBe(

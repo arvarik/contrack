@@ -299,13 +299,13 @@ describe("useSlideNavigate", () => {
     expect(document.documentElement.dataset.settingsSlide).toBeUndefined();
   });
 
-  it("opens a door out of Settings at once, with no slide", () => {
+  it("slides to Tracked contacts like every other settings page", () => {
     const calls = stubTransitions();
-    const door = SETTINGS_PAGES.find((p) => p.door)!;
+    const tracked = SETTINGS_PAGES.find((p) => p.id === "tracked")!;
     renderProbe();
-    act(() => go(door.path, "forward"));
-    expect(calls).toHaveLength(0);
-    expect(document.documentElement.dataset.settingsSlide).toBeUndefined();
+    act(() => go(tracked.path, "forward"));
+    expect(calls).toHaveLength(1);
+    expect(document.documentElement.dataset.settingsSlide).toBe("forward");
   });
 
   it("does not slide from lg, where the rail is on screen", () => {

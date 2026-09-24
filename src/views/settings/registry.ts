@@ -6,8 +6,7 @@
  *
  * @module views/settings/registry
  */
-import React from "react";
-import { Navigate } from "react-router-dom";
+import type React from "react";
 import {
   Activity,
   Archive,
@@ -81,11 +80,6 @@ export interface SettingsPage {
    */
   boxed?: boolean;
   /**
-   * A door to a page outside Settings: its route steps over to that page.
-   * A link to it navigates at once, with no slide.
-   */
-  door?: boolean;
-  /**
    * An admin reaches the same page under Administration, where it covers
    * every account, so the rail, the list and the search leave this one out
    * for an admin.
@@ -101,17 +95,13 @@ export interface SettingsSearchHit {
   path: string;
 }
 
-/** Settings, Data lists the Tracked contacts page and steps over to it. */
-const TrackedRedirect = () =>
-  React.createElement(Navigate, { to: "/tracked", replace: true });
-
 export const SETTINGS_PAGES: SettingsPage[] = [
   // ── YOU ──────────────────────────────────────────────────────────────────
   {
     id: "account",
     path: "/settings/account",
     title: "Account",
-    description: "Your profile, how you sign in, your devices, and API tokens.",
+    description: "Your profile, how you sign in, your devices and API tokens",
     icon: UserRound,
     group: "you",
     needsAccount: true,
@@ -163,7 +153,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "appearance",
     path: "/settings/appearance",
     title: "Appearance",
-    description: "How Contrack looks on this account.",
+    description: "How Contrack looks on this account",
     icon: Palette,
     group: "you",
     keywords: [
@@ -264,8 +254,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "network",
     path: "/settings/network",
     title: "Network and contacts",
-    description:
-      "Where Contrack opens, the contact list, cadence, and weather.",
+    description: "Where Contrack opens, the contact list, cadence and weather",
     icon: Users,
     group: "you",
     keywords: [
@@ -384,7 +373,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "keyboard",
     path: "/settings/keyboard",
     title: "Keyboard",
-    description: "Single-key shortcuts, and every shortcut in one list.",
+    description: "Single-key shortcuts, and every shortcut in one list",
     icon: Keyboard,
     group: "you",
     keywords: [
@@ -415,7 +404,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/privacy",
     title: "Privacy and AI",
     description:
-      "Whether Contrack uses AI for you, and what stays on this machine.",
+      "Whether Contrack uses AI for you, and what stays on this machine",
     icon: Shield,
     group: "you",
     keywords: [
@@ -457,7 +446,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "ai-usage",
     path: "/settings/ai-usage",
     title: "AI usage",
-    description: "How much AI your account used, and what it cost.",
+    description: "How much AI your account used, and what it cost",
     icon: Gauge,
     group: "you",
     memberOnly: true,
@@ -470,7 +459,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "import",
     path: "/settings/import",
     title: "Import",
-    description: "Bring in contacts from Apple, LinkedIn, Google or Facebook.",
+    description: "Bring in contacts from Apple, LinkedIn, Google or Facebook",
     icon: UploadCloud,
     group: "tools",
     keywords: [
@@ -495,8 +484,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: NAMES.duplicates.description,
     icon: Copy,
     group: "tools",
-    ownsScrolling: true,
-    boxed: true,
     keywords: [
       "duplicates",
       "dedupe",
@@ -589,7 +576,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "tags",
     path: "/settings/tags",
     title: "Tags",
-    description: "Organise contacts with labels. Rename, merge, or delete.",
+    description: "The labels on your contacts. Open one to see who has it",
     icon: Tag,
     group: "data",
     keywords: [
@@ -608,8 +595,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "lists",
     path: "/settings/lists",
     title: "Lists",
-    description:
-      "Reorder, rename, and delete lists, and manage who belongs to each.",
+    description: "Reorder, rename and delete lists, and choose who is on each",
     icon: List,
     group: "data",
     ownsScrolling: true,
@@ -622,7 +608,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "export",
     path: "/settings/export",
     title: "Export",
-    description: "Take your contacts and interactions with you.",
+    description: "Take your contacts and interactions with you",
     icon: Download,
     group: "data",
     keywords: [
@@ -656,18 +642,17 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./pages/ExportPage"),
   },
   {
-    // A door, not a page. The Tracked contacts page lives at /tracked,
-    // beside the Network, so this entry puts it in the rail, the phone's
-    // landing list, the settings search and the palette, and its route
-    // steps over to the page. `REDIRECTS` cannot hold it: every target
-    // there must be a settings page.
+    // A page in the shell like every other: the rail stays beside it. The
+    // old `/tracked` path redirects here (App.tsx). It scrolls itself, so
+    // its virtualised list has a scroller of its own.
     id: "tracked",
     path: "/settings/tracked",
     title: NAMES.tracked.title,
     description: NAMES.tracked.description,
     icon: Radar,
     group: "data",
-    door: true,
+    ownsScrolling: true,
+    boxed: true,
     keywords: [
       "tracked",
       "track",
@@ -678,13 +663,16 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "fading",
       "strong",
     ],
-    load: () => Promise.resolve({ default: TrackedRedirect }),
+    load: () =>
+      import("../TrackedContactsView").then((m) => ({
+        default: m.TrackedContactsView,
+      })),
   },
   {
     id: "archived",
     path: "/settings/archived",
     title: "Archived contacts",
-    description: "Hidden from your Network and Map. Restore them at any time.",
+    description: "Hidden from your Network and Map. Restore them at any time",
     icon: Archive,
     tone: "warning",
     group: "data",
@@ -698,7 +686,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "trash",
     path: "/settings/trash",
     title: "Trash",
-    description: "Deleted contacts, until they are removed for good.",
+    description: "Deleted contacts, until they are removed for good",
     icon: Trash2,
     tone: "error",
     group: "data",
@@ -832,7 +820,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/admin/general",
     title: "General",
     description:
-      "Who can join, how long a sign-in lasts, Trash, backups, and integrations.",
+      "The instance's name, sign-in, Trash, backups and integrations",
     icon: ServerCog,
     group: "admin",
     admin: true,
@@ -845,6 +833,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "backups",
       "integrations",
       "searxng",
+      "google",
       "general",
       "admin",
     ],
@@ -856,14 +845,20 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "registration",
-        label: "Who can join",
+        label: "Anyone can create an account",
         keywords: [
           "registration",
           "join",
           "who can join",
-          "magic link",
+          "sign up",
+          "create account",
           "admin",
         ],
+      },
+      {
+        id: "magic-link",
+        label: "Sign in by emailed link",
+        keywords: ["magic link", "email link", "passwordless", "admin"],
       },
       {
         id: "session-length",
@@ -872,26 +867,49 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "trash",
-        label: "Trash retention",
+        label: "Trash",
         keywords: ["trash", "retention", "purge", "deleted", "admin"],
       },
       {
         id: "backups",
-        label: "Backup schedule",
+        label: "Backups",
         keywords: [
           "backup",
           "backups",
           "snapshot",
           "interval",
-          "keep",
           "schedule",
           "admin",
         ],
       },
       {
-        id: "integrations",
-        label: "Integrations",
-        keywords: ["integrations", "searxng", "search", "admin"],
+        id: "backup-keep",
+        label: "Snapshots to keep",
+        keywords: ["backup", "snapshots", "keep", "retention", "admin"],
+      },
+      {
+        id: "searxng",
+        label: "Self-hosted search (SearXNG)",
+        keywords: [
+          "searxng",
+          "search",
+          "web research",
+          "integrations",
+          "admin",
+        ],
+      },
+      {
+        id: "google-oauth",
+        label: "Google OAuth client",
+        keywords: [
+          "google",
+          "oauth",
+          "client id",
+          "workspace",
+          "gmail",
+          "integrations",
+          "admin",
+        ],
       },
     ],
     load: () => import("./admin/GeneralView"),
@@ -901,7 +919,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/admin/users",
     title: "Accounts",
     description:
-      "Everyone with an account here. Each account sees only its own contacts.",
+      "Everyone with an account here. Each account sees only its own contacts",
     icon: Users,
     group: "admin",
     admin: true,
@@ -922,7 +940,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-invitations",
     path: "/settings/admin/invitations",
     title: "Invitations",
-    description: "Links that create an account. Each one works exactly once.",
+    description: "Links that create an account. Each one works exactly once",
     icon: MailPlus,
     group: "admin",
     admin: true,
@@ -947,7 +965,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-ai",
     path: "/settings/admin/ai",
     title: "AI providers",
-    description: "Provider keys, and which model does each kind of work.",
+    description: "Provider keys, and which model does each kind of work",
     icon: Brain,
     group: "admin",
     admin: true,
@@ -969,7 +987,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-ai-usage",
     path: "/settings/admin/ai-usage",
     title: "AI usage",
-    description: "How much AI each account used, and what it cost.",
+    description: "How much AI each account used, and what it cost",
     icon: Gauge,
     group: "admin",
     admin: true,
@@ -989,7 +1007,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/admin/backups",
     title: "Backups",
     description:
-      "Snapshots of the whole database, each one checked as it is taken.",
+      "Snapshots of the whole database, each one checked as it is taken",
     icon: DatabaseBackup,
     group: "admin",
     admin: true,
@@ -1003,7 +1021,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-audit",
     path: "/settings/admin/audit",
     title: "Audit log",
-    description: "Every administrative action and every sign-in, newest first.",
+    description: "Every administrative action and every sign-in, newest first",
     icon: ScrollText,
     group: "admin",
     admin: true,
@@ -1015,7 +1033,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: "admin-health",
     path: "/settings/admin/health",
     title: "Instance health",
-    description: "What this instance reports about itself, every 15 seconds.",
+    description: "What this instance reports about itself, every 15 seconds",
     icon: Activity,
     group: "admin",
     admin: true,

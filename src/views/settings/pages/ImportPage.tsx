@@ -13,12 +13,10 @@ import {
   Clock,
   Loader2,
   RotateCw,
-  UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImportPanel } from "../../../components/ImportPanel";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import {
   useImports,
   retryImport,
@@ -78,107 +76,106 @@ export const ImportPage = () => {
         <ImportPanel />
       </div>
 
-      {/* Recent imports: one card, a row for each import. */}
-      <section aria-label="Recent imports">
-        <h2 className={SETTINGS_SECTION_HEADING}>Recent imports</h2>
+      {/* Recent imports: one card, a row for each import. With none yet
+          the section is not there: a heading over "No recent imports" said
+          the same thing twice about nothing. */}
+      {(isLoading || imports.length > 0) && (
+        <section aria-label="Recent imports">
+          <h2 className={SETTINGS_SECTION_HEADING}>Recent imports</h2>
 
-        {isLoading ? (
-          <div className="flex justify-center p-8">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
-        ) : imports.length === 0 ? (
-          <EmptyState
-            icon={UploadCloud}
-            title="No recent imports"
-            body="Each file you import shows up here, with what came in and a way to retry what failed."
-          />
-        ) : (
-          <div className={cn(CARD, "p-0 py-2")}>
-            {imports.map((item: ImportRecord) => {
-              const badge = statusBadges[item.status] ?? statusBadges.complete;
-              const Icon = badge.icon;
-              const canRetry = item.status === "failed" || item.failed > 0;
-              const isRetrying = retryingId === item.id;
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className={cn(CARD, "p-0 py-2")}>
+              {imports.map((item: ImportRecord) => {
+                const badge =
+                  statusBadges[item.status] ?? statusBadges.complete;
+                const Icon = badge.icon;
+                const canRetry = item.status === "failed" || item.failed > 0;
+                const isRetrying = retryingId === item.id;
 
-              return (
-                <div
-                  key={item.id}
-                  className="px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold",
-                          TONE_WASH[badge.tone],
-                        )}
-                      >
-                        <Icon
+                return (
+                  <div
+                    key={item.id}
+                    className="px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span
                           className={cn(
-                            "w-3 h-3 shrink-0",
-                            item.status === "running" && "animate-spin",
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold",
+                            TONE_WASH[badge.tone],
                           )}
-                        />
-                        {badge.label}
-                      </span>
-                      <span
-                        className="text-xs text-on-surface-variant"
-                        title={formatWhen(item.createdAt)}
-                      >
-                        {formatRelative(item.createdAt)}
-                      </span>
-                    </div>
-
-                    <div className="text-sm font-medium text-on-surface flex items-center gap-2 flex-wrap">
-                      <span>{item.imported} imported</span>
-                      {item.failed > 0 && (
-                        <span className="text-error font-bold">
-                          · {item.failed} failed
+                        >
+                          <Icon
+                            className={cn(
+                              "w-3 h-3 shrink-0",
+                              item.status === "running" && "animate-spin",
+                            )}
+                          />
+                          {badge.label}
                         </span>
+                        <span
+                          className="text-xs text-on-surface-variant"
+                          title={formatWhen(item.createdAt)}
+                        >
+                          {formatRelative(item.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="text-sm font-medium text-on-surface flex items-center gap-2 flex-wrap">
+                        <span>{item.imported} imported</span>
+                        {item.failed > 0 && (
+                          <span className="text-error font-bold">
+                            · {item.failed} failed
+                          </span>
+                        )}
+                        {item.summary?.autoMerged !== undefined &&
+                          item.summary.autoMerged > 0 && (
+                            <span className="text-on-surface-variant text-xs">
+                              · {item.summary.autoMerged} merged
+                            </span>
+                          )}
+                        {item.summary?.needsReview !== undefined &&
+                          item.summary.needsReview > 0 && (
+                            <span className="text-warning text-xs font-bold">
+                              · {item.summary.needsReview} need review
+                            </span>
+                          )}
+                      </div>
+
+                      {item.error && (
+                        <p className="text-xs text-error">{item.error}</p>
                       )}
-                      {item.summary?.autoMerged !== undefined &&
-                        item.summary.autoMerged > 0 && (
-                          <span className="text-on-surface-variant text-xs">
-                            · {item.summary.autoMerged} merged
-                          </span>
-                        )}
-                      {item.summary?.needsReview !== undefined &&
-                        item.summary.needsReview > 0 && (
-                          <span className="text-warning text-xs font-bold">
-                            · {item.summary.needsReview} need review
-                          </span>
-                        )}
                     </div>
 
-                    {item.error && (
-                      <p className="text-xs text-error">{item.error}</p>
+                    {canRetry && (
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRetry(item.id)}
+                          disabled={isRetrying}
+                          className="btn-secondary btn-sm"
+                        >
+                          <RotateCw
+                            className={cn(
+                              "w-3.5 h-3.5",
+                              isRetrying && "animate-spin",
+                            )}
+                          />
+                          Retry
+                        </button>
+                      </div>
                     )}
                   </div>
-
-                  {canRetry && (
-                    <div className="shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleRetry(item.id)}
-                        disabled={isRetrying}
-                        className="btn-secondary btn-sm"
-                      >
-                        <RotateCw
-                          className={cn(
-                            "w-3.5 h-3.5",
-                            isRetrying && "animate-spin",
-                          )}
-                        />
-                        Retry
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 };

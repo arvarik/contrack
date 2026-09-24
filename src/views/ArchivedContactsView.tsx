@@ -138,8 +138,8 @@ export const ArchivedContactsView = () => {
 
   return (
     // The bottom padding stays tall at every width: the bulk bar floats over
-    // the end of the list.
-    <div className={cn(SETTINGS_PAGE, "md:pb-28")}>
+    // the end of the list. From md the shell's own 40 px end adds to it.
+    <div className={cn(SETTINGS_PAGE, "md:pb-18")}>
       {isLoading && (
         <div className="flex justify-center py-12">
           <Loader2
@@ -153,7 +153,7 @@ export const ArchivedContactsView = () => {
         <EmptyState
           illustration={<CorvidMark size={64} className="text-primary/60" />}
           title="No archived contacts"
-          body="Archive contacts from their detail page to hide them from your Network."
+          body="Archive a contact from the menu on its page"
         />
       )}
 

@@ -34,7 +34,7 @@ export const SuccessStage = ({
       <p className="text-on-surface-variant text-sm mb-6">
         {duplicates.length} contact{duplicates.length > 1 ? "s were" : " was"}{" "}
         merged into "{primary?.name}". All timeline entries, emails, and data
-        have been consolidated.
+        have been consolidated
       </p>
       <button onClick={onReset} className="btn-primary">
         Merge more contacts

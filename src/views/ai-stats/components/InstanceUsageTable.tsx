@@ -30,7 +30,7 @@ export const InstanceUsageTable = ({
   if (byUser.length === 0) {
     return (
       <p className="text-sm text-on-surface-variant">
-        No AI calls have been made on this instance yet.
+        No AI calls have been made on this instance yet
       </p>
     );
   }

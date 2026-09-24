@@ -119,7 +119,7 @@ export const SettingsSearch = ({
         >
           {results.length === 0 ? (
             <p className="text-xs sm:text-sm text-on-surface-variant text-center py-6">
-              Nothing in Settings matches “{query.trim()}”.
+              Nothing in Settings matches “{query.trim()}”
             </p>
           ) : (
             groupedResults.map(({ page, hits }) => {

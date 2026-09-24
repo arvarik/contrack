@@ -10,8 +10,12 @@
  *   │ ◇  │   icon tile, 48 px, primary wash (or the illustration)
  *   └────┘
  *   Title            16 px bold
- *   One sentence.    14 px
+ *   One sentence     14 px, or none
  *   [ Action ]       at most one .btn-primary
+ *
+ * The sentence is for a place whose emptiness needs explaining. A simple
+ * place ("No lists yet", with New list under it) says it in the title and
+ * takes no sentence.
  *
  * One action at most, so the prop is one object and not a node: a second
  * button cannot be passed in. The `illustration` slot replaces the icon tile
@@ -39,8 +43,8 @@ export interface EmptyStateProps {
   /** A node drawn in place of the icon tile. The corvid mark goes here. */
   illustration?: ReactNode;
   title: string;
-  /** One sentence. */
-  body: ReactNode;
+  /** One sentence, when the title does not say enough on its own. */
+  body?: ReactNode;
   action?: EmptyStateAction;
   /** 2 on a page, 3 inside a card that has its own h2. */
   level?: 2 | 3;
@@ -87,7 +91,9 @@ export const EmptyState = ({
       <Heading className="text-base font-headline font-bold text-on-surface">
         {title}
       </Heading>
-      <p className="text-sm text-on-surface-variant max-w-sm">{body}</p>
+      {body && (
+        <p className="text-sm text-on-surface-variant max-w-sm">{body}</p>
+      )}
       {action && (
         <button
           type="button"
