@@ -423,7 +423,7 @@ describe("frontend.pulse", () => {
     expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
   });
 
-  it("renders Inbox as one line, 'Nothing to clean up.', when there is nothing to do", () => {
+  it("renders Inbox as one line, 'Nothing to clean up', when there is nothing to do", () => {
     mockDashboardData = createSampleDashboard({
       ghosts: [],
       hygiene: {
@@ -441,7 +441,7 @@ describe("frontend.pulse", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Nothing to clean up.")).toBeDefined();
+    expect(screen.getByText("Nothing to clean up")).toBeDefined();
     // A line: the section has no card surface class.
     const inbox = document.querySelector('[data-card-id="inbox"]');
     expect(inbox?.className).not.toContain("bg-surface-container-lowest");
@@ -634,7 +634,7 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("Bring your people in")).toBeDefined();
     expect(
       screen.getByText(
-        "Import contacts and log a note. Pulse fills itself from there.",
+        "Import contacts and log a note. Pulse fills itself from there",
       ),
     ).toBeDefined();
     // The welcome masthead is quiet: the title, the date and the actions, no
@@ -1025,7 +1025,7 @@ describe("frontend.pulse", () => {
         </MemoryRouter>,
       );
       expect(
-        screen.getByText("Your admin has not added an AI key yet."),
+        screen.getByText("Your admin has not added an AI key yet"),
       ).toBeDefined();
       expect(screen.queryByRole("link")).toBeNull();
     });
@@ -1483,7 +1483,7 @@ describe("frontend.pulse", () => {
           count={0}
           variant="line"
         >
-          Nothing completed yet.
+          Nothing completed yet
         </CardFrame>,
       );
       const section = container.querySelector(
@@ -1495,7 +1495,7 @@ describe("frontend.pulse", () => {
       expect(
         screen.getByRole("heading", { level: 2, name: /^Completed,\s?0$/ }),
       ).toBeDefined();
-      const sentence = screen.getByText("Nothing completed yet.");
+      const sentence = screen.getByText("Nothing completed yet");
       // The heading and the sentence share the row.
       expect(sentence.parentElement).toBe(section);
       expect(screen.getByRole("heading", { level: 2 }).parentElement).toBe(
@@ -1519,7 +1519,7 @@ describe("frontend.pulse", () => {
           }}
         >
           <CardFrame cardId="completed" title="Completed" variant="line">
-            Nothing completed yet.
+            Nothing completed yet
           </CardFrame>
         </CardCustomizeContext.Provider>,
       );
@@ -1543,7 +1543,7 @@ describe("frontend.pulse", () => {
 
       // The words keep their place out of sight and the controls sit over
       // the end of the title's row, so the line keeps its height.
-      expect(screen.getByText("Nothing completed yet.").className).toContain(
+      expect(screen.getByText("Nothing completed yet").className).toContain(
         "invisible",
       );
       expect(
@@ -1618,7 +1618,7 @@ describe("frontend.pulse", () => {
           <CompletedCard />
         </MemoryRouter>,
       );
-      expect(screen.getByText("Nothing completed yet.")).toBeDefined();
+      expect(screen.getByText("Nothing completed yet")).toBeDefined();
       expect(screen.queryByRole("button", { name: "Show" })).toBeNull();
     });
   });
@@ -2001,13 +2001,13 @@ describe("frontend.pulse", () => {
     expect(screen.queryByTestId("hidden-cards-tray")).toBeNull();
     expect(
       screen.getByText(
-        "Drag a card by its handle to move it. Use the eye to hide one.",
+        "Drag a card by its handle to move it. Use the eye to hide one",
       ),
     ).toBeDefined();
     // A phone holds the handle before the card lifts, and the words say so.
     expect(
       screen.getByText(
-        "Hold a card's handle, then drag it. Use the eye to hide one.",
+        "Hold a card's handle, then drag it. Use the eye to hide one",
       ),
     ).toBeDefined();
 

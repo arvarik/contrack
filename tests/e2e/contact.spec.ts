@@ -663,7 +663,7 @@ test.describe("the contact header", () => {
     await field.fill("zoe");
     await field.press("Enter");
     await expect(page.getByRole("alert")).toHaveText(
-      "That is not a web address.",
+      "That is not a web address",
     );
     await expect(field).toBeVisible();
 
@@ -682,7 +682,7 @@ test.describe("the contact header", () => {
     await field.fill("https://dropbox.com/s/zoe/");
     await field.press("Enter");
     await expect(page.getByRole("alert")).toHaveText(
-      "This contact already has that link.",
+      "This contact already has that link",
     );
     await field.press("Escape");
     await expect(add).toBeFocused();

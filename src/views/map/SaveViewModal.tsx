@@ -36,7 +36,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Please enter a name for the view");
+      setError("Enter a name for the view");
       return;
     }
     if (trimmed.length > 60) {
@@ -72,7 +72,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
           </h2>
           <p className="text-xs text-on-surface-variant mt-1">
             Save current map position, zoom, filters, and active layer to come
-            back to it anytime.
+            back to it anytime
           </p>
         </div>
 

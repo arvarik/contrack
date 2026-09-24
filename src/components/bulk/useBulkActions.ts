@@ -166,7 +166,7 @@ export function useBulkActions({
                           toast.success(
                             next
                               ? `Stopped tracking ${say(undone)}`
-                              : `Tracking ${say(undone)} again, at the default cadence.`,
+                              : `Tracking ${say(undone)} again, at the default cadence`,
                           ),
                         onError: (err) =>
                           toast.error(`Could not undo: ${reason(err)}`),

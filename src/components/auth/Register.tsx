@@ -50,7 +50,7 @@ export const Register = ({
       );
       if (photoFailed) {
         toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+          "Your account is ready. The photo did not upload. Add it in Settings > Account",
         );
       }
       onRegistered();
@@ -61,7 +61,7 @@ export const Register = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not create the account.")),
+                : "Could not create the account")),
       );
       setBusy(false);
     }

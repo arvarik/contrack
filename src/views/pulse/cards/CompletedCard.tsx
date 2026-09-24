@@ -44,7 +44,7 @@ export const CompletedCard = () => {
           )
         }
       >
-        {count === 0 ? "Nothing completed yet." : `${count} completed recently`}
+        {count === 0 ? "Nothing completed yet" : `${count} completed recently`}
       </CardFrame>
 
       {open && (

@@ -431,9 +431,8 @@ export const ClusterSwipeCard = ({
                       Large cluster warning
                     </p>
                     <p className="text-xs text-on-surface-variant mt-0.5">
-                      This cluster contains {cluster.size} contacts. Merging
-                      this many records is irreversible. Please double-check
-                      before proceeding
+                      This cluster contains {cluster.size} contacts. Check that
+                      they are all the same person before you merge
                     </p>
                   </div>
                 </div>

@@ -67,11 +67,11 @@ export function passwordProblem(
   confirm?: string,
 ): { password?: string; confirm?: string } {
   const problems: { password?: string; confirm?: string } = {};
-  if (!password) problems.password = "Choose a password.";
+  if (!password) problems.password = "Choose a password";
   else if (password.length < MIN_PASSWORD_LENGTH)
-    problems.password = `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+    problems.password = `Use at least ${MIN_PASSWORD_LENGTH} characters`;
   if (confirm !== undefined && password && confirm !== password)
-    problems.confirm = "These don't match.";
+    problems.confirm = "These don't match";
   return problems;
 }
 
@@ -79,19 +79,19 @@ function validate(values: Values): Errors {
   const errors: Errors = {};
 
   const email = values.email.trim().toLowerCase();
-  if (!email) errors.email = "Enter an email address.";
+  if (!email) errors.email = "Enter an email address";
   else if (!EMAIL_PATTERN.test(email))
-    errors.email = "That doesn't look like an email address.";
+    errors.email = "That doesn't look like an email address";
 
   const username = values.username.trim().toLowerCase();
-  if (!username) errors.username = "Choose a username.";
+  if (!username) errors.username = "Choose a username";
   else if (username.length < 2)
-    errors.username = "Usernames need at least 2 characters.";
+    errors.username = "Usernames need at least 2 characters";
   else if (username.length > 32)
-    errors.username = "Usernames can be at most 32 characters.";
+    errors.username = "Usernames can be at most 32 characters";
   else if (!USERNAME_PATTERN.test(username))
     errors.username =
-      "Use lowercase letters, numbers, dots, dashes and underscores.";
+      "Use lowercase letters, numbers, dots, dashes and underscores";
 
   return { ...errors, ...passwordProblem(values.password) };
 }
@@ -227,15 +227,15 @@ export async function createAccountThenPhoto(
 export const AccountFields = ({
   form,
   passwordHint,
-  nameHint = "Optional. Shown in the app.",
+  nameHint = "Optional. Shown in the app",
 }: {
   form: AccountForm;
   passwordHint?: string;
   nameHint?: string;
 }) => {
   const usernameHint = form.isUsernameSuggested
-    ? "Suggested from your email. Change it if you like."
-    : "Lowercase letters, numbers, dots, dashes, underscores.";
+    ? "Suggested from your email. Change it if you like"
+    : "Lowercase letters, numbers, dots, dashes, underscores";
 
   return (
     <>
@@ -248,7 +248,7 @@ export const AccountFields = ({
           onChange={form.setPhoto}
         />
         <p className="text-xs text-on-surface-variant">
-          Optional. You can add or change it later in Settings.
+          Optional. You can add or change it later in Settings
         </p>
       </div>
       <AuthField
@@ -299,7 +299,7 @@ export const AccountFields = ({
         label="Password"
         hint={
           passwordHint ??
-          `At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble.`
+          `At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble`
         }
         type="password"
         value={form.values.password}

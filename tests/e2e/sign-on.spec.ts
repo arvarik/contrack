@@ -141,7 +141,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   const alert = page.getByRole("alert");
   await expect(alert).toHaveText(
-    "That passkey did not work. Try again, or sign in with your password.",
+    "That passkey did not work. Try again, or sign in with your password",
   );
   await cdp.send("WebAuthn.setAutomaticPresenceSimulation", {
     authenticatorId,

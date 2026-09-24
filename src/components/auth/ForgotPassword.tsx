@@ -46,7 +46,7 @@ export const ForgotPassword = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not request password reset.")),
+                : "Could not request password reset")),
       );
     } finally {
       setBusy(false);
@@ -73,14 +73,14 @@ export const ForgotPassword = ({
         <div className="space-y-3 text-sm text-on-surface-variant">
           <p>
             This Contrack cannot send email. An administrator can reset your
-            password from Settings, Accounts.
+            password from Settings, Accounts
           </p>
           <p>
             If you run the server,{" "}
             <code className="px-1.5 py-0.5 rounded bg-surface-container font-mono text-xs text-on-surface">
               npx tsx scripts/reset-password.ts &lt;username&gt;
             </code>{" "}
-            prints a temporary password.
+            prints a temporary password
           </p>
         </div>
         <div className="pt-2">

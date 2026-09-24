@@ -173,7 +173,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Failed to save preference. Changes reverted.",
+          : "Failed to save preference. Changes reverted",
       );
     },
     onSuccess: (response) => {
@@ -214,7 +214,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Failed to reset preference. Changes reverted.",
+          : "Failed to reset preference. Changes reverted",
       );
     },
     onSuccess: (response) => {

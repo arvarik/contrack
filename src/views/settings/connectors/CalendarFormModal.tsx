@@ -125,7 +125,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       return;
     }
     if (!trimmedUrl) {
-      setFormError("Please enter a private ICS calendar URL.");
+      setFormError("Enter a private ICS calendar URL");
       return;
     }
 

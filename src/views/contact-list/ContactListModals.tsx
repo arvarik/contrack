@@ -358,7 +358,7 @@ export const ContactListModals = ({
               <p className="text-sm text-on-surface-variant leading-relaxed">
                 Paste anything — an email signature, a LinkedIn bio, a text
                 snippet, or rough notes — and AI will pull out the contact
-                details for you.
+                details for you
               </p>
               <textarea
                 aria-label="Paste contact details"

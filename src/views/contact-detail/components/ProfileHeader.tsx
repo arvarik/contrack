@@ -726,8 +726,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                         : connectorSource.platform
                     : null;
                   const ghostText = sourceName
-                    ? `Seen ${count} time${count === 1 ? "" : "s"} in your ${sourceName}. Waiting to be populated.`
-                    : "Created automatically from a mention. Waiting to be populated.";
+                    ? `Seen ${count} time${count === 1 ? "" : "s"} in your ${sourceName}. Waiting to be populated`
+                    : "Created automatically from a mention. Waiting to be populated";
 
                   return (
                     <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">

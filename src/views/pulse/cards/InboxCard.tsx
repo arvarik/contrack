@@ -141,7 +141,7 @@ export const InboxCard = ({
             className={cn("w-4 h-4 shrink-0", TONE_TEXT.success)}
             aria-hidden="true"
           />
-          Nothing to clean up.
+          Nothing to clean up
         </span>
       </CardFrame>
     );

@@ -35,9 +35,9 @@ test("first run creates the admin, and the account can sign out and back in", as
   // Submitting an empty form reveals every problem at once, each attached
   // to its field, and nothing is created.
   await page.getByRole("button", { name: SETUP_HEADING }).click();
-  await expect(page.getByText("Enter an email address.")).toBeVisible();
-  await expect(page.getByText("Choose a username.")).toBeVisible();
-  await expect(page.getByText("Choose a password.")).toBeVisible();
+  await expect(page.getByText("Enter an email address")).toBeVisible();
+  await expect(page.getByText("Choose a username")).toBeVisible();
+  await expect(page.getByText("Choose a password")).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveAttribute(
     "aria-invalid",
     "true",
@@ -116,7 +116,7 @@ test("a password an admin chose must be replaced before the app opens", async ({
   await page.getByLabel("Confirm new password").fill(temporary);
   await page.getByRole("button", { name: "Set my password" }).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Choose a password different from the temporary one.",
+    "Choose a password different from the temporary one",
   );
 
   await page.getByLabel("New password", { exact: true }).fill(MEMBER.password);

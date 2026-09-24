@@ -85,7 +85,7 @@ const EmptyDossier = ({ name }: { name: string }) => {
         <p className="text-sm text-on-surface-variant text-pretty">
           The dossier collects background on {name}: what they do, where they
           have worked and studied, and anything else worth remembering. Contact
-          enrichment researches that from the web and fills it in.
+          enrichment researches that from the web and fills it in
         </p>
       </div>
       {aiAllowed && (
@@ -96,7 +96,7 @@ const EmptyDossier = ({ name }: { name: string }) => {
       )}
       <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
         You can also fill any of this in by hand from the contact&rsquo;s
-        details, or paste a bio into a note and let Contrack pull it apart.
+        details, or paste a bio into a note and let Contrack pull it apart
       </p>
     </motion.div>
   );
@@ -151,7 +151,7 @@ function BriefingCard({
       </h2>
       <p className="text-sm text-on-surface-variant text-pretty">
         Three points to read before you talk: what you last discussed, what is
-        still open, and something to open with.
+        still open, and something to open with
       </p>
 
       {pending ? (
@@ -200,7 +200,7 @@ function BriefingCard({
       {failed && !pending && (
         <p role="alert" className="mt-3 text-sm font-medium text-error">
           Could not write the briefing. Check that AI is set up in Settings,
-          then try again.
+          then try again
         </p>
       )}
 
@@ -325,7 +325,7 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
           <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
             <p className="text-xs not-prose mb-3">
               Review the source dates and contact identity before you use these
-              details.
+              details
             </p>
             <ReactMarkdown
               skipHtml

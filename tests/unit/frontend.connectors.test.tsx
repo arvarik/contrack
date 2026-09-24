@@ -495,7 +495,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.submit(form);
 
       expect(screen.getByRole("alert").textContent).toContain(
-        "Please enter a private ICS calendar URL.",
+        "Enter a private ICS calendar URL",
       );
     });
 

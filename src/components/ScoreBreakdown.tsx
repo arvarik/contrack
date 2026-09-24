@@ -67,7 +67,7 @@ const Panel = ({ contactId }: { contactId: string }) => {
   if (isError || !data) {
     return (
       <p className="text-xs text-on-surface-variant">
-        Couldn't load the breakdown.
+        Couldn't load the breakdown
       </p>
     );
   }
@@ -224,7 +224,7 @@ export const ScoreBreakdown = ({
         >
           <Panel contactId={contactId} />
           <p className="text-[11px] text-on-surface-variant text-pretty">
-            Recalculated hourly, and whenever you log an interaction.
+            Recalculated hourly, and whenever you log an interaction
           </p>
         </div>
       )}

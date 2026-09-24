@@ -494,7 +494,7 @@ export const ContactMap = ({
           role="status"
           className="absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-xl bg-surface-container-lowest px-4 py-2 text-sm font-medium text-on-surface shadow-md"
         >
-          The basemap did not load. Pins still work.
+          The basemap did not load. Pins still work
         </p>
       )}
       {hoverCard && (

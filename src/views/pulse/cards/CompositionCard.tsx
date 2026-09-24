@@ -112,9 +112,7 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
           />
 
           {totalCount === 0 ? (
-            <p className={cn(PULSE_TYPE.meta, "py-2")}>
-              No {tab} recorded yet.
-            </p>
+            <p className={cn(PULSE_TYPE.meta, "py-2")}>No {tab} recorded yet</p>
           ) : (
             // The donut over the legend, not beside it: the Intelligence
             // column is three of twelve at xl, and a legend squeezed beside

@@ -106,7 +106,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
         <span className="text-primary text-base">✨</span>
         <p className="flex-1 min-w-[12rem] text-sm text-on-surface">
           We found another contact that looks like{" "}
-          <span className="font-bold">{otherContact.name || "someone"}</span>.
+          <span className="font-bold">{otherContact.name || "someone"}</span>
         </p>
         <button
           onClick={() => setShowReview((v) => !v)}
@@ -198,7 +198,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                       {conflicts.length > 3
                         ? ` +${conflicts.length - 3} more`
                         : ""}
-                      . Primary values will be kept.
+                      . Primary values will be kept
                     </span>
                   </div>
                 </div>

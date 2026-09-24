@@ -679,7 +679,7 @@ export const DedupeView = () => {
                         body={
                           <>
                             {mergedIds.size > 0
-                              ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine.`
+                              ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine`
                               : "All clusters have been reviewed"}
                             {dismissed.size > 0 && (
                               <span className="block text-xs mt-1">

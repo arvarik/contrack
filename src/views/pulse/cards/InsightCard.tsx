@@ -70,7 +70,7 @@ export const InsightCard = ({
             </Link>
           </>
         ) : (
-          "Your admin has not added an AI key yet."
+          "Your admin has not added an AI key yet"
         )}
       </CardFrame>
     );

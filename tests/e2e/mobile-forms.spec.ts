@@ -137,7 +137,7 @@ gatedTest.describe("gated instance", () => {
       await email.fill("not-an-address");
       await page.keyboard.press("Tab");
       const emailError = page.getByText(
-        "That doesn't look like an email address.",
+        "That doesn't look like an email address",
       );
       await expect(emailError).toBeVisible();
       await expect(email).toHaveAttribute("aria-invalid", "true");

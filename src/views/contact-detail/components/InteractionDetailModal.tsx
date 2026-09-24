@@ -200,7 +200,7 @@ export const InteractionDetailModal = ({
                     />
                   ) : (
                     <span className="text-sm italic opacity-50">
-                      No notes provided.
+                      No notes provided
                     </span>
                   )}
                 </div>

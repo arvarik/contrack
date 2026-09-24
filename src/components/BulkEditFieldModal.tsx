@@ -97,7 +97,7 @@ export const BulkEditFieldModal = ({
         <p className="text-sm sm:text-xs text-on-surface-variant">
           Apply a value to{" "}
           <span className="font-bold text-on-surface">{selectedCount}</span>{" "}
-          selected contact{selectedCount !== 1 ? "s" : ""}.
+          selected contact{selectedCount !== 1 ? "s" : ""}
         </p>
 
         {/* Field selector */}

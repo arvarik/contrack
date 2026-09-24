@@ -405,7 +405,7 @@ export const ClusterList = ({
                               <span className="font-bold">
                                 Large cluster ({cluster.size} contacts)
                               </span>{" "}
-                              Review carefully — merging is irreversible
+                              Check that they are all the same person
                             </p>
                           </div>
                         )}

@@ -67,11 +67,11 @@ export const AccountPhotoField = ({
       if (rejections.length > 0) {
         const first = rejections[0].errors[0];
         if (first?.code === "file-too-large") {
-          setError("Image must be under 10 MB.");
+          setError("Image must be under 10 MB");
         } else if (first?.code === "file-invalid-type") {
-          setError("Only JPEG, PNG, GIF, WebP, or AVIF images are allowed.");
+          setError("Only JPEG, PNG, GIF, WebP, or AVIF images are allowed");
         } else {
-          setError(first?.message || "Invalid image file.");
+          setError(first?.message || "Invalid image file");
         }
         return;
       }

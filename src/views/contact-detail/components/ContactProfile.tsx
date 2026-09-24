@@ -278,7 +278,7 @@ export const ContactProfile = ({
       </div>
     );
   if (!contact)
-    return <div className="p-12 text-center">Contact not found.</div>;
+    return <div className="p-12 text-center">Contact not found</div>;
 
   // ── Theme ─────────────────────────────────────────────────────────────
   // The vibe replaces the primary palette for this page only, so it has to be

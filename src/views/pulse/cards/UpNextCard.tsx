@@ -131,7 +131,7 @@ export const UpNextCard = ({
           <Key>J</Key> <Key>K</Key> walk the rows. <Key>D</Key> done,{" "}
           <Key>S</Key> snooze a day, <Key>L</Key> log a note. Tab into the list,
           then <Key>↑</Key> <Key>↓</Key> move, <Key>Enter</Key> opens the
-          contact and <Key>Space</Key> does the row&apos;s action.
+          contact and <Key>Space</Key> does the row&apos;s action
         </InfoTip>
       }
     >

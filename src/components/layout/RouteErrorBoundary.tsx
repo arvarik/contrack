@@ -103,8 +103,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
             </h2>
             <p className="text-sm text-on-surface-variant leading-relaxed">
               {isChunk
-                ? "Contrack couldn't download the rest of the app — the server may be restarting. Your data is safe."
-                : "This view crashed unexpectedly. The rest of the app is still working — you can retry or navigate elsewhere."}
+                ? "Contrack couldn't download the rest of the app — the server may be restarting. Your data is safe"
+                : "This view crashed unexpectedly. The rest of the app is still working — you can retry or navigate elsewhere"}
             </p>
             {/*
               The raw message helps on a real crash and only confuses on a

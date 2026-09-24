@@ -44,7 +44,7 @@ export const ForcedPasswordChange = ({
     if (!ready) {
       setTouched(true);
       if (current && next && next === current)
-        setFormError("Choose a password different from the temporary one.");
+        setFormError("Choose a password different from the temporary one");
       return;
     }
 
@@ -64,7 +64,7 @@ export const ForcedPasswordChange = ({
             (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not change the password.")),
+                : "Could not change the password")),
       );
       setCurrent("");
       setBusy(false);
@@ -87,7 +87,7 @@ export const ForcedPasswordChange = ({
           ) : (
             "You're signed in with a password an administrator chose. "
           )}
-          Replace it to continue. Nothing else works until you do.
+          Replace it to continue. Nothing else works until you do
         </>
       }
       onSubmit={handleSubmit}

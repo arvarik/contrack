@@ -452,7 +452,7 @@ describe("delete", () => {
     act(() => lastToast().onAutoClose());
     await waitFor(() => expect(entry("call")).not.toBeNull());
     expect(toastMock.error).toHaveBeenCalledWith(
-      "Could not delete the interaction. It is back on the timeline.",
+      "Could not delete the interaction. It is back on the timeline",
     );
   });
 

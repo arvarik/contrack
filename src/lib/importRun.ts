@@ -90,7 +90,7 @@ export async function readImportStream(
   onProgress: (progress: ImportProgress) => void,
 ): Promise<ImportStreamResult> {
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("Import stream unavailable.");
+  if (!reader) throw new Error("Import stream unavailable");
   const decoder = new TextDecoder();
   let buffer = "";
   let importId: string | null = null;

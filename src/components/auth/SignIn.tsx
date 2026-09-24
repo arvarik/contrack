@@ -158,7 +158,7 @@ export const SignIn = ({
       const errName = (err as { name?: string })?.name;
       if (errName !== "AbortError" && errName !== "NotAllowedError") {
         setError(
-          "That passkey did not work. Try again, or sign in with your password.",
+          "That passkey did not work. Try again, or sign in with your password",
         );
       }
       setPasskeyBusy(false);
@@ -195,7 +195,7 @@ export const SignIn = ({
             // not a wrong password, and saying "incorrect" would send
             // somebody hunting for a password that was right.
             (rateLimitMessage(err) ??
-              (err instanceof Error ? err.message : "Sign-in failed.")),
+              (err instanceof Error ? err.message : "Sign-in failed")),
       );
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
@@ -395,7 +395,7 @@ const MagicLinkRequest = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not send sign-in link.")),
+                : "Could not send sign-in link")),
       );
     } finally {
       setBusy(false);

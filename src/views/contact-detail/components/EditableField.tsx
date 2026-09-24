@@ -162,7 +162,7 @@ export function EditableField({
         </span>
         {error && (
           <span role="alert" className="text-xs text-error">
-            Save failed. Press Enter to retry or Escape to cancel.
+            Save failed. Press Enter to retry or Escape to cancel
           </span>
         )}
       </span>

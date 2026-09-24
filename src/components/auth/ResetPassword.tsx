@@ -34,7 +34,7 @@ export const ResetPassword = ({
     event.preventDefault();
     if (busy || !password) return;
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -56,7 +56,7 @@ export const ResetPassword = ({
           : (rateLimitMessage(err) ??
               (err instanceof Error
                 ? err.message
-                : "Could not reset your password.")),
+                : "Could not reset your password")),
       );
       setBusy(false);
     }
@@ -69,13 +69,13 @@ export const ResetPassword = ({
         title="This reset link is no longer valid"
         subtitle={
           error ??
-          "The link has already been used or has expired. Reset links work for a limited time and can only be used once."
+          "The link has already been used or has expired. Reset links work for a limited time and can only be used once"
         }
         onSubmit={(event) => {
           event.preventDefault();
           onRequestNewLink();
         }}
-        footer="Reset links work once. You can request a new one at any time."
+        footer="Reset links work once. You can request a new one at any time"
       >
         <AuthSubmit>Request a new link</AuthSubmit>
       </AuthShell>
@@ -87,7 +87,7 @@ export const ResetPassword = ({
       title="Choose a new password"
       subtitle="Enter a new password for your Contrack account"
       onSubmit={handleSubmit}
-      footer="Once you set a new password, all other active sessions will be signed out."
+      footer="Once you set a new password, all other active sessions will be signed out"
     >
       <div className="space-y-4">
         <AuthField

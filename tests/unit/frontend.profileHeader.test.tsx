@@ -828,7 +828,7 @@ describe("+ link", () => {
     fireEvent.change(field, { target: { value: "umbrella.com/" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(screen.getByRole("alert").textContent).toBe(
-      "This contact already has that link.",
+      "This contact already has that link",
     );
     expect(props.updateContact.mutate).not.toHaveBeenCalled();
   });
@@ -1086,7 +1086,7 @@ describe("the briefing card", () => {
       .calls[0];
     act(() => options.onError(new Error("Failed to generate briefing")));
     expect(screen.getByRole("alert").textContent).toBe(
-      "Could not write the briefing. Check that AI is set up in Settings, then try again.",
+      "Could not write the briefing. Check that AI is set up in Settings, then try again",
     );
   });
 

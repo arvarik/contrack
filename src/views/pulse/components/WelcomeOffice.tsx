@@ -56,7 +56,7 @@ export const WelcomeOffice = () => {
             Bring your people in
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            Import contacts and log a note. Pulse fills itself from there.
+            Import contacts and log a note. Pulse fills itself from there
           </p>
         </div>
 
@@ -70,7 +70,7 @@ export const WelcomeOffice = () => {
               <div>
                 <span className={STEP_TITLE}>Import contacts</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
-                  Bring in contacts from a CSV or vCard file.
+                  Bring in contacts from a CSV or vCard file
                 </span>
               </div>
             </div>
@@ -92,7 +92,6 @@ export const WelcomeOffice = () => {
                     {" "}
                     (press <kbd className={KBD_SM}>⌘⇧I</kbd>)
                   </span>
-                  .
                 </span>
               </div>
             </div>
@@ -109,7 +108,7 @@ export const WelcomeOffice = () => {
                 <span className={STEP_TITLE}>Connect AI</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
                   Enable relationship analysis, smart parsing, and daily
-                  insights.
+                  insights
                 </span>
               </div>
             </div>
@@ -126,7 +125,7 @@ export const WelcomeOffice = () => {
                 <div>
                   <span className={STEP_TITLE}>Connect a calendar</span>
                   <span className="text-xs text-on-surface-variant mt-0.5 block">
-                    Sync meetings and automatically track upcoming interactions.
+                    Sync meetings and automatically track upcoming interactions
                   </span>
                 </div>
               </div>

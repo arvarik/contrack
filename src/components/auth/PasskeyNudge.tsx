@@ -27,7 +27,7 @@ export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to add passkey. Try again.",
+            : "Failed to add passkey. Try again",
         );
       }
       setBusy(false);

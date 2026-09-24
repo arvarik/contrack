@@ -165,9 +165,15 @@ keeps the periods between them and drops the last one. An ellipsis
 
 - ✅ "Choose 2 to 5 contacts to merge. All their data is combined"
 - ❌ "Runs a few seconds after you add one."
-- `tests/unit/copy.periods.test.ts` fails on a `description`, `body`,
-  `hint`, `desc` or `subtitle` string under `src/` that ends with one, and
-  on a settings page's or a destination's description that does.
+- ✅ Words a person only hears keep the period, because a speech engine
+  ends a sentence on it: an `aria-` name or description, a live region's
+  words (`lib/searchAnnouncements.ts`) and the drag announcements
+  (`PulseGrid`). A string that copies another system's words exactly keeps
+  them too, such as the server's sign-in error.
+- `tests/unit/copy.periods.test.ts` fails on a statement prop, on the text
+  before a closing tag and on any sentence written as a string under `src/`
+  that ends with one, and on a settings page's or a destination's
+  description that does.
 
 #### 11 px type floor (REQUIRED)
 
