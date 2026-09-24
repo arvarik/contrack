@@ -1,24 +1,25 @@
 /**
- * CorvidTile: the favicon, inline.
+ * CorvidTile: the app icon, inline.
  *
- * The gradient rounded square with the white glyph on it, in fixed brand
+ * The gradient rounded square with the white corvid on it, in fixed brand
  * colours, for the places in the app that show the app's icon rather than
  * its mark: an "installed" card, an about row, a list of instances. It does
- * not follow the accent, on purpose. The tab strip cannot follow it either,
- * and this is the tab strip's picture.
+ * not follow the accent, on purpose. The tab strip and a home screen cannot
+ * follow it either, and this is their picture.
  *
- * The geometry is `TILE` and `fitGlyph` from `src/assets/corvidPaths.ts`,
- * which `scripts/brand/build-icons.ts` also reads to write `public/favicon.svg`.
+ * The bird is the optical size for the tile's size (`opticalSize`), the
+ * master the favicon or the launcher icon of that size draws. The geometry
+ * is `TILE`, `CORVID_OPTICAL` and `fitMark` from `src/assets/corvidPaths.ts`,
+ * which `scripts/brand/build-icons.ts` also reads to write `public/`.
  */
 import React, { useId } from "react";
 import {
   CORVID_EYE,
+  CORVID_OPTICAL,
   CORVID_PATHS,
-  GLYPH_EYE_R,
-  GLYPH_PARTS,
-  GLYPH_STROKE,
   TILE,
-  fitGlyph,
+  fitMark,
+  opticalSize,
 } from "../../assets/corvidPaths";
 
 export interface CorvidTileProps {
@@ -29,14 +30,14 @@ export interface CorvidTileProps {
   className?: string;
 }
 
-const PLACEMENT = fitGlyph(TILE.box, TILE.glyphInset);
-
 export const CorvidTile = ({
   size = 32,
   decorative = true,
   className,
 }: CorvidTileProps) => {
   const gradientId = `tile-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const master = CORVID_OPTICAL[opticalSize(size)];
+  const placement = fitMark(master, TILE.box, master.tileInset);
   return (
     <svg
       viewBox={`0 0 ${TILE.box} ${TILE.box}`}
@@ -61,23 +62,25 @@ export const CorvidTile = ({
         fill={`url(#${gradientId})`}
       />
       <g
-        transform={`translate(${PLACEMENT.tx} ${PLACEMENT.ty}) scale(${PLACEMENT.scale})`}
+        transform={`translate(${placement.tx} ${placement.ty}) scale(${placement.scale})`}
         fill="none"
         stroke={TILE.ink}
-        strokeWidth={GLYPH_STROKE}
+        strokeWidth={master.stroke}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {GLYPH_PARTS.map((part) => (
+        {master.parts.map((part) => (
           <path key={part} d={CORVID_PATHS[part]} />
         ))}
-        <circle
-          cx={CORVID_EYE.cx}
-          cy={CORVID_EYE.cy}
-          r={GLYPH_EYE_R}
-          fill={TILE.eye}
-          stroke="none"
-        />
+        {master.eye > 0 && (
+          <circle
+            cx={CORVID_EYE.cx}
+            cy={CORVID_EYE.cy}
+            r={master.eye}
+            fill={TILE.eye}
+            stroke="none"
+          />
+        )}
       </g>
     </svg>
   );

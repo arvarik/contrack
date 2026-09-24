@@ -245,30 +245,37 @@ Firefox or Chrome on Windows. Do the search page on both.
 2. With "reduce motion" on in the OS, dialogs and result cards appear without
    animation.
 3. With "reduce motion" on in the OS, the corvid on top of the sidebar does
-   not blink and does not fly when you click it, whatever "Corvid motion" on
-   the Appearance page is set to.
+   not blink, look about or fly when you click it, whatever "Corvid motion"
+   on the Appearance page is set to, and neither does the bird beside that
+   row.
 
 ### The corvid
 
-The mark in the sidebar moves. Settings > Appearance > "Corvid motion" sets
-how much:
+The mark in the sidebar is alive. The bird sits in its ring, the C, and
+blinks, looks about, preens and stretches now and then; the ring itself
+never moves. It answers the app: a nod when a follow-up is done, a hop for
+a new contact. Settings > Appearance > "Corvid motion" sets how much, and
+the bird beside that row shows what each choice does:
 
-| Choice | What it does                                                            |
-| ------ | ----------------------------------------------------------------------- |
-| Full   | The bird blinks now and then, and flies a lap of the window on a click. |
-| Subtle | The blinks and a hop on a click. No flights.                            |
-| Off    | Nothing moves.                                                          |
+| Choice | What it does                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------- |
+| Full   | The bird lives in its ring, and leaves it to fly a lap of the window on a click, then comes back. |
+| Subtle | The bird lives in its ring. A click is a flutter of its wings; it never leaves the ring.          |
+| Off    | Nothing moves.                                                                                    |
 
 Two things override the choice, and the row says so when either is on:
 "reduce motion" in the operating system, and the "Motion" row directly above
 it set to Reduced. Either one means the bird holds still on Full.
 
 Nothing the bird does is announced, and nothing it does can get in the way.
-The drawing is `aria-hidden`; its button carries the name "Contrack" and the
-tooltip "Let the corvid fly". The flight is a fixed layer that ignores
-pointer events and sits under every dialog, panel and menu, so a bird passing
-over a button never swallows the click. Escape lands it at once, and changing
-page cancels it.
+Every drawing is `aria-hidden`. The sidebar's button carries the name
+"Contrack" and the tooltip "Let the corvid fly"; the Appearance row's is
+"Try the corvid". The flight is a fixed layer that ignores pointer events
+and sits under every dialog, panel and menu, so a bird passing over a button
+never swallows the click. Escape lands it at once, and changing page lands
+it too. A flight the bird takes by itself is short, stays near its ring, and
+never starts while a dialog is open or a field has focus. Big acts on the
+perch wait while you type.
 
 ### A phone
 

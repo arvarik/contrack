@@ -17,6 +17,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
+import { corvidReact } from "../lib/corvid";
 import { Interaction, Contact } from "../types";
 
 /**
@@ -61,6 +62,8 @@ export const useAddInteraction = () => {
       if (!res.ok) throw new Error("Failed to add interaction");
       return res.json();
     },
+    // A conversation written down: the corvid calls, without a sound.
+    onSuccess: () => corvidReact("caw"),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);

@@ -1,6 +1,7 @@
 import { ApiError, apiFetch, apiJson } from "./client";
 import { fetchAuthStatus } from "./auth";
 import { emitAuthExpired } from "../lib/appEvents";
+import { corvidReact } from "../lib/corvid";
 /**
  * Deduplication API Hooks — React Query hooks for the async duplicate detection engine.
  *
@@ -297,6 +298,8 @@ export const useMergeContacts = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Two records made one: the corvid tidies its own feathers.
+      corvidReact("preen");
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
@@ -329,6 +332,8 @@ export const useMergeBatch = () => {
       }>;
     },
     onSuccess: () => {
+      // Two records made one: the corvid tidies its own feathers.
+      corvidReact("preen");
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
@@ -369,6 +374,8 @@ export const useMergeCluster = () => {
       }>;
     },
     onSuccess: () => {
+      // Two records made one: the corvid tidies its own feathers.
+      corvidReact("preen");
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       // The server resolves the pending suggestions this merge satisfied; the
       // review queue and its badge must drop them without a reload.
@@ -405,6 +412,8 @@ export const useMergeClusters = () => {
       }>;
     },
     onSuccess: () => {
+      // Two records made one: the corvid tidies its own feathers.
+      corvidReact("preen");
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });

@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { corvidReact } from "../lib/corvid";
 /**
  * Suggestions API Hooks — React Query hooks for the persistent dedupe suggestions system.
  *
@@ -119,6 +120,8 @@ export const useMergeSuggestion = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Two records made one: the corvid tidies its own feathers.
+      corvidReact("preen");
       qc.invalidateQueries({ queryKey: suggestionKeys.count });
       qc.invalidateQueries({ queryKey: suggestionKeys.pending });
       qc.invalidateQueries({ queryKey: suggestionKeys.mergeLog });

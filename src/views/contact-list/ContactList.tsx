@@ -1030,6 +1030,9 @@ export const ContactList = () => {
           from the letter rail on the right: the two used to share the same
           strip, and a thumb aimed at "M" landed on the bar. Only the box
           flips. The `dir="ltr"` child puts every row back the way it reads.
+          The thumb shows only while the pointer is over the list or the
+          keyboard is in it (`scrollbar-on-hover`), so it does not sit
+          against the sidebar all the time.
 
           With the rail on screen the scroller keeps a 2 rem gutter on the
           right. Rows end before it, so a selected row's tint and the hover
@@ -1049,7 +1052,7 @@ export const ContactList = () => {
           dir="rtl"
           {...roving.containerProps}
           className={cn(
-            "h-full overflow-y-auto px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
+            "h-full overflow-y-auto scrollbar-on-hover px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
             showAlphabetRail && "pr-8",
           )}
           style={

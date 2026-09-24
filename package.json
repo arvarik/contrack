@@ -137,6 +137,7 @@
     "@types/cors": "^2.8.19",
     "@types/dompurify": "^3.0.5",
     "@types/express": "^5.0.6",
+    "@types/fontkit": "^2.0.9",
     "@types/mailparser": "^3.4.6",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.1.0",
@@ -153,6 +154,7 @@
     "eslint": "^10.3.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "fontkit": "^2.0.4",
     "husky": "^9.1.7",
     "jsdom": "^30.0.1",
     "lint-staged": "^17.0.4",
@@ -163,7 +165,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.3",
     "vite": "^8.0.13",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "wawoff2": "^2.0.1"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

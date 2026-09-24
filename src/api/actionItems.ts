@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { corvidReact } from "../lib/corvid";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ActionItem } from "../types";
 export type { ActionItem };
@@ -68,6 +69,8 @@ export const useCompleteActionItem = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Done: the corvid on its perch nods.
+      corvidReact("nod");
       queryClient.invalidateQueries({ queryKey: ["actionItems"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: true });

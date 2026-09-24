@@ -9,6 +9,7 @@ import { useListDensity } from "../../../hooks/useListDensity";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { Segmented } from "../../../components/ui/Segmented";
 import { AccentPicker } from "../../../components/ui/AccentPicker";
+import { CorvidPreview } from "../../../components/brand/CorvidPreview";
 import { SettingRow } from "../SettingRow";
 import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 
@@ -113,10 +114,13 @@ export const AppearancePage = () => {
           // one only when the reduced motion sentence follows it.
           description={
             motionIsReduced
-              ? "The bird blinks, hops and flies when you click it. Subtle keeps the blinks and drops the flights. Motion is reduced, so the corvid stays still whatever you choose here"
-              : "The bird blinks, hops and flies when you click it. Subtle keeps the blinks and drops the flights"
+              ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Motion is reduced, so the corvid stays still whatever you choose here"
+              : preferences.mascotMotion === "off"
+                ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring"
+                : "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Press the bird here to try it"
           }
         >
+          <CorvidPreview />
           <Segmented
             label="Corvid motion"
             value={preferences.mascotMotion}

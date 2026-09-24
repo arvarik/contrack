@@ -1,7 +1,7 @@
 /**
  * The brand, as the browser sees it.
  *
- * Three things a unit test cannot reach. The favicon and the manifest are
+ * Three things a unit test cannot reach. The favicons and the manifest are
  * files a server has to hand over with the right type, and a broken one shows
  * up as a blank tab rather than as a failing assertion anywhere else. The
  * sidebar mark is a button now, and the whole point of that button is that
@@ -16,38 +16,68 @@ import { test, expect } from "./fixtures/test";
 import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
 
 test.describe("the generated icons", () => {
-  test("the favicon is served as an SVG", async ({ page, baseURL }) => {
-    const response = await page.request.get(`${baseURL}/favicon.svg`);
-    expect(response.status()).toBe(200);
-    expect(response.headers()["content-type"]).toContain("image/svg+xml");
-    const body = await response.text();
-    expect(body).toContain("<svg");
-    // Literal colours only: a favicon cannot read the app's CSS tokens.
-    expect(body).not.toContain("var(--");
+  test("serves a favicon for each size, and the icon file that holds them", async ({
+    page,
+    baseURL,
+  }) => {
+    for (const px of [16, 32, 48]) {
+      const response = await page.request.get(`${baseURL}/favicon-${px}.png`);
+      expect(response.status(), `${px}`).toBe(200);
+      expect(response.headers()["content-type"]).toContain("image/png");
+    }
+    const ico = await page.request.get(`${baseURL}/favicon.ico`);
+    expect(ico.status()).toBe(200);
+    expect(ico.headers()["content-type"]).toMatch(
+      /image\/(x-icon|vnd\.microsoft\.icon)/,
+    );
   });
 
-  test("the page asks for the icons the manifest lists", async ({
+  test("the page asks for each favicon by size, and for the icons the manifest lists", async ({
     page,
     baseURL,
   }) => {
     await page.goto("/");
-    const href = await page
-      .locator('link[rel="icon"][type="image/svg+xml"]')
+    const links = await page.locator('link[rel="icon"]').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        href: node.getAttribute("href")!,
+        sizes: node.getAttribute("sizes"),
+      })),
+    );
+    expect(links.map((link) => link.sizes)).toEqual([
+      "16x16",
+      "32x32",
+      "48x48",
+      "16x16 32x32 48x48",
+    ]);
+    // No SVG favicon: a browser takes it over every sized one, and one
+    // weight scaled to every size is what made the tab's bird hard to read.
+    await expect(page.locator('link[type="image/svg+xml"]')).toHaveCount(0);
+    for (const link of links) {
+      // Browsers pin a favicon hard, so every link carries a version query.
+      expect(link.href).toContain("?v=");
+      const response = await page.request.get(`${baseURL}${link.href}`);
+      expect(response.status(), link.href).toBe(200);
+    }
+    const touch = await page
+      .locator('link[rel="apple-touch-icon"]')
       .getAttribute("href");
-    expect(href).toContain("/favicon.svg");
-    // Browsers pin a favicon hard, so the link carries a version query.
-    expect(href).toContain("?v=");
+    expect((await page.request.get(`${baseURL}${touch}`)).status()).toBe(200);
 
-    const manifest = await page.request.get(`${baseURL}/site.webmanifest`);
+    const manifestHref = await page
+      .locator('link[rel="manifest"]')
+      .getAttribute("href");
+    const manifest = await page.request.get(`${baseURL}${manifestHref}`);
     expect(manifest.status()).toBe(200);
     const parsed = (await manifest.json()) as {
       icons: { src: string; purpose?: string }[];
     };
-    const maskable = parsed.icons.find((icon) => icon.purpose === "maskable");
-    expect(maskable, "the manifest lists no maskable icon").toBeTruthy();
-
-    const icon = await page.request.get(`${baseURL}/${maskable!.src}`);
-    expect(icon.status()).toBe(200);
+    const maskable = parsed.icons.filter((icon) => icon.purpose === "maskable");
+    expect(maskable, "the manifest lists no maskable icon").toHaveLength(2);
+    for (const icon of parsed.icons) {
+      const response = await page.request.get(`${baseURL}${icon.src}`);
+      expect(response.status(), icon.src).toBe(200);
+      expect(response.headers()["content-type"]).toContain("image/png");
+    }
   });
 });
 

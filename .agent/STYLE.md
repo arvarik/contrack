@@ -340,11 +340,21 @@ decoration, so the rule is short:
 
 Every scroller draws the same thin bar: the hairline token for the thumb,
 no track (the base layer in `src/index.css`, for all elements). Add no
-scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
+other scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
 scrolls sideways. The two left panes, the Network list and the Settings
 rail, keep their bar on the left edge (`dir="rtl"` on the scroller, `ltr`
 inside it): away from the list's letter rail, and on the sidebar's side of
 the rail.
+
+The two left panes also carry `scrollbar-on-hover`: the thumb shows only
+while the pointer is over the pane or the keyboard is in it. A bar against
+the sidebar that never goes away reads as part of the sidebar. The lane
+stays, so nothing moves when the thumb comes back, and a screen with no
+hover keeps the bar the platform draws.
+
+- ❌ No `scrollbar-on-hover` on a page, a card or a dialog. The bar is how a
+  person sees that there is more, and only the two panes beside the sidebar
+  are always long.
 
 ### The left pane: one width
 
@@ -814,42 +824,78 @@ Use `sonner` via the `<Toaster>` in `App.tsx`. Toasts use `glass-panel` styling 
 
 The corvid is the one mark. `src/assets/corvidPaths.ts` holds the drawing, and
 everything that shows the bird reads that file: the React components, the
-favicon, the PWA icons, the link preview and the README picture. There is no
-second drawing anywhere.
+rig that moves it, the favicon, the PWA icons, the link preview, the model
+sheet and the README picture. There is no second drawing anywhere.
+
+The mark is two things. **The ring** is the C the bird sits in, and nothing
+ever moves it. **The bird** is everything else, and it is the only thing any
+animation touches. When the bird flies, the ring stays where it is, empty,
+until the bird lands in it again.
 
 ### The mark
 
 - `<CorvidMark>` (`src/components/brand/CorvidMark.tsx`) draws the bird
-  inline. Variant `mark` is the whole bird, for 24 px and up. Variant `glyph`
-  is the crown, the beak and the wing at a heavier stroke, for 16 and 32 px.
+  inline. Variant `mark` is the logo at its own weight, the strokes the rig
+  moves. Variant `glyph` is the small optical size, for 16 to 20 px: every
+  part, at a heavier stroke, with a larger eye.
+- The ring is its own path, first in the svg. The bird is a `[data-bird]`
+  group after it: the nape, the chest, the wing, the two tail strokes, the
+  head and the eye. A rule or a script that moves the bird reaches the group
+  or a part inside it, never the svg.
 - The stroke is `currentColor`. Put the mark on `text-primary` and it follows
   the accent a person chose. The eye fills with `--color-corvid-eye` (light
   `#47befd`, dark `#7fd6ff`) and does not follow the accent. A rose bird keeps
-  its cyan eye.
+  its cyan eye. The eye is an ellipse, so it can blink.
 - Decorative by default: `aria-hidden`, never focusable, no Tab stop. Pass
   `decorative={false}` only where the mark is the one thing that names the
   app, and it becomes `role="img"` named "Contrack".
-- Every part has an id, `<prefix>-body`, `<prefix>-wing`, `<prefix>-eye` and
-  so on. The prefix is unique per instance. The sidebar perch passes
-  `idPrefix="corvid"`, so `#corvid-wing` is that one bird and nothing else.
-- `<CorvidTile>` is the favicon inline: the gradient rounded square with the
-  white glyph, in fixed colours. `<Wordmark>` is the mark beside the name in
-  the headline face, for a wide surface.
+- Every part has an id, `<prefix>-ring`, `<prefix>-wing`, `<prefix>-eye` and
+  so on, and a `data-part` with the same name without the prefix. The prefix
+  is unique per instance. The sidebar perch passes `idPrefix="corvid"`.
+- The nape is the one line the logo does not show. Sitting in the ring, the
+  bird borrows the ring for the back of its head, so the nape's path is
+  empty. Out of the ring it draws itself in from the crown.
+- `<CorvidTile>` is the app icon inline: the gradient rounded square with the
+  white bird, in fixed colours, at the optical size its size calls for.
+  `<Wordmark>` is the mark beside the name in the headline face, for a wide
+  surface.
+
+### Optical sizes
+
+One stroke cannot serve every size, so the mark has four masters,
+`CORVID_OPTICAL` in `corvidPaths.ts`. Each draws the same paths. The size a
+person sees picks the master, not the file's pixels (`opticalSize`).
+`docs/brand/README.md` shows them.
+
+| Master   | Seen at                              | Parts                        | Stroke | Eye  |
+| -------- | ------------------------------------ | ---------------------------- | ------ | ---- |
+| `tiny`   | 16 px on a 1x screen                 | ring, head, wing, outer tail | 7.5    | none |
+| `small`  | 16 to 47 pt, two pixels to a point   | all six                      | 5.2    | 4.2  |
+| `medium` | 48 to 95 pt: launcher and home icons | all six                      | 4.4    | 3.6  |
+| `large`  | 96 pt and up: the logo as drawn      | all six                      | 3.6    | 3    |
+
+- ❌ Never scale one weight to every size. That is what made the old favicon
+  a wave: one heavy stroke that filled in at 32 px.
+- ❌ Never draw white on the branding gradient's end, `#47befd`. The tile
+  stops at 55 percent of the gradient, `#2795c9`, so the white bird keeps
+  3:1 in its lightest corner.
 
 ### Sizes
 
-| Surface                       | Variant       | Size       | Colour                           |
-| ----------------------------- | ------------- | ---------- | -------------------------------- |
-| Tab strip favicon             | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
-| PWA and touch icons           | glyph on tile | 180 to 512 | same                             |
-| Sidebar perch                 | mark          | 40         | `text-primary`, eye token        |
-| Auth card                     | mark          | 40         | `text-primary`                   |
-| Empty states                  | mark          | 64 to 96   | `text-primary/60`                |
-| Crash screen footer           | mark          | 20         | `text-on-surface-variant`        |
-| README header                 | PNG           | 96         | fixed brand colours              |
-| Flight overlay                | mark          | 48         | `text-primary`                   |
-| Settings footer (phone perch) | mark          | 20         | `text-primary`                   |
-| Thinking indicator            | glyph         | 16 to 20   | inherits the slot's colour       |
+| Surface                       | Variant                   | Size       | Colour                           |
+| ----------------------------- | ------------------------- | ---------- | -------------------------------- |
+| Tab strip favicon             | tiny or small on the tile | 16 to 48   | white on the tile, eye `#47befd` |
+| PWA and touch icons           | medium on the tile        | 180 to 512 | same                             |
+| Sidebar perch                 | mark                      | 40         | `text-primary`, eye token        |
+| Auth card                     | mark                      | 40         | `text-primary`                   |
+| Appearance preview            | mark                      | 36         | `text-primary`                   |
+| Empty states                  | mark                      | 64 to 96   | `text-primary/60`                |
+| Start panel                   | mark                      | 144        | `text-primary/35`                |
+| Crash screen footer           | mark                      | 20         | `text-on-surface-variant`        |
+| README header                 | the lockup SVG            | 400 wide   | light and dark versions          |
+| Flying bird                   | the rig                   | 52 to 64   | `text-primary`                   |
+| Settings footer (phone perch) | mark                      | 20         | `text-primary`                   |
+| Thinking indicator            | glyph                     | 16 to 20   | inherits the slot's colour       |
 
 - ✅ Width equals height. The `size` prop sets both. Never stretch the mark.
 - ✅ An empty state passes the mark through the `illustration` slot of
@@ -861,93 +907,205 @@ second drawing anywhere.
 
 ### Public icons are generated, never edited
 
-- `npm run brand:icons` runs `scripts/brand/build-icons.ts`. It writes
-  `public/favicon.svg`, `icon-192.png`, `icon-512.png`,
-  `icon-maskable-512.png`, `apple-touch-icon.png`, `og-image.png` and
-  `docs/brand/corvid-mark.png` from the paths.
-- ❌ Never edit a file the script writes. Change `corvidPaths.ts`, run the
-  script, commit what it writes. `tests/unit/brand.icons.test.ts` renders the
-  favicon again and fails when the committed file differs.
+- `npm run brand:icons` runs `scripts/brand/build-icons.ts`. It writes the
+  favicons (`favicon-16.png`, `favicon-32.png`, `favicon-48.png` and
+  `favicon.ico`), the touch, launcher and maskable icons and `og-image.png`
+  in `public/`, and the brand kit in `docs/brand/`: the mark in four
+  versions, the app icon, the lockups, the repository card, the model sheet
+  and the guide's sheets. `docs/brand/README.md` lists every file and what it
+  is for.
+- ❌ Never edit a file the script writes. Change `corvidPaths.ts` or
+  `corvidRig.ts`, run the script, commit what it writes.
+  `tests/unit/brand.icons.test.ts` renders every SVG again and fails when a
+  committed file differs.
+- ❌ No SVG favicon. A browser takes it over every sized picture and scales
+  one weight to every size. Each favicon is drawn for its pixels, and the two
+  smallest are fitted to the pixel grid.
 - ❌ No CSS variables in anything the script renders. librsvg does not resolve
   them. Colours there are literals from `BRAND` and `TILE` in
-  `corvidPaths.ts`, copied from the light palette.
+  `corvidPaths.ts`, and `tests/unit/brand.paths.test.ts` holds each to its
+  token.
+- ❌ No text set by the machine's fonts. Words in a brand image are outlines
+  of the app's own faces (`scripts/brand/type.ts`). Pango on macOS looks
+  fonts up through the system, and the link preview once came out in
+  Helvetica.
 - `docs/brand/corvid-source.jpg` is the reference drawing. Nothing serves it,
   and `public/` holds only what the script writes.
-- The icon links in `index.html` and the manifest carry `?v=corvid`. Browsers
-  pin a favicon hard. Change the query when the tile changes.
+- The icon links in `index.html` and the manifest carry `?v=corvid-2`.
+  Browsers pin a favicon hard. Change the query when an icon changes.
+
+### The rig
+
+`src/assets/corvidRig.ts` is the bird, able to move. A pose is a set of
+numbers, `CorvidPose`: how far into flight, which way the body and the head
+face, how high the wing is, how open the eye. `drawCorvid(pose)` turns one
+into the same strokes the mark is drawn with.
+
+- **At rest it is the logo, point for point.** The rig reads the bird's
+  parts from `CORVID_PATHS` when it loads, and `HOME_POSE` draws them back
+  exactly. A mark at rest repaints the logo's own path data, not the rig's
+  copy of it.
+- **The head is never redrawn.** It is the logo's head, turned about the
+  neck, `NECK` at (37, 35). The body turns under it about the same x, so a
+  bird can turn round on its perch with its head held still, which is what
+  a real one does.
+- **The wing is the logo's wing in its own frame.** It opens, bends, swings
+  about the shoulder and, through the middle of a stroke, turns edge on, so
+  its leading edge stays in front on the way down and on the way up.
+- **The throat hangs between the head and the body.** Each of its points
+  follows the head by a weight that falls to nothing at the shoulder, so the
+  neck bends rather than breaking.
+- **The flying shape is the same five strokes in other places.** The logo's
+  body faces left and its head looks back over its shoulder to the right. In
+  the air the head faces the way the bird goes. Flying right is the rig's
+  mirror.
+- **A barrel roll turns the points, not the pen.** `rollDrawing` moves every
+  point toward the line the flight holds the bird by, so edge on the bird is
+  a line as thick as its strokes.
+- ❌ Never squash or stretch the bird with a CSS `scale`. It thins the
+  strokes with the shape, and an edge-on bird breaks up into a hairline.
+- ❌ Never add a stroke to the bird without a place for it in `HOME_POSE`
+  that draws nothing, the way the nape does. The logo is the one pose that
+  must not change.
+- ❌ Never move the ring. The rig does not draw it, and no rule, keyframe or
+  script may select it to animate it.
 
 ### The motion
 
 Three levels, one account preference, `mascotMotion`, on the Appearance page
 under "Corvid motion".
 
-| Level    | What the bird does                                |
-| -------- | ------------------------------------------------- |
-| `full`   | Blinks, tilts its head, hops, and flies. Default. |
-| `subtle` | Blinks, tilts and hops. No flights, no swoops.    |
-| `off`    | Nothing. The static mark.                         |
+| Level    | What the bird does                                                               |
+| -------- | -------------------------------------------------------------------------------- |
+| `full`   | Lives in its ring, answers the app, and leaves the ring to fly. Default.         |
+| `subtle` | Lives in its ring and answers the app. A press is a flutter; it never leaves it. |
+| `off`    | Nothing. The static mark.                                                        |
 
 - **Reduced motion wins.** `motionLevel(mascotMotion, prefersReducedMotion,
 motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
   and it answers `off` when the operating system asks for reduced motion or
   when the Motion row is set to Reduced, whatever the account chose. Read the
-  level through that function. Never read `mascotMotion` on its own.
-- **What idles.** Pass `idle` to `<CorvidMark>` and `useCorvidIdle` schedules
-  a blink 4 to 9 seconds out, with one beat in five a two-degree head tilt
-  instead. It holds still while the tab is hidden, and a mark under 24 px
-  never gets a timer: there is one timer per idling mark, so only the marks a
-  person actually looks at ask for one. The sidebar perch idles. The empty
-  states and the crash screen do not.
-- **The keyframes are CSS, and select on `data-part`.** `corvid-blink`,
-  `corvid-tilt`, `corvid-hop` and `corvid-flap` live in `src/index.css`. They
-  reach the bird through `[data-part="eye"]` and `[data-part="wing"]`, never
-  through an id: `CorvidMark` gives every instance its own id prefix, so
-  `#corvid-eye` is one specific bird. All four are `transform` only, and the
-  reduced-motion blocks switch them off outright.
-- **The event API.** Anything that wants a flight calls `flyCorvid({ kind })`
-  from `src/lib/corvid.ts` and forgets about it. `kind` is `"loop"` (the
-  circuit of the window, 4.5 s) or `"swoop"` (one pass across the top, 2 s).
-  Pass `from` to leave from a rectangle other than the sidebar perch.
-  `CorvidFlight`, mounted once in `App` beside the `Toaster`, is the only
-  listener: it measures the perch, hides it, flies, lands and gives it back.
+  level through `useCorvidLevel()`. Never read `mascotMotion` on its own.
+- **A living mark.** Pass `alive` to `<CorvidMark>` and `useCorvidLife` runs
+  a brain for it (`src/lib/corvidBrain.ts`). Blinks come every three to seven
+  seconds, one in five doubled. Small acts (a look about, a cock of the
+  head, a look back) come every six to fourteen seconds. Big acts (a preen,
+  a feather shake, a wing stretch, a silent caw, a hop) every twenty to
+  fifty, never the same one twice running, and never while the person is
+  typing. Every act is made fresh from a random source
+  (`src/lib/corvidMotion.ts`), so no two are quite alike, and every one ends
+  in the logo.
+- **What it costs.** Nothing while it is still, asleep included. Between
+  acts it sleeps on one timer; it draws frames only while something moves;
+  it stops altogether in a hidden tab, out of view, while its bird is away
+  flying, and at `off`.
+  Under 24 px a mark does not live, but a mark passed `alive` still answers a
+  reaction addressed to it.
+- **The app's own bird.** The sidebar perch passes `primary`. That bird, and
+  only that one, answers `corvidReact()` and the app's activity, watches the
+  pointer when it comes within 260 px (the head turns in quick snaps and
+  still holds, the way a bird's does), gets ready when its button is
+  hovered or focused, and falls asleep after two and a half quiet minutes.
+  Any input wakes it with a start.
+- **Flights.** Anything that wants a flight calls `flyCorvid({ kind })` from
+  `src/lib/corvid.ts` and forgets about it. `kind` is `"loop"` (a lap of the
+  window), `"swoop"` (the celebration: a pass along the top, sometimes with
+  a barrel roll) or `"sortie"` (a short outing near home). Pass `perch` to
+  leave from a living mark other than the one on screen, as the Appearance
+  preview does, or `from` for a rectangle with no bird of its own.
+- **Every flight is new.** `planFlight` in `src/lib/corvidFlight.ts` draws a
+  random route through random waypoints, with its own speed, its own bursts
+  of wingbeats and glides, and pitch with the climb. No waypoint turns it
+  sharper than a bird at speed could, and it slows through a tight curve.
+  The bird turns round when the route doubles back, rather than flying
+  upside down, and its pitch leans through level as it turns. It leaves as
+  the logo and lands as the logo, at the perch's place and size, so the swap
+  between the perch's bird and the flying one cannot be seen.
+- **One overlay.** `CorvidFlight`, mounted once in `App` beside the
+  `Toaster`, is the only listener. It hides the perch's `[data-bird]` group,
+  never the ring, flies, lands and gives the bird back. A ring that moved
+  while the bird was out, because its page scrolled, is landed on where it
+  is. Escape and a route change land it at once.
+- **A second press asks it home by a short way**, eased out of the frame it
+  was in, to the ring it left, whichever perch was pressed. It is heard
+  only while the bird is out and on its way, not while it is still leaving
+  or already coming in. A flight the app asks for by itself, a celebration
+  or an outing, never cuts a person's lap short: it is dropped.
+- **A celebration waits to be seen.** `flyWhenClear()` flies at once on a
+  clear page, or when the dialog that covers it closes, and lets the moment
+  pass after twenty seconds.
+- **The thinking bird is CSS.** It is small and there can be several, so its
+  head tilt is the one keyframe left, `corvid-thinking` in `src/index.css`.
+  It moves `[data-part="head"]` and the eye about the rig's neck, with
+  `transform-box: view-box`, and each instance keeps its own period and
+  starting point.
 - ❌ Never animate the bird in a view. One overlay, one event. Two birds in
   the air at once is a bug, and a per-view animation cannot be cancelled when
   the route changes.
 - ❌ Never let the bird take a pointer event or a Tab stop. The flight layer
   is `aria-hidden`, `pointer-events-none` and `z-[60]`, under the contact
   overlay and the palette (`z-[100]`) and under `Modal` (`z-[200]`).
-- The sidebar perch is the one mark that is a control: a `<button>` named
-  "Contrack", titled "Let the corvid fly", with `navLink(false)` padding. It
-  is the seventh sidebar Tab stop and the reason both budgets in
-  `keyboard.spec.ts` are one higher than the controls on the page.
+- The sidebar perch is a control: a `<button>` named "Contrack", titled "Let
+  the corvid fly", with `navLink(false)` padding. It is the seventh sidebar
+  Tab stop and the reason both budgets in `keyboard.spec.ts` are one higher
+  than the controls on the page. The Appearance preview is the other: a
+  button named "Try the corvid".
+
+### The moments it answers
+
+The bird is part of the app's work, not a toy beside it. Each moment below
+is asked for by the code that did the work, on success only, through
+`corvidReact()`, which drops a repeat that comes within four seconds.
+
+| Moment                               | What the bird does                         | Asked for by                                      |
+| ------------------------------------ | ------------------------------------------ | ------------------------------------------------- |
+| A follow-up is done                  | Nods                                       | `useCompleteActionItem`                           |
+| A conversation is written down       | Caws, silently                             | `useAddInteraction`                               |
+| Somebody new is added                | Hops                                       | `useCreateContact`                                |
+| A person is tracked                  | Cocks its head at them                     | `useSetTracked`                                   |
+| Two records are merged               | Preens                                     | every merge hook in `dedupe.ts`, `suggestions.ts` |
+| A contact comes back from the trash  | Nods                                       | `useRestoreContact`                               |
+| An import adds people                | Flies the celebration pass                 | `ImportPanel`                                     |
+| The last follow-up in Up next clears | Flies the celebration pass, under confetti | `UpNextCard`                                      |
+| The app at work                      | Does something of its own                  | `noteCorvidActivity()`, from `apiFetch`           |
+
+- **The app at work.** `apiFetch` counts every request that comes back OK.
+  About once a hundred requests, or once every six to twelve AI answers, the
+  bird is stirred: it plays a big act, if the page is quiet. Now and then,
+  at `full`, the stir is a short outing near home instead. Never twice in
+  twenty seconds, an outing never twice in three minutes, and never an
+  outing while a dialog, a menu or the palette is open or a field has focus.
 
 ### Where the bird lives
 
 One row per surface. A new one goes here, and nowhere else gets a bird
 without a reason a person could state.
 
-| Surface                                     | What it does                                                                  | Component            |
-| ------------------------------------------- | ----------------------------------------------------------------------------- | -------------------- |
-| Sidebar perch, 40 px                        | Idles, hops, flies on a click                                                 | `Sidebar.tsx`        |
-| Settings footer on a phone, 20 px           | The same, where there is no sidebar                                           | `SettingsHome.tsx`   |
-| Sign-in and setup card, 40 px               | Idles, shakes at a wrong password                                             | `AuthShell.tsx`      |
-| Synthesis bar, enrich badge, briefing card  | Tilts its head while AI works                                                 | `CorvidThinking.tsx` |
-| Ask Contrack while a People search runs     | Tilts its head in the search box, on "Searching…" and on "Enriching with AI…" | `CorvidThinking.tsx` |
-| Pulse, when the last follow-up clears       | One swoop, under the confetti                                                 | `UpNextCard.tsx`     |
-| Duplicates, "All reviewed"                  | One hop when it arrives                                                       | `DedupeView.tsx`     |
-| Empty network, Trash, Archived, start panel | Still, as the illustration                                                    | `EmptyState` callers |
-| Crash screen footer, 20 px                  | Still                                                                         | `ErrorBoundary.tsx`  |
+| Surface                                    | What it does                                                                  | Component            |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | -------------------- |
+| Sidebar perch, 40 px                       | Lives, answers the app, watches the pointer, dozes, flies on a press          | `Sidebar.tsx`        |
+| Settings footer on a phone, 20 px          | Flies on a press, where there is no sidebar; flutters at Subtle               | `SettingsHome.tsx`   |
+| Sign-in and setup card, 40 px              | Lives calmly, shakes its head at a wrong password                             | `AuthShell.tsx`      |
+| Settings, Appearance, "Corvid motion"      | Lives faster, so the row shows what it does; flies from its own ring          | `CorvidPreview.tsx`  |
+| Synthesis bar, enrich badge, briefing card | Tilts its head while AI works                                                 | `CorvidThinking.tsx` |
+| Ask Contrack while a People search runs    | Tilts its head in the search box, on "Searching…" and on "Enriching with AI…" | `CorvidThinking.tsx` |
+| Pulse, when the last follow-up clears      | The celebration pass, under the confetti                                      | `UpNextCard.tsx`     |
+| Duplicates, "All reviewed"                 | Hops when it arrives, then lives calmly                                       | `DedupeView.tsx`     |
+| Start panel, 144 px                        | Lives calmly: blinks, looks about, looks back, nothing bigger                 | `StartPanel.tsx`     |
+| Empty network, Trash, Archived             | Still, as the illustration                                                    | `EmptyState` callers |
+| Crash screen footer, 20 px                 | Still                                                                         | `ErrorBoundary.tsx`  |
 
 - **One rule, one hook.** `useCorvidLevel()` answers "how much may this bird
   move", and every surface above reads it, directly or through `CorvidMark`.
   A surface that animates without asking is a bug: reduced motion, from the
   operating system or from the Motion row, has to reach every one of them.
-- **`CorvidMark` gates its own `idle` and `hop`.** A caller may pass either
-  without checking the level first.
-- **Two perches, one bird.** The sidebar's perch stays in the DOM below `md`,
-  hidden by CSS, and the Settings footer carries the phone's. `findPerch()`
-  in `CorvidFlight.tsx` picks the one with a layout box. A third perch goes
-  through the same function or the bird leaves from the wrong rectangle.
+- **`CorvidMark` gates its own life.** A caller may pass `alive`, `hop` or
+  `primary` without checking the level first.
+- **Perches.** The sidebar's perch stays in the DOM below `md`, hidden by
+  CSS, and the Settings footer carries the phone's. `findPerch()` in
+  `CorvidFlight.tsx` picks the one with a layout box. The Appearance preview
+  is not found that way: it passes itself as `perch`. A new perch does one
+  or the other, or the bird leaves from the wrong ring.
 - **The thinking bird never carries the meaning alone.** Every surface that
   shows it also says what it is waiting for in text, and where that text is
   beside the bird the bird is `decorative`. A person who cannot see it loses
@@ -955,6 +1113,8 @@ without a reason a person could state.
 - ❌ No bird on a crash, a destructive confirmation or an error, except the
   head shake at a wrong password, which is the bird saying no rather than
   the bird being cheerful.
+- ❌ No reaction on a failure. A moment above is asked for in `onSuccess`,
+  never in `onSettled`.
 
 ## 7. The ring means tracked
 

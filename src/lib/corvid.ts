@@ -1,52 +1,273 @@
 /**
- * corvid.ts — the seam between whatever wants the bird to move and the one
- * overlay that moves it.
+ * corvid.ts — the seam between whatever wants the bird to move and the birds
+ * that move.
  *
- * Nothing here imports React. A view that wants a flight calls `flyCorvid()`
- * and forgets about it; `CorvidFlight`, mounted once in `App`, is the only
- * listener. That keeps the Pulse celebration, the sidebar perch and anything
- * a later plan adds from each owning a copy of the animation.
+ * Nothing here imports React. A view that wants something from the corvid
+ * calls one of three functions and forgets about it:
  *
- * `buildFlightPath` is pure on purpose. A path that leaves the viewport, or
- * crosses the page header, or hides under a phone's tab bar, is a bug that a
- * unit test can catch, and a test can only catch it when the geometry is a
- * function of two rectangles rather than of the DOM.
+ * - `flyCorvid()` asks for a flight. `CorvidFlight`, mounted once in `App`,
+ *   is the only listener, so two birds are never in the air at once.
+ * - `corvidReact()` asks the perched bird for one small act: a nod when a
+ *   follow-up is done, a hop for a new contact. The bird on the sidebar
+ *   perch, the one that is always there, is the listener.
+ * - `noteCorvidActivity()` counts a finished API request. About once a
+ *   hundred requests, or once every six to twelve AI answers, the bird
+ *   notices the work going on and does something of its own: a preen, a
+ *   stretch, now and then a short flight near home. `apiFetch` calls it, so
+ *   no view has to.
+ *
+ * Every one of these is silent when the account, the Motion row or the
+ * operating system asked for no motion: the listeners read the level, and
+ * the level is `motionLevel()` below and nothing else.
  *
  * @module lib/corvid
  */
 import type { MascotMotion, MotionPreference } from "../api/preferences";
+import type { CorvidReaction } from "./corvidBrain";
+import { between, type Rng } from "./corvidMotion";
+import type { FlightKind } from "./corvidFlight";
+
+export type { CorvidReaction } from "./corvidBrain";
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
 
 /** Someone asked the corvid to fly. Owned by `CorvidFlight`. */
 export const CORVID_FLY_EVENT = "contrack:corvid-fly";
+/** Someone asked the perched corvid for one act. */
+export const CORVID_REACT_EVENT = "contrack:corvid-react";
+/** The app is busy: the perched corvid may do something of its own. */
+export const CORVID_STIR_EVENT = "contrack:corvid-stir";
+/** The bird left this perch. The perch stops moving its hidden bird. */
+export const CORVID_AWAY_EVENT = "contrack:corvid-away";
+/** The bird is back on this perch. */
+export const CORVID_HOME_EVENT = "contrack:corvid-home";
 
-/**
- * `loop` is the sidebar click: one wide circuit of the window and home.
- * `swoop` is the celebration: one pass across the top of the page.
- */
-export type CorvidFlightKind = "loop" | "swoop";
+export type CorvidFlightKind = FlightKind;
 
 /** The payload {@link CORVID_FLY_EVENT} carries. */
 export interface CorvidFlyDetail {
   kind: CorvidFlightKind;
   /**
-   * Where the bird starts and lands. Omitted means the sidebar perch, which
-   * the overlay finds for itself.
+   * The perch to leave from and land on: the element round a living mark,
+   * whose bird is hidden while it is out. Omitted means the perch on
+   * screen, which the overlay finds for itself.
+   */
+  perch?: Element | null;
+  /**
+   * A rectangle to start and land at instead, with no bird of its own to
+   * hide: a flypast of something that is not a perch.
    */
   from?: DOMRect;
 }
 
-/** How much the corvid is allowed to move, once every input has had its say. */
-export type MotionLevel = MascotMotion;
+/** The payload {@link CORVID_REACT_EVENT} carries. */
+export interface CorvidReactDetail {
+  reaction: CorvidReaction;
+  /**
+   * The perch that should answer. Omitted means the one bird that listens to
+   * the whole app, on the sidebar perch.
+   */
+  target?: Element | null;
+}
+
+/** The payload of the away and home events: which perch. */
+export interface CorvidPerchDetail {
+  perch: Element;
+}
+
+const emit = <T>(name: string, detail?: T) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<T>(name, { detail }));
+};
 
 /** Ask the corvid to fly. Silent when no overlay is mounted. */
-export const flyCorvid = (detail: Partial<CorvidFlyDetail> = {}): void => {
+export const flyCorvid = (detail: Partial<CorvidFlyDetail> = {}): void =>
+  emit<CorvidFlyDetail>(CORVID_FLY_EVENT, {
+    kind: detail.kind ?? "loop",
+    perch: detail.perch,
+    from: detail.from,
+  });
+
+/**
+ * The shortest time between two of the same reaction, in ms. Ten follow-ups
+ * done in a row get a nod or two, not ten.
+ */
+export const REACTION_GAP = 4_000;
+const lastReaction = new Map<CorvidReaction, number>();
+
+/** Ask the perched corvid for one act. Repeats close together are dropped. */
+export function corvidReact(
+  reaction: CorvidReaction,
+  target?: Element | null,
+): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<CorvidFlyDetail>(CORVID_FLY_EVENT, {
-      detail: { kind: detail.kind ?? "loop", from: detail.from },
-    }),
-  );
+  const now = performance.now();
+  if (!target) {
+    if (now - (lastReaction.get(reaction) ?? -Infinity) < REACTION_GAP) return;
+    lastReaction.set(reaction, now);
+  }
+  emit<CorvidReactDetail>(CORVID_REACT_EVENT, { reaction, target });
+}
+
+// ---------------------------------------------------------------------------
+// Activity
+// ---------------------------------------------------------------------------
+
+/**
+ * Requests that mean a model did some work. The client side of
+ * `AI_COST_PATTERNS` in `server/middleware/rateLimit.ts`, less the two that
+ * only fetch: the link preview and the embedding backfill.
+ */
+const AI_PATHS: readonly RegExp[] = [
+  /^\/search\/semantic/,
+  /^\/search\/synthesize/,
+  /^\/parse-contact/,
+  /^\/contacts\/[^/]+\/enrich/,
+  /^\/contacts\/[^/]+\/briefing/,
+  /^\/ai-search$/,
+  /^\/dedupe\/scan/,
+  /^\/dashboard\/insight/,
+];
+
+/** Whether an `apiFetch` path is a request a model answers. */
+export const isAiPath = (path: string): boolean => {
+  const bare = path.split("?")[0]!.toLowerCase();
+  return AI_PATHS.some((pattern) => pattern.test(bare));
 };
+
+/** How many requests pass between two stirs: about a hundred. */
+export const API_STIR_EVERY: readonly [number, number] = [70, 130];
+/** How many AI answers: six to twelve. */
+export const AI_STIR_EVERY: readonly [number, number] = [6, 12];
+
+export interface ActivityCounter {
+  /** Count one request. Returns its kind when that kind's count came due. */
+  note(kind: "api" | "ai"): "api" | "ai" | null;
+}
+
+/**
+ * Two counts, each with its own random threshold, drawn again every time it
+ * comes due, so the bird never keeps a rhythm anyone could learn.
+ */
+export function createActivityCounter(rng: Rng): ActivityCounter {
+  const due = {
+    api: between(rng, ...API_STIR_EVERY),
+    ai: between(rng, ...AI_STIR_EVERY),
+  };
+  const seen = { api: 0, ai: 0 };
+  return {
+    note(kind) {
+      seen[kind] += 1;
+      if (seen[kind] < due[kind]) return null;
+      seen[kind] = 0;
+      due[kind] = between(
+        rng,
+        ...(kind === "ai" ? AI_STIR_EVERY : API_STIR_EVERY),
+      );
+      return kind;
+    },
+  };
+}
+
+/** A stir at most this often, in ms, however busy the app is. */
+export const STIR_GAP = 20_000;
+/** A flight of its own at most this often. */
+export const SORTIE_GAP = 180_000;
+/** How often a stir is a short flight rather than an act on the perch. */
+export const SORTIE_CHANCE = { api: 0.15, ai: 0.35 } as const;
+
+let counter = createActivityCounter(Math.random);
+let lastStir = -Infinity;
+let lastSortie = -Infinity;
+
+/** For tests: start counting again, with this random source. */
+export function resetCorvidActivity(rng: Rng = Math.random): void {
+  counter = createActivityCounter(rng);
+  lastStir = -Infinity;
+  lastSortie = -Infinity;
+  lastReaction.clear();
+}
+
+/** Whether a dialog, a menu or the palette is open over the page. */
+export function overlayIsOpen(): boolean {
+  if (typeof document === "undefined") return true;
+  return !!document.querySelector(
+    '[role="dialog"], [role="menu"], [cmdk-dialog]',
+  );
+}
+
+/**
+ * Whether the page is in no state for a bird to cross it: a dialog, a menu or
+ * the palette is open, or the person is typing in a field.
+ */
+export function pageIsBusy(): boolean {
+  if (typeof document === "undefined") return true;
+  if (overlayIsOpen()) return true;
+  const active = document.activeElement as HTMLElement | null;
+  if (!active) return false;
+  return (
+    active.isContentEditable ||
+    active.tagName === "INPUT" ||
+    active.tagName === "TEXTAREA" ||
+    active.tagName === "SELECT"
+  );
+}
+
+/**
+ * Count one finished request. `apiFetch` calls this for every response that
+ * came back OK. Almost always it only counts. When the bird is stirred, it is
+ * told after the request has gone back to its caller, never on the way.
+ */
+export function noteCorvidActivity(path: string): void {
+  if (typeof window === "undefined") return;
+  const crossed = counter.note(isAiPath(path) ? "ai" : "api");
+  if (!crossed) return;
+  const now = performance.now();
+  if (now - lastStir < STIR_GAP || document.hidden) return;
+  lastStir = now;
+  const sortie =
+    !pageIsBusy() &&
+    now - lastSortie >= SORTIE_GAP &&
+    Math.random() < SORTIE_CHANCE[crossed];
+  if (sortie) lastSortie = now;
+  setTimeout(() => {
+    if (sortie) flyCorvid({ kind: "sortie" });
+    else emit(CORVID_STIR_EVENT);
+  }, 0);
+}
+
+/** How long a celebration waits for a dialog to close before it lets go. */
+export const CELEBRATION_WAIT = 20_000;
+
+/**
+ * Ask for a flight the page can see: at once, or as soon as no dialog, menu
+ * or palette covers the page. An import finishes inside its dialog, and a
+ * celebration flown behind the dialog's backdrop is a celebration nobody
+ * sees, with the sidebar's ring empty meanwhile. If the page is still
+ * covered after twenty seconds, the moment has passed and nothing flies.
+ */
+export function flyWhenClear(detail: Partial<CorvidFlyDetail> = {}): void {
+  if (typeof window === "undefined") return;
+  if (!overlayIsOpen()) {
+    flyCorvid(detail);
+    return;
+  }
+  const until = performance.now() + CELEBRATION_WAIT;
+  const check = () => {
+    if (!overlayIsOpen()) flyCorvid(detail);
+    else if (performance.now() < until) setTimeout(check, 400);
+  };
+  setTimeout(check, 400);
+}
+
+// ---------------------------------------------------------------------------
+// The level
+// ---------------------------------------------------------------------------
+
+/** How much the corvid is allowed to move, once every input has had its say. */
+export type MotionLevel = MascotMotion;
 
 /**
  * What the bird may do, from the account's choice and the two ways a person
@@ -65,233 +286,3 @@ export function motionLevel(
   if (motionPreference === "reduced") return "off";
   return mascotMotion;
 }
-
-/**
- * Whether this browser can follow a motion path.
- *
- * Safari before 16 ignores `offset-path`, which would leave the bird sitting
- * at the top left of the window for four and a half seconds. The caller plays
- * the hop instead.
- */
-export function supportsOffsetPath(): boolean {
-  if (typeof CSS === "undefined" || typeof CSS.supports !== "function") {
-    return false;
-  }
-  return CSS.supports("offset-path", "path('M0 0')");
-}
-
-// ---------------------------------------------------------------------------
-// The flight path
-// ---------------------------------------------------------------------------
-
-/** How far the flight stays inside the left, right and bottom edges. */
-export const FLIGHT_EDGE = 24;
-
-/** The band at the top of the window the page header owns. */
-export const FLIGHT_TOP = 56;
-
-/** The band at the bottom a phone's tab bar owns. */
-export const FLIGHT_PHONE_BOTTOM = 96;
-
-/** Tailwind's `md`. Below it the tab bar exists, above it the sidebar does. */
-export const FLIGHT_MD = 768;
-
-export interface FlightViewport {
-  width: number;
-  height: number;
-}
-
-/** The point the bird leaves from and returns to, in viewport pixels. */
-export interface FlightPerch {
-  x: number;
-  y: number;
-}
-
-export interface FlightBox {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-/**
- * The rectangle a flight is allowed to cross.
- *
- * A window can be smaller than its own margins, so each axis collapses to its
- * midpoint rather than inverting. A degenerate box gives a flight that goes
- * nowhere, which is the right answer for a window 100 pixels tall.
- */
-export function flightBox(viewport: FlightViewport): FlightBox {
-  const bottomBand =
-    viewport.width < FLIGHT_MD ? FLIGHT_PHONE_BOTTOM : FLIGHT_EDGE;
-  const [left, right] = span(FLIGHT_EDGE, viewport.width - FLIGHT_EDGE);
-  const [top, bottom] = span(FLIGHT_TOP, viewport.height - bottomBand);
-  return { left, top, right, bottom };
-}
-
-/** One axis of the box, collapsed to its midpoint when the margins overlap. */
-function span(low: number, high: number): [number, number] {
-  if (low <= high) return [low, high];
-  const middle = (low + high) / 2;
-  return [middle, middle];
-}
-
-type Vec = [number, number];
-
-const clampTo = (box: FlightBox, [x, y]: Vec): Vec => [
-  Math.min(Math.max(x, box.left), box.right),
-  Math.min(Math.max(y, box.top), box.bottom),
-];
-
-/** One decimal is finer than a pixel, and `parsePath` rejects exponents. */
-const fixed = (n: number): string => (Math.round(n * 10) / 10).toFixed(1);
-
-/**
- * The waypoints of one flight, perch first and perch last.
- *
- * The loop is clockwise from the perch on the left: up and right along the
- * header line, down the right edge, back across the bottom, up the left edge
- * and home. The swoop is the celebration: one pass along the top third and a
- * quicker return above it.
- */
-export function flightWaypoints(
-  viewport: FlightViewport,
-  perch: FlightPerch,
-  kind: CorvidFlightKind = "loop",
-): Vec[] {
-  const box = flightBox(viewport);
-  const width = box.right - box.left;
-  const height = box.bottom - box.top;
-  const at = (fx: number, fy: number): Vec =>
-    clampTo(box, [box.left + width * fx, box.top + height * fy]);
-  const start: Vec = [perch.x, perch.y];
-
-  if (kind === "swoop") {
-    return [
-      start,
-      at(0.25, 0.14),
-      at(0.75, 0.24),
-      at(1, 0.1),
-      at(0.4, 0.04),
-      start,
-    ];
-  }
-
-  return [
-    start,
-    at(0.25, 0),
-    at(1, 0.28),
-    at(0.78, 0.78),
-    at(0.3, 1),
-    at(0, 0.45),
-    start,
-  ];
-}
-
-/**
- * The flight as an SVG path for `offset-path`, in viewport pixels.
- *
- * A Catmull-Rom spline through the waypoints, written out as cubic Béziers so
- * the curve passes through every one of them. Both handles of every segment
- * are clamped into the box, and a cubic never leaves the convex hull of its
- * four control points, so the only part of the curve outside the box is the
- * stretch between the perch and the first waypoint. That is what lets the
- * perch sit in the sidebar's top band while the flight itself keeps clear of
- * the header and the tab bar.
- *
- * Absolute `M` and `C` only, rounded to one decimal, so `parsePath` in
- * `assets/corvidPaths.ts` reads it back and the test measures the real curve.
- */
-export function buildFlightPath(
-  viewport: FlightViewport,
-  perch: FlightPerch,
-  kind: CorvidFlightKind = "loop",
-): string {
-  const points = flightWaypoints(viewport, perch, kind);
-  const box = flightBox(viewport);
-  const at = (i: number): Vec =>
-    points[Math.min(Math.max(i, 0), points.length - 1)]!;
-
-  let d = `M${fixed(points[0]![0])} ${fixed(points[0]![1])}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = at(i - 1);
-    const p1 = at(i);
-    const p2 = at(i + 1);
-    const p3 = at(i + 2);
-    // Catmull-Rom to Bézier, at the usual tension of one sixth.
-    const c1 = clampTo(box, [
-      p1[0] + (p2[0] - p0[0]) / 6,
-      p1[1] + (p2[1] - p0[1]) / 6,
-    ]);
-    const c2 = clampTo(box, [
-      p2[0] - (p3[0] - p1[0]) / 6,
-      p2[1] - (p3[1] - p1[1]) / 6,
-    ]);
-    d +=
-      ` C${fixed(c1[0])} ${fixed(c1[1])}` +
-      ` ${fixed(c2[0])} ${fixed(c2[1])}` +
-      ` ${fixed(p2[0])} ${fixed(p2[1])}`;
-  }
-  return d;
-}
-
-/**
- * A short curve from wherever the bird is now to the perch.
- *
- * A second click while the bird is out asks it home. Restarting the loop
- * would send it round again, so the overlay swaps the path for this one and
- * runs it in under a second.
- */
-export function buildHomePath(
-  viewport: FlightViewport,
-  perch: FlightPerch,
-  from: FlightPerch,
-): string {
-  const box = flightBox(viewport);
-  const mid = clampTo(box, [
-    (from.x + perch.x) / 2,
-    Math.min(from.y, perch.y) - (box.bottom - box.top) * 0.12,
-  ]);
-  return (
-    `M${fixed(from.x)} ${fixed(from.y)}` +
-    ` C${fixed(mid[0])} ${fixed(mid[1])}` +
-    ` ${fixed(mid[0])} ${fixed(mid[1])}` +
-    ` ${fixed(perch.x)} ${fixed(perch.y)}`
-  );
-}
-
-/**
- * Where a swoop starts when there is no perch to leave from.
- *
- * A celebration is a flypast, not a bird leaving its perch: Pulse fires one
- * when the last follow-up clears, and on a phone there is no perch on that
- * page at all. The sidebar's is in the DOM but CSS-hidden, so its rectangle
- * is all zeros, and a flight built from that would come out of the top left
- * corner of the window and go back into it.
- *
- * This is a point just outside the left edge, on the band the swoop uses, so
- * the bird comes in from off screen, crosses, and leaves the same way.
- */
-export function offscreenStart(viewport: FlightViewport): FlightPerch {
-  const box = flightBox(viewport);
-  return {
-    x: box.left - FLIGHT_SIZE,
-    y: box.top + (box.bottom - box.top) * 0.14,
-  };
-}
-
-/** The flying bird's size. The overlay renders the mark at this. */
-export const FLIGHT_SIZE = 48;
-
-/** How long a full flight takes, in seconds. */
-export const FLIGHT_SECONDS = 4.5;
-
-/** How long the way home takes after a second click, in seconds. */
-export const HOMING_SECONDS = 0.8;
-
-/** The celebration pass is shorter than the circuit. */
-export const SWOOP_SECONDS = 2;
-
-/** How long a flight lasts, by kind. */
-export const flightSeconds = (kind: CorvidFlightKind): number =>
-  kind === "swoop" ? SWOOP_SECONDS : FLIGHT_SECONDS;

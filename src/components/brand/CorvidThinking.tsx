@@ -9,6 +9,9 @@
  *
  * The glyph rather than the full mark, because this is a 20 px slot and the
  * chest and the tail smear at that size. It is the same drawing either way.
+ * Only the head moves: it cocks, looks up, and dips as if at something, while
+ * the ring and the wing hold still. Each instance runs at its own pace from
+ * its own place in the loop.
  *
  * It names itself "Thinking" by default, so replacing a silent spinner with a
  * picture adds a word rather than a mystery. Where the surface already says
@@ -19,6 +22,7 @@
  * At level "off" it is the static glyph. Nothing about the waiting is lost:
  * every caller shows or says what it is waiting for in words as well.
  */
+import { useState, type CSSProperties } from "react";
 import { cn } from "../../lib/utils";
 import { CorvidMark } from "./CorvidMark";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
@@ -40,6 +44,11 @@ export const CorvidThinking = ({
   className,
 }: CorvidThinkingProps) => {
   const level = useCorvidLevel();
+  // Each bird keeps its own time, so two thinking at once never nod in step.
+  const [rhythm] = useState(() => ({
+    period: 2.1 + Math.random() * 0.9,
+    offset: -Math.random() * 2.4,
+  }));
 
   return (
     <CorvidMark
@@ -48,6 +57,12 @@ export const CorvidThinking = ({
       decorative={decorative}
       label="Thinking"
       className={cn(level !== "off" && THINKING_CLASS, className)}
+      style={
+        {
+          "--corvid-think": `${rhythm.period.toFixed(2)}s`,
+          "--corvid-think-offset": `${rhythm.offset.toFixed(2)}s`,
+        } as CSSProperties
+      }
     />
   );
 };

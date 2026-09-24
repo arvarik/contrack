@@ -21,7 +21,7 @@ import {
   Activity,
   Keyboard,
 } from "lucide-react";
-import React, { useRef, useCallback } from "react";
+import React, { useCallback } from "react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
@@ -30,7 +30,7 @@ import { openKeyboardShortcuts } from "../../lib/appEvents";
 import { SidebarIdentity } from "../auth/AccountIdentity";
 import { CorvidMark } from "../brand/CorvidMark";
 import { perchProps } from "../brand/CorvidFlight";
-import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
+import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 import { NAMES } from "../../lib/names";
@@ -43,23 +43,22 @@ import { RailTooltip } from "../ui/RailTooltip";
 /**
  * The corvid's perch.
  *
- * Level "full" hops and then flies, "subtle" hops and stays, "off" does
- * neither, and either reduced-motion input forces "off" whatever the account
- * chose. The hop is played here rather than in the overlay so that "subtle"
- * needs no overlay at all.
+ * The app's own bird lives here: it blinks, looks about, preens, answers the
+ * app, watches the pointer when it comes near and dozes when the person goes
+ * quiet (see `useCorvidLife`). Hovering or focusing the button gets it ready
+ * to go, weight down and head up, which is the button saying what a press
+ * will do. A press is `flyCorvid()`: at level "full" the bird leaves its
+ * ring for a flight of its own choosing, at "subtle" it flutters where it
+ * sits, at "off" nothing moves. The overlay decides which.
  */
 const CorvidPerch = () => {
-  const markRef = useRef<HTMLSpanElement>(null);
   const level = useCorvidLevel();
+  const bird = useCorvidControls();
 
   // Enter and Space already reach this through the button's own click, so
   // there is no key handler here to get out of step with the pointer.
   const onClick = useCallback(() => {
     if (level === "off") return;
-    if (level === "subtle") {
-      playCorvidBeat(markRef.current, HOP_CLASS, HOP_MS);
-      return;
-    }
     flyCorvid({ kind: "loop" });
   }, [level]);
 
@@ -67,10 +66,14 @@ const CorvidPerch = () => {
     <button
       type="button"
       onClick={onClick}
+      onPointerEnter={() => bird.hover(true)}
+      onPointerLeave={() => bird.hover(false)}
+      onFocus={() => bird.hover(true)}
+      onBlur={() => bird.hover(false)}
       /*
         The nav link's shape and the focus ring every control gets from
         `index.css`, but not its hover layer: while the bird is away this
-        button is empty, and a grey box where the mark used to be reads as
+        button holds only the empty ring, and a grey box round it reads as
         something still loading.
       */
       /*
@@ -85,11 +88,12 @@ const CorvidPerch = () => {
     >
       {/*
         The perch attribute sits on this wrapper, not on the svg. The overlay
-        hides the perch while the bird is out, and hiding a wrapper leaves the
-        button's own box alone, so the sidebar does not shift by a pixel.
+        hides only the bird inside it while the bird is out, never the ring,
+        and never the button's own box, so the sidebar does not shift by a
+        pixel.
       */}
-      <span ref={markRef} {...perchProps} className="flex">
-        <CorvidMark size={40} idPrefix="corvid" idle={level !== "off"} />
+      <span {...perchProps} className="flex">
+        <CorvidMark size={40} idPrefix="corvid" alive primary controls={bird} />
       </span>
     </button>
   );

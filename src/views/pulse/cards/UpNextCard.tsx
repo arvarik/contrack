@@ -9,7 +9,7 @@ import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { KBD_SM, TONE_DOT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
-import { flyCorvid } from "../../../lib/corvid";
+import { flyWhenClear } from "../../../lib/corvid";
 import { GROUP_TONE, PULSE_TYPE } from "../lib/pulseStyles";
 import { groupHeadingId } from "../lib/jumpToGroup";
 import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
@@ -105,7 +105,7 @@ export const UpNextCard = ({
       // overlay decides whether it actually flies: it runs the swoop only at
       // level "full", and reduced motion, from the account or the operating
       // system, is already "off" by the time it reads the level.
-      flyCorvid({ kind: "swoop" });
+      flyWhenClear({ kind: "swoop" });
     }
     prevItemCountRef.current = items.length;
 

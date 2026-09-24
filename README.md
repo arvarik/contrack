@@ -1,7 +1,9 @@
 <div align="center">
   <h1>
-    <img src="docs/brand/corvid-mark.png" alt="" width="96" height="96" align="middle" />
-    Contrack
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/contrack-lockup-dark.svg" />
+      <img src="docs/brand/contrack-lockup.svg" alt="Contrack" width="400" />
+    </picture>
   </h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
 

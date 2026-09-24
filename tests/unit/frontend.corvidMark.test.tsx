@@ -9,6 +9,10 @@
  *
  * The motion phase added two more: every part carries `data-part`, which is
  * what the shared keyframes select on, and `idle` starts the blink timer.
+ *
+ * The living corvid adds the split the whole design rests on: the ring is
+ * its own path outside the bird's group, so nothing that moves the bird can
+ * move the ring, and `alive` starts a life only where a life can be seen.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,18 +21,15 @@ import { CorvidMark } from "../../src/components/brand/CorvidMark";
 import { CorvidTile } from "../../src/components/brand/CorvidTile";
 import { Wordmark } from "../../src/components/brand/Wordmark";
 import {
+  BIRD_PART_ORDER,
+  CORVID_OPTICAL,
+  CORVID_PATHS,
   CORVID_PART_ORDER,
-  GLYPH_PARTS,
-  GLYPH_STROKE,
   MARK_STROKE,
   TILE,
 } from "../../src/assets/corvidPaths";
-import {
-  BLINK_CLASS,
-  IDLE_MAX_MS,
-  IDLE_MIN_MS,
-  IDLE_MIN_SIZE,
-} from "../../src/hooks/useCorvidIdle";
+import { LIFE_MIN_SIZE } from "../../src/hooks/useCorvidLife";
+import { BLINK_EVERY } from "../../src/lib/corvidBrain";
 
 afterEach(() => {
   cleanup();
@@ -70,17 +71,40 @@ describe("CorvidMark", () => {
     expect(svg.getAttribute("fill")).toBe("none");
     expect(svg.getAttribute("stroke-width")).toBe(String(MARK_STROKE));
     expect(svg.getAttribute("stroke-linecap")).toBe("round");
-    const eye = svg.querySelector("circle")!;
+    const eye = svg.querySelector("ellipse")!;
     expect(eye.getAttribute("fill")).toBe("var(--color-corvid-eye)");
     expect(eye.getAttribute("stroke")).toBe("none");
   });
 
   it("draws every part with an id from the prefix", () => {
     render(<CorvidMark idPrefix="corvid" />);
-    for (const part of CORVID_PART_ORDER) {
+    for (const part of [...CORVID_PART_ORDER, "nape"]) {
       expect(document.getElementById(`corvid-${part}`)?.tagName).toBe("path");
     }
-    expect(document.getElementById("corvid-eye")?.tagName).toBe("circle");
+    expect(document.getElementById("corvid-eye")?.tagName).toBe("ellipse");
+  });
+
+  it("keeps the ring outside the bird, so nothing that moves the bird moves it", () => {
+    const { container } = render(<CorvidMark />);
+    const svg = svgOf(container);
+    const ring = svg.querySelector('[data-part="ring"]')!;
+    const bird = svg.querySelector("[data-bird]")!;
+    expect(ring.parentElement).toBe(svg);
+    expect(bird.contains(ring)).toBe(false);
+    expect(ring.getAttribute("d")).toBe(CORVID_PATHS.ring);
+    for (const part of BIRD_PART_ORDER) {
+      expect(
+        bird.querySelector(`[data-part="${part}"]`)?.getAttribute("d"),
+      ).toBe(CORVID_PATHS[part]);
+    }
+    expect(bird.querySelector('[data-part="eye"]')).toBeTruthy();
+  });
+
+  it("draws no nape while the bird sits in its ring", () => {
+    const { container } = render(<CorvidMark />);
+    expect(
+      svgOf(container).querySelector('[data-part="nape"]')?.getAttribute("d"),
+    ).toBe("");
   });
 
   it("gives two marks on one page different ids", () => {
@@ -91,7 +115,8 @@ describe("CorvidMark", () => {
       </>,
     );
     const ids = [...container.querySelectorAll("[id]")].map((el) => el.id);
-    expect(ids.length).toBe(2 * (CORVID_PART_ORDER.length + 1));
+    // Every part, the nape and the eye, twice.
+    expect(ids.length).toBe(2 * (CORVID_PART_ORDER.length + 2));
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids)
       expect(id).toMatch(/^corvid-[A-Za-z0-9_-]+-[a-z0-9]+$/);
@@ -103,32 +128,38 @@ describe("CorvidMark", () => {
     const parts = [...svg.querySelectorAll("[data-part]")].map((el) =>
       el.getAttribute("data-part"),
     );
-    expect(parts).toEqual([...CORVID_PART_ORDER, "eye"]);
-    // The keyframes reach the wing and the eye through this attribute,
+    expect(parts).toEqual(["ring", "nape", ...BIRD_PART_ORDER, "eye"]);
+    // The rig and the keyframes reach the parts through this attribute,
     // because an id is unique per instance and cannot be in a stylesheet.
-    expect(svg.querySelector('[data-part="wing"]')?.tagName).toBe("path");
-    expect(svg.querySelector('[data-part="eye"]')?.tagName).toBe("circle");
+    expect(svg.querySelector('[data-part="head"]')?.tagName).toBe("path");
+    expect(svg.querySelector('[data-part="eye"]')?.tagName).toBe("ellipse");
   });
 
-  it("omits the chest and the tail in the glyph, at the heavier stroke", () => {
+  it("draws the glyph as the small optical size: every part, heavier, with a larger eye", () => {
     const { container } = render(<CorvidMark variant="glyph" idPrefix="g" />);
     const svg = svgOf(container);
-    expect(svg.querySelectorAll("path")).toHaveLength(GLYPH_PARTS.length);
-    for (const part of GLYPH_PARTS) {
+    const { small } = CORVID_OPTICAL;
+    // The whole bird, as the favicon draws it at 32 px, and no nape: the
+    // glyph never leaves its ring.
+    expect(svg.querySelectorAll("path")).toHaveLength(small.parts.length);
+    for (const part of small.parts) {
       expect(document.getElementById(`g-${part}`)).toBeTruthy();
     }
-    expect(document.getElementById("g-chest")).toBeNull();
-    expect(document.getElementById("g-tail1")).toBeNull();
-    expect(document.getElementById("g-tail2")).toBeNull();
-    expect(svg.getAttribute("stroke-width")).toBe(String(GLYPH_STROKE));
+    expect(document.getElementById("g-nape")).toBeNull();
+    expect(svg.getAttribute("stroke-width")).toBe(String(small.stroke));
+    expect(Number(svg.getAttribute("stroke-width"))).toBeGreaterThan(
+      MARK_STROKE,
+    );
+    expect(document.getElementById("g-eye")?.getAttribute("rx")).toBe(
+      String(small.eye),
+    );
     expect(svg.getAttribute("data-variant")).toBe("glyph");
   });
 });
 
-describe("CorvidMark, idling", () => {
+describe("CorvidMark, alive", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
   });
 
   afterEach(() => {
@@ -136,31 +167,52 @@ describe("CorvidMark, idling", () => {
     vi.restoreAllMocks();
   });
 
+  const eyeOf = (container: HTMLElement) =>
+    svgOf(container).querySelector('[data-part="eye"]')!;
+
   it("holds still by default", () => {
     render(<CorvidMark size={32} />);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("blinks when asked, on the eye the keyframe selects", () => {
-    const { container } = render(<CorvidMark size={32} idle />);
-    const svg = svgOf(container);
-    expect(svg.classList.contains(BLINK_CLASS)).toBe(false);
-
-    act(() => {
-      vi.advanceTimersByTime(IDLE_MIN_MS + 0.5 * (IDLE_MAX_MS - IDLE_MIN_MS));
-    });
-    expect(svg.classList.contains(BLINK_CLASS)).toBe(true);
-    expect(svg.querySelector('[data-part="eye"]')).toBeTruthy();
+  it("blinks when it lives, and only its bird moves", () => {
+    const { container } = render(<CorvidMark size={40} alive />);
+    const ring = svgOf(container).querySelector('[data-part="ring"]')!;
+    let shut = false;
+    for (let t = 0; t < BLINK_EVERY[1] + 1_000 && !shut; t += 16) {
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+      shut = Number(eyeOf(container).getAttribute("ry")) < 1;
+    }
+    expect(shut).toBe(true);
+    expect(ring.getAttribute("d")).toBe(CORVID_PATHS.ring);
   });
 
-  it("does not idle at a size where a blink would be invisible", () => {
-    render(<CorvidMark size={IDLE_MIN_SIZE - 1} idle />);
+  it("does not live at a size where a blink would be invisible", () => {
+    render(<CorvidMark size={LIFE_MIN_SIZE - 1} alive />);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not live as the glyph", () => {
+    render(<CorvidMark size={32} variant="glyph" alive />);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaves nothing running and the logo drawn when it unmounts", () => {
+    const { container, unmount } = render(<CorvidMark size={40} alive />);
+    const head = svgOf(container).querySelector('[data-part="head"]')!;
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(head.getAttribute("d")).toBe(CORVID_PATHS.head);
   });
 });
 
 describe("CorvidTile", () => {
-  it("draws the white glyph on the gradient tile in fixed colours", () => {
+  it("draws the white bird on the gradient tile in fixed colours", () => {
     const { container } = render(<CorvidTile size={24} />);
     const svg = svgOf(container);
     expect(svg.getAttribute("aria-hidden")).toBe("true");
@@ -168,14 +220,30 @@ describe("CorvidTile", () => {
     expect(svg.querySelector("rect")?.getAttribute("rx")).toBe(
       String(TILE.radius),
     );
+    const stops = [...svg.querySelectorAll("stop")].map((stop) =>
+      stop.getAttribute("stop-color"),
+    );
+    expect(stops).toEqual([TILE.gradientFrom, TILE.gradientTo]);
     const group = svg.querySelector("g")!;
     expect(group.getAttribute("stroke")).toBe(TILE.ink);
     expect(group.getAttribute("transform")).toMatch(
-      /^translate\([\d.]+ [\d.]+\) scale\([\d.]+\)$/,
+      /^translate\(-?[\d.]+ -?[\d.]+\) scale\([\d.]+\)$/,
     );
-    expect(svg.querySelectorAll("path")).toHaveLength(GLYPH_PARTS.length);
     expect(svg.querySelector("circle")?.getAttribute("fill")).toBe(TILE.eye);
     expect(container.innerHTML).not.toContain("var(");
+  });
+
+  it("draws the optical size its size calls for, as the favicons do", () => {
+    const { container, rerender } = render(<CorvidTile size={32} />);
+    const weight = () =>
+      svgOf(container).querySelector("g")!.getAttribute("stroke-width");
+    const paths = () => svgOf(container).querySelectorAll("path").length;
+    expect(weight()).toBe(String(CORVID_OPTICAL.small.stroke));
+    expect(paths()).toBe(CORVID_OPTICAL.small.parts.length);
+    rerender(<CorvidTile size={64} />);
+    expect(weight()).toBe(String(CORVID_OPTICAL.medium.stroke));
+    rerender(<CorvidTile size={128} />);
+    expect(weight()).toBe(String(CORVID_OPTICAL.large.stroke));
   });
 
   it("uses a gradient id of its own for each instance", () => {

@@ -5,9 +5,10 @@
  * Three behaviours that only exist because a surface asked for them, and
  * that a person would only notice if they broke:
  *
- * 1. The sign-in card shakes its head at a wrong password, once per message,
- *    and at nothing else. A card that twitches on every re-render while an
- *    error is up is worse than a card that never moves.
+ * 1. The sign-in card's bird shakes its head at a wrong password, once per
+ *    message, and at nothing else. A card that twitches on every re-render
+ *    while an error is up is worse than a card that never moves. The ring
+ *    it sits in never moves at all.
  * 2. The "All reviewed" mark hops when it arrives, and holds still for an
  *    account that asked for no motion.
  * 3. The flight leaves from the perch that is actually on screen. There are
@@ -20,8 +21,6 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import {
   AuthError,
   AuthShell,
-  SHAKE_CLASS,
-  SHAKE_MS,
   WRONG_CREDENTIALS,
 } from "../../src/components/auth/AuthShell";
 import {
@@ -29,7 +28,7 @@ import {
   PERCH_ATTRIBUTE,
 } from "../../src/components/brand/CorvidFlight";
 import { CorvidMark } from "../../src/components/brand/CorvidMark";
-import { HOP_CLASS, HOP_MS } from "../../src/hooks/useCorvidIdle";
+import { CORVID_PATHS } from "../../src/assets/corvidPaths";
 import type { MascotMotion, MotionPreference } from "../../src/api/preferences";
 
 const preferences = {
@@ -69,31 +68,41 @@ const Card = ({ error }: { error: string | null }) => (
 );
 
 const mark = () => screen.getByTestId("auth-corvid");
+const partOf = (root: Element, part: string) =>
+  root.querySelector(`[data-part="${part}"]`)!.getAttribute("d");
+/** Whether the head is somewhere other than the logo's head right now. */
+const headMoved = () => partOf(mark(), "head") !== CORVID_PATHS.head;
+
+const advance = (ms: number) => {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+};
 
 describe("the sign-in card", () => {
-  it("shakes its head when the password was wrong", () => {
+  it("shakes its head when the password was wrong, and only its head", () => {
     const { rerender } = render(<Card error={null} />);
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(50);
+    expect(headMoved()).toBe(false);
 
     rerender(<Card error={WRONG_CREDENTIALS} />);
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(true);
+    advance(90);
+    expect(headMoved()).toBe(true);
+    expect(partOf(mark(), "ring")).toBe(CORVID_PATHS.ring);
 
-    act(() => {
-      vi.advanceTimersByTime(SHAKE_MS);
-    });
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(400);
+    expect(headMoved()).toBe(false);
   });
 
   it("shakes once per message, not once per render", () => {
     const { rerender } = render(<Card error={WRONG_CREDENTIALS} />);
-    act(() => {
-      vi.advanceTimersByTime(SHAKE_MS);
-    });
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(500);
+    expect(headMoved()).toBe(false);
 
-    // Same sentence, another render: the card must hold still.
+    // Same sentence, another render: the bird must hold still.
     rerender(<Card error={WRONG_CREDENTIALS} />);
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(90);
+    expect(headMoved()).toBe(false);
   });
 
   it("holds still for an error that is not about the credential", () => {
@@ -101,14 +110,17 @@ describe("the sign-in card", () => {
     // "No, that is not it" is untrue of both, so the bird says nothing.
     const { rerender } = render(<Card error={null} />);
     rerender(<Card error="Could not reach the server." />);
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(90);
+    expect(headMoved()).toBe(false);
   });
 
   it("holds still at level off", () => {
     preferences.mascotMotion = "off";
     const { rerender } = render(<Card error={null} />);
     rerender(<Card error={WRONG_CREDENTIALS} />);
-    expect(mark().classList.contains(SHAKE_CLASS)).toBe(false);
+    advance(90);
+    expect(headMoved()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("still announces the error, whatever the bird does", () => {
@@ -116,12 +128,13 @@ describe("the sign-in card", () => {
     expect(screen.getByRole("alert").textContent).toBe(WRONG_CREDENTIALS);
   });
 
-  it("leaves no timer behind when the card unmounts mid-shake", () => {
+  it("leaves no timer behind and the logo drawn when the card unmounts mid-shake", () => {
     const { rerender, unmount } = render(<Card error={null} />);
     rerender(<Card error={WRONG_CREDENTIALS} />);
-    const element = mark();
+    advance(90);
+    const head = mark().querySelector('[data-part="head"]')!;
     unmount();
-    expect(element.classList.contains(SHAKE_CLASS)).toBe(false);
+    expect(head.getAttribute("d")).toBe(CORVID_PATHS.head);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
@@ -131,45 +144,45 @@ describe("the sign-in card", () => {
 // ---------------------------------------------------------------------------
 
 describe("a mark that hops on mount", () => {
-  it("hops once and then holds still", () => {
-    const { container } = render(<CorvidMark size={96} hop />);
-    const svg = container.querySelector("svg")!;
-    expect(svg.classList.contains(HOP_CLASS)).toBe(true);
+  const chest = (container: HTMLElement) => partOf(container, "chest");
 
-    act(() => {
-      vi.advanceTimersByTime(HOP_MS);
-    });
-    expect(svg.classList.contains(HOP_CLASS)).toBe(false);
+  it("hops once, leaving its ring where it is, and then holds still", () => {
+    const { container } = render(<CorvidMark size={96} hop />);
+    advance(200);
+    expect(chest(container)).not.toBe(CORVID_PATHS.chest);
+    expect(partOf(container, "ring")).toBe(CORVID_PATHS.ring);
+    advance(600);
+    expect(chest(container)).toBe(CORVID_PATHS.chest);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("does not hop at level off", () => {
     preferences.mascotMotion = "off";
     const { container } = render(<CorvidMark size={96} hop />);
-    expect(container.querySelector("svg")!.classList.contains(HOP_CLASS)).toBe(
-      false,
-    );
+    advance(200);
+    expect(chest(container)).toBe(CORVID_PATHS.chest);
   });
 
-  it("does not hop when the operating system asks for reduced motion", () => {
+  it("does not hop when the Motion row asks for reduced motion", () => {
     preferences.motion = "reduced";
     const { container } = render(<CorvidMark size={96} hop />);
-    expect(container.querySelector("svg")!.classList.contains(HOP_CLASS)).toBe(
-      false,
-    );
+    advance(200);
+    expect(chest(container)).toBe(CORVID_PATHS.chest);
   });
 
   it("does not hop unless it is asked to", () => {
     const { container } = render(<CorvidMark size={96} />);
-    expect(container.querySelector("svg")!.classList.contains(HOP_CLASS)).toBe(
-      false,
-    );
+    advance(200);
+    expect(chest(container)).toBe(CORVID_PATHS.chest);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("leaves no timer behind when it unmounts mid-hop", () => {
     const { container, unmount } = render(<CorvidMark size={96} hop />);
-    const svg = container.querySelector("svg")!;
+    advance(150);
+    const el = container.querySelector('[data-part="chest"]')!;
     unmount();
-    expect(svg.classList.contains(HOP_CLASS)).toBe(false);
+    expect(el.getAttribute("d")).toBe(CORVID_PATHS.chest);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
