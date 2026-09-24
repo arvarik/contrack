@@ -121,8 +121,6 @@ export interface Motion {
   /** How long it lasts, in ms. `Infinity` for a posture that holds. */
   duration: number;
   tracks: Tracks;
-  /** A rhythm under the tracks, for the breathing of a dozing bird. */
-  wave?: (t: number) => Partial<CorvidPose>;
 }
 
 /** The value of one track at `t`. Before the first key it is that key's. */
@@ -159,12 +157,6 @@ export function sampleMotion(
   };
   for (const field of Object.keys(motion.tracks) as (keyof CorvidPose)[]) {
     apply(field, sampleTrack(motion.tracks[field]!, t));
-  }
-  if (motion.wave) {
-    const wave = motion.wave(t);
-    for (const field of Object.keys(wave) as (keyof CorvidPose)[]) {
-      apply(field, wave[field]!);
-    }
   }
   return out;
 }
@@ -593,11 +585,12 @@ export function makeReady(): Motion {
 }
 
 /**
- * Asleep: the eye shut, the head sunk, the feathers up, breathing slowly.
- * Held until something wakes it.
+ * Asleep: the eye shut, the head sunk, the feathers up. Held until something
+ * wakes it. It does not breathe: at the size the mark is drawn a breath is
+ * a fifth of a pixel, and a frame every few seconds for motion nobody can
+ * see is a cost with nothing to show for it.
  */
-export function makeDoze(rng: Rng): Motion {
-  const breath = between(rng, 3800, 4800);
+export function makeDoze(): Motion {
   return {
     name: "doze",
     duration: Infinity,
@@ -621,6 +614,5 @@ export function makeDoze(rng: Rng): Motion {
         { at: 2400, value: 0.55 },
       ],
     },
-    wave: (t) => ({ fluff: 0.12 * Math.sin((2 * Math.PI * t) / breath) }),
   };
 }

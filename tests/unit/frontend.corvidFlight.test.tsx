@@ -27,7 +27,12 @@ import {
   perchProps,
 } from "../../src/components/brand/CorvidFlight";
 import { CorvidMark } from "../../src/components/brand/CorvidMark";
-import { CORVID_REACT_EVENT, flyCorvid } from "../../src/lib/corvid";
+import {
+  CORVID_HOME_EVENT,
+  CORVID_REACT_EVENT,
+  flyCorvid,
+} from "../../src/lib/corvid";
+import { createRng } from "../../src/lib/corvidMotion";
 import type { MascotMotion, MotionPreference } from "../../src/api/preferences";
 
 const preferences = {
@@ -262,6 +267,139 @@ describe("CorvidFlight", () => {
     fly("swoop");
     expect(birdAt()[0]).toBeLessThan(0);
     expect(perchBird().style.visibility).toBe("");
+  });
+
+  it("hears a second press only while the bird is out and on its way", () => {
+    mount();
+    fly();
+    // Still leaving the ring: a press now would turn it round in the ring.
+    advance(200);
+    fly();
+    advance(2_000);
+    // The lap went on: two seconds in, it is far from home.
+    expect(overlay()).not.toBeNull();
+    const [x] = birdAt();
+    expect(x).toBeGreaterThan(200);
+  });
+
+  it("lets nothing the app asks for by itself cut a lap short", () => {
+    mount();
+    fly();
+    advance(1_500);
+    fly("swoop");
+    fly("sortie");
+    // A way home would be over by now; the lap is not.
+    advance(3_000);
+    expect(overlay()).not.toBeNull();
+    advance(9_000);
+    expect(overlay()).toBeNull();
+  });
+
+  it("brings the bird home to the ring it left, whichever perch is pressed", () => {
+    render(
+      <MemoryRouter>
+        <Perch />
+        <span data-testid="preview" className="flex">
+          <CorvidMark size={36} alive />
+        </span>
+        <CorvidFlight />
+      </MemoryRouter>,
+    );
+    screen.getByTestId("perch").getBoundingClientRect = () => box(16, 12, 40);
+    const preview = screen.getByTestId("preview");
+    preview.getBoundingClientRect = () => box(1000, 500, 36);
+    const previewBird = preview.querySelector<SVGGElement>("[data-bird]")!;
+    act(() => {
+      flyCorvid({ kind: "loop", perch: preview });
+    });
+    advance(1_500);
+    // The sidebar's logo is pressed while the preview's bird is out.
+    fly();
+    expect(perchBird().style.visibility).toBe("");
+    advance(8_000);
+    expect(overlay()).toBeNull();
+    expect(previewBird.style.visibility).toBe("");
+  });
+
+  it("starts the next flight even when the last one ended in the same moment", () => {
+    mount();
+    fly();
+    advance(300);
+    // A landing and a new flight in one batch: the new one must still run.
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      flyCorvid({ kind: "loop" });
+    });
+    expect(overlay()).not.toBeNull();
+    const [x0] = birdAt();
+    advance(1_200);
+    expect(birdAt()[0]).not.toBe(x0);
+    advance(12_000);
+    expect(overlay()).toBeNull();
+    expect(perchBird().style.visibility).toBe("");
+  });
+
+  it("lands where the ring is now, if its page scrolled while the bird was out", () => {
+    render(
+      <MemoryRouter>
+        <span data-testid="preview" className="flex">
+          <CorvidMark size={36} alive />
+        </span>
+        <CorvidFlight />
+      </MemoryRouter>,
+    );
+    const preview = screen.getByTestId("preview");
+    preview.getBoundingClientRect = () => box(1000, 500, 36);
+    act(() => {
+      flyCorvid({ kind: "loop", perch: preview });
+    });
+    advance(1_000);
+    // The page scrolls up by 120 px under the flying bird.
+    preview.getBoundingClientRect = () => box(1000, 380, 36);
+    let lastY = 0;
+    for (let i = 0; i < 700 && overlay(); i++) {
+      advance(16);
+      if (overlay()) lastY = birdAt()[1]!;
+    }
+    expect(overlay()).toBeNull();
+    // The logo's body middle at the new place: 380 + 0.54 * 36.
+    expect(lastY).toBeCloseTo(380 + 0.54 * 36, 0);
+  });
+
+  it("rolls by turning the drawing and never by squashing it, so the pen keeps its width", () => {
+    // A celebration pass rolls about one time in two. Fly them until one does.
+    let upsideDown = false;
+    for (let seed = 1; seed <= 12 && !upsideDown; seed++) {
+      const random = vi
+        .spyOn(Math, "random")
+        .mockImplementation(createRng(seed));
+      const { unmount } = mount();
+      fly("swoop");
+      for (let i = 0; i < 1_000 && overlay(); i++) {
+        const holder = overlay()!.firstElementChild as HTMLElement;
+        expect(holder.style.transform).not.toMatch(/scale/);
+        // Upright, the eye is above the body's middle, at about 40. Upside
+        // down, the rig has turned the points, and it is below, at about 64.
+        const eye = overlay()!.querySelector('[data-part="eye"]')!;
+        if (Number(eye.getAttribute("cy")) > 55) upsideDown = true;
+        advance(16);
+      }
+      unmount();
+      random.mockRestore();
+    }
+    expect(upsideDown).toBe(true);
+  });
+
+  it("tells the perch its bird is home when the app unmounts mid-flight", () => {
+    const { unmount } = mount();
+    const perch = screen.getByTestId("perch");
+    fly();
+    const homes: unknown[] = [];
+    const listen = (e: Event) => homes.push((e as CustomEvent).detail?.perch);
+    window.addEventListener(CORVID_HOME_EVENT, listen);
+    unmount();
+    window.removeEventListener(CORVID_HOME_EVENT, listen);
+    expect(homes).toEqual([perch]);
   });
 
   it("leaves from a perch the caller names, and lands back on it", () => {

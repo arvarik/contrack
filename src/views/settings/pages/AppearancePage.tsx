@@ -115,7 +115,9 @@ export const AppearancePage = () => {
           description={
             motionIsReduced
               ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Motion is reduced, so the corvid stays still whatever you choose here"
-              : "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Press the bird here to try it"
+              : preferences.mascotMotion === "off"
+                ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring"
+                : "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Press the bird here to try it"
           }
         >
           <CorvidPreview />

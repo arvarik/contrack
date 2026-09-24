@@ -56,8 +56,10 @@ import {
 import {
   planFlight,
   type FlightFrame,
+  type FlightPerch,
   type FlightPlan,
 } from "../../lib/corvidFlight";
+import { easeInOut } from "../../lib/corvidMotion";
 
 /** The perch marks itself with this, so the overlay can find it. */
 export const PERCH_ATTRIBUTE = "data-corvid-perch";
@@ -120,6 +122,21 @@ interface Flight {
   /** The perch's bird, hidden while it is out, or null for a flypast. */
   hidden: SVGGElement | null;
   perch: HTMLElement | null;
+  /** The ring's rectangle the plan lands on, as it was measured. */
+  home: FlightPerch | null;
+  /** How far the ring has moved since, if its page scrolled. */
+  shift: { x: number; y: number };
+  frames: number;
+}
+
+/** How long before touchdown the landing starts following a ring that moved. */
+const FOLLOW_MS = 1_200;
+
+/** The rectangle a perch's mark sits in, or null when CSS hides it. */
+function perchBox(perch: Element | null | undefined): FlightPerch | null {
+  const rect = perch?.getBoundingClientRect();
+  if (!rect || rect.width <= 0) return null;
+  return { left: rect.left, top: rect.top, size: Math.max(rect.width, 1) };
 }
 
 export const CorvidFlight = () => {
@@ -135,6 +152,8 @@ export const CorvidFlight = () => {
   const bird = useRef<BirdElements | null>(null);
   const raf = useRef(0);
   const shown = useRef(0);
+  /** Every flight has an id of its own, so a new one always renders. */
+  const flightId = useRef(0);
 
   /** Give the perch its bird back, however the flight ended. */
   const land = useCallback(() => {
@@ -163,9 +182,11 @@ export const CorvidFlight = () => {
     if (!bird.current) bird.current = birdElements(canvas);
     const k = frame.size / 100;
     const [cx, cy] = bodyCentre(frame.pose);
+    // The roll is not a transform: a squash here would thin the strokes
+    // with the bird. The rig turns the points and the pen keeps its width.
     el.style.transform =
       `translate3d(${frame.x.toFixed(2)}px, ${frame.y.toFixed(2)}px, 0) ` +
-      `rotate(${frame.rotate.toFixed(2)}deg) scale(1, ${frame.roll.toFixed(3)}) ` +
+      `rotate(${frame.rotate.toFixed(2)}deg) ` +
       `translate(${(-(cx + PAD) * k).toFixed(2)}px, ${(-(cy + PAD) * k).toFixed(2)}px)`;
     const px = CANVAS * k;
     if (Math.abs(px - shown.current) > 0.25) {
@@ -173,7 +194,7 @@ export const CorvidFlight = () => {
       canvas.setAttribute("height", px.toFixed(2));
       shown.current = px;
     }
-    paintPose(bird.current, frame.pose);
+    paintPose(bird.current, frame.pose, frame.roll);
     last.current = frame;
   }, []);
 
@@ -182,7 +203,32 @@ export const CorvidFlight = () => {
     const current = flight.current;
     if (!current) return;
     const t = performance.now() - current.start;
-    place(current.plan.frame(t));
+    let frame = current.plan.frame(t);
+    // A ring on a page that scrolled has moved. Measure it now and then, and
+    // bring the landing to where it is now over the last stretch home.
+    if (current.home && current.perch) {
+      current.frames += 1;
+      if (current.frames % 10 === 0) {
+        const box = perchBox(current.perch);
+        if (box) {
+          current.shift = {
+            x: box.left - current.home.left,
+            y: box.top - current.home.top,
+          };
+        }
+      }
+      const follow = easeInOut(
+        (t - (current.plan.duration - FOLLOW_MS)) / (FOLLOW_MS - 300),
+      );
+      if (follow > 0 && (current.shift.x || current.shift.y)) {
+        frame = {
+          ...frame,
+          x: frame.x + current.shift.x * follow,
+          y: frame.y + current.shift.y * follow,
+        };
+      }
+    }
+    place(frame);
     if (t >= current.plan.duration) {
       land();
       return;
@@ -225,23 +271,34 @@ export const CorvidFlight = () => {
         ? { left: rect.left, top: rect.top, size: Math.max(rect.width, 1) }
         : null;
 
-      // Already out: a second press asks it home by a short way.
+      // Already out: a second press asks it home by a short way, to the ring
+      // it left, whichever perch was pressed. A flight the app asked for by
+      // itself never cuts a person's lap short, and nothing turns the bird
+      // round while it is still leaving or already coming in.
       const current = flight.current;
       if (current) {
         const at = last.current;
-        if (!at || !current.plan.lands || !home) return;
+        const t = performance.now() - current.start;
+        if (detail.kind !== "loop" || !at || !current.plan.interruptible(t)) {
+          return;
+        }
+        const back = perchBox(current.perch) ?? current.home;
+        if (!back) return;
         current.plan = planFlight({
           kind: "loop",
           viewport,
-          perch: home,
+          perch: back,
           rng: Math.random,
           airborne: {
             x: at.x,
             y: at.y,
             facing: at.pose.headFacing >= 0 ? 1 : -1,
+            from: at,
           },
         });
         current.start = performance.now();
+        current.home = back;
+        current.shift = { x: 0, y: 0 };
         return;
       }
 
@@ -258,6 +315,9 @@ export const CorvidFlight = () => {
         start: performance.now(),
         hidden,
         perch: leaving,
+        home: leaving ? home : null,
+        shift: { x: 0, y: 0 },
+        frames: 0,
       };
       if (leaving) {
         window.dispatchEvent(
@@ -266,7 +326,8 @@ export const CorvidFlight = () => {
           }),
         );
       }
-      setFlying((n) => n + 1);
+      flightId.current += 1;
+      setFlying(flightId.current);
     };
 
     window.addEventListener(CORVID_FLY_EVENT, onFly);
@@ -307,13 +368,24 @@ export const CorvidFlight = () => {
     if (level !== "full" && flight.current) land();
   }, [level, land]);
 
-  /** Nothing is left running, and nothing is left hidden, on unmount. */
+  /**
+   * Nothing is left running, and nothing is left hidden, on unmount, and the
+   * perch is told its bird is home, so a perch that outlives the overlay
+   * does not wait for a bird that is never coming back.
+   */
   useEffect(
     () => () => {
       if (raf.current) cancelAnimationFrame(raf.current);
       const current = flight.current;
       flight.current = null;
       if (current?.hidden) current.hidden.style.visibility = "";
+      if (current?.perch) {
+        window.dispatchEvent(
+          new CustomEvent<CorvidPerchDetail>(CORVID_HOME_EVENT, {
+            detail: { perch: current.perch },
+          }),
+        );
+      }
     },
     [],
   );

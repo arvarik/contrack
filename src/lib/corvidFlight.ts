@@ -126,10 +126,11 @@ export interface FlightRequest {
   perch: FlightPerch | null;
   rng: Rng;
   /**
-   * Already flying, from here, facing this way: the way home after a second
-   * click. The plan skips the launch.
+   * Already flying: the way home after a second press. The plan skips the
+   * launch, starts where the bird is, facing the way it faces, and eases
+   * out of the frame it was drawing, so nothing about the bird jumps.
    */
-  airborne?: { x: number; y: number; facing: 1 | -1 };
+  airborne?: { x: number; y: number; facing: 1 | -1; from?: FlightFrame };
 }
 
 /** One moment of a flight. */
@@ -155,6 +156,11 @@ export interface FlightPlan {
   /** The route, as `M` and `L` in px, for tests and for a debugging eye. */
   route: string;
   frame(t: number): FlightFrame;
+  /**
+   * Whether the bird may be asked home at `t`: not while it is still
+   * leaving the ring, and not once it is coming in to land.
+   */
+  interruptible(t: number): boolean;
 }
 
 /** How big the bird flies, in px per rig box: bigger than it sits. */
@@ -177,6 +183,13 @@ const SETTLE_MS = 480;
 const TURN_MS = 170;
 /** A barrel roll. */
 const ROLL_MS = 580;
+/** How long the way home takes to ease out of the frame it began in. */
+const HOMEWARD_BLEND_MS = 180;
+/** The bird grows from the ring's size to its flying size over this span. */
+const GROW_FROM = 150;
+const GROW_TO = 720;
+/** It starts shrinking back this long before the flare. */
+const SHRINK_LEAD = 320;
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -233,13 +246,17 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
       out(between(rng, 0.35, 0.55), between(rng, 0.7, 1)),
     ];
   } else if (kind === "swoop") {
-    // The celebration: along the top third and back a little higher.
-    const y = between(rng, 0.1, 0.26);
+    // The celebration: along the top third, round in a wide turn at the
+    // far end, and home a little lower, with room to bank all the way.
+    const y = between(rng, 0.06, 0.18);
+    const drop = between(rng, 0.14, 0.22);
     middle = [
-      at(0.3, y + between(rng, 0.04, 0.12)),
-      at(between(rng, 0.55, 0.65), y - between(rng, 0, 0.06)),
-      at(between(rng, 0.85, 0.95), y + between(rng, 0.02, 0.1)),
-      at(between(rng, 0.55, 0.7), Math.max(0, y - between(rng, 0.04, 0.1))),
+      at(0.3, y + between(rng, 0.04, 0.1)),
+      at(between(rng, 0.55, 0.62), y - between(rng, 0, 0.04)),
+      at(between(rng, 0.8, 0.86), y + between(rng, 0.02, 0.06)),
+      at(0.95, y + drop * 0.5),
+      at(between(rng, 0.8, 0.86), y + drop),
+      at(between(rng, 0.5, 0.6), y + drop + between(rng, 0, 0.06)),
     ];
     if (side < 0)
       middle = middle.map(([x, py]) => [box.right - (x - box.left), py]);
@@ -255,7 +272,7 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
       const angle =
         startAngle +
         direction * ((i / (n + 1)) * 2 * Math.PI + between(rng, -0.3, 0.3));
-      const reach = between(rng, 0.55, 0.95);
+      const reach = between(rng, 0.5, 0.85);
       middle.push(
         clampTo(box, [
           centre[0] + Math.cos(angle) * (width / 2) * reach,
@@ -269,7 +286,49 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
       middle[2] = a;
     }
   }
-  return [start, launch, ...middle, approach, start];
+  return relax([start, launch, ...middle, approach, start]);
+}
+
+/** The sharpest turn a flight takes at a waypoint, in degrees. */
+const MAX_TURN = 100;
+
+/**
+ * Soften any waypoint the route would turn too sharply at. A bird at speed
+ * cannot turn on a point, and a random route will now and then ask it to:
+ * such a waypoint is drawn toward the middle of its two neighbours until the
+ * turn is one a bird could make. The ends stay where they are.
+ */
+function relax(points: Point[]): Point[] {
+  const out = points.map((p) => [...p] as Point);
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    for (let i = 1; i < out.length - 1; i++) {
+      const a = out[i - 1]!;
+      const b = out[i]!;
+      const c = out[i + 1]!;
+      if (turnAt(a, b, c) <= MAX_TURN) continue;
+      out[i] = [
+        b[0] + ((a[0] + c[0]) / 2 - b[0]) * 0.35,
+        b[1] + ((a[1] + c[1]) / 2 - b[1]) * 0.35,
+      ];
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  return out;
+}
+
+/** How far the direction turns at `b`, from `a` through `b` to `c`, in degrees. */
+function turnAt(a: Point, b: Point, c: Point): number {
+  const ux = b[0] - a[0];
+  const uy = b[1] - a[1];
+  const vx = c[0] - b[0];
+  const vy = c[1] - b[1];
+  const lu = Math.hypot(ux, uy);
+  const lv = Math.hypot(vx, vy);
+  if (lu < 1e-6 || lv < 1e-6) return 0;
+  const cos = Math.min(1, Math.max(-1, (ux * vx + uy * vy) / (lu * lv)));
+  return (Math.acos(cos) * 180) / Math.PI;
 }
 
 /**
@@ -475,6 +534,8 @@ function timeRoute(
     const slope = ds > 0 ? dy / ds : 0;
     // Up is negative y: slower climbing, faster diving.
     let v = cruise * (1 + (slope > 0 ? 0.28 : 0.22) * slope);
+    // Slower through a tight curve, the way a bird banks round one.
+    v *= Math.max(0.45, 1 - curvature(points, i) * 60);
     const s = length[i]!;
     if (pushesOff) v *= 0.3 + 0.7 * easeOut(Math.min(s / 170, 1));
     if (lands) {
@@ -484,6 +545,25 @@ function timeRoute(
     time.push(time[i - 1]! + (ds / Math.max(v, 1)) * 1000);
   }
   return { points, length, time };
+}
+
+/**
+ * How sharply the route bends at point `i`, in radians per px, measured over
+ * a few points either side so the sampling does not show through.
+ */
+function curvature(points: readonly Point[], i: number): number {
+  const a = points[Math.max(i - 3, 0)]!;
+  const b = points[i]!;
+  const c = points[Math.min(i + 3, points.length - 1)]!;
+  const ux = b[0] - a[0];
+  const uy = b[1] - a[1];
+  const vx = c[0] - b[0];
+  const vy = c[1] - b[1];
+  const lu = Math.hypot(ux, uy);
+  const lv = Math.hypot(vx, vy);
+  if (lu < 1e-6 || lv < 1e-6) return 0;
+  const cos = Math.min(1, Math.max(-1, (ux * vx + uy * vy) / (lu * lv)));
+  return Math.acos(cos) / ((lu + lv) / 2);
 }
 
 /** Where along the track the bird is at `t` ms from departure. */
@@ -555,8 +635,10 @@ function turns(track: Track, initial: 1 | -1, until: number): Turn[] {
   let lastTurn = -Infinity;
   for (let t = 0; t < until; t += 16) {
     const { s } = locate(track, t);
-    const [hx] = heading(track, s, 30);
-    if (hx * facing < -0.35 && t - lastTurn > TURN_MS * 2) {
+    // Look a little ahead, so the turn is under way as the route bends and
+    // the bird is not caught flying backwards before it turns.
+    const [hx] = heading(track, s + 45, 30);
+    if (hx * facing < -0.2 && t - lastTurn > TURN_MS * 2) {
       facing = facing === 1 ? -1 : 1;
       out.push({ at: t, to: facing });
       lastTurn = t;
@@ -574,21 +656,23 @@ function facingAt(
   initial: 1 | -1,
   list: readonly Turn[],
   t: number,
-): { body: number; head: number } {
+): { body: number; head: number; lean: number } {
   let current: number = initial;
   for (const turn of list) {
     if (t < turn.at) break;
     const u = (t - turn.at) / TURN_MS;
     if (u < 1) {
-      let f = current + (turn.to - current) * easeInOut(u);
-      // Never quite edge on: a bird seen side on narrows, it does not vanish.
+      // `lean` runs smoothly through zero; the facings never quite reach it:
+      // a bird seen side on narrows, it does not vanish.
+      const lean = current + (turn.to - current) * easeInOut(u);
+      let f = lean;
       if (Math.abs(f) < 0.2)
         f = u < 0.5 ? 0.2 * Math.sign(current) : 0.2 * turn.to;
-      return { body: -f, head: f };
+      return { body: -f, head: f, lean };
     }
     current = turn.to;
   }
-  return { body: -current, head: current };
+  return { body: -current, head: current, lean: current };
 }
 
 /** A facing on its way through zero, but never quite at it: its own sign. */
@@ -635,6 +719,16 @@ export function planFlight(req: FlightRequest): FlightPlan {
       return [p[0], Math.min(Math.max(p[1], box.top), box.bottom)];
     return clampTo(box, p);
   });
+  // Where the spline ran along a wall, clamping leaves a corner. A few
+  // passes of a small average round it off, ends held where they are.
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 1; i < points.length - 1; i++) {
+      const a = points[i - 1]!;
+      const b = points[i]!;
+      const c = points[i + 1]!;
+      points[i] = [(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4];
+    }
+  }
 
   const cruise =
     between(rng, 600, 780) *
@@ -727,11 +821,12 @@ export function planFlight(req: FlightRequest): FlightPlan {
       headFacing: facing.head,
     };
 
-    // Pitch with the climb. Right facing is the rig's mirror, so the same
-    // climb turns the other way.
-    const faceRight = facing.head > 0;
-    const along = (Math.atan2(hy, faceRight ? hx : -hx) * 180) / Math.PI;
-    let rotate = Math.max(-50, Math.min(50, faceRight ? along : -along));
+    // Pitch with the climb, nose up when the route rises, whichever way the
+    // bird faces. Facing right is the rig's mirror, so the same climb turns
+    // the other way, and through a turn the pitch leans smoothly through
+    // level instead of flipping.
+    const climb = (Math.atan2(hy, Math.abs(hx)) * 180) / Math.PI;
+    let rotate = Math.max(-50, Math.min(50, climb)) * facing.lean;
     y -= 1.8 * lift;
 
     // Nearer and farther.
@@ -789,7 +884,6 @@ export function planFlight(req: FlightRequest): FlightPlan {
       wing = mixWing(folded, raised, open);
       lift = 0;
       rotate *= rise;
-      currentSize = perchSize + (size - perchSize) * easeInOut((k - 200) / 420);
       // The hop of the turn, at the perch's scale.
       const hop = Math.sin(Math.PI * Math.min(Math.max((k - 100) / 130, 0), 1));
       y = point[1] - hop * 0.07 * perchSize * (1 - rise);
@@ -834,16 +928,47 @@ export function planFlight(req: FlightRequest): FlightPlan {
       }
       pose.nape = 1 - easeInOut((after - 170) / 260);
       lift *= 1 - flare;
-      currentSize =
-        size + (perchSize - size) * easeInOut((k - 60) / (FLARE_MS - 60));
       if (after === 0) y -= 1.8 * lift;
     }
 
+    // Nearer as it leaves the ring, back to the ring's size as it lands,
+    // each over more than half a second, so the change reads as distance.
+    if (launches) {
+      const grow = easeInOut((clampT - GROW_FROM) / (GROW_TO - GROW_FROM));
+      currentSize = perchSize + (currentSize - perchSize) * grow;
+    }
+    if (lands) {
+      const from = arrive - FLARE_MS - SHRINK_LEAD;
+      const shrink = easeInOut((clampT - from) / (FLARE_MS + SHRINK_LEAD - 60));
+      currentSize = currentSize + (perchSize - currentSize) * shrink;
+    }
+
     // The roll: upside down and back, the wings held out.
-    const roll =
+    let roll =
       clampT >= rollAt && clampT <= rollAt + ROLL_MS
         ? Math.cos((2 * Math.PI * (clampT - rollAt)) / ROLL_MS)
         : 1;
+
+    // The way home eases out of the frame the bird was in when it was asked.
+    const from = airborne?.from;
+    if (from && clampT < HOMEWARD_BLEND_MS) {
+      const k = easeInOut(clampT / HOMEWARD_BLEND_MS);
+      x = from.x + (x - from.x) * k;
+      y = from.y + (y - from.y) * k;
+      currentSize = from.size + (currentSize - from.size) * k;
+      rotate = from.rotate + (rotate - from.rotate) * k;
+      roll = from.roll + (roll - from.roll) * k;
+      wing = mixWing(
+        {
+          wingAngle: from.pose.wingAngle,
+          wingSpread: from.pose.wingSpread,
+          wingCurl: from.pose.wingCurl,
+          wingTurn: from.pose.wingTurn,
+        },
+        wing,
+        k,
+      );
+    }
 
     return {
       x,
@@ -855,13 +980,16 @@ export function planFlight(req: FlightRequest): FlightPlan {
     };
   };
 
+  const interruptible = (t: number) =>
+    lands && t >= (launches ? LAUNCH_MS : 0) && t <= arrive - FLARE_MS;
+
   const route = points
     .map(
       ([px, py], i) =>
         `${i === 0 ? "M" : "L"}${px.toFixed(1)} ${py.toFixed(1)}`,
     )
     .join(" ");
-  return { kind: req.kind, duration, lands, route, frame };
+  return { kind: req.kind, duration, lands, route, frame, interruptible };
 }
 
 /**
@@ -883,5 +1011,5 @@ function homeWaypoints(
     (from[0] + approach[0]) / 2,
     Math.min(from[1], approach[1]) - between(req.rng, 20, 60),
   ]);
-  return [from, middle, approach, perch];
+  return relax([from, middle, approach, perch]);
 }

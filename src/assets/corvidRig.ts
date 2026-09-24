@@ -546,19 +546,56 @@ export function corvidPathData(drawing: CorvidDrawing): CorvidPathData {
   };
 }
 
+/**
+ * A drawing turned about its long axis, the line `y = about`, as in a barrel
+ * roll: `roll` 1 is upright, -1 upside down and 0 edge on. It moves the
+ * points and not the pen, so every stroke keeps its width. A squash in CSS
+ * thins the strokes with the bird, and the edge-on bird goes to a broken
+ * hairline. This one stays a line as thick as the rest of the drawing.
+ */
+export function rollDrawing(
+  drawing: CorvidDrawing,
+  roll: number,
+  about: number,
+): CorvidDrawing {
+  if (roll === 1) return drawing;
+  const turn = (points: readonly Vec[]): Vec[] =>
+    points.map(([x, y]): Vec => [x, about + (y - about) * roll]);
+  return {
+    head: [turn(drawing.head[0]), turn(drawing.head[1])],
+    chest: turn(drawing.chest),
+    wing: turn(drawing.wing),
+    tail1: turn(drawing.tail1),
+    tail2: turn(drawing.tail2),
+    nape: turn(drawing.nape),
+    eye: {
+      ...drawing.eye,
+      cy: about + (drawing.eye.cy - about) * roll,
+      ry: drawing.eye.ry * Math.abs(roll),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Placing a flying bird
 // ---------------------------------------------------------------------------
 
 /**
  * The point a flight path carries: the middle of the body, in rig units. A
- * sitting bird's is the middle of the mark. A flying bird's is the middle of
- * its back, mirrored with the body, so the path holds the bird by its body
- * and not by a corner of the box while it turns and flaps.
+ * flying bird's is the middle of its back, mirrored with the body, so the
+ * path holds the bird by its body and not by a corner of the box while it
+ * turns and flaps.
+ *
+ * A sitting bird's is the middle of the mark, and it does not move when the
+ * body turns: a bird turning round on its perch turns about its neck, with
+ * its head held still, so the point it is held by must hold still too. The
+ * mirror comes in with flight.
  */
 export function bodyCentre(
   pose: Pick<CorvidPose, "flight" | "bodyFacing" | "x" | "y">,
 ): Vec {
-  const [x, y] = mix([56, 54], [56, 52], clamp01(pose.flight));
-  return [NECK[0] + (x - NECK[0]) * pose.bodyFacing + pose.x, y + pose.y];
+  const f = clamp01(pose.flight);
+  const [x, y] = mix([56, 54], [56, 52], f);
+  const facing = 1 + (pose.bodyFacing - 1) * f;
+  return [NECK[0] + (x - NECK[0]) * facing + pose.x, y + pose.y];
 }

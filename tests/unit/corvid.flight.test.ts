@@ -31,7 +31,12 @@ import {
   type FlightPlan,
   type FlightViewport,
 } from "../../src/lib/corvidFlight";
-import { HOME_POSE, POSE_KEYS, bodyCentre } from "../../src/assets/corvidRig";
+import {
+  HOME_POSE,
+  POSE_KEYS,
+  bodyCentre,
+  drawCorvid,
+} from "../../src/assets/corvidRig";
 import { createRng } from "../../src/lib/corvidMotion";
 import { motionLevel } from "../../src/lib/corvid";
 
@@ -279,6 +284,165 @@ describe("turning round", () => {
         ).toBe(true);
       }
     }
+  });
+});
+
+describe("smoothness", () => {
+  const KINDS: FlightKind[] = ["loop", "sortie", "swoop"];
+
+  it("never pitches more than 18 degrees in one frame, turns included", () => {
+    for (const kind of KINDS) {
+      for (const seed of SEEDS) {
+        const frames = fly(
+          planFlight({
+            kind,
+            viewport: LAPTOP,
+            perch: SIDEBAR,
+            rng: createRng(seed),
+          }),
+        );
+        for (let i = 1; i < frames.length; i++) {
+          expect(
+            Math.abs(frames[i]!.rotate - frames[i - 1]!.rotate),
+            `${kind} ${seed} ${i}`,
+          ).toBeLessThan(18);
+        }
+      }
+    }
+  });
+
+  it("never doubles back within a frame: every turn has a radius", () => {
+    for (const kind of KINDS) {
+      for (const seed of SEEDS) {
+        const plan = planFlight({
+          kind,
+          viewport: LAPTOP,
+          perch: SIDEBAR,
+          rng: createRng(seed),
+        });
+        const frames = fly(plan);
+        // Between the launch and the flare, where the bird is under way.
+        for (let i = 40; i < frames.length - 60; i++) {
+          const a = frames[i - 1]!;
+          const b = frames[i]!;
+          const c = frames[i + 1]!;
+          const u = [b.x - a.x, b.y - a.y];
+          const v = [c.x - b.x, c.y - b.y];
+          const lu = Math.hypot(u[0]!, u[1]!);
+          const lv = Math.hypot(v[0]!, v[1]!);
+          if (lu < 3 || lv < 3) continue;
+          const turn =
+            (Math.acos(
+              Math.min(1, (u[0]! * v[0]! + u[1]! * v[1]!) / (lu * lv)),
+            ) *
+              180) /
+            Math.PI;
+          expect(turn, `${kind} ${seed} ${i}`).toBeLessThan(45);
+        }
+      }
+    }
+  });
+
+  it("grows and shrinks smoothly: never more than 2 px in one frame", () => {
+    for (const [viewport, perch] of [
+      [LAPTOP, SIDEBAR],
+      [PHONE, FOOTER],
+    ] as const) {
+      for (const seed of SEEDS) {
+        const frames = fly(
+          planFlight({ kind: "loop", viewport, perch, rng: createRng(seed) }),
+        );
+        for (let i = 1; i < frames.length; i++) {
+          expect(
+            Math.abs(frames[i]!.size - frames[i - 1]!.size),
+            `${seed} ${i}`,
+          ).toBeLessThan(2);
+        }
+      }
+    }
+  });
+
+  it("keeps its head where it was while it turns about in the ring", () => {
+    for (const seed of SEEDS) {
+      const plan = planFlight({
+        kind: "loop",
+        viewport: LAPTOP,
+        perch: SIDEBAR,
+        rng: createRng(seed),
+      });
+      const eyeAt = (t: number) => {
+        const f = plan.frame(t);
+        const [cx] = bodyCentre(f.pose);
+        const eye = drawCorvid(f.pose).eye;
+        return f.x + ((eye.cx - cx) * f.size) / 100;
+      };
+      const start = eyeAt(0);
+      // The body turns under the head between 100 and 210 ms, before the leap.
+      for (let t = 0; t <= 205; t += 5)
+        expect(Math.abs(eyeAt(t) - start), `${seed} ${t}`).toBeLessThan(3);
+    }
+  });
+});
+
+describe("a second press", () => {
+  it("eases the way home out of the frame the bird was in", () => {
+    for (const seed of SEEDS) {
+      const first = planFlight({
+        kind: "loop",
+        viewport: LAPTOP,
+        perch: SIDEBAR,
+        rng: createRng(seed),
+      });
+      const at = first.frame(1_700);
+      const home = planFlight({
+        kind: "loop",
+        viewport: LAPTOP,
+        perch: SIDEBAR,
+        rng: createRng(seed + 100),
+        airborne: {
+          x: at.x,
+          y: at.y,
+          facing: at.pose.headFacing >= 0 ? 1 : -1,
+          from: at,
+        },
+      });
+      const next = home.frame(0);
+      expect(next.x).toBeCloseTo(at.x, 3);
+      expect(next.y).toBeCloseTo(at.y, 0);
+      expect(next.size).toBeCloseTo(at.size, 6);
+      expect(next.rotate).toBeCloseTo(at.rotate, 6);
+      expect(next.pose.wingAngle).toBeCloseTo(at.pose.wingAngle, 6);
+      const frames = fly(home);
+      for (let i = 1; i < frames.length; i++) {
+        expect(Math.abs(frames[i]!.size - frames[i - 1]!.size)).toBeLessThan(
+          2.5,
+        );
+        expect(
+          Math.abs(frames[i]!.rotate - frames[i - 1]!.rotate),
+        ).toBeLessThan(18);
+      }
+      expectHome(frames[frames.length - 1]!, SIDEBAR);
+    }
+  });
+
+  it("is only heard between leaving the ring and coming in to land", () => {
+    const plan = planFlight({
+      kind: "loop",
+      viewport: LAPTOP,
+      perch: SIDEBAR,
+      rng: createRng(3),
+    });
+    expect(plan.interruptible(100)).toBe(false);
+    expect(plan.interruptible(600)).toBe(true);
+    expect(plan.interruptible(plan.duration / 2)).toBe(true);
+    expect(plan.interruptible(plan.duration - 300)).toBe(false);
+    const flypast = planFlight({
+      kind: "swoop",
+      viewport: PHONE,
+      perch: null,
+      rng: createRng(3),
+    });
+    expect(flypast.interruptible(flypast.duration / 2)).toBe(false);
   });
 });
 

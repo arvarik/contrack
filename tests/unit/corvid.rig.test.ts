@@ -14,6 +14,8 @@
  *    other way is the same bird and not a new drawing.
  * 5. Whatever the numbers, it draws finite points, and a wing in any part of
  *    a wingbeat keeps its length and never goes flat.
+ * 6. A barrel roll turns the points and not the pen, so the bird edge on is
+ *    a line as thick as its strokes.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -24,9 +26,11 @@ import {
   corvidPathData,
   corvidPose,
   drawCorvid,
+  rollDrawing,
   splinePath,
   throughPoints,
   trimPoints,
+  type CorvidDrawing,
   type CorvidPose,
   type Vec,
 } from "../../src/assets/corvidRig";
@@ -174,10 +178,59 @@ describe("turning round", () => {
     expect(chestX(turned)).toBeGreaterThan(NECK[0]);
   });
 
-  it("keeps the body's middle mirrored with the body", () => {
-    const [x] = bodyCentre(HOME_POSE);
-    const [turnedX] = bodyCentre({ ...HOME_POSE, bodyFacing: -1 });
+  it("holds a sitting bird still by its middle while it turns, and mirrors a flying one", () => {
+    // On the perch the body turns about the neck under a still head, so the
+    // point the bird is held by does not move.
+    expect(bodyCentre({ ...HOME_POSE, bodyFacing: -1 })).toEqual(
+      bodyCentre(HOME_POSE),
+    );
+    // In the air the body's middle goes where the body goes.
+    const [x] = bodyCentre({ ...HOME_POSE, flight: 1 });
+    const [turnedX] = bodyCentre({ ...HOME_POSE, flight: 1, bodyFacing: -1 });
     expect(turnedX).toBeCloseTo(2 * NECK[0] - x, 9);
+  });
+});
+
+describe("a barrel roll", () => {
+  const flying = drawCorvid(corvidPose({ flight: 1, nape: 1 }));
+  const about = bodyCentre(corvidPose({ flight: 1 }))[1];
+  const strokes = (d: CorvidDrawing): Vec[][] => [
+    d.head[0],
+    d.head[1],
+    d.chest,
+    d.wing,
+    d.tail1,
+    d.tail2,
+    d.nape,
+  ];
+
+  it("leaves an upright bird exactly as it is", () => {
+    expect(rollDrawing(flying, 1, about)).toBe(flying);
+  });
+
+  it("turns the points about the line the flight holds it by, and never moves them along it", () => {
+    const upside = rollDrawing(flying, -1, about);
+    const edgeOn = rollDrawing(flying, 0, about);
+    strokes(flying).forEach((stroke, s) =>
+      stroke.forEach(([x, y], i) => {
+        expect(close(strokes(upside)[s]![i]!, [x, 2 * about - y])).toBe(true);
+        expect(close(strokes(edgeOn)[s]![i]!, [x, about])).toBe(true);
+      }),
+    );
+    expect(upside.eye.cy).toBeCloseTo(2 * about - flying.eye.cy, 9);
+    expect(upside.eye.ry).toBeCloseTo(flying.eye.ry, 9);
+    expect(edgeOn.eye).toEqual({ ...flying.eye, cy: about, ry: 0 });
+  });
+
+  it("draws a stroke-thick line edge on, not a hairline: the pen is not part of it", () => {
+    // Every point lies on the line, so a path of them is a line drawn with
+    // the mark's own stroke width.
+    const paths = corvidPathData(rollDrawing(flying, 0, about));
+    for (const [part, d] of Object.entries(paths)) {
+      for (const command of parsePath(d))
+        for (const [, y] of command.points)
+          expect(y, part).toBeCloseTo(about, 1);
+    }
   });
 });
 

@@ -58,11 +58,20 @@ describe("CorvidPreview", () => {
     expect(asked[0]!.perch).toBe(button.querySelector("span"));
   });
 
-  it("asks for nothing at level off", () => {
+  it("is a still picture, not a button, at level off", () => {
     preferences.mascotMotion = "off";
+    const { container } = render(<CorvidPreview />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(container.querySelector("svg")!.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("is a still picture under reduced motion too", () => {
+    preferences.motion = "reduced";
     render(<CorvidPreview />);
-    act(() => screen.getByRole("button", { name: "Try the corvid" }).click());
-    expect(asked).toEqual([]);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("lives faster than the sidebar's bird, so the row shows what it does", () => {

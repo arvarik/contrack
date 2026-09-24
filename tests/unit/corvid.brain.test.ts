@@ -154,6 +154,25 @@ describe("sleep", () => {
     expect(brain.playing).toBe("startle");
   });
 
+  it("fades out of the doze instead of snapping awake, and does not blink at once", () => {
+    const brain = new CorvidBrain({ rng: createRng(4), now: 0 });
+    live(brain, 0, DOZE_AFTER + 5_000, undefined, 50);
+    const woke = DOZE_AFTER + 5_000;
+    expect(brain.sample(woke).headY).toBeGreaterThan(2);
+    brain.send({ type: "input" }, woke);
+    // A moment after waking the head is still on its way up.
+    const soon = brain.sample(woke + 60);
+    expect(soon.headY).toBeGreaterThan(1);
+    expect(soon.headY).toBeLessThan(2.2);
+    expect(brain.sample(woke + 400).headY).toBe(0);
+    // Nothing that fell due while it slept plays the moment it wakes.
+    let blinked = false;
+    for (let t = woke + 400; t < woke + 1_300; t += 16) {
+      if (brain.sample(t).eye < 0.3) blinked = true;
+    }
+    expect(blinked).toBe(false);
+  });
+
   it("stays awake while a pointer moves, and never dozes when told not to", () => {
     const watched = new CorvidBrain({ rng: createRng(4), now: 0 });
     live(
@@ -257,9 +276,29 @@ describe("frames", () => {
     expect(next).toBeLessThanOrEqual(BLINK_EVERY[1]);
   });
 
-  it("asks for a slow frame now and then while asleep, for its breathing", () => {
+  it("asks for no frames at all once asleep and settled", () => {
     const brain = new CorvidBrain({ rng: createRng(4), now: 0 });
     live(brain, 0, DOZE_AFTER + 5_000, undefined, 50);
-    expect(brain.nextChange(DOZE_AFTER + 5_000)).toBe(90);
+    expect(brain.dozing).toBe(true);
+    // Whatever wakes it sends an event first, so the wait can be long.
+    expect(brain.nextChange(DOZE_AFTER + 5_000)).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("wakes for a head turn that is waiting on the last hold", () => {
+    const brain = new CorvidBrain({ rng: createRng(1), now: 0 });
+    brain.send({ type: "pointer", dx: 120, dy: -120 }, 1_000);
+    brain.sample(1_000);
+    brain.sample(1_150);
+    // The pointer moves on while the head is still holding its first look.
+    brain.send({ type: "pointer", dx: 120, dy: 160 }, 1_160);
+    brain.sample(1_160);
+    const wait = brain.nextChange(1_160);
+    expect(wait).toBeGreaterThan(0);
+    expect(wait).toBeLessThanOrEqual(420);
+    // And when the pointer goes, the head comes back as soon as it may.
+    brain.sample(1_700);
+    brain.send({ type: "pointerGone" }, 1_750);
+    brain.sample(1_750);
+    expect(brain.nextChange(1_750)).toBeLessThanOrEqual(420);
   });
 });

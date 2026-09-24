@@ -246,15 +246,14 @@ describe("held postures", () => {
     }
   });
 
-  it("put the bird to sleep with its eye shut and its feathers up, breathing", () => {
+  it("put the bird to sleep with its eye shut and its feathers up, then hold still", () => {
     const doze = makeCorvidMotion("doze", createRng(1));
     const deep = at(doze, 10_000);
     expect(deep.eye).toBeLessThan(0.05);
     expect(deep.headY).toBeGreaterThan(1);
-    const breaths = Array.from(
-      { length: 40 },
-      (_, i) => at(doze, 10_000 + i * 200).fluff,
-    );
-    expect(Math.max(...breaths) - Math.min(...breaths)).toBeGreaterThan(0.1);
+    expect(deep.fluff).toBeGreaterThan(0.4);
+    // Settled, it does not move: a breath would be invisible at this size,
+    // and frames for it would cost something for nothing.
+    expect(at(doze, 60_000)).toEqual(deep);
   });
 });

@@ -190,15 +190,21 @@ export function resetCorvidActivity(rng: Rng = Math.random): void {
   lastReaction.clear();
 }
 
+/** Whether a dialog, a menu or the palette is open over the page. */
+export function overlayIsOpen(): boolean {
+  if (typeof document === "undefined") return true;
+  return !!document.querySelector(
+    '[role="dialog"], [role="menu"], [cmdk-dialog]',
+  );
+}
+
 /**
  * Whether the page is in no state for a bird to cross it: a dialog, a menu or
  * the palette is open, or the person is typing in a field.
  */
 export function pageIsBusy(): boolean {
   if (typeof document === "undefined") return true;
-  if (document.querySelector('[role="dialog"], [role="menu"], [cmdk-dialog]')) {
-    return true;
-  }
+  if (overlayIsOpen()) return true;
   const active = document.activeElement as HTMLElement | null;
   if (!active) return false;
   return (
@@ -211,7 +217,8 @@ export function pageIsBusy(): boolean {
 
 /**
  * Count one finished request. `apiFetch` calls this for every response that
- * came back OK. Almost always it only counts.
+ * came back OK. Almost always it only counts. When the bird is stirred, it is
+ * told after the request has gone back to its caller, never on the way.
  */
 export function noteCorvidActivity(path: string): void {
   if (typeof window === "undefined") return;
@@ -220,16 +227,39 @@ export function noteCorvidActivity(path: string): void {
   const now = performance.now();
   if (now - lastStir < STIR_GAP || document.hidden) return;
   lastStir = now;
-  if (
+  const sortie =
     !pageIsBusy() &&
     now - lastSortie >= SORTIE_GAP &&
-    Math.random() < SORTIE_CHANCE[crossed]
-  ) {
-    lastSortie = now;
-    flyCorvid({ kind: "sortie" });
+    Math.random() < SORTIE_CHANCE[crossed];
+  if (sortie) lastSortie = now;
+  setTimeout(() => {
+    if (sortie) flyCorvid({ kind: "sortie" });
+    else emit(CORVID_STIR_EVENT);
+  }, 0);
+}
+
+/** How long a celebration waits for a dialog to close before it lets go. */
+export const CELEBRATION_WAIT = 20_000;
+
+/**
+ * Ask for a flight the page can see: at once, or as soon as no dialog, menu
+ * or palette covers the page. An import finishes inside its dialog, and a
+ * celebration flown behind the dialog's backdrop is a celebration nobody
+ * sees, with the sidebar's ring empty meanwhile. If the page is still
+ * covered after twenty seconds, the moment has passed and nothing flies.
+ */
+export function flyWhenClear(detail: Partial<CorvidFlyDetail> = {}): void {
+  if (typeof window === "undefined") return;
+  if (!overlayIsOpen()) {
+    flyCorvid(detail);
     return;
   }
-  emit(CORVID_STIR_EVENT);
+  const until = performance.now() + CELEBRATION_WAIT;
+  const check = () => {
+    if (!overlayIsOpen()) flyCorvid(detail);
+    else if (performance.now() < until) setTimeout(check, 400);
+  };
+  setTimeout(check, 400);
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AI_STIR_EVERY,
   API_STIR_EVERY,
+  CELEBRATION_WAIT,
   CORVID_FLY_EVENT,
   CORVID_REACT_EVENT,
   CORVID_STIR_EVENT,
@@ -26,6 +27,7 @@ import {
   STIR_GAP,
   corvidReact,
   createActivityCounter,
+  flyWhenClear,
   isAiPath,
   noteCorvidActivity,
   pageIsBusy,
@@ -34,6 +36,8 @@ import {
 import { createRng } from "../../src/lib/corvidMotion";
 
 const heard = { fly: [] as unknown[], stir: 0, react: [] as unknown[] };
+/** The bird is told after the request returns, on the next turn. */
+const tick = () => vi.advanceTimersByTime(1);
 const onFly = (e: Event) => heard.fly.push((e as CustomEvent).detail);
 const onStir = () => (heard.stir += 1);
 const onReact = (e: Event) => heard.react.push((e as CustomEvent).detail);
@@ -125,12 +129,15 @@ describe("noticing", () => {
     resetCorvidActivity(createRng(8));
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     for (let i = 0; i < 130; i++) noteCorvidActivity("/contacts");
+    tick();
     expect(heard.stir).toBe(1);
     // Another hundred and thirty at once: the gap holds.
     for (let i = 0; i < 130; i++) noteCorvidActivity("/contacts");
+    tick();
     expect(heard.stir).toBe(1);
     vi.advanceTimersByTime(STIR_GAP);
     for (let i = 0; i < 130; i++) noteCorvidActivity("/contacts");
+    tick();
     expect(heard.stir).toBe(2);
     expect(heard.fly).toEqual([]);
   });
@@ -139,16 +146,19 @@ describe("noticing", () => {
     resetCorvidActivity(createRng(8));
     vi.spyOn(Math, "random").mockReturnValue(0);
     for (let i = 0; i < 12; i++) noteCorvidActivity("/search/semantic");
+    tick();
     expect(heard.fly).toEqual([
       { kind: "sortie", perch: undefined, from: undefined },
     ]);
     // Not again for three minutes: the next due count is a stir instead.
     vi.advanceTimersByTime(STIR_GAP);
     for (let i = 0; i < 12; i++) noteCorvidActivity("/search/semantic");
+    tick();
     expect(heard.fly).toHaveLength(1);
     expect(heard.stir).toBe(1);
     vi.advanceTimersByTime(SORTIE_GAP);
     for (let i = 0; i < 12; i++) noteCorvidActivity("/search/semantic");
+    tick();
     expect(heard.fly).toHaveLength(2);
   });
 
@@ -160,6 +170,7 @@ describe("noticing", () => {
     document.body.append(dialog);
     expect(pageIsBusy()).toBe(true);
     for (let i = 0; i < 12; i++) noteCorvidActivity("/search/semantic");
+    tick();
     expect(heard.fly).toEqual([]);
     expect(heard.stir).toBe(1);
 
@@ -170,6 +181,7 @@ describe("noticing", () => {
     expect(pageIsBusy()).toBe(true);
     vi.advanceTimersByTime(SORTIE_GAP);
     for (let i = 0; i < 12; i++) noteCorvidActivity("/search/semantic");
+    tick();
     expect(heard.fly).toEqual([]);
   });
 
@@ -177,8 +189,59 @@ describe("noticing", () => {
     resetCorvidActivity(createRng(8));
     vi.spyOn(document, "hidden", "get").mockReturnValue(true);
     for (let i = 0; i < 300; i++) noteCorvidActivity("/contacts");
+    tick();
     expect(heard.stir).toBe(0);
     expect(heard.fly).toEqual([]);
+  });
+});
+
+describe("telling the bird", () => {
+  it("waits until the request is back with its caller", () => {
+    resetCorvidActivity(createRng(8));
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    let crossedAt = -1;
+    for (let i = 0; i < 130 && crossedAt < 0; i++) {
+      noteCorvidActivity("/contacts");
+      if (vi.getTimerCount() > 0) crossedAt = i;
+    }
+    expect(crossedAt).toBeGreaterThanOrEqual(0);
+    // Nothing yet: the stir goes out on the next turn, not on the way.
+    expect(heard.stir).toBe(0);
+    tick();
+    expect(heard.stir).toBe(1);
+  });
+});
+
+describe("a celebration", () => {
+  it("flies at once when nothing covers the page", () => {
+    flyWhenClear({ kind: "swoop" });
+    expect(heard.fly).toEqual([
+      { kind: "swoop", perch: undefined, from: undefined },
+    ]);
+  });
+
+  it("waits for a dialog to close, then flies", () => {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.append(dialog);
+    flyWhenClear({ kind: "swoop" });
+    vi.advanceTimersByTime(2_000);
+    expect(heard.fly).toEqual([]);
+    dialog.remove();
+    vi.advanceTimersByTime(500);
+    expect(heard.fly).toHaveLength(1);
+  });
+
+  it("lets the moment pass if the dialog stays open", () => {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.append(dialog);
+    flyWhenClear({ kind: "swoop" });
+    vi.advanceTimersByTime(CELEBRATION_WAIT + 1_000);
+    dialog.remove();
+    vi.advanceTimersByTime(5_000);
+    expect(heard.fly).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

@@ -917,6 +917,11 @@ into the same strokes the mark is drawn with.
   body faces left and its head looks back over its shoulder to the right. In
   the air the head faces the way the bird goes. Flying right is the rig's
   mirror.
+- **A barrel roll turns the points, not the pen.** `rollDrawing` moves every
+  point toward the line the flight holds the bird by, so edge on the bird is
+  a line as thick as its strokes.
+- ❌ Never squash or stretch the bird with a CSS `scale`. It thins the
+  strokes with the shape, and an edge-on bird breaks up into a hairline.
 - ❌ Never add a stroke to the bird without a place for it in `HOME_POSE`
   that draws nothing, the way the nape does. The logo is the one pose that
   must not change.
@@ -948,9 +953,10 @@ motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
   typing. Every act is made fresh from a random source
   (`src/lib/corvidMotion.ts`), so no two are quite alike, and every one ends
   in the logo.
-- **What it costs.** Nothing while it is still. Between acts it sleeps on one
-  timer; it draws frames only while something moves; it stops altogether in
-  a hidden tab, out of view, while its bird is away flying, and at `off`.
+- **What it costs.** Nothing while it is still, asleep included. Between
+  acts it sleeps on one timer; it draws frames only while something moves;
+  it stops altogether in a hidden tab, out of view, while its bird is away
+  flying, and at `off`.
   Under 24 px a mark does not live, but a mark passed `alive` still answers a
   reaction addressed to it.
 - **The app's own bird.** The sidebar perch passes `primary`. That bird, and
@@ -967,14 +973,25 @@ motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
   preview does, or `from` for a rectangle with no bird of its own.
 - **Every flight is new.** `planFlight` in `src/lib/corvidFlight.ts` draws a
   random route through random waypoints, with its own speed, its own bursts
-  of wingbeats and glides, and pitch with the climb. The bird turns round
-  when the route doubles back, rather than flying upside down. It leaves as
+  of wingbeats and glides, and pitch with the climb. No waypoint turns it
+  sharper than a bird at speed could, and it slows through a tight curve.
+  The bird turns round when the route doubles back, rather than flying
+  upside down, and its pitch leans through level as it turns. It leaves as
   the logo and lands as the logo, at the perch's place and size, so the swap
   between the perch's bird and the flying one cannot be seen.
 - **One overlay.** `CorvidFlight`, mounted once in `App` beside the
   `Toaster`, is the only listener. It hides the perch's `[data-bird]` group,
-  never the ring, flies, lands and gives the bird back. A second press asks
-  it home by a short way. Escape and a route change land it at once.
+  never the ring, flies, lands and gives the bird back. A ring that moved
+  while the bird was out, because its page scrolled, is landed on where it
+  is. Escape and a route change land it at once.
+- **A second press asks it home by a short way**, eased out of the frame it
+  was in, to the ring it left, whichever perch was pressed. It is heard
+  only while the bird is out and on its way, not while it is still leaving
+  or already coming in. A flight the app asks for by itself, a celebration
+  or an outing, never cuts a person's lap short: it is dropped.
+- **A celebration waits to be seen.** `flyWhenClear()` flies at once on a
+  clear page, or when the dialog that covers it closes, and lets the moment
+  pass after twenty seconds.
 - **The thinking bird is CSS.** It is small and there can be several, so its
   head tilt is the one keyframe left, `corvid-thinking` in `src/index.css`.
   It moves `[data-part="head"]` and the eye about the rig's neck, with

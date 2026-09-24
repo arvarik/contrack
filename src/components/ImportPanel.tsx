@@ -35,7 +35,7 @@ import {
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, NetworkError, apiFetch } from "../api/client";
-import { flyCorvid } from "../lib/corvid";
+import { flyWhenClear } from "../lib/corvid";
 import {
   fetchImport,
   fetchImportRows,
@@ -181,9 +181,10 @@ export const ImportPanel = ({
       setError(null);
       invalidate();
       onComplete?.(done);
-      // The network grew: the corvid takes a turn round the room for it.
-      // The overlay decides whether it actually flies.
-      if (done.imported > 0) flyCorvid({ kind: "swoop" });
+      // The network grew: the corvid takes a turn round the room for it,
+      // once the import's dialog is out of the way. The overlay decides
+      // whether it actually flies.
+      if (done.imported > 0) flyWhenClear({ kind: "swoop" });
       if (done.failed > 0) {
         try {
           setFailedRows(await fetchImportRows(id, "failed"));

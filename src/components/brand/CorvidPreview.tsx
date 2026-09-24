@@ -7,8 +7,9 @@
  * takes to read the row. It is a perch in its own right: press it and it
  * does what the chosen level does, from here. At "full" it leaves the ring
  * for a flight round the window and lands back in this ring. At "subtle" it
- * flutters where it sits. At "off" it holds still, and so does everything
- * else.
+ * flutters where it sits. At "off", from the account or from reduced motion,
+ * it is a still picture and not a button: a control that does nothing is a
+ * Tab stop with nothing behind it.
  *
  * It is a button named "Try the corvid". The drawing inside stays
  * `aria-hidden`, like every mark.
@@ -25,9 +26,16 @@ export const CorvidPreview = () => {
   const bird = useCorvidControls();
 
   const onClick = useCallback(() => {
-    if (level === "off") return;
     flyCorvid({ kind: "loop", perch: perch.current });
-  }, [level]);
+  }, []);
+
+  if (level === "off") {
+    return (
+      <span className="shrink-0 p-1 text-primary">
+        <CorvidMark size={36} />
+      </span>
+    );
+  }
 
   return (
     <button

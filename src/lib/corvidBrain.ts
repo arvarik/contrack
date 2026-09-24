@@ -136,7 +136,7 @@ export function makeCorvidMotion(name: MotionName, rng: Rng): Motion {
     case "ready":
       return makeReady();
     case "doze":
-      return makeDoze(rng);
+      return makeDoze();
   }
 }
 
@@ -182,10 +182,15 @@ interface Playing {
 
 interface Held {
   motion: Motion;
+  /** When the posture began: its own tracks run from here. */
   start: number;
-  /** How much of it shows, 0 to 1, and where that is heading. */
-  weight: number;
+  /** When it last started fading in or out, and how much showed then. */
+  fadeAt: number;
+  fadeFrom: number;
+  /** Where the fade is heading. */
   target: 0 | 1;
+  /** When its own tracks stop moving, as time since `start`. */
+  settles: number;
 }
 
 /** One head turn toward the pointer: from where it was to where it looks. */
@@ -315,31 +320,47 @@ export class CorvidBrain {
     if (!this.dozing) return;
     this.hold("doze", 0, now);
     if (startle) this.start("startle", now);
+    // The schedule slept too: nothing that fell due in the night plays the
+    // moment the eye opens.
+    this.nextBlinkAt = now + this.wait(BLINK_EVERY) * 0.5;
+    this.nextSmallAt = now + this.wait(SMALL_EVERY) * 0.5;
+    this.nextBigAt = Math.max(this.nextBigAt, now + 12_000 / this.tempo);
   }
 
   private hold(name: "ready" | "doze", target: 0 | 1, now: number) {
     const current = this.held[name];
     if (current) {
-      current.weight = this.heldWeight(name, current, now);
-      current.start = now;
+      // The fade turns round from wherever it is. The posture's own tracks
+      // keep their time, so a bird waking from a deep doze fades out of it
+      // rather than snapping back to its first moment.
+      current.fadeFrom = this.heldWeight(name, current, now);
+      current.fadeAt = now;
       current.target = target;
       return;
     }
     if (target === 0) return;
+    const motion = makeCorvidMotion(name, this.rng);
     this.held[name] = {
-      motion: makeCorvidMotion(name, this.rng),
+      motion,
       start: now,
-      weight: 0,
+      fadeAt: now,
+      fadeFrom: 0,
       target,
+      settles: Math.max(
+        0,
+        ...Object.values(motion.tracks).map(
+          (keys) => keys![keys!.length - 1]!.at,
+        ),
+      ),
     };
   }
 
   private heldWeight(name: "ready" | "doze", held: Held, now: number): number {
     const fade = HOLD_FADE_MS[name][held.target === 1 ? "in" : "out"];
-    const moved = (now - held.start) / fade;
+    const moved = (now - held.fadeAt) / fade;
     return held.target === 1
-      ? Math.min(1, held.weight + moved)
-      : Math.max(0, held.weight - moved);
+      ? Math.min(1, held.fadeFrom + moved)
+      : Math.max(0, held.fadeFrom - moved);
   }
 
   private start(name: MotionName, now: number) {
@@ -406,6 +427,21 @@ export class CorvidBrain {
     }
   }
 
+  /** Where the head wants to look now: the pointer, or straight ahead. */
+  private watchTarget(): { angle: number; facing: number } {
+    const rest = { angle: 0, facing: 1 };
+    return this.act || this.dozing ? rest : (this.lookTarget ?? rest);
+  }
+
+  /** Whether the head has somewhere new to look, not yet started. */
+  private lookPending(): boolean {
+    const target = this.watchTarget();
+    return (
+      Math.abs(target.angle - (this.look?.to.angle ?? 0)) > 2.5 ||
+      target.facing !== (this.look?.to.facing ?? 1)
+    );
+  }
+
   /** The head's turn toward the pointer at `now`, snapping and holding. */
   private watch(now: number): { angle: number; facing: number } {
     const rest = { angle: 0, facing: 1 };
@@ -419,11 +455,8 @@ export class CorvidBrain {
       };
     };
     const current = this.look ? at(this.look) : rest;
-    const target = this.act || this.dozing ? rest : (this.lookTarget ?? rest);
-    const moved =
-      Math.abs(target.angle - (this.look?.to.angle ?? 0)) > 2.5 ||
-      target.facing !== (this.look?.to.facing ?? 1);
-    if (moved && now >= this.nextLookAt) {
+    const target = this.watchTarget();
+    if (this.lookPending() && now >= this.nextLookAt) {
       this.look = {
         from: current,
         to: target,
@@ -476,11 +509,15 @@ export class CorvidBrain {
       (this.look !== null && now - this.look.start < this.look.duration) ||
       Object.entries(this.held).some(([name, held]) => {
         const weight = this.heldWeight(name as "ready" | "doze", held!, now);
-        return held!.target === 1 ? weight < 1 : weight > 0;
+        const fading = held!.target === 1 ? weight < 1 : weight > 0;
+        return fading || (weight > 0 && now - held!.start < held!.settles);
       });
     if (moving) return 0;
-    // Asleep, it breathes: a frame every so often is plenty for that.
-    if (this.dozing) return 90;
+    // A turn toward the pointer is waiting for the head's last hold to end.
+    if (this.lookPending()) return Math.max(16, this.nextLookAt - now);
+    // Asleep and settled, nothing moves until something wakes it, and
+    // whatever wakes it sends an event first.
+    if (this.dozing) return 60_000;
     const due = Math.min(
       this.nextBlinkAt,
       this.nextSmallAt,

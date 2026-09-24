@@ -16,8 +16,10 @@ import { CORVID_EYE, CORVID_PATHS } from "../../assets/corvidPaths";
 import {
   HOME_POSE,
   POSE_KEYS,
+  bodyCentre,
   corvidPathData,
   drawCorvid,
+  rollDrawing,
   type CorvidPose,
 } from "../../assets/corvidRig";
 
@@ -62,9 +64,16 @@ const setD = (el: SVGPathElement | undefined, d: string) => {
   if (el && el.getAttribute("d") !== d) el.setAttribute("d", d);
 };
 
-/** Paint a pose. */
-export function paintPose(bird: BirdElements, pose: CorvidPose): void {
-  const drawing = drawCorvid(pose);
+/**
+ * Paint a pose. A flying bird in a barrel roll passes `roll`, and turns
+ * about the line its flight holds it by.
+ */
+export function paintPose(
+  bird: BirdElements,
+  pose: CorvidPose,
+  roll: number = 1,
+): void {
+  const drawing = rollDrawing(drawCorvid(pose), roll, bodyCentre(pose)[1]);
   const paths = corvidPathData(drawing);
   for (const stroke of BIRD_STROKES) setD(bird.strokes[stroke], paths[stroke]);
   if (bird.eye) {
