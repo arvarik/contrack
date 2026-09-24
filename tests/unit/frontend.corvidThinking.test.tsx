@@ -15,7 +15,7 @@ import {
   CorvidThinking,
   THINKING_CLASS,
 } from "../../src/components/brand/CorvidThinking";
-import { GLYPH_PARTS } from "../../src/assets/corvidPaths";
+import { CORVID_OPTICAL } from "../../src/assets/corvidPaths";
 import type { MascotMotion, MotionPreference } from "../../src/api/preferences";
 
 const preferences = {
@@ -47,7 +47,13 @@ describe("CorvidThinking", () => {
     expect(svg.getAttribute("width")).toBe("20");
     expect(svg.getAttribute("height")).toBe("20");
     expect(svg.getAttribute("data-variant")).toBe("glyph");
-    expect(svg.querySelectorAll("path")).toHaveLength(GLYPH_PARTS.length);
+    // The small optical size: the whole bird at the favicon's 32 px weight.
+    expect(svg.querySelectorAll("path")).toHaveLength(
+      CORVID_OPTICAL.small.parts.length,
+    );
+    expect(svg.getAttribute("stroke-width")).toBe(
+      String(CORVID_OPTICAL.small.stroke),
+    );
   });
 
   it("runs the head-tilt loop", () => {

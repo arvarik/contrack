@@ -22,10 +22,9 @@ import { CorvidTile } from "../../src/components/brand/CorvidTile";
 import { Wordmark } from "../../src/components/brand/Wordmark";
 import {
   BIRD_PART_ORDER,
+  CORVID_OPTICAL,
   CORVID_PATHS,
   CORVID_PART_ORDER,
-  GLYPH_PARTS,
-  GLYPH_STROKE,
   MARK_STROKE,
   TILE,
 } from "../../src/assets/corvidPaths";
@@ -136,18 +135,24 @@ describe("CorvidMark", () => {
     expect(svg.querySelector('[data-part="eye"]')?.tagName).toBe("ellipse");
   });
 
-  it("omits the chest and the tail in the glyph, at the heavier stroke", () => {
+  it("draws the glyph as the small optical size: every part, heavier, with a larger eye", () => {
     const { container } = render(<CorvidMark variant="glyph" idPrefix="g" />);
     const svg = svgOf(container);
-    expect(svg.querySelectorAll("path")).toHaveLength(GLYPH_PARTS.length);
-    for (const part of GLYPH_PARTS) {
+    const { small } = CORVID_OPTICAL;
+    // The whole bird, as the favicon draws it at 32 px, and no nape: the
+    // glyph never leaves its ring.
+    expect(svg.querySelectorAll("path")).toHaveLength(small.parts.length);
+    for (const part of small.parts) {
       expect(document.getElementById(`g-${part}`)).toBeTruthy();
     }
     expect(document.getElementById("g-nape")).toBeNull();
-    expect(document.getElementById("g-chest")).toBeNull();
-    expect(document.getElementById("g-tail1")).toBeNull();
-    expect(document.getElementById("g-tail2")).toBeNull();
-    expect(svg.getAttribute("stroke-width")).toBe(String(GLYPH_STROKE));
+    expect(svg.getAttribute("stroke-width")).toBe(String(small.stroke));
+    expect(Number(svg.getAttribute("stroke-width"))).toBeGreaterThan(
+      MARK_STROKE,
+    );
+    expect(document.getElementById("g-eye")?.getAttribute("rx")).toBe(
+      String(small.eye),
+    );
     expect(svg.getAttribute("data-variant")).toBe("glyph");
   });
 });
@@ -207,7 +212,7 @@ describe("CorvidMark, alive", () => {
 });
 
 describe("CorvidTile", () => {
-  it("draws the white glyph on the gradient tile in fixed colours", () => {
+  it("draws the white bird on the gradient tile in fixed colours", () => {
     const { container } = render(<CorvidTile size={24} />);
     const svg = svgOf(container);
     expect(svg.getAttribute("aria-hidden")).toBe("true");
@@ -215,14 +220,30 @@ describe("CorvidTile", () => {
     expect(svg.querySelector("rect")?.getAttribute("rx")).toBe(
       String(TILE.radius),
     );
+    const stops = [...svg.querySelectorAll("stop")].map((stop) =>
+      stop.getAttribute("stop-color"),
+    );
+    expect(stops).toEqual([TILE.gradientFrom, TILE.gradientTo]);
     const group = svg.querySelector("g")!;
     expect(group.getAttribute("stroke")).toBe(TILE.ink);
     expect(group.getAttribute("transform")).toMatch(
-      /^translate\([\d.]+ [\d.]+\) scale\([\d.]+\)$/,
+      /^translate\(-?[\d.]+ -?[\d.]+\) scale\([\d.]+\)$/,
     );
-    expect(svg.querySelectorAll("path")).toHaveLength(GLYPH_PARTS.length);
     expect(svg.querySelector("circle")?.getAttribute("fill")).toBe(TILE.eye);
     expect(container.innerHTML).not.toContain("var(");
+  });
+
+  it("draws the optical size its size calls for, as the favicons do", () => {
+    const { container, rerender } = render(<CorvidTile size={32} />);
+    const weight = () =>
+      svgOf(container).querySelector("g")!.getAttribute("stroke-width");
+    const paths = () => svgOf(container).querySelectorAll("path").length;
+    expect(weight()).toBe(String(CORVID_OPTICAL.small.stroke));
+    expect(paths()).toBe(CORVID_OPTICAL.small.parts.length);
+    rerender(<CorvidTile size={64} />);
+    expect(weight()).toBe(String(CORVID_OPTICAL.medium.stroke));
+    rerender(<CorvidTile size={128} />);
+    expect(weight()).toBe(String(CORVID_OPTICAL.large.stroke));
   });
 
   it("uses a gradient id of its own for each instance", () => {

@@ -958,6 +958,26 @@
     display: none;
   }
 
+  /* The two left panes, the Network list and the Settings rail, show their
+   * bar only while the pointer is over the pane or the keyboard is in it.
+   * The bar sits against the sidebar, and a bar that never goes away reads
+   * as part of the sidebar. The lane stays, so nothing moves when the thumb
+   * comes back. Only the thumb's colour changes. A mouse press that focuses
+   * a row does not keep it, because `:focus-visible` is the keyboard's. A
+   * screen with no hover keeps the bar the platform draws while scrolling. */
+  @media (hover: hover) {
+    .scrollbar-on-hover:not(:hover, :focus-visible, :has(:focus-visible)) {
+      scrollbar-color: transparent transparent;
+    }
+    .scrollbar-on-hover:not(
+        :hover,
+        :focus-visible,
+        :has(:focus-visible)
+      )::-webkit-scrollbar-thumb {
+      background-color: transparent;
+    }
+  }
+
   /**
    * result-card-enter — GPU-composited opacity-only entrance for search result cards.
    *

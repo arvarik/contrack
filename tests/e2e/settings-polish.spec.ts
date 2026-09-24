@@ -57,6 +57,47 @@ test.describe("the left pane", () => {
     const list = await page.locator('[data-pane="list"]').boundingBox();
     expect(Math.round(list!.width)).toBe(480);
   });
+
+  test("shows each pane's scroll bar only while the pointer or the keyboard is in it", async ({
+    page,
+  }) => {
+    // The thumb's colour, first in `scrollbar-color`: transparent at rest.
+    const thumbShows = (scroller: ReturnType<typeof page.locator>) =>
+      scroller.evaluate(
+        (el) =>
+          !/^(transparent|rgba\([^)]*,\s*0\))/.test(
+            getComputedStyle(el).scrollbarColor,
+          ),
+      );
+
+    await page.goto("/");
+    const list = page.locator("#contact-list");
+    await expect(list.getByRole("link").first()).toBeVisible();
+    await page.mouse.move(1100, 500);
+    await expect.poll(() => thumbShows(list)).toBe(false);
+    await list.hover();
+    await expect.poll(() => thumbShows(list)).toBe(true);
+    await page.mouse.move(1100, 500);
+    await expect.poll(() => thumbShows(list)).toBe(false);
+    // The keyboard in the list brings it back, with the pointer elsewhere.
+    // Tab from the top of the page until the focus is in the list, as a
+    // person on the keyboard gets there.
+    const inList = () =>
+      list.evaluate((el) => el.contains(document.activeElement));
+    for (let i = 0; i < 30 && !(await inList()); i++) {
+      await page.keyboard.press("Tab");
+    }
+    expect(await inList()).toBe(true);
+    await expect.poll(() => thumbShows(list)).toBe(true);
+
+    await page.goto("/settings/appearance");
+    const rail = page.getByRole("navigation", { name: "Settings" });
+    await expect(rail).toBeVisible();
+    await page.mouse.move(1100, 500);
+    await expect.poll(() => thumbShows(rail)).toBe(false);
+    await rail.hover();
+    await expect.poll(() => thumbShows(rail)).toBe(true);
+  });
 });
 
 test.describe("a tag on the Tags page", () => {

@@ -796,6 +796,20 @@ test.describe("tracking", () => {
     // Where the control sits before any choice. No choice may move it.
     const boxBefore = await track.boundingBox();
     expect(Math.round(boxBefore!.height)).toBe(32);
+    // The glyph and the word sit in the middle of the label's cell. The
+    // cell is as wide as "Quarterly", so a short word such as Track has
+    // room on both sides, and none of it gathers before the chevron.
+    const balance = await track.evaluate((button) => {
+      const layer = button.querySelector("span.grid > span:not(.invisible)")!;
+      const cell = layer.parentElement!.getBoundingClientRect();
+      const glyph = layer.querySelector("svg")!.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(layer.lastChild!);
+      const word = range.getBoundingClientRect();
+      return { before: glyph.left - cell.left, after: cell.right - word.right };
+    });
+    expect(balance.before).toBeGreaterThan(4);
+    expect(Math.abs(balance.before - balance.after)).toBeLessThanOrEqual(1);
     await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
       "data-score-band",
       "untracked",

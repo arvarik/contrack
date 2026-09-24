@@ -13,7 +13,8 @@
  *
  * The rows scroll with their bar on the left edge, as the Network list's
  * do (`dir="rtl"` on the scroller, `ltr` inside it), so the bar sits on the
- * sidebar's side and away from the page.
+ * sidebar's side and away from the page. The bar shows only while the
+ * pointer is over the rail or the keyboard is in it (`scrollbar-on-hover`).
  *
  * The rail's own surface sets it apart from the page, with no line between
  * them. The label keeps one weight in both states, so the selected row's
@@ -84,7 +85,7 @@ export const SettingsRail = () => {
           // 8 px sides and 10 px inside a row. A row the keyboard reaches
           // scrolls into view with 12 px to spare, not flush with the
           // rail's edge.
-          className="flex-1 min-h-0 overflow-y-auto px-2 py-2 scroll-py-3"
+          className="flex-1 min-h-0 overflow-y-auto scrollbar-on-hover px-2 py-2 scroll-py-3"
         >
           <div dir="ltr" className="space-y-4">
             {SETTINGS_GROUPS.map((group) => {

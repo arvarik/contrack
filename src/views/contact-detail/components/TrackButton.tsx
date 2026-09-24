@@ -39,11 +39,12 @@
  *
  * **One width, whatever it says.** Every word the button can show from the
  * menu, the default and the `t` key is drawn in one grid cell, invisibly,
- * and the current word is drawn over them. The cell is as wide as the
- * widest word, so choosing a cadence never moves the control's left edge.
- * That matters because the header's cluster is right-aligned: a control
- * that grows pulls its own label out from under the pointer.
- * `tests/e2e/contact.spec.ts` measures the box before and after.
+ * and the glyph and the current word are drawn over them, centred. The cell
+ * is as wide as the widest word, so choosing a cadence never moves the
+ * control's left edge. That matters because the header's cluster is
+ * right-aligned: a control that grows pulls its own label out from under
+ * the pointer. `tests/e2e/contact.spec.ts` measures the box before and
+ * after, and checks that the glyph and the word sit in the middle.
  *
  * **Size.** 32 px tall, the height of `.btn-sm`, with tight sides, 13 px
  * bold type, a 12 px chevron and the 44 px tap box of `hit-area`: about
@@ -173,6 +174,13 @@ export const TrackButton = ({
     ? SIZER_WORDS
     : [...SIZER_WORDS, word];
 
+  const glyph = (
+    <Radar
+      aria-hidden="true"
+      className={cn("w-4 h-4 shrink-0", on && "text-primary")}
+    />
+  );
+
   return (
     <ActionMenu
       label={label}
@@ -189,24 +197,27 @@ export const TrackButton = ({
       )}
       triggerContent={
         <>
-          <Radar
-            aria-hidden="true"
-            className={cn("w-4 h-4 shrink-0", on && "text-primary")}
-          />
-          {!compact && (
+          {compact ? (
+            glyph
+          ) : (
             // One cell, many layers: the words it may show, invisible, set
-            // the width, and the current word is drawn over them.
+            // the width, and the glyph and the current word are drawn over
+            // them together, centred. A short word such as Track sits in
+            // the middle of the button, not against its left edge with a
+            // gap before the chevron. Each sizer leaves room for the glyph
+            // and the gap after it: `pl-5` is the 16 px glyph and 4 px.
             <span className="grid">
               {sizers.map((sizer) => (
                 <span
                   key={sizer}
                   aria-hidden="true"
-                  className="col-start-1 row-start-1 invisible whitespace-nowrap"
+                  className="col-start-1 row-start-1 invisible whitespace-nowrap pl-5"
                 >
                   {sizer}
                 </span>
               ))}
-              <span className="col-start-1 row-start-1 text-left whitespace-nowrap">
+              <span className="col-start-1 row-start-1 flex items-center justify-center gap-1 whitespace-nowrap">
+                {glyph}
                 {word}
               </span>
             </span>

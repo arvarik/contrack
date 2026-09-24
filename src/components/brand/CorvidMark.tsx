@@ -7,12 +7,13 @@
  * thinking tilt, a flight. When the bird flies, the ring stays where it is,
  * empty, until the bird lands in it again.
  *
- * Two variants. `mark` is the whole bird, for 24 px and up. `glyph` is the
- * ring, the head and the wing at a heavier stroke, for 16 and 32 px, where
- * the chest and the tail would smear. Both stroke with `currentColor`, so a
- * mark on `text-primary` follows the accent a person chose in Settings. The
- * eye does not: it fills with `--color-corvid-eye`, so a rose bird keeps its
- * cyan eye.
+ * Two variants. `mark` is the logo at its own weight, the one the rig moves.
+ * `glyph` is the small optical size (`CORVID_OPTICAL.small`), for a bird at
+ * 16 to 20 px: every part, at a heavier stroke and with a larger eye, the
+ * same master the favicon draws at 32 px. Both stroke with `currentColor`,
+ * so a mark on `text-primary` follows the accent a person chose in Settings.
+ * The eye does not: it fills with `--color-corvid-eye`, so a rose bird keeps
+ * its cyan eye.
  *
  * Decorative by default. The page title already names the app, and a
  * picture that repeats it is noise to a screen reader, so the SVG is
@@ -38,14 +39,15 @@ import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import {
   BIRD_PART_ORDER,
   CORVID_EYE,
+  CORVID_OPTICAL,
   CORVID_PATHS,
   CORVID_RING,
   CORVID_VIEWBOX,
-  GLYPH_EYE_R,
-  GLYPH_PARTS,
-  GLYPH_STROKE,
   MARK_STROKE,
 } from "../../assets/corvidPaths";
+
+/** The thinking bird's weight: the favicon's at 32 px. */
+const GLYPH = CORVID_OPTICAL.small;
 
 export type CorvidVariant = "mark" | "glyph";
 
@@ -118,10 +120,10 @@ export const CorvidMark = ({
   const prefix = idPrefix ?? `corvid-${cleanId(generated)}`;
   const glyph = variant === "glyph";
   const birdParts = glyph
-    ? BIRD_PART_ORDER.filter((part) => GLYPH_PARTS.includes(part))
+    ? BIRD_PART_ORDER.filter((part) => GLYPH.parts.includes(part))
     : BIRD_PART_ORDER;
-  const stroke = glyph ? GLYPH_STROKE : MARK_STROKE;
-  const eyeRadius = glyph ? GLYPH_EYE_R : CORVID_EYE.r;
+  const stroke = glyph ? GLYPH.stroke : MARK_STROKE;
+  const eyeRadius = glyph ? GLYPH.eye : CORVID_EYE.r;
 
   // The level is read here rather than by each caller, so a surface that
   // asks for motion cannot forget that the account, or the operating system,

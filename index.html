@@ -65,20 +65,50 @@
     />
 
     <!--
-      The brand mark: the corvid glyph on the gradient tile. Every icon is
-      generated from src/assets/corvidPaths.ts by `npm run brand:icons`, so do
-      not edit the files in public/ by hand. Browsers pin a favicon hard; the
-      `?v=corvid` query makes them fetch this one.
+      The brand mark: the corvid on the gradient tile. Every icon is generated
+      from src/assets/corvidPaths.ts by `npm run brand:icons`, so do not edit
+      the files in public/ by hand. See docs/brand/README.md.
+
+      One picture per size, not one SVG for every size. Each favicon is drawn
+      for its pixels: 16 is the tab at 1x, 32 the tab at 2x, 48 the tab at 3x
+      and search results. The browser takes the one that fits the screen. An
+      SVG favicon would win over all three and scale one weight to every size,
+      which is what made the tab's bird hard to read. The .ico holds the same
+      three frames for everything that asks for /favicon.ico.
+
+      Browsers pin a favicon hard; the `?v=` query makes them fetch these.
     -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=corvid" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=corvid" />
-    <link rel="manifest" href="/site.webmanifest" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/favicon-16.png?v=corvid-2"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/favicon-32.png?v=corvid-2"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="48x48"
+      href="/favicon-48.png?v=corvid-2"
+    />
+    <link rel="icon" href="/favicon.ico?v=corvid-2" sizes="16x16 32x32 48x48" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/apple-touch-icon.png?v=corvid-2"
+    />
+    <link rel="manifest" href="/site.webmanifest?v=corvid-2" />
 
     <!--
-      Link previews. The image is the tile, the name and the first line of the
-      description above, rendered by the same script. A relative path is the
-      most a self-hosted app can promise: its origin is whatever the instance
-      is served from.
+      Link previews. The image is the app icon, the name and the first line of
+      the description above, rendered by the same script in the app's own
+      faces. A relative path is the most a self-hosted app can promise: its
+      origin is whatever the instance is served from.
     -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Contrack" />
@@ -86,7 +116,11 @@
       property="og:description"
       content="A self-hosted People CRM for managing your personal and professional network."
     />
-    <meta property="og:image" content="/og-image.png?v=corvid" />
+    <meta property="og:image" content="/og-image.png?v=corvid-2" />
+    <meta
+      property="og:image:alt"
+      content="The Contrack app icon, a corvid in a C, beside the name and the line: A self-hosted People CRM for managing your personal and professional network."
+    />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />

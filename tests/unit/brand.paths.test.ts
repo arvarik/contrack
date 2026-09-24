@@ -2,11 +2,15 @@
  * The corvid's geometry.
  *
  * The paths are hand-traced numbers, so the checks are the ones a number can
- * fail: every string parses as the two commands the parser accepts, the
- * glyph is a subset of the mark's parts, the ink keeps its padding inside
- * the box, the glyph lands inside the tile with the inset clear, the ring is
- * the one part that is not the bird, and the thinking head still turns
- * about the rig's neck.
+ * fail: every string parses as the two commands the parser accepts, every
+ * optical size is a subset of the mark's parts and gets heavier as it gets
+ * smaller, the ink keeps its padding inside the box, every master lands
+ * inside the tile with its inset clear, the ring is the one part that is
+ * not the bird, and the thinking head still turns about the rig's neck.
+ *
+ * The brand's colours are literals, because a favicon cannot read a token.
+ * So the last checks hold each literal to the token it copies, and measure
+ * the contrast every ground and ink pair needs.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -15,19 +19,25 @@ import {
   BRAND,
   CORVID_BOX,
   CORVID_EYE,
+  CORVID_OPTICAL,
   CORVID_PART_ORDER,
   CORVID_PATHS,
   CORVID_RING,
-  GLYPH_EYE_R,
-  GLYPH_PARTS,
-  GLYPH_STROKE,
   MARK_STROKE,
   TILE,
-  fitGlyph,
+  fitMark,
+  masterBounds,
+  opticalSize,
   parsePath,
   pathBounds,
+  type OpticalSize,
 } from "../../src/assets/corvidPaths";
 import { NECK } from "../../src/assets/corvidRig";
+import { DARK, LIGHT } from "../../src/lib/theme";
+import { contrast, hexToRgb } from "../../src/lib/color";
+
+const SIZES: OpticalSize[] = ["tiny", "small", "medium", "large"];
+const ratio = (a: string, b: string) => contrast(hexToRgb(a), hexToRgb(b));
 
 const ALL_PATHS = CORVID_PART_ORDER.map((part) => CORVID_PATHS[part]);
 
@@ -71,11 +81,50 @@ describe("the corvid's paths", () => {
     expect(BIRD_PART_ORDER).not.toContain(CORVID_RING);
   });
 
-  it("keeps the glyph a subset of the mark, without the chest or the tail", () => {
-    for (const part of GLYPH_PARTS) expect(CORVID_PART_ORDER).toContain(part);
-    expect(GLYPH_PARTS).toEqual(["ring", "head", "wing"]);
-    expect(GLYPH_STROKE).toBeGreaterThan(MARK_STROKE);
-    expect(GLYPH_EYE_R).toBeGreaterThanOrEqual(CORVID_EYE.r);
+  it("keeps every optical size a subset of the mark, in drawing order", () => {
+    for (const size of SIZES) {
+      const { parts } = CORVID_OPTICAL[size];
+      expect(parts, size).toEqual(
+        CORVID_PART_ORDER.filter((part) => parts.includes(part)),
+      );
+    }
+    // At 16 px the silhouette only: the C, the wing, the outer tail and the
+    // head. The chest and the inner feather merge with their neighbours.
+    expect(CORVID_OPTICAL.tiny.parts).toEqual([
+      "ring",
+      "wing",
+      "tail1",
+      "head",
+    ]);
+    expect(CORVID_OPTICAL.tiny.eye).toBe(0);
+    for (const size of ["small", "medium", "large"] as const) {
+      expect(CORVID_OPTICAL[size].parts, size).toEqual(CORVID_PART_ORDER);
+    }
+  });
+
+  it("draws a smaller size heavier, down to the logo's own weight", () => {
+    const strokes = SIZES.map((size) => CORVID_OPTICAL[size].stroke);
+    expect([...strokes].sort((a, b) => b - a)).toEqual(strokes);
+    expect(new Set(strokes).size).toBe(strokes.length);
+    expect(CORVID_OPTICAL.large.stroke).toBe(MARK_STROKE);
+    expect(CORVID_OPTICAL.large.eye).toBe(CORVID_EYE.r);
+    expect(CORVID_OPTICAL.small.eye).toBeGreaterThan(CORVID_OPTICAL.medium.eye);
+    expect(CORVID_OPTICAL.medium.eye).toBeGreaterThan(CORVID_EYE.r);
+  });
+
+  it("picks a size by what a person sees, not by the file's pixels", () => {
+    // A 16 px tab: tiny on a 1x screen, small with two pixels a point.
+    expect(opticalSize(16, 1)).toBe("tiny");
+    expect(opticalSize(16, 2)).toBe("small");
+    expect(opticalSize(23, 1)).toBe("tiny");
+    expect(opticalSize(24, 1)).toBe("small");
+    expect(opticalSize(47)).toBe("small");
+    // A launcher or home screen icon, at 48 to 60 points.
+    expect(opticalSize(48)).toBe("medium");
+    expect(opticalSize(60, 3)).toBe("medium");
+    expect(opticalSize(95)).toBe("medium");
+    expect(opticalSize(96)).toBe("large");
+    expect(opticalSize(144)).toBe("large");
   });
 
   it("keeps the ink inside the box, 8 units from the sides", () => {
@@ -107,24 +156,28 @@ describe("the corvid's paths", () => {
     expect(CORVID_EYE.cy + CORVID_EYE.r).toBeLessThan(eye.maxY);
   });
 
-  it("places the glyph inside the tile with the inset clear on every side", () => {
-    const { scale, tx, ty } = fitGlyph(TILE.box, TILE.glyphInset);
-    const ink = pathBounds(
-      GLYPH_PARTS.map((part) => CORVID_PATHS[part]),
-      GLYPH_STROKE,
-    );
-    const left = ink.minX * scale + tx;
-    const right = ink.maxX * scale + tx;
-    const top = ink.minY * scale + ty;
-    const bottom = ink.maxY * scale + ty;
-    // The placement rounds to three decimals, so allow a tenth of a unit.
-    expect(left).toBeGreaterThanOrEqual(TILE.glyphInset - 0.1);
-    expect(right).toBeLessThanOrEqual(TILE.box - TILE.glyphInset + 0.1);
-    expect(top).toBeGreaterThanOrEqual(TILE.glyphInset - 0.1);
-    expect(bottom).toBeLessThanOrEqual(TILE.box - TILE.glyphInset + 0.1);
-    // The wider axis fills the room, and the glyph is centred on the other.
-    expect(right - left).toBeCloseTo(TILE.box - 2 * TILE.glyphInset, 1);
-    expect(top + bottom).toBeCloseTo(TILE.box, 1);
+  it("places every master inside the tile with its inset clear on every side", () => {
+    for (const size of SIZES) {
+      const master = CORVID_OPTICAL[size];
+      const inset = master.tileInset;
+      const { scale, tx, ty } = fitMark(master, TILE.box, inset);
+      const ink = masterBounds(master);
+      const left = ink.minX * scale + tx;
+      const right = ink.maxX * scale + tx;
+      const top = ink.minY * scale + ty;
+      const bottom = ink.maxY * scale + ty;
+      // The placement rounds to three decimals, so allow a tenth of a unit.
+      expect(left, size).toBeGreaterThanOrEqual(inset - 0.1);
+      expect(right, size).toBeLessThanOrEqual(TILE.box - inset + 0.1);
+      expect(top, size).toBeGreaterThanOrEqual(inset - 0.1);
+      expect(bottom, size).toBeLessThanOrEqual(TILE.box - inset + 0.1);
+      // The wider axis fills the room, and the bird is centred on the other.
+      expect(right - left, size).toBeCloseTo(TILE.box - 2 * inset, 1);
+      expect(top + bottom, size).toBeCloseTo(TILE.box, 1);
+    }
+    // More room round a larger icon, as the platforms' icon grids ask.
+    const insets = SIZES.map((size) => CORVID_OPTICAL[size].tileInset);
+    expect([...insets].sort((a, b) => a - b)).toEqual(insets);
   });
 
   it("turns the thinking head about the rig's neck", () => {
@@ -146,13 +199,69 @@ describe("the corvid's paths", () => {
     expect(css).not.toMatch(/\.corvid-thinking\s*\{/);
     expect(css).not.toMatch(/data-part="ring"\][^{]*\{[^}]*animation/);
   });
+});
 
-  it("copies the brand literals from the light palette", () => {
-    expect(BRAND.mark).toBe("#006a91");
-    expect(BRAND.eyeLight).toBe("#47befd");
-    expect(BRAND.eyeDark).toBe("#7fd6ff");
+describe("the brand's colours", () => {
+  it("copies each literal from the token it names", () => {
+    // `theme.contrast.test.ts` holds LIGHT and DARK to the stylesheet.
+    expect(BRAND.mark).toBe(LIGHT.primary);
+    expect(BRAND.markDark).toBe(DARK.primary);
+    expect(BRAND.primaryDim).toBe(LIGHT["primary-dim"]);
+    expect(BRAND.primaryContainer).toBe(LIGHT["primary-container"]);
+    expect(BRAND.surface).toBe(LIGHT.surface);
+    expect(BRAND.surfaceDark).toBe(DARK.surface);
+    expect(BRAND.onSurface).toBe(LIGHT["on-surface"]);
+    expect(BRAND.onSurfaceDark).toBe(DARK["on-surface"]);
+    expect(BRAND.onSurfaceVariant).toBe(LIGHT["on-surface-variant"]);
+    expect(BRAND.onSurfaceVariantDark).toBe(DARK["on-surface-variant"]);
+    // The eye is not in the palettes: read it from the stylesheet, where it
+    // is set once for light and twice for dark.
+    const css = readFileSync("src/index.css", "utf8");
+    const eyes = [...css.matchAll(/--color-corvid-eye:\s*(#[0-9a-f]{6})/g)].map(
+      (m) => m[1],
+    );
+    expect(eyes).toEqual([BRAND.eyeLight, BRAND.eyeDark, BRAND.eyeDark]);
+  });
+
+  it("runs the tile from primary-dim to 55 percent of the branding gradient", () => {
+    expect(TILE.gradientFrom).toBe(BRAND.primaryDim);
+    const from = hexToRgb(BRAND.primaryDim);
+    const to = hexToRgb(BRAND.primaryContainer);
+    const at = hexToRgb(TILE.gradientTo);
+    for (const channel of ["r", "g", "b"] as const) {
+      expect(at[channel]).toBe(
+        Math.round(from[channel] + (to[channel] - from[channel]) * 0.55),
+      );
+    }
     expect(TILE.eye).toBe(BRAND.eyeLight);
-    expect(TILE.gradientTo).toBe("#47befd");
-    expect(TILE.gradientFrom).toBe("#00628a");
+    expect(TILE.ink).toBe("#ffffff");
+  });
+
+  it("keeps the white bird at 3:1 or better on every part of the tile", () => {
+    // Every channel rises from one stop to the other, so the lightest point
+    // of the tile is its end, and 3:1 there is 3:1 everywhere. WCAG 1.4.11
+    // asks 3:1 of a graphic a person has to make out.
+    expect(ratio(TILE.ink, TILE.gradientTo)).toBeGreaterThanOrEqual(3.3);
+    expect(ratio(TILE.ink, TILE.gradientFrom)).toBeGreaterThanOrEqual(6);
+    // The branding gradient's own end is why the tile stops short of it.
+    expect(ratio(TILE.ink, BRAND.primaryContainer)).toBeLessThan(3);
+  });
+
+  it("keeps every version of the mark and the name readable on its ground", () => {
+    expect(ratio(BRAND.mark, BRAND.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(BRAND.markDark, BRAND.surfaceDark)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    // GitHub's dark page, where the README shows the dark lockup.
+    expect(ratio(BRAND.markDark, "#0d1117")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(BRAND.onSurface, BRAND.surface)).toBeGreaterThanOrEqual(7);
+    expect(
+      ratio(BRAND.onSurfaceDark, BRAND.surfaceDark),
+    ).toBeGreaterThanOrEqual(7);
+    expect(ratio(BRAND.onSurfaceVariant, BRAND.surface)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    // The reversed mark, white on the primary.
+    expect(ratio("#ffffff", BRAND.mark)).toBeGreaterThanOrEqual(4.5);
   });
 });

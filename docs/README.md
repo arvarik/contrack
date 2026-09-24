@@ -29,7 +29,7 @@ Welcome to the Contrack documentation. These guides cover everything from gettin
 
 - [README](../README.md) — Project overview and quick start
 - [Contributing](../CONTRIBUTING.md) — Development standards and PR process
-- [Brand](brand/) — The corvid: the source drawing, the generated mark, and the model sheet of every pose the bird takes, drawn by its rig (`corvid-poses.svg`). Every icon in `public/` is built from `src/assets/corvidPaths.ts` by `npm run brand:icons`
+- [Brand](brand/README.md) — The brand kit and its guide: the corvid in four versions, its four optical sizes, the lockup, the app icon, the colours with their contrast, clear space, type, and the model sheet of every pose the bird takes, drawn by its rig (`corvid-poses.svg`). Every icon in `public/` and every file in `docs/brand/` is built from `src/assets/corvidPaths.ts` by `npm run brand:icons`
 
 ## Screenshots
 

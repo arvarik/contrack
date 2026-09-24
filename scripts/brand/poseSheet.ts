@@ -202,10 +202,10 @@ const GAP = 12;
 const PAD = 28;
 const TITLE = 34;
 const LABEL = 26;
-const SURFACE = "#f5f6f9";
+const SURFACE = BRAND.surface;
 const CARD = "#ffffff";
-const INK = "#2a3437";
-const MUTED = "#566164";
+const INK = BRAND.onSurface;
+const MUTED = BRAND.onSurfaceVariant;
 
 const num = (n: number) => String(Math.round(n * 100) / 100);
 

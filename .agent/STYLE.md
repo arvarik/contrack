@@ -340,11 +340,21 @@ decoration, so the rule is short:
 
 Every scroller draws the same thin bar: the hairline token for the thumb,
 no track (the base layer in `src/index.css`, for all elements). Add no
-scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
+other scrollbar class. `scrollbar-hide` hides the bar on a row of chips that
 scrolls sideways. The two left panes, the Network list and the Settings
 rail, keep their bar on the left edge (`dir="rtl"` on the scroller, `ltr`
 inside it): away from the list's letter rail, and on the sidebar's side of
 the rail.
+
+The two left panes also carry `scrollbar-on-hover`: the thumb shows only
+while the pointer is over the pane or the keyboard is in it. A bar against
+the sidebar that never goes away reads as part of the sidebar. The lane
+stays, so nothing moves when the thumb comes back, and a screen with no
+hover keeps the bar the platform draws.
+
+- ❌ No `scrollbar-on-hover` on a page, a card or a dialog. The bar is how a
+  person sees that there is more, and only the two panes beside the sidebar
+  are always long.
 
 ### The left pane: one width
 
@@ -825,8 +835,9 @@ until the bird lands in it again.
 ### The mark
 
 - `<CorvidMark>` (`src/components/brand/CorvidMark.tsx`) draws the bird
-  inline. Variant `mark` is the whole bird, for 24 px and up. Variant `glyph`
-  is the ring, the head and the wing at a heavier stroke, for 16 and 32 px.
+  inline. Variant `mark` is the logo at its own weight, the strokes the rig
+  moves. Variant `glyph` is the small optical size, for 16 to 20 px: every
+  part, at a heavier stroke, with a larger eye.
 - The ring is its own path, first in the svg. The bird is a `[data-bird]`
   group after it: the nape, the chest, the wing, the two tail strokes, the
   head and the eye. A rule or a script that moves the bird reaches the group
@@ -844,26 +855,47 @@ until the bird lands in it again.
 - The nape is the one line the logo does not show. Sitting in the ring, the
   bird borrows the ring for the back of its head, so the nape's path is
   empty. Out of the ring it draws itself in from the crown.
-- `<CorvidTile>` is the favicon inline: the gradient rounded square with the
-  white glyph, in fixed colours. `<Wordmark>` is the mark beside the name in
-  the headline face, for a wide surface.
+- `<CorvidTile>` is the app icon inline: the gradient rounded square with the
+  white bird, in fixed colours, at the optical size its size calls for.
+  `<Wordmark>` is the mark beside the name in the headline face, for a wide
+  surface.
+
+### Optical sizes
+
+One stroke cannot serve every size, so the mark has four masters,
+`CORVID_OPTICAL` in `corvidPaths.ts`. Each draws the same paths. The size a
+person sees picks the master, not the file's pixels (`opticalSize`).
+`docs/brand/README.md` shows them.
+
+| Master   | Seen at                              | Parts                        | Stroke | Eye  |
+| -------- | ------------------------------------ | ---------------------------- | ------ | ---- |
+| `tiny`   | 16 px on a 1x screen                 | ring, head, wing, outer tail | 7.5    | none |
+| `small`  | 16 to 47 pt, two pixels to a point   | all six                      | 5.2    | 4.2  |
+| `medium` | 48 to 95 pt: launcher and home icons | all six                      | 4.4    | 3.6  |
+| `large`  | 96 pt and up: the logo as drawn      | all six                      | 3.6    | 3    |
+
+- ❌ Never scale one weight to every size. That is what made the old favicon
+  a wave: one heavy stroke that filled in at 32 px.
+- ❌ Never draw white on the branding gradient's end, `#47befd`. The tile
+  stops at 55 percent of the gradient, `#2795c9`, so the white bird keeps
+  3:1 in its lightest corner.
 
 ### Sizes
 
-| Surface                       | Variant       | Size       | Colour                           |
-| ----------------------------- | ------------- | ---------- | -------------------------------- |
-| Tab strip favicon             | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
-| PWA and touch icons           | glyph on tile | 180 to 512 | same                             |
-| Sidebar perch                 | mark          | 40         | `text-primary`, eye token        |
-| Auth card                     | mark          | 40         | `text-primary`                   |
-| Appearance preview            | mark          | 36         | `text-primary`                   |
-| Empty states                  | mark          | 64 to 96   | `text-primary/60`                |
-| Start panel                   | mark          | 144        | `text-primary/35`                |
-| Crash screen footer           | mark          | 20         | `text-on-surface-variant`        |
-| README header                 | PNG           | 96         | fixed brand colours              |
-| Flying bird                   | the rig       | 52 to 64   | `text-primary`                   |
-| Settings footer (phone perch) | mark          | 20         | `text-primary`                   |
-| Thinking indicator            | glyph         | 16 to 20   | inherits the slot's colour       |
+| Surface                       | Variant                   | Size       | Colour                           |
+| ----------------------------- | ------------------------- | ---------- | -------------------------------- |
+| Tab strip favicon             | tiny or small on the tile | 16 to 48   | white on the tile, eye `#47befd` |
+| PWA and touch icons           | medium on the tile        | 180 to 512 | same                             |
+| Sidebar perch                 | mark                      | 40         | `text-primary`, eye token        |
+| Auth card                     | mark                      | 40         | `text-primary`                   |
+| Appearance preview            | mark                      | 36         | `text-primary`                   |
+| Empty states                  | mark                      | 64 to 96   | `text-primary/60`                |
+| Start panel                   | mark                      | 144        | `text-primary/35`                |
+| Crash screen footer           | mark                      | 20         | `text-on-surface-variant`        |
+| README header                 | the lockup SVG            | 400 wide   | light and dark versions          |
+| Flying bird                   | the rig                   | 52 to 64   | `text-primary`                   |
+| Settings footer (phone perch) | mark                      | 20         | `text-primary`                   |
+| Thinking indicator            | glyph                     | 16 to 20   | inherits the slot's colour       |
 
 - ✅ Width equals height. The `size` prop sets both. Never stretch the mark.
 - ✅ An empty state passes the mark through the `illustration` slot of
@@ -875,22 +907,32 @@ until the bird lands in it again.
 
 ### Public icons are generated, never edited
 
-- `npm run brand:icons` runs `scripts/brand/build-icons.ts`. It writes
-  `public/favicon.svg`, `icon-192.png`, `icon-512.png`,
-  `icon-maskable-512.png`, `apple-touch-icon.png`, `og-image.png`,
-  `docs/brand/corvid-mark.png`, and the model sheet,
-  `docs/brand/corvid-poses.svg` and `.png`, from the paths and the rig.
+- `npm run brand:icons` runs `scripts/brand/build-icons.ts`. It writes the
+  favicons (`favicon-16.png`, `favicon-32.png`, `favicon-48.png` and
+  `favicon.ico`), the touch, launcher and maskable icons and `og-image.png`
+  in `public/`, and the brand kit in `docs/brand/`: the mark in four
+  versions, the app icon, the lockups, the repository card, the model sheet
+  and the guide's sheets. `docs/brand/README.md` lists every file and what it
+  is for.
 - ❌ Never edit a file the script writes. Change `corvidPaths.ts` or
   `corvidRig.ts`, run the script, commit what it writes.
-  `tests/unit/brand.icons.test.ts` renders the favicon and the model sheet
-  again and fails when a committed file differs.
+  `tests/unit/brand.icons.test.ts` renders every SVG again and fails when a
+  committed file differs.
+- ❌ No SVG favicon. A browser takes it over every sized picture and scales
+  one weight to every size. Each favicon is drawn for its pixels, and the two
+  smallest are fitted to the pixel grid.
 - ❌ No CSS variables in anything the script renders. librsvg does not resolve
   them. Colours there are literals from `BRAND` and `TILE` in
-  `corvidPaths.ts`, copied from the light palette.
+  `corvidPaths.ts`, and `tests/unit/brand.paths.test.ts` holds each to its
+  token.
+- ❌ No text set by the machine's fonts. Words in a brand image are outlines
+  of the app's own faces (`scripts/brand/type.ts`). Pango on macOS looks
+  fonts up through the system, and the link preview once came out in
+  Helvetica.
 - `docs/brand/corvid-source.jpg` is the reference drawing. Nothing serves it,
   and `public/` holds only what the script writes.
-- The icon links in `index.html` and the manifest carry `?v=corvid`. Browsers
-  pin a favicon hard. Change the query when the tile changes.
+- The icon links in `index.html` and the manifest carry `?v=corvid-2`.
+  Browsers pin a favicon hard. Change the query when an icon changes.
 
 ### The rig
 
