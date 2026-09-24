@@ -16,14 +16,13 @@ import React, {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TONE_WASH } from "../../lib/styles";
 import { CorvidMark } from "../brand/CorvidMark";
-import { playCorvidBeat } from "../../hooks/useCorvidIdle";
+import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { useAuth } from "./AuthGate";
 
@@ -37,10 +36,6 @@ import { useAuth } from "./AuthGate";
  * those two arrive through the same component.
  */
 export const WRONG_CREDENTIALS = "Incorrect username or password.";
-
-/** How long the head shake lasts. */
-export const SHAKE_MS = 200;
-export const SHAKE_CLASS = "corvid-shake";
 
 /**
  * A way for the form error below to reach the mark above it.
@@ -72,21 +67,15 @@ export const AuthShell = ({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) => {
-  const markRef = useRef<HTMLSpanElement>(null);
   const level = useCorvidLevel();
-  const cancelShake = useRef<(() => void) | null>(null);
+  const bird = useCorvidControls();
 
+  // The bird turns its head away and back: no. Only the bird moves; the
+  // ring it sits in stays where it is.
   const shake = useCallback(() => {
     if (level === "off") return;
-    cancelShake.current?.();
-    cancelShake.current = playCorvidBeat(
-      markRef.current,
-      SHAKE_CLASS,
-      SHAKE_MS,
-    );
-  }, [level]);
-
-  useEffect(() => () => cancelShake.current?.(), []);
+    bird.react("shake");
+  }, [bird, level]);
 
   return (
     <div className="min-h-dvh bg-surface text-on-surface flex items-center justify-center p-0 sm:p-6">
@@ -124,15 +113,21 @@ export const AuthShell = ({
                 {icon}
               </span>
             ) : (
-              // The wrapper is what shakes: the class sits on it so the whole
-              // bird moves together, and the mark's own blink keeps running
-              // underneath.
+              // The card's bird lives, calmly: it blinks and looks about, and
+              // shakes its head at a wrong password. Nothing bigger. It does
+              // not hear the typing the sidebar's bird waits for, and a bird
+              // that preened while you typed a password would be in the way.
               <span
-                ref={markRef}
                 data-testid="auth-corvid"
                 className="block mx-auto w-10 text-primary"
               >
-                <CorvidMark size={40} idle className="block" />
+                <CorvidMark
+                  size={40}
+                  alive
+                  temperament="calm"
+                  controls={bird}
+                  className="block"
+                />
               </span>
             )}
             <InstanceName />

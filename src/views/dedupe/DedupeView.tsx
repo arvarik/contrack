@@ -672,6 +672,8 @@ export const DedupeView = () => {
                           <CorvidMark
                             size={96}
                             hop
+                            alive
+                            temperament="calm"
                             className="text-primary/60"
                           />
                         }

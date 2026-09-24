@@ -17,6 +17,8 @@
  *                                  name and one line of the description
  *   docs/brand/corvid-mark.png     the full mark at 512 on transparent, for
  *                                  the README
+ *   docs/brand/corvid-poses.svg    the model sheet: the bird in every pose,
+ *   docs/brand/corvid-poses.png    drawn by its rig (see `poseSheet.ts`)
  *
  * Every colour here is a literal. A favicon cannot read CSS tokens, and
  * librsvg, which sharp rasterises through, does not resolve `var()` either.
@@ -44,6 +46,7 @@ import {
   TILE,
   fitGlyph,
 } from "../../src/assets/corvidPaths.ts";
+import { renderPoseSheet } from "./poseSheet.ts";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -287,6 +290,13 @@ export async function build(): Promise<string[]> {
     [
       path.join(BRAND_DIR, "corvid-mark.png"),
       await png(markSvg(512, BRAND.mark, BRAND.eyeLight)),
+    ],
+    [path.join(BRAND_DIR, "corvid-poses.svg"), renderPoseSheet()],
+    [
+      path.join(BRAND_DIR, "corvid-poses.png"),
+      await sharp(Buffer.from(renderPoseSheet()), { density: 144 })
+        .png({ compressionLevel: 9 })
+        .toBuffer(),
     ],
   ];
 

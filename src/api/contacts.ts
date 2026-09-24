@@ -14,6 +14,7 @@ import {
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
+import { corvidReact } from "../lib/corvid";
 import {
   Contact,
   ContactUpdateData,
@@ -222,6 +223,8 @@ export const useCreateContact = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Somebody new: the corvid hops.
+      corvidReact("hop");
       invalidateContactViews(queryClient);
     },
   });
@@ -365,7 +368,9 @@ export const useSetTracked = () => {
         trackedAt: isTracked ? new Date().toISOString() : null,
         ...(cadenceDays === undefined ? {} : { cadenceDays }),
       }),
-    onSuccess: (contact) => {
+    onSuccess: (contact, { isTracked }) => {
+      // Tracked: the corvid cocks its head at them. It keeps an eye out now.
+      if (isTracked) corvidReact("cock");
       queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
         old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
@@ -458,6 +463,8 @@ export const useRestoreContact = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Back from the trash: a nod.
+      corvidReact("nod");
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },

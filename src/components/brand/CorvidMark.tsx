@@ -1,40 +1,45 @@
 /**
  * CorvidMark: the corvid as an inline SVG.
  *
- * Two variants of one drawing. `mark` is the whole bird, for 24 px and up.
- * `glyph` is the crown, the beak and the wing at a heavier stroke, for 16
- * and 32 px, where the chest and the tail would smear. Both stroke with
- * `currentColor`, so a mark on `text-primary` follows the accent a person
- * chose in Settings. The eye does not: it fills with `--color-corvid-eye`,
- * so a rose bird keeps its cyan eye.
+ * Two things in one drawing. The ring is the C the bird sits in, and nothing
+ * ever moves it. The bird is everything else, grouped under `[data-bird]`,
+ * and it is the only thing any animation touches: a blink, a preen, the
+ * thinking tilt, a flight. When the bird flies, the ring stays where it is,
+ * empty, until the bird lands in it again.
+ *
+ * Two variants. `mark` is the whole bird, for 24 px and up. `glyph` is the
+ * ring, the head and the wing at a heavier stroke, for 16 and 32 px, where
+ * the chest and the tail would smear. Both stroke with `currentColor`, so a
+ * mark on `text-primary` follows the accent a person chose in Settings. The
+ * eye does not: it fills with `--color-corvid-eye`, so a rose bird keeps its
+ * cyan eye.
  *
  * Decorative by default. The page title already names the app, and a
  * picture that repeats it is noise to a screen reader, so the SVG is
  * `aria-hidden` unless `decorative={false}` asks for `role="img"` with the
  * name "Contrack". It is never focusable.
  *
- * Every part carries an id, `<prefix>-wing`, `<prefix>-eye` and so on, so a
- * stylesheet can move one feather without touching the rest. The prefix is
- * unique per instance unless the caller sets it: the sidebar perch passes
- * `idPrefix="corvid"`, which is the one the motion keyframes target.
+ * Every part carries an id, `<prefix>-wing`, `<prefix>-eye` and so on, and a
+ * `data-part` with the same name without the prefix. The prefix is unique
+ * per instance unless the caller sets it. The sidebar perch passes
+ * `idPrefix="corvid"`.
  *
- * Every part also carries `data-part`, which is the same name without the
- * prefix. An id is unique per instance and so cannot appear in a stylesheet;
- * `.corvid-flying [data-part="wing"]` reaches the wing of whichever bird is
- * flying, which is what the keyframes in `index.css` need.
+ * `alive` gives the bird a life of its own (see `useCorvidLife`). `hop` plays
+ * one hop when the mark appears. Both read the motion level themselves, so a
+ * caller may pass either without checking it first.
  */
-import React, { useEffect, useId, useRef } from "react";
+import React, { useId, useRef } from "react";
 import {
-  HOP_CLASS,
-  HOP_MS,
-  playCorvidBeat,
-  useCorvidIdle,
-} from "../../hooks/useCorvidIdle";
+  useCorvidLife,
+  LIFE_MIN_SIZE,
+  type CorvidControls,
+} from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import {
+  BIRD_PART_ORDER,
   CORVID_EYE,
-  CORVID_PART_ORDER,
   CORVID_PATHS,
+  CORVID_RING,
   CORVID_VIEWBOX,
   GLYPH_EYE_R,
   GLYPH_PARTS,
@@ -64,11 +69,24 @@ export interface CorvidMarkProps extends Omit<
   /** The stem of every part's id. Unique per instance when not given. */
   idPrefix?: string;
   /**
-   * Blink now and then. Off by default: most marks on a page are furniture,
-   * and one timer each would be a lot of timers for nothing. A mark under
-   * 24 px ignores this, because a blink is invisible at that size.
+   * A life of its own: blinks, looks about, preens, stretches. Off by
+   * default: most marks on a page are furniture. A mark under 24 px does not
+   * live, because a blink is invisible at that size, but it still answers a
+   * reaction sent to it. The whole mark only, not the glyph.
    */
-  idle?: boolean;
+  alive?: boolean;
+  /**
+   * The app's own bird: it answers `corvidReact()` and the app's activity,
+   * watches the pointer and falls asleep when the person goes quiet. Only
+   * the sidebar perch.
+   */
+  primary?: boolean;
+  /** "calm" only blinks and looks about, for a bird that is an illustration. */
+  temperament?: "lively" | "calm";
+  /** More than 1 lives faster: the Appearance preview. */
+  tempo?: number;
+  /** A handle for the owner to ask for an act, or to say it is hovered. */
+  controls?: CorvidControls;
   /**
    * One hop when the mark appears, for a bird that is the good news itself:
    * the "All reviewed" state of the duplicates queue.
@@ -86,7 +104,11 @@ export const CorvidMark = ({
   label = "Contrack",
   title,
   idPrefix,
-  idle = false,
+  alive = false,
+  primary = false,
+  temperament = "lively",
+  tempo = 1,
+  controls,
   hop = false,
   className,
   ...rest
@@ -94,25 +116,29 @@ export const CorvidMark = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const generated = useId();
   const prefix = idPrefix ?? `corvid-${cleanId(generated)}`;
-  const parts =
-    variant === "glyph"
-      ? CORVID_PART_ORDER.filter((part) => GLYPH_PARTS.includes(part))
-      : CORVID_PART_ORDER;
-  const stroke = variant === "glyph" ? GLYPH_STROKE : MARK_STROKE;
-  const eyeRadius = variant === "glyph" ? GLYPH_EYE_R : CORVID_EYE.r;
+  const glyph = variant === "glyph";
+  const birdParts = glyph
+    ? BIRD_PART_ORDER.filter((part) => GLYPH_PARTS.includes(part))
+    : BIRD_PART_ORDER;
+  const stroke = glyph ? GLYPH_STROKE : MARK_STROKE;
+  const eyeRadius = glyph ? GLYPH_EYE_R : CORVID_EYE.r;
 
   // The level is read here rather than by each caller, so a surface that
   // asks for motion cannot forget that the account, or the operating system,
   // may have asked for none.
   const level = useCorvidLevel();
-  const moves = level !== "off";
+  const lives = alive && !glyph && size >= LIFE_MIN_SIZE;
 
-  useCorvidIdle(svgRef, { enabled: idle && moves, size });
-
-  useEffect(() => {
-    if (!hop || !moves) return;
-    return playCorvidBeat(svgRef.current, HOP_CLASS, HOP_MS);
-  }, [hop, moves]);
+  useCorvidLife(svgRef, {
+    enabled: level !== "off" && !glyph,
+    alive: lives,
+    reactive: alive && !glyph,
+    once: hop ? "hop" : null,
+    primary: lives && primary,
+    temperament,
+    tempo,
+    controls,
+  });
 
   return (
     <svg
@@ -134,23 +160,33 @@ export const CorvidMark = ({
       {...rest}
     >
       {title && <title>{title}</title>}
-      {parts.map((part) => (
-        <path
-          key={part}
-          id={`${prefix}-${part}`}
-          data-part={part}
-          d={CORVID_PATHS[part]}
-        />
-      ))}
-      <circle
-        id={`${prefix}-eye`}
-        data-part="eye"
-        cx={CORVID_EYE.cx}
-        cy={CORVID_EYE.cy}
-        r={eyeRadius}
-        fill="var(--color-corvid-eye)"
-        stroke="none"
+      <path
+        id={`${prefix}-${CORVID_RING}`}
+        data-part={CORVID_RING}
+        d={CORVID_PATHS[CORVID_RING]}
       />
+      <g data-bird="">
+        {/* The nape: drawn only while the bird is out of the ring. */}
+        {!glyph && <path id={`${prefix}-nape`} data-part="nape" d="" />}
+        {birdParts.map((part) => (
+          <path
+            key={part}
+            id={`${prefix}-${part}`}
+            data-part={part}
+            d={CORVID_PATHS[part]}
+          />
+        ))}
+        <ellipse
+          id={`${prefix}-eye`}
+          data-part="eye"
+          cx={CORVID_EYE.cx}
+          cy={CORVID_EYE.cy}
+          rx={eyeRadius}
+          ry={eyeRadius}
+          fill="var(--color-corvid-eye)"
+          stroke="none"
+        />
+      </g>
     </svg>
   );
 };

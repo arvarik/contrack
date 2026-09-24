@@ -55,6 +55,33 @@ describe("CorvidThinking", () => {
     expect(svgOf(container).classList.contains(THINKING_CLASS)).toBe(true);
   });
 
+  it("keeps its own time, so two thinking at once are not in step", () => {
+    const { container } = render(
+      <>
+        <CorvidThinking decorative />
+        <CorvidThinking decorative />
+      </>,
+    );
+    const rhythms = [...container.querySelectorAll("svg")].map((svg) => [
+      svg.style.getPropertyValue("--corvid-think"),
+      svg.style.getPropertyValue("--corvid-think-offset"),
+    ]);
+    for (const [period, offset] of rhythms) {
+      expect(Number.parseFloat(period!)).toBeGreaterThanOrEqual(2.1);
+      expect(Number.parseFloat(period!)).toBeLessThanOrEqual(3);
+      expect(Number.parseFloat(offset!)).toBeLessThanOrEqual(0);
+    }
+    expect(rhythms[0]).not.toEqual(rhythms[1]);
+  });
+
+  it("moves its head only: the ring is its own path, outside the bird", () => {
+    const { container } = render(<CorvidThinking />);
+    const svg = svgOf(container);
+    const ring = svg.querySelector('[data-part="ring"]')!;
+    expect(svg.querySelector("[data-bird]")!.contains(ring)).toBe(false);
+    expect(svg.querySelector('[data-bird] [data-part="head"]')).toBeTruthy();
+  });
+
   it("says nothing where the surface already says it in text", () => {
     const { container } = render(<CorvidThinking decorative />);
     expect(screen.queryByRole("img")).toBeNull();

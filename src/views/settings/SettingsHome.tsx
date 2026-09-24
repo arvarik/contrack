@@ -7,7 +7,7 @@
  * Below `lg` this is the list a person opens every page from, and a page
  * slides in over it (`SlideLink`).
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
@@ -25,7 +25,6 @@ import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
 import { CorvidMark } from "../../components/brand/CorvidMark";
 import { perchProps } from "../../components/brand/CorvidFlight";
-import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 
@@ -82,15 +81,10 @@ const SettingsLink = ({
  * and two birds that both fly would be two birds in the air.
  */
 const PhonePerch = () => {
-  const markRef = useRef<HTMLSpanElement>(null);
   const level = useCorvidLevel();
 
   const onClick = useCallback(() => {
     if (level === "off") return;
-    if (level === "subtle") {
-      playCorvidBeat(markRef.current, HOP_CLASS, HOP_MS);
-      return;
-    }
     flyCorvid({ kind: "loop" });
   }, [level]);
 
@@ -104,8 +98,9 @@ const PhonePerch = () => {
       aria-label="Contrack"
       title="Let the corvid fly"
     >
-      <span ref={markRef} {...perchProps} className="flex">
-        <CorvidMark size={20} />
+      <span {...perchProps} className="flex">
+        {/* Too small to live, but it answers: the flutter at "subtle". */}
+        <CorvidMark size={20} alive />
       </span>
     </button>
   );

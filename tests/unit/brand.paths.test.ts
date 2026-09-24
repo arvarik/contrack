@@ -4,17 +4,20 @@
  * The paths are hand-traced numbers, so the checks are the ones a number can
  * fail: every string parses as the two commands the parser accepts, the
  * glyph is a subset of the mark's parts, the ink keeps its padding inside
- * the box, the glyph lands inside the tile with the inset clear, and the
- * wing's flap keyframe still turns about the shoulder.
+ * the box, the glyph lands inside the tile with the inset clear, the ring is
+ * the one part that is not the bird, and the thinking head still turns
+ * about the rig's neck.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  BIRD_PART_ORDER,
   BRAND,
   CORVID_BOX,
   CORVID_EYE,
   CORVID_PART_ORDER,
   CORVID_PATHS,
+  CORVID_RING,
   GLYPH_EYE_R,
   GLYPH_PARTS,
   GLYPH_STROKE,
@@ -24,38 +27,7 @@ import {
   parsePath,
   pathBounds,
 } from "../../src/assets/corvidPaths";
-import type { Point } from "../../src/assets/corvidPaths";
-
-/** Where a path reaches furthest left. For the wing, that is the shoulder. */
-function leftmostPoint(d: string): Point {
-  const cubic = (p0: Point, c1: Point, c2: Point, p1: Point, t: number) => {
-    const mt = 1 - t;
-    const a = mt * mt * mt;
-    const b = 3 * mt * mt * t;
-    const c = 3 * mt * t * t;
-    const e = t * t * t;
-    return [
-      a * p0[0] + b * c1[0] + c * c2[0] + e * p1[0],
-      a * p0[1] + b * c1[1] + c * c2[1] + e * p1[1],
-    ] as Point;
-  };
-  let current: Point = [0, 0];
-  let best: Point = [Infinity, 0];
-  for (const { cmd, points } of parsePath(d)) {
-    if (cmd === "M") {
-      current = points[0]!;
-      if (current[0] < best[0]) best = current;
-      continue;
-    }
-    const [c1, c2, p1] = points as [Point, Point, Point];
-    for (let s = 1; s <= 200; s++) {
-      const point = cubic(current, c1, c2, p1, s / 200);
-      if (point[0] < best[0]) best = point;
-    }
-    current = p1;
-  }
-  return best;
-}
+import { NECK } from "../../src/assets/corvidRig";
 
 const ALL_PATHS = CORVID_PART_ORDER.map((part) => CORVID_PATHS[part]);
 
@@ -84,17 +56,24 @@ describe("the corvid's paths", () => {
     expect(() => parsePath("M1 1 C1 1 2 2 3 x")).toThrow(/Bad number/);
   });
 
-  it("lists every part once, in a drawing order that ends with the beak", () => {
+  it("lists every part once, in a drawing order that ends with the head", () => {
     expect([...CORVID_PART_ORDER].sort()).toEqual(
       Object.keys(CORVID_PATHS).sort(),
     );
     expect(new Set(CORVID_PART_ORDER).size).toBe(CORVID_PART_ORDER.length);
-    expect(CORVID_PART_ORDER[CORVID_PART_ORDER.length - 1]).toBe("beak");
+    expect(CORVID_PART_ORDER[CORVID_PART_ORDER.length - 1]).toBe("head");
+  });
+
+  it("has one part that is not the bird: the ring, drawn first", () => {
+    expect(CORVID_RING).toBe("ring");
+    expect(CORVID_PART_ORDER[0]).toBe(CORVID_RING);
+    expect(BIRD_PART_ORDER).toEqual(CORVID_PART_ORDER.slice(1));
+    expect(BIRD_PART_ORDER).not.toContain(CORVID_RING);
   });
 
   it("keeps the glyph a subset of the mark, without the chest or the tail", () => {
     for (const part of GLYPH_PARTS) expect(CORVID_PART_ORDER).toContain(part);
-    expect(GLYPH_PARTS).toEqual(["body", "beak", "wing"]);
+    expect(GLYPH_PARTS).toEqual(["ring", "head", "wing"]);
     expect(GLYPH_STROKE).toBeGreaterThan(MARK_STROKE);
     expect(GLYPH_EYE_R).toBeGreaterThanOrEqual(CORVID_EYE.r);
   });
@@ -118,13 +97,13 @@ describe("the corvid's paths", () => {
   });
 
   it("puts the eye in the head, between the crown and the head line", () => {
-    const eye = pathBounds([CORVID_PATHS.beak]);
+    const eye = pathBounds([CORVID_PATHS.head]);
     // The head line starts at x 27 and runs right of the eye's centre.
     expect(CORVID_EYE.cx).toBeGreaterThan(eye.minX);
     expect(CORVID_EYE.cx).toBeLessThan(eye.maxX);
     // Below the crown's top, above the beak's lower edge.
-    const crown = pathBounds([CORVID_PATHS.body]);
-    expect(CORVID_EYE.cy - CORVID_EYE.r).toBeGreaterThan(crown.minY);
+    const ring = pathBounds([CORVID_PATHS.ring]);
+    expect(CORVID_EYE.cy - CORVID_EYE.r).toBeGreaterThan(ring.minY);
     expect(CORVID_EYE.cy + CORVID_EYE.r).toBeLessThan(eye.maxY);
   });
 
@@ -148,26 +127,24 @@ describe("the corvid's paths", () => {
     expect(top + bottom).toBeCloseTo(TILE.box, 1);
   });
 
-  it("turns the wing about the shoulder in the flap keyframe", () => {
-    // `transform-box: fill-box` reads `transform-origin` against the wing's
-    // own bounding box, so the number in the stylesheet is a fraction of that
-    // box, not of the 100-unit drawing. Redrawing the wing moves the
-    // shoulder, and a stale origin makes the bird flap about its wingtip.
-    const box = pathBounds([CORVID_PATHS.wing]);
-    const shoulder = leftmostPoint(CORVID_PATHS.wing);
-    const wantX = ((shoulder[0] - box.minX) / (box.maxX - box.minX)) * 100;
-    const wantY = ((shoulder[1] - box.minY) / (box.maxY - box.minY)) * 100;
-
+  it("turns the thinking head about the rig's neck", () => {
+    // `transform-box: view-box` reads the origin in the mark's own box, so
+    // the number in the stylesheet is a point of the drawing. Moving the
+    // rig's neck without the keyframe would make the thinking bird nod
+    // about some other point than the one every other head turn uses.
     const css = readFileSync("src/index.css", "utf8");
     const rule = css.match(
-      /\.corvid-flapping \[data-part="wing"\]\s*\{[^}]*transform-origin:\s*([\d.]+)% ([\d.]+)%/,
+      /\.corvid-thinking \[data-part="head"\],\s*\.corvid-thinking \[data-part="eye"\]\s*\{[^}]*transform-box:\s*view-box;[^}]*transform-origin:\s*([\d.]+)px ([\d.]+)px/,
     );
-    expect(rule, "no transform-origin on the flap rule").toBeTruthy();
-    // Three percentage points of the wing's box is under two units of the
-    // drawing: close enough that no eye sees the difference, tight enough
-    // that a redrawn wing fails here.
-    expect(Math.abs(Number(rule![1]) - wantX)).toBeLessThan(3);
-    expect(Math.abs(Number(rule![2]) - wantY)).toBeLessThan(3);
+    expect(rule, "no transform-origin on the thinking rule").toBeTruthy();
+    expect(Number(rule![1])).toBe(NECK[0]);
+    expect(Number(rule![2])).toBe(NECK[1]);
+  });
+
+  it("keeps the thinking keyframe off the ring", () => {
+    const css = readFileSync("src/index.css", "utf8");
+    expect(css).not.toMatch(/\.corvid-thinking\s*\{/);
+    expect(css).not.toMatch(/data-part="ring"\][^{]*\{[^}]*animation/);
   });
 
   it("copies the brand literals from the light palette", () => {

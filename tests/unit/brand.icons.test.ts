@@ -4,7 +4,9 @@
  * `public/` holds what `scripts/brand/build-icons.ts` writes, and nothing
  * else. The favicon is compared byte for byte with a fresh render, so an
  * edit to the paths without `npm run brand:icons` fails here rather than
- * shipping a tab-strip icon that disagrees with the sidebar.
+ * shipping a tab-strip icon that disagrees with the sidebar. The model sheet
+ * in `docs/brand` is held the same way, so the reference drawing of every
+ * pose is always the rig's own.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -14,6 +16,7 @@ import {
   descriptionLine,
   renderFaviconSvg,
 } from "../../scripts/brand/build-icons";
+import { POSE_ROWS, renderPoseSheet } from "../../scripts/brand/poseSheet";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +28,22 @@ const exists = (file: string) => fs.existsSync(path.join(ROOT, file));
 describe("the generated brand assets", () => {
   it("commits the favicon the script renders, byte for byte", () => {
     expect(read("public/favicon.svg")).toBe(renderFaviconSvg());
+  });
+
+  it("commits the model sheet the rig draws, byte for byte", () => {
+    expect(read("docs/brand/corvid-poses.svg")).toBe(renderPoseSheet());
+    expect(exists("docs/brand/corvid-poses.png")).toBe(true);
+  });
+
+  it("draws every pose of the sheet with one ring at most, and the ring unmoved", () => {
+    const sheet = renderPoseSheet();
+    const cells = POSE_ROWS.flatMap((row) => row.cells);
+    expect(cells.length).toBeGreaterThanOrEqual(30);
+    // Every cell has its eye, and no cell moves the ring: it is drawn with
+    // the mark's own path data or not at all.
+    expect(sheet.match(/<ellipse /g)).toHaveLength(cells.length);
+    const rings = cells.filter((cell) => cell.ring).length;
+    expect(sheet.split('<path d="M65.5 22.9 ').length - 1).toBe(rings);
   });
 
   it("keeps CSS variables and text out of the favicon", () => {

@@ -22,6 +22,7 @@ import {
   emitAuthStatusStale,
   emitPasswordChangeRequired,
 } from "../lib/appEvents";
+import { noteCorvidActivity } from "../lib/corvid";
 
 export const API_BASE = "/api";
 
@@ -245,6 +246,8 @@ export async function apiFetch(
     throw new NetworkError(cause);
   }
   if (!res.ok) throw await failureOf(res);
+  // The corvid counts the work going by, and once in a long while notices.
+  noteCorvidActivity(path);
   return res;
 }
 
