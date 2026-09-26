@@ -18,6 +18,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "../src/db/schema.ts";
 import { log } from "./utils/logger.ts";
+import { defaultAvatarUrl, isDefaultAvatarFor } from "./utils/avatarUrl.ts";
 import crypto from "crypto";
 
 // =============================================================================
@@ -1395,6 +1396,64 @@ try {
   log.warn(
     "Database",
     `Avatar URL migration skipped: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
+// =============================================================================
+// 2a-1. Data Migration — Default avatars follow the contact's pronouns
+// =============================================================================
+// The default face used to come from the name alone. It now reads the
+// pronouns first, and a pronoun reaches the avatar route only through the
+// URL's `look` parameter. Rows created before that carry a default URL with
+// no `look`, so give them one.
+//
+// Only a contact that still wears the default avatar for its own name is
+// touched: a face picked in the avatar picker and a photo stay as they are.
+// Idempotent: a row already carrying the right look writes nothing, so after
+// the first boot the UPDATE never runs. On that first boot the edit trigger
+// stamps `updatedAt` on the rows it redraws, as an edit would. Only contacts
+// with pronouns are candidates, so that is a small batch, once.
+// =============================================================================
+
+try {
+  const withPronouns = sqlite
+    .prepare(
+      // tenant-lint: allow boot migration
+      "SELECT id, name, pronouns, avatarUrl FROM contacts WHERE pronouns IS NOT NULL AND avatarUrl LIKE '/api/avatar/avataaars?%'",
+    )
+    .all() as {
+    id: string;
+    name: string;
+    pronouns: string;
+    avatarUrl: string;
+  }[];
+
+  const stale = withPronouns
+    .filter((row) => isDefaultAvatarFor(row.avatarUrl, row.name))
+    .map((row) => ({
+      id: row.id,
+      next: defaultAvatarUrl(row.name, row.pronouns),
+      current: row.avatarUrl,
+    }))
+    .filter((row) => row.next !== row.current);
+
+  if (stale.length > 0) {
+    const update = sqlite.prepare(
+      // tenant-lint: allow boot migration
+      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
+    );
+    sqlite.transaction(() => {
+      for (const row of stale) update.run(row.next, row.id);
+    })();
+    log.info(
+      "Database",
+      `Redrew ${stale.length} default avatar(s) from the contact's pronouns`,
+    );
+  }
+} catch (err) {
+  log.warn(
+    "Database",
+    `Pronoun avatar migration skipped: ${err instanceof Error ? err.message : String(err)}`,
   );
 }
 

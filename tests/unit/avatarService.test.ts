@@ -15,15 +15,20 @@
 import { describe, it, expect } from "vitest";
 import { schema as avataaarsSchema } from "@dicebear/avataaars";
 import {
+  AVATAR_LOOK_POOLS,
   AVATAR_STYLES,
   BANNED_EXPRESSIONS,
   FRIENDLY_EYEBROWS,
   FRIENDLY_EYES,
   FRIENDLY_MOUTH,
   buildAvatarUrl,
+  defaultAvatarUrl,
   isAvatarStyle,
   isAvatarTheme,
+  isDefaultAvatarFor,
+  parseAvatarLook,
   renderAvatar,
+  type AvatarLook,
   type AvatarStyle,
 } from "../../server/services/avatarService.ts";
 
@@ -84,6 +89,70 @@ describe("expression allow-lists", () => {
   });
 });
 
+describe("look pools", () => {
+  const looks = Object.keys(AVATAR_LOOK_POOLS) as AvatarLook[];
+
+  it.each(looks)(
+    "every %s hair and clothing value exists in DiceBear's schema",
+    (look) => {
+      // The same silent failure as the expression lists: an unknown value is
+      // ignored, and a pool made only of typos would draw from everything.
+      const pool = AVATAR_LOOK_POOLS[look];
+      const tops = schemaEnum("top");
+      const clothing = schemaEnum("clothing");
+      for (const value of pool.top) expect(tops).toContain(value);
+      for (const value of pool.clothing) expect(clothing).toContain(value);
+    },
+  );
+
+  it("draws no facial hair on a neutral face", () => {
+    expect(AVATAR_LOOK_POOLS.neutral.facialHairProbability).toBe(0);
+    expect(AVATAR_LOOK_POOLS.female.facialHairProbability).toBe(0);
+  });
+
+  it("gives a neutral face natural hair colours from DiceBear's palette", () => {
+    const palette = (
+      avataaarsSchema as unknown as {
+        properties: { hairColor: { default: string[] } };
+      }
+    ).properties.hairColor.default;
+    for (const colour of AVATAR_LOOK_POOLS.neutral.hairColor)
+      expect(palette).toContain(colour);
+    expect(AVATAR_LOOK_POOLS.neutral.hairColor).not.toContain("f59797");
+  });
+
+  it("keeps the hair that reads female out of the male pool", () => {
+    expect(AVATAR_LOOK_POOLS.male.top).not.toContain("shavedSides");
+  });
+
+  it("keeps the neutral pool apart from the gendered hair", () => {
+    // Long hair and the bob read female, the short crops read male. None of
+    // them belongs on a face we declined to guess.
+    const gendered = [
+      "bob",
+      "bigHair",
+      "curvy",
+      "longButNotTooLong",
+      "miaWallace",
+      "straight01",
+      "straight02",
+      "straightAndStrand",
+      "frida",
+      "hijab",
+      "shortFlat",
+      "shortRound",
+      "shortWaved",
+      "sides",
+      "theCaesar",
+      "theCaesarAndSidePart",
+      "turban",
+    ];
+    for (const value of gendered)
+      expect(AVATAR_LOOK_POOLS.neutral.top).not.toContain(value);
+    expect(AVATAR_LOOK_POOLS.neutral.clothing).not.toContain("shirtScoopNeck");
+  });
+});
+
 describe("renderAvatar", () => {
   it.each(AVATAR_STYLES)("renders %s as an SVG document", (style) => {
     const svg = renderAvatar({ style, seed: "Karen White" });
@@ -102,6 +171,27 @@ describe("renderAvatar", () => {
     const a = renderAvatar({ style: "avataaars", seed: "Karen White" });
     const b = renderAvatar({ style: "avataaars", seed: "James Thomas" });
     expect(a).not.toBe(b);
+  });
+
+  it("draws the look it is given, whatever the seed suggests", () => {
+    const byName = renderAvatar({ style: "avataaars", seed: "James Thomas" });
+    const asked = renderAvatar({
+      style: "avataaars",
+      seed: "James Thomas",
+      look: "female",
+    });
+    expect(asked).not.toBe(byName);
+    expect(
+      renderAvatar({ style: "avataaars", seed: "James Thomas", look: "male" }),
+    ).toBe(byName);
+    // Still deterministic with a look.
+    expect(
+      renderAvatar({
+        style: "avataaars",
+        seed: "James Thomas",
+        look: "female",
+      }),
+    ).toBe(asked);
   });
 
   it("applies the pastel background only when asked", () => {
@@ -155,6 +245,16 @@ describe("buildAvatarUrl", () => {
     expect(new URLSearchParams(url.split("?")[1]).get("seed")).toBe(
       "Ann & Bob #1",
     );
+  });
+
+  it("carries a look in one letter", () => {
+    expect(buildAvatarUrl("Ada", "avataaars", { look: "female" })).toBe(
+      "/api/avatar/avataaars?seed=Ada&look=f",
+    );
+    expect(buildAvatarUrl("Ada", "avataaars", { look: "neutral" })).toContain(
+      "look=n",
+    );
+    expect(buildAvatarUrl("Ada")).not.toContain("look=");
   });
 
   it("requests the pastel wash only on demand", () => {
@@ -242,5 +342,59 @@ describe("isAvatarStyle", () => {
     for (const style of ["", "pixel-art", "../../etc/passwd", "AVATAAARS"]) {
       expect(isAvatarStyle(style)).toBe(false);
     }
+  });
+});
+
+describe("the default avatar and its URL", () => {
+  it("parses only the three looks", () => {
+    expect(parseAvatarLook("f")).toBe("female");
+    expect(parseAvatarLook("m")).toBe("male");
+    expect(parseAvatarLook("n")).toBe("neutral");
+    for (const value of ["x", "", "female", undefined, ["f"], 1])
+      expect(parseAvatarLook(value)).toBeUndefined();
+  });
+
+  it("puts pronouns in the URL and leaves the name to the route", () => {
+    expect(defaultAvatarUrl("Jordan Lee")).toBe(
+      "/api/avatar/avataaars?seed=Jordan+Lee",
+    );
+    expect(defaultAvatarUrl("Jordan Lee", "she/her")).toBe(
+      "/api/avatar/avataaars?seed=Jordan+Lee&look=f",
+    );
+    expect(defaultAvatarUrl("Jordan Lee", "they/them")).toContain("look=n");
+    expect(defaultAvatarUrl("Jordan Lee", "n/a")).not.toContain("look=");
+  });
+
+  it("recognises a default avatar for the contact's own name only", () => {
+    expect(isDefaultAvatarFor(defaultAvatarUrl("Ann Lee"), "Ann Lee")).toBe(
+      true,
+    );
+    expect(
+      isDefaultAvatarFor(defaultAvatarUrl("Ann Lee", "he/him"), "Ann Lee"),
+    ).toBe(true);
+    // The boot migration off api.dicebear.com wrote this exact shape.
+    expect(
+      isDefaultAvatarFor("/api/avatar/avataaars?seed=Ann%20Lee", "Ann Lee"),
+    ).toBe(true);
+  });
+
+  it("never mistakes a chosen picture for the default", () => {
+    expect(
+      isDefaultAvatarFor("/api/avatar/avataaars?seed=Felix&bg=1", "Felix"),
+    ).toBe(false);
+    expect(
+      isDefaultAvatarFor("/api/avatar/avataaars?seed=Ann+Lee&bg=1", "Ann Lee"),
+    ).toBe(false);
+    expect(
+      isDefaultAvatarFor("/api/avatar/lorelei?seed=Ann+Lee", "Ann Lee"),
+    ).toBe(false);
+    expect(
+      isDefaultAvatarFor("/api/avatar/avataaars?seed=Someone", "Ann Lee"),
+    ).toBe(false);
+    expect(isDefaultAvatarFor("/uploads/u/x/avatars/ann.webp", "Ann Lee")).toBe(
+      false,
+    );
+    expect(isDefaultAvatarFor(null, "Ann Lee")).toBe(false);
+    expect(isDefaultAvatarFor(defaultAvatarUrl("Ann"), null)).toBe(false);
   });
 });

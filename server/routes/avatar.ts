@@ -5,7 +5,8 @@
 // embedded in every contact row, so no contact name leaves the machine.
 //
 // Deliberately stores nothing. The response is a pure function of (style, seed,
-// bg) plus the presets in avatarService, so HTTP caching is the whole cache:
+// bg, theme, look) plus the presets in avatarService, so HTTP caching is the
+// whole cache:
 //
 //   - `max-age` keeps the browser from asking again for a day, which is what
 //     makes a list of 200 avatars cheap after the first paint.
@@ -22,6 +23,7 @@ import {
   AVATAR_STYLES,
   isAvatarStyle,
   isAvatarTheme,
+  parseAvatarLook,
   renderAvatar,
 } from "../services/avatarService.ts";
 
@@ -56,11 +58,16 @@ router.get(
     // palettes, which is what the default `system` theme wants.
     const theme = isAvatarTheme(req.query.theme) ? req.query.theme : undefined;
 
+    // `look` is how a contact's pronouns reach the face (`f`, `m` or `n`).
+    // Absent or unrecognised, the avatar service reads the look from the seed.
+    const look = parseAvatarLook(req.query.look);
+
     const svg = renderAvatar({
       style,
       seed,
       background: req.query.bg === "1",
       theme,
+      look,
     });
 
     res.set("Cache-Control", `public, max-age=${MAX_AGE_SECONDS}`);

@@ -23,7 +23,7 @@ import {
 import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
-import { buildAvatarUrl } from "./avatarService.ts";
+import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
 import {
   scheduleSearchIndex,
@@ -164,6 +164,42 @@ function buildInsertValues(
     aiBriefingAt: body.aiBriefingAt ?? null,
     phoneticHash: body.name ? doubleMetaphone(body.name).primary : null,
   };
+}
+
+/**
+ * Keep the default face in step with the name and pronouns it was drawn from.
+ *
+ * When an edit changes either, and the contact still wears the default avatar
+ * for its old name, the update carries the new default. A face from the
+ * picker, a photo, and an edit that sets `avatarUrl` itself are left alone.
+ */
+function redrawDefaultAvatar(
+  scope: Scope,
+  id: string,
+  body: Record<string, unknown>,
+  update: Record<string, unknown>,
+): void {
+  if (body.avatarUrl !== undefined) return;
+  const renamed = typeof body.name === "string" && body.name.trim() !== "";
+  const pronounsChanged = body.pronouns !== undefined;
+  if (!renamed && !pronounsChanged) return;
+
+  const existing = contactRepo.findOwned(scope, id);
+  const oldName = typeof existing?.name === "string" ? existing.name : null;
+  const oldUrl =
+    typeof existing?.avatarUrl === "string" ? existing.avatarUrl : null;
+  if (!oldName || !isDefaultAvatarFor(oldUrl, oldName)) return;
+
+  const name = renamed ? (body.name as string) : oldName;
+  const pronouns = pronounsChanged
+    ? typeof body.pronouns === "string"
+      ? body.pronouns
+      : null
+    : typeof existing?.pronouns === "string"
+      ? existing.pronouns
+      : null;
+  const next = defaultAvatarUrl(name, pronouns);
+  if (next !== oldUrl) update.avatarUrl = next;
 }
 
 /**
@@ -401,9 +437,10 @@ export const contactService = {
       manual: source === "manual",
     });
 
-    // Smart avatar: if no avatar was provided, generate a gender-aware one
+    // No picture given: the default face, drawn from the pronouns when the
+    // contact has them and from the name otherwise.
     if (!values.avatarUrl && body.name) {
-      values.avatarUrl = buildAvatarUrl(body.name);
+      values.avatarUrl = defaultAvatarUrl(body.name, body.pronouns);
     }
 
     const txn = sqlite.transaction(() => {
@@ -542,9 +579,9 @@ export const contactService = {
         // An import, so never tracked by the preference.
         const values = buildInsertValues(scope, c, id, { manual: false });
 
-        // Smart avatar: gender-aware DiceBear URL if no avatar was provided
+        // No picture given: the default face, as for a single create.
         if (!values.avatarUrl && c.name) {
-          values.avatarUrl = buildAvatarUrl(c.name);
+          values.avatarUrl = defaultAvatarUrl(c.name, c.pronouns);
         }
 
         db.insert(schema.contacts)
@@ -672,6 +709,7 @@ export const contactService = {
     if (body.name) {
       updateData.phoneticHash = doubleMetaphone(body.name).primary;
     }
+    redrawDefaultAvatar(scope, id, body, updateData);
 
     const txn = sqlite.transaction(() => {
       applyTrackingRules(scope, [id], body as Record<string, unknown>);
@@ -759,6 +797,12 @@ export const contactService = {
     assertOwnedContact(scope, id);
     const pinBefore = pinStateOf(scope, id);
     const update = buildContactUpdate(body);
+    // The same as updateContact: dedupe's phonetic blocking reads this hash,
+    // and a rename by PATCH used to leave the old one behind.
+    if (typeof body.name === "string" && body.name) {
+      update.phoneticHash = doubleMetaphone(body.name).primary;
+    }
+    redrawDefaultAvatar(scope, id, body, update);
     const write = sqlite.transaction(() => {
       applyTrackingRules(scope, [id], body);
       db.update(schema.contacts)
