@@ -33,8 +33,11 @@ RUN npm pkg delete scripts.prepare \
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy backend and database configurations
+# Copy backend and database configurations. The server imports shared/ at
+# runtime (server/services/searchService.ts loads shared/searchFacets.ts), so
+# it ships too. Without it the image stopped at boot with ERR_MODULE_NOT_FOUND.
 COPY server/ ./server/
+COPY shared/ ./shared/
 COPY src/db/ ./src/db/
 COPY drizzle/ ./drizzle/
 COPY server.ts drizzle.config.ts ./

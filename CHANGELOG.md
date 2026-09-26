@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Docker image stopped at boot.** The server loads
+  `shared/searchFacets.ts` at runtime, from `server/services/searchService.ts`,
+  and the image's runtime stage did not copy `shared/`. The container exited
+  with `ERR_MODULE_NOT_FOUND` before it served a request. The runtime stage
+  copies `shared/` now.
+
 ## [1.5.5] — 2026-08-09
 
 Corrections from an independent review of the v1.5.4 release, run with fresh
