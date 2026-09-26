@@ -19,6 +19,7 @@ import { AppError } from "../../../utils/AppError.ts";
 // =============================================================================
 
 import { generateFor } from "../../../ai/gateway.ts";
+import { toCitations } from "../../../ai/citations.ts";
 import {
   wrapUntrusted,
   UNTRUSTED_DATA_RULE,
@@ -43,25 +44,42 @@ export class TwoPassStrategy implements AISearchStrategy {
   ): Promise<AISearchResult> {
     signal?.throwIfAborted();
     const startMs = Date.now();
-    const pass1Result = await generateFor("research", {
-      prompt,
-      responseFormat: "text",
-      enableSearchGrounding: true,
-      signal,
-      timeoutMs: 60_000,
-      maxOutputTokens: 2_500,
-    });
+    // Gemini counts its thinking against this budget, and 2,500 tokens ran
+    // out before the search began. The model also decides for itself whether
+    // to search, and for a well-known name it sometimes answers from memory,
+    // which the source rule below refuses. So a pass with no sources runs
+    // once more, told to search.
+    const ground = (text: string) =>
+      generateFor("research", {
+        prompt: text,
+        responseFormat: "text",
+        enableSearchGrounding: true,
+        signal,
+        timeoutMs: 45_000,
+        maxOutputTokens: 8_192,
+      });
+    const sourcesOf = (result: {
+      citations?: { uri: string; title: string }[];
+    }) =>
+      toCitations(
+        (result.citations ?? []).map((c) => ({ url: c.uri, title: c.title })),
+      );
+    let pass1Result = await ground(prompt);
+    let citations = sourcesOf(pass1Result);
+    if (citations.length === 0 && pass1Result.text.trim()) {
+      signal?.throwIfAborted();
+      log.info(
+        "TwoPassStrategy",
+        `${pass1Result.model} answered without searching; asking once more`,
+      );
+      pass1Result = await ground(
+        `${prompt}\n\nRun Google Search now, before you answer. Base every fact on what the search returns, even facts you already know.`,
+      );
+      citations = sourcesOf(pass1Result);
+    }
     signal?.throwIfAborted();
     const groundedText = pass1Result.text;
     const modelsUsed = [pass1Result.model];
-    const citations = (pass1Result.citations ?? []).filter((source) => {
-      try {
-        const url = new URL(source.uri);
-        return /^https?:$/.test(url.protocol) && !url.username && !url.password;
-      } catch {
-        return false;
-      }
-    });
     recordInvocation({
       operation: "aiSearchGrounding",
       model: pass1Result.model,

@@ -377,3 +377,21 @@ describe("AI_DEFAULTS", () => {
     expect(AI_DEFAULTS.jitterMs).toBe(250);
   });
 });
+
+describe("withRetry: a model the provider does not serve", () => {
+  it("says so, in the provider's words, without retrying", async () => {
+    const op = vi.fn(async () => {
+      throw Object.assign(
+        new Error(
+          '{"error":{"code":404,"message":"This model models/gemini-2.5-flash is no longer available to new users.","status":"NOT_FOUND"}}',
+        ),
+        { status: 404 },
+      );
+    });
+    await expect(withRetry(op)).rejects.toMatchObject({
+      code: "AI_MODEL_UNAVAILABLE",
+      message: expect.stringContaining("no longer available to new users"),
+    });
+    expect(op).toHaveBeenCalledTimes(1);
+  });
+});

@@ -8,7 +8,8 @@
 //   - Per-attempt AbortSignal-backed timeout (default 60s).
 //   - Exponential backoff with jitter on transient failures.
 //   - Caller-cancellation via options.signal.
-//   - Tolerant JSON validation for responseFormat === "json".
+//   - Tolerant JSON validation for responseFormat === "json", normalised so
+//     the text callers get back always parses.
 // =============================================================================
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -19,10 +20,14 @@ import type {
   AIGenerateResult,
   JsonSchemaNode,
 } from "../types.ts";
-import { getLatestDiscoveredModel } from "../modelFilter.ts";
+import {
+  getDiscoveredModelsForProvider,
+  getLatestDiscoveredModel,
+} from "../modelFilter.ts";
 import { contentHash } from "../../utils/aiCache.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { toCitations, type RawSource } from "../citations.ts";
 import {
   withTimeout,
   withRetry,
@@ -31,6 +36,7 @@ import {
 } from "../resilience.ts";
 import {
   translateSchemaNode as translateSchema,
+  exceedsAnthropicSchemaLimits,
   type TranslateOptions,
 } from "../schemaTranslation.ts";
 
@@ -38,16 +44,44 @@ import {
 // Model Class Mapping
 // ---------------------------------------------------------------------------
 
-const MODEL_MAP: Record<string, string> = {
+// The fallback when discovery has not run. Discovery overrides each with the
+// newest model of its family the key can see.
+const MODEL_MAP: Record<ModelClass, string> = {
   lite: "claude-haiku-4-5",
-  flash: "claude-sonnet-4-6",
-  pro: "claude-opus-4-6",
+  flash: "claude-sonnet-5",
+  pro: "claude-opus-5",
 };
 
-const DEFAULT_MODEL_CLASS = "lite";
+const DEFAULT_MODEL_CLASS: ModelClass = "lite";
 
 const DEFAULT_MAX_TOKENS = 4096;
+/**
+ * Research answers in a wide JSON object after reading search results, and
+ * the model thinks first, so a grounded call gets at least this much room.
+ */
 const SEARCH_MAX_TOKENS = 8192;
+
+/** A turn paused by the server-side tool loop is resumed at most this often. */
+const MAX_CONTINUATIONS = 3;
+
+/**
+ * Searches one research call may run. With no cap Sonnet 5 kept searching a
+ * well-known person: 129K tokens and 55 s of a 60 s budget. Five searches
+ * fill a contact's profile, and the answer still carries its sources.
+ */
+const MAX_SEARCHES = 5;
+
+/**
+ * The effort each class asks for. Sonnet 5 and Opus 5 think by default, at
+ * effort "high", and Opus 5.5 and Fable cannot turn thinking off at all, so
+ * a one-line summary pays for deliberation it does not need. Quick and deep
+ * work runs at "low". Haiku 4.5 takes no effort, and is sent none.
+ */
+const EFFORT_FOR_CLASS: Record<ModelClass, "low" | "medium"> = {
+  lite: "low",
+  flash: "low",
+  pro: "medium",
+};
 
 /**
  * Whether a Claude model supports the server-side `web_search` tool.
@@ -63,6 +97,44 @@ function supportsWebSearch(modelId: string): boolean {
   if (/^claude-(2|instant)/i.test(modelId)) return false;
   if (/^claude-3-(opus|sonnet|haiku)/i.test(modelId)) return false;
   return /^claude-/i.test(modelId);
+}
+
+/**
+ * The effort levels a model takes, from what discovery recorded (the Models
+ * API declares them), else a family rule: effort arrived with Opus 4.5 and is
+ * on every Opus, Sonnet and Fable since; Haiku 4.5 and Sonnet 4.5 refuse it.
+ */
+function effortsOf(modelId: string): string[] {
+  const discovered = getDiscoveredModelsForProvider("anthropic").find(
+    (m) => m.id === modelId,
+  );
+  if (discovered?.efforts) return discovered.efforts;
+  if (/haiku|sonnet-4-5|claude-3|claude-(2|instant)/i.test(modelId)) return [];
+  return ["low", "medium", "high"];
+}
+
+/** A server-side tool's result block, reduced to the fields we read. */
+interface ContentBlock {
+  type?: string;
+  text?: string;
+  citations?: Array<{ url?: string; title?: string }>;
+  content?: unknown;
+}
+
+/** The pages a response says it read: text citations first, then results. */
+function sourcesOf(content: ContentBlock[]): RawSource[] {
+  const cited: RawSource[] = [];
+  const results: RawSource[] = [];
+  for (const block of content) {
+    if (block.type === "text") cited.push(...(block.citations ?? []));
+    if (block.type === "web_search_tool_result" && Array.isArray(block.content))
+      results.push(
+        ...(block.content as Array<{ type?: string } & RawSource>).filter(
+          (r) => r.type === "web_search_result",
+        ),
+      );
+  }
+  return [...cited, ...results];
 }
 
 // ---------------------------------------------------------------------------
@@ -90,8 +162,16 @@ function isSchemaComplexityError(error: unknown): boolean {
   const msg = getErrorMessage(error).toLowerCase();
   return (
     msg.includes("too many optional parameters") ||
+    msg.includes("too many parameters with union types") ||
     msg.includes("grammar compilation") ||
     (msg.includes("output_config.format") && msg.includes("schema"))
+  );
+}
+
+/** True when the model refused `output_config.effort`. */
+function isEffortRejection(error: unknown): boolean {
+  return /does not support the effort parameter|output_config\.effort/i.test(
+    getErrorMessage(error),
   );
 }
 
@@ -105,18 +185,22 @@ export class AnthropicAdapter implements AIProvider {
   readonly defaultMaxTokens = DEFAULT_MAX_TOKENS;
   private client: Anthropic;
   /**
-   * Prompts whose schema Claude declined to compile (it caps optional
-   * parameters at 24). Remembered so the retry is paid once, not per call.
+   * Schemas Claude declined to compile, by model and schema hash, for the
+   * grammar errors the local limit check does not predict. Remembered so the
+   * retry is paid once, not per call.
    */
   private schemaTooComplex = new Set<string>();
+  /** Models that answered 400 to an effort, so none is sent again. */
+  private noEffort = new Set<string>();
 
   constructor(apiKey: string) {
     this.client = new Anthropic({ apiKey, maxRetries: 0 });
   }
 
   /**
-   * Enumerate models. Anthropic reports ids + display names; every listed
-   * model is a chat model (Anthropic ships no first-party embedding models).
+   * Enumerate models. Anthropic reports ids, display names, release dates,
+   * context windows and capabilities; every listed model is a chat model
+   * (Anthropic ships no first-party embedding models).
    *
    * The server-side `web_search` tool this adapter uses for research is a
    * Claude 3.5-and-later feature, so the legacy families are excluded from
@@ -127,11 +211,38 @@ export class AnthropicAdapter implements AIProvider {
     for await (const model of this.client.models.list()) {
       const capabilities: ModelCapability[] = ["chat"];
       if (supportsWebSearch(model.id)) capabilities.push("grounding");
+      const declared = model as unknown as {
+        created_at?: string;
+        max_input_tokens?: number;
+        capabilities?: {
+          effort?: Record<string, { supported?: boolean } | boolean>;
+        };
+      };
+      const effort = declared.capabilities?.effort;
+      const efforts =
+        effort && effort.supported
+          ? Object.entries(effort)
+              .filter(
+                ([level, value]) =>
+                  level !== "supported" &&
+                  typeof value === "object" &&
+                  value?.supported,
+              )
+              .map(([level]) => level)
+          : effort
+            ? []
+            : undefined;
+      const releasedAt = declared.created_at
+        ? Date.parse(declared.created_at)
+        : undefined;
       models.push({
         id: model.id,
         label: model.display_name ?? model.id,
         capabilities,
         capabilityConfidence: "declared",
+        contextWindow: declared.max_input_tokens,
+        releasedAt: Number.isNaN(releasedAt) ? undefined : releasedAt,
+        efforts,
       });
     }
     return models;
@@ -140,9 +251,7 @@ export class AnthropicAdapter implements AIProvider {
   /** Claude defaults to latest discovered models, falling back to static map. */
   defaultModelFor(modelClass: ModelClass): string | undefined {
     return (
-      getLatestDiscoveredModel("anthropic", modelClass) ??
-      MODEL_MAP[modelClass] ??
-      MODEL_MAP[DEFAULT_MODEL_CLASS]
+      getLatestDiscoveredModel("anthropic", modelClass) ?? MODEL_MAP[modelClass]
     );
   }
 
@@ -176,17 +285,22 @@ export class AnthropicAdapter implements AIProvider {
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
     const maxTokens = options.enableSearchGrounding
-      ? SEARCH_MAX_TOKENS
-      : DEFAULT_MAX_TOKENS;
+      ? Math.max(options.maxOutputTokens ?? 0, SEARCH_MAX_TOKENS)
+      : (options.maxOutputTokens ?? DEFAULT_MAX_TOKENS);
 
     return withRetry(
       async (attempt) => {
         const startMs = Date.now();
         const schemaKey = `${model}:${contentHash(JSON.stringify(options.jsonSchema ?? {}))}`;
-        let useSchema = !this.schemaTooComplex.has(schemaKey);
-        let result: AIGenerateResult;
-        try {
-          result = await withTimeout(
+        // Claude caps a schema at 24 optional parameters and 16 union-typed
+        // ones. Contrack's contact and research schemas are legitimately
+        // wider, so they go to prompt-guided JSON without a failed request.
+        let useSchema =
+          !!options.jsonSchema &&
+          !exceedsAnthropicSchemaLimits(options.jsonSchema) &&
+          !this.schemaTooComplex.has(schemaKey);
+        const run = (schema: boolean) =>
+          withTimeout(
             (signal) =>
               this.runMessages(
                 options,
@@ -194,15 +308,16 @@ export class AnthropicAdapter implements AIProvider {
                 maxTokens,
                 signal,
                 startMs,
-                useSchema,
+                schema,
               ),
             timeoutMs,
             options.signal,
           );
+
+        let result: AIGenerateResult;
+        try {
+          result = await run(useSchema);
         } catch (err) {
-          // Claude caps a schema at 24 optional parameters. Contrack's research
-          // schema is legitimately wider than that, so drop to prompt-guided
-          // JSON rather than failing the whole enrichment.
           if (!useSchema || !isSchemaComplexityError(err)) throw err;
           log.warn(
             "AnthropicAdapter",
@@ -211,23 +326,17 @@ export class AnthropicAdapter implements AIProvider {
           if (this.schemaTooComplex.size >= 100) this.schemaTooComplex.clear();
           this.schemaTooComplex.add(schemaKey);
           useSchema = false;
-          result = await withTimeout(
-            (signal) =>
-              this.runMessages(
-                options,
-                model,
-                maxTokens,
-                signal,
-                startMs,
-                false,
-              ),
-            timeoutMs,
-            options.signal,
-          );
+          result = await run(false);
         }
 
+        // The text callers get parses as it stands: prompt-guided answers
+        // arrive with a sentence of prose or a code fence around the JSON.
         if (options.responseFormat === "json") {
-          parseAIJson(result.text, `AnthropicAdapter.generate(${model})`);
+          const parsed = parseAIJson(
+            result.text,
+            `AnthropicAdapter.generate(${model})`,
+          );
+          result.text = JSON.stringify(parsed);
         }
 
         if (attempt > 1) {
@@ -251,23 +360,27 @@ export class AnthropicAdapter implements AIProvider {
     );
   }
 
+  /** The effort to send `model`, or undefined when it takes none. */
+  private effortFor(
+    model: string,
+    options: AIGenerateOptions,
+  ): string | undefined {
+    if (this.noEffort.has(model)) return undefined;
+    const wanted =
+      EFFORT_FOR_CLASS[
+        (options.routing?.prefer ?? DEFAULT_MODEL_CLASS) as ModelClass
+      ] ?? "low";
+    return effortsOf(model).includes(wanted) ? wanted : undefined;
+  }
+
   private async runMessages(
     options: AIGenerateOptions,
     model: string,
     maxTokens: number,
     signal: AbortSignal,
     startMs: number,
-    useSchema = true,
+    useSchema: boolean,
   ): Promise<AIGenerateResult> {
-    const messages: Array<{ role: "user"; content: string }> = [
-      { role: "user", content: options.prompt },
-    ];
-
-    const requestParams: Record<string, unknown> = {
-      model,
-      messages,
-      max_tokens: options.maxOutputTokens ?? maxTokens,
-    };
     let systemPrompt = options.systemPrompt ?? "";
     // Without a schema to constrain it, the model needs the shape in words.
     if (options.responseFormat === "json" && !useSchema) {
@@ -278,52 +391,116 @@ export class AnthropicAdapter implements AIProvider {
         )}`;
       }
     }
-    if (systemPrompt.trim()) requestParams.system = systemPrompt.trim();
-    if (options.enableSearchGrounding) {
-      // Sonnet/Opus 4.6+ support the dynamic-filtering variant; Haiku 4.5
-      // only supports the basic one.
-      const webSearchType = model.includes("haiku")
-        ? "web_search_20250305"
-        : "web_search_20260209";
-      requestParams.tools = [{ type: webSearchType, name: "web_search" }];
-    }
-    if (options.responseFormat === "json" && options.jsonSchema && useSchema) {
-      requestParams.output_config = {
-        format: this.translateSchema(options.jsonSchema),
-      };
-    }
+
+    const tools = options.enableSearchGrounding
+      ? [
+          {
+            // The basic tool on every model, though Sonnet and Opus 4.5 and
+            // later also take `web_search_20260209`. That variant filters
+            // results with code first, and on Contrack's research prompt it
+            // was five times slower for the same answer: 75 s, 90K input
+            // tokens and 5 searches, against 14 s, 50K and 3 (Sonnet 5,
+            // 2026-09-26). The research budget is 60 s.
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: MAX_SEARCHES,
+          },
+        ]
+      : undefined;
 
     // Local response shape — the SDK's `Message` union (text / tool_use /
     // server_tool_use / web_search_tool_result) is too granular for our needs.
     interface ClaudeMessageResponse {
-      content?: Array<{ type?: string; text?: string }>;
+      content?: ContentBlock[];
+      stop_reason?: string;
       usage?: { input_tokens?: number; output_tokens?: number };
     }
-    const response = (await this.client.messages.create(
-      requestParams as unknown as Parameters<
-        typeof this.client.messages.create
-      >[0],
-      { signal },
-    )) as unknown as ClaudeMessageResponse;
+
+    const send = (
+      messages: Array<{ role: "user" | "assistant"; content: unknown }>,
+      effort: string | undefined,
+    ) => {
+      const requestParams: Record<string, unknown> = {
+        model,
+        messages,
+        max_tokens: maxTokens,
+      };
+      if (systemPrompt.trim()) requestParams.system = systemPrompt.trim();
+      if (tools) requestParams.tools = tools;
+      const outputConfig: Record<string, unknown> = {};
+      if (effort) outputConfig.effort = effort;
+      if (
+        options.responseFormat === "json" &&
+        options.jsonSchema &&
+        useSchema
+      ) {
+        outputConfig.format = this.translateSchema(options.jsonSchema);
+      }
+      if (Object.keys(outputConfig).length > 0)
+        requestParams.output_config = outputConfig;
+      return this.client.messages.create(
+        requestParams as unknown as Parameters<
+          typeof this.client.messages.create
+        >[0],
+        { signal },
+      ) as unknown as Promise<ClaudeMessageResponse>;
+    };
+
+    const question = { role: "user" as const, content: options.prompt };
+    let effort = this.effortFor(model, options);
+    let response: ClaudeMessageResponse;
+    try {
+      response = await send([question], effort);
+    } catch (err) {
+      if (!effort || !isEffortRejection(err)) throw err;
+      this.noEffort.add(model);
+      log.info("AnthropicAdapter", `${model} takes no effort parameter`);
+      effort = undefined;
+      response = await send([question], undefined);
+    }
+
+    // With a server tool, the server runs its own loop and may hand the turn
+    // back unfinished (`pause_turn`). Sending the partial answer back resumes
+    // it; the adapter used to keep whatever text had arrived by then.
+    const content: ContentBlock[] = [...(response.content ?? [])];
+    let inputTokens = response.usage?.input_tokens ?? 0;
+    let outputTokens = response.usage?.output_tokens ?? 0;
+    for (
+      let turn = 0;
+      response.stop_reason === "pause_turn" && turn < MAX_CONTINUATIONS;
+      turn++
+    ) {
+      log.info(
+        "AnthropicAdapter",
+        `${model} paused its turn; resuming (${turn + 1}/${MAX_CONTINUATIONS})`,
+      );
+      response = await send(
+        [question, { role: "assistant", content: [...content] }],
+        effort,
+      );
+      content.push(...(response.content ?? []));
+      inputTokens += response.usage?.input_tokens ?? 0;
+      outputTokens += response.usage?.output_tokens ?? 0;
+    }
 
     let text = "";
-    if (response.content) {
-      for (const block of response.content) {
-        if (block.type === "text" && typeof block.text === "string") {
-          text += block.text;
-        }
+    for (const block of content) {
+      if (block.type === "text" && typeof block.text === "string") {
+        text += block.text;
       }
     }
 
-    const tokenCount =
-      (response.usage?.input_tokens ?? 0) +
-      (response.usage?.output_tokens ?? 0);
+    const tokenCount = inputTokens + outputTokens;
     const latencyMs = Date.now() - startMs;
+    const citations = options.enableSearchGrounding
+      ? toCitations(sourcesOf(content))
+      : undefined;
 
     log.info(
       "AnthropicAdapter",
-      `${model} | ${latencyMs}ms | ${tokenCount} tokens`,
+      `${model} | ${latencyMs}ms | ${tokenCount} tokens` +
+        (citations ? ` | ${citations.length} sources` : ""),
     );
-    return { text, model, tokenCount, latencyMs };
+    return { text, model, tokenCount, latencyMs, citations };
   }
 }

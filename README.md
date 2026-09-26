@@ -220,13 +220,13 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 
 Full documentation lives in the [`docs/`](docs/) directory:
 
-| Guide                                      | Description                                           |
-| ------------------------------------------ | ----------------------------------------------------- |
-| [Getting Started](docs/getting-started.md) | Installation, first boot, scripts, keyboard shortcuts |
-| [Configuration](docs/configuration.md)     | Environment variables, AI provider setup, tier tuning |
-| [Architecture](docs/architecture.md)       | System overview, data flow, schema, caching           |
-| [API Reference](docs/api-reference.md)     | Complete REST API with curl and JavaScript examples   |
-| [CI & Release](docs/ci-and-release.md)     | Pipeline, published images, release procedure         |
+| Guide                                      | Description                                            |
+| ------------------------------------------ | ------------------------------------------------------ |
+| [Getting Started](docs/getting-started.md) | Installation, first boot, scripts, keyboard shortcuts  |
+| [Configuration](docs/configuration.md)     | Environment variables, AI provider setup, model choice |
+| [Architecture](docs/architecture.md)       | System overview, data flow, schema, caching            |
+| [API Reference](docs/api-reference.md)     | Complete REST API with curl and JavaScript examples    |
+| [CI & Release](docs/ci-and-release.md)     | Pipeline, published images, release procedure          |
 
 ### Feature Guides
 
@@ -251,7 +251,6 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `GEMINI_API_KEY`        | Gemini API key                                                                                                                                    | —            |
 | `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                    | —            |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                 | —            |
-| `AI_TIER`               | `FREE` or `PAID` rate limit profile                                                                                                               | `FREE`       |
 | `PORT`                  | Express listening port                                                                                                                            | `3210`       |
 | `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)                                                                                                       | `127.0.0.1`  |
 | `PUBLIC_URL`            | Canonical external origin behind a proxy (e.g. `https://crm.example.com`) for passkeys and invites                                                | — (derived)  |

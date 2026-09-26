@@ -23,9 +23,9 @@ import { currentOwnerId } from "../tenancy/requestContext.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
-import { isProviderConfigured } from "../ai/singleton.ts";
-import { ai, activeProviderName } from "../ai/index.ts";
-import { getAITier, GEMINI_REGISTRY } from "../ai/routing/registry.ts";
+import { isAnyProviderConfigured } from "../ai/gateway.ts";
+import { getProvider } from "../ai/providerRegistry.ts";
+import { blendedCostPerM } from "../ai/pricing.ts";
 import crypto from "crypto";
 
 // =============================================================================
@@ -111,32 +111,36 @@ const costBreakdownStmt = sqlite.prepare(`
   GROUP BY model
 `);
 
+/** Web research calls, fresh ones only, in the last 24 hours. */
+const researchRunsStmt = sqlite.prepare(
+  // tenant-lint: allow instance sweep
+  `SELECT COUNT(*) AS n FROM ai_invocations
+    WHERE operation IN ('aiSearchGrounding', 'aiSearchSinglePass')
+      AND cached = 0
+      AND createdAt >= datetime('now', '-1 day')`,
+);
+
+/**
+ * How many web research calls the instance made in the last 24 hours, with
+ * any provider. The Enrichment page shows it, because each one is billed.
+ */
+export function researchRunsLastDay(): number {
+  return (researchRunsStmt.get() as { n: number }).n;
+}
+
 const cleanupStmt = sqlite.prepare(
   // tenant-lint: allow instance sweep
   `DELETE FROM ai_invocations WHERE createdAt < datetime('now', '-30 days')`,
 );
 
 // =============================================================================
-// Cost Lookup — Build a model→costPerM map from all provider registries
+// Cost Lookup — list prices in ai/pricing.ts, one blended rate per model
 // =============================================================================
-
-const costPerMMap = new Map<string, number>();
-
-// Gemini models (from registry)
-for (const model of GEMINI_REGISTRY) {
-  costPerMMap.set(model.id, model.costPerM);
-}
-
-// OpenAI models — average of (input + output) cost per 1M tokens
-// Source: ARCHITECTURE.md §2 Model Ledger
-costPerMMap.set("gpt-4o-mini", 0.375); // avg($0.15 in, $0.60 out)
-costPerMMap.set("gpt-5.4-mini", 2.625); // avg($0.75 in, $4.50 out)
-costPerMMap.set("gpt-5.4", 8.75); // avg($2.50 in, $15.00 out)
-
-// Anthropic models — average of (input + output) cost per 1M tokens
-costPerMMap.set("claude-haiku-4.5", 3.0); // avg($1.00 in, $5.00 out)
-costPerMMap.set("claude-sonnet-4.6", 9.0); // avg($3.00 in, $15.00 out)
-costPerMMap.set("claude-opus-4.6", 15.0); // avg($5.00 in, $25.00 out)
+// This used to be a map of its own, and it had drifted: the Anthropic rows
+// were keyed "claude-haiku-4.5", which no request ever names (the id is
+// claude-haiku-4-5-20251001), and OpenAI stopped at GPT-5.4. So the page
+// priced every Anthropic and GPT-6 call at nothing.
+// =============================================================================
 
 // =============================================================================
 // Public API
@@ -202,7 +206,7 @@ export function getSummary(scope: Scope, options: { admin: boolean }) {
   }[];
   let estimatedCostUsd = 0;
   for (const row of costRows) {
-    const costPerM = costPerMMap.get(row.model) ?? 0;
+    const costPerM = blendedCostPerM(row.model);
     estimatedCostUsd += (row.tokens / 1_000_000) * costPerM;
   }
 
@@ -210,23 +214,20 @@ export function getSummary(scope: Scope, options: { admin: boolean }) {
   const cacheHitRate =
     agg.totalInvocations > 0 ? agg.cachedCalls / agg.totalInvocations : 0;
 
-  // 4. Tier — provider-aware (F-07)
-  // For Gemini: show FREE/PAID tier from AI_TIER env var
-  // For OpenAI/Anthropic: show provider name (always paid, no free tier concept)
-  let tier: string;
-  if (!isProviderConfigured) {
-    tier = "MOCK";
-  } else if (activeProviderName === "gemini") {
-    tier = getAITier();
-  } else {
-    tier = activeProviderName.toUpperCase(); // "OPENAI" or "ANTHROPIC"
-  }
+  // 4. Live or mock. There is no free or paid tier to report: Google sets a
+  // key's tier from its Cloud project's billing and never says which, and
+  // OpenAI and Anthropic have none. What can be known is whether Google has
+  // answered with a free-tier quota error, which the page flags because
+  // Google uses free-tier prompts to improve its products.
+  const tier: "LIVE" | "MOCK" = isAnyProviderConfigured() ? "LIVE" : "MOCK";
+  const geminiSnapshot = getProvider("gemini")?.getQuotaSnapshot?.();
+  const freeTier = geminiSnapshot?.freeTier ?? false;
 
-  // 5. Quota snapshot (safe for all providers via barrel export)
-  const quotaSnapshot = ai.getQuotaSnapshot();
+  // 5. Gemini's usage meter (requests and tokens per model, grounded
+  // requests today). Empty when Gemini is not connected.
   const quota = {
-    models: quotaSnapshot.models,
-    grounding: quotaSnapshot.grounding,
+    models: geminiSnapshot?.models ?? {},
+    grounding: { rpd: geminiSnapshot?.grounding.rpd ?? 0 },
   };
 
   // 6. Cache tier stats (in-memory, from aiCache). Admin only.
@@ -276,6 +277,7 @@ export function getSummary(scope: Scope, options: { admin: boolean }) {
       cacheHitRate: Math.round(cacheHitRate * 1000) / 1000, // 3 decimal places
     },
     tier,
+    freeTier,
     quota,
     ...(options.admin ? { cacheTiers } : {}),
     timestamp: new Date().toISOString(),
@@ -406,7 +408,7 @@ export interface UserUsage {
 function costOf(rows: { model: string | null; tokens: number }[]): number {
   let total = 0;
   for (const row of rows) {
-    const perM = costPerMMap.get(row.model ?? "") ?? 0;
+    const perM = blendedCostPerM(row.model ?? "");
     total += (row.tokens / 1_000_000) * perM;
   }
   return Math.round(total * 1_000_000) / 1_000_000;

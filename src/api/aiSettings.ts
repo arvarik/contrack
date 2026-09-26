@@ -28,6 +28,11 @@ export interface ProviderStatus {
   modelsError?: string;
   supportsDiscovery: boolean;
   supportsGrounding: boolean;
+  /**
+   * Google answered this Gemini key with a free-tier quota error. On the
+   * free tier Google may use prompts and responses to improve its products.
+   */
+  freeTier?: boolean;
 }
 
 export interface CustomEndpoint {

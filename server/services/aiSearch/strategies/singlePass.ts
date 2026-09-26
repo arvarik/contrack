@@ -10,10 +10,16 @@ import { AppError } from "../../../utils/AppError.ts";
 // enableSearchGrounding: true and responseFormat: "json" + jsonSchema,
 // letting the provider handle grounding and extraction atomically.
 //
-// Used automatically when AI_PROVIDER is "openai" or "anthropic".
+// It holds the two-pass rule: no source links, no field changes. The
+// adapters return the pages the answer read (OpenAI's web_search_call
+// sources, Anthropic's web_search_tool_result blocks), and the merge engine
+// lists them under the dossier's Sources.
+//
+// Used automatically when research resolves to OpenAI or Anthropic.
 // =============================================================================
 
 import { generateFor } from "../../../ai/gateway.ts";
+import { toCitations } from "../../../ai/citations.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import {
@@ -39,15 +45,17 @@ export class SinglePassStrategy implements AISearchStrategy {
     signal?.throwIfAborted();
     const startMs = Date.now();
 
-    // Single combined request: web search + structured JSON output
-    // Prefer "pro" model class for maximum quality on research tasks.
+    // Single combined request: web search + structured JSON output.
     const result = await generateFor("research", {
       prompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
       enableSearchGrounding: true,
       signal,
-      timeoutMs: 60_000,
+      // One call does the searching and the writing, and the research prompt
+      // leads to four or five searches: GPT-6 Sol took 35 to 48 s on it
+      // (2026-09-26). The job around this call allows 90 s.
+      timeoutMs: 85_000,
       maxOutputTokens: 4_000,
     });
 
@@ -67,6 +75,17 @@ export class SinglePassStrategy implements AISearchStrategy {
       `Complete via ${result.model} in ${result.latencyMs}ms` +
         ` (${result.tokenCount ?? "?"} tokens)`,
     );
+
+    // An answer the model gave without reading anything is not research.
+    const citations = toCitations(
+      (result.citations ?? []).map((c) => ({ url: c.uri, title: c.title })),
+    );
+    if (citations.length === 0)
+      throw new AppError(
+        "Research did not include source links. No contact fields changed. Choose another research model in AI settings.",
+        502,
+        { code: "AI_GROUNDING_MISSING" },
+      );
 
     // Parse and validate with Zod
     let rawParsed: unknown;
@@ -94,6 +113,7 @@ export class SinglePassStrategy implements AISearchStrategy {
       models: [result.model],
       tokenCount: result.tokenCount,
       latencyMs,
+      citations,
       // Single-pass combines grounding + extraction, so grounded text = raw response
       groundedText: result.text.trim(),
     };

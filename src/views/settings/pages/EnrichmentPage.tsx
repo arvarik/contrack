@@ -37,10 +37,6 @@ export const EnrichmentPage = () => {
     setSelectedIds(new Set(neverEnrichedContacts.map((c) => c.id)));
   };
 
-  const groundingUsed = groundingCapacity
-    ? Math.max(0, groundingCapacity.limit - groundingCapacity.remaining)
-    : 0;
-
   return (
     // One box for the whole page, the enrichment list included, so every
     // card starts under the page title.
@@ -83,12 +79,12 @@ export const EnrichmentPage = () => {
         {isAdmin && groundingCapacity && (
           <SettingRow
             id="grounding"
-            title="Web searches today"
-            description="The provider's daily limit for research on the web, for the whole instance"
+            title="Research runs, last 24 hours"
+            description="Web research for the whole instance. The provider bills each run"
             inline
           >
             <span className="text-sm font-bold text-on-surface tabular-nums whitespace-nowrap">
-              {groundingUsed} of {groundingCapacity.limit}
+              {groundingCapacity.researchRuns24h}
             </span>
           </SettingRow>
         )}

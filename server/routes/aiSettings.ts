@@ -26,6 +26,7 @@ import {
   upsertCustomEndpoint,
   deleteCustomEndpoint,
   refreshModels,
+  probeGeneration,
 } from "../services/aiSettingsService.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
@@ -215,6 +216,20 @@ router.put(
           { code: "EMBEDDINGS_PROBE_FAILED" },
         );
       }
+    }
+
+    // A generation pin is tested the same way before it is saved, so a model
+    // the provider lists but will not serve cannot become the one that runs.
+    if (
+      capability !== "embeddings" &&
+      req.body.mode === "pinned" &&
+      req.body.providerId
+    ) {
+      await probeGeneration(
+        capability,
+        String(req.body.providerId),
+        req.body.model ? String(req.body.model) : undefined,
+      );
     }
 
     setCapabilityAssignment(capability, req.body);

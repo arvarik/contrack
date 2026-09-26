@@ -1,114 +1,18 @@
 // =============================================================================
-// AI Layer — Tier-Aware Model Registry
+// AI Layer — Gemini Model Registry
 // =============================================================================
-// Single source of truth for Gemini model capabilities, rate limits, and costs.
-// Each model carries BOTH free-tier and paid-tier limit profiles. The active
-// profile is selected at startup via the AI_TIER environment variable.
+// The Gemini models the router may pick when a capability is on Auto, with
+// what each is for. There is no free or paid profile here any more. Google
+// decides a key's limits from its Cloud project's billing, publishes no
+// free-tier numbers, and changes them without notice, so a table of guessed
+// limits either throttled paid keys or let free keys run into 429s. The
+// router now learns a limit from the 429 itself (see SmartRouter and the
+// Gemini adapter's circuit breaker).
 //
-// MAINTENANCE: When Google releases new models or changes limits, update this
-// file. Check your project's AI Studio dashboard at https://aistudio.google.com/
-// for current rate limit values.
-// =============================================================================
-
-/**
- * Stability tier for a model.
- * - "stable": GA model, safe for production use
- * - "preview": May change behavior or be removed; opt-in only
- */
-export type ModelStability = "stable" | "preview";
-
-/**
- * Functional model class — describes what tier of capability the model offers.
- * Used by consumers to express a preference via `routing.prefer`.
- * - "lite":  Cheapest, fastest — good for simple extraction/classification
- * - "flash": Mid-tier — good for reasoning, summarization, structured output
- * - "pro":   Most capable — best for complex reasoning, search grounding
- */
-export type ModelClass = "lite" | "flash" | "pro";
-
-/**
- * Billing tier — controls which limit set the registry uses.
- * Read from the AI_TIER environment variable at startup.
- */
-export type AITier = "FREE" | "PAID";
-
-/**
- * Rate limit set for a single billing tier.
- * All three dimensions are checked by the QuotaTracker.
- */
-export interface TierLimits {
-  /** Requests per minute (project-level) */
-  rpm: number;
-  /** Tokens per minute — input + output combined (project-level) */
-  tpm: number;
-  /** Requests per day. Use Infinity for "Unlimited" */
-  rpd: number;
-}
-
-/**
- * Full model configuration with per-tier rate limits.
- *
- * Free-tier limits derived from the user's AI Studio dashboard using:
- *   free_limit ≈ paid_limit − |negative_remaining_shown|
- *
- * Paid-tier limits are the dashboard's primary display values (Tier 2).
- *
- * Values sourced from the user's Google AI Studio dashboard (April 2026)
- * and official pricing at https://ai.google.dev/gemini-api/docs/pricing
- */
-export interface ModelConfig {
-  /** Model identifier as accepted by the Gemini API */
-  id: string;
-
-  /** Functional class — lite, flash, or pro */
-  modelClass: ModelClass;
-
-  /** Major generation number (2 for Gemini 2.5, 3 for Gemini 3.x, etc.) */
-  generation: number;
-
-  /** Stability tier — preview models are opt-in only */
-  stability: ModelStability;
-
-  /** Whether this model has ANY free generation availability (even if very limited) */
-  hasFreeTier: boolean;
-
-  /** Free-tier rate limits (conservative — ~10 RPM for flash-lite) */
-  freeLimits: TierLimits;
-
-  /** Paid-tier rate limits (generous — 10K RPM for flash-lite) */
-  paidLimits: TierLimits;
-
-  /** Paid-tier cost per 1M output tokens in USD (for overflow cost sorting) */
-  costPerM: number;
-
-  /**
-   * Whether this model supports Google Search grounding.
-   * Note: Grounding has its OWN separate RPD limit (see GROUNDING_LIMITS).
-   */
-  supportsGrounding: boolean;
-}
-
-// =============================================================================
-// Grounding Limits
-// =============================================================================
-// These are SEPARATE from each model's generation RPD.
-// All current Gemini models (2.5 and 3.x) support search grounding.
-// Grounding RPD is a shared pool across all models.
-// =============================================================================
-
-export const GROUNDING_LIMITS = {
-  /** Free-tier: 500 RPD shared between flash + flash-lite */
-  free: { rpd: 500 },
-  /** Paid-tier: much higher grounding allowance */
-  paid: { rpd: 5_000 },
-} as const;
-
-// =============================================================================
-// Model Registry
-// =============================================================================
-// Ordered cheapest-first — this is the default routing preference.
-// The SmartRouter re-sorts by costPerM but preserving insertion order
-// as a tiebreaker keeps behavior deterministic.
+// MAINTENANCE: add a model when Google ships one. Models the key can see but
+// this list lacks are added from discovery (getActiveGeminiRegistry), so a new
+// generation is picked up without a release.
+// Prices: https://ai.google.dev/gemini-api/docs/pricing (September 2026).
 // =============================================================================
 
 import {
@@ -120,41 +24,69 @@ import {
   getDiscoveredModelsForProvider,
 } from "../modelFilter.ts";
 
+/**
+ * Stability tier for a model.
+ * - "stable": GA model
+ * - "preview": may change behaviour or be withdrawn; sorts after stable
+ */
+export type ModelStability = "stable" | "preview";
+
+/**
+ * Functional model class — describes what tier of capability the model offers.
+ * Used by consumers to express a preference via `routing.prefer`.
+ * - "lite":  Cheapest, fastest — good for simple extraction/classification
+ * - "flash": Mid-tier — reasoning, summarisation, structured output, research
+ * - "pro":   Most capable, slowest and dearest
+ */
+export type ModelClass = "lite" | "flash" | "pro";
+
+export interface ModelConfig {
+  /** Model identifier as accepted by the Gemini API */
+  id: string;
+
+  /** Functional class — lite, flash, or pro */
+  modelClass: ModelClass;
+
+  /** Generation number (3.8 for Gemini 3.8, 2.5 for Gemini 2.5) */
+  generation: number;
+
+  /** Stability tier — preview models sort after stable ones */
+  stability: ModelStability;
+
+  /**
+   * Paid price per 1M output tokens in USD. Breaks a tie between two models
+   * of one class and generation, cheapest first.
+   */
+  costPerM: number;
+
+  /** Whether this model supports Google Search grounding. */
+  supportsGrounding: boolean;
+}
+
+// =============================================================================
+// Model Registry
+// =============================================================================
+// No 2.5 models. Google serves them to existing projects only, and a new key
+// gets 404 "This model models/gemini-2.5-flash is no longer available to new
+// users" (tested 2026-09-26). As the router's last fallback they failed every
+// time they were reached.
+// =============================================================================
+
 export const GEMINI_REGISTRY: ModelConfig[] = [
-  // ── Baseline Stable Models (ordered by tier & generation) ───────────
-  // Note: gemini-2.5-flash-lite ($0.40/M) is preserved at index 0 for
-  // cheapest-tiebreaker and legacy unit tests.
-  {
-    id: "gemini-2.5-flash-lite",
-    modelClass: "lite",
-    generation: 2,
-    stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 10, tpm: 250_000, rpd: 500 },
-    paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: Infinity },
-    costPerM: 0.4,
-    supportsGrounding: true,
-  },
   {
     id: "gemini-3.8-flash",
     modelClass: "flash",
     generation: 3.8,
     stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
-    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
-    costPerM: 2.5,
+    costPerM: 3.75,
     supportsGrounding: true,
   },
   {
-    id: "gemini-3.5-flash-lite",
-    modelClass: "lite",
-    generation: 3.5,
+    id: "gemini-3.7-flash",
+    modelClass: "flash",
+    generation: 3.7,
     stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
-    paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: Infinity },
-    costPerM: 0.4,
+    costPerM: 3.75,
     supportsGrounding: true,
   },
   {
@@ -162,10 +94,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     modelClass: "flash",
     generation: 3.6,
     stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
-    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
-    costPerM: 2.5,
+    costPerM: 3.75,
     supportsGrounding: true,
   },
   {
@@ -173,43 +102,15 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     modelClass: "flash",
     generation: 3.5,
     stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
-    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
-    costPerM: 2.5,
+    costPerM: 9.0,
     supportsGrounding: true,
   },
   {
-    id: "gemini-3.1-pro-preview",
-    modelClass: "pro",
-    generation: 3.1,
-    stability: "preview",
-    hasFreeTier: true,
-    freeLimits: { rpm: 2, tpm: 32_000, rpd: 50 },
-    paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-    costPerM: 10.0,
-    supportsGrounding: true,
-  },
-  {
-    id: "gemini-2.5-flash",
-    modelClass: "flash",
-    generation: 2,
+    id: "gemini-3.5-flash-lite",
+    modelClass: "lite",
+    generation: 3.5,
     stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 2, tpm: 250_000, rpd: 20 },
-    paidLimits: { rpm: 2_000, tpm: 3_000_000, rpd: 100_000 },
     costPerM: 2.5,
-    supportsGrounding: true,
-  },
-  {
-    id: "gemini-2.5-pro",
-    modelClass: "pro",
-    generation: 2,
-    stability: "stable",
-    hasFreeTier: true,
-    freeLimits: { rpm: 2, tpm: 4_000, rpd: 2 },
-    paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-    costPerM: 10.0,
     supportsGrounding: true,
   },
   {
@@ -217,33 +118,34 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     modelClass: "lite",
     generation: 3.1,
     stability: "stable",
-    hasFreeTier: false,
-    freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
-    paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: 350_000 },
     costPerM: 1.5,
     supportsGrounding: true,
   },
   {
-    id: "gemini-3-flash-preview",
-    modelClass: "flash",
-    generation: 3,
+    id: "gemini-3.1-pro-preview",
+    modelClass: "pro",
+    generation: 3.1,
     stability: "preview",
-    hasFreeTier: false,
-    freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
-    paidLimits: { rpm: 2_000, tpm: 3_000_000, rpd: 100_000 },
-    costPerM: 3.0,
+    costPerM: 12.0,
     supportsGrounding: true,
   },
 ];
+
+/** A class's price when discovery finds a model this list does not know. */
+const DISCOVERED_COST: Record<ModelClass, number> = {
+  lite: 2.5,
+  flash: 3.75,
+  pro: 12.0,
+};
 
 // =============================================================================
 // Registry Helpers
 // =============================================================================
 
 /**
- * Return the active Gemini registry, dynamically enriched with newly discovered
- * models from provider discovery so newer versions (e.g. gemini-3.9+, gemini-4+)
- * are automatically available without requiring manual code changes.
+ * Return the active Gemini registry, enriched with models discovery found
+ * that the list above lacks, so a newer generation is available without a
+ * code change.
  */
 export function getActiveGeminiRegistry(): ModelConfig[] {
   const base = [...GEMINI_REGISTRY];
@@ -251,39 +153,20 @@ export function getActiveGeminiRegistry(): ModelConfig[] {
     const discovered = getDiscoveredModelsForProvider("gemini");
     if (!discovered || discovered.length === 0) return base;
 
-    const chatModels = discovered.filter((m) => isChatModel(m.id));
     const knownIds = new Set(base.map((m) => m.id));
-
-    for (const m of chatModels) {
-      if (knownIds.has(m.id)) continue;
+    for (const m of discovered) {
+      if (!isChatModel(m.id) || knownIds.has(m.id)) continue;
       const family = inferModelFamily("gemini", m.id);
       const modelClass = familyToModelClass("gemini", family);
       if (!modelClass) continue;
 
-      const gen = extractGeneration(m.id) ?? 3;
-      const isPreview = isPreviewVariant(m.id);
-
       base.push({
         id: m.id,
         modelClass,
-        generation: gen,
-        stability: isPreview ? "preview" : "stable",
-        hasFreeTier: true,
-        freeLimits:
-          modelClass === "lite"
-            ? { rpm: 15, tpm: 1_000_000, rpd: 1_500 }
-            : modelClass === "flash"
-              ? { rpm: 15, tpm: 1_000_000, rpd: 1_500 }
-              : { rpm: 2, tpm: 32_000, rpd: 50 },
-        paidLimits:
-          modelClass === "lite"
-            ? { rpm: 10_000, tpm: 10_000_000, rpd: Infinity }
-            : modelClass === "flash"
-              ? { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 }
-              : { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-        costPerM:
-          modelClass === "lite" ? 0.4 : modelClass === "flash" ? 2.5 : 10.0,
-        supportsGrounding: true,
+        generation: extractGeneration(m.id) ?? 3,
+        stability: isPreviewVariant(m.id) ? "preview" : "stable",
+        costPerM: DISCOVERED_COST[modelClass],
+        supportsGrounding: m.capabilities.includes("grounding"),
       });
       knownIds.add(m.id);
     }
@@ -293,77 +176,42 @@ export function getActiveGeminiRegistry(): ModelConfig[] {
   return base;
 }
 
-/**
- * Read the AI_TIER from environment.
- * Defaults to "FREE" if not set — conservative by default to avoid
- * unexpected charges for users who haven't explicitly opted in.
- */
-export function getAITier(): AITier {
-  const tier = process.env.AI_TIER?.toUpperCase();
-  if (tier === "PAID") return "PAID";
-  return "FREE";
-}
-
-/** Get the active limits for a model based on the current AI_TIER. */
-export function getActiveLimits(model: ModelConfig, tier: AITier): TierLimits {
-  return tier === "PAID" ? model.paidLimits : model.freeLimits;
-}
-
-/** Get the active grounding RPD limit based on the current AI_TIER. */
-export function getGroundingRPDLimit(tier: AITier): number {
-  return tier === "PAID"
-    ? GROUNDING_LIMITS.paid.rpd
-    : GROUNDING_LIMITS.free.rpd;
-}
-
 /** Lookup a model config by ID. Returns undefined if not registered. */
 export function getModelConfig(modelId: string): ModelConfig | undefined {
   return getActiveGeminiRegistry().find((m) => m.id === modelId);
 }
 
 /**
- * Get models available for routing on a given tier.
- * - FREE: only models with hasFreeTier === true
- * - PAID: all models (paid-only models become available)
+ * The order the router tries models in for a class: the preferred class
+ * first, then the newest generation, stable before preview, cheapest last.
+ * One comparator, so the settings screen and the router cannot disagree.
  */
-export function getAvailableModels(tier: AITier): ModelConfig[] {
-  const registry = getActiveGeminiRegistry();
-  if (tier === "PAID") return registry;
-  return registry.filter((m) => m.hasFreeTier);
+export function compareForClass(
+  prefer: ModelClass | undefined,
+): (a: ModelConfig, b: ModelConfig) => number {
+  return (a, b) => {
+    if (prefer) {
+      const aPref = a.modelClass === prefer ? 0 : 1;
+      const bPref = b.modelClass === prefer ? 0 : 1;
+      if (aPref !== bPref) return aPref - bPref;
+    }
+    if (a.generation !== b.generation) return b.generation - a.generation;
+    if (a.stability !== b.stability) return a.stability === "stable" ? -1 : 1;
+    return a.costPerM - b.costPerM;
+  };
 }
 
 /**
- * Which model the SmartRouter would pick for a class if nothing were rate
- * limited or circuit-broken — the answer to "what does Auto actually run?".
- *
- * This mirrors SmartRouter's Pass-1 filters and candidate sort deliberately:
- * the router's real choice additionally depends on live quota state, which no
- * settings screen can meaningfully predict, so this reports the steady-state
- * pick and the router remains free to fall back under load. Keep the sort here
- * in step with `SmartRouter.getNextAvailableRoute`.
+ * Which model the router would pick for a class with nothing paused — the
+ * answer to "what does Auto actually run?".
  *
  * @returns the model id, or undefined if nothing in the registry qualifies
  */
 export function previewModelForClass(
   prefer: ModelClass,
-  tier: AITier,
   requiresGrounding = false,
 ): string | undefined {
-  // Preview models are opt-in in the router only when a class preference is
-  // set — which is exactly the case here, so they are in scope.
-  const candidates = getAvailableModels(tier).filter((m) => {
-    if (tier === "FREE" && !m.hasFreeTier) return false;
-    if (requiresGrounding && !m.supportsGrounding) return false;
-    return true;
-  });
-
-  candidates.sort((a, b) => {
-    const aPref = a.modelClass === prefer ? 0 : 1;
-    const bPref = b.modelClass === prefer ? 0 : 1;
-    if (aPref !== bPref) return aPref - bPref;
-    if (a.generation !== b.generation) return b.generation - a.generation;
-    return a.costPerM - b.costPerM;
-  });
-
-  return candidates[0]?.id;
+  return getActiveGeminiRegistry()
+    .filter((m) => !requiresGrounding || m.supportsGrounding)
+    .sort(compareForClass(prefer))[0]?.id;
 }

@@ -57,7 +57,7 @@ describe("EnrichmentPage", () => {
       setPreference: mockSetPreference,
     } as unknown as ReturnType<typeof prefContext.usePreferences>);
     vi.mocked(enrichmentApi.useGroundingCapacity).mockReturnValue({
-      data: { hasCapacity: true, remaining: 88, limit: 100 },
+      data: { hasCapacity: true, provider: "gemini", researchRuns24h: 12 },
     } as unknown as ReturnType<typeof enrichmentApi.useGroundingCapacity>);
   });
 
@@ -108,15 +108,15 @@ describe("EnrichmentPage", () => {
     expect(screen.getByText("Selected: c1,c2")).toBeTruthy();
   });
 
-  it("renders autoEnrich switch and admin grounding meter", () => {
+  it("renders autoEnrich switch and the admin's research count", () => {
     vi.mocked(api.useContacts).mockReturnValue({
       data: [],
     } as unknown as ReturnType<typeof api.useContacts>);
 
     renderComponent();
     expect(screen.getByText("Enrich new contacts automatically")).toBeTruthy();
-    expect(screen.getByText("Web searches today")).toBeTruthy();
-    expect(screen.getByText("12 of 100")).toBeTruthy();
+    expect(screen.getByText("Research runs, last 24 hours")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
 
     const autoEnrichSwitch = screen.getByRole("switch", {
       name: "Enrich new contacts automatically",
@@ -125,7 +125,7 @@ describe("EnrichmentPage", () => {
     expect(mockSetPreference).toHaveBeenCalledWith("autoEnrich", true);
   });
 
-  it("hides grounding meter for non-admin members", () => {
+  it("hides the research count from members", () => {
     vi.mocked(authGate.useAuth).mockReturnValue({
       isAdmin: false,
       authRequired: true,
@@ -135,6 +135,6 @@ describe("EnrichmentPage", () => {
     } as unknown as ReturnType<typeof api.useContacts>);
 
     renderComponent();
-    expect(screen.queryByText(/Web searches today/i)).toBeNull();
+    expect(screen.queryByText(/Research runs/i)).toBeNull();
   });
 });

@@ -94,6 +94,9 @@ export default defineConfig({
           environment: "node",
           globals: true,
           include: ["tests/contract/**/*.contract.test.ts"],
+          // A temp DATA_DIR, so the adapters' model cache never opens the
+          // developer's curator.db.
+          setupFiles: ["./tests/contract/setup.ts"],
           testTimeout: 90_000,
           // Third-party rate limits punish parallelism.
           fileParallelism: false,

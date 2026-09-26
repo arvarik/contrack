@@ -12,6 +12,7 @@ import { aiCache } from "../utils/aiCache.ts";
 import { getSetting, setSetting, SETTING_KEYS } from "./settingsService.ts";
 import {
   getProvider,
+  getProviderConfig,
   getProviderConfigs,
   getCachedModels,
   invalidateProviderCache,
@@ -20,6 +21,7 @@ import {
 } from "../ai/providerRegistry.ts";
 import { resolveEmbeddings } from "../ai/embeddings.ts";
 import {
+  classForCapability,
   getCapabilityAssignments,
   type AICapability,
   type CapabilityAssignment,
@@ -166,6 +168,50 @@ export function setCapabilityAssignment(
   aiCache.invalidateAll();
 }
 
+/**
+ * Send a pinned model one tiny request, the way its capability will call it,
+ * before the pin is saved.
+ *
+ * The catalog shows what a provider lists, and a provider lists models that
+ * cannot answer: on 2026-09-26 OpenAI listed nine deprecated models that
+ * answer 404 and seven that Chat Completions refuses. The catalog now leaves
+ * those out, and this catches the next one. A research pin is sent with the
+ * web-search tool on, because a model can chat and still refuse the tool
+ * (Haiku 4.5 refuses the newer search tool). The prompt needs no search, so
+ * no search is billed.
+ *
+ * Only the three built-in providers are tested. A custom endpoint is the
+ * operator's own server, which may be down for a reason, and a provider with
+ * no key yet has nothing to test.
+ */
+export async function probeGeneration(
+  capability: Exclude<AICapability, "embeddings">,
+  providerId: string,
+  model?: string,
+): Promise<void> {
+  const config = getProviderConfig(providerId);
+  if (!config || config.kind === "openai-compatible") return;
+  const provider = getProvider(providerId);
+  if (!provider) return;
+  try {
+    await provider.generate({
+      prompt: "Reply with the single word OK.",
+      responseFormat: "text",
+      model,
+      maxOutputTokens: 16,
+      timeoutMs: capability === "research" ? 45_000 : 20_000,
+      enableSearchGrounding: capability === "research",
+      routing: { prefer: classForCapability(capability) },
+    });
+  } catch (err) {
+    throw new AppError(
+      `${model ?? config.label} did not answer a test request, so the choice was not saved: ${getErrorMessage(err).slice(0, 200)}`,
+      502,
+      { code: "MODEL_PROBE_FAILED" },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Model discovery + cache
 // ---------------------------------------------------------------------------
@@ -271,6 +317,12 @@ export interface AISettingsView {
     modelsError?: string;
     supportsDiscovery: boolean;
     supportsGrounding: boolean;
+    /**
+     * Google answered this Gemini key with a free-tier quota error. Google
+     * uses free-tier prompts and responses to improve its products, and
+     * every Contrack prompt carries a contact's details.
+     */
+    freeTier?: boolean;
   }[];
   /** Built-in providers with no credentials yet — shown as "Add key". */
   availableProviders: { id: string; label: string }[];
@@ -360,7 +412,11 @@ function resolveForView(
         // own router, so ask the adapter what it would pick. Adapters that
         // cannot answer (custom endpoints) leave this undefined and the UI
         // falls back to naming the provider alone.
-        model: r.model ?? r.provider.defaultModelFor?.(r.modelClass),
+        model:
+          r.model ??
+          r.provider.defaultModelFor?.(r.modelClass, {
+            grounding: capability === "research",
+          }),
       },
     };
   }
@@ -432,6 +488,7 @@ export function getSettingsView(): AISettingsView {
       modelsError: entry?.error,
       supportsDiscovery: !!provider?.listModels,
       supportsGrounding: provider?.supportsSearchGrounding !== false,
+      freeTier: provider?.getQuotaSnapshot?.().freeTier || undefined,
     };
   });
 

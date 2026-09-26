@@ -91,23 +91,24 @@ All AI operations route through a layered architecture in `server/ai/`:
 - **`singleton.ts`**: Back-compat surface. `sharedProvider` is a Proxy that delegates to the registry's default provider, so per-provider state (Gemini's SmartRouter, QuotaTracker) stays singleton while the underlying provider can change at runtime. New code should call `generateFor()` from `gateway.ts` instead.
 - **`types.ts`**: Provider-agnostic type definitions including `AIProviderName = "gemini" | "openai" | "anthropic"`, `AIGenerateOptions`, `AIGenerateResult`, `JsonSchemaNode`, `RoutingPolicy`.
 - **Adapters** (`server/ai/adapters/`):
-  - `gemini.ts` — Google Gemini via `@google/genai`. Includes SmartRouter integration, QuotaTracker, circuit breakers. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums.
-  - `openai.ts` — OpenAI via `openai` npm package. Schema translation: `JsonSchemaNode` → `response_format: { type: "json_schema", json_schema: { strict: true, ... } }`. Web search via Responses API `web_search` tool. System prompt via `system` role message.
-  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`. Web search via native `web_search` tool. System prompt via `system` parameter. Requires explicit `max_tokens` on every request.
+  - `gemini.ts` — Google Gemini via `@google/genai`. SmartRouter picks the model; a 429, 5xx or timeout pauses it for Google's `retryDelay` (circuit breaker); QuotaTracker only counts usage. Sets `thinkingLevel: "low"` on 3.x models for deep and grounded work, because thinking tokens count against `maxOutputTokens`. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums.
+  - `openai.ts` — OpenAI via `openai` npm package. Chat Completions with non-strict `response_format: { type: "json_schema", json_schema: { name, schema } }`, an array root wrapped in an object (OpenAI refuses array roots). Research via the Responses API: flat non-strict `text.format`, the `web_search` tool, and `include: ["web_search_call.action.sources"]` for the sources. `reasoning_effort` per class (`none` quick, `low` deep and research), stepping to the nearest supported value when a model refuses one and remembering it.
+  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`, or prompt-guided JSON when the schema passes Claude's limits (24 optional, 16 union-typed parameters). `output_config.effort: "low"` for models that declare effort. Research uses the basic `web_search_20250305` tool with `max_uses: 5` (the dynamic-filtering variant was five times slower), resumes `pause_turn`, and returns the search results as sources. Requires explicit `max_tokens` on every request.
+  - Every adapter returns JSON text re-serialised from the parsed value, so a fence or a sentence of prose around the JSON never reaches a caller's `JSON.parse`.
 - **Routing** (Gemini-only, `server/ai/routing/`):
-  - `SmartRouter.ts` — 3-pass model selection (Filter → Capacity → Overflow). **Only used by GeminiAdapter.**
-  - `QuotaTracker.ts` — Optimistic in-memory sliding-window quota tracker. **Only used by GeminiAdapter.**
-  - `registry.ts` — Gemini model configs with per-tier rate limits. Model classes: `lite`, `flash`, `pro`.
-  - `ParallelQueue.ts` — Tier-aware concurrency limiter (PAID=10, FREE=2 workers). Provider-agnostic.
-- **Model class mapping** (`routing.prefer`):
+  - `SmartRouter.ts` — filter (paused, policy, grounding) then sort (preferred class, newest generation, stable before preview, cheapest). **Only used by GeminiAdapter.** No capacity check: there is no free or paid tier, and a real limit shows up as a 429.
+  - `QuotaTracker.ts` — In-memory usage meter (requests and tokens per minute, requests today, grounded requests today) for the Health page. Blocks nothing.
+  - `registry.ts` — Gemini models with class, generation, stability, price and grounding. Discovery adds models the list lacks. Model classes: `lite`, `flash`, `pro`.
+  - `ParallelQueue.ts` — Concurrency limiter for batch work (bulk parsing runs two workers). Provider-agnostic.
+- **Model class mapping** (`routing.prefer`). Capabilities: quick → `lite`, deep → `flash`, research → `flash`. With models discovered, each adapter takes the newest model of the family; the fallbacks when discovery has not run:
 
-  | `prefer`  | Gemini (PAID, AI_TIER)                  | Gemini (FREE)           | OpenAI                      | Anthropic           |
-  | --------- | --------------------------------------- | ----------------------- | --------------------------- | ------------------- |
-  | `"lite"`  | `gemini-3.1-flash-lite` (GA 2026-05-07) | `gemini-2.5-flash-lite` | `gpt-5.4-nano` (2026-03-17) | `claude-haiku-4-5`  |
-  | `"flash"` | `gemini-2.5-flash`                      | `gemini-2.5-flash`      | `gpt-5.4-mini`              | `claude-sonnet-4-6` |
-  | `"pro"`   | `gemini-2.5-pro`                        | `gemini-2.5-pro`        | `gpt-5.4`                   | `claude-opus-4-6`   |
+  | `prefer`  | Gemini                   | OpenAI        | Anthropic          |
+  | --------- | ------------------------ | ------------- | ------------------ |
+  | `"lite"`  | `gemini-3.5-flash-lite`  | `gpt-6-luna`  | `claude-haiku-4-5` |
+  | `"flash"` | `gemini-3.8-flash`       | `gpt-6-sol`   | `claude-sonnet-5`  |
+  | `"pro"`   | `gemini-3.1-pro-preview` | `gpt-6-astra` | `claude-opus-5`    |
 
-  SmartRouter prefers higher-generation models within a class, so on `AI_TIER=PAID` `prefer: "lite"` picks the newer paid-only `gemini-3.1-flash-lite`; on `AI_TIER=FREE` the same call resolves to `gemini-2.5-flash-lite` because Gemini 3 has no free tier.
+  OpenAI renamed its tiers between generations: in GPT-5.6, Sol is the flagship and Terra the middle; in GPT-6, Astra is the flagship and Sol the middle. `inferModelFamily` reads the generation to tell them apart.
 
 ### AI Search Enrichment Pipeline (`server/services/aiSearch/`)
 
@@ -326,9 +327,9 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 ## 5. External Integrations
 
 - **LLM Providers** (resolved per capability; `AI_PROVIDER` sets the Auto preference):
-  - **Gemini** (default): 6 registered models via `@google/genai`. Full SmartRouter + QuotaTracker + circuit breakers. Includes Google Search grounding and embedding models.
-  - **OpenAI**: `gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4` via `openai` npm package. Web search via Responses API. Structured output via `response_format: json_schema`.
-  - **Anthropic**: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
+  - **Gemini** (default): 7 registered models via `@google/genai` (3.5 to 3.8 Flash, 3.5 and 3.1 Flash-Lite, 3.1 Pro preview), plus newer models that discovery finds. SmartRouter orders them per class, and a 429 pauses a model for Google's `retryDelay`. Includes Google Search grounding and embedding models.
+  - **OpenAI**: `gpt-6-luna` (quick), `gpt-6-sol` (deep and research) and `gpt-6-astra` (pro) via the `openai` package, unless discovery finds a newer model of the class. Web search via the Responses API, which returns the pages it read (`web_search_call.action.sources`). Structured output via a non-strict `json_schema`, with an array root wrapped in an object.
+  - **Anthropic**: `claude-haiku-4-5` (quick), `claude-sonnet-5` (deep and research) and `claude-opus-5` (pro) via `@anthropic-ai/sdk`, unless discovery finds a newer model of the class. Web search via the basic `web_search_20250305` tool, at most 5 searches, with a `pause_turn` resumed up to 3 times. Structured output via `output_config.format: json_schema`, and prompt-guided JSON when a schema passes Claude's limits (24 optional fields, 16 unions).
 - **Dedupe Embeddings**: resolved from the embeddings capability — the same model that backs semantic search. Defaults to the built-in local model. Degrades to deterministic-only matching when unavailable.
 - **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
 - **Geocoding**: Nominatim (OpenStreetMap), the one geocoder. No key needed. The background queue spaces requests 1.1 s apart, and `geocode_cache` keeps every answer, a failure for seven days.
@@ -347,36 +348,42 @@ _Documents every LLM/ML model in use. Required by the ml-ai topology profile for
 
 #### Gemini Models
 
-| Model                    | Role                                                                  | Cost (1M in / 1M out) | Context Window | Structured Output | Rate Limit (FREE)           | Rate Limit (PAID)            | Circuit Breaker Cost Cap |
-| ------------------------ | --------------------------------------------------------------------- | --------------------- | -------------- | ----------------- | --------------------------- | ---------------------------- | ------------------------ |
-| `gemini-2.5-flash-lite`  | Lite extraction, mentions, reranking, search expansion, daily insight | $0.075 / $0.40        | 1M tokens      | Yes (JSON schema) | 10 RPM / 250K TPM / 500 RPD | 10K RPM / 10M TPM / ∞ RPD    | $0.50/day                |
-| `gemini-2.5-flash`       | Flash reasoning, EML summaries, general structured tasks              | $0.15 / $2.50         | 1M tokens      | Yes (JSON schema) | 2 RPM / 250K TPM / 20 RPD   | 2K RPM / 3M TPM / 100K RPD   | $2.00/day                |
-| `gemini-2.5-pro`         | Pro — complex reasoning, AI search grounding (Pass 1)                 | $1.25 / $10.00        | 1M tokens      | Yes (JSON schema) | 2 RPM / 4K TPM / 2 RPD      | 1K RPM / 5M TPM / 50K RPD    | $5.00/day                |
-| `gemini-3.1-flash-lite`  | Lite (GA 2026-05-07) — default lite class on PAID tier                | $0.25 / $1.50         | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 10K RPM / 10M TPM / 350K RPD | $1.50/day                |
-| `gemini-3-flash-preview` | Preview flash — overflow capacity (PAID only)                         | $0.15 / $3.00         | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 2K RPM / 3M TPM / 100K RPD   | $3.00/day                |
-| `gemini-3.1-pro-preview` | Preview pro — overflow capacity (PAID only)                           | $1.25 / $12.00        | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 1K RPM / 5M TPM / 50K RPD    | $6.00/day                |
+Prices are the paid Standard tier, per 1M tokens, from https://ai.google.dev/gemini-api/docs/pricing (September 2026). Google no longer publishes free-tier limits, and Contrack holds none: a 429 pauses the model for Google's `retryDelay`.
 
-_Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all Gemini models._
+| Model                        | Role                                                                            | Cost (1M in / 1M out)           | Context Window | Structured Output |
+| ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------- | -------------- | ----------------- |
+| `gemini-3.5-flash-lite`      | Lite: extraction, mentions, planning, insights                                  | $0.30 / $2.50                   | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.8-flash`           | Flash: summaries, duplicate checks, grounded research                           | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.7-flash`           | Flash fallback                                                                  | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.6-flash`           | Flash fallback                                                                  | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.5-flash`           | Flash fallback                                                                  | $1.50 / $9.00                   | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.1-flash-lite`      | Lite fallback                                                                   | $0.25 / $1.50                   | 1M tokens      | Yes (JSON schema) |
+| `gemini-3.1-pro-preview`     | Pro, pinned only. No free tier; thinking cannot be turned off                   | $2 / $12                        | 1M tokens      | Yes (JSON schema) |
+| `gemini-2.5-*` (not offered) | Listed by Google, but a new project gets 404 "no longer available to new users" | $0.10–$1.25 / $0.40–$10         | 1M tokens      | Yes (JSON schema) |
+
+_Grounding on Gemini 3.x is paid only: 5,000 searches a month free, then $14 per 1,000 search queries. Google bills each query the model runs._
 
 #### OpenAI Models
 
-| Model          | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search          | Notes                                            |
-| -------------- | ----- | --------------------- | -------------- | ------------------- | ------------------- | ------------------------------------------------ |
-| `gpt-5.4-nano` | lite  | $0.20 / ~$0.80        | 128K tokens    | Yes (`json_schema`) | Yes (Responses API) | Cheapest, default for lite tasks (GA 2026-03-17) |
-| `gpt-5.4-mini` | flash | $0.75 / $4.50         | 400K tokens    | Yes (`json_schema`) | Yes (Responses API) | Balanced price/quality                           |
-| `gpt-5.4`      | pro   | $2.50 / $15.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Flagship reasoning                               |
+| Model           | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search          | Notes                                  |
+| --------------- | ----- | --------------------- | -------------- | ------------------- | ------------------- | -------------------------------------- |
+| `gpt-6-luna`    | lite  | $0.10 / $0.50         | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Default for quick tasks, effort `none` |
+| `gpt-6-sol`     | flash | $2.00 / $10.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Default for deep tasks and research    |
+| `gpt-6-astra`   | pro   | $10.00 / $50.00       | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Flagship. Refuses effort `none`        |
+| `gpt-5.6-terra` | flash | $2.00 / $12.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Previous middle tier                   |
 
-_No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits are dynamic based on account spend tier._
+_The catalog leaves out the codex, `*-chat-latest`, `-pro`, live, search, realtime, audio and image models, which answer 404 or "not a chat model" on Chat Completions, and chat models more than a year old. Web search costs $10 per 1,000 calls plus the search content at model rates._
 
 #### Anthropic Models
 
-| Model               | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search        | Notes                            |
-| ------------------- | ----- | --------------------- | -------------- | ------------------- | ----------------- | -------------------------------- |
-| `claude-haiku-4-5`  | lite  | $1.00 / $5.00         | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Cheapest, default for lite tasks |
-| `claude-sonnet-4-6` | flash | $3.00 / $15.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Balanced coding/agents           |
-| `claude-opus-4-6`   | pro   | $5.00 / $25.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Flagship reasoning               |
+| Model              | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search        | Notes                                      |
+| ------------------ | ----- | --------------------- | -------------- | ------------------- | ----------------- | ------------------------------------------ |
+| `claude-haiku-4-5` | lite  | $1.00 / $5.00         | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Default for quick tasks. Takes no effort   |
+| `claude-sonnet-5`  | flash | $2.00 / $10.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Default for deep tasks and research        |
+| `claude-opus-5-5`  | pro   | $4.00 / $20.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Newest Opus. Thinking cannot be turned off |
+| `claude-opus-5`    | pro   | $5.00 / $25.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Fallback when discovery has not run        |
 
-_No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits based on 4-tier spend system. No first-party embedding models._
+_Web search costs $10 per 1,000 searches plus tokens. No first-party embedding models._
 
 #### Local Models (Provider-Agnostic)
 
@@ -386,24 +393,23 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 
 ## 6. Environment Variables
 
-| Variable              | Required                | Default      | Purpose                                                                                                                                              |
-| --------------------- | ----------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.                                                   |
-| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                                                                |
-| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                                                                            |
-| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                                                                  |
-| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                                                                   |
-| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Enables Gemini for any capability set to Auto.                                                                                |
-| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                                                            |
-| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
-| `AI_TIER`             | No                      | `FREE`       | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
-| `PORT`                | No                      | `3210`       | Server port.                                                                                                                                         |
-| `HOST`                | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                                                                      |
-| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                                                               |
-| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.                                                 |
-| `APP_URL`             | No                      | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                                                                        |
-| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                                                             |
-| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                                                                         |
+| Variable              | Required                | Default      | Purpose                                                                                              |
+| --------------------- | ----------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.   |
+| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                |
+| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                            |
+| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                  |
+| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                   |
+| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Enables Gemini for any capability set to Auto.                                |
+| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                            |
+| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                  |
+| `PORT`                | No                      | `3210`       | Server port.                                                                                         |
+| `HOST`                | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                      |
+| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                               |
+| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker. |
+| `APP_URL`             | No                      | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                        |
+| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                             |
+| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                         |
 
 ## 7. Invariants & Safety Rules
 
@@ -598,8 +604,9 @@ Returns aggregate session KPIs, quota state, and cache tier statistics.
 ```
 {
   session: { totalInvocations, freshCalls, cachedCalls, totalTokens, estimatedCostUsd, cacheHitRate },
-  tier: "FREE" | "PAID" | "MOCK",
-  quota: { models: Record<modelId, { rpm, tpm, rpd }>, grounding: { rpd, limit, remaining } },
+  tier: "LIVE" | "MOCK",
+  freeTier: boolean,  // Google answered the Gemini key with a free-tier quota error
+  quota: { models: Record<modelId, { rpm, tpm, rpd }>, grounding: { rpd } },
   cacheTiers: Record<tierName, { entries, hits, misses, evictions, hitRate, ttlMs, maxEntries }>,
   timestamp: string  // ISO 8601
 }

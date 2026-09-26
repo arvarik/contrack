@@ -23,11 +23,13 @@ for a request that the provider already accepted.
 The OpenAI-compatible adapter can negotiate an unsupported JSON format after
 an explicit provider rejection. It uses the same total deadline.
 
-Gemini quota reservations use unique IDs. Out-of-order responses update their
-own reservation. Explicit model pins consume both model and grounding quotas.
-Unknown failures retain the estimated usage because the provider can still
-charge for them. Daily quotas reset at midnight Pacific, including daylight
-saving time. A late rejection cannot reduce the next day's grounding usage.
+Gemini usage entries use unique IDs. Out-of-order responses update their own
+entry. Explicit model pins are counted like routed calls. Unknown failures keep
+the estimated usage because the provider can still charge for them. Daily
+counts reset at midnight Pacific, including daylight saving time. A late
+rejection cannot reduce the next day's grounding count. The counts are for the
+Health page: nothing is refused because of them. A 429 pauses the model for
+the delay Google names, and the retry goes to the next model.
 
 ## Contact data and caches
 

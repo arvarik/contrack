@@ -146,16 +146,13 @@ export const AIStatsView = () => {
       ? `${session!.freshCalls} fresh · ${session!.cachedCalls} cached`
       : undefined;
 
-  // Sub-value for the tokens card
-  // Cost displays for any paid provider (PAID, OPENAI, ANTHROPIC — anything not FREE/MOCK)
-  const isPaidProvider =
-    tier !== undefined && tier !== "FREE" && tier !== "MOCK";
+  // Sub-value for the tokens card. The cost is an estimate at list prices,
+  // so it says nothing on a Gemini free-tier key, which Google does not bill.
+  const showCost = tier === "LIVE" && !summary?.freeTier;
   const tokenSub =
-    isPaidProvider && session && session.estimatedCostUsd > 0
+    showCost && session && session.estimatedCostUsd > 0
       ? `~$${session.estimatedCostUsd.toFixed(4)}`
-      : tier === "FREE" && summary?.quota?.grounding
-        ? `${summary.quota.grounding.remaining} grounding RPD left`
-        : undefined;
+      : undefined;
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-4")}>
@@ -199,10 +196,7 @@ export const AIStatsView = () => {
           className={cn(CARD, "tile-enter space-y-3")}
         >
           <span className={cn(SECTION_HEADING, "mb-0")}>By account</span>
-          <InstanceUsageTable
-            byUser={summary.byUser}
-            showCost={isPaidProvider}
-          />
+          <InstanceUsageTable byUser={summary.byUser} showCost={showCost} />
         </div>
       )}
 

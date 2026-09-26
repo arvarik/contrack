@@ -8,7 +8,10 @@
 // Heuristics:
 //   1. Modality filter  — drop embeddings, audio/tts, image/video generation,
 //                         moderation, and specialized robotics/research agents.
-//   2. Recency filter   — drop models released over 1 year ago (when dated).
+//   2. Recency filter   — drop chat models released over 1 year ago (when the
+//                         provider dates them: OpenAI and Anthropic do).
+//                         Embedding models are exempt: OpenAI's newest are
+//                         from January 2024.
 //   3. Alias dedupe     — collapse pinned snapshots (gpt-4o-2024-08-06) into
 //                         their floating alias (gpt-4o).
 //   4. Generation       — extract generation numbers (gemini-3.8-flash → 3.8)
@@ -61,6 +64,9 @@ const NON_CHAT_PATTERNS = [
   /search-preview/i,
   // Gemini attributed question answering (not a chat model)
   /\baqa\b/i,
+  // Gemini Omni answers generateContent with 400 "This model only supports
+  // Interactions API" (and OpenAI's omni-moderation is a classifier)
+  /omni/i,
 ];
 
 /**
@@ -113,15 +119,14 @@ export function dedupeAliases<T extends { id: string }>(models: T[]): T[] {
 /**
  * Run catalog guardrails over a raw model list.
  * Preserves models that declare "embeddings" capability if present on the object,
- * otherwise requires isChatModel.
+ * otherwise requires isChatModel and a release inside the recency window.
  */
 export function applyCatalogGuardrails<
   T extends { id: string; capabilities?: string[]; releasedAt?: number | null },
 >(models: T[], nowMs: number = Date.now()): T[] {
   const filtered = models.filter((m) => {
-    const isEmbedding = m.capabilities?.includes("embeddings");
-    const isChat = isChatModel(m.id);
-    if (!isEmbedding && !isChat) return false;
+    if (m.capabilities?.includes("embeddings")) return true;
+    if (!isChatModel(m.id)) return false;
     return isWithinRecencyWindow(m.releasedAt, nowMs);
   });
   return dedupeAliases(filtered);
@@ -152,7 +157,14 @@ export function inferModelFamily(
     return null;
   }
   if (provider === "openai") {
-    if (id.includes("-sol")) return "Flagship";
+    // OpenAI renamed its tiers between generations. In GPT-5.6, Sol is the
+    // flagship, Terra the old "mini" and Luna the old "nano". In GPT-6,
+    // Astra is the flagship ($10/$50 per 1M tokens), Sol the middle ($2/$10)
+    // and Luna the cheap tier ($0.10/$0.50). Read as one rule, Sol would be
+    // the flagship twice and GPT-6's middle tier would never be picked.
+    const generation = extractGeneration(id) ?? 0;
+    if (id.includes("-astra")) return "Flagship";
+    if (id.includes("-sol")) return generation >= 6 ? "Balanced" : "Flagship";
     if (id.includes("-terra")) return "Balanced";
     if (id.includes("-luna")) return "Fast";
     if (id.includes("nano")) return "Nano";

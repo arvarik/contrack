@@ -1,15 +1,20 @@
 // =============================================================================
 // Provider contract tests
 // =============================================================================
-// One block per provider, each asserting the three things a mocked test cannot:
+// One block per provider, each asserting the things a mocked test cannot:
 //
 //   1. listModels() speaks the shape we parse
 //   2. structured output actually returns parseable JSON matching the schema
 //   3. embed() returns one vector per input, at a stable dimension
+//   4. an array schema, a small budget and a grounded call each work
+//   5. every chat model the catalog offers answers a request
 //
 // (2) is the important one. Both real provider bugs found in v1.4.0 were wire
 // format mismatches — Anthropic's schema wrapper and Gemini's batch embedding
-// shape — and both were invisible to mocked tests.
+// shape — and both were invisible to mocked tests. (4) and (5) are the bugs
+// found on 2026-09-26: OpenAI refused an array at the schema root, reasoning
+// ate a small budget, research sent the wrong format to the Responses API,
+// and the OpenAI catalog offered sixteen models that could not answer.
 //
 // Run with: npm run test:contract
 // Providers without credentials skip themselves.
@@ -31,6 +36,7 @@ import {
   EXTRACTION_PROMPT,
 } from "./helpers.ts";
 import { parseAIJson } from "../../server/ai/resilience.ts";
+import { applyCatalogGuardrails } from "../../server/ai/modelFilter.ts";
 
 // Probed once at load: a credential the provider rejects skips its block with
 // an explanation, so a stale key in someone's shell cannot turn this red.
@@ -50,6 +56,28 @@ const openai = await probeCredential("openai", openaiKey(), () =>
 const anthropic = await probeCredential("anthropic", anthropicKey(), () =>
   new AnthropicAdapter(anthropicKey()!).listModels(),
 );
+
+/** A root the OpenAI wire format refuses unless it is wrapped. */
+const LIST_SCHEMA = {
+  type: "array" as const,
+  items: { type: "string" as const },
+};
+const LIST_PROMPT =
+  "Name three primary colours. Return a JSON array of strings.";
+
+/** A grounded question no model can answer from memory. */
+const SEARCH_PROMPT = `Search the web and name one headline published on ${new Date()
+  .toISOString()
+  .slice(0, 10)}, with its source. One sentence.`;
+
+/** The chat models a provider's catalog would offer, after the guardrails. */
+async function offered(
+  list: () => Promise<import("../../server/ai/provider.ts").ModelInfo[]>,
+) {
+  return applyCatalogGuardrails(await list()).filter((m) =>
+    m.capabilities.includes("chat"),
+  );
+}
 
 /** Assert a generate() result is JSON we can actually use. */
 function expectUsableExtraction(text: string) {
@@ -97,6 +125,47 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
     },
     CONTRACT_TIMEOUT_MS,
   );
+
+  it(
+    "grounds an answer with sources",
+    async () => {
+      const result = await new GeminiAdapter(geminiKey()!).generate({
+        prompt: SEARCH_PROMPT,
+        responseFormat: "text",
+        enableSearchGrounding: true,
+        routing: { prefer: "flash" },
+        maxOutputTokens: 8_192,
+        timeoutMs: 60_000,
+      });
+      expect(result.text.trim().length).toBeGreaterThan(0);
+      expect(result.citations?.length).toBeGreaterThan(0);
+    },
+    CONTRACT_TIMEOUT_MS,
+  );
+
+  it("offers only chat models that answer", async () => {
+    const adapter = new GeminiAdapter(geminiKey()!);
+    const models = await offered(() => adapter.listModels());
+    const failures = (
+      await Promise.all(
+        models.map(async (m) => {
+          try {
+            await adapter.generate({
+              prompt: "Reply with the single word OK.",
+              responseFormat: "text",
+              model: m.id,
+              maxOutputTokens: 256,
+              timeoutMs: 60_000,
+            });
+            return null;
+          } catch (err) {
+            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
+          }
+        }),
+      )
+    ).filter(Boolean);
+    expect(failures).toEqual([]);
+  }, 180_000);
 
   it(
     "embeds one vector per input, not one per batch",
@@ -148,12 +217,87 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
         jsonSchema: CONTACT_SCHEMA,
-        model: modelFor("openai", "gpt-4o-mini"),
+        model: modelFor("openai", "gpt-6-luna"),
       });
       expectUsableExtraction(result.text);
     },
     CONTRACT_TIMEOUT_MS,
   );
+
+  it(
+    "returns an array for an array schema",
+    async () => {
+      const result = await new OpenAIAdapter(openaiKey()!).generate({
+        prompt: LIST_PROMPT,
+        responseFormat: "json",
+        jsonSchema: LIST_SCHEMA,
+        model: modelFor("openai", "gpt-6-luna"),
+      });
+      expect(Array.isArray(JSON.parse(result.text))).toBe(true);
+    },
+    CONTRACT_TIMEOUT_MS,
+  );
+
+  it(
+    "answers inside a small budget",
+    async () => {
+      const result = await new OpenAIAdapter(openaiKey()!).generate({
+        prompt: "Summarize in one sentence: the pilot starts in October.",
+        responseFormat: "text",
+        routing: { prefer: "lite" },
+        maxOutputTokens: 200,
+      });
+      expect(result.text.trim().length).toBeGreaterThan(0);
+    },
+    CONTRACT_TIMEOUT_MS,
+  );
+
+  it(
+    "grounds JSON through the Responses API, with sources",
+    async () => {
+      const result = await new OpenAIAdapter(openaiKey()!).generate({
+        prompt: `${SEARCH_PROMPT} Return JSON with "headline" and "source".`,
+        responseFormat: "json",
+        jsonSchema: {
+          type: "object",
+          properties: {
+            headline: { type: "string" },
+            source: { type: "string" },
+          },
+        },
+        enableSearchGrounding: true,
+        routing: { prefer: "flash" },
+        timeoutMs: 90_000,
+      });
+      expect(() => parseAIJson(result.text, "contract")).not.toThrow();
+      expect(result.citations?.length).toBeGreaterThan(0);
+    },
+    CONTRACT_TIMEOUT_MS,
+  );
+
+  it("offers only chat models that answer", async () => {
+    const adapter = new OpenAIAdapter(openaiKey()!);
+    const models = await offered(() => adapter.listModels());
+    const failures = (
+      await Promise.all(
+        models.map(async (m) => {
+          try {
+            await adapter.generate({
+              prompt: "Reply with the single word OK.",
+              responseFormat: "text",
+              model: m.id,
+              maxOutputTokens: 16,
+              timeoutMs: 60_000,
+            });
+            return null;
+          } catch (err) {
+            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
+          }
+        }),
+      )
+    ).filter(Boolean);
+    expect(failures).toEqual([]);
+  }, 180_000);
 
   it(
     "embeds one vector per input",
@@ -234,6 +378,47 @@ describe.skipIf(!anthropic.usable)("Anthropic", () => {
     },
     CONTRACT_TIMEOUT_MS,
   );
+
+  it(
+    "grounds an answer with sources",
+    async () => {
+      const result = await new AnthropicAdapter(anthropicKey()!).generate({
+        prompt: SEARCH_PROMPT,
+        responseFormat: "text",
+        enableSearchGrounding: true,
+        model: modelFor("anthropic", "claude-sonnet-5"),
+        routing: { prefer: "flash" },
+        timeoutMs: 90_000,
+      });
+      expect(result.text.trim().length).toBeGreaterThan(0);
+      expect(result.citations?.length).toBeGreaterThan(0);
+    },
+    CONTRACT_TIMEOUT_MS,
+  );
+
+  it("offers only chat models that answer", async () => {
+    const adapter = new AnthropicAdapter(anthropicKey()!);
+    const models = await offered(() => adapter.listModels());
+    const failures = (
+      await Promise.all(
+        models.map(async (m) => {
+          try {
+            await adapter.generate({
+              prompt: "Reply with the single word OK.",
+              responseFormat: "text",
+              model: m.id,
+              maxOutputTokens: 64,
+              routing: { prefer: "flash" },
+            });
+            return null;
+          } catch (err) {
+            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
+          }
+        }),
+      )
+    ).filter(Boolean);
+    expect(failures).toEqual([]);
+  }, 180_000);
 });
 
 // ─── OpenAI-compatible (Ollama / vLLM / LM Studio / llama.cpp) ────────────────

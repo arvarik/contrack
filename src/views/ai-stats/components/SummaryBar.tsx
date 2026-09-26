@@ -1,6 +1,7 @@
 /**
  * SummaryBar — Tinted hero card for the AI Stats page.
- * Shows the current tier badge, session summary sentence, and a Brain icon watermark.
+ * Shows a badge when calls are simulated or on Gemini's free tier, the
+ * session summary sentence, and a Brain icon watermark.
  */
 import React from "react";
 import { cn } from "../../../lib/utils";
@@ -16,35 +17,27 @@ interface SummaryBarProps {
 }
 
 /**
- * The tier badge. A paid key, Gemini's paid tier or an OpenAI or Anthropic
- * key, is `info`. The free tier is `success` and mock mode is `warning`, so
- * a badge's tone says what the calls cost.
+ * The badge, shown only when it tells a reader something about their calls.
+ * Mock mode means nothing reached a provider. The Gemini free tier means
+ * Google may use the prompts, contacts' details included, to improve its
+ * products, which is the one tier fact worth a warning.
  */
-const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  FREE: {
-    label: "Free tier",
-    color: "bg-success/10 text-success ring-success/20",
-  },
-  PAID: {
-    label: "Paid tier",
-    color: "bg-info/10 text-info ring-info/20",
-  },
-  MOCK: {
-    label: "Mock mode",
-    color: "bg-warning/10 text-warning ring-warning/20",
-  },
-  OPENAI: {
-    label: "OpenAI",
-    color: "bg-info/10 text-info ring-info/20",
-  },
-  ANTHROPIC: {
-    label: "Anthropic",
-    color: "bg-info/10 text-info ring-info/20",
-  },
-};
+function badgeFor(s: AIStatsSummary): { label: string; color: string } | null {
+  if (s.tier === "MOCK")
+    return {
+      label: "Mock mode",
+      color: "bg-warning/10 text-warning ring-warning/20",
+    };
+  if (s.freeTier)
+    return {
+      label: "Gemini free tier",
+      color: "bg-warning/10 text-warning ring-warning/20",
+    };
+  return null;
+}
 
 function buildSummaryText(s: AIStatsSummary): string {
-  const { session, tier } = s;
+  const { session, tier, freeTier } = s;
   if (session.totalInvocations === 0) return "No AI activity recorded yet";
 
   const parts: string[] = [];
@@ -58,9 +51,8 @@ function buildSummaryText(s: AIStatsSummary): string {
     parts.push(`${formatCompact(session.totalTokens)} tokens`);
   }
 
-  // Cost displays for any paid provider (PAID, OPENAI, ANTHROPIC — anything not FREE/MOCK)
-  const isPaidProvider = tier !== "FREE" && tier !== "MOCK";
-  if (isPaidProvider && session.estimatedCostUsd > 0) {
+  // An estimate at list prices, so not on a free-tier key Google does not bill.
+  if (tier === "LIVE" && !freeTier && session.estimatedCostUsd > 0) {
     parts.push(`~$${session.estimatedCostUsd.toFixed(4)} est.`);
   }
 
@@ -74,9 +66,7 @@ function formatCompact(n: number): string {
 }
 
 export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
-  const tierInfo = summary
-    ? (TIER_LABELS[summary.tier] ?? TIER_LABELS.MOCK)
-    : null;
+  const tierInfo = summary ? badgeFor(summary) : null;
 
   return (
     <motion.div

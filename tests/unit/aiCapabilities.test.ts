@@ -139,11 +139,13 @@ describe("provider registry", () => {
 });
 
 describe("capability resolution — backward compatibility", () => {
-  it("maps capabilities to the historical model classes", () => {
+  it("maps capabilities to their model classes", () => {
     process.env.GEMINI_API_KEY = "g-key";
     expect(resolveCapability("quick")?.modelClass).toBe("lite");
     expect(resolveCapability("deep")?.modelClass).toBe("flash");
-    expect(resolveCapability("research")?.modelClass).toBe("pro");
+    // Research runs on the middle class: the flagship cost two to five times
+    // as much for the same profile, and was slower. A pin can still choose it.
+    expect(resolveCapability("research")?.modelClass).toBe("flash");
   });
 
   it("routes everything to the single configured provider", () => {

@@ -106,15 +106,11 @@ export interface RoutingPolicy {
    * Preferred model class for this request.
    *
    * When set, the SmartRouter prioritizes models of this class and prefers
-   * newer generations (Gemini 3.x → 2.x). If the preferred class is
-   * exhausted or circuit-broken, the router gracefully falls back to
-   * other classes — same capacity/quota/retry logic applies.
+   * newer generations (Gemini 3.8 before 3.5 before 2.5). If every model of
+   * the class is paused, the router falls back to the other classes.
    *
-   * Preview models (Gemini 3.x) are automatically allowed when a
-   * preference is set, since they are the primary Gemini 3 offerings.
-   *
-   * Example: `prefer: "lite"` → tries gemini-3.1-flash-lite first,
-   * then gemini-2.5-flash-lite, then any available model.
+   * Example: `prefer: "lite"` → tries gemini-3.5-flash-lite first,
+   * then gemini-3.1-flash-lite, then any available model.
    */
   prefer?: ModelClass;
 
@@ -129,28 +125,6 @@ export interface RoutingPolicy {
    * Useful for background tasks that should avoid expensive models.
    */
   denyModels?: string[];
-
-  /**
-   * Whether to fall through to paid-limit overflow if tier capacity exhausted.
-   *
-   * **Only meaningful on `AI_TIER=FREE`**:
-   * - On FREE: defaults to `false` (avoid surprise charges). When `true`,
-   *   the router will fall through to paid-tier limits if free capacity
-   *   is exhausted.
-   * - On PAID: this field has **no effect** because Pass 2 already uses
-   *   paid limits — there is nothing to "spill over" to.
-   *
-   * Can be explicitly overridden per-request.
-   */
-  allowPaidSpillover?: boolean;
-
-  /**
-   * Whether to include preview-stability models (Gemini 3.x) in routing.
-   * Defaults to false — only stable models are used.
-   * Automatically set to true when `prefer` is specified.
-   * On AI_TIER=FREE, preview models are excluded regardless (they have no free tier).
-   */
-  allowPreview?: boolean;
 }
 
 /**
@@ -198,8 +172,8 @@ export interface JsonSchemaNode {
 // =============================================================================
 // Diagnostics Snapshot
 // =============================================================================
-// Typed return value for GeminiAdapter.getQuotaSnapshot().
-// Used by the /api/ai/diagnostics endpoint.
+// Typed return value for GeminiAdapter.getQuotaSnapshot(). What this process
+// has sent, for the /api/ai/diagnostics endpoint and the admin Health page.
 // =============================================================================
 
 /** Per-model usage counters within the current tracking window. */
@@ -216,12 +190,16 @@ export interface ModelUsageSnapshot {
 export interface DiagnosticsSnapshot {
   /** Per-model usage counters */
   models: Record<string, ModelUsageSnapshot>;
-  /** Shared grounding RPD pool state */
-  grounding: { rpd: number; limit: number; remaining: number };
-  /** Active billing tier */
-  aiTier: string;
-  /** Model IDs currently banned by circuit breakers */
+  /** Grounded requests sent today (Pacific day, as Google counts it) */
+  grounding: { rpd: number };
+  /** Model IDs paused after a 429, a 5xx or a timeout */
   circuitBreakers: string[];
+  /**
+   * True once Google answered this key with a free-tier quota error. On the
+   * free tier Google uses prompts and responses to improve its products, and
+   * people may read them, so Settings warns about it.
+   */
+  freeTier?: boolean;
 }
 
 // =============================================================================
