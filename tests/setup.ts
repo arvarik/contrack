@@ -1,4 +1,14 @@
 import { vi } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+// A unit test that unmocks server/db.ts gets the real module, which opens
+// DATA_DIR/curator.db, or ./curator.db when DATA_DIR is unset. Run from a
+// checkout, that is the developer's own database. authLinks, tagRename and
+// connectors.ingest wrote test accounts, contacts and links into it on every
+// `npm test`. Each unit test file gets a temp directory of its own instead.
+process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "contrack-unit-"));
 
 // Mock DB to prevent accidental disk writes during unit tests
 vi.mock("../server/db.ts", () => ({
