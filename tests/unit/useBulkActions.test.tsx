@@ -210,7 +210,7 @@ describe("useBulkActions", () => {
     /** The Undo action of the last success toast. */
     const lastUndo = () =>
       (
-        toastMock.success.mock.calls.at(-1)?.[1] as {
+        toastMock.success.mock.calls.at(-1)![1] as {
           action: { onClick: () => void };
         }
       ).action.onClick;

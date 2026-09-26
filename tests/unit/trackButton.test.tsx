@@ -80,8 +80,8 @@ const TRACKED = { ...ADA, isTracked: true, cadenceDays: 90 };
 
 /** The body of the last PATCH the hooks sent. */
 function lastBody(): Record<string, unknown> {
-  const call = api.fetch.mock.calls.at(-1);
-  return JSON.parse((call?.[1] as RequestInit).body as string);
+  const call = api.fetch.mock.calls.at(-1)!;
+  return JSON.parse((call[1] as RequestInit).body as string);
 }
 
 /** The Undo action of the last success toast. */

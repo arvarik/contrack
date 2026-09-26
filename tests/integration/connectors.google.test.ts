@@ -267,9 +267,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       expect(googleConn?.name).toBe("Google (alice@example.com)");
       expect(googleConn?.status).toBe("active");
       expect(googleConn?.secretPresent).toBe(true);
-      expect((googleConn?.config as Record<string, unknown>).summaries).toBe(
-        true,
-      );
+      expect(googleConn?.config).toMatchObject({ summaries: true });
     });
 
     it("GET /api/connectors/google/callback rejects invalid or expired state", async () => {

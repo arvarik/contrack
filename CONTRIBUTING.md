@@ -66,7 +66,7 @@ contrack/
 ### Code Style
 
 - **TypeScript**: `strict: true` is enforced by `tsconfig.json` (plus `noImplicitOverride` and `noFallthroughCasesInSwitch`), and `@typescript-eslint/no-explicit-any` is an **error** — `any` disables strict checking for everything it touches. For genuinely untypable third-party surfaces, use an inline `eslint-disable-next-line` with a one-line justification. Prefer `Record<string, unknown>` + narrowing over index signatures. Cast better-sqlite3 `.get()`/`.all()` results once at the query site to a narrow row interface (only the selected columns), or use `Pick<ContactRow, ...>` from the Drizzle-inferred types.
-- **React lint**: `react-hooks/rules-of-hooks` is an error; `react-hooks/exhaustive-deps` and the `jsx-a11y` recommended set are warnings being ratcheted to errors as their counts reach zero — don't add new violations.
+- **React lint**: `react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps` are errors. The `jsx-a11y` recommended set starts as warnings, and a rule becomes an error when its count reaches zero. Eight are errors now. Don't add new violations. Oxlint runs these rules from `.oxlintrc.json`, and it reads `eslint-disable` comments.
 - **TSDoc on Exports**: Every exported function, class, and interface in `src/lib/`, `src/types.ts`, `server/utils/`, and `server/repositories/types.ts` MUST carry a TSDoc block describing purpose, parameters, return value, and edge cases.
 - **React Query**: All frontend data fetching must go through `@tanstack/react-query` hooks. Raw `useEffect` fetch loops are not acceptable.
 - **Styling**: Use Tailwind CSS v4 utility classes. No raw borders — containment is expressed through surface background shifts. Touch-interactive elements must have a 44×44 px minimum hit area (use `<IconButton>` for icon-only buttons).
@@ -89,7 +89,7 @@ Run the full test suite:
 ```bash
 npm test              # Unit + integration (500+ tests, no API keys needed)
 npm run test:coverage # ...with a coverage report
-npm run lint          # ESLint + tsc --noEmit (strict)
+npm run lint          # Oxlint + tsc --noEmit (strict)
 npm run build && npm run test:e2e   # Browser journeys in headless Chromium
 ```
 

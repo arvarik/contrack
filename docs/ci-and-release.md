@@ -12,7 +12,7 @@ and GitHub releases.
 | Push of a `v*` tag       | ✅    | ✅               | `X.Y.Z`, `X.Y`    | ✅             |
 | Manual dispatch          | ✅    | ✅               | —                 | —              |
 
-`build-and-test` runs lint (ESLint + `tsc --noEmit` under strict), a Prettier
+`build-and-test` runs lint (Oxlint + `tsc --noEmit` under strict), a Prettier
 check, the full test suite with coverage, and a production build on the
 Node version in `.nvmrc` (26.10), the line the Docker image ships.
 

@@ -210,7 +210,6 @@ export const ResizeHandle = ({
     <div ref={box} className={cn("relative z-20 w-0 shrink-0", className)}>
       {/* A focusable separator is a widget (WAI-ARIA window splitter): it
           takes focus and the arrow keys, like a slider. */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={handle}
         role="separator"
@@ -219,7 +218,6 @@ export const ResizeHandle = ({
         aria-valuenow={width}
         aria-valuemin={min}
         aria-valuemax={limit}
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         data-dragging={dragging || undefined}
         onPointerDown={onPointerDown}

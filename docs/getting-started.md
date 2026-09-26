@@ -101,7 +101,7 @@ When authentication is enabled, you can optionally pick a profile photo during i
 | `npm run preview`       | Preview production build locally                           |
 | `npm run db:seed`       | Generate ~30 realistic demo contacts (adds, never deletes) |
 | `npm run seed`          | Insert one example contact; skips a non-empty database     |
-| `npm run lint`          | ESLint + TypeScript strict type-check                      |
+| `npm run lint`          | Oxlint + TypeScript strict type-check                      |
 | `npm test`              | Run the full Vitest suite (unit + integration)             |
 | `npm run test:watch`    | The same suite in watch mode                               |
 | `npm run test:coverage` | The suite with a coverage report                           |

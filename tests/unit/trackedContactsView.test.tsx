@@ -175,7 +175,7 @@ const namesIn = (name: RegExp) =>
 
 /** The body of the last PATCH the page sent. */
 const lastBody = () =>
-  JSON.parse((api.fetch.mock.calls.at(-1)?.[1] as RequestInit).body as string);
+  JSON.parse((api.fetch.mock.calls.at(-1)![1] as RequestInit).body as string);
 
 beforeEach(() => {
   api.contacts = PEOPLE;

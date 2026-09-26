@@ -28,9 +28,20 @@ export const WCAG_TAGS = [
   "wcag22aa",
 ] as const;
 
-/** A scan builder with the suite's rule set applied. */
+/**
+ * A scan builder with the suite's rule set applied.
+ *
+ * One best-practice rule joins the tags: aria-dialog-name. A dialog with no
+ * name is announced as only "dialog", and the journeys scan every dialog
+ * they open. The linter used to check hand-written dialogs for a label,
+ * with an option Oxlint does not have. This rule reads the name the browser
+ * computes instead. It is set before the tags, because `options()` replaces
+ * the whole option object.
+ */
 export function axeFor(page: Page): AxeBuilder {
-  return new AxeBuilder({ page }).withTags([...WCAG_TAGS]);
+  return new AxeBuilder({ page })
+    .options({ rules: { "aria-dialog-name": { enabled: true } } })
+    .withTags([...WCAG_TAGS]);
 }
 
 /** One line per node, so a failure names the element and the rule. */

@@ -69,7 +69,7 @@ function mount(contact = ADA) {
 }
 
 const lastBody = () =>
-  JSON.parse((api.fetch.mock.calls.at(-1)?.[1] as RequestInit).body as string);
+  JSON.parse((api.fetch.mock.calls.at(-1)![1] as RequestInit).body as string);
 
 beforeEach(() => {
   api.fetch.mockImplementation(async (_url: string, init: RequestInit) => ({

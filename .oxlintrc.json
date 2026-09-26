@@ -1,0 +1,394 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // Oxlint parses TypeScript and TSX itself, so the linter does not depend
+  // on the TypeScript compiler, and TypeScript can move to a new major on
+  // its own. The rules are ESLint's and typescript-eslint's recommended
+  // sets, as `npx @oxlint/migrate` wrote them from the old
+  // eslint.config.mjs, plus this project's choices. Every rule is named and
+  // no category is on, so a new Oxlint release cannot turn a rule on by
+  // itself.
+  //
+  // Oxlint reads `eslint-disable` comments, and it maps the
+  // `@typescript-eslint/` and `react-hooks/` rule names to its own, so the
+  // existing suppressions keep working.
+  "plugins": ["typescript"],
+  "categories": { "correctness": "off" },
+  "env": { "builtin": true },
+  // A disable comment that suppresses nothing is dead code, like an unused
+  // binding, so it fails the lint. ESLint only warned about it.
+  "options": { "reportUnusedDisableDirectives": "error" },
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "drizzle/",
+    "docs/",
+    // Playwright's own output: the HTML report ships bundled JavaScript.
+    "playwright-report/",
+    "test-results/",
+    "blob-report/"
+  ],
+
+  // ESLint's recommended set, then typescript-eslint's. Five recommended
+  // rules stay off, as they were: no-empty, no-useless-assignment,
+  // no-useless-escape, preserve-caught-error and no-unused-expressions.
+  "rules": {
+    "constructor-super": "error",
+    "for-direction": "error",
+    "getter-return": "error",
+    "no-async-promise-executor": "error",
+    "no-case-declarations": "error",
+    "no-class-assign": "error",
+    "no-compare-neg-zero": "error",
+    "no-cond-assign": "error",
+    "no-const-assign": "error",
+    "no-constant-binary-expression": "error",
+    "no-constant-condition": "error",
+    "no-control-regex": "error",
+    "no-debugger": "error",
+    "no-delete-var": "error",
+    "no-dupe-class-members": "error",
+    "no-dupe-else-if": "error",
+    "no-dupe-keys": "error",
+    "no-duplicate-case": "error",
+    "no-empty-character-class": "error",
+    "no-empty-pattern": "error",
+    "no-empty-static-block": "error",
+    "no-ex-assign": "error",
+    "no-extra-boolean-cast": "error",
+    "no-fallthrough": "error",
+    "no-func-assign": "error",
+    "no-global-assign": "error",
+    "no-import-assign": "error",
+    "no-invalid-regexp": "error",
+    "no-irregular-whitespace": "error",
+    "no-loss-of-precision": "error",
+    "no-misleading-character-class": "error",
+    "no-new-native-nonconstructor": "error",
+    "no-nonoctal-decimal-escape": "error",
+    "no-obj-calls": "error",
+    "no-prototype-builtins": "error",
+    "no-redeclare": "error",
+    "no-regex-spaces": "error",
+    "no-self-assign": "error",
+    "no-setter-return": "error",
+    "no-shadow-restricted-names": "error",
+    "no-sparse-arrays": "error",
+    "no-this-before-super": "error",
+    "no-unassigned-vars": "error",
+    // Oxlint still marks this rule as under development ("nursery"). It is
+    // on only for plain JavaScript: TypeScript files turn it off below,
+    // because the compiler already reports an undefined name.
+    "no-undef": "error",
+    "no-unexpected-multiline": "error",
+    "no-unreachable": "error",
+    "no-unsafe-finally": "error",
+    "no-unsafe-negation": "error",
+    "no-unsafe-optional-chaining": "error",
+    "no-unused-labels": "error",
+    "no-unused-private-class-members": "error",
+
+    // Dead bindings are dead code, so this is an error rather than a warning.
+    // Two escape hatches, both for cases where the binding is doing a job the
+    // rule cannot see:
+    //
+    //   argsIgnorePattern   a positional parameter that must stay in the
+    //                       signature even though this implementation ignores
+    //                       it. Prefix it with `_` to say so on purpose.
+    //   ignoreRestSiblings  `const { contactId, ...rest } = row` is the
+    //                       idiomatic way to *omit* a field. The binding is
+    //                       unused by design, and that is the whole point.
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
+    ],
+    "no-useless-backreference": "error",
+    "no-useless-catch": "error",
+    "no-with": "error",
+    "require-yield": "error",
+    "use-isnan": "error",
+    "valid-typeof": "error",
+
+    "no-array-constructor": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-empty-object-type": "error",
+    // `any` disables strict-mode checking for everything it touches, so it
+    // is an error, not a style preference. Escape hatch for genuinely
+    // untypable third-party surfaces: an inline disable with a comment
+    // explaining why.
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/triple-slash-reference": "error"
+  },
+
+  "overrides": [
+    // The compiler already checks what these rules check, so
+    // typescript-eslint's recommended set turns them off for TypeScript and
+    // asks for modern syntax instead.
+    {
+      "files": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "rules": {
+        "constructor-super": "off",
+        "getter-return": "off",
+        "no-class-assign": "off",
+        "no-const-assign": "off",
+        "no-dupe-class-members": "off",
+        "no-dupe-keys": "off",
+        "no-func-assign": "off",
+        "no-import-assign": "off",
+        "no-new-native-nonconstructor": "off",
+        "no-obj-calls": "off",
+        "no-redeclare": "off",
+        "no-setter-return": "off",
+        "no-this-before-super": "off",
+        "no-undef": "off",
+        "no-unreachable": "off",
+        "no-unsafe-negation": "off",
+        "no-var": "error",
+        "no-with": "off",
+        "prefer-const": "error",
+        "prefer-rest-params": "error",
+        "prefer-spread": "error"
+      }
+    },
+
+    // Standalone Node tooling (audit scripts, codegen). These run under
+    // `node` directly rather than through the app's TS build, so they need
+    // Node globals declared. Without this, every `process` or `console`
+    // reads as undefined. Listed explicitly rather than pulling in a
+    // globals package for a few files.
+    {
+      "files": ["scripts/**/*.{mjs,js}"],
+      "globals": {
+        "process": "readonly",
+        "console": "readonly",
+        "fetch": "readonly",
+        "WebSocket": "readonly",
+        "URL": "readonly",
+        "Buffer": "readonly",
+        "setTimeout": "readonly",
+        "clearTimeout": "readonly",
+        "setInterval": "readonly",
+        "clearInterval": "readonly"
+      }
+    },
+
+    // The theme boot script. It is served to the browser as a plain file
+    // rather than bundled. The production CSP is `script-src 'self'`, so the
+    // palette cannot be painted before the first frame by an inline script,
+    // which puts this file outside the app's TypeScript build and its
+    // browser globals.
+    {
+      "files": ["public/**/*.js"],
+      "globals": {
+        "window": "readonly",
+        "document": "readonly"
+      }
+    },
+
+    // React hooks correctness. Violations are real bugs, not style.
+    //
+    // exhaustive-deps was burned down to zero on 2026-08-09 (14 warnings,
+    // each reviewed individually, and one was a live stale-closure bug in
+    // ClusterSwipeCard). It is locked at error so the count cannot quietly
+    // climb back. A legitimate mount-only effect documents itself with a
+    // targeted disable comment rather than relying on the rule staying soft.
+    {
+      "files": ["src/**/*.{ts,tsx}"],
+      "plugins": ["react"],
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error"
+      }
+    },
+
+    // Accessibility: jsx-a11y's recommended set, with the options that its
+    // recommended config ships. A rule written as a bare "error" would drop
+    // those options and change what the rule means. Rules start as warnings
+    // and are ratcheted to "error" once their violation count reaches zero,
+    // so a rule that has been paid off cannot quietly regress.
+    //
+    // label-has-for stays off. jsx-a11y deprecated it in favour of
+    // label-has-associated-control, which is on and locked.
+    {
+      "files": ["src/**/*.tsx"],
+      "plugins": ["jsx-a11y"],
+      "rules": {
+        "jsx-a11y/alt-text": "warn",
+        "jsx-a11y/anchor-ambiguous-text": "warn",
+        "jsx-a11y/anchor-has-content": "warn",
+        "jsx-a11y/aria-activedescendant-has-tabindex": "warn",
+        "jsx-a11y/aria-props": "warn",
+        "jsx-a11y/aria-proptypes": "warn",
+        "jsx-a11y/aria-role": "warn",
+        "jsx-a11y/aria-unsupported-elements": "warn",
+        "jsx-a11y/autocomplete-valid": "warn",
+        "jsx-a11y/heading-has-content": "warn",
+        "jsx-a11y/html-has-lang": "warn",
+        "jsx-a11y/iframe-has-title": "warn",
+        "jsx-a11y/img-redundant-alt": "warn",
+        "jsx-a11y/interactive-supports-focus": [
+          "warn",
+          {
+            "tabbable": [
+              "button",
+              "checkbox",
+              "link",
+              "searchbox",
+              "spinbutton",
+              "switch",
+              "textbox"
+            ]
+          }
+        ],
+        "jsx-a11y/media-has-caption": "warn",
+        "jsx-a11y/mouse-events-have-key-events": "warn",
+        "jsx-a11y/no-access-key": "warn",
+        "jsx-a11y/no-distracting-elements": "warn",
+        "jsx-a11y/no-interactive-element-to-noninteractive-role": [
+          "warn",
+          { "tr": ["none", "presentation"], "canvas": ["img"] }
+        ],
+        "jsx-a11y/no-noninteractive-element-to-interactive-role": [
+          "warn",
+          {
+            "ul": [
+              "listbox",
+              "menu",
+              "menubar",
+              "radiogroup",
+              "tablist",
+              "tree",
+              "treegrid"
+            ],
+            "ol": [
+              "listbox",
+              "menu",
+              "menubar",
+              "radiogroup",
+              "tablist",
+              "tree",
+              "treegrid"
+            ],
+            "li": [
+              "menuitem",
+              "menuitemradio",
+              "menuitemcheckbox",
+              "option",
+              "row",
+              "tab",
+              "treeitem"
+            ],
+            "table": ["grid"],
+            "td": ["gridcell"],
+            "fieldset": ["radiogroup", "presentation"]
+          }
+        ],
+        "jsx-a11y/no-noninteractive-tabindex": [
+          "warn",
+          { "tags": [], "roles": ["tabpanel"], "allowExpressionValues": true }
+        ],
+        "jsx-a11y/no-redundant-roles": "warn",
+        "jsx-a11y/role-has-required-aria-props": "warn",
+        "jsx-a11y/scope": "warn",
+        "jsx-a11y/tabindex-no-positive": "warn",
+
+        // ── RATCHETED: cleared to zero, locked so they stay there ──────────
+        "jsx-a11y/anchor-is-valid": "error",
+        "jsx-a11y/click-events-have-key-events": "error",
+        // jsx-a11y's recommended options also have `includeRoles: ["alert",
+        // "dialog"]`, and Oxlint does not support that option. The browser
+        // suite checks dialogs instead: axe's aria-dialog-name rule reads
+        // the name the browser computes for every dialog a journey opens
+        // (tests/e2e/fixtures/a11y.ts).
+        "jsx-a11y/control-has-associated-label": [
+          "error",
+          {
+            "ignoreElements": [
+              "audio",
+              "canvas",
+              "embed",
+              "input",
+              "textarea",
+              "tr",
+              "video"
+            ],
+            "ignoreRoles": [
+              "grid",
+              "listbox",
+              "menu",
+              "menubar",
+              "radiogroup",
+              "row",
+              "tablist",
+              "toolbar",
+              "tree",
+              "treegrid"
+            ]
+          }
+        ],
+        "jsx-a11y/label-has-associated-control": "error",
+        "jsx-a11y/no-noninteractive-element-interactions": [
+          "error",
+          {
+            "handlers": [
+              "onClick",
+              "onError",
+              "onLoad",
+              "onMouseDown",
+              "onMouseUp",
+              "onKeyPress",
+              "onKeyDown",
+              "onKeyUp"
+            ],
+            "alert": ["onKeyUp", "onKeyDown", "onKeyPress"],
+            "body": ["onError", "onLoad"],
+            "dialog": ["onKeyUp", "onKeyDown", "onKeyPress"],
+            "iframe": ["onError", "onLoad"],
+            "img": ["onError", "onLoad"]
+          }
+        ],
+        "jsx-a11y/no-static-element-interactions": [
+          "error",
+          {
+            "allowExpressionValues": true,
+            "handlers": [
+              "onClick",
+              "onMouseDown",
+              "onMouseUp",
+              "onKeyPress",
+              "onKeyDown",
+              "onKeyUp"
+            ]
+          }
+        ],
+        "jsx-a11y/role-supports-aria-props": "error",
+
+        // Also ratcheted. Autofocus inside a dialog the user just opened is
+        // correct and expected, and the rule cannot distinguish that from
+        // autofocus on page load, which is the case it exists for. Every
+        // current use is inside something the user deliberately opened and
+        // carries an inline disable saying so, which is the point: a *new*
+        // autofocus now has to justify itself rather than slip in.
+        "jsx-a11y/no-autofocus": "error"
+      }
+    }
+  ]
+}
