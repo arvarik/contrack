@@ -423,9 +423,9 @@ describe("the process", () => {
       await startJob({ kind: "embed", texts: [], batchSize: 8 }).result;
       console.log("job-done");
     `;
-    // `.mts`, not `.ts`. The file is outside the repository, so tsx has no
-    // package.json saying `"type": "module"` to go on and transforms a bare
-    // `.ts` as CommonJS, where a top-level await is a syntax error.
+    // `.mts`, not `.ts`. The file is outside the repository, so Node has no
+    // package.json saying `"type": "module"` to go on and reads a bare `.ts`
+    // as CommonJS, where a top-level await is a syntax error.
     const file = path.join(os.tmpdir(), `cpu-worker-exit-${process.pid}.mts`);
     fs.writeFileSync(file, script);
 
@@ -451,13 +451,19 @@ function hostPath(): string {
   ).href;
 }
 
-/** Run a script under tsx and report whether it ended on its own. */
+/**
+ * Run a script with Node and report whether it ended on its own.
+ *
+ * The child is Node itself. It was `npx tsx`, three processes deep, and a
+ * timeout's SIGKILL reached only npx: the tsx and node processes under it
+ * were orphaned, and one was found still running fifteen days later.
+ */
 function runNode(
   file: string,
   timeoutMs: number,
 ): Promise<{ stdout: string; code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn("npx", ["tsx", file], {
+    const child = spawn(process.execPath, [file], {
       cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
       stdio: ["ignore", "pipe", "pipe"],
     });

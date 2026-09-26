@@ -32,7 +32,7 @@ import { SELECTED_TINT } from "./lib/styles";
 import {
   OPEN_SHORTCUTS_EVENT,
   OPEN_QUICK_NOTE_EVENT,
-  OpenQuickNoteDetail,
+  type OpenQuickNoteDetail,
 } from "./lib/appEvents";
 import { NAMES } from "./lib/names";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";

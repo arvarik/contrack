@@ -1,5 +1,5 @@
 import "../server/utils/loadEnv.ts";
-import * as schema from "../src/db/schema";
+import * as schema from "../src/db/schema.ts";
 import { faker } from "@faker-js/faker";
 import crypto from "crypto";
 // The server's own database module — DATA_DIR resolution and migrations

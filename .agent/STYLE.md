@@ -794,8 +794,8 @@ Use `sonner` via the `<Toaster>` in `App.tsx`. Toasts use `glass-panel` styling 
 
 ### Import Conventions
 
-- Use `@/` path alias for absolute imports (resolves to project root).
-- Server imports use explicit `.ts` extensions (required by `tsx` runtime).
+- The `@/` path alias resolves to the project root in frontend code only. Vite reads it, and Node does not.
+- In `server/`, `shared/`, `src/db/` and `scripts/`, every relative import names its file with its extension (`./geo.ts`). Node 26 runs the TypeScript itself and resolves no extensionless path or folder index. `tests/unit/nativeTypeScript.test.ts` checks it.
 - Barrel exports (`index.ts`) used for major module boundaries (`server/ai/`, `src/api/`, view directories).
 
 ### State Management

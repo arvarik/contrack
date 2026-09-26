@@ -16,10 +16,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { corvidReact } from "../lib/corvid";
 import {
-  Contact,
-  ContactUpdateData,
-  ParsedContactData,
-  TrashedContact,
+  type Contact,
+  type ContactUpdateData,
+  type ParsedContactData,
+  type TrashedContact,
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { apiFetch } from "./client";

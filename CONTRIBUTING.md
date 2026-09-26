@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Contrack! This guide outlines the
 
 ```
 contrack/
-├── server/                  # Express backend (TypeScript, run via tsx)
+├── server/                  # Express backend (TypeScript, run by Node 26)
 │   ├── ai/                  # AI module — provider-agnostic adapter pattern
 │   │   ├── adapters/        #   Concrete LLM adapters (gemini, openai, anthropic, compat)
 │   │   ├── routing/         #   SmartRouter, QuotaTracker, ParallelQueue

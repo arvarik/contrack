@@ -18,7 +18,7 @@ import {
 } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { corvidReact } from "../lib/corvid";
-import { Interaction, Contact } from "../types";
+import { type Interaction, type Contact } from "../types";
 
 /**
  * Refresh the note search after a note changes.

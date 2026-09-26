@@ -41,7 +41,7 @@
  *
  * @module assets/corvidRig
  */
-import { CORVID_EYE, CORVID_PATHS, parsePath } from "./corvidPaths";
+import { CORVID_EYE, CORVID_PATHS, parsePath } from "./corvidPaths.ts";
 
 export type Vec = readonly [number, number];
 

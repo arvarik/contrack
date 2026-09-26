@@ -11,7 +11,7 @@ import { apiFetch } from "./client";
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
-import { Contact, ContactList } from "../types";
+import { type Contact, type ContactList } from "../types";
 
 export const useLists = () => {
   return useQuery({

@@ -36,7 +36,7 @@ Both FTS tables live under one version gate, `PRAGMA user_version`, now 4. See [
 
 Run `npm test` for keyword syntax, visibility, child updates, migration, filtered retrieval, and asynchronous write regressions.
 `tests/integration/search.interactions.test.ts` covers the note index: every write path, hidden contacts, HTML stripping, stemming, every stored date shape, date phrases by zone, paging, validation, and the MCP route.
-Run `npx tsx scripts/benchmark-search.ts` for a temporary database with 10,000 synthetic contacts.
+Run `node scripts/benchmark-search.ts` for a temporary database with 10,000 synthetic contacts.
 The benchmark measures 100 contact edits and 100 keyword searches. It never opens the user's database.
 
 On the development machine, the edit p95 decreased from 3.094 ms to 0.113 ms.

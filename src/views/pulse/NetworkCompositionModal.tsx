@@ -1,7 +1,7 @@
 import { X, PieChart, MapPin, Briefcase } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
-import { DashboardPayload } from "../../api";
+import { type DashboardPayload } from "../../api";
 
 import { ICON_BTN, SECTION_HEADING } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";

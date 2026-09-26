@@ -6,9 +6,9 @@
 // The 10-owner run is the one that matters: each owner reads and writes only
 // their own data across list endpoints, search, timeline, and dedupe scans.
 //
-//   npx tsx scripts/bench-tenancy.ts                 # 1 owner, 5000 contacts
-//   OWNERS=10 CONTACTS_PER_OWNER=2000 npx tsx scripts/bench-tenancy.ts
-//   OWNERS=25 CONTACTS_PER_OWNER=2000 npx tsx scripts/bench-tenancy.ts
+//   node scripts/bench-tenancy.ts                    # 1 owner, 5000 contacts
+//   OWNERS=10 CONTACTS_PER_OWNER=2000 node scripts/bench-tenancy.ts
+//   OWNERS=25 CONTACTS_PER_OWNER=2000 node scripts/bench-tenancy.ts
 // =============================================================================
 
 import { mkdtempSync } from "node:fs";

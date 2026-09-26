@@ -70,13 +70,22 @@ function packageOf(specifier: string): string {
 }
 
 /**
- * Every package the server loads at runtime, with a file that loads it.
- * Starts at server.ts and follows relative imports, like the image does.
+ * The files the image runs: the server, and the password recovery that
+ * docs/configuration.md tells a container's operator to run.
+ */
+const ENTRIES = [
+  path.join(ROOT, "server.ts"),
+  path.join(ROOT, "scripts/reset-password.ts"),
+];
+
+/**
+ * Every package the image's entries load at runtime, with a file that loads
+ * it. Starts at each entry and follows relative imports, like the image does.
  */
 function serverPackages(): Map<string, string> {
   const packages = new Map<string, string>();
   const seen = new Set<string>();
-  const queue = [path.join(ROOT, "server.ts")];
+  const queue = [...ENTRIES];
   while (queue.length > 0) {
     const file = queue.pop()!;
     if (seen.has(file)) continue;
@@ -102,10 +111,7 @@ describe("the runtime image", () => {
         (c) => target === c || target.startsWith(c.replace(/\/?$/, "/")),
       );
 
-    const files = [
-      path.join(ROOT, "server.ts"),
-      ...tsFiles(path.join(ROOT, "server")),
-    ];
+    const files = [...ENTRIES, ...tsFiles(path.join(ROOT, "server"))];
     const missing: string[] = [];
     const seen = new Set<string>();
     const queue = [...files];
@@ -138,14 +144,26 @@ describe("the runtime image", () => {
       .filter(([name]) => !production.has(name) && !devOnly.has(name))
       .map(([name, file]) => `${name} (from ${file})`);
     expect(missing).toEqual([]);
-    // The image starts the server with `node --import tsx`.
-    expect(production.has("tsx")).toBe(true);
+  });
+
+  it("starts the server with Node alone, with no TypeScript loader", () => {
+    const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+    expect(dockerfile).toMatch(/^CMD \["node", "server\.ts"\]$/m);
+    const pkg = JSON.parse(
+      readFileSync(path.join(ROOT, "package.json"), "utf8"),
+    );
+    expect(pkg.dependencies?.tsx).toBeUndefined();
   });
 
   it("reads the COPY lines it checks against", () => {
     const copied = runtimeCopies().map((p) => path.relative(ROOT, p));
     expect(copied).toEqual(
-      expect.arrayContaining(["server", "shared", "server.ts"]),
+      expect.arrayContaining([
+        "server",
+        "shared",
+        "server.ts",
+        "scripts/reset-password.ts",
+      ]),
     );
   });
 });

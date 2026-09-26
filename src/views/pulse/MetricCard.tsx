@@ -1,6 +1,6 @@
 import { cn } from "../../lib/utils";
 import { CARD_COMPACT, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
-import { LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 
 interface MetricCardProps {
   label: string;

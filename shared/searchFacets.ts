@@ -1,4 +1,4 @@
-import { haversineKm, isValidLatLng } from "./geo";
+import { haversineKm, isValidLatLng } from "./geo.ts";
 
 export type FacetField =
   | "role"

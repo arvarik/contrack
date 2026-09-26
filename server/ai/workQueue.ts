@@ -65,11 +65,17 @@ export class GenerationQueue {
   private consecutiveInteractiveDispatches = 0;
   private waitingCount = 0;
 
-  constructor(
-    private readonly concurrency = 2,
-    private readonly capacity = 16,
-    private readonly maxConsecutiveInteractive = 3,
-  ) {}
+  private readonly concurrency: number;
+  private readonly capacity: number;
+  private readonly maxConsecutiveInteractive: number;
+
+  // Plain fields, not parameter properties: Node strips types and does not
+  // compile, and a parameter property needs compiling.
+  constructor(concurrency = 2, capacity = 16, maxConsecutiveInteractive = 3) {
+    this.concurrency = concurrency;
+    this.capacity = capacity;
+    this.maxConsecutiveInteractive = maxConsecutiveInteractive;
+  }
 
   run<T>(
     operation: () => Promise<T>,
