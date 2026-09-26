@@ -17,6 +17,7 @@ import type { Interaction } from "../../../types";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { useHiddenInteractionIds } from "../../../lib/pendingDeletes";
+import { DROPZONE_INPUT } from "../../../lib/styles";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 import {
   Timeline,
@@ -131,7 +132,11 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         name, and it is the one form control on the timeline a screen reader
         would otherwise reach as "edit, file".
       */}
-      <input {...getInputProps()} aria-label="Attach files to this timeline" />
+      <input
+        {...getInputProps()}
+        className={DROPZONE_INPUT}
+        aria-label="Attach files to this timeline"
+      />
 
       {/* Drop Zone Overlay */}
       <AnimatePresence>

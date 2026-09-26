@@ -19,7 +19,7 @@ import {
   type gmail_v1,
   type people_v1,
   type calendar_v3,
-} from "googleapis";
+} from "../googleApis.ts";
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import { normalizeEmail } from "../email/normalize.ts";

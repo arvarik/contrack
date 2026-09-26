@@ -215,6 +215,10 @@ export const ContactProfile = ({
     onDrop,
     noClick: true,
     noKeyboard: true,
+    // react-dropzone 19.2 turned paste-to-upload on by default. This root
+    // wraps the note composer, so a screenshot pasted into a note would
+    // become an attachment.
+    noPaste: true,
     accept: {
       "message/rfc822": [".eml"],
       "image/*": [".png", ".jpg", ".jpeg", ".gif"],

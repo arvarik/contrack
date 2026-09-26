@@ -67,7 +67,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       # npm run lint = eslint . && tsc --noEmit (strict) — one gate for both
       - name: Lint + Type Check
@@ -108,7 +108,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Production Build
         run: npm run build

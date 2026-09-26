@@ -170,7 +170,7 @@ interface FocusStyle {
  */
 export async function expectVisibleFocus(locator: Locator): Promise<void> {
   await expect(locator).toBeFocused();
-  const style = await locator.evaluate<FocusStyle, HTMLElement>((el) => {
+  const style = await locator.evaluate((el): FocusStyle => {
     const s = getComputedStyle(el);
     return {
       outlineStyle: s.outlineStyle,

@@ -25,14 +25,13 @@ import React, {
   useState,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Facebook, Linkedin } from "../../../components/socialIcons";
 import {
   CalendarCheck,
   ExternalLink,
-  Facebook,
   File,
   FileText,
   Handshake,
-  Linkedin,
   Mail,
   MessageSquare,
   Pencil,

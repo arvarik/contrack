@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import {
   BTN_QUIET,
+  DROPZONE_INPUT,
   SWATCH_SELECTED,
   TAB_CONTAINER,
   tabItem,
@@ -145,6 +146,9 @@ export const AvatarPickerModal = ({
     accept: { "image/*": [] },
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
+    // Paste-to-upload is on by default since react-dropzone 19.2. Off, as
+    // before, until it is a decision rather than a side effect.
+    noPaste: true,
   });
 
   const handleClose = () => {
@@ -333,6 +337,7 @@ export const AvatarPickerModal = ({
                 >
                   <input
                     {...getInputProps()}
+                    className={DROPZONE_INPUT}
                     aria-label="Choose an image file"
                   />
                   <div

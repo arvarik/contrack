@@ -29,6 +29,17 @@ import { cn } from "./utils";
  * every chip. Every uppercase label in the app uses this one tracking.
  */
 
+/**
+ * A dropzone's hidden file input, out of the layout.
+ *
+ * react-dropzone 19 renders the input as an in-flow block of zero size, so a
+ * flex container with a gap still gives it a gap: the account photo's button
+ * moved 16 px right and the timeline 24 px down. `sr-only` positions it
+ * absolutely, as react-dropzone 15 did. The inline style it keeps sets no
+ * position, so the class decides that one.
+ */
+export const DROPZONE_INPUT = "sr-only";
+
 /** Micro label — field labels inside detail cards (e.g. "LOCATION", "EMAIL") */
 export const LABEL =
   "text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant";

@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { Camera } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { DROPZONE_INPUT } from "../../lib/styles";
 
 export interface AccountPhotoFieldProps {
   value: File | null;
@@ -89,6 +90,9 @@ export const AccountPhotoField = ({
     maxSize: MAX_BYTES,
     maxFiles: 1,
     multiple: false,
+    // Paste-to-upload is on by default since react-dropzone 19.2. Off, as
+    // before, until it is a decision rather than a side effect.
+    noPaste: true,
   });
 
   const chooseBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -113,6 +117,7 @@ export const AccountPhotoField = ({
       <div className="flex items-center gap-4">
         <input
           {...getInputProps({
+            className: DROPZONE_INPUT,
             "aria-label": "Choose a profile photo",
             "aria-describedby": error ? "account-photo-error" : undefined,
           })}
