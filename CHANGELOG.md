@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`npm test` wrote test data into the developer's own database.** Three unit tests, `authLinks`, `tagRename` and `connectors.ingest`, unmock `server/db.ts`, and the unit project set no `DATA_DIR`, so the real module opened `./curator.db`. Run from a checkout with real data, every run added test accounts, contacts, tags, auth links and search revisions to it. Each unit test file now gets a temp `DATA_DIR`, and `server/db.ts` refuses to open the `./curator.db` fallback under Vitest.
 - **Web research always failed on OpenAI.** The Responses API got the Chat Completions format, nested under `json_schema`, and answered 400 "Missing required parameter: 'text.format.name'". It gets its own flat, non-strict format now.
 - **@mentions and the Catch-Me-Up briefing failed on OpenAI.** Both ask for an array, and OpenAI refuses an array at the schema's root. The adapter wraps it in an object and hands back the array. @mention extraction failed quietly, finding nobody.
 - **Magic Paste failed on Anthropic.** The contact schema has 33 optional fields, over Claude's 24, so the adapter fell back to prompt-guided JSON, and Haiku put it in a code fence the parser refused. Every adapter now hands back JSON that parses as it stands, and a schema over Claude's limits (24 optional or 16 union-typed parameters) goes straight to prompt-guided JSON without a failed request first.

@@ -33,6 +33,14 @@ import {
   ownerUploadUrl,
   resolveUploadPath,
 } from "./utils/paths.ts";
+// Under Vitest the database must live in a DATA_DIR the test setup made. The
+// fallback, ./curator.db, is the developer's own data when the suite runs
+// from a checkout, and three unit tests once wrote test accounts into it.
+if (process.env.VITEST && !process.env.DATA_DIR) {
+  throw new Error(
+    "DATA_DIR is not set under Vitest. The fallback ./curator.db is real data, so a test setup must give each file a temp DATA_DIR.",
+  );
+}
 const DB_PATH = process.env.DATA_DIR
   ? path.join(process.env.DATA_DIR, "curator.db")
   : "curator.db";
