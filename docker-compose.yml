@@ -8,26 +8,39 @@ services:
       - ./data:/app/data
     environment:
       - AI_PROVIDER=${AI_PROVIDER:-gemini}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       # The basemap style per palette. Unset means OpenFreeMap's public
       # styles, which need no key. Point these at your own style to
       # self-host the basemap.
-      - MAP_STYLE_LIGHT=${MAP_STYLE_LIGHT}
-      - MAP_STYLE_DARK=${MAP_STYLE_DARK}
+      - MAP_STYLE_LIGHT=${MAP_STYLE_LIGHT:-}
+      - MAP_STYLE_DARK=${MAP_STYLE_DARK:-}
       # Auth is OFF by default. The published port is reachable by anything
       # that can route to this host, so if that is more than the host itself,
       # set AUTH_REQUIRED=true — the first visit walks you through creating an
       # account, and everything already in the database is assigned to it.
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
-      # Machine credential for scripts and MCP clients. Setting it also gates
-      # the instance. Generate one with: openssl rand -hex 32
+      # Deprecated machine credential for scripts and MCP clients. Setting it
+      # also gates the instance. A personal token from Settings, Account, API
+      # tokens replaces it, and it is removed in 3.0.
       - API_TOKEN=${API_TOKEN:-}
-      # Everything below is optional tuning, forwarded so a value in .env
-      # actually reaches the container — previously only the eight variables
-      # above made it through, and a documented setting like BACKUP_KEEP was
-      # silently ignored on the Docker path.
+      # The address people open, when a reverse proxy sits in front. Passkeys,
+      # invitation links and the Google connector need it.
+      - PUBLIC_URL=${PUBLIC_URL:-}
+      # Encrypts the credentials the database stores. Unset means a key
+      # generated in ./data/secret.key, so back that file up with the data.
+      - CONTRACK_SECRET_KEY=${CONTRACK_SECRET_KEY:-}
+      # Everything below is optional, and each one can be set in the app
+      # instead. It is forwarded so a value in .env reaches the container: a
+      # variable left off this list is silently ignored on the Docker path.
+      # tests/unit/envDocs.test.ts fails when a documented one is missing.
+      - SMTP_URL=${SMTP_URL:-}
+      - MAIL_FROM=${MAIL_FROM:-}
+      - MAIL_REPLY_TO=${MAIL_REPLY_TO:-}
+      - SEARXNG_URL=${SEARXNG_URL:-}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-}
       - TRASH_RETENTION_DAYS=${TRASH_RETENTION_DAYS:-}
       - BACKUP_INTERVAL_HOURS=${BACKUP_INTERVAL_HOURS:-}

@@ -12,6 +12,8 @@ import { log } from "./logger.ts";
 export const RETIRED_ENV: Record<string, string> = {
   AI_TIER:
     "Contrack no longer has a free or paid setting. It learns a Gemini key's limits from Google's 429 answers. Remove AI_TIER.",
+  MAPBOX_API_KEY:
+    "Nominatim is the one geocoder, and the map uses OpenFreeMap styles that need no key. Remove MAPBOX_API_KEY.",
 };
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Device descriptions from User-Agent strings.
  *
- * @module lib/devices
+ * @module shared/devices
  */
 
 /** Turn a User-Agent into something a person can recognise their laptop in. */

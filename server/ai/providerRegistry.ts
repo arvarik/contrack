@@ -8,6 +8,9 @@
 // Instances are cached per provider id so provider-internal state that must
 // be a singleton — Gemini's SmartRouter, QuotaTracker, and circuit breakers —
 // stays singleton per provider.
+//
+// A key saved in Settings is stored sealed with the instance secret, the way
+// SMTP passwords and connector feeds already were (readStoredKey below).
 // =============================================================================
 
 import type { AIProvider, ModelInfo } from "./provider.ts";
@@ -17,6 +20,7 @@ import { AnthropicAdapter } from "./adapters/anthropic.ts";
 import { OpenAICompatibleAdapter } from "./adapters/openaiCompatible.ts";
 import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
+import { open } from "../utils/secretBox.ts";
 
 export type ProviderKind =
   "gemini" | "openai" | "anthropic" | "openai-compatible";
@@ -40,6 +44,7 @@ export interface CustomEndpointConfig {
   id: string;
   label: string;
   baseUrl: string;
+  /** Sealed as the settings store holds it (see readStoredKey). */
   apiKey?: string;
 }
 
@@ -80,6 +85,46 @@ function isUsableKey(key: string | undefined): key is string {
   return !!key && key.trim().length > 0 && key !== "dummy_key";
 }
 
+/** A sealed value from secretBox.seal. */
+export function isSealed(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("v1:");
+}
+
+/** Sealed values that would not open, so each is reported once. */
+const unreadable = new Set<string>();
+
+/**
+ * A key as the settings store holds it, ready to send.
+ *
+ * Keys saved from 2.0 are sealed. A key saved before is plain text, and it
+ * is read as it is until the boot pass seals it (sealStoredAiKeys).
+ *
+ * A sealed key that does not open reads as no key. This happens when the
+ * instance secret changed: CONTRACK_SECRET_KEY was set or changed, or
+ * DATA_DIR/secret.key was lost. The provider then shows as not connected,
+ * and the key can be entered again. Sending the sealed text as a key would
+ * fail at the provider with a message that points nowhere near the cause.
+ */
+export function readStoredKey(
+  value: unknown,
+  owner: string,
+): string | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  if (!isSealed(value)) return value;
+  try {
+    return open(value);
+  } catch {
+    if (!unreadable.has(value)) {
+      unreadable.add(value);
+      log.warn(
+        "AIRegistry",
+        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → AI.`,
+      );
+    }
+    return undefined;
+  }
+}
+
 /**
  * All configured providers. Env keys take precedence over settings keys for
  * the same provider so existing deployments keep working exactly as before.
@@ -91,7 +136,9 @@ export function getProviderConfigs(): ProviderConfig[] {
 
   for (const builtIn of BUILT_IN) {
     const envKey = process.env[builtIn.envVar];
-    const settingsKey = settingsKeys[builtIn.id];
+    const settingsKey = isUsableKey(envKey)
+      ? undefined
+      : readStoredKey(settingsKeys[builtIn.id], builtIn.label);
     const apiKey = isUsableKey(envKey)
       ? envKey
       : isUsableKey(settingsKey)
@@ -115,7 +162,7 @@ export function getProviderConfigs(): ProviderConfig[] {
       id: `custom:${endpoint.id}`,
       kind: "openai-compatible",
       label: endpoint.label || endpoint.id,
-      apiKey: endpoint.apiKey,
+      apiKey: readStoredKey(endpoint.apiKey, endpoint.label || endpoint.id),
       baseUrl: endpoint.baseUrl,
       source: "settings",
     });

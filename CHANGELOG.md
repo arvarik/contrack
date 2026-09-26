@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The name table is built from the World Gender Name Dictionary 2.0.** `scripts/build-given-names.ts` turns WIPO's counts of people by name, country and gender (CC0 1.0) into `server/utils/nlp/givenNames.tsv.gz`, 161,856 names in 444 KB. A name gets a line only when at least 90% of the people counted with it share a gender, and every country that holds 5% of them or more leans the same way by at least 75%. The lookup is a binary search over one string, loaded on the first avatar.
 - **A neutral face reads as neutral.** No facial hair, the short and textured hair (`bun`, `fro`, `dreads01`, `dreads02`, `frizzle`, `shaggy`, `shaggyMullet`, `shortCurly` and two beanies), no scoop neck and no pastel pink hair. It was the unconstrained pool, with a beard one time in ten.
 - **Contacts saved with pronouns get the pronoun look on boot.** A one-time pass in `server/db.ts` (§2a-1) adds `look` to a default avatar that has none. A face from the picker and a photo are left alone.
+- **AI keys saved in Settings are encrypted.** Keys entered in Settings → AI and custom endpoint keys sat in `app_settings` as plain text, and so in every backup and every copy of the database. SMTP passwords, connector feeds and the Google client secret were already sealed with the instance secret (`CONTRACK_SECRET_KEY`, or `DATA_DIR/secret.key`), and AI keys now are too. The first start seals the keys already stored. A key that cannot be opened, because the instance secret changed, reads as no key: the provider shows as not connected, and the log says to enter it again. **This is one way.** An older build reads a sealed key as the key itself.
+- **`.env.example` is short.** It holds the three AI keys, the model pins, the network, sign-in and data settings, and it says that the rest lives in the app. `docs/configuration.md` lists every variable. The `AUTH_TOKEN` text said the name still worked with a warning. The server refuses to start with it, and the file no longer offers it. `API_TOKEN` is deprecated, and the file no longer offers it either.
+- **Docker gets every documented variable.** `docker-compose.yml` passed 18 variables, so `PUBLIC_URL`, `CONTRACK_SECRET_KEY`, `SMTP_URL`, `MAIL_FROM`, `MAIL_REPLY_TO`, `SEARXNG_URL` and the Google OAuth pair did nothing when set in `.env`. It passes all of them now. The eight it leaves out, and why, are in docs/configuration.md.
+- **The container check reads only marker files.** `/.dockerenv` or `/run/.containerenv` means a container. The `DOCKER`, `IS_DOCKER` and `DOCKER_CONTAINER` variables were read and never set or documented.
 
 ### Fixed
 
@@ -42,11 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A rename kept the old name's face.** The default avatar stayed seeded on the old name. A rename or a pronoun change now redraws it, and never replaces a face someone picked.
 - **`shavedSides` gave one man in ten a woman's haircut.** It is long hair swept to one side, and it is out of the male pool.
 - **A rename by PATCH left the old phonetic hash.** Dedupe's phonetic blocking reads `phoneticHash`, and only the PUT path recomputed it.
+- **The Docker image failed at boot.** The runtime stage copied `server/` but not `shared/`, and the server imports `shared/` (dates, search facets, cadence, the MCP tool list, connectors). Every image built since those imports stopped with `ERR_MODULE_NOT_FOUND`. The image copies `shared/`, `src/lib/devices.ts` moves there, and `tests/unit/dockerRuntime.test.ts` follows the server's imports through the Dockerfile's COPY lines, so the next such import fails in CI.
+- **The Docker build context held the backups.** `.dockerignore` matched `*.db` at the root only, so `backups/*.db` and `*.db.json` (gigabytes of contact data) went into the context, and the builder's `COPY . .` put them in a layer. The patterns reach every folder now, and `secret.key`, `.claude`, `test-results` and `playwright-report` stay out.
+- **Variables the code reads were undocumented.** `MAIL_REPLY_TO`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` and `TRANSFORMERS_CACHE` join docs/configuration.md, with the three development switches. `tests/unit/envDocs.test.ts` fails when the code, the docs, `.env.example` and the compose file disagree.
+- **The encryption docs named the wrong database.** They said to back up `secret.key` with `contrack.db`. The file is `curator.db`, and `secret.key` joins the table of what `DATA_DIR` holds.
 
 ### Removed
 
 - **`AI_TIER`, and the free and paid limits behind it.** `hasFreeTier`, `freeLimits`, `paidLimits`, `allowPaidSpillover`, `allowPreview`, the grounding pool's daily limit and `getAITier` are gone. The quota tracker still counts, for the Health page.
 - **`gender-detection-from-name`.** Six binary tables and 2.1 MB of JavaScript, loaded whole on the first avatar. The new table replaces it.
+- **`MAPBOX_API_KEY` warns.** It was removed earlier in 2.0. Boot now names it, like `AI_TIER`, when it is still set.
+- **`TRANSFORMERS_CACHE` in the image.** The model cache follows `DATA_DIR` on its own, to the same `/app/data/.cache`.
+- **`APP_URL` in the agent docs.** Nothing read it. It came from the AI Studio template, and so did the comment on `DISABLE_HMR`, which now says what the switch is for. The eval scripts' `LOG_LEVEL` is gone too, because the logger has no levels.
 
 ### Added
 

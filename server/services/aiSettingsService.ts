@@ -3,7 +3,8 @@ import { aiCache } from "../utils/aiCache.ts";
 // AI Settings Service — provider credentials, capability assignments, models
 // =============================================================================
 // Backing logic for Settings → AI. Owns:
-//   - provider API keys entered through the UI (env keys stay read-only)
+//   - provider API keys entered through the UI (env keys stay read-only),
+//     stored sealed with the instance secret
 //   - custom OpenAI-compatible endpoints
 //   - capability assignments (fast / smart / research / embeddings)
 //   - the cached model catalog per provider
@@ -16,6 +17,8 @@ import {
   getProviderConfigs,
   getCachedModels,
   invalidateProviderCache,
+  isSealed,
+  readStoredKey,
   type CustomEndpointConfig,
   type ProviderConfig,
 } from "../ai/providerRegistry.ts";
@@ -32,6 +35,7 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { applyCatalogGuardrails } from "../ai/modelFilter.ts";
+import { seal } from "../utils/secretBox.ts";
 
 /** Model list cached per provider. */
 export interface CachedModelList {
@@ -54,14 +58,16 @@ function redact(key: string | undefined): string | undefined {
   return key.length <= 4 ? "••••" : `••••${key.slice(-4)}`;
 }
 
-/** Store an API key for a built-in provider. */
+/** Store an API key for a built-in provider, sealed. */
 export function setProviderKey(providerId: string, apiKey: string): void {
   if (!["gemini", "openai", "anthropic"].includes(providerId)) {
     throw new ValidationError(`Unknown provider "${providerId}"`);
   }
+  const key = apiKey.trim();
+  if (!key) throw new ValidationError("API key is required");
   const keys =
     getSetting<Record<string, string>>(SETTING_KEYS.aiProviderKeys) ?? {};
-  keys[providerId] = apiKey.trim();
+  keys[providerId] = seal(key);
   setSetting(SETTING_KEYS.aiProviderKeys, keys);
   invalidateProviderCache();
   aiCache.invalidateAll();
@@ -107,6 +113,7 @@ function releasePinsFor(providerId: string): void {
 // Custom OpenAI-compatible endpoints
 // ---------------------------------------------------------------------------
 
+/** Custom endpoints as stored: each key is sealed (see readStoredKey). */
 export function listCustomEndpoints(): CustomEndpointConfig[] {
   return (
     getSetting<CustomEndpointConfig[]>(SETTING_KEYS.aiCustomEndpoints) ?? []
@@ -119,10 +126,12 @@ export function upsertCustomEndpoint(endpoint: CustomEndpointConfig): void {
   if (!/^https?:\/\//i.test(endpoint.baseUrl ?? "")) {
     throw new ValidationError("Endpoint baseUrl must be an http(s) URL");
   }
+  const key = endpoint.apiKey?.trim();
+  const stored = { ...endpoint, apiKey: key ? seal(key) : undefined };
   const endpoints = listCustomEndpoints();
   const index = endpoints.findIndex((e) => e.id === endpoint.id);
-  if (index >= 0) endpoints[index] = endpoint;
-  else endpoints.push(endpoint);
+  if (index >= 0) endpoints[index] = stored;
+  else endpoints.push(stored);
   setSetting(SETTING_KEYS.aiCustomEndpoints, endpoints);
   invalidateProviderCache();
   aiCache.invalidateAll();
@@ -136,6 +145,48 @@ export function deleteCustomEndpoint(id: string): void {
   releasePinsFor(`custom:${id}`);
   invalidateProviderCache();
   aiCache.invalidateAll();
+}
+
+/**
+ * Seal every key the settings store still holds as plain text. Keys saved
+ * before 2.0 were stored that way. Runs at boot, and returns how many keys
+ * it sealed.
+ *
+ * A sealed key is left as it is, so the pass is safe on every boot and from
+ * a second instance on the same data. The value is sealed exactly as stored,
+ * so the key sent to the provider does not change.
+ */
+export function sealStoredAiKeys(): number {
+  const plain = (value: unknown): value is string =>
+    typeof value === "string" && value.length > 0 && !isSealed(value);
+
+  const keys = getSetting<Record<string, string>>(SETTING_KEYS.aiProviderKeys);
+  const plainKeys = Object.entries(keys ?? {}).filter(([, v]) => plain(v));
+  if (plainKeys.length > 0) {
+    const next = { ...keys };
+    for (const [id, value] of plainKeys) next[id] = seal(value);
+    setSetting(SETTING_KEYS.aiProviderKeys, next);
+  }
+
+  const endpoints = listCustomEndpoints();
+  const plainEndpoints = endpoints.filter((e) => plain(e.apiKey)).length;
+  if (plainEndpoints > 0) {
+    setSetting(
+      SETTING_KEYS.aiCustomEndpoints,
+      endpoints.map((e) =>
+        plain(e.apiKey) ? { ...e, apiKey: seal(e.apiKey) } : e,
+      ),
+    );
+  }
+
+  const sealed = plainKeys.length + plainEndpoints;
+  if (sealed > 0) {
+    log.info(
+      "AISettings",
+      `Encrypted ${sealed} saved AI key(s) that were stored as plain text`,
+    );
+  }
+  return sealed;
 }
 
 // ---------------------------------------------------------------------------
@@ -512,7 +563,7 @@ export function getSettingsView(): AISettingsView {
     customEndpoints: listCustomEndpoints().map((e) => ({
       ...e,
       apiKey: undefined,
-      keyPreview: redact(e.apiKey),
+      keyPreview: redact(readStoredKey(e.apiKey, e.label || e.id)),
     })),
     capabilities,
     searxngUrl: getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url,

@@ -8,6 +8,7 @@ node_modules
 .idea
 .cursorrules
 .agent
+.claude
 .husky
 
 # Secrets — must never enter image layers
@@ -15,16 +16,25 @@ node_modules
 .env.*
 !.env.example
 
-# Local data — databases, uploads, model caches
-*.db
-*.db-shm
-*.db-wal
+# Local data — databases, backups, uploads, keys, model caches. The patterns
+# need **/ to reach below the root: `*.db` alone let backups/*.db (gigabytes
+# of contact data) into the build context, and the builder's COPY . . put
+# them in a layer.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db.json
+backups
 uploads
 data
+secret.key
+*.key
 
-# Build output — rebuilt inside the image
+# Build and test output — rebuilt inside the image, or not needed
 dist
 coverage
+test-results
+playwright-report
 
 # Docs, tests, and tooling not needed at build/runtime
 docs

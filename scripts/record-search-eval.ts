@@ -42,7 +42,6 @@ process.env.GEMINI_API_KEY = "";
 process.env.OPENAI_API_KEY = "";
 process.env.ANTHROPIC_API_KEY = "";
 process.env.AUTH_REQUIRED = "";
-process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "warn";
 
 // The model cache would otherwise land inside the throwaway DATA_DIR, so
 // every run would download it again. Keep it beside the dependencies that

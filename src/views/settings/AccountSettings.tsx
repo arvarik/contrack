@@ -60,7 +60,7 @@ import { SecretReveal } from "../../components/ui/SecretReveal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { describeDevice } from "../../lib/devices";
+import { describeDevice } from "../../../shared/devices";
 import { PasskeysCard } from "./account/PasskeysCard";
 import { useHashTarget } from "./SettingRow";
 import {
