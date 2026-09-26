@@ -97,7 +97,6 @@
     "drizzle-orm": "^0.45.2",
     "eml-format": "^0.6.1",
     "express": "^5.2.1",
-    "gender-detection-from-name": "^1.11.4",
     "googleapis": "^181.0.0",
     "imapflow": "^2.0.5",
     "lucide-react": "^0.546.0",

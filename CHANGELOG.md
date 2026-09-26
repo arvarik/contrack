@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The default avatar reads the pronouns, then a title, then the first name.** "she/her" draws from the female pool, "he/him" from the male pool, and any other pronoun from the neutral pool. With no pronouns, a title decides (Mr, Mrs, Ms, Dame, Sir, Mx), and after that the first name. The look travels in the avatar URL as `look=f`, `m` or `n`, because the route only sees the seed. A name does not travel: the route reads it at render time, so every existing default avatar gets the new rule with no row rewritten.
+- **The name table is built from the World Gender Name Dictionary 2.0.** `scripts/build-given-names.ts` turns WIPO's counts of people by name, country and gender (CC0 1.0) into `server/utils/nlp/givenNames.tsv.gz`, 161,856 names in 444 KB. A name gets a line only when at least 90% of the people counted with it share a gender, and every country that holds 5% of them or more leans the same way by at least 75%. The lookup is a binary search over one string, loaded on the first avatar.
+- **A neutral face reads as neutral.** No facial hair, the short and textured hair (`bun`, `fro`, `dreads01`, `dreads02`, `frizzle`, `shaggy`, `shaggyMullet`, `shortCurly` and two beanies), no scoop neck and no pastel pink hair. It was the unconstrained pool, with a beard one time in ten.
+- **Contacts saved with pronouns get the pronoun look on boot.** A one-time pass in `server/db.ts` (§2a-1) adds `look` to a default avatar that has none. A face from the picker and a photo are left alone.
+
+### Fixed
+
+- **A name used for both genders got a coin toss.** The old package answered male or female for every name it knew: Jordan was a man, Taylor a woman, Kim a woman, Harpreet a woman and Gurpreet a man. Of 35 unisex names tested, it gendered all 35. These names get the neutral face now.
+- **A title, a suffix or a comma hid the name.** "Dr. Sarah Chen" and "Mr. John Smith" read as unknown, "Dame Judi Dench" read as male, and "Helen Smith, PhD" read the first name as "PhD". Titles are read, suffixes dropped, "Smith, Jane" is turned around, initials such as "J." are skipped, and accents fold, so "María" and "Søren" are found.
+- **Wrong answers in the old table.** It had "Yael" as male in English, "the" and "dame" as French men's names, and "Noël" as female. Over 184 test names, the old lookup gave the wrong gender for 3 of 123 gendered names and a gender to 53 of 61 unisex names. The new one gives the wrong gender for none of the 123, and a gender to 15 of the 61, each a name that at least 90% of its carriers share, such as Alex and Cameron.
+- **A family name first took a gender from another country.** "Li Na" read as female because Li is a Swedish girl's name. A name of two or more words that starts with a common Chinese, Korean or Vietnamese family name is neutral now. A three-syllable Hangul name drops its family name before the lookup, so 김민준 finds 민준.
+- **A rename kept the old name's face.** The default avatar stayed seeded on the old name. A rename or a pronoun change now redraws it, and never replaces a face someone picked.
+- **`shavedSides` gave one man in ten a woman's haircut.** It is long hair swept to one side, and it is out of the male pool.
+- **A rename by PATCH left the old phonetic hash.** Dedupe's phonetic blocking reads `phoneticHash`, and only the PUT path recomputed it.
+
+### Removed
+
+- **`gender-detection-from-name`.** Six binary tables and 2.1 MB of JavaScript, loaded whole on the first avatar. The new table replaces it.
+
 ### Added
 
 - **The corvid lives in its ring.** The mark is two things now: the ring, the C, which never moves, and the bird in it, which is the only thing any animation touches. The sidebar's bird blinks every three to seven seconds, one blink in five doubled, and between them it looks about, cocks its head, looks back over its shoulder, preens, shakes out its feathers, stretches a wing, caws without a sound and hops. Every act is made fresh from a random source, so no two are alike, and every one ends in the logo. Big acts wait while you type. It watches the pointer when it comes near, in the quick turns and still holds a bird's head moves in, gets ready when its button is hovered or focused, and falls asleep after two and a half quiet minutes, waking with a start. It costs nothing while it is still: one timer between acts, frames only while something moves, nothing in a hidden tab or out of view.

@@ -23,9 +23,19 @@ import { createAvatar } from "@dicebear/core";
 import * as avataaars from "@dicebear/avataaars";
 import * as lorelei from "@dicebear/lorelei";
 import * as bottts from "@dicebear/bottts";
-import { classifyName } from "../utils/smartAvatar.ts";
+import { classifyName, type AvatarLook } from "../utils/smartAvatar.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+
+export type { AvatarLook } from "../utils/smartAvatar.ts";
+// URL building lives in utils/avatarUrl.ts, which loads no artwork, so the
+// database's boot migration can use it. Re-exported for existing callers.
+export {
+  buildAvatarUrl,
+  defaultAvatarUrl,
+  isDefaultAvatarFor,
+  parseAvatarLook,
+} from "../utils/avatarUrl.ts";
 
 /** Styles the app offers. `initials` doubles as the last-resort fallback. */
 export const AVATAR_STYLES = [
@@ -105,13 +115,19 @@ export const BANNED_EXPRESSIONS = {
 const SKIN_COLOR = ["f8d25c"] as const;
 
 /**
- * Gender-tuned asset pools, carried over from the URL builder this replaces.
+ * Asset pools for the three looks smartAvatar can pick.
  *
- * The point is variety, not assumption: constraining the pool means two people
- * of the same classification still differ (the seed picks within the pool),
- * while an unclassified name gets the full range rather than a guess.
+ * The seed still picks within a pool, so two people with the same look get
+ * different faces. The neutral pool is for names the data cannot call and for
+ * pronouns other than he or she: no facial hair, the short and textured hair
+ * that reads either way, no scoop neck, and no pastel pink hair, which reads
+ * female. It used to be the unconstrained pool, which gave one ambiguous name
+ * in ten a beard.
+ *
+ * `shavedSides` left the male pool: it is long hair swept to one side, and it
+ * read female on one man in ten.
  */
-const GENDER_PRESETS = {
+const LOOK_PRESETS = {
   male: {
     top: [
       "shortFlat",
@@ -121,7 +137,6 @@ const GENDER_PRESETS = {
       "theCaesar",
       "theCaesarAndSidePart",
       "sides",
-      "shavedSides",
       "dreads01",
       "frizzle",
     ],
@@ -158,11 +173,53 @@ const GENDER_PRESETS = {
       "shirtVNeck",
     ],
   },
-  unknown: {
-    // No hair/clothing constraint — full diversity for names we cannot classify.
-    facialHairProbability: 10,
+  neutral: {
+    top: [
+      "bun",
+      "fro",
+      "dreads01",
+      "dreads02",
+      "frizzle",
+      "shaggy",
+      "shaggyMullet",
+      "shortCurly",
+      "winterHat02",
+      "winterHat03",
+    ],
+    facialHairProbability: 0,
+    clothing: [
+      "blazerAndShirt",
+      "blazerAndSweater",
+      "collarAndSweater",
+      "hoodie",
+      "shirtCrewNeck",
+      "shirtVNeck",
+    ],
+    // DiceBear's palette without its pastel pink, f59797.
+    hairColor: [
+      "a55728",
+      "2c1b18",
+      "b58143",
+      "d6b370",
+      "724133",
+      "4a312c",
+      "ecdcbf",
+      "c93305",
+      "e8e1e1",
+    ],
   },
-} as const;
+} as const satisfies Record<
+  AvatarLook,
+  {
+    top: readonly string[];
+    facialHairProbability: number;
+    clothing: readonly string[];
+    hairColor?: readonly string[];
+  }
+>;
+
+/** Every look, for the tests that check each pool against DiceBear's schema. */
+export const AVATAR_LOOK_POOLS = LOOK_PRESETS;
 
 /** Pastel wash used by the avatar picker grid. Off by default. */
 const BACKGROUND_COLORS = [
@@ -214,6 +271,12 @@ export interface RenderAvatarOptions {
    * which is what a person who chose light or dark explicitly needs.
    */
   theme?: AvatarTheme;
+  /**
+   * Which pool the illustrated style draws from. Undefined means "read it
+   * from the seed", which is right for a name. A contact's pronouns arrive
+   * here, because the seed alone cannot carry them.
+   */
+  look?: AvatarLook;
 }
 
 /**
@@ -247,6 +310,7 @@ function renderStyle({
   seed,
   background = false,
   theme,
+  look,
 }: RenderAvatarOptions) {
   const base = baseOptions(seed, background, theme);
 
@@ -255,7 +319,7 @@ function renderStyle({
       // Spread each pool into a fresh array: `as const` above keeps the literal
       // element types (which the style's option unions require) but makes the
       // arrays readonly, and DiceBear's options are mutable arrays.
-      const preset = GENDER_PRESETS[classifyName(seed)];
+      const preset = LOOK_PRESETS[look ?? classifyName(seed)];
       return createAvatar(avataaars, {
         ...base,
         eyebrows: [...FRIENDLY_EYEBROWS],
@@ -263,8 +327,9 @@ function renderStyle({
         mouth: [...FRIENDLY_MOUTH],
         skinColor: [...SKIN_COLOR],
         facialHairProbability: preset.facialHairProbability,
-        ...("top" in preset ? { top: [...preset.top] } : {}),
-        ...("clothing" in preset ? { clothing: [...preset.clothing] } : {}),
+        top: [...preset.top],
+        clothing: [...preset.clothing],
+        ...("hairColor" in preset ? { hairColor: [...preset.hairColor] } : {}),
       }).toString();
     }
     case "lorelei":
@@ -363,24 +428,4 @@ function plainMonogram(seed: string, theme?: AvatarTheme): string {
     `font-family="sans-serif" font-size="42" font-weight="700" fill="${fg}">${safe}</text>` +
     `</svg>`
   );
-}
-
-// ---------------------------------------------------------------------------
-// URL building
-// ---------------------------------------------------------------------------
-
-/**
- * The app-relative URL that renders `seed` in `style`.
- *
- * Same-origin by construction — that is the entire point of this module.
- */
-export function buildAvatarUrl(
-  seed: string,
-  style: AvatarStyle = "avataaars",
-  options: { background?: boolean; theme?: AvatarTheme } = {},
-): string {
-  const params = new URLSearchParams({ seed });
-  if (options.background) params.set("bg", "1");
-  if (options.theme) params.set("theme", options.theme);
-  return `/api/avatar/${style}?${params.toString()}`;
 }

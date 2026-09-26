@@ -355,13 +355,25 @@ It is also in the Command Palette action sub-menu (`B`).
 
 ## Avatar System
 
-Press the pencil on the avatar (**Change avatar**). There are three ways to set a contact's avatar:
+Press the pencil on the avatar (**Change avatar**). The picker has two tabs:
 
-1. **Upload** — Drag or click to upload an image (max 10 MB)
-2. **URL** — Paste an image URL
-3. **Generated** — Automatic fallback using initials on the contact's colour
+1. **Avatar**: a grid of illustrated faces in three styles, Cartoon, Illustrated and Bot.
+2. **Upload**: a photo of the person, dragged in or chosen (JPEG, PNG, GIF, WebP or AVIF, at most 10 MB).
 
-Uploaded avatars are processed by Sharp (resized, optimized) and stored in `uploads/avatars/`.
+Uploads are resized by Sharp and stored in `uploads/u/<ownerId>/avatars/`.
+
+### The default avatar
+
+A contact nobody chose a picture for gets a Cartoon face. The server draws it in-process (`GET /api/avatar/avataaars?seed=<name>`), so no name leaves the machine. The same name always gets the same face. The face comes from one of three pools of hair and clothing, and `server/utils/smartAvatar.ts` picks the pool:
+
+1. **Pronouns come first.** "she/her" draws from the female pool, "he/him" from the male pool, and any other pronoun ("they/them", "xe/xem", "any") from the neutral pool. The first pronoun a person lists decides, so "she/they" is female. The look travels in the URL as `look=f`, `m` or `n`, because the route only sees the seed.
+2. **A title comes next.** Mr, Sir and Herr are male. Mrs, Ms, Miss, Dame and Frau are female. Mx is neutral. Dr, Prof, Rev and the like say nothing and are skipped.
+3. **Then the first name.** The name is cleaned first: an email keeps its first word, "Smith, Jane" becomes "Jane Smith", "PhD" and parentheses go, initials such as "J." are skipped, accents fold, so "José" meets "Jose". The first name is then looked up in `server/utils/nlp/givenNames.tsv.gz`.
+4. **Anything else is neutral.** The neutral pool has no facial hair, short and textured hair that reads either way, and natural hair colours.
+
+**The name table.** `scripts/build-given-names.ts` builds it from the World Gender Name Dictionary 2.0 (WIPO, CC0 1.0), which counts people by name, country and gender. A name gets a line only when at least 90% of the people counted with it share a gender, and every country that holds 5% or more of those people leans the same way by at least 75%. About 162,000 names pass. Names used for both, such as Jordan, Taylor, Kim, Jean, the Sikh names such as Harpreet, and most romanised Chinese given names, have no line, so they get a neutral face rather than a coin toss. A name of two or more words that starts with a common Chinese, Korean or Vietnamese family name ("Li Na", "Kim Min-jun") is neutral too, because the first word is probably not the given name.
+
+**Edits.** Renaming a contact, or changing their pronouns, redraws the default face. A face chosen in the picker and a photo are never replaced.
 
 ---
 

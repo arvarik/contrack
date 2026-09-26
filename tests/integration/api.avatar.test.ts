@@ -9,6 +9,8 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { sqlite } from "../../server/db.ts";
+import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
 
 const app = makeTestApp();
 
@@ -81,6 +83,32 @@ describe("GET /api/avatar/:style", () => {
     ).toBe(400);
   });
 
+  it("draws the look the URL asks for, whatever the seed suggests", async () => {
+    const [byName, asked, again] = await Promise.all([
+      request(app).get("/api/avatar/avataaars").query({ seed: "James Thomas" }),
+      request(app)
+        .get("/api/avatar/avataaars")
+        .query({ seed: "James Thomas", look: "f" }),
+      request(app)
+        .get("/api/avatar/avataaars")
+        .query({ seed: "James Thomas", look: "f" }),
+    ]);
+    expect(asked.status).toBe(200);
+    expect(svgOf(asked)).not.toBe(svgOf(byName));
+    expect(svgOf(asked)).toBe(svgOf(again));
+  });
+
+  it("ignores a look it does not know rather than refusing", async () => {
+    const [plain, odd] = await Promise.all([
+      request(app).get("/api/avatar/avataaars").query({ seed: "James Thomas" }),
+      request(app)
+        .get("/api/avatar/avataaars")
+        .query({ seed: "James Thomas", look: "female" }),
+    ]);
+    expect(odd.status).toBe(200);
+    expect(svgOf(odd)).toBe(svgOf(plain));
+  });
+
   it("handles seeds containing characters that matter in XML", async () => {
     const res = await request(app)
       .get("/api/avatar/initials")
@@ -141,5 +169,75 @@ describe("contact creation", () => {
     expect(res.status).toBe(201);
     expect(res.body.avatarUrl).toMatch(/^\/api\/avatar\//);
     expect(res.body.avatarUrl).not.toContain("dicebear");
+  });
+});
+
+describe("the default avatar follows the name and pronouns", () => {
+  async function create(body: Record<string, unknown>) {
+    const res = await request(app).post("/api/contacts").send(body);
+    expect(res.status).toBe(201);
+    return res.body as { id: string; avatarUrl: string };
+  }
+
+  it("draws from the pronouns when the contact has them", async () => {
+    const withPronouns = await create({
+      name: "Jordan Pronoun",
+      pronouns: "she/her",
+    });
+    expect(withPronouns.avatarUrl).toBe(
+      "/api/avatar/avataaars?seed=Jordan+Pronoun&look=f",
+    );
+    const without = await create({ name: "Jordan Plain" });
+    expect(without.avatarUrl).toBe("/api/avatar/avataaars?seed=Jordan+Plain");
+  });
+
+  it("redraws the default face when the contact is renamed", async () => {
+    const contact = await create({ name: "Rename Before" });
+    const res = await request(app)
+      .put(`/api/contacts/${contact.id}`)
+      .send({ name: "Rename After" });
+    expect(res.status).toBe(200);
+    expect(res.body.avatarUrl).toBe("/api/avatar/avataaars?seed=Rename+After");
+  });
+
+  it("redraws the default face when the pronouns change", async () => {
+    const contact = await create({ name: "Pronoun Edit" });
+    const set = await request(app)
+      .patch(`/api/contacts/${contact.id}`)
+      .send({ pronouns: "he/him" });
+    expect(set.status).toBe(200);
+    expect(set.body.avatarUrl).toBe(
+      "/api/avatar/avataaars?seed=Pronoun+Edit&look=m",
+    );
+
+    const cleared = await request(app)
+      .patch(`/api/contacts/${contact.id}`)
+      .send({ pronouns: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.avatarUrl).toBe(
+      "/api/avatar/avataaars?seed=Pronoun+Edit",
+    );
+  });
+
+  it("keeps a face someone picked", async () => {
+    const picked = "/api/avatar/avataaars?seed=Felix&bg=1";
+    const contact = await create({ name: "Picked Face", avatarUrl: picked });
+    const res = await request(app)
+      .put(`/api/contacts/${contact.id}`)
+      .send({ name: "Picked Face Renamed", pronouns: "she/her" });
+    expect(res.status).toBe(200);
+    expect(res.body.avatarUrl).toBe(picked);
+  });
+
+  it("keeps the phonetic hash in step with a rename by PATCH", async () => {
+    const contact = await create({ name: "Katherine Phonetic" });
+    const res = await request(app)
+      .patch(`/api/contacts/${contact.id}`)
+      .send({ name: "Siobhan Phonetic" });
+    expect(res.status).toBe(200);
+    const row = sqlite
+      .prepare("SELECT phoneticHash FROM contacts WHERE id = ?")
+      .get(contact.id) as { phoneticHash: string };
+    expect(row.phoneticHash).toBe(doubleMetaphone("Siobhan Phonetic").primary);
   });
 });
