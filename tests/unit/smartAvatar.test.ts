@@ -199,18 +199,25 @@ describe("the given-name table", () => {
     expect(lines.length).toBeGreaterThan(100_000);
   });
 
+  // One pass and one assertion per rule. An expect() per line, over
+  // 161,856 lines, took more than the 5 s test limit on a CI runner.
   it("is sorted and well formed, because the lookup is a binary search", () => {
+    const malformed: number[] = [];
+    const unsorted: number[] = [];
     for (let i = 0; i < lines.length; i++) {
-      expect(lines[i], `line ${i + 1}`).toMatch(/^[^\t\n]+\t[FM]$/);
-      if (i > 0) expect(lines[i - 1] < lines[i], `line ${i + 1}`).toBe(true);
+      if (!/^[^\t\n]+\t[FM]$/.test(lines[i])) malformed.push(i + 1);
+      if (i > 0 && !(lines[i - 1] < lines[i])) unsorted.push(i + 1);
     }
+    expect(malformed.slice(0, 10), "malformed lines").toEqual([]);
+    expect(unsorted.slice(0, 10), "lines out of order").toEqual([]);
   });
 
   it("stores every name folded", () => {
-    for (const line of lines.slice(0, 5_000)) {
-      const name = line.split("\t")[0];
-      expect(foldName(name)).toBe(name);
-    }
+    const unfolded = lines
+      .slice(0, 5_000)
+      .map((line) => line.split("\t")[0])
+      .filter((name) => foldName(name) !== name);
+    expect(unfolded.slice(0, 10)).toEqual([]);
   });
 
   it("finds the first and the last line", () => {

@@ -64,11 +64,12 @@ it. `AUTH_TOKEN` is the one that stops the server, as its row says.
 **Development and test switches.** These change one process, and a deployment
 does not need them.
 
-| Variable                      | Description                                                                                                 | Default |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------- |
-| `DISABLE_HMR`                 | `true` turns off Vite hot reload. A second dev server needs it, because the first one holds the reload port | `false` |
-| `IMPORT_SETTLE_MS`            | How long a non-streaming import waits before its duplicate sweep, in milliseconds. Tests shorten it         | `3000`  |
-| `AI_GATEWAY_TIMEOUT_OVERRIDE` | Replaces the time limit of every AI call, in milliseconds. Tests and evals use it                           | —       |
+| Variable                      | Description                                                                                                                                                          | Default |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `DISABLE_HMR`                 | `true` turns off Vite hot reload. A second dev server needs it, because the first one holds the reload port                                                          | `false` |
+| `VITEST`                      | Set by Vitest itself, never by hand. Under it, `server/db.ts` refuses to open `./curator.db` unless `DATA_DIR` is set, because that file is the developer's own data | —       |
+| `IMPORT_SETTLE_MS`            | How long a non-streaming import waits before its duplicate sweep, in milliseconds. Tests shorten it                                                                  | `3000`  |
+| `AI_GATEWAY_TIMEOUT_OVERRIDE` | Replaces the time limit of every AI call, in milliseconds. Tests and evals use it                                                                                    | —       |
 
 **Docker.** `docker-compose.yml` passes every variable in the first table to
 the container, except eight. The image sets `HOST`, `PORT`, `DATA_DIR` and
