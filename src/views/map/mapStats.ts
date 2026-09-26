@@ -6,7 +6,7 @@
  *
  * @module views/map/mapStats
  */
-import tzlookup from "tz-lookup";
+import tzlookup from "@photostructure/tz-lookup";
 import { isPastDay } from "../../../shared/dates";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
 import { boundsContain } from "./mapMath";

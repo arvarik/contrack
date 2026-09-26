@@ -14,7 +14,7 @@
 // single key exercises only that provider.
 // =============================================================================
 
-import "dotenv/config";
+import "../../server/utils/loadEnv.ts";
 
 /** A credential that is present but a placeholder is not a credential. */
 function realKey(name: string): string | null {

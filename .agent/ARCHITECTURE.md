@@ -567,7 +567,7 @@ return withRetry(
 
 ## 9. Startup Lifecycle (`server.ts`)
 
-1. Load environment variables (`dotenv/config`)
+1. Load environment variables (`server/utils/loadEnv.ts`, which calls `process.loadEnvFile`)
 2. Validate that at least one provider is configured (env key, stored key, or custom endpoint); warn if none
 3. Initialize Express with optional CORS (only when `CORS_ORIGIN` is set), JSON parsing (50MB limit), per-IP rate limiting on AI-cost endpoints (60 req/min via `server/middleware/rateLimit.ts`), request ID middleware, Morgan logging
 4. Mount all API routers

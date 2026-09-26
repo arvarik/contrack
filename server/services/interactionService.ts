@@ -2,8 +2,7 @@ import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
-// @ts-expect-error no types available
-import emlFormat from "eml-format";
+import { emailText } from "../utils/emailText.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
@@ -500,21 +499,9 @@ export const interactionService = {
     let content: string | null = null;
     const isEmail = file.originalname.toLowerCase().endsWith(".eml");
     if (isEmail) {
-      const rawEml = await fs.promises.readFile(file.path, "utf8");
-      const emlData = await new Promise<Record<string, unknown>>(
-        (resolve, reject) => {
-          emlFormat.read(
-            rawEml,
-            (err: Error | null, data: Record<string, unknown>) => {
-              if (err) reject(err);
-              else resolve(data);
-            },
-          );
-        },
-      );
-      content = await summarizeEmlEmail(
-        String(emlData?.text || emlData?.html || rawEml),
-      );
+      // The bytes, not a UTF-8 string: each MIME part names its charset.
+      const raw = await fs.promises.readFile(file.path);
+      content = await summarizeEmlEmail(await emailText(raw));
     }
     // The contact can disappear during email summarization.
     assertOwnedContact(scope, contactId);

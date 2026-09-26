@@ -16,7 +16,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
-import "dotenv/config";
+import "../server/utils/loadEnv.ts";
 import { installAnswerRecorder } from "./answer-eval/recording.ts";
 import { validateAnswerFixture } from "./answer-eval/fixtureValidation.ts";
 import type { AnswerBaseline } from "../tests/eval/answer-harness.ts";

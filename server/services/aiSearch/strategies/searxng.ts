@@ -15,7 +15,7 @@
 // wrapUntrusted() before it ever reaches a prompt.
 // =============================================================================
 
-import * as cheerio from "cheerio";
+import * as cheerio from "cheerio/slim";
 import { generateFor } from "../../../ai/gateway.ts";
 import {
   wrapUntrusted,
@@ -102,15 +102,29 @@ async function fetchPageText(
     if (!/text\/html|text\/plain|application\/xhtml/i.test(contentType)) {
       return null;
     }
-    const html = await readBodyCapped(response, signal);
-    const $ = cheerio.load(html);
-    $("script, style, nav, footer, header, noscript, svg").remove();
-    const text = $("body").text().replace(/\s+/g, " ").trim();
-    return text ? text.slice(0, MAX_PAGE_CHARS) : null;
+    return pageText(await readBodyCapped(response, signal));
   } catch (err) {
     log.debug("SearxngStrategy", `Skipped ${pageUrl}: ${getErrorMessage(err)}`);
     return null;
   }
+}
+
+/**
+ * The readable text of a fetched page, without scripts, styles and page
+ * chrome, cut to MAX_PAGE_CHARS.
+ *
+ * cheerio/slim parses with htmlparser2, which adds no <body> to a fragment
+ * or a text/plain answer the way a browser's parser does. So the whole
+ * document is read when it has no body element, with the head and title
+ * removed first.
+ */
+export function pageText(html: string): string | null {
+  const $ = cheerio.load(html);
+  $("script, style, nav, footer, header, noscript, svg, head, title").remove();
+  const body = $("body");
+  const raw = body.length > 0 ? body.text() : $.root().text();
+  const text = raw.replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, MAX_PAGE_CHARS) : null;
 }
 
 export class SearxngStrategy implements AISearchStrategy {

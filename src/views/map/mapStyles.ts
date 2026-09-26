@@ -63,6 +63,9 @@ let pmtilesRegistered = false;
 export function registerPmtilesProtocol(): void {
   if (pmtilesRegistered) return;
   const protocol = new Protocol();
-  addProtocol("pmtiles", protocol.tilev4);
+  // pmtiles types the TileJSON answer's data as unknown, and MapLibre 6.11
+  // accepts only the shapes it can decode. The value is an object at
+  // runtime, which MapLibre accepts, so only the type is asserted here.
+  addProtocol("pmtiles", protocol.tilev4 as Parameters<typeof addProtocol>[1]);
   pmtilesRegistered = true;
 }
