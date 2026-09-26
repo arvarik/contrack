@@ -445,7 +445,7 @@ Contrack is designed for fast sign-in and account creation with minimal typing a
 npm run reset-password <username>
 
 # Or in a Docker container:
-docker exec -it contrack npx tsx scripts/reset-password.ts <username>
+docker exec -it contrack node scripts/reset-password.ts <username>
 ```
 
 The script assigns a secure temporary password, marks the account as requiring a password change on next sign-in (`mustChangePassword`), and revokes all active sessions for that account.

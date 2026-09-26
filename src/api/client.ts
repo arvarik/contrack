@@ -28,17 +28,28 @@ export const API_BASE = "/api";
 
 /** A server rejection with its HTTP status, stable code, and request identifier. */
 export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly requestId?: string;
+  readonly retryAfterMs?: number;
+  /** The envelope's `details`, untouched. Shape depends on `code`. */
+  readonly details?: unknown;
+
   constructor(
     message: string,
-    readonly status: number,
-    readonly code?: string,
-    readonly requestId?: string,
-    readonly retryAfterMs?: number,
-    /** The envelope's `details`, untouched. Shape depends on `code`. */
-    readonly details?: unknown,
+    status: number,
+    code?: string,
+    requestId?: string,
+    retryAfterMs?: number,
+    details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+    this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
 
   /**

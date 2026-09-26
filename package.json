@@ -17,7 +17,19 @@
     "personal-crm"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=26.10.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=26.10.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.19.0",
+      "onFail": "error"
+    }
   },
   "repository": {
     "type": "git",
@@ -28,7 +40,7 @@
   },
   "homepage": "https://github.com/arvarik/contrack#readme",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "node server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -37,11 +49,11 @@
     "lint:js": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "seed": "tsx scripts/seed.ts",
-    "reset-password": "tsx scripts/reset-password.ts",
+    "seed": "node scripts/seed.ts",
+    "reset-password": "node scripts/reset-password.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seedMock.ts",
+    "db:seed": "node scripts/seedMock.ts",
     "test": "vitest run --project unit --project integration --project eval",
     "test:watch": "vitest --project unit --project integration --project eval",
     "test:coverage": "vitest run --project unit --project integration --project eval --coverage",
@@ -50,13 +62,13 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "audit:contrast": "node scripts/contrast-audit.mjs",
-    "brand:icons": "tsx scripts/brand/build-icons.ts",
-    "tenancy:verify": "tsx scripts/tenancy-verify.ts",
-    "eval:record": "tsx scripts/record-search-eval.ts",
+    "brand:icons": "node scripts/brand/build-icons.ts",
+    "tenancy:verify": "node scripts/tenancy-verify.ts",
+    "eval:record": "node scripts/record-search-eval.ts",
     "test:eval": "vitest run --project eval",
-    "eval:record:dedupe": "tsx scripts/record-dedupe-eval.ts",
-    "eval:record:answer": "tsx scripts/record-answer-eval.ts --record",
-    "eval:answer:live": "tsx scripts/record-answer-eval.ts --live"
+    "eval:record:dedupe": "node scripts/record-dedupe-eval.ts",
+    "eval:record:answer": "node scripts/record-answer-eval.ts --record",
+    "eval:answer:live": "node scripts/record-answer-eval.ts --live"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -121,7 +133,6 @@
     "sonner": "^2.0.8",
     "sqlite-vec": "^0.1.9",
     "tailwind-merge": "^3.7.0",
-    "tsx": "^4.23.15",
     "undici": "^8.11.2",
     "zod": "^4.6.5"
   },
@@ -142,7 +153,7 @@
     "@types/mailparser": "^3.4.6",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.2.0",
-    "@types/node": "^22.20.4",
+    "@types/node": "^26.6.3",
     "@types/nodemailer": "^8.0.2",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.3.0",
@@ -181,5 +192,15 @@
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "onnxruntime-node": false,
+    "protobufjs": false,
+    "@google/genai": false
   }
 }

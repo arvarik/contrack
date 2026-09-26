@@ -1,7 +1,7 @@
 /**
  * build-given-names: the table the default avatar reads a first name from.
  *
- *   npx tsx scripts/build-given-names.ts [path/to/wgnd_2_0_sources.csv]
+ *   node scripts/build-given-names.ts [path/to/wgnd_2_0_sources.csv]
  *
  * Writes `server/utils/nlp/givenNames.tsv.gz`. With no path, the script
  * downloads the source file (about 140 MB) from Harvard Dataverse.

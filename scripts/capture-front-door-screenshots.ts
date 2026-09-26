@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ContrackInstance } from "../tests/e2e/fixtures/instance";
-import { ADMIN, SETUP_HEADING } from "../tests/e2e/fixtures/accounts";
+import { ContrackInstance } from "../tests/e2e/fixtures/instance.ts";
+import { ADMIN, SETUP_HEADING } from "../tests/e2e/fixtures/accounts.ts";
 
 async function run() {
   const outputDir = path.resolve(process.cwd(), "docs/screenshots/front-door");

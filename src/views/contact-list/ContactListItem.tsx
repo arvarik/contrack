@@ -24,7 +24,7 @@ import { useCompanyLogo } from "../../hooks/useCompanyLogo";
 import { formatDay } from "../../lib/datetime";
 import { listRow, TONE_TEXT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { Contact } from "../../types";
+import { type Contact } from "../../types";
 import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
 import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
 import { PROXIMITY_ROW_ATTR } from "../../hooks/useProximityLift";

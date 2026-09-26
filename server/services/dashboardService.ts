@@ -4,7 +4,7 @@ import { resolveCapability } from "../ai/capabilities.ts";
 import { sqlite, tableExists } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "./actionItemService.ts";
-import { generateDailyInsight, DailyInsight } from "../ai/aiService.ts";
+import { generateDailyInsight, type DailyInsight } from "../ai/aiService.ts";
 import { aiCache, ownerKey } from "../utils/aiCache.ts";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";

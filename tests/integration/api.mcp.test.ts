@@ -23,8 +23,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import http from "http";
-import { AddressInfo } from "net";
+import type http from "http";
+import { type AddressInfo } from "net";
 import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";

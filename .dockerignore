@@ -40,6 +40,8 @@ playwright-report
 docs
 tests
 scripts
+# The one script the image runs: the documented password recovery.
+!scripts/reset-password.ts
 Dockerfile
 docker-compose.yml
 .dockerignore

@@ -14,7 +14,7 @@
  *
  *   <IconButton aria-label="Close" onClick={…}><X className="w-5 h-5" /></IconButton>
  */
-import { forwardRef, ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../../lib/utils";
 
 type Tone = "ghost" | "subtle" | "danger";

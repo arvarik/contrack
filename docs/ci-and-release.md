@@ -13,8 +13,8 @@ and GitHub releases.
 | Manual dispatch          | ✅    | ✅               | —                 | —              |
 
 `build-and-test` runs lint (ESLint + `tsc --noEmit` under strict), a Prettier
-check, the full test suite with coverage, and a production build on Node 22 —
-the version the Docker image ships.
+check, the full test suite with coverage, and a production build on the
+Node version in `.nvmrc` (26.10), the line the Docker image ships.
 
 `browser-a11y` runs beside it, not after it, so a lint failure and a focus
 regression are reported separately. It builds the production bundle, boots

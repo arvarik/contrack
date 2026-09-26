@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ContrackInstance } from "../tests/e2e/fixtures/instance";
-import { seedInstance } from "../tests/e2e/fixtures/seed";
+import { ContrackInstance } from "../tests/e2e/fixtures/instance.ts";
+import { seedInstance } from "../tests/e2e/fixtures/seed.ts";
 
 async function run() {
   const outputDir = path.resolve(

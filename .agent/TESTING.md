@@ -6,7 +6,7 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 26.10+ (`.nvmrc`)
 - Valid `GEMINI_API_KEY` mapping in `.env` (copy from `.env.example`). AI features degrade gracefully if missing.
 
 ### Initialization

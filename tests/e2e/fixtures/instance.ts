@@ -1,7 +1,7 @@
 /**
  * ContrackInstance — a disposable production server for one worker.
  *
- * Boots `tsx server.ts` the way a release runs it: `NODE_ENV=production`,
+ * Boots `node server.ts` the way a release runs it: `NODE_ENV=production`,
  * serving `dist/`, with the security headers and the CSP on. Everything that
  * would reach the network or a developer's data is off: every provider key
  * is blank, background jobs are disabled, and DATA_DIR is a fresh temporary
@@ -19,15 +19,10 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { REPO_ROOT } from "./paths";
-
-const require = createRequire(import.meta.url);
-/** tsx's command-line entry, resolved through its package exports. */
-const TSX_CLI = require.resolve("tsx/cli");
+import { REPO_ROOT } from "./paths.ts";
 
 const BOOT_TIMEOUT_MS = 45_000;
 const STOP_TIMEOUT_MS = 5_000;
@@ -87,7 +82,8 @@ export class ContrackInstance {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "contrack-e2e-"));
     const baseURL = `http://127.0.0.1:${port}`;
 
-    const child = spawn(process.execPath, [TSX_CLI, "server.ts"], {
+    // Node 26 runs the TypeScript itself, so the child is the server process.
+    const child = spawn(process.execPath, ["server.ts"], {
       cwd: REPO_ROOT,
       stdio: ["ignore", "pipe", "pipe"],
       env: {

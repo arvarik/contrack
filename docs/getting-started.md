@@ -4,7 +4,7 @@ This guide walks you through installing Contrack, running it locally, and unders
 
 ## Prerequisites
 
-- **Node.js 22+** — [Download](https://nodejs.org/)
+- **Node.js 26.10+** — [Download](https://nodejs.org/)
 - **Git** — [Download](https://git-scm.com/)
 - **An AI API key** — any one is enough; Contrack picks a suitable model for
   each kind of work. Add more later to mix providers across tasks.
@@ -64,7 +64,7 @@ scripts write to the same database the server uses (they honour `DATA_DIR`).
 
 ```bash
 npm run build
-NODE_ENV=production npx tsx server.ts
+NODE_ENV=production node server.ts
 ```
 
 The production server serves the built `dist/`, enables the security headers

@@ -36,7 +36,7 @@
  *
  * @module lib/corvidFlight
  */
-import { HOME_POSE, bodyCentre, type CorvidPose } from "../assets/corvidRig";
+import { HOME_POSE, bodyCentre, type CorvidPose } from "../assets/corvidRig.ts";
 import {
   between,
   chance,
@@ -46,7 +46,7 @@ import {
   easeOut,
   sign,
   type Rng,
-} from "./corvidMotion";
+} from "./corvidMotion.ts";
 
 // ---------------------------------------------------------------------------
 // Where a flight may go

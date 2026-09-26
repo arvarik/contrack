@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Docker image runs one process and pins tsx.** tsx is a production dependency, so the lockfile fixes its version. The image ran `npm install -g tsx@4`, which took the newest 4.x on the day of the build. The server starts with `node --import tsx`, so `docker stop` signals the server itself, which drains its connections and closes the database. The image also skips onnxruntime-node's CUDA download (about 300 MB on linux/x64), which CI already skipped, and the Tailwind build plugins moved to devDependencies, so Vite is no longer in the image.
 - **The mention list is placed by Floating UI.** tippy.js, last released in 2021, and its Popper engine are gone. TipTap's own suggestion plugin already used `@floating-ui/dom`. The list opens at the same place, 10 px under the typed name.
 - **Lucide 1.0 dropped its brand icons.** The six social icons Contrack shows (LinkedIn, Facebook, GitHub, X/Twitter, Instagram, YouTube) are kept in `src/components/socialIcons.ts` with the same drawings, and render the same markup. Lucide redrew some of its own icons slightly, for example the corner of the file icon.
+- **Node 26.10 or later, and nothing on Node 22.** `engines` and a new `devEngines` require Node 26.10 and npm 11.19, and npm refuses `install`, `ci` and `run` on an older Node with `EBADDEVENGINES`. `.nvmrc` and `.tool-versions` pin 26.10.0 for CI and for nvm, fnm, mise and asdf. The Docker image runs `node:26-trixie-slim` on Debian 13, because Debian 12 moved to reduced LTS support in June 2026. `@types/node` is 26. Node 22's support ends on 2027-04-30, and Node 26's runs to 2029-04-30.
+- **Node runs the TypeScript itself.** The server, the scripts and the Docker image run `node server.ts` with Node 26's type stripping, so tsx and its esbuild leave the runtime. `/healthz` answers in 0.95 s, where tsx took 1.38 s. tsconfig adds `verbatimModuleSyntax` and `erasableSyntaxOnly`, so `npm run lint` fails on code Node could not run: 28 type imports gained `type`, two constructors lost their parameter properties, and 12 relative imports gained their file extension. Class fields follow the standard rules everywhere (`useDefineForClassFields: true`), so a test checks what production runs. `tests/unit/nativeTypeScript.test.ts` follows every import from `server.ts` and each script.
+- **Install scripts have a policy.** `allowScripts` in package.json allows better-sqlite3, esbuild and fsevents, and denies onnxruntime-node (its CUDA download), protobufjs and @google/genai. npm 11.19 treats the list as advisory and only stops warning about these packages. A later npm release enforces it.
 
 ### Fixed
 
@@ -62,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **multer left files behind on aborted uploads (CVE-2026-88932).** An upload cut off early could leave a complete file on disk with nothing to remove it, and the attachment and avatar routes use that storage. multer 2.4.0 fixes it. The update also fixes advisories in adm-zip (a file overwrite through symlinks, and a memory DoS), nanoid and vitest's mocker. `npm audit --omit=dev` finds nothing. The full audit reports only the dev-only esbuild inside drizzle-kit, which needs drizzle-kit 1.0.
 - **A dropzone input took space in the layout.** react-dropzone 19 renders its hidden file input as a zero-size block, and a flex gap still counts it, so the next item moved by the gap: 16 px for the account photo's button, 12 px for the avatar picker's content and 24 px for the timeline. The inputs are positioned out of the flow again (`DROPZONE_INPUT`), and the account photo screenshots match the ones from before the update pixel for pixel.
 - **A pasted screenshot would have become an attachment.** react-dropzone 19.2 turned paste-to-upload on by default, and the profile's drop target wraps the note composer. The three dropzones set `noPaste`, as before.
+- **Password recovery could not run in Docker.** docs/configuration.md gave `docker exec -it contrack npx tsx scripts/reset-password.ts`, and the image had neither `scripts/` nor the tsx CLI. The image ships `scripts/reset-password.ts`, and the command is `node scripts/reset-password.ts <username>`.
+- **A timed-out CPU worker test left processes running.** It started `npx tsx`, three processes deep, and its SIGKILL reached only npx. One orphan was still running fifteen days later. The test starts Node directly now.
 
 ### Removed
 
@@ -72,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`APP_URL` in the agent docs.** Nothing read it. It came from the AI Studio template, and so did the comment on `DISABLE_HMR`, which now says what the switch is for. The eval scripts' `LOG_LEVEL` is gone too, because the logger has no levels.
 - **`googleapis`, `eml-format`, `tz-lookup`, `@types/tz-lookup`, `dotenv`, `tippy.js`, `@popperjs/core` and `@types/dompurify`.** Node reads `.env` itself (`process.loadEnvFile`, same rules), and dompurify ships its own types. The install holds 959 packages, down from 986.
 - **`.npmrc`.** It held only `legacy-peer-deps`.
+- **tsx**, as a dependency and from every npm script and script header. `npm run dev` is `node server.ts`.
+- **`experimentalDecorators`** in tsconfig. No code uses decorators.
 
 ### Added
 

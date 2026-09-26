@@ -3,8 +3,13 @@
 #  It is a boolean feature flag; the directive silences the false positive so
 #  a first-time builder doesn't see a scary "secrets" warning.)
 
+# Node 26 on Debian 13 (trixie), the current Debian stable. Debian 12
+# (bookworm) moved to reduced LTS support in June 2026. The tag names the
+# major line only, so a rebuild takes each 26.x security release; package.json
+# requires 26.10 or later.
+
 # Stage 1: Build the frontend
-FROM node:22-bookworm AS builder
+FROM node:26-trixie AS builder
 
 WORKDIR /app
 
@@ -21,13 +26,12 @@ RUN npm run build
 # Stage 2: Production runtime
 # No apt packages needed: better-sqlite3 bundles its own SQLite, and Node
 # ships with a built-in CA store for outbound TLS.
-FROM node:22-bookworm-slim AS runtime
+FROM node:26-trixie-slim AS runtime
 
 WORKDIR /app
 
-# Install production dependencies. tsx, which runs the TypeScript server, is
-# one of them, so the lockfile pins it. A global `npm install -g tsx@4` took
-# whatever 4.x was newest on the day of the build.
+# Install production dependencies. Node runs the TypeScript itself, so there
+# is no TypeScript loader to install.
 COPY package.json package-lock.json ./
 RUN npm pkg delete scripts.prepare \
     && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev \
@@ -44,6 +48,10 @@ COPY shared/ ./shared/
 COPY src/db/ ./src/db/
 COPY drizzle/ ./drizzle/
 COPY server.ts drizzle.config.ts ./
+# The documented password recovery, `docker exec -it contrack node
+# scripts/reset-password.ts <username>`, runs this file. The image had no
+# scripts/, so the command could not work in a container.
+COPY scripts/reset-password.ts ./scripts/
 
 # Configure environment variables
 # AUTH_REQUIRED defaults to false: the common deployment is a container reached
@@ -78,7 +86,7 @@ EXPOSE 3210
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3210)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# One process: `node --import tsx` loads the TypeScript hooks into Node
-# itself, so SIGTERM from `docker stop` reaches the server, which drains its
+# Node 26 strips the types and runs server.ts, with no loader. It is one
+# process, so SIGTERM from `docker stop` reaches the server, which drains its
 # connections and closes the database.
-CMD ["node", "--import", "tsx", "server.ts"]
+CMD ["node", "server.ts"]

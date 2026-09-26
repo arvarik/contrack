@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
+    /* Node 26 runs the server's TypeScript itself, by stripping the types.
+       It applies no compiler settings, so class fields follow the standard
+       rules there. The compiler, Vite and Vitest follow the same rules, so
+       a test checks what production runs. */
+    "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
@@ -17,6 +20,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    /* What Node's type stripping needs: a type-only import says `type`, and
+       no syntax needs compiling (no enums, namespaces or parameter
+       properties). `npm run lint` fails on either before Node would. */
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
 
     /* Strictness — keep these on. `strict` enables noImplicitAny,
        strictNullChecks, strictFunctionTypes, useUnknownInCatchVariables, etc.

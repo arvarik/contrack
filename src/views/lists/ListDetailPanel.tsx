@@ -17,7 +17,7 @@ import {
   useListContacts,
   useRemoveFromList,
 } from "../../api";
-import { ContactList } from "../../types";
+import { type ContactList } from "../../types";
 import { ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
 import {

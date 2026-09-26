@@ -24,8 +24,8 @@ import React, {
   useContext,
   useMemo,
   useState,
-  Dispatch,
-  SetStateAction,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import type { SemanticSearchResult } from "../types";
 

@@ -12,7 +12,7 @@ import {
   Handshake,
   ActivitySquare,
 } from "lucide-react";
-import { Interaction } from "../../../types";
+import { type Interaction } from "../../../types";
 import type { LucideIcon } from "lucide-react";
 import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";

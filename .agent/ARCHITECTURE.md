@@ -10,9 +10,9 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 
 ## 1. Tech Stack & Infrastructure
 
-- **Language / Runtime**: TypeScript 6 / Node.js 22+
+- **Language / Runtime**: TypeScript 6 / Node.js 26.10+. Node strips the types and runs the `.ts` files itself, with no tsx or build step for the server
 - **Frontend**: React 19 via Vite 8, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Motion 13 (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
-- **Backend / API**: Express 5 running natively via `tsx` (`node --import tsx server.ts` in the Docker image). Vite dev server runs as middleware **inside** the Express process (not on a separate port).
+- **Backend / API**: Express 5, run by Node 26 as `node server.ts`, in development and in the Docker image. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
 - **AI Provider**: Capability-routed multi-provider — Google Gemini via `@google/genai`, OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`, plus a generic OpenAI-compatible adapter for self-hosted servers. Providers are resolved per capability at call time (see `capabilities.ts`), not fixed at startup; `AI_PROVIDER` is now only the Auto-mode preference. Local embeddings via `@huggingface/transformers` (Transformers.js).
 - **Deployment**: Local-first / Self-hosted. Single Node.js process serves both API and frontend.

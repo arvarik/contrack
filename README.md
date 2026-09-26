@@ -196,7 +196,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 22+.
+Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 26.10 or later.
 
 > **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
 
@@ -207,7 +207,7 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 | Domain       | Technology                                                            |
 | ------------ | --------------------------------------------------------------------- |
 | **Frontend** | React 19, Vite 8, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
-| **Backend**  | Node.js 22, Express, TypeScript (tsx), Zod validation                 |
+| **Backend**  | Node.js 26 (runs the TypeScript itself), Express, Zod validation      |
 | **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |

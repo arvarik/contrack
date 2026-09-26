@@ -93,7 +93,8 @@ const getWeatherIcon = (code: number, isDay: boolean) => {
  * "en-IN" knows IST for India and "en-IE" knows IST for Ireland, "en-ZA"
  * SAST and "en-SG" SGT, "en-CA" Newfoundland's NST, and "en-HK" HKT. Japan's
  * JST is known only to "ja-JP", which is why one locale here is not English:
- * it comes last, so it can only fill a gap. Checked in Node 22 against every
+ * it comes last, so it can only fill a gap. Checked in Node 26 (ICU 78.3,
+ * tzdata 2026c) against every
  * IANA zone, in January and in July: the list names about half of them, the
  * populous half. The rest, such as Seoul, Shanghai, São Paulo and Moscow,
  * keep the offset.
