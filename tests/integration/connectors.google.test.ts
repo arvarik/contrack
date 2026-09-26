@@ -24,7 +24,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { google } from "googleapis";
+import { google } from "../../server/connectors/googleApis.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, resetAccounts, type Actor } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";

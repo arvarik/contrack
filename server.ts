@@ -5,7 +5,7 @@
  * server/app.ts), attaches Vite dev middleware (or static serving in
  * production), starts listening, and kicks off background tasks.
  */
-import "dotenv/config";
+import "./server/utils/loadEnv.ts";
 import express from "express";
 import path from "path";
 

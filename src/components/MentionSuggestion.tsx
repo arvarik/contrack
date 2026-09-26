@@ -4,7 +4,14 @@ import type {
   SuggestionKeyDownProps,
 } from "@tiptap/suggestion";
 import type { MentionNodeAttrs } from "@tiptap/extension-mention";
-import tippy, { Instance as TippyInstance } from "tippy.js";
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  shift,
+  type VirtualElement,
+} from "@floating-ui/dom";
 import React, {
   forwardRef,
   useEffect,
@@ -127,6 +134,11 @@ export const MentionList = forwardRef<
  * pointer events and is hidden from assistive tech. A list appended to
  * `document.body` could be seen and not clicked, and a click on it counted as
  * a click outside, which closed the dialog.
+ *
+ * Floating UI places the list under the caret, above it when there is no
+ * room below, and follows the caret while the page scrolls. TipTap's
+ * suggestion plugin uses the same library. tippy.js did this before. Its
+ * last release was in 2021, and its Popper engine's in 2023.
  */
 export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
   items: ({ query }: { query: string }) => {
@@ -137,7 +149,28 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
 
   render: () => {
     let component: ReactRenderer;
-    let popup: TippyInstance[];
+    let popup: HTMLElement | null = null;
+    let stopUpdates: (() => void) | null = null;
+    let caret: (() => DOMRect | null) | null | undefined;
+    // One reference for the list's lifetime, reading the latest caret, so
+    // autoUpdate keeps following it after each keystroke.
+    const reference: VirtualElement = {
+      getBoundingClientRect: () => caret?.() ?? new DOMRect(),
+    };
+
+    const place = () => {
+      const el = popup;
+      if (!el) return;
+      void computePosition(reference, el, {
+        placement: "bottom-start",
+        middleware: [offset(10), flip(), shift({ padding: 8 })],
+      }).then(({ x, y }) => {
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        // Hidden until placed, so it never shows at the host's corner.
+        el.style.visibility = "visible";
+      });
+    };
 
     return {
       onStart: (props: SuggestionProps<ContactSlim, MentionNodeAttrs>) => {
@@ -147,34 +180,36 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
         });
 
         if (!props.clientRect) return;
+        caret = props.clientRect;
+        reference.contextElement = props.editor.view.dom;
 
         const host =
           props.editor.view.dom.closest<HTMLElement>('[role="dialog"]') ??
           document.body;
-        popup = tippy("body", {
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-          appendTo: () => host,
-          content: component.element,
-          showOnCreate: true,
-          interactive: true,
-          trigger: "manual",
-          placement: "bottom-start",
+        popup = document.createElement("div");
+        Object.assign(popup.style, {
+          position: "absolute",
+          top: "0",
+          left: "0",
+          zIndex: "9999",
+          visibility: "hidden",
         });
+        popup.appendChild(component.element);
+        host.appendChild(popup);
+        stopUpdates = autoUpdate(reference, popup, place);
       },
 
       onUpdate(props: SuggestionProps<ContactSlim, MentionNodeAttrs>) {
         component.updateProps(props);
 
         if (!props.clientRect) return;
-
-        popup[0].setProps({
-          getReferenceClientRect: props.clientRect as () => DOMRect,
-        });
+        caret = props.clientRect;
+        place();
       },
 
       onKeyDown(props: SuggestionKeyDownProps) {
         if (props.event.key === "Escape") {
-          popup[0].hide();
+          if (popup) popup.style.display = "none";
           return true;
         }
 
@@ -190,7 +225,9 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
       },
 
       onExit() {
-        popup[0].destroy();
+        stopUpdates?.();
+        popup?.remove();
+        popup = null;
         component.destroy();
       },
     };

@@ -1,17 +1,17 @@
 /**
  * PlatformIcon — Resolves a social platform name to the appropriate icon.
- * Uses Lucide icons for known platforms, falls back to a favicon proxy or Globe.
+ * Uses Lucide-style icons for known platforms, falls back to a favicon proxy or Globe.
  */
 import React from "react";
+import { Globe } from "lucide-react";
 import {
-  Linkedin,
   Facebook,
   Github,
-  Twitter,
   Instagram,
-  Globe,
+  Linkedin,
+  Twitter,
   Youtube,
-} from "lucide-react";
+} from "../../../components/socialIcons";
 
 // Known platform → icon mapping
 const PLATFORM_ICONS: Record<string, React.FC<{ className?: string }>> = {

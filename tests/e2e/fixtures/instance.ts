@@ -97,9 +97,9 @@ export class ContrackInstance {
         HOST: "127.0.0.1",
         DATA_DIR: dataDir,
         AUTH_REQUIRED: options.authRequired ? "true" : "false",
-        // Empty rather than deleted: server modules load dotenv, and dotenv
-        // fills only variables that are unset, so an empty value is what
-        // keeps a developer's .env keys out of the run.
+        // Empty rather than deleted: the server loads .env, and it fills
+        // only variables that are unset, so an empty value is what keeps a
+        // developer's .env keys out of the run.
         GEMINI_API_KEY: "",
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",

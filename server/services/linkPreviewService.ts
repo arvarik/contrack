@@ -1,4 +1,6 @@
-import * as cheerio from "cheerio";
+// The slim build parses with htmlparser2 and skips parse5 and the undici
+// copy the full entry loads for cheerio.fromURL, which nothing here calls.
+import * as cheerio from "cheerio/slim";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import {
   assertPublicHttpUrl,

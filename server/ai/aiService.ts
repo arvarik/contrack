@@ -16,7 +16,7 @@
 // operations in the domain module they belong to and re-export them here.
 // =============================================================================
 
-import "dotenv/config";
+import "../utils/loadEnv.ts";
 import type {
   ParsedContact,
   MentionEntity,

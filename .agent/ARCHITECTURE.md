@@ -10,9 +10,9 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 
 ## 1. Tech Stack & Infrastructure
 
-- **Language / Runtime**: TypeScript ~5.8 / Node.js 22+
-- **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
-- **Backend / API**: Express 4 running natively via `tsx`. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
+- **Language / Runtime**: TypeScript 6 / Node.js 22+
+- **Frontend**: React 19 via Vite 8, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Motion 13 (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
+- **Backend / API**: Express 5 running natively via `tsx` (`node --import tsx server.ts` in the Docker image). Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
 - **AI Provider**: Capability-routed multi-provider — Google Gemini via `@google/genai`, OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`, plus a generic OpenAI-compatible adapter for self-hosted servers. Providers are resolved per capability at call time (see `capabilities.ts`), not fixed at startup; `AI_PROVIDER` is now only the Auto-mode preference. Local embeddings via `@huggingface/transformers` (Transformers.js).
 - **Deployment**: Local-first / Self-hosted. Single Node.js process serves both API and frontend.
@@ -233,7 +233,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `server/ai/adapters/` — Vendor integrations: `gemini.ts` (`@google/genai`), `openai.ts` (`openai`), `anthropic.ts` (`@anthropic-ai/sdk`)
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
 - `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`, `connectors.ts`
-- `server/connectors/` — Connectors subsystem: `service.ts` (CRUD, secrets, backoff), `scheduler.ts` (polling loop, concurrency), `ingest.ts` (idempotent stream commit, ghost promotion, day roll-up), `matching.ts` (participant contact resolution), `registry.ts` (adapter catalog), `summaries.ts` (prompt-injection shielded AI digests), `email/normalize.ts` (subject & address canonicalization), `adapters/ics.ts` (Calendar), `adapters/imap.ts` (Mailbox via IMAP), `adapters/google.ts` (Google Workspace contacts, mail, calendar via OAuth 2.0)
+- `server/connectors/` — Connectors subsystem: `service.ts` (CRUD, secrets, backoff), `scheduler.ts` (polling loop, concurrency), `ingest.ts` (idempotent stream commit, ghost promotion, day roll-up), `matching.ts` (participant contact resolution), `registry.ts` (adapter catalog), `summaries.ts` (prompt-injection shielded AI digests), `email/normalize.ts` (subject & address canonicalization), `adapters/ics.ts` (Calendar), `adapters/imap.ts` (Mailbox via IMAP), `adapters/google.ts` (Google Workspace contacts, mail, calendar via OAuth 2.0, with the per-API `@googleapis/*` clients from `googleApis.ts`)
 - `server/services/` — Heavy business logic:
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
@@ -335,12 +335,12 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - **Geocoding**: Nominatim (OpenStreetMap), the one geocoder. No key needed. The background queue spaces requests 1.1 s apart, and `geocode_cache` keeps every answer, a failure for seven days.
 - **Web Search (Enrichment)**: Google Search Grounding (Gemini), OpenAI Responses API web search, Anthropic native web search tool, or self-hosted SearXNG instance (configured via `SEARXNG_URL` or Admin Settings).
 - **Avatar Processing**: `sharp` for image resizing/optimization.
-- **Icons**: `lucide-react` icon library.
+- **Icons**: `lucide-react` 1.x. The six social brand icons that Lucide 1.0 dropped are kept, with the same drawings, in `src/components/socialIcons.ts`.
 - **Toast Notifications**: `sonner`.
 - **Drag & Drop**: `@dnd-kit/core` + `@dnd-kit/sortable` for list reordering.
 - **Date Utilities**: `date-fns` for formatting, `chrono-node` for NLP date parsing.
 - **Validation**: `zod` for runtime payload validation.
-- **Utilities**: `clsx` + `tailwind-merge` for class merging, `dompurify` for HTML sanitization, `papaparse` for CSV parsing, `eml-format` for .eml email parsing.
+- **Utilities**: `clsx` + `tailwind-merge` for class merging, `dompurify` for HTML sanitization, `papaparse` for CSV parsing, `mailparser` for .eml email parsing (the IMAP connector uses it too).
 
 ### Model Ledger (ML/AI Topology)
 
@@ -567,7 +567,7 @@ return withRetry(
 
 ## 9. Startup Lifecycle (`server.ts`)
 
-1. Load environment variables (`dotenv/config`)
+1. Load environment variables (`server/utils/loadEnv.ts`, which calls `process.loadEnvFile`)
 2. Validate that at least one provider is configured (env key, stored key, or custom endpoint); warn if none
 3. Initialize Express with optional CORS (only when `CORS_ORIGIN` is set), JSON parsing (50MB limit), per-IP rate limiting on AI-cost endpoints (60 req/min via `server/middleware/rateLimit.ts`), request ID middleware, Morgan logging
 4. Mount all API routers
@@ -589,8 +589,8 @@ return withRetry(
 - **Database Seed**: `npm run seed` (resets data, recreates schemas, provides fixture data)
 - **Migrations**: `npm run db:generate` (outputs Drizzle migration)
 - **Type Check**: `npm run lint` (`tsc --noEmit`)
-- **Test**: `npm test` (Vitest in watch mode) / `npx vitest run` (single-run)
-- **Requirements**: Provide at least one AI credential — an API key in `.env` (copy from `.env.example`), a key entered under Settings → Administration → AI providers, or a custom OpenAI-compatible endpoint
+- **Test**: `npm test` (Vitest, one run of the unit, integration and eval projects) / `npm run test:watch` (watch mode)
+- **Requirements**: None to start. Contacts and semantic search run on the built-in local model. AI features need one credential: an API key in `.env` (copy from `.env.example`), a key entered under Settings → AI, or a custom OpenAI-compatible endpoint
 
 ## 11. AI Stats API Contracts
 

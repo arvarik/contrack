@@ -22,7 +22,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import tzlookup from "tz-lookup";
+import tzlookup from "@photostructure/tz-lookup";
 import {
   Sun,
   Moon,

@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../server/utils/loadEnv.ts";
 import { sqlite } from "../server/db.ts";
 import { hashPassword } from "../server/services/passwords.ts";
 import { generateTemporaryPassword } from "../server/services/adminService.ts";

@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../server/utils/loadEnv.ts";
 import * as schema from "../src/db/schema";
 import { faker } from "@faker-js/faker";
 import crypto from "crypto";

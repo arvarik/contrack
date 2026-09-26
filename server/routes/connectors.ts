@@ -9,7 +9,7 @@
  */
 
 import crypto from "node:crypto";
-import { google } from "googleapis";
+import { CodeChallengeMethod, google } from "../connectors/googleApis.ts";
 import { Router } from "express";
 import { z } from "zod";
 import { sqlite } from "../db.ts";
@@ -200,8 +200,7 @@ connectorsRouter.get(
       scope: scopes,
       state,
       code_challenge: codeChallenge,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- googleapis GenerateAuthUrlOpts type mismatch
-      code_challenge_method: "S256" as any,
+      code_challenge_method: CodeChallengeMethod.S256,
     });
 
     res.redirect(authUrl);

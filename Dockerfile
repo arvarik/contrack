@@ -8,9 +8,11 @@ FROM node:22-bookworm AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies. ONNXRUNTIME_NODE_INSTALL=skip stops onnxruntime-node
+# from downloading its CUDA 12 binaries from NuGet on linux/x64, as CI already
+# does. The embedding model runs on the CPU, so those files were never loaded.
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps
+RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci
 
 # Copy source and build
 COPY . .
@@ -23,11 +25,12 @@ FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 
-# Install production dependencies + tsx to execute the TypeScript server
+# Install production dependencies. tsx, which runs the TypeScript server, is
+# one of them, so the lockfile pins it. A global `npm install -g tsx@4` took
+# whatever 4.x was newest on the day of the build.
 COPY package.json package-lock.json ./
 RUN npm pkg delete scripts.prepare \
-    && npm ci --omit=dev --legacy-peer-deps \
-    && npm install -g tsx@4 \
+    && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev \
     && npm cache clean --force
 
 # Copy built frontend from builder
@@ -75,4 +78,7 @@ EXPOSE 3210
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3210)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["tsx", "server.ts"]
+# One process: `node --import tsx` loads the TypeScript hooks into Node
+# itself, so SIGTERM from `docker stop` reaches the server, which drains its
+# connections and closes the database.
+CMD ["node", "--import", "tsx", "server.ts"]

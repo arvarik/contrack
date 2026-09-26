@@ -20,7 +20,7 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 
 ### Framework & Configuration
 
-- **Runner**: Vitest 4.x (imported from `vitest/config`)
+- **Runner**: Vitest 5.x (imported from `vitest/config`)
 - **Environment**: Node (not jsdom — backend-focused tests)
 - **Globals**: `true` (describe/it/expect available without imports)
 - **Coverage**: V8 provider with `text`, `json`, `html` reporters (see `vitest.config.ts`)
