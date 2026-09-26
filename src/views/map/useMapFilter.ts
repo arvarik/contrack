@@ -225,7 +225,10 @@ export function useMapFilter(
     setRawInputState("");
     setOverdueOnlyState(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    (options?.onClearActiveView ?? options?.onFilterChange)?.();
+    // Read first, then call: Oxlint's exhaustive-deps reads
+    // `(options?.a ?? options?.b)?.()` as a use of all of `options`.
+    const onClear = options?.onClearActiveView ?? options?.onFilterChange;
+    onClear?.();
     isInternalUpdateRef.current = true;
     setSearchParams(
       (prev) => {

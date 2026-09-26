@@ -39,7 +39,7 @@ describe("the sqlite-vec version gate", () => {
   it("compares numbers, not strings", () => {
     // "v0.1.10" sorts before "v0.1.6" as a string and after it as a version.
     // Getting this wrong would refuse to boot on a newer sqlite-vec.
-    expect("v0.1.10" < "v0.1.6").toBe(true);
+    expect(["v0.1.6", "v0.1.10"].sort()).toEqual(["v0.1.10", "v0.1.6"]);
     expect(() => assertVecVersion("v0.1.10")).not.toThrow();
   });
 

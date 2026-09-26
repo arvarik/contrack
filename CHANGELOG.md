@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Node 26.10 or later, and nothing on Node 22.** `engines` and a new `devEngines` require Node 26.10 and npm 11.19, and npm refuses `install`, `ci` and `run` on an older Node with `EBADDEVENGINES`. `.nvmrc` and `.tool-versions` pin 26.10.0 for CI and for nvm, fnm, mise and asdf. The Docker image runs `node:26-trixie-slim` on Debian 13, because Debian 12 moved to reduced LTS support in June 2026. `@types/node` is 26. Node 22's support ends on 2027-04-30, and Node 26's runs to 2029-04-30.
 - **Node runs the TypeScript itself.** The server, the scripts and the Docker image run `node server.ts` with Node 26's type stripping, so tsx and its esbuild leave the runtime. `/healthz` answers in 0.95 s, where tsx took 1.38 s. tsconfig adds `verbatimModuleSyntax` and `erasableSyntaxOnly`, so `npm run lint` fails on code Node could not run: 28 type imports gained `type`, two constructors lost their parameter properties, and 12 relative imports gained their file extension. Class fields follow the standard rules everywhere (`useDefineForClassFields: true`), so a test checks what production runs. `tests/unit/nativeTypeScript.test.ts` follows every import from `server.ts` and each script.
 - **Install scripts have a policy.** `allowScripts` in package.json allows better-sqlite3, esbuild and fsevents, and denies onnxruntime-node (its CUDA download), protobufjs and @google/genai. npm 11.19 treats the list as advisory and only stops warning about these packages. A later npm release enforces it.
+- **Oxlint lints the code, and TypeScript is 7.** Oxlint runs the same rules from `.oxlintrc.json`: ESLint's and typescript-eslint's recommended sets, the React hooks rules, and jsx-a11y with its ratchet. It lints the 1,000 files in 0.09 s, where ESLint took 3.8 s. Oxlint parses TypeScript itself, so TypeScript moves to 7.0.2, the native compiler, and `tsc --noEmit` takes 0.95 s, where 6.0 took 5.9 s. `npm run lint` takes 1.4 s, where it took 10.1 s. typescript-eslint could not make this move, because TypeScript 7.0 has no JavaScript API. The `eslint-disable` comments stay, because Oxlint reads them.
+- **A disable comment that suppresses nothing fails the lint.** ESLint only warned about one. Two in `ResizeHandle.tsx` suppressed nothing under Oxlint, which counts a focusable separator as a widget, as WAI-ARIA does. They are gone.
+- **The browser suite checks each dialog's name.** The axe scans add `aria-dialog-name`, which reads the name the browser computes for every dialog a journey opens. It replaces a jsx-a11y option, `includeRoles`, that Oxlint does not have. That option checked hand-written dialogs for a label.
 
 ### Fixed
 
@@ -67,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A pasted screenshot would have become an attachment.** react-dropzone 19.2 turned paste-to-upload on by default, and the profile's drop target wraps the note composer. The three dropzones set `noPaste`, as before.
 - **Password recovery could not run in Docker.** docs/configuration.md gave `docker exec -it contrack npx tsx scripts/reset-password.ts`, and the image had neither `scripts/` nor the tsx CLI. The image ships `scripts/reset-password.ts`, and the command is `node scripts/reset-password.ts <username>`.
 - **A timed-out CPU worker test left processes running.** It started `npx tsx`, three processes deep, and its SIGKILL reached only npx. One orphan was still running fifteen days later. The test starts Node directly now.
+- **Oxlint found six places that ESLint missed.** Four test helpers and one assertion read a value with `?.` and then read a field of it, so the `?.` protected nothing. ESLint does not look through the `as` cast around them. The helpers now say that the call exists (`!`), the way other tests do, and the assertion uses `toMatchObject`. The composer's editor area has a click handler and no role. ESLint skipped it, because the handler is conditional. Its disable comment now names that rule too, with the reason.
 
 ### Removed
 
@@ -79,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`.npmrc`.** It held only `legacy-peer-deps`.
 - **tsx**, as a dependency and from every npm script and script header. `npm run dev` is `node server.ts`.
 - **`experimentalDecorators`** in tsconfig. No code uses decorators.
+- **ESLint**, with `@eslint/js`, `typescript-eslint`, `eslint-plugin-jsx-a11y`, `eslint-plugin-react-hooks` and `eslint.config.mjs`. The lockfile holds 950 packages, where it held 1,104.
 
 ### Added
 

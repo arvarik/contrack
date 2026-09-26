@@ -530,8 +530,8 @@ const Composer = ({
     >
       {/* Editor area. While collapsed, a tap anywhere on the line focuses the
           editor, not only a tap on its text. The editor is the keyboard's way
-          in, so the area needs no key handler of its own. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
+          in, so the area needs no key handler and no role of its own. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         className={cn(
           "flex-1 relative",

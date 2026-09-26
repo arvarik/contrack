@@ -10,7 +10,7 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 
 ## 1. Tech Stack & Infrastructure
 
-- **Language / Runtime**: TypeScript 6 / Node.js 26.10+. Node strips the types and runs the `.ts` files itself, with no tsx or build step for the server
+- **Language / Runtime**: TypeScript 7 / Node.js 26.10+. Node strips the types and runs the `.ts` files itself, with no tsx or build step for the server
 - **Frontend**: React 19 via Vite 8, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Motion 13 (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
 - **Backend / API**: Express 5, run by Node 26 as `node server.ts`, in development and in the Docker image. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
