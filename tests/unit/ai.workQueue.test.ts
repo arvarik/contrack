@@ -655,13 +655,13 @@ describe("concurrent quota reservations", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date(before));
-      const tracker = new QuotaTracker(2);
+      const tracker = new QuotaTracker();
       tracker.reserve("same", 100);
       tracker.reserveGrounding();
       vi.setSystemTime(new Date(after));
       const snapshot = tracker.getSnapshot();
       expect(snapshot.models.same).toEqual({ rpm: 0, tpm: 0, rpd: 0 });
-      expect(snapshot.grounding.remaining).toBe(2);
+      expect(snapshot.grounding.rpd).toBe(0);
     } finally {
       vi.useRealTimers();
     }
@@ -670,7 +670,7 @@ describe("concurrent quota reservations", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-09-08T23:59:00Z"));
-      const tracker = new QuotaTracker(2);
+      const tracker = new QuotaTracker();
       const oldRequest = tracker.reserve("same", 100);
       const oldGroundingDate = tracker.reserveGrounding();
       vi.setSystemTime(new Date("2026-09-09T00:01:00Z"));

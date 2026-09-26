@@ -14,7 +14,6 @@ cp .env.example .env
 | `GEMINI_API_KEY`                 | Google Gemini API key                                                                                                                                                                          | —                      | No       |
 | `OPENAI_API_KEY`                 | OpenAI API key                                                                                                                                                                                 | —                      | No       |
 | `ANTHROPIC_API_KEY`              | Anthropic API key                                                                                                                                                                              | —                      | No       |
-| `AI_TIER`                        | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`                 | No       |
 | `PORT`                           | Express listening port                                                                                                                                                                         | `3210`                 | No       |
 | `HOST`                           | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`            | No       |
 | `PUBLIC_URL`                     | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
@@ -186,18 +185,43 @@ keyword search until it is restarted. Everything else carries on.
 
 ---
 
-## AI Tier Configuration
+## How Contrack picks a model
 
-The `AI_TIER` variable controls rate limiting and model access:
+Every kind of AI work is on **Automatic** until you choose a model for it in
+Settings → AI. Automatic picks each provider's newest model in the right tier:
 
-| Tier   | Behavior                                                                                                    |
-| ------ | ----------------------------------------------------------------------------------------------------------- |
-| `FREE` | Conservative routing, limits matching free-tier quotas (~10 RPM). Avoids paid spillover. Default.           |
-| `PAID` | Aggressive routing, full paid-tier limits (10K+ RPM). Includes paid-only models (e.g., Gemini 3.x preview). |
+| Task                                                     | Gemini                  | OpenAI       | Anthropic          |
+| -------------------------------------------------------- | ----------------------- | ------------ | ------------------ |
+| Quick: Magic Paste, @mentions, search planning, insights | `gemini-3.5-flash-lite` | `gpt-6-luna` | `claude-haiku-4-5` |
+| Deep: email summaries, duplicate checks                  | `gemini-3.8-flash`      | `gpt-6-sol`  | `claude-sonnet-5`  |
+| Research: web research on a contact                      | `gemini-3.8-flash`      | `gpt-6-sol`  | `claude-sonnet-5`  |
 
-> **Note:** `AI_TIER` only affects Gemini's SmartRouter, which picks a concrete
-> Gemini model whenever a capability is left on Auto. Other providers use their
-> own default rate limits, and an explicitly pinned model bypasses routing.
+Research runs on the middle tier. The flagships (Gemini 3.1 Pro, GPT-6
+Astra, Claude Opus) cost two to five times as much for the same profile and
+were slower. Pin one if you want it.
+
+- **Newer models arrive on their own.** Discovery lists the models your key
+  can use every day, and Automatic takes the newest of each tier.
+- **The list offers only models that answer.** Deprecated models, models
+  that Chat Completions refuses, and chat models more than a year old are
+  left out. A pin is tested with one tiny request before it is saved.
+- **Quick work does not reason.** OpenAI models get effort `none`, and Claude
+  Haiku and Gemini Flash-Lite do not think by default. Deep work and research
+  reason lightly: effort `low` on OpenAI and Anthropic, thinking level `low`
+  on Gemini. A one-line summary takes about a second.
+
+There is no free or paid setting. `AI_TIER` is gone: Google sets a key's
+limits from its Cloud project's billing and publishes no free-tier numbers,
+so a table of guessed limits either throttled paid keys or ran free keys
+into errors. When Google answers 429, Contrack pauses that model for as long
+as Google asks and routes the next request to the next model.
+
+> **Gemini's free tier.** Google may use free-tier prompts and responses to
+> improve its products, and people may read them. Google's terms ask you not
+> to send personal information there, and every Contrack prompt carries a
+> contact's details. Use a key from a Cloud project with billing. Web
+> research on Gemini 3.x needs billing too. Settings → AI and the admin
+> Health page say so when Google answers with a free-tier quota error.
 
 ---
 

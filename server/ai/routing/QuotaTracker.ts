@@ -1,20 +1,20 @@
 // =============================================================================
-// AI Layer — Optimistic Quota Tracker
+// AI Layer — Gemini Usage Meter
 // =============================================================================
-// Maintains an in-memory sliding window of recent API usage per model.
-// Answers the question: "If I send a request with ~N tokens to model X
-// right now, will it fit within the current tier's capacity?"
+// An in-memory count of what this process has sent to each Gemini model: the
+// requests and tokens of the last 60 seconds, the requests today, and the
+// grounded requests today. The admin Health page and /api/ai/diagnostics read
+// it.
 //
-// Key insight: By deducting quota synchronously BEFORE the network request
-// fires, parallel requests see each other's reservations and won't all
-// pile onto the same model — preventing burst 429 errors.
+// It used to gate requests too, against a free or paid limit per model. Those
+// limits were guesses, because Google sets them per Cloud project, so the
+// gate is gone and the meter only counts. A request is counted when it is
+// sent, corrected to the real token count when it returns, and taken back
+// when the provider refused it.
 //
-// Why in-memory? Contrack is a single-user, local-first app with one
-// Node.js process. An in-memory tracker has zero latency and naturally
-// resets on restart (quotas are time-windowed anyway).
+// Why in-memory? One Node.js process serves the instance, and the counts are
+// time-windowed, so a restart losing them costs nothing.
 // =============================================================================
-
-import type { TierLimits } from "./registry.ts";
 
 const quotaDate = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Los_Angeles",
@@ -49,15 +49,10 @@ export class QuotaTracker {
   private usage = new Map<string, UsageWindow>();
   private nextReservationId = 0;
 
-  // ── Grounding RPD Tracking ──────────────────────────────────────────
-  // Grounding has its own daily limit, SEPARATE from generation RPD.
-  // Flash and Flash-Lite share a single grounding pool on Gemini 2.5.
+  // ── Grounded requests today ─────────────────────────────────────────
+  // Counted apart from generation, because Google bills grounded searches
+  // apart from tokens.
   private groundingUsage = { dateKey: "", rpd: 0 };
-  private readonly groundingRPDLimit: number;
-
-  constructor(groundingRPDLimit: number = 500) {
-    this.groundingRPDLimit = groundingRPDLimit;
-  }
 
   // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -77,9 +72,8 @@ export class QuotaTracker {
    * outputs are 30–80% of input length.
    * +50 token overhead for JSON schema instructions.
    *
-   * This is intentionally conservative (overestimates). Under-counting
-   * risks blowing past limits; over-counting only causes slightly
-   * earlier model rotation — a safe tradeoff.
+   * It stands in for the real count only until the response arrives and
+   * `reconcile` replaces it.
    */
   estimateTokens(
     prompt: string,
@@ -125,58 +119,20 @@ export class QuotaTracker {
     window.tokens = window.tokens.filter((t) => t.ts > cutoff);
   }
 
-  // ── Capacity Check ──────────────────────────────────────────────────
-
-  /**
-   * Check whether a model has capacity for an estimated request
-   * against the provided tier-specific limits.
-   *
-   * This is a **read-only** check — does NOT reserve quota.
-   * The caller must call `reserve()` separately after deciding to proceed.
-   */
-  hasCapacity(
-    modelId: string,
-    estimatedTokens: number,
-    limits: TierLimits,
-  ): boolean {
-    const now = Date.now();
-    const window = this.getOrCreateWindow(modelId);
-    this.cleanup(window, now);
-
-    const currentRpm = window.requests.length;
-    const currentTpm = window.tokens.reduce((sum, t) => sum + t.count, 0);
-    const currentRpd = window.rpd;
-
-    return (
-      currentRpm + 1 <= limits.rpm &&
-      currentTpm + estimatedTokens <= limits.tpm &&
-      currentRpd + 1 <= limits.rpd
-    );
-  }
-
-  /**
-   * Check whether there's remaining grounding RPD in the shared pool.
-   *
-   * The grounding pool is shared between flash + flash-lite on Gemini 2.5.
-   * This is SEPARATE from generation RPD — a model can have generation
-   * capacity remaining but no grounding capacity.
-   */
-  hasGroundingCapacity(): boolean {
+  /** Start a new grounding day when the Pacific date has moved on. */
+  private rollGroundingDay(): void {
     const today = this.getTodayKey();
     if (this.groundingUsage.dateKey !== today) {
       this.groundingUsage = { dateKey: today, rpd: 0 };
     }
-    return this.groundingUsage.rpd < this.groundingRPDLimit;
   }
 
-  // ── Optimistic Reservation ──────────────────────────────────────────
+  // ── Counting ────────────────────────────────────────────────────────
 
   /**
-   * Reserve quota BEFORE the network request fires.
-   *
-   * This is the core concurrency safety mechanism: by deducting
-   * synchronously from the in-memory ledger, parallel requests see
-   * each other's reservations and won't all pile onto the same model.
+   * Count a request as it is sent, with its estimated tokens. Returns an id
+   * that `reconcile` and `rollback` use to find this request again, so
+   * responses arriving out of order adjust the right entry.
    */
   reserve(modelId: string, estimatedTokens: number): number {
     const now = Date.now();
@@ -192,14 +148,11 @@ export class QuotaTracker {
     return id;
   }
 
-  /** Reserve one unit from the shared grounding RPD pool. */
+  /** Count one grounded request. Returns the day it was counted on. */
   reserveGrounding(): string {
-    const today = this.getTodayKey();
-    if (this.groundingUsage.dateKey !== today) {
-      this.groundingUsage = { dateKey: today, rpd: 0 };
-    }
+    this.rollGroundingDay();
     this.groundingUsage.rpd += 1;
-    return today;
+    return this.groundingUsage.dateKey;
   }
 
   // ── Post-Response Adjustments ───────────────────────────────────────
@@ -208,10 +161,8 @@ export class QuotaTracker {
    * Reconcile estimated tokens with actual tokens from API response.
    * Adjusts the most recent token entry to reflect reality.
    *
-   * This keeps the sliding window accurate over time, even though
-   * individual estimates may drift. Over-estimation is harmless
-   * (causes slightly earlier model rotation); under-estimation is
-   * corrected here to prevent future capacity miscalculations.
+   * This keeps the per-minute token count true to what was billed, even
+   * though individual estimates drift.
    */
   reconcile(
     modelId: string,
@@ -234,8 +185,8 @@ export class QuotaTracker {
   }
 
   /**
-   * Rollback a reservation if the API call fails.
-   * Removes the most recent request + token entry and decrements RPD.
+   * Take back a request the provider refused, so it is not counted.
+   * Removes its request and token entries and decrements the day's count.
    */
   rollback(modelId: string, reservationId?: number): void {
     const window = this.usage.get(modelId);
@@ -254,9 +205,9 @@ export class QuotaTracker {
       window.rpd = Math.max(0, window.rpd - 1);
   }
 
-  /** Rollback one unit from the shared grounding RPD pool. */
+  /** Take back a grounded request the provider refused. */
   rollbackGrounding(reservedDate = this.getTodayKey()): void {
-    this.hasGroundingCapacity();
+    this.rollGroundingDay();
     if (reservedDate === this.groundingUsage.dateKey)
       this.groundingUsage.rpd = Math.max(0, this.groundingUsage.rpd - 1);
   }
@@ -269,13 +220,13 @@ export class QuotaTracker {
    */
   getSnapshot(): {
     models: Record<string, { rpm: number; tpm: number; rpd: number }>;
-    grounding: { rpd: number; limit: number; remaining: number };
+    grounding: { rpd: number };
   } {
     const now = Date.now();
     const models: Record<string, { rpm: number; tpm: number; rpd: number }> =
       {};
 
-    this.hasGroundingCapacity();
+    this.rollGroundingDay();
     for (const modelId of this.usage.keys()) {
       const window = this.getOrCreateWindow(modelId);
       this.cleanup(window, now);
@@ -288,14 +239,7 @@ export class QuotaTracker {
 
     return {
       models,
-      grounding: {
-        rpd: this.groundingUsage.rpd,
-        limit: this.groundingRPDLimit,
-        remaining: Math.max(
-          0,
-          this.groundingRPDLimit - this.groundingUsage.rpd,
-        ),
-      },
+      grounding: { rpd: this.groundingUsage.rpd },
     };
   }
 }

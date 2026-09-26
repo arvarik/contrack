@@ -76,3 +76,72 @@ export function translateSchemaNode(
 
   return result;
 }
+
+// =============================================================================
+// Root shape — OpenAI's structured output takes an object at the root
+// =============================================================================
+
+/** The property a non-object root travels under while it is wrapped. */
+const WRAPPED_KEY = "items";
+
+/**
+ * Give a schema an object root, and say how to unwrap the answer.
+ *
+ * OpenAI's `json_schema` (Chat Completions and Responses alike) answers a
+ * `type: "array"` root with a 400, "schema must be a JSON Schema of 'type:
+ * "object"'". @mention extraction and the Catch-Me-Up briefing both ask for an
+ * array, so both failed on OpenAI while working on Gemini.
+ */
+export function withObjectRoot(node: JsonSchemaNode): {
+  schema: JsonSchemaNode;
+  unwrap: (value: unknown) => unknown;
+} {
+  if (node.type === "object") return { schema: node, unwrap: (v) => v };
+  return {
+    schema: {
+      type: "object",
+      properties: { [WRAPPED_KEY]: node },
+      required: [WRAPPED_KEY],
+    },
+    unwrap: (value) =>
+      value && typeof value === "object" && WRAPPED_KEY in value
+        ? (value as Record<string, unknown>)[WRAPPED_KEY]
+        : value,
+  };
+}
+
+// =============================================================================
+// Anthropic's grammar limits
+// =============================================================================
+
+/** Claude compiles a schema with at most this many optional parameters. */
+export const ANTHROPIC_MAX_OPTIONAL = 24;
+/** ...and at most this many parameters whose type is a union. */
+export const ANTHROPIC_MAX_UNIONS = 16;
+
+/**
+ * Whether Claude will refuse to compile `node` as an output schema.
+ *
+ * Contrack's contact-parsing schema has 33 optional fields and the research
+ * schema 32. Claude answers either with a 400, and the adapter used to learn
+ * that by sending it, once per schema per process. Counting here goes
+ * straight to prompt-guided JSON. Making the optional fields required and
+ * nullable does not help: that trips the union limit instead.
+ */
+export function exceedsAnthropicSchemaLimits(node: JsonSchemaNode): boolean {
+  let optional = 0;
+  let unions = 0;
+  const walk = (n: JsonSchemaNode) => {
+    if (n.nullable) unions++;
+    if (n.properties) {
+      const required = new Set(n.required ?? []);
+      for (const [key, child] of Object.entries(n.properties)) {
+        if (!required.has(key)) optional++;
+        walk(child);
+      }
+    }
+    if (n.items) walk(n.items);
+  };
+  walk(node);
+  return optional > ANTHROPIC_MAX_OPTIONAL || unions > ANTHROPIC_MAX_UNIONS;
+}

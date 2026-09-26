@@ -231,7 +231,12 @@ describe("what it says", () => {
       uptimeSeconds: number;
       startedAt: string;
       aiCache: Record<string, { entries: number; hitRate: number }>;
-      provider: { aiTier: string; circuitBreakers: string[] };
+      provider: {
+        capabilities: Record<string, unknown>;
+        circuitBreakers: string[];
+        grounding: { rpd: number };
+        freeTier: boolean;
+      };
     };
 
     expect(body.uptimeSeconds).toBeGreaterThanOrEqual(0);
@@ -240,6 +245,16 @@ describe("what it says", () => {
     // The tier bucket is not a cache tier and must not be reported as one.
     expect(body.aiCache.batchMode).toBeUndefined();
     expect(body.provider.circuitBreakers).toEqual([]);
+    // No key in a test run, so nothing serves quick, deep or research, and
+    // there is no tier to report.
+    expect(body.provider.capabilities).toEqual({
+      quick: null,
+      deep: null,
+      research: null,
+    });
+    expect(body.provider.grounding).toEqual({ rpd: 0 });
+    expect(body.provider.freeTier).toBe(false);
+    expect(body.provider).not.toHaveProperty("aiTier");
   });
 
   it("carries no secret", async () => {

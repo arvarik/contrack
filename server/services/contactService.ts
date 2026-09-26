@@ -36,7 +36,6 @@ import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { relationshipService } from "./relationshipService.ts";
-import { activeProviderName, ai } from "../ai/index.ts";
 import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
@@ -92,16 +91,6 @@ export function scheduleIncrementalDedupe(contactId: string) {
   }, DEDUPE_DEBOUNCE_MS);
 
   _dedupeTimers.set(contactId, timer);
-}
-
-function hasGroundingCapacity(): boolean {
-  try {
-    if (activeProviderName !== "gemini") return true;
-    const snapshot = ai.getQuotaSnapshot();
-    return snapshot.grounding.remaining > 0;
-  } catch {
-    return false;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -485,13 +474,13 @@ export const contactService = {
       scheduleIncrementalDedupe(id);
     }
 
-    // Auto-enrich person-created contact (never imports)
+    // Auto-enrich person-created contact (never imports). Whether research
+    // can run at all is validateEnrichmentStrategy's question, asked below.
     if (
       prefs.autoEnrich &&
       prefs.aiAssist &&
       !body.isGhost &&
-      !body.isArchived &&
-      hasGroundingCapacity()
+      !body.isArchived
     ) {
       runWithContext(
         {

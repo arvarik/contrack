@@ -45,8 +45,7 @@ import type {
 /** Empty diagnostics snapshot for providers without quota tracking. */
 const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
   models: {},
-  grounding: { rpd: 0, limit: 0, remaining: 0 },
-  aiTier: "N/A",
+  grounding: { rpd: 0 },
   circuitBreakers: [],
 };
 

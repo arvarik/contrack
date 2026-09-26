@@ -5,9 +5,10 @@
 // All Gemini SDK coupling is contained here. The rest of the AI layer
 // programs against the abstract AIProvider interface.
 //
-// v1.2 upgrade: Replaced static FALLBACK_MODELS chain with the Predictive
-// Smart Mesh — tier-aware routing, optimistic quota tracking, circuit
-// breakers, and exponential backoff. The public API is unchanged.
+// Routing: the SmartRouter picks the model for a class, a circuit breaker
+// pauses a model that answered 429, 5xx or timed out, for as long as Google
+// asks, and the retry goes to the next model. The QuotaTracker only counts
+// what was sent, for the Health page.
 // =============================================================================
 
 import { GoogleGenAI, Type } from "@google/genai";
@@ -22,13 +23,11 @@ import type {
 import { QuotaTracker } from "../routing/QuotaTracker.ts";
 import { SmartRouter } from "../routing/SmartRouter.ts";
 import {
-  getAITier,
-  getGroundingRPDLimit,
   getModelConfig,
   previewModelForClass,
-  type AITier,
   type ModelClass,
 } from "../routing/registry.ts";
+import { extractGeneration } from "../modelFilter.ts";
 import { log } from "../../utils/logger.ts";
 import {
   withTimeout,
@@ -37,7 +36,7 @@ import {
   withRetry,
   isRetryableError,
 } from "../resilience.ts";
-import { AppError } from "../../utils/AppError.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // JSON Schema Translation (unchanged from v1.0)
@@ -96,8 +95,61 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Duration (ms) to ban a model after a 429/503 — short enough for fast recovery */
+/** How long a model sits out after a 429, 5xx or timeout, when Google names no delay. */
 const CIRCUIT_BREAKER_DURATION_MS = 30_000;
+
+/** Bounds on the delay Google asks for, so a malformed hint cannot pause a model for a day. */
+const MIN_PAUSE_MS = 5_000;
+const MAX_PAUSE_MS = 15 * 60_000;
+
+/**
+ * How long to pause a model after `error`.
+ *
+ * A Gemini 429 carries a `google.rpc.RetryInfo` detail, `"retryDelay": "37s"`,
+ * which is Google's own answer to "when will this model take requests again".
+ * Honouring it replaces the guessed per-tier limits the router used to hold.
+ */
+export function pauseForError(error: unknown): number {
+  const match = getErrorMessage(error).match(
+    /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/,
+  );
+  if (!match) return CIRCUIT_BREAKER_DURATION_MS;
+  const ms = Math.round(Number(match[1]) * 1000);
+  return Math.min(MAX_PAUSE_MS, Math.max(MIN_PAUSE_MS, ms));
+}
+
+/**
+ * The thinking level to ask a model for, or undefined to leave its default.
+ *
+ * Gemini counts thinking tokens against `maxOutputTokens`. At the default
+ * level, 3.8 Flash thought for about 1,800 tokens on the research prompt,
+ * hit a 2,500-token cap with `MAX_TOKENS` and never searched; 3.1 Pro did the
+ * same. So deep and grounded work runs at "low", which every 3.x model takes.
+ * Flash-Lite already defaults to "minimal", and 2.5 models take a thinking
+ * budget, not a level, so both are left alone.
+ */
+export function thinkingLevelFor(
+  model: string,
+  modelClass: ModelClass | undefined,
+  grounded: boolean,
+): "low" | undefined {
+  const config = getModelConfig(model);
+  const generation = config?.generation ?? extractGeneration(model) ?? 0;
+  if (generation < 3) return undefined;
+  const cls = config?.modelClass ?? modelClass;
+  if (!grounded && cls === "lite") return undefined;
+  if (/flash-lite/i.test(model) && !grounded) return undefined;
+  return "low";
+}
+
+/**
+ * True when a Gemini error names a free-tier quota, such as
+ * `generate_content_free_tier_requests`. Google does not say a key's tier any
+ * other way.
+ */
+export function isFreeTierError(error: unknown): boolean {
+  return /free_tier|FreeTier/.test(getErrorMessage(error));
+}
 
 /**
  * Whether a discovered Gemini model can use the `googleSearch` tool.
@@ -132,14 +184,18 @@ function supportsGrounding(modelId: string): boolean {
 
 export class GeminiAdapter implements AIProvider {
   readonly name = "Gemini";
+  readonly supportsSearchGrounding = true;
   private client: GoogleGenAI;
   private apiKey: string;
-  private aiTier: AITier;
 
   // Routing infrastructure (shared across all generate() calls)
-  private tracker: QuotaTracker;
-  private router: SmartRouter;
+  private tracker = new QuotaTracker();
+  private router = new SmartRouter();
   private circuitBreakers = new Set<string>();
+  /** Set once Google answers with a free-tier quota error. */
+  private freeTier = false;
+  /** Models that refused a thinking level, so none is sent again. */
+  private noThinkingLevel = new Set<string>();
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -147,40 +203,24 @@ export class GeminiAdapter implements AIProvider {
       apiKey,
       httpOptions: { retryOptions: { attempts: 1 } },
     });
-
-    // Read tier from environment once at construction time
-    this.aiTier = getAITier();
-    const groundingLimit = getGroundingRPDLimit(this.aiTier);
-
-    this.tracker = new QuotaTracker(groundingLimit);
-    this.router = new SmartRouter(this.tracker, this.aiTier);
-
-    log.info(
-      "GeminiAdapter",
-      `Initialized with AI_TIER=${this.aiTier} | Grounding RPD limit: ${groundingLimit}`,
-    );
   }
 
   /**
-   * Expose full routing diagnostics for the /api/ai/diagnostics endpoint.
-   * Returns quota snapshot, circuit breaker state, and active tier — all
-   * in one call to keep the diagnostics surface minimal.
-   */
-  readonly supportsSearchGrounding = true;
-
-  /**
-   * The model the SmartRouter settles on for a class when nothing is rate
-   * limited. Under load the router may fall back to another model in the
+   * The model the SmartRouter settles on for a class when nothing is
+   * paused. Under load the router may fall back to another model in the
    * same class — this is the steady-state answer the settings UI shows.
    */
-  defaultModelFor(modelClass: ModelClass): string | undefined {
-    return previewModelForClass(
-      modelClass,
-      this.aiTier,
-      // The "pro" class is what research runs on, and research always needs
-      // the googleSearch tool.
-      modelClass === "pro",
-    );
+  defaultModelFor(
+    modelClass: ModelClass,
+    options: { grounding?: boolean } = {},
+  ): string | undefined {
+    return previewModelForClass(modelClass, options.grounding ?? false);
+  }
+
+  /** Take a model out of rotation for `ms`, after which it is tried again. */
+  private pause(model: string, ms: number): void {
+    this.circuitBreakers.add(model);
+    setTimeout(() => this.circuitBreakers.delete(model), ms).unref();
   }
 
   /**
@@ -224,7 +264,10 @@ export class GeminiAdapter implements AIProvider {
         const methods = model.supportedGenerationMethods ?? [];
         const id = model.name.replace(/^models\//, "");
         const capabilities: ModelCapability[] = [];
-        if (methods.includes("generateContent")) capabilities.push("chat");
+        // Gemini 1.x and 2.x are listed but answer a new project with 404
+        // "no longer available to new users", so they are not offered to chat.
+        if (methods.includes("generateContent") && !/^gemini-[12]\./.test(id))
+          capabilities.push("chat");
         if (methods.includes("embedContent")) capabilities.push("embeddings");
         if (capabilities.length === 0) continue;
         if (capabilities.includes("chat") && supportsGrounding(id)) {
@@ -260,8 +303,8 @@ export class GeminiAdapter implements AIProvider {
   getQuotaSnapshot(): DiagnosticsSnapshot {
     return {
       ...this.tracker.getSnapshot(),
-      aiTier: this.aiTier,
       circuitBreakers: [...this.circuitBreakers],
+      freeTier: this.freeTier,
     };
   }
 
@@ -281,33 +324,13 @@ export class GeminiAdapter implements AIProvider {
     return withRetry(
       async () => {
         options.signal?.throwIfAborted();
-        if (requiresGrounding && !this.tracker.hasGroundingCapacity())
-          throw new AppError("Grounding quota exhausted for today.", 429, {
-            code: "AI_BUSY",
-          });
         const model =
           options.model ??
           this.router.getNextAvailableRoute(
-            estimatedTokens,
             options.routing,
             this.circuitBreakers,
             requiresGrounding,
           ).modelId;
-        const config = getModelConfig(model);
-        if (
-          options.model &&
-          config &&
-          !this.tracker.hasCapacity(
-            model,
-            estimatedTokens,
-            this.aiTier === "FREE" ? config.freeLimits : config.paidLimits,
-          )
-        )
-          throw new AppError(
-            "This model has reached its local quota limit. Try again shortly.",
-            429,
-            { code: "AI_BUSY" },
-          );
         const reservation = this.tracker.reserve(model, estimatedTokens);
         const groundingDate = requiresGrounding
           ? this.tracker.reserveGrounding()
@@ -331,13 +354,18 @@ export class GeminiAdapter implements AIProvider {
             if (requiresGrounding)
               this.tracker.rollbackGrounding(groundingDate);
           }
+          if (status === 429 && isFreeTierError(error) && !this.freeTier) {
+            this.freeTier = true;
+            log.warn(
+              "GeminiAdapter",
+              "Google answered with a free-tier quota. On the free tier Google may use prompts and responses to improve its products. A key from a Cloud project with billing keeps them out.",
+            );
+          }
           options.signal?.throwIfAborted();
+          // A pinned model is the caller's choice, so there is nothing to
+          // route around. A routed one sits out and the retry picks another.
           if (isRetryableError(error, false) && !options.model) {
-            this.circuitBreakers.add(model);
-            setTimeout(
-              () => this.circuitBreakers.delete(model),
-              CIRCUIT_BREAKER_DURATION_MS,
-            ).unref();
+            this.pause(model, pauseForError(error));
           }
           throw error;
         }
@@ -361,6 +389,15 @@ export class GeminiAdapter implements AIProvider {
     const config: Record<string, unknown> = {};
     if (options.maxOutputTokens)
       config.maxOutputTokens = options.maxOutputTokens;
+
+    const thinkingLevel = this.noThinkingLevel.has(model)
+      ? undefined
+      : thinkingLevelFor(
+          model,
+          options.routing?.prefer,
+          !!options.enableSearchGrounding,
+        );
+    if (thinkingLevel) config.thinkingConfig = { thinkingLevel };
 
     if (options.enableSearchGrounding) {
       // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
@@ -386,26 +423,43 @@ export class GeminiAdapter implements AIProvider {
 
     // Forward cancellation to the SDK and bound callers even if the transport stalls.
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
-    const response = await withTimeout(
-      async (abortSignal) =>
-        this.client.models.generateContent({
-          model,
-          contents: options.prompt,
-          config: { ...config, abortSignal },
-        }),
-      timeoutMs,
-      options.signal,
-    );
+    const call = () =>
+      withTimeout(
+        async (abortSignal) =>
+          this.client.models.generateContent({
+            model,
+            contents: options.prompt,
+            config: { ...config, abortSignal },
+          }),
+        timeoutMs,
+        options.signal,
+      );
+    let response: Awaited<ReturnType<typeof call>>;
+    try {
+      response = await call();
+    } catch (err) {
+      // A model that takes no thinking level says so in a 400. Send it none,
+      // now and from then on.
+      if (!thinkingLevel || !/thinking/i.test(getErrorMessage(err))) throw err;
+      this.noThinkingLevel.add(model);
+      delete config.thinkingConfig;
+      log.info("GeminiAdapter", `${model} takes no thinking level`);
+      response = await call();
+    }
 
-    const text = response.text ?? "";
+    let text = response.text ?? "";
     const tokenCount = response.usageMetadata?.totalTokenCount;
     const latencyMs = Date.now() - startMs;
 
     // Validate JSON at the adapter boundary so downstream callers never
-    // crash on `JSON.parse` of a malformed model response. We deliberately
-    // do this for routed AND explicit-model paths so behavior is uniform.
+    // crash on `JSON.parse` of a malformed model response, and hand them the
+    // parsed value re-serialised, so a fence or a stray sentence is gone.
+    // We deliberately do this for routed AND explicit-model paths so
+    // behavior is uniform.
     if (options.responseFormat === "json" && !options.enableSearchGrounding) {
-      parseAIJson(text, `GeminiAdapter.executeWithModel(${model})`);
+      text = JSON.stringify(
+        parseAIJson(text, `GeminiAdapter.executeWithModel(${model})`),
+      );
     }
 
     const citations = response.candidates

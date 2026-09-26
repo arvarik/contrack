@@ -38,6 +38,7 @@ import {
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
+import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
 import {
   startConnectorScheduler,
   stopConnectorScheduler,
@@ -45,6 +46,7 @@ import {
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
+warnRetiredEnv();
 
 if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
   log.warn(

@@ -35,9 +35,11 @@ export interface AIStatsCacheTier {
   maxEntries: number;
 }
 
+/** Gemini's usage meter. Empty when Gemini is not connected. */
 export interface AIStatsQuota {
   models: Record<string, { rpm: number; tpm: number; rpd: number }>;
-  grounding: { rpd: number; limit: number; remaining: number };
+  /** Grounded requests sent today. */
+  grounding: { rpd: number };
 }
 
 /** One account's share of the instance's AI spending. */
@@ -54,7 +56,10 @@ export interface AIStatsUserUsage {
 
 export interface AIStatsSummary {
   session: AIStatsSessionKPIs;
-  tier: "FREE" | "PAID" | "MOCK";
+  /** "MOCK" when no provider is connected and every AI call is simulated. */
+  tier: "LIVE" | "MOCK";
+  /** Google answered the Gemini key with a free-tier quota error. */
+  freeTier: boolean;
   quota: AIStatsQuota;
   /**
    * The shared in-process cache. Admin-only, and simply absent for a member,

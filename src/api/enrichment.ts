@@ -44,10 +44,11 @@ export const useGroundingCapacity = () => {
   return useQuery({
     queryKey: enrichmentKeys.groundingCapacity,
     queryFn: ({ signal }) =>
-      apiJson<{ hasCapacity: boolean; remaining: number; limit: number }>(
-        `/ai/grounding-capacity`,
-        { signal },
-      ),
+      apiJson<{
+        hasCapacity: boolean;
+        provider: string | null;
+        researchRuns24h: number;
+      }>(`/ai/grounding-capacity`, { signal }),
     enabled: isAdmin,
     staleTime: 60_000, // Re-check every 60s
     refetchInterval: 120_000, // Background refresh every 2min

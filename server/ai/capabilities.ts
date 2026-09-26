@@ -12,12 +12,19 @@
 //      providers have credentials.
 //
 // Capabilities:
-//   fast       — Magic Paste, mentions, query planning/HyDE, verification,
+//   quick      — Magic Paste, mentions, query planning/HyDE, verification,
 //                daily insight, search expansion  (internal class: lite)
-//   smart      — briefings, email summaries, dedupe adjudication, extraction
+//   deep       — briefings, email summaries, dedupe adjudication, extraction
 //                (internal class: flash)
-//   research   — grounded web research for AI Search  (internal class: pro)
+//   research   — grounded web research for AI Search  (internal class: flash)
 //   embeddings — semantic search + duplicate similarity  (see embeddings.ts)
+//
+// Research runs on the middle class, not the top one. The job is to read a
+// few pages about a person and fill a form, which Sonnet 5, GPT-6 Sol and
+// Gemini 3.8 Flash do well. On the top class the same run cost twice as much
+// on Anthropic (Opus 5.5: 44 s, about $0.30 a contact, against Sonnet 5's
+// 36 s and $0.15) and five times as much on OpenAI (Astra). A person who
+// wants the flagship pins it.
 // =============================================================================
 
 import type { AIProvider } from "./provider.ts";
@@ -65,7 +72,7 @@ const CAPABILITY_CLASS: Record<
 > = {
   quick: "lite",
   deep: "flash",
-  research: "pro",
+  research: "flash",
 };
 
 /**
@@ -85,6 +92,13 @@ const ENV_OVERRIDE: Record<Exclude<AICapability, "embeddings">, string> = {
   deep: "AI_DEEP_MODEL",
   research: "AI_RESEARCH_MODEL",
 };
+
+/** The internal model class a generation capability runs on. */
+export function classForCapability(
+  capability: Exclude<AICapability, "embeddings">,
+): ModelClass {
+  return CAPABILITY_CLASS[capability];
+}
 
 /** Read all capability assignments (settings store). */
 export function getCapabilityAssignments(): Partial<
@@ -271,5 +285,27 @@ export function capabilityAvailability(): Record<
     quick: resolveCapability("quick") !== null,
     deep: resolveCapability("deep") !== null,
     research: resolveCapability("research") !== null,
+  };
+}
+
+/**
+ * The provider and model a capability runs on now, for the screens that name
+ * it: Settings, the admin Health page and /api/ai/diagnostics. The model is
+ * the pin when there is one, else what the adapter would pick, which a
+ * custom endpoint cannot say in advance (null).
+ */
+export function capabilityTarget(
+  capability: Exclude<AICapability, "embeddings">,
+): { providerId: string; model: string | null } | null {
+  const resolved = resolveCapability(capability);
+  if (!resolved) return null;
+  return {
+    providerId: resolved.providerId,
+    model:
+      resolved.model ??
+      resolved.provider.defaultModelFor?.(resolved.modelClass, {
+        grounding: capability === "research",
+      }) ??
+      null,
   };
 }

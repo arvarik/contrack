@@ -218,6 +218,20 @@ const CapabilityRow = ({
       })),
     ),
   ];
+  // A pin the catalog no longer offers (a model past its year, or one the
+  // provider stopped serving) stays visible, so the field still says what
+  // is saved rather than going blank.
+  if (
+    saved.mode === "pinned" &&
+    saved.model &&
+    !options.some((option) => option.value === savedValue)
+  ) {
+    options.push({
+      value: savedValue,
+      label: `${saved.model} (no longer listed)`,
+      group: resolved?.providerLabel ?? saved.providerId,
+    });
+  }
 
   const handleSave = () => {
     if (!isDirty) return;

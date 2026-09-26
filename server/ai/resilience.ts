@@ -236,6 +236,12 @@ export async function withRetry<T>(
       503,
       { code: "AI_AUTH_FAILED" },
     );
+  if (status === 404)
+    throw new AppError(
+      `The AI provider has no such model for this key. ${providerMessage(e?.message)}`.trim(),
+      502,
+      { code: "AI_MODEL_UNAVAILABLE" },
+    );
   if (status === 400 || status === 422)
     throw new AppError(
       "AI provider rejected the request. Check the model settings.",
@@ -254,6 +260,18 @@ export async function withRetry<T>(
   throw new ServiceUnavailableError("AI provider call failed after retries", {
     cause: e?.message,
   });
+}
+
+/**
+ * The human sentence inside a provider's error, when there is one: Gemini and
+ * OpenAI wrap it in JSON (`{"error":{"message":"..."}}`), Anthropic in a
+ * status prefix. Capped, because it reaches a toast.
+ */
+function providerMessage(raw: string | undefined): string {
+  if (!raw) return "";
+  const quoted = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const text = quoted ? quoted[1].replace(/\\"/g, '"') : raw;
+  return text.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {

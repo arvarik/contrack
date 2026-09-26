@@ -1833,7 +1833,10 @@ curl -X PUT http://localhost:3210/api/settings/ai/searxng \
 
 ### `GET /api/ai/diagnostics`
 
-Get AI model routing and quota diagnostics.
+What quick, deep and research resolve to now, and Gemini's usage meter:
+per-model requests and tokens in the last minute, requests today, grounded
+requests today, the models paused after a 429, and `freeTier` when Google has
+answered the key with a free-tier quota error.
 
 ```bash
 curl http://localhost:3210/api/ai/diagnostics
@@ -1843,7 +1846,9 @@ curl http://localhost:3210/api/ai/diagnostics
 
 ### `GET /api/ai/grounding-capacity`
 
-Check the grounding RPD quota for contact enrichment (Gemini only).
+Whether web research can run now, with any provider, and how many research
+runs the instance made in the last 24 hours:
+`{ "hasCapacity": true, "provider": "anthropic", "researchRuns24h": 4 }`.
 
 ```bash
 curl http://localhost:3210/api/ai/grounding-capacity
@@ -2724,9 +2729,14 @@ curl http://localhost:3210/api/admin/health
     "briefing": { "entries": 12, "hits": 40, "misses": 8, "hitRate": 0.83 }
   },
   "provider": {
-    "aiTier": "FREE",
+    "capabilities": {
+      "quick": { "providerId": "gemini", "model": "gemini-3.5-flash-lite" },
+      "deep": { "providerId": "gemini", "model": "gemini-3.8-flash" },
+      "research": { "providerId": "anthropic", "model": "claude-sonnet-5" }
+    },
     "circuitBreakers": [],
-    "grounding": { "rpd": 12, "limit": 500, "remaining": 488 }
+    "grounding": { "rpd": 12 },
+    "freeTier": false
   }
 }
 ```

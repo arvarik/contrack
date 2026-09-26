@@ -8,7 +8,6 @@ import { AppError } from "../../utils/AppError.ts";
 
 import type { ParsedContact } from "../types.ts";
 import { ParallelQueue } from "../routing/ParallelQueue.ts";
-import { getAITier } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { recordInvocation } from "../../services/aiStatsService.ts";
@@ -272,19 +271,19 @@ ${UNTRUSTED_DATA_RULE}`;
 }
 
 /**
- * Parse multiple unstructured contact texts in parallel with tier-aware
- * concurrency. Uses ParallelQueue to enforce concurrency limits and
- * delegates each item to `parseContactRecord` for DRY prompt/schema reuse.
+ * Parse multiple unstructured contact texts in parallel. Uses ParallelQueue
+ * to cap concurrency and delegates each item to `parseContactRecord` for DRY
+ * prompt/schema reuse.
  *
- * Concurrency adapts to AI_TIER automatically:
- *   - PAID → 10 concurrent workers (10K RPM headroom)
- *   - FREE → 2 concurrent workers (conservative for ~10 RPM limits)
+ * Two workers at most. A provider that is rate limited answers 429, and the
+ * adapter's retry moves the item to another model, so there is no need to
+ * guess the key's limits here.
  *
  * Individual failures are isolated — one bad text never crashes the batch.
  * Failed items return `null` in the result array.
  *
  * @param texts       - Array of unstructured text strings to parse
- * @param concurrency - Override automatic tier-based concurrency
+ * @param concurrency - Workers to run, 1 or 2 (default 2)
  * @returns           - Array of parsed contacts (or null for failed items),
  *                      in the same order as the input array
  */
@@ -301,22 +300,11 @@ export async function bulkParseContacts(
 
   if (texts.length === 0) return [];
 
-  // Adapt concurrency to tier if not explicitly provided
-  // Non-Gemini providers (OpenAI, Anthropic) are always paid — no RPM restrictions
-  // that justify the conservative FREE tier concurrency of 2.
-  const tier = getAITier();
-  const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-  const effectiveConcurrency = Math.max(
-    1,
-    Math.min(
-      concurrency ?? (providerName !== "gemini" ? 2 : tier === "PAID" ? 2 : 1),
-      2,
-    ),
-  );
+  const effectiveConcurrency = Math.max(1, Math.min(concurrency ?? 2, 2));
 
   log.info(
     "AIService",
-    `bulkParseContacts: ${texts.length} items | concurrency: ${effectiveConcurrency} (${tier})`,
+    `bulkParseContacts: ${texts.length} items | concurrency: ${effectiveConcurrency}`,
   );
   const startMs = Date.now();
 

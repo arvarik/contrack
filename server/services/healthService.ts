@@ -27,6 +27,9 @@ import {
   TENANCY_SCHEMA_VERSION,
 } from "../db.ts";
 import { ai } from "../ai/index.ts";
+import { capabilityTarget } from "../ai/capabilities.ts";
+import { getProvider } from "../ai/providerRegistry.ts";
+import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { FTS_SCHEMA_VERSION } from "./search/ftsIndex.ts";
@@ -122,10 +125,17 @@ export interface InstanceHealth {
   };
   aiCache: Record<string, CacheTierHealth>;
   provider: {
-    aiTier: string;
-    /** Models a circuit breaker has taken out of rotation. */
+    /** What quick, deep and research run on now, by provider and model. */
+    capabilities: Record<
+      "quick" | "deep" | "research",
+      { providerId: string; model: string | null } | null
+    >;
+    /** Gemini models a circuit breaker has taken out of rotation. */
     circuitBreakers: string[];
-    grounding: { rpd: number; limit: number; remaining: number };
+    /** Grounded Gemini requests this process sent today. */
+    grounding: { rpd: number };
+    /** Google answered the Gemini key with a free-tier quota. */
+    freeTier: boolean;
   };
 }
 
@@ -285,17 +295,27 @@ export function instanceHealth(): InstanceHealth {
 
   let provider: InstanceHealth["provider"];
   try {
-    const snapshot = ai.getQuotaSnapshot();
+    const snapshot = getProvider("gemini")?.getQuotaSnapshot?.();
     provider = {
-      aiTier: snapshot.aiTier,
-      circuitBreakers: snapshot.circuitBreakers,
-      grounding: snapshot.grounding,
+      capabilities: {
+        quick: capabilityTarget("quick"),
+        deep: capabilityTarget("deep"),
+        research: capabilityTarget("research"),
+      },
+      circuitBreakers: snapshot?.circuitBreakers ?? [],
+      grounding: { rpd: snapshot?.grounding.rpd ?? 0 },
+      freeTier: snapshot?.freeTier ?? false,
     };
   } catch (err) {
+    log.warn(
+      "Health",
+      `AI provider state unavailable: ${getErrorMessage(err)}`,
+    );
     provider = {
-      aiTier: `unavailable (${getErrorMessage(err)})`,
+      capabilities: { quick: null, deep: null, research: null },
       circuitBreakers: [],
-      grounding: { rpd: 0, limit: 0, remaining: 0 },
+      grounding: { rpd: 0 },
+      freeTier: false,
     };
   }
 

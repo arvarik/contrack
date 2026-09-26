@@ -24,7 +24,7 @@ export const InstanceUsageTable = ({
   showCost,
 }: {
   byUser: AIStatsUserUsage[];
-  /** Hidden on a free tier, where every cost is zero and says nothing. */
+  /** Hidden in mock mode and on a Gemini free-tier key, where no call is billed. */
   showCost: boolean;
 }) => {
   if (byUser.length === 0) {

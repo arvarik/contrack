@@ -1,82 +1,61 @@
 // =============================================================================
 // Routes — AI Diagnostics
 // =============================================================================
-// Lightweight endpoint for debugging the Smart Mesh routing layer.
-// Exposes current quota usage, circuit breaker state, and tier configuration.
+// What each kind of AI work runs on right now, and what this process has sent
+// to Gemini: per-model usage, grounded requests today, and the models a
+// circuit breaker has paused.
 //
 // Usage: GET /api/ai/diagnostics
 // =============================================================================
 
 import { Router } from "express";
-import { ai, activeProviderName } from "../ai/index.ts";
-import {
-  getAvailableModels,
-  getAITier,
-  GEMINI_REGISTRY,
-} from "../ai/routing/registry.ts";
+import { getProvider } from "../ai/providerRegistry.ts";
+import { capabilityTarget, resolveCapability } from "../ai/capabilities.ts";
+import { GEMINI_REGISTRY } from "../ai/routing/registry.ts";
+import type { DiagnosticsSnapshot } from "../ai/types.ts";
+import { getSearxngUrl } from "../services/aiSearch/strategies/searxng.ts";
+import { researchRunsLastDay } from "../services/aiStatsService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { requireAdmin } from "../middleware/auth.ts";
-import { log } from "../utils/logger.ts";
 
 const router = Router();
 
-// Both routes report the instance's shared routing state: quota windows,
-// circuit breakers and the grounding pool that every account draws on. They
-// describe the operator's provider account, not the caller's data, which is
-// why the manifest classes them `admin` and Phase 3 guards them.
+// Both routes report the instance's shared routing state: usage and circuit
+// breakers that every account draws on. They describe the operator's provider
+// account, not the caller's data, which is why the manifest classes them
+// `admin` and Phase 3 guards them.
+
+const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
+  models: {},
+  grounding: { rpd: 0 },
+  circuitBreakers: [],
+};
+
+/** Gemini's usage meter, or an empty one when Gemini is not connected. */
+function geminiSnapshot(): DiagnosticsSnapshot {
+  return getProvider("gemini")?.getQuotaSnapshot?.() ?? EMPTY_SNAPSHOT;
+}
 
 /**
  * GET /api/ai/diagnostics
  *
- * Returns the Smart Mesh routing state:
- * - Per-model quota usage (RPM, TPM, RPD within the sliding window)
- * - Grounding RPD usage and remaining capacity
- * - Active circuit breakers (models temporarily banned)
- * - AI tier configuration and registry metadata
- *
- * For non-Gemini providers, returns a simplified response indicating
- * that detailed quota tracking is not available.
+ * - What quick, deep and research resolve to now
+ * - Gemini's per-model usage (requests and tokens in the last minute,
+ *   requests today), grounded requests today, and paused models
+ * - Whether Google has answered this key with a free-tier quota
  */
 router.get(
   "/diagnostics",
   requireAdmin,
-  asyncHandler(async (req, res) => {
-    const rid = req.requestId;
-
-    const snapshot = ai.getQuotaSnapshot();
-
-    log.debug(
-      "API",
-      `[${rid}] GET /api/ai/diagnostics (provider: ${activeProviderName})`,
-    );
-
-    // Non-Gemini providers: return provider info without Gemini-specific registry data
-    if (activeProviderName !== "gemini") {
-      return res.json({
-        ...snapshot,
-        provider: activeProviderName,
-        registry: {
-          totalModels: 0,
-          availableModels: 0,
-          availableModelIds: [],
-          note: `Detailed quota tracking is not available for ${activeProviderName}. Quota is managed by the provider.`,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    // Gemini: full registry + quota data
-    const tier = getAITier();
-    const available = getAvailableModels(tier);
-
+  asyncHandler(async (_req, res) => {
     res.json({
-      ...snapshot,
-      provider: activeProviderName,
-      registry: {
-        totalModels: GEMINI_REGISTRY.length,
-        availableModels: available.length,
-        availableModelIds: available.map((m) => m.id),
+      ...geminiSnapshot(),
+      capabilities: {
+        quick: capabilityTarget("quick"),
+        deep: capabilityTarget("deep"),
+        research: capabilityTarget("research"),
       },
+      registry: { models: GEMINI_REGISTRY.map((m) => m.id) },
       timestamp: new Date().toISOString(),
     });
   }),
@@ -85,35 +64,36 @@ router.get(
 /**
  * GET /api/ai/grounding-capacity
  *
- * Lightweight endpoint for the frontend to check whether single-contact
- * enrichment (grounding) is available. Returns remaining daily capacity.
- *
- * For non-Gemini providers, always returns hasCapacity: true since they
- * don't have a shared grounding RPD pool.
+ * Whether web research can run right now, for the command palette's enrich
+ * action, and how many research calls the instance made in the last 24 hours,
+ * for the Enrichment page. It used to answer from Gemini's local grounding
+ * pool, and only when AI_PROVIDER was gemini, so it was wrong whenever
+ * research ran elsewhere. Now: research resolves to a provider (or SearXNG is
+ * set), and when that provider is Gemini, at least one of its search models
+ * is not paused.
  */
 router.get(
   "/grounding-capacity",
   requireAdmin,
   asyncHandler(async (_req, res) => {
-    // Non-Gemini providers don't have grounding RPD limits
-    if (activeProviderName !== "gemini") {
+    const research = resolveCapability("research");
+    const researchRuns24h = researchRunsLastDay();
+    if (!research) {
+      const searxng = !!getSearxngUrl() && !!resolveCapability("deep");
       return res.json({
-        hasCapacity: true,
-        remaining: null,
-        limit: null,
-        provider: activeProviderName,
-        note: "Grounding capacity limits are Gemini-specific. This provider has no shared grounding pool.",
+        hasCapacity: searxng,
+        provider: searxng ? "searxng" : null,
+        researchRuns24h,
       });
     }
-
-    const snapshot = ai.getQuotaSnapshot();
-    const { grounding } = snapshot;
-
-    res.json({
-      hasCapacity: grounding.remaining > 0,
-      remaining: grounding.remaining,
-      limit: grounding.limit,
-    });
+    let hasCapacity = true;
+    if (research.providerId === "gemini" && !research.model) {
+      const paused = new Set(geminiSnapshot().circuitBreakers);
+      hasCapacity = GEMINI_REGISTRY.some(
+        (m) => m.supportsGrounding && !paused.has(m.id),
+      );
+    }
+    res.json({ hasCapacity, provider: research.providerId, researchRuns24h });
   }),
 );
 

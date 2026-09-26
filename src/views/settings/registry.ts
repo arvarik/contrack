@@ -558,13 +558,13 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "grounding",
-        label: "Web searches today",
+        label: "Research runs, last 24 hours",
         keywords: [
           "web searches",
+          "research runs",
           "grounding",
-          "grounding capacity",
-          "quota",
-          "used",
+          "usage",
+          "billing",
         ],
       },
     ],

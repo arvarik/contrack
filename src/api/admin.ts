@@ -209,9 +209,17 @@ export interface InstanceHealth {
     { entries: number; hits: number; misses: number; hitRate: number }
   >;
   provider: {
-    aiTier: string;
+    /** What each kind of AI work runs on now. Null when nothing can serve it. */
+    capabilities: Record<
+      "quick" | "deep" | "research",
+      { providerId: string; model: string | null } | null
+    >;
+    /** Gemini models paused after a 429, a 5xx or a timeout. */
     circuitBreakers: string[];
-    grounding: { rpd: number; limit: number; remaining: number };
+    /** Grounded Gemini requests sent today. */
+    grounding: { rpd: number };
+    /** Google answered the Gemini key with a free-tier quota error. */
+    freeTier: boolean;
   };
 }
 

@@ -182,9 +182,26 @@ describe("batch research lifecycle", () => {
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe("AI_GROUNDING_MISSING");
-    expect(generateFor).toHaveBeenCalledTimes(1);
+    // The search pass runs once more, told to search, and extraction never
+    // starts. A model decides for itself whether to search.
+    expect(generateFor).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(generateFor).mock.calls[1][1].prompt).toContain(
+      "Run Google Search now",
+    );
     expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
     expect(enrichmentContact(scope(), id).role).toBeNull();
+  });
+  it("asks once more when the first search pass read nothing", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
+      .mockResolvedValueOnce(reply("A source-backed biography"))
+      .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.status).toBe(200);
+    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(enrichmentContact(scope(), id).aiBackground).toContain(
+      "https://example.com/profile",
+    );
   });
   it("persists safe provider source links with the validated research", async () => {
     vi.mocked(generateFor)

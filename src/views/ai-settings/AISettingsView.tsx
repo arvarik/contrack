@@ -183,6 +183,16 @@ export const AISettingsView = () => {
                       </span>
                     )}
                   </div>
+                  {/* Only Google says a key is on its free tier, and only in
+                    a quota error, so this appears after the first one. */}
+                  {provider.freeTier && (
+                    <p className="text-xs text-warning flex items-start gap-1.5 mt-1 text-pretty">
+                      <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                      This key is on Google's free tier. Google may use prompts
+                      and responses, contacts' details included, to improve its
+                      products. A key from a project with billing keeps them out
+                    </p>
+                  )}
                 </div>
                 {provider.supportsDiscovery && (
                   <button

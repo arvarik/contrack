@@ -119,7 +119,16 @@ export function buildSearchPrompt(contact: HydratedContact): string {
       ? `\n## Suggested Search Queries\nStart with these targeted queries to identify the correct person:\n${searchHints.join("\n")}`
       : "";
 
+  // Every provider decides for itself whether to run a search, and for a name
+  // it already knows it often answers from memory, which the source rule then
+  // refuses. Saying the memory may be stale moved Gemini 3.8 Flash from one
+  // search in three runs to five in six (2026-09-26).
+  const today = new Date().toISOString().slice(0, 10);
+
   return `
+Today is ${today}. What you remember about this person may be out of date, so
+search the web before you answer, and base every fact on what the search returns.
+
 You are an elite professional researcher and intelligence analyst. Your task is to
 conduct a THOROUGH internet investigation about the person described below.
 

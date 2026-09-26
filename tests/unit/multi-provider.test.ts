@@ -62,33 +62,29 @@ describe("OpenAIAdapter", () => {
   });
 
   // ── Model Class Mapping ──────────────────────────────────────────────
-  // Contract: lite → gpt-5.4-nano, flash → gpt-5.4-mini, pro → gpt-5.4
-  // (lite was bumped from gpt-4o-mini to gpt-5.4-nano on 2026-03-17 when
-  // OpenAI introduced the nano size tier below mini.)
+  // Contract, with no discovered models: lite → gpt-6-luna, flash →
+  // gpt-6-sol, pro → gpt-6-astra. GPT-6 renamed the tiers: Astra is the
+  // flagship, Sol the middle and Luna the cheap one.
 
   describe("model class mapping", () => {
-    it("maps 'lite' to gpt-5.4-nano", () => {
+    it("maps 'lite' to gpt-6-luna", () => {
       const adapter = new OpenAIAdapter("test-key");
-      const model = adapter.resolveModel("lite");
-      expect(model).toBe("gpt-5.4-nano");
+      expect(adapter.resolveModel("lite")).toBe("gpt-6-luna");
     });
 
-    it("maps 'flash' to gpt-5.4-mini", () => {
+    it("maps 'flash' to gpt-6-sol", () => {
       const adapter = new OpenAIAdapter("test-key");
-      const model = adapter.resolveModel("flash");
-      expect(model).toBe("gpt-5.4-mini");
+      expect(adapter.resolveModel("flash")).toBe("gpt-6-sol");
     });
 
-    it("maps 'pro' to gpt-5.4", () => {
+    it("maps 'pro' to gpt-6-astra", () => {
       const adapter = new OpenAIAdapter("test-key");
-      const model = adapter.resolveModel("pro");
-      expect(model).toBe("gpt-5.4");
+      expect(adapter.resolveModel("pro")).toBe("gpt-6-astra");
     });
 
     it("defaults to lite when no preference specified", () => {
       const adapter = new OpenAIAdapter("test-key");
-      const model = adapter.resolveModel(undefined);
-      expect(model).toBe("gpt-5.4-nano");
+      expect(adapter.resolveModel(undefined)).toBe("gpt-6-luna");
     });
   });
 
@@ -148,7 +144,9 @@ describe("OpenAIAdapter", () => {
       expect(companyProp.anyOf).toContainEqual({ type: "null" });
     });
 
-    it("handles array schemas", () => {
+    it("wraps an array schema in an object, which OpenAI requires at the root", () => {
+      // The live API answers a `type: "array"` root with a 400, which broke
+      // @mention extraction and the briefing on OpenAI.
       const adapter = new OpenAIAdapter("test-key");
       const schema = {
         type: "array" as const,
@@ -162,8 +160,30 @@ describe("OpenAIAdapter", () => {
       };
 
       const translated = adapter.translateSchema(schema);
-      expect(translated.json_schema.schema.type).toBe("array");
-      expect(translated.json_schema.schema.items.type).toBe("object");
+      expect(translated.json_schema.schema.type).toBe("object");
+      expect(translated.json_schema.schema.required).toEqual(["items"]);
+      expect(translated.json_schema.schema.properties.items.type).toBe("array");
+      expect(translated.json_schema.schema.properties.items.items.type).toBe(
+        "object",
+      );
+    });
+
+    it("sends the Responses API its flat, non-strict format", () => {
+      // The nested Chat Completions shape answered 400 "Missing required
+      // parameter: 'text.format.name'", and the Responses API is strict by
+      // default, which rejects optional fields.
+      const adapter = new OpenAIAdapter("test-key");
+      const format = adapter.translateResponsesFormat({
+        type: "object",
+        properties: { name: { type: "string" } },
+      });
+      expect(format).toMatchObject({
+        type: "json_schema",
+        name: "response",
+        strict: false,
+      });
+      expect(format.schema.type).toBe("object");
+      expect("json_schema" in format).toBe(false);
     });
 
     it("handles enum fields", () => {
@@ -216,7 +236,8 @@ describe("AnthropicAdapter", () => {
   });
 
   // ── Model Class Mapping ──────────────────────────────────────────────
-  // Contract: lite → claude-haiku-4-5, flash → claude-sonnet-4-6, pro → claude-opus-4-6
+  // Contract, with no discovered models: lite → claude-haiku-4-5, flash →
+  // claude-sonnet-5, pro → claude-opus-5.
   // (API model IDs use dashes, not dots — dotted IDs 404 on the live API.)
 
   describe("model class mapping", () => {
@@ -226,16 +247,14 @@ describe("AnthropicAdapter", () => {
       expect(model).toBe("claude-haiku-4-5");
     });
 
-    it("maps 'flash' to claude-sonnet-4-6", () => {
+    it("maps 'flash' to claude-sonnet-5", () => {
       const adapter = new AnthropicAdapter("test-key");
-      const model = adapter.resolveModel("flash");
-      expect(model).toBe("claude-sonnet-4-6");
+      expect(adapter.resolveModel("flash")).toBe("claude-sonnet-5");
     });
 
-    it("maps 'pro' to claude-opus-4-6", () => {
+    it("maps 'pro' to claude-opus-5", () => {
       const adapter = new AnthropicAdapter("test-key");
-      const model = adapter.resolveModel("pro");
-      expect(model).toBe("claude-opus-4-6");
+      expect(adapter.resolveModel("pro")).toBe("claude-opus-5");
     });
 
     it("defaults to lite when no preference specified", () => {

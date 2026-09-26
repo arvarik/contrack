@@ -45,6 +45,16 @@ export interface ModelInfo {
   capabilityConfidence: "declared" | "guessed";
   /** Optional context-window size, when the provider reports it. */
   contextWindow?: number;
+  /**
+   * When the provider released the model, in ms since the epoch, when it
+   * says. The catalog drops chat models older than a year.
+   */
+  releasedAt?: number;
+  /**
+   * Effort levels the model accepts ("low", "medium"...), when the provider
+   * declares them. Anthropic does; a model that lists none takes no effort.
+   */
+  efforts?: string[];
 }
 
 /**
@@ -107,8 +117,14 @@ export interface AIProvider {
    *
    * Returns undefined when the choice genuinely cannot be known in advance
    * (a compat endpoint whose model set is arbitrary).
+   *
+   * `grounding` asks for a model that can search the web, which research
+   * needs and the class alone does not say.
    */
-  defaultModelFor?(modelClass: ModelClass): string | undefined;
+  defaultModelFor?(
+    modelClass: ModelClass,
+    options?: { grounding?: boolean },
+  ): string | undefined;
 
   /**
    * Optional: generate embedding vectors. Only implemented by providers whose

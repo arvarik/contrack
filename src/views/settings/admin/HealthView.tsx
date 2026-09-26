@@ -139,17 +139,25 @@ const CACHE_TIER_NAMES: Record<string, string> = {
   queryParse: "Reading a question",
 };
 
-/** "dailyInsight" as "Daily insight", "FREE" as "Free". */
-/**
- * The provider's tier, as the server names it. "N/A" is the answer with no
- * provider, and `words` would have made it "N/a".
- */
-const AI_TIER_NAMES: Record<string, string> = {
-  FREE: "Free",
-  PAID: "Paid",
-  "N/A": "No provider",
+/** Provider ids as a person reads them. A custom endpoint keeps its slug. */
+const PROVIDER_NAMES: Record<string, string> = {
+  gemini: "Gemini",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
 };
 
+/** "Gemini · gemini-3.8-flash", or "None" when nothing can serve the task. */
+function targetLabel(
+  target: { providerId: string; model: string | null } | null,
+): string {
+  if (!target) return "None";
+  const provider =
+    PROVIDER_NAMES[target.providerId] ??
+    target.providerId.replace(/^custom:/, "");
+  return target.model ? `${provider} · ${target.model}` : provider;
+}
+
+/** "dailyInsight" as "Daily insight". */
 function words(key: string): string {
   const spaced = key
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -372,12 +380,17 @@ const ProviderCard = ({ health }: { health: InstanceHealth }) => {
         ) : undefined
       }
     >
-      <Row label="Tier">
-        {AI_TIER_NAMES[provider.aiTier] ?? provider.aiTier}
+      <Row label="Quick tasks">{targetLabel(provider.capabilities.quick)}</Row>
+      <Row label="Deep tasks">{targetLabel(provider.capabilities.deep)}</Row>
+      <Row label="Web research">
+        {targetLabel(provider.capabilities.research)}
       </Row>
-      <Row label="Web searches today">
-        {grounding.rpd} of {grounding.limit}
-      </Row>
+      <Row label="Gemini web searches today">{grounding.rpd}</Row>
+      {provider.freeTier && (
+        <Row label="Gemini key" tone="warning">
+          Free tier. Google may use prompts to improve its products
+        </Row>
+      )}
       <Row
         label="Models paused"
         tone={provider.circuitBreakers.length > 0 ? "error" : "normal"}

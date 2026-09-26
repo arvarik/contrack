@@ -35,6 +35,7 @@ import {
 } from "../resilience.ts";
 import {
   translateSchemaNode as translateSchema,
+  withObjectRoot,
   type TranslateOptions,
 } from "../schemaTranslation.ts";
 
@@ -153,8 +154,17 @@ export class OpenAICompatibleAdapter implements AIProvider {
           timeoutMs,
           options.signal,
         );
+        // Hand callers JSON that parses as it stands, and an array root as
+        // the array it was asked for.
         if (options.responseFormat === "json") {
-          parseAIJson(result.text, `${this.name}.generate(${model})`);
+          const parsed = parseAIJson(
+            result.text,
+            `${this.name}.generate(${model})`,
+          );
+          const unwrap = options.jsonSchema
+            ? withObjectRoot(options.jsonSchema).unwrap
+            : (v: unknown) => v;
+          result.text = JSON.stringify(unwrap(parsed));
         }
         if (attempt > 1) {
           log.info(
@@ -243,12 +253,19 @@ export class OpenAICompatibleAdapter implements AIProvider {
   ): Promise<AIGenerateResult> {
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
 
+    // The OpenAI wire format takes an object at the root, and a json_object
+    // answer is an object by definition, so an array schema travels wrapped.
+    const schema = options.jsonSchema
+      ? withObjectRoot(options.jsonSchema).schema
+      : undefined;
+
     let systemPrompt = options.systemPrompt ?? "";
-    // In prompt mode the schema itself becomes the instruction.
-    if (options.responseFormat === "json" && mode === "prompt") {
-      const schemaText = options.jsonSchema
+    // Below json_schema the schema itself becomes the instruction, so a
+    // json_object answer knows its shape too.
+    if (options.responseFormat === "json" && mode !== "json_schema") {
+      const schemaText = schema
         ? `\n\nRespond with JSON matching this schema:\n${JSON.stringify(
-            translateSchemaNode(options.jsonSchema),
+            translateSchemaNode(schema),
           )}`
         : "";
       systemPrompt += `\n\nRespond with valid JSON only — no markdown fences, no prose.${schemaText}`;
@@ -262,13 +279,13 @@ export class OpenAICompatibleAdapter implements AIProvider {
     if (options.maxOutputTokens)
       requestParams.max_tokens = options.maxOutputTokens;
     if (options.responseFormat === "json") {
-      if (mode === "json_schema" && options.jsonSchema) {
+      if (mode === "json_schema" && schema) {
         requestParams.response_format = {
           type: "json_schema",
           json_schema: {
             name: "response",
             strict: true,
-            schema: translateSchemaNode(options.jsonSchema),
+            schema: translateSchemaNode(schema),
           },
         };
       } else if (mode === "json_object" || mode === "json_schema") {

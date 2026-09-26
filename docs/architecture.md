@@ -123,7 +123,7 @@ All errors flow through a centralized Express error handler using the `AppError`
 ```
 server/ai/
 ├── adapters/                # Concrete implementations
-│   ├── gemini.ts            # Gemini via @google/genai, with SmartRouter + quota tracking
+│   ├── gemini.ts            # Gemini via @google/genai, with SmartRouter + usage meter
 │   ├── openai.ts            # OpenAI
 │   ├── anthropic.ts         # Anthropic
 │   └── openaiCompatible.ts  # Any OpenAI-format server (Ollama, vLLM, LM Studio…)
@@ -161,17 +161,25 @@ interface AIProvider {
 
 ### Smart Router (Gemini only)
 
-The `SmartRouter` selects the optimal Gemini model per use case:
+The `SmartRouter` picks the Gemini model for each task class: the newest
+generation in the class, stable before preview, cheaper as the tie-break.
 
-| Use Case                     | Model Class                  | Reasoning                      |
-| ---------------------------- | ---------------------------- | ------------------------------ |
-| Contact parsing, mentions    | Lite (Gemini 2.0 Flash-Lite) | Low latency, simple extraction |
-| Search, briefings, insights  | Flash (Gemini 2.5 Flash)     | Balance of speed and quality   |
-| Complex synthesis, grounding | Pro (Gemini 2.5 Pro)         | Maximum quality                |
+| Use Case                                   | Model Class                   | Reasoning                      |
+| ------------------------------------------ | ----------------------------- | ------------------------------ |
+| Contact parsing, mentions, search planning | Lite (Gemini 3.5 Flash-Lite)  | Low latency, simple extraction |
+| Email summaries, duplicate checks          | Flash (Gemini 3.8 Flash)      | Balance of speed and quality   |
+| Web research                               | Flash, with Google Search     | Balance of speed and quality   |
+| Pinned only                                | Pro (Gemini 3.1 Pro, preview) | Maximum quality                |
+
+A model that answers 429, a 5xx or a timeout sits out for the delay Google
+names in the error (30 seconds when it names none), and the retry goes to the
+next model. There are no guessed free or paid limits.
 
 ### Quota Tracker
 
-Tracks per-model RPM (requests per minute) and RPD (requests per day) limits. Automatic retry with fallback to lower-tier models on rate limits.
+Counts what this process sent to each Gemini model: requests and tokens in the
+last minute, requests today, and grounded requests today. The admin Health
+page shows it. It counts only and blocks nothing.
 
 ### Parallel Queue
 

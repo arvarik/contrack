@@ -6,16 +6,14 @@
 // sliding window expiry tests.
 // =============================================================================
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Module imports ───────────────────────────────────────────────────────────
 import {
-  getAITier,
-  getActiveLimits,
-  getAvailableModels,
-  getGroundingRPDLimit,
+  compareForClass,
+  previewModelForClass,
   GEMINI_REGISTRY,
-  type TierLimits,
+  type ModelConfig,
 } from "../../server/ai/routing/registry.ts";
 import { QuotaTracker } from "../../server/ai/routing/QuotaTracker.ts";
 import { SmartRouter } from "../../server/ai/routing/SmartRouter.ts";
@@ -26,82 +24,84 @@ import { ParallelQueue } from "../../server/ai/routing/ParallelQueue.ts";
 // =============================================================================
 
 describe("Registry", () => {
-  const originalEnv = process.env.AI_TIER;
+  it("lists each model once", () => {
+    const ids = GEMINI_REGISTRY.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 
-  afterEach(() => {
-    // Restore original env after each test
-    if (originalEnv !== undefined) {
-      process.env.AI_TIER = originalEnv;
-    } else {
-      delete process.env.AI_TIER;
+  it("offers no model Google has closed to new projects", () => {
+    // 2.5 answers a new key with 404 "no longer available to new users".
+    expect(GEMINI_REGISTRY.some((m) => m.generation < 3)).toBe(false);
+  });
+
+  it("carries no free or paid limits", () => {
+    // Google sets a key's limits from its Cloud project's billing and no
+    // longer publishes free-tier numbers, so the router must not hold any.
+    for (const model of GEMINI_REGISTRY) {
+      expect(Object.keys(model).sort()).toEqual([
+        "costPerM",
+        "generation",
+        "id",
+        "modelClass",
+        "stability",
+        "supportsGrounding",
+      ]);
     }
   });
 
-  describe("getAITier", () => {
-    it("defaults to FREE when AI_TIER is not set", () => {
-      delete process.env.AI_TIER;
-      expect(getAITier()).toBe("FREE");
-    });
-
-    it("reads PAID from environment (case-insensitive)", () => {
-      process.env.AI_TIER = "paid";
-      expect(getAITier()).toBe("PAID");
-    });
-
-    it("returns FREE for any unrecognized value", () => {
-      process.env.AI_TIER = "premium";
-      expect(getAITier()).toBe("FREE");
-    });
+  it("names what Auto runs for each class", () => {
+    expect(previewModelForClass("lite")).toBe("gemini-3.5-flash-lite");
+    expect(previewModelForClass("flash")).toBe("gemini-3.8-flash");
+    expect(previewModelForClass("pro")).toBe("gemini-3.1-pro-preview");
   });
 
-  describe("getActiveLimits", () => {
-    const model = GEMINI_REGISTRY[0]; // gemini-2.5-flash-lite
-
-    it("returns free limits on FREE tier", () => {
-      const limits = getActiveLimits(model, "FREE");
-      expect(limits).toBe(model.freeLimits);
-    });
-
-    it("returns paid limits on PAID tier", () => {
-      const limits = getActiveLimits(model, "PAID");
-      expect(limits).toBe(model.paidLimits);
-    });
+  it("names a model that can search when research asks", () => {
+    const id = previewModelForClass("flash", true);
+    expect(GEMINI_REGISTRY.find((m) => m.id === id)?.supportsGrounding).toBe(
+      true,
+    );
   });
 
-  describe("getAvailableModels", () => {
-    it("excludes paid-only models on FREE tier", () => {
-      const models = getAvailableModels("FREE");
-      const allHaveFreeTier = models.every((m) => m.hasFreeTier);
-      expect(allHaveFreeTier).toBe(true);
-      expect(models.length).toBeLessThan(GEMINI_REGISTRY.length);
+  describe("compareForClass", () => {
+    const model = (overrides: Partial<ModelConfig>): ModelConfig => ({
+      id: "m",
+      modelClass: "flash",
+      generation: 3,
+      stability: "stable",
+      costPerM: 1,
+      supportsGrounding: true,
+      ...overrides,
     });
 
-    it("includes all models on PAID tier", () => {
-      const models = getAvailableModels("PAID");
-      expect(models.length).toBe(GEMINI_REGISTRY.length);
-    });
-  });
-
-  describe("getGroundingRPDLimit", () => {
-    it("returns 500 for FREE tier", () => {
-      expect(getGroundingRPDLimit("FREE")).toBe(500);
+    it("puts the preferred class first", () => {
+      const lite = model({ id: "lite", modelClass: "lite", generation: 9 });
+      const flash = model({ id: "flash", modelClass: "flash", generation: 1 });
+      expect([lite, flash].sort(compareForClass("flash"))[0].id).toBe("flash");
     });
 
-    it("returns 5000 for PAID tier", () => {
-      expect(getGroundingRPDLimit("PAID")).toBe(5000);
+    it("puts a newer generation first, then stable, then the cheaper", () => {
+      const old = model({ id: "old", generation: 2.5, costPerM: 0.1 });
+      const preview = model({ id: "preview", stability: "preview" });
+      const dear = model({ id: "dear", costPerM: 9 });
+      const cheap = model({ id: "cheap", costPerM: 2 });
+      expect(
+        [old, preview, dear, cheap]
+          .sort(compareForClass("flash"))
+          .map((m) => m.id),
+      ).toEqual(["cheap", "dear", "preview", "old"]);
     });
   });
 });
 
 // =============================================================================
-// 2. QuotaTracker
+// 2. QuotaTracker — a usage meter now, with no limits to enforce
 // =============================================================================
 
 describe("QuotaTracker", () => {
   let tracker: QuotaTracker;
 
   beforeEach(() => {
-    tracker = new QuotaTracker(500); // 500 grounding RPD limit
+    tracker = new QuotaTracker();
   });
 
   describe("estimateTokens", () => {
@@ -133,46 +133,15 @@ describe("QuotaTracker", () => {
     });
   });
 
-  describe("hasCapacity", () => {
-    const limits: TierLimits = { rpm: 10, tpm: 1000, rpd: 100 };
-
-    it("returns true when under all limits", () => {
-      expect(tracker.hasCapacity("model-a", 100, limits)).toBe(true);
-    });
-
-    it("returns false when RPM would be exceeded", () => {
-      // Fill up RPM
-      for (let i = 0; i < 10; i++) {
-        tracker.reserve("model-a", 10);
-      }
-      expect(tracker.hasCapacity("model-a", 10, limits)).toBe(false);
-    });
-
-    it("returns false when TPM would be exceeded", () => {
-      // Reserve 950 tokens — next request of 100 would exceed 1000
-      tracker.reserve("model-a", 950);
-      expect(tracker.hasCapacity("model-a", 100, limits)).toBe(false);
-    });
-
-    it("returns false when RPD would be exceeded", () => {
-      const tightLimits: TierLimits = { rpm: 1000, tpm: 1_000_000, rpd: 3 };
-      for (let i = 0; i < 3; i++) {
-        tracker.reserve("model-a", 10);
-      }
-      expect(tracker.hasCapacity("model-a", 10, tightLimits)).toBe(false);
-    });
-  });
-
   describe("reserve → rollback", () => {
-    it("fully unwinds a reservation", () => {
-      const limits: TierLimits = { rpm: 2, tpm: 1000, rpd: 100 };
-
-      // Reserve then rollback
+    it("fully unwinds a request the provider refused", () => {
       tracker.reserve("model-a", 500);
       tracker.rollback("model-a");
-
-      // Should have capacity again
-      expect(tracker.hasCapacity("model-a", 500, limits)).toBe(true);
+      expect(tracker.getSnapshot().models["model-a"]).toEqual({
+        rpm: 0,
+        tpm: 0,
+        rpd: 0,
+      });
     });
   });
 
@@ -188,8 +157,6 @@ describe("QuotaTracker", () => {
     });
 
     it("clamps to zero — never produces negative token counts", () => {
-      // Estimate 100 tokens, actually used 10
-      // Delta = 10 - 100 = -90 → count would go to 100 + (-90) = 10
       tracker.reserve("model-a", 100);
       tracker.reconcile("model-a", 100, 10);
       expect(tracker.getSnapshot().models["model-a"].tpm).toBe(10);
@@ -200,24 +167,12 @@ describe("QuotaTracker", () => {
     });
   });
 
-  describe("grounding tracking", () => {
-    it("hasGroundingCapacity returns true when under limit", () => {
-      expect(tracker.hasGroundingCapacity()).toBe(true);
-    });
-
-    it("hasGroundingCapacity returns false when exhausted", () => {
-      for (let i = 0; i < 500; i++) {
-        tracker.reserveGrounding();
-      }
-      expect(tracker.hasGroundingCapacity()).toBe(false);
-    });
-
-    it("rollbackGrounding unwinds a reservation", () => {
-      for (let i = 0; i < 500; i++) {
-        tracker.reserveGrounding();
-      }
+  describe("grounded requests", () => {
+    it("counts them and takes one back", () => {
+      tracker.reserveGrounding();
+      tracker.reserveGrounding();
       tracker.rollbackGrounding();
-      expect(tracker.hasGroundingCapacity()).toBe(true);
+      expect(tracker.getSnapshot().grounding).toEqual({ rpd: 1 });
     });
   });
 
@@ -233,28 +188,17 @@ describe("QuotaTracker", () => {
         tpm: 300,
         rpd: 2,
       });
-      expect(snapshot.grounding).toEqual({
-        rpd: 1,
-        limit: 500,
-        remaining: 499,
-      });
+      expect(snapshot.grounding).toEqual({ rpd: 1 });
     });
   });
 
   describe("sliding window expiry", () => {
     it("expires entries older than 60s from RPM and TPM", () => {
       vi.useFakeTimers();
-      const limits: TierLimits = { rpm: 2, tpm: 1000, rpd: 100 };
 
       try {
-        // Reserve at T=0
         tracker.reserve("model-a", 100);
-
-        // Advance past 60s
         vi.advanceTimersByTime(61_000);
-
-        // RPM and TPM should have expired, but RPD persists (daily counter)
-        expect(tracker.hasCapacity("model-a", 100, limits)).toBe(true);
 
         const snapshot = tracker.getSnapshot();
         expect(snapshot.models["model-a"].rpm).toBe(0);
@@ -272,184 +216,101 @@ describe("QuotaTracker", () => {
 // =============================================================================
 
 describe("SmartRouter", () => {
-  let tracker: QuotaTracker;
-  let emptyBreakers: Set<string>;
+  const router = new SmartRouter(GEMINI_REGISTRY);
+  const noPauses = new Set<string>();
+  const byId = (id: string) => GEMINI_REGISTRY.find((m) => m.id === id);
 
-  beforeEach(() => {
-    tracker = new QuotaTracker(500);
-    emptyBreakers = new Set();
+  it("routes to the newest model of the preferred class", () => {
+    expect(
+      router.getNextAvailableRoute({ prefer: "lite" }, noPauses).modelId,
+    ).toBe("gemini-3.5-flash-lite");
+    expect(
+      router.getNextAvailableRoute({ prefer: "flash" }, noPauses).modelId,
+    ).toBe("gemini-3.8-flash");
   });
 
-  it("routes to cheapest model by default on PAID tier", () => {
-    const router = new SmartRouter(tracker, "PAID");
-    const route = router.getNextAvailableRoute(100, {}, emptyBreakers);
-
-    // gemini-2.5-flash-lite is the cheapest at $0.40/M
-    expect(route.modelId).toBe("gemini-2.5-flash-lite");
-    expect(route.tier).toBe("paid");
-  });
-
-  it("routes to cheapest free-tier model on FREE tier", () => {
-    const router = new SmartRouter(tracker, "FREE");
-    const route = router.getNextAvailableRoute(100, {}, emptyBreakers);
-
-    // gemini-2.5-flash-lite is cheapest with hasFreeTier=true
-    expect(route.modelId).toBe("gemini-2.5-flash-lite");
-    expect(route.tier).toBe("free");
+  it("routes to the newest generation with no preference", () => {
+    expect(router.getNextAvailableRoute({}, noPauses).modelId).toBe(
+      "gemini-3.8-flash",
+    );
   });
 
   it("respects denyModels policy", () => {
-    const router = new SmartRouter(tracker, "PAID");
     const route = router.getNextAvailableRoute(
-      100,
-      { denyModels: ["gemini-2.5-flash-lite"] },
-      emptyBreakers,
+      { prefer: "flash", denyModels: ["gemini-3.8-flash"] },
+      noPauses,
     );
-
-    expect(route.modelId).not.toBe("gemini-2.5-flash-lite");
+    expect(route.modelId).toBe("gemini-3.7-flash");
   });
 
   it("respects allowModels policy", () => {
-    const router = new SmartRouter(tracker, "PAID");
     const route = router.getNextAvailableRoute(
-      100,
-      { allowModels: ["gemini-2.5-flash"] },
-      emptyBreakers,
+      { allowModels: ["gemini-3.6-flash"] },
+      noPauses,
     );
-
-    expect(route.modelId).toBe("gemini-2.5-flash");
+    expect(route.modelId).toBe("gemini-3.6-flash");
   });
 
-  it("excludes circuit-broken models", () => {
-    const router = new SmartRouter(tracker, "PAID");
-    const breakers = new Set(["gemini-2.5-flash-lite"]);
-    const route = router.getNextAvailableRoute(100, {}, breakers);
-
-    expect(route.modelId).not.toBe("gemini-2.5-flash-lite");
-  });
-
-  it("excludes non-grounding models when grounding requested", () => {
-    const router = new SmartRouter(tracker, "PAID");
-    const route = router.getNextAvailableRoute(100, {}, emptyBreakers, true);
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.supportsGrounding).toBe(true);
-  });
-
-  it("excludes preview models by default", () => {
-    const router = new SmartRouter(tracker, "PAID");
-    const route = router.getNextAvailableRoute(100, {}, emptyBreakers);
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.stability).toBe("stable");
-  });
-
-  it("includes preview models when allowPreview is true on PAID tier", () => {
-    const router = new SmartRouter(tracker, "PAID");
-
-    // Deny all stable models to force preview selection
-    const stableIds = GEMINI_REGISTRY.filter(
-      (m) => m.stability === "stable",
-    ).map((m) => m.id);
-
+  it("steps past a paused model to the next in its class", () => {
     const route = router.getNextAvailableRoute(
-      100,
-      { allowPreview: true, denyModels: stableIds },
-      emptyBreakers,
+      { prefer: "flash" },
+      new Set(["gemini-3.8-flash"]),
     );
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.stability).toBe("preview");
+    expect(route.modelId).toBe("gemini-3.7-flash");
   });
 
-  it("throws when all models are exhausted", () => {
-    const router = new SmartRouter(tracker, "FREE");
+  it("keeps grounded requests on models that can search", () => {
+    const route = router.getNextAvailableRoute(
+      { prefer: "flash" },
+      noPauses,
+      true,
+    );
+    expect(byId(route.modelId)?.supportsGrounding).toBe(true);
+  });
 
-    // Circuit-break all free-tier models
-    const freeModels = GEMINI_REGISTRY.filter((m) => m.hasFreeTier);
-    const allBroken = new Set(freeModels.map((m) => m.id));
+  it("falls back to other classes when the preferred class is paused", () => {
+    const proIds = GEMINI_REGISTRY.filter((m) => m.modelClass === "pro").map(
+      (m) => m.id,
+    );
+    const route = router.getNextAvailableRoute(
+      { prefer: "pro" },
+      new Set(proIds),
+    );
+    expect(byId(route.modelId)?.modelClass).not.toBe("pro");
+  });
 
-    expect(() => router.getNextAvailableRoute(100, {}, allBroken)).toThrow(
+  it("throws when every model is paused", () => {
+    const all = new Set(GEMINI_REGISTRY.map((m) => m.id));
+    expect(() => router.getNextAvailableRoute({}, all)).toThrow(
       "No models match routing criteria",
     );
   });
 
-  // ── Model Preference Routing ────────────────────────────────────────
-
-  it("prefers the requested model class", () => {
-    const router = new SmartRouter(tracker, "PAID");
-
-    // Prefer flash — should pick a flash model, not the cheapest (lite)
-    const route = router.getNextAvailableRoute(
-      100,
-      { prefer: "flash" },
-      emptyBreakers,
-    );
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.modelClass).toBe("flash");
-  });
-
-  it("prefers Gemini 3 over Gemini 2 within the same class", () => {
-    const router = new SmartRouter(tracker, "PAID");
-
-    // Prefer lite — should pick gemini-3.1-flash-lite (gen 3)
-    // over gemini-2.5-flash-lite (gen 2), despite the latter being cheaper
-    const route = router.getNextAvailableRoute(
-      100,
-      { prefer: "lite" },
-      emptyBreakers,
-    );
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.modelClass).toBe("lite");
-    expect(model?.generation).toBeGreaterThanOrEqual(3);
-  });
-
-  it("falls back to other classes when preferred class is exhausted", () => {
-    const router = new SmartRouter(tracker, "PAID");
-
-    // Circuit-break ALL pro models
-    const proIds = GEMINI_REGISTRY.filter((m) => m.modelClass === "pro").map(
-      (m) => m.id,
-    );
-    const breakers = new Set(proIds);
-
-    // Prefer pro — all pro models broken, should fall back to another class
-    const route = router.getNextAvailableRoute(
-      100,
-      { prefer: "pro" },
-      breakers,
-    );
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.modelClass).not.toBe("pro");
-    // Should still route successfully (graceful degradation)
-    expect(route.modelId).toBeTruthy();
-  });
-
-  it("auto-enables preview models when prefer is set", () => {
-    const router = new SmartRouter(tracker, "PAID");
-
-    // Deny all stable models — without auto-preview, this would throw.
-    // With prefer set, preview models are automatically allowed.
-    // (Note: after gemini-3.1-flash-lite went GA on 2026-05-07 the only
-    // remaining preview-class models are flash and pro, so the router
-    // falls back to the cheapest preview rather than a lite. The test
-    // asserts the *behavior* — preview models become eligible — rather
-    // than a specific class to remain robust to future GA promotions.)
-    const stableIds = GEMINI_REGISTRY.filter(
-      (m) => m.stability === "stable",
-    ).map((m) => m.id);
-
-    const route = router.getNextAvailableRoute(
-      100,
-      { prefer: "lite", denyModels: stableIds },
-      emptyBreakers,
-    );
-
-    const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
-    expect(model?.stability).toBe("preview");
+  it("prefers a stable model to a preview of the same generation", () => {
+    const registry: ModelConfig[] = [
+      {
+        id: "preview",
+        modelClass: "flash",
+        generation: 4,
+        stability: "preview",
+        costPerM: 1,
+        supportsGrounding: true,
+      },
+      {
+        id: "stable",
+        modelClass: "flash",
+        generation: 4,
+        stability: "stable",
+        costPerM: 5,
+        supportsGrounding: true,
+      },
+    ];
+    expect(
+      new SmartRouter(registry).getNextAvailableRoute(
+        { prefer: "flash" },
+        noPauses,
+      ).modelId,
+    ).toBe("stable");
   });
 });
 
