@@ -13,8 +13,8 @@ export default defineConfig({
     },
   },
   server: {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
-    // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+    // DISABLE_HMR=true turns hot reload off. A second dev server needs it:
+    // the first one holds the reload socket's port, 24678.
     hmr: process.env.DISABLE_HMR !== "true",
   },
   // MapLibre's worker is an ES module (`maplibreWorker.ts` bundles it with

@@ -6,7 +6,7 @@
 // at call time, using (in priority order):
 //
 //   1. An explicit pin from the settings store (Settings → AI).
-//   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_PROVIDER).
+//   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_MODEL).
 //   3. Auto: the legacy AI_PROVIDER first (so existing deployments behave
 //      identically), then a documented preference order over whatever
 //      providers have credentials.

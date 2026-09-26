@@ -47,7 +47,7 @@ connectorsRouter.get(
     const platform = process.platform;
     const docker = isDocker();
     const googleConfigured = Boolean(getGoogleOAuthCredentials());
-    const kinds = kindsFor(platform, docker, { googleConfigured });
+    const kinds = kindsFor({ googleConfigured });
     res.json({ platform, docker, kinds });
   }),
 );

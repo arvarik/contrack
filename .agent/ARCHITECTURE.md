@@ -393,23 +393,24 @@ _Web search costs $10 per 1,000 searches plus tokens. No first-party embedding m
 
 ## 6. Environment Variables
 
-| Variable              | Required                | Default      | Purpose                                                                                              |
-| --------------------- | ----------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.   |
-| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                |
-| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                            |
-| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                  |
-| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                   |
-| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Enables Gemini for any capability set to Auto.                                |
-| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                            |
-| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                  |
-| `PORT`                | No                      | `3210`       | Server port.                                                                                         |
-| `HOST`                | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                      |
-| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                               |
-| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker. |
-| `APP_URL`             | No                      | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                        |
-| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                             |
-| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                         |
+The common variables are below. `docs/configuration.md` lists all of them, and `tests/unit/envDocs.test.ts` fails when that list, `.env.example`, `docker-compose.yml` and the code disagree.
+
+| Variable              | Required                | Default      | Purpose                                                                                                   |
+| --------------------- | ----------------------- | ------------ | --------------------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.        |
+| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                     |
+| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                                 |
+| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                       |
+| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                        |
+| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Enables Gemini for any capability set to Auto.                                     |
+| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                 |
+| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                       |
+| `PORT`                | No                      | `3210`       | Server port.                                                                                              |
+| `HOST`                | No                      | `127.0.0.1`  | Bind interface. Localhost by default; Docker sets `0.0.0.0`. Set `AUTH_REQUIRED=true` before exposing it. |
+| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                    |
+| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.      |
+| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                  |
+| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR. A second dev server needs it: the first holds the reload port.         |
 
 ## 7. Invariants & Safety Rules
 

@@ -33,8 +33,11 @@ RUN npm pkg delete scripts.prepare \
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy backend and database configurations
+# Copy backend and database configurations. The server imports shared/ at
+# runtime (the MCP tools, connectors, dates, geo), so it ships too; without it
+# the image failed at boot with ERR_MODULE_NOT_FOUND.
 COPY server/ ./server/
+COPY shared/ ./shared/
 COPY src/db/ ./src/db/
 COPY drizzle/ ./drizzle/
 COPY server.ts drizzle.config.ts ./
@@ -48,12 +51,12 @@ COPY server.ts drizzle.config.ts ./
 # reachable from anything that can route to the published port. If the port is
 # exposed beyond the host, turn auth on:
 #   -e AUTH_REQUIRED=true      require sign-in; first visit creates the account
-#   -e API_TOKEN=<secret>      machine credential for scripts/MCP; also gates
+# Scripts and MCP clients then use a personal token from Settings → Account →
+# API tokens. The older -e API_TOKEN=<secret> still works, and is deprecated.
 # The server logs a warning at startup whenever it binds a non-loopback address
 # with auth off.
 ENV NODE_ENV=production \
     DATA_DIR=/app/data \
-    TRANSFORMERS_CACHE=/app/data/.cache \
     PORT=3210 \
     HOST=0.0.0.0 \
     AUTH_REQUIRED=false

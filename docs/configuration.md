@@ -1,45 +1,83 @@
 # Configuration
 
-All configuration is done through environment variables in a `.env` file at the project root. Copy `.env.example` to get started:
+Contrack needs no configuration to start. Most settings live in the app. AI
+providers and the model for each task are in **Settings → AI**. Outgoing mail,
+SearXNG, the Google connector, trash retention and backups are in **Settings →
+Administration**.
+
+Environment variables are for what the app cannot set for itself, such as the
+port, the data folder and sign-in. They also serve deployments that are set up
+without the UI. Put them in a `.env` file at the project root. `.env.example`
+holds the common ones:
 
 ```bash
 cp .env.example .env
 ```
 
+When a variable and an app setting both exist, the variable wins, and the app
+shows the field as locked. The model for each task is the exception. A model
+picked in Settings → AI wins over `AI_QUICK_MODEL` and the others.
+
 ## Environment Variables
 
-| Variable                         | Description                                                                                                                                                                                    | Default                | Required |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------- |
-| `AI_PROVIDER`                    | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                                        | `gemini`               | No       |
-| `GEMINI_API_KEY`                 | Google Gemini API key                                                                                                                                                                          | —                      | No       |
-| `OPENAI_API_KEY`                 | OpenAI API key                                                                                                                                                                                 | —                      | No       |
-| `ANTHROPIC_API_KEY`              | Anthropic API key                                                                                                                                                                              | —                      | No       |
-| `PORT`                           | Express listening port                                                                                                                                                                         | `3210`                 | No       |
-| `HOST`                           | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`            | No       |
-| `PUBLIC_URL`                     | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
-| `CORS_ORIGIN`                    | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
-| `DATA_DIR`                       | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
-| `SEARXNG_URL`                    | Base URL of self-hosted SearXNG search instance. Environment overrides setting in UI                                                                                                           | —                      | No       |
-| `MAP_STYLE_LIGHT`                | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                 | OpenFreeMap `positron` | No       |
-| `MAP_STYLE_DARK`                 | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                | OpenFreeMap `dark`     | No       |
-| `AUTH_REQUIRED`                  | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`                | No       |
-| `SMTP_URL`                       | SMTP connection URL (e.g. `smtp://user:pass@smtp.example.com:587` or `smtps://user:pass@smtp.example.com:465`). Environment overrides UI settings                                              | —                      | No       |
-| `MAIL_FROM`                      | Sender address for outgoing email (e.g. `Contrack <noreply@example.com>` or `noreply@example.com`)                                                                                             | — (derived)            | No       |
-| `CONTRACK_SECRET_KEY`            | 32-byte hexadecimal key (64 hex characters) used to encrypt stored credentials like SMTP passwords. Generated at `DATA_DIR/secret.key` when omitted                                            | — (auto)               | No       |
-| `API_TOKEN`                      | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off)           | No       |
-| `AUTH_TOKEN`                     | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —                      | No       |
-| `TRASH_RETENTION_DAYS`           | Days a deleted contact stays restorable before permanent purge. UI setting fallback; environment overrides                                                                                     | `30`                   | No       |
-| `BACKUP_INTERVAL_HOURS`          | Automatic SQLite snapshot cadence (`0` disables). UI setting fallback; environment overrides                                                                                                   | `24`                   | No       |
-| `BACKUP_KEEP`                    | How many rotated snapshots to keep in `DATA_DIR/backups`. UI setting fallback; environment overrides                                                                                           | `7`                    | No       |
-| `AI_QUICK_MODEL`                 | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                        | — (auto)               | No       |
-| `AI_DEEP_MODEL`                  | Pin the Deep-tasks model                                                                                                                                                                       | — (auto)               | No       |
-| `AI_RESEARCH_MODEL`              | Pin the Web-research model                                                                                                                                                                     | — (auto)               | No       |
-| `AI_EMBEDDINGS_MODEL`            | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                                         | — (built-in)           | No       |
-| `CONNECTOR_SYNC_CONCURRENCY`     | Maximum concurrent connector sync operations                                                                                                                                                   | `2`                    | No       |
-| `CONNECTORS_ALLOW_PRIVATE_HOSTS` | `true` permits connectors to fetch feeds from internal LAN/RFC1918 IPs. Emits a security warning at startup. Avoid in public production environments                                           | `false`                | No       |
-| `DISABLE_BACKGROUND_JOBS`        | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                                        | `false`                | No       |
-| `DISABLE_CPU_WORKER`             | `true` runs the embedding model on the request thread instead of a worker thread. Slower for everybody else while an index is built, and there only for a Node build that cannot spawn threads | `false`                | No       |
-| `NODE_ENV`                       | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                              | — (dev)                | No       |
+| Variable                         | Description                                                                                                                                                                                                        | Default                | Required |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | -------- |
+| `AI_PROVIDER`                    | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                                                            | `gemini`               | No       |
+| `GEMINI_API_KEY`                 | Google Gemini API key                                                                                                                                                                                              | —                      | No       |
+| `OPENAI_API_KEY`                 | OpenAI API key                                                                                                                                                                                                     | —                      | No       |
+| `ANTHROPIC_API_KEY`              | Anthropic API key                                                                                                                                                                                                  | —                      | No       |
+| `PORT`                           | Express listening port                                                                                                                                                                                             | `3210`                 | No       |
+| `HOST`                           | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                                                   | `127.0.0.1`            | No       |
+| `PUBLIC_URL`                     | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for passkeys, invitation links and the Google connector's sign-in redirect                               | — (derived)            | No       |
+| `CORS_ORIGIN`                    | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                                         | — (disabled)           | No       |
+| `DATA_DIR`                       | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                                          | project root           | No       |
+| `TRANSFORMERS_CACHE`             | Folder for the built-in embedding model's files                                                                                                                                                                    | `DATA_DIR/.cache`      | No       |
+| `GOOGLE_OAUTH_CLIENT_ID`         | OAuth client ID for the Google Workspace connector. Set it with `GOOGLE_OAUTH_CLIENT_SECRET`. Environment overrides the setting in Settings → Administration → General                                             | —                      | No       |
+| `GOOGLE_OAUTH_CLIENT_SECRET`     | OAuth client secret for the Google Workspace connector. Read only when `GOOGLE_OAUTH_CLIENT_ID` is also set                                                                                                        | —                      | No       |
+| `SEARXNG_URL`                    | Base URL of self-hosted SearXNG search instance. Environment overrides setting in UI                                                                                                                               | —                      | No       |
+| `MAP_STYLE_LIGHT`                | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                                     | OpenFreeMap `positron` | No       |
+| `MAP_STYLE_DARK`                 | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                                    | OpenFreeMap `dark`     | No       |
+| `AUTH_REQUIRED`                  | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                                        | `false`                | No       |
+| `SMTP_URL`                       | SMTP connection URL (e.g. `smtp://user:pass@smtp.example.com:587` or `smtps://user:pass@smtp.example.com:465`). Environment overrides UI settings                                                                  | —                      | No       |
+| `MAIL_FROM`                      | Sender address for outgoing email (e.g. `Contrack <noreply@example.com>` or `noreply@example.com`)                                                                                                                 | — (derived)            | No       |
+| `MAIL_REPLY_TO`                  | Reply-To address for outgoing email. Environment overrides the setting in Settings → Administration → Outgoing mail                                                                                                | —                      | No       |
+| `CONTRACK_SECRET_KEY`            | 32-byte hexadecimal key (64 hex characters) that encrypts the credentials the database stores: AI keys, SMTP passwords, connector feeds, the Google client secret. Generated at `DATA_DIR/secret.key` when omitted | — (auto)               | No       |
+| `API_TOKEN`                      | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token                                  | — (auth off)           | No       |
+| `AUTH_TOKEN`                     | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                                              | —                      | No       |
+| `TRASH_RETENTION_DAYS`           | Days a deleted contact stays restorable before permanent purge. UI setting fallback; environment overrides                                                                                                         | `30`                   | No       |
+| `BACKUP_INTERVAL_HOURS`          | Automatic SQLite snapshot cadence (`0` disables). UI setting fallback; environment overrides                                                                                                                       | `24`                   | No       |
+| `BACKUP_KEEP`                    | How many rotated snapshots to keep in `DATA_DIR/backups`. UI setting fallback; environment overrides                                                                                                               | `7`                    | No       |
+| `AI_QUICK_MODEL`                 | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                                            | — (auto)               | No       |
+| `AI_DEEP_MODEL`                  | Pin the Deep-tasks model                                                                                                                                                                                           | — (auto)               | No       |
+| `AI_RESEARCH_MODEL`              | Pin the Web-research model                                                                                                                                                                                         | — (auto)               | No       |
+| `AI_EMBEDDINGS_MODEL`            | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                                                             | — (built-in)           | No       |
+| `CONNECTOR_SYNC_CONCURRENCY`     | Maximum concurrent connector sync operations                                                                                                                                                                       | `2`                    | No       |
+| `CONNECTORS_ALLOW_PRIVATE_HOSTS` | `true` permits connectors to fetch feeds from internal LAN/RFC1918 IPs. Emits a security warning at startup. Avoid in public production environments                                                               | `false`                | No       |
+| `DISABLE_BACKGROUND_JOBS`        | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                                                            | `false`                | No       |
+| `DISABLE_CPU_WORKER`             | `true` runs the embedding model on the request thread instead of a worker thread. Slower for everybody else while an index is built, and there only for a Node build that cannot spawn threads                     | `false`                | No       |
+| `NODE_ENV`                       | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                                                  | — (dev)                | No       |
+
+**Retired variables.** `AI_TIER` and `MAPBOX_API_KEY` are no longer read. The
+server logs a warning at boot when one of them is set, and says what replaced
+it. `AUTH_TOKEN` is the one that stops the server, as its row says.
+
+**Development and test switches.** These change one process, and a deployment
+does not need them.
+
+| Variable                      | Description                                                                                                 | Default |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------- |
+| `DISABLE_HMR`                 | `true` turns off Vite hot reload. A second dev server needs it, because the first one holds the reload port | `false` |
+| `IMPORT_SETTLE_MS`            | How long a non-streaming import waits before its duplicate sweep, in milliseconds. Tests shorten it         | `3000`  |
+| `AI_GATEWAY_TIMEOUT_OVERRIDE` | Replaces the time limit of every AI call, in milliseconds. Tests and evals use it                           | —       |
+
+**Docker.** `docker-compose.yml` passes every variable in the first table to
+the container, except eight. The image sets `HOST`, `PORT`, `DATA_DIR` and
+`NODE_ENV` itself, and a value meant for a local run would break it.
+`DISABLE_BACKGROUND_JOBS` and `DISABLE_CPU_WORKER` are switches for one
+process, and a value meant for development would stop backups or the
+embedding worker in the container. `TRANSFORMERS_CACHE` follows `DATA_DIR`
+there, and `AUTH_TOKEN` is removed. `tests/unit/envDocs.test.ts` fails when this table, `.env.example`,
+the compose file and the code disagree.
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -280,12 +318,13 @@ Contrack uses **SQLite** in WAL (Write-Ahead Logging) mode for maximum local-fir
 
 `DATA_DIR` is the whole persistence story, not just the database. It holds:
 
-| Path inside `DATA_DIR` | Contents                                          |
-| ---------------------- | ------------------------------------------------- |
-| `curator.db`           | The database (plus `-wal`/`-shm` while running)   |
-| `uploads/`             | Profile photos, avatars, and attachments          |
-| `backups/`             | Rotating automatic snapshots                      |
-| `.cache/`              | The local embedding model (re-downloaded if lost) |
+| Path inside `DATA_DIR` | Contents                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `curator.db`           | The database (plus `-wal`/`-shm` while running)                                                             |
+| `uploads/`             | Profile photos, avatars, and attachments                                                                    |
+| `backups/`             | Rotating automatic snapshots                                                                                |
+| `.cache/`              | The local embedding model (re-downloaded if lost)                                                           |
+| `secret.key`           | The key that encrypts stored credentials, unless `CONTRACK_SECRET_KEY` is set. Back it up with the database |
 
 **Docker deployment:** mount **`/app/data`** — and only that — as a
 persistent volume, exactly as `docker-compose.yml` does (`./data:/app/data`).
@@ -460,11 +499,12 @@ Use the **Send a test message** button to verify connectivity and delivery to yo
 
 ### Encryption Key (`CONTRACK_SECRET_KEY` and `secret.key`)
 
-SMTP passwords and other sensitive integration secrets stored in the database are encrypted using AES-256-GCM via `secretBox`.
+Every credential the database stores is encrypted with AES-256-GCM (`secretBox`): AI keys and custom endpoint keys entered in Settings → AI, SMTP passwords, connector feeds, and the Google client secret. AI keys saved before 2.0 were plain text. The first start of 2.0 encrypts them.
 
 - If `CONTRACK_SECRET_KEY` is provided as an environment variable, it must be a 64-character hexadecimal string (32 bytes).
 - If `CONTRACK_SECRET_KEY` is omitted, Contrack generates a cryptographic key at boot and writes it to `DATA_DIR/secret.key` with strict permissions (`0600`).
-- **Backing up your key**: Always back up `DATA_DIR/secret.key` alongside your database (`contrack.db`). If the secret key is lost or modified, encrypted values cannot be decrypted.
+- **Backing up your key**: Always back up `DATA_DIR/secret.key` alongside your database (`curator.db`). If the secret key is lost or modified, encrypted values cannot be decrypted. An AI provider whose key cannot be decrypted shows as not connected, and the server log says why. Enter the key again in Settings → AI.
+- **Backups**: the automatic snapshots in `DATA_DIR/backups` hold the database only. A snapshot from before 2.0 still holds AI keys as plain text, so delete old snapshots you no longer need.
 
 ## Data Lifecycle
 

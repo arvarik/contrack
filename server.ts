@@ -102,6 +102,19 @@ async function startServer() {
   // who believes their instance is protected would have no way to find out.
   assertNoLegacyAuthToken();
 
+  // AI keys saved in Settings before 2.0 are plain text in app_settings, and
+  // so in every backup. Seal them once, the way other stored secrets are.
+  try {
+    const { sealStoredAiKeys } =
+      await import("./server/services/aiSettingsService.ts");
+    sealStoredAiKeys();
+  } catch (err) {
+    log.warn(
+      "Server",
+      `Could not encrypt saved AI keys: ${getErrorMessage(err)}`,
+    );
+  }
+
   // Report the auth posture at boot rather than leaving it to be discovered on
   // the first request — "why is it asking me to sign in" and "why is it NOT"
   // are both questions best answered by the startup log.

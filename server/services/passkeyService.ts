@@ -18,7 +18,7 @@ import { AppError } from "../utils/AppError.ts";
 import { getPasskeyRp } from "../utils/publicOrigin.ts";
 import { getInstanceName, getUserById, type User } from "./authService.ts";
 import { auditService } from "./auditService.ts";
-import { describeDevice } from "../../src/lib/devices.ts";
+import { describeDevice } from "../../shared/devices.ts";
 
 export interface PasskeySummary {
   id: string;

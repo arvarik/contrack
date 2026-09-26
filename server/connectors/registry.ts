@@ -32,25 +32,22 @@ export function getAdapter(
   return adapters.get(kind as ConnectorKind);
 }
 
+/**
+ * Whether the server runs in a container, for `GET /api/connectors/kinds`.
+ * Docker writes /.dockerenv and Podman writes /run/.containerenv. Three
+ * environment variables (DOCKER, IS_DOCKER, DOCKER_CONTAINER) could also say
+ * so. Nothing set them, and nothing documented them, so they are gone.
+ */
 export function isDocker(): boolean {
   try {
-    return (
-      fs.existsSync("/.dockerenv") ||
-      process.env.DOCKER === "true" ||
-      process.env.IS_DOCKER === "true" ||
-      process.env.DOCKER_CONTAINER === "true"
-    );
+    return fs.existsSync("/.dockerenv") || fs.existsSync("/run/.containerenv");
   } catch {
     return false;
   }
 }
 
-/**
- * Returns available connector kinds for a given platform and Docker state.
- */
+/** The connector kinds this server offers. Every kind runs everywhere. */
 export function kindsFor(
-  _platform: string = process.platform,
-  _isDockerEnv: boolean = isDocker(),
   options: { googleConfigured?: boolean } = {},
 ): KindInfo[] {
   const kinds: KindInfo[] = [

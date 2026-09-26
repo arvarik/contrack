@@ -32,7 +32,6 @@ process.env.DATA_DIR = dataDir;
 process.env.DISABLE_BACKGROUND_JOBS = "true";
 let closeDatabase: (() => void) | undefined;
 process.env.AUTH_REQUIRED = "";
-process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "warn";
 process.env.AI_GATEWAY_TIMEOUT_OVERRIDE = "90000";
 
 // Transformers model cache
