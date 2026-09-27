@@ -687,8 +687,15 @@ export const CommandPalette = () => {
             }
           }}
           label="Global command palette"
+          // Only the action rows are left to cmdk's fuzzy filter. The people
+          // rows arrive filtered and ranked, by the instant filter or by the
+          // server, and cmdk scores only a row's id and name: it hid every
+          // match on a company, a nickname, a misspelling or a phone number.
           shouldFilter={
-            mode !== "ai" && !isEmptyInput && !subMenuContactId && !hasFilters
+            mode === "action" &&
+            !isEmptyInput &&
+            !subMenuContactId &&
+            !hasFilters
           }
           // Backdrop click-to-dismiss. The dialog content fills the viewport
           // (inset-0) which means Radix's built-in pointer-down-outside never

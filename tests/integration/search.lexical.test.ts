@@ -56,6 +56,13 @@ function decoys(): Seed[] {
   for (let i = 0; i < 150; i++)
     out.push({ name: `Ada No${faker.person.lastName().toLowerCase()}` });
   out.push({ name: "Peggy Torp" }, { name: "Walter Ellington" });
+  // Two Margarets and two people who go by her nicknames.
+  out.push(
+    { name: "Margaret Quinn" },
+    { name: "Margaret Oduya" },
+    { name: "Maggie Holt" },
+    { name: "Margie Lund" },
+  );
   for (let i = 0; i < 40; i++)
     out.push({
       name: faker.person.fullName(),
@@ -67,7 +74,7 @@ function decoys(): Seed[] {
 beforeAll(async () => {
   faker.seed(20_260_927);
   const generated: Seed[] = Array.from(
-    { length: 5_000 - TARGETS.length - 342 },
+    { length: 5_000 - TARGETS.length - 346 },
     () => ({
       name: faker.person.fullName(),
       company: faker.company.name(),
@@ -89,6 +96,20 @@ describe("keyword search finds the forms of a name among 5,000 contacts", () => 
     const names = sidebar("Peggy Ellington");
     expect(names[0]).toBe("Margaret Ellington");
     expect(names.indexOf("Peggy Torp")).not.toBe(0);
+  });
+
+  it("lists everyone named Margaret before the people her nicknames find", () => {
+    const names = sidebar("Margaret");
+    const lastMargaret = Math.max(
+      ...names.flatMap((name, i) => (name.startsWith("Margaret") ? [i] : [])),
+    );
+    const firstNickname = names.findIndex((name) =>
+      /^(Maggie|Margie|Peggy|Marge|Meg) /.test(name),
+    );
+    expect(names).toEqual(
+      expect.arrayContaining(["Margaret Quinn", "Margaret Oduya"]),
+    );
+    expect(firstNickname).toBeGreaterThan(lastMargaret);
   });
 
   it("finds Robert from Bob and his surname", () => {

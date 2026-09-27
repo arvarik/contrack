@@ -54,6 +54,11 @@ The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). A value
 
 ### Facets on the server
 
+The palette shows the people rows in the order it gets them. It does not
+filter them again with cmdk's fuzzy filter, which reads only a row's name. That
+filter used to hide every person the search found by company, nickname,
+misspelling or phone number. Only the action (`>`) rows use cmdk's filter.
+
 The palette filters its cached contacts first. Then it asks the server's keyword search (`GET /api/search`) with the same facets. The server turns every facet into SQL and applies it before its result limit. `list:`, `missing:`, `near:` and `contacted:` work there too. Before this change, the server refused `list:`, `missing:` and `near:` with `400`.
 
 `near:` narrows the results only when it carries a resolved point. The map resolves the place with the geocoder. Without a point, `near:` keeps everyone.

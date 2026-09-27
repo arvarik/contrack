@@ -257,8 +257,11 @@ shared one word of it.
 other names of the group also match, on the name column only. "Bob
 Castellanos" finds Robert Castellanos, and "Peggy Ellington" finds Margaret
 Ellington. Only the first token gets the other names, so a sentence such as
-"people I will meet" does not look for William. The approximate-name step
-uses the other names of every token.
+"people I will meet" does not look for William. The query as typed matches
+first, and the nickname matches follow it. A rare nickname scores higher in
+BM25 than a common name, so "Margaret" would otherwise list Maggie and Peggy
+above every Margaret. Partial matches use the query as typed only. The
+approximate-name step uses the other names of every token.
 
 **Phone numbers.** A query is a phone number when it has at least 7 digits
 and nothing but digits, spaces and `+()-.` (`isPhoneQuery` in

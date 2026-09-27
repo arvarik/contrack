@@ -50,15 +50,13 @@ export function scopedMatch(scope: Scope, strategy: string): string {
  * One token as an FTS clause: a prefix match, or an exact match for a
  * one-letter token in the OR strategy.
  *
- * The query's first token is where a first name goes. When it has
- * nicknames, the other names of its group also match, on the name column
- * only: "bob" becomes `("bob"* OR name:("robert" OR "rob" OR ...))`. Only
- * the first token, so a sentence such as "people I will meet" does not
- * reach for William.
+ * With `nicknames`, the other names of the token's nickname group also
+ * match, on the name column only: "bob" becomes
+ * `("bob"* OR name:("robert" OR "rob" OR ...))`.
  */
-function tokenClause(token: string, index: number, exact = false): string {
+function tokenClause(token: string, nicknames = false, exact = false): string {
   const clause = exact ? `"${token}"` : `"${token}"*`;
-  const variants = index === 0 ? nicknameVariants(token) : [];
+  const variants = nicknames ? nicknameVariants(token) : [];
   return variants.length
     ? `(${clause} OR name:(${variants.map((name) => `"${name}"`).join(" OR ")}))`
     : clause;
@@ -153,10 +151,21 @@ export function lexicalSearch(
     if (rows.length) return rows;
   }
 
-  // Exact matches always stay strictly first.
-  const exactRows = run(
-    tokens.map((token, i) => tokenClause(token, i)).join(" AND "),
-  );
+  // Exact matches always stay strictly first: the query as typed, then the
+  // query with the other names of its first token's nickname group. The
+  // first token is where a first name goes, so "Peggy Ellington" finds
+  // Margaret Ellington, and "people I will meet" does not reach for
+  // William. A rare nickname outscores a common name in BM25, so the
+  // nickname matches follow the literal ones rather than mix with them:
+  // "Margaret" lists every Margaret before a Maggie.
+  let exactRows = run(tokens.map((token) => tokenClause(token)).join(" AND "));
+  if (exactRows.length < limit && nicknameVariants(tokens[0]).length) {
+    const literal = new Set(exactRows.map((r) => r.contactId));
+    const nicknames = run(
+      tokens.map((token, i) => tokenClause(token, i === 0)).join(" AND "),
+    ).filter((r) => !literal.has(r.contactId));
+    exactRows = [...exactRows, ...nicknames].slice(0, limit);
+  }
   if (exactRows.length >= limit) return exactRows;
 
   const seen = new Set(exactRows.map((r) => r.contactId));
@@ -183,15 +192,10 @@ export function lexicalSearch(
   // A one-letter token, such as the O of O'Callahan, would make every
   // O'Brien a partial match. It counts only when the query has nothing
   // longer.
-  const partialTokens = tokens
-    .map((token, index) => ({ token, index }))
-    .filter(({ token }) => token.length > 1);
+  const longer = tokens.filter((token) => token.length > 1);
   const partial = run(
-    (partialTokens.length
-      ? partialTokens
-      : tokens.map((token, index) => ({ token, index }))
-    )
-      .map(({ token, index }) => tokenClause(token, index, token.length < 2))
+    (longer.length ? longer : tokens)
+      .map((token) => tokenClause(token, false, token.length < 2))
       .join(" OR "),
   );
 
