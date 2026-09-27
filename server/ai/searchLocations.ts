@@ -185,6 +185,35 @@ function parsePlace(
   return result;
 }
 
+/** Where each planner matcher occurs in `text`, as a whole-word span. */
+function matcherSpans(
+  text: string,
+  matchers: string[],
+): { start: number; end: number }[] {
+  return matchers.flatMap((matcher) => {
+    const tokens = normalize(matcher).split(" ").filter(Boolean);
+    if (!tokens.length) return [];
+    const pattern = new RegExp(
+      `(?<![\\p{L}\\p{N}])${tokens.join("[\\s.,-]+")}(?![\\p{L}\\p{N}])`,
+      "iu",
+    );
+    const match = pattern.exec(text);
+    return match
+      ? [{ start: match.index, end: match.index + match[0].length }]
+      : [];
+  });
+}
+
+/** The part of `text` the matchers cover, first start to last end, or null. */
+function matcherSpan(text: string, matchers: string[]): string | null {
+  const spans = matcherSpans(text, matchers);
+  if (!spans.length) return null;
+  return text.slice(
+    Math.min(...spans.map((span) => span.start)),
+    Math.max(...spans.map((span) => span.end)),
+  );
+}
+
 /** Extract only locations grounded in a location phrase or an exact planner suggestion. */
 export function extractQueryLocations(
   query: string,
@@ -225,21 +254,28 @@ export function extractQueryLocations(
     }
     // "or" and "and" join alternative places. A comma joins city and qualifiers.
     for (const part of phrase.split(/\s+(?:or|and)\s+/i)) {
+      if (!part.trim()) continue;
       const parsed = parsePlace(part, false);
+      if (
+        !parsed.literal ||
+        parsed.city ||
+        parsed.region ||
+        parsed.country ||
+        /^(?:based|located) in\b/i.test(match[0])
+      ) {
+        phrases.push(part.trim());
+        continue;
+      }
       const grounded = legacyMatchers.some(
         (matcher) =>
           matcher.trim() && contains(normalize(part), normalize(matcher)),
       );
-      if (
-        part.trim() &&
-        (!parsed.literal ||
-          parsed.city ||
-          parsed.region ||
-          parsed.country ||
-          grounded ||
-          /^(?:based|located) in\b/i.test(match[0]))
-      )
-        phrases.push(part.trim());
+      // A phrase that is a place only because a planner matcher sits inside
+      // it ends where the matcher ends. The phrase pattern stops at "who",
+      // "with" and "at", not at a verb, so "who in Lisbon goes rock
+      // climbing" read "Lisbon goes rock climbing", which matched nobody.
+      if (grounded)
+        phrases.push(matcherSpan(part, legacyMatchers)?.trim() || part.trim());
     }
   }
   if (
@@ -248,30 +284,35 @@ export function extractQueryLocations(
     !/\b(?:not|outside|except|excluding|anywhere but)\b/i.test(query)
   ) {
     for (const alternative of query.split(/\s+(?:or|and)\s+/i)) {
-      const spans = legacyMatchers.flatMap((matcher) => {
-        const tokens = normalize(matcher).split(" ").filter(Boolean);
-        if (!tokens.length) return [];
-        const pattern = new RegExp(
-          `(?<![\\p{L}\\p{N}])${tokens.join("[\\s.,-]+")}(?![\\p{L}\\p{N}])`,
-          "iu",
-        );
-        const match = pattern.exec(alternative);
-        return match
-          ? [{ start: match.index, end: match.index + match[0].length }]
-          : [];
-      });
-      if (spans.length)
-        phrases.push(
-          alternative.slice(
-            Math.min(...spans.map((span) => span.start)),
-            Math.max(...spans.map((span) => span.end)),
-          ),
-        );
+      const span = matcherSpan(alternative, legacyMatchers);
+      if (span) phrases.push(span);
     }
   }
   return phrases
     .filter((phrase) => normalize(phrase).length > 0)
     .map((phrase) => parsePlace(phrase, false));
+}
+
+/**
+ * Contact locations already parsed. A location filter reads every contact's
+ * location, and parsing 5,000 of them took 45 ms on each question. The
+ * parse is a pure function of the text, so a repeat is free.
+ */
+const parsedContactPlaces = new Map<
+  string,
+  { place: QueryLocationConstraint; text: string }
+>();
+const MAX_PARSED_PLACES = 20_000;
+
+function contactPlace(location: string) {
+  let parsed = parsedContactPlaces.get(location);
+  if (!parsed) {
+    if (parsedContactPlaces.size >= MAX_PARSED_PLACES)
+      parsedContactPlaces.clear();
+    parsed = { place: parsePlace(location, true), text: normalize(location) };
+    parsedContactPlaces.set(location, parsed);
+  }
+  return parsed;
 }
 
 /** Every field in one constraint must match. Separate constraints are alternatives. */
@@ -280,8 +321,7 @@ export function matchesQueryLocations(
   constraints: QueryLocationConstraint[],
 ): boolean {
   if (!constraints.length) return true;
-  const contact = parsePlace(contactLocation, true);
-  const text = normalize(contactLocation);
+  const { place: contact, text } = contactPlace(contactLocation);
   return constraints.some(
     (constraint) =>
       Boolean(

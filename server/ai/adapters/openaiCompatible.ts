@@ -185,6 +185,66 @@ export class OpenAICompatibleAdapter implements AIProvider {
     );
   }
 
+  /**
+   * The same call, streamed: `onDelta` gets each piece of the answer as the
+   * server sends it. A JSON call is not streamed, and neither is a grounded
+   * call or one with no model. `generate` runs and its text arrives as one
+   * piece.
+   *
+   * A stream that fails before its first piece falls back to `generate`,
+   * which has the retries. After the first piece a failure is thrown,
+   * because a piece already sent cannot be taken back.
+   */
+  async generateStream(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    const model = options.model;
+    // With no model, `generate` throws the 503 that says how to choose one.
+    if (
+      !model ||
+      options.responseFormat !== "text" ||
+      options.enableSearchGrounding
+    )
+      return this.generateInOnePiece(options, onDelta);
+    let sent = false;
+    try {
+      return await withTimeout(
+        (signal) =>
+          this.streamChat(options, model, signal, (piece) => {
+            sent = true;
+            onDelta(piece);
+          }),
+        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+        options.signal,
+      );
+    } catch (error) {
+      if (options.signal?.aborted)
+        throw new AppError("AI call cancelled by caller", 499, {
+          code: "CANCELLED",
+        });
+      // A piece already sent cannot be taken back. A model that spent its
+      // budget on reasoning would spend it again on a second call.
+      if (sent || (error instanceof AppError && error.code === "AI_NO_ANSWER"))
+        throw error;
+      log.warn(
+        "OpenAICompatible",
+        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
+      );
+      return this.generateInOnePiece(options, onDelta);
+    }
+  }
+
+  /** Run `generate` and send its text as one piece. */
+  private async generateInOnePiece(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    const result = await this.generate(options);
+    if (result.text) onDelta(result.text);
+    return result;
+  }
+
   private async runChat(
     options: AIGenerateOptions,
     model: string,
@@ -322,16 +382,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
     // returning "" would surface downstream as "malformed JSON", which sends
     // the user looking in the wrong place.
     if (!text.trim() && choice?.message?.reasoning_content?.trim()) {
-      // 422, not 502: retrying replays the same prompt into the same ceiling,
-      // which on a local model costs seconds per attempt for a certain failure.
-      throw new AppError(
-        `${this.name}: ${model} spent its entire token budget on reasoning and produced no answer` +
-          (choice.finish_reason === "length"
-            ? " (finish_reason=length — raise the server's token limit for this model)"
-            : ""),
-        422,
-        { code: "AI_NO_ANSWER" },
-      );
+      throw this.noAnswer(model, choice.finish_reason);
     }
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
@@ -352,5 +403,105 @@ export class OpenAICompatibleAdapter implements AIProvider {
       }),
       latencyMs,
     };
+  }
+
+  /** Stream a text call and send each piece of the answer as it comes. */
+  private async streamChat(
+    options: AIGenerateOptions,
+    model: string,
+    signal: AbortSignal,
+    send: (piece: string) => void,
+  ): Promise<AIGenerateResult> {
+    const startMs = Date.now();
+    const messages: Array<{ role: "system" | "user"; content: string }> = [];
+    const systemPrompt = options.systemPrompt?.trim();
+    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: options.prompt });
+    const requestParams: Record<string, unknown> = {
+      model,
+      messages,
+      stream: true,
+    };
+    if (options.maxOutputTokens)
+      requestParams.max_tokens = options.maxOutputTokens;
+
+    interface ChatCompletionChunk {
+      choices?: Array<{
+        finish_reason?: string | null;
+        delta?: {
+          content?: string | null;
+          /** Reasoning models stream their thinking here, apart from the answer. */
+          reasoning_content?: string | null;
+        };
+      }>;
+      /** Usage, from a server that reports it while streaming. */
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      } | null;
+    }
+    const stream = (await this.client.chat.completions.create(
+      requestParams as unknown as Parameters<
+        typeof this.client.chat.completions.create
+      >[0],
+      { signal },
+    )) as unknown as AsyncIterable<ChatCompletionChunk>;
+
+    let text = "";
+    let reasoned = false;
+    let finishReason: string | null | undefined;
+    let usage: ChatCompletionChunk["usage"];
+    for await (const chunk of stream) {
+      // The caller or the timeout ended the call, so no piece goes out.
+      signal.throwIfAborted();
+      usage = chunk.usage ?? usage;
+      const choice = chunk.choices?.[0];
+      finishReason = choice?.finish_reason ?? finishReason;
+      // The reasoning is not part of the answer, so it is never sent.
+      if (choice?.delta?.reasoning_content?.trim()) reasoned = true;
+      const piece = choice?.delta?.content;
+      if (!piece) continue;
+      text += piece;
+      send(piece);
+    }
+    // The same check as `attempt`: all reasoning and no answer is an error.
+    if (!text.trim() && reasoned) throw this.noAnswer(model, finishReason);
+
+    const tokenCount = usage?.total_tokens;
+    const latencyMs = Date.now() - startMs;
+    log.info(
+      "OpenAICompatible",
+      `${this.name} ${model} (stream) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
+    );
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(usage && {
+        usage: {
+          inputTokens: usage.prompt_tokens ?? 0,
+          outputTokens: usage.completion_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+    };
+  }
+
+  /**
+   * The error for a reasoning model that spent its whole token budget on
+   * reasoning and produced no answer. 422, not 502: retrying replays the
+   * same prompt into the same ceiling, which on a local model costs seconds
+   * per attempt for a certain failure.
+   */
+  private noAnswer(model: string, finishReason?: string | null): AppError {
+    return new AppError(
+      `${this.name}: ${model} spent its entire token budget on reasoning and produced no answer` +
+        (finishReason === "length"
+          ? " (finish_reason=length — raise the server's token limit for this model)"
+          : ""),
+      422,
+      { code: "AI_NO_ANSWER" },
+    );
   }
 }

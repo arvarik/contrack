@@ -48,18 +48,83 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 The retrieval pipeline is split into four pipeline stages, each enforcing a different
 quality guarantee:
 
-| Stage      | Goal                                | Mechanism                                                                                              | Failure mode                                      |
-| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| **Plan**   | Understand user intent              | `parseSearchQuery` → `QueryPlan { must, should, confidence }`                                          | LLM unavailable → empty plan, pipeline still runs |
-| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list | Empty filter set → honest "no matches" response   |
-| **Rank**   | Surface relevance within candidates | FTS5 (BM25) + HyDE-vector KNN + soft trait boosts → RRF fusion (k=15)                                  | One channel down → others still produce results   |
-| **Verify** | Reject false positives              | `rerankCandidates` requires evidence per match; server-side word-boundary re-check against the plan    | LLM unavailable → keep Phase 1 results unverified |
+| Stage      | Goal                                | Mechanism                                                                                                                                                              | Failure mode                                           |
+| ---------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Plan**   | Understand user intent              | `parseSearchQuery` → `QueryPlan { must, should, confidence }`                                                                                                          | LLM unavailable → empty plan, pipeline still runs      |
+| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list                                                                 | Empty filter set → honest "no matches" response        |
+| **Rank**   | Surface relevance within candidates | FTS5 (BM25) + HyDE-vector KNN + soft trait boosts → RRF fusion (k=15)                                                                                                  | One channel down → others still produce results        |
+| **Verify** | Reject false positives              | `rerankCandidates` returns `contact_id`, `verified_field` and `verified_value`. The server re-checks the value and the plan. Skipped when the database proves the plan | LLM unavailable → a fresh local list, `fallback: true` |
 
 The architectural fix for "Sydney leaking into 'Who lives in America'" is the
 **Filter** stage: when the planner reports `confidence: "high"|"medium"` and emits
 `must.locationMatchers`, the JS-side word-boundary regex filter is the gate that
 FTS/vector run against — not a downstream RRF boost that can be outweighed by
 strong vector similarity on irrelevant signals.
+
+**Request flow** (`runSearch` in `server/services/searchService.ts`, for
+`POST /api/search/semantic`). The JSON and the NDJSON callers share it.
+
+1. **L1 cache** (`getCachedSearch`, the `rerank` tier of `aiCache`). The key
+   holds the owner, `search_revision`, a 5-minute bucket, the quick
+   capability's provider and model, and the normalized query. With AI off or
+   no provider, `local` takes the place of the provider and model. An AI-off
+   request therefore never reads an entry that a model verified.
+2. **Strict keyword search** (`lexicalSearch`). Every token must match, then
+   approximate names follow, top 30. The result's names give the name
+   signals for step 3.
+3. **Classify** (`classifyQuery(query, signals)` in
+   `server/services/search/intent.ts`). The kinds are `email`, `phone`,
+   `quoted`, `name`, `conceptual` and `mixed`. The first four are local
+   kinds. The result also carries fusion weights per kind: lexical 0.7 and
+   dense 0.3 for the local kinds, 0.3 and 0.7 for `conceptual`, and 0.5 and
+   0.5 for `mixed`. Prompt 2 of the search-engine plan uses the weights.
+   Nothing reads them yet.
+4. **Local kinds.** The strict keyword result is the final answer. Every
+   match has `verified: true`, no model runs, and L1 keeps the answer.
+   "Approximate" still marks a close name. The p95 at 5,000 contacts is
+   4.9 ms for a name, 5.0 ms for an email and 1.0 ms for a phone number.
+5. **Local list** (`localRetrieval` in `hybridRetrieval.ts`). FTS5 in broad
+   mode with approximate names, vector KNN, and RRF with k = 15, with no
+   planner, in about 10 ms. The top 30 are hydrated and stream as the
+   instant chunk, `fallback: true`, every match `verified: false`. The p95
+   at 5,000 contacts is 15.6 to 17.6 ms.
+6. **AI off or no provider.** The route reads the caller's `aiAssist` with
+   `aiAllowedFor(req)` (`server/middleware/aiAllowed.ts`) and passes
+   `aiAllowed` to the service. With AI off, or with `isMockMode()`, the local
+   list is the final answer with `fallback: true`. The stream sends only the
+   complete chunk, because no model stage follows. With AI off, a provider
+   embedding model does not embed the query. The built-in local model still
+   embeds it.
+7. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start as soon as
+   step 3 knows the kind, so the planner's request is on the network while
+   step 5 builds the local list. `hybridRetrieval` runs the planner
+   (`parseSearchQuery`) in the search lane, then the hard filter, then
+   `localRetrieval` inside the filter, with the query vector step 5 made.
+   `answerFromPlan` then picks the final answer with `databaseProof(plan)`:
+   - `"filters"`: confidence "high", no `should.traits`, and hard filters
+     that hold every constraint. The answer is the filtered contacts in
+     retrieval order, then the other filtered contacts by name, top 30,
+     `verified: true`. No reranker runs.
+   - `"temporal"`: only `must.temporal`, and confidence not "low". The
+     answer is the filtered contacts by last contact, never contacted first.
+     No reranker runs.
+   - `null`, or no hard filter applied: the compact reranker checks the
+     top 30 candidates. They travel to the model with short ids, `c1` to
+     `c30`, which the server maps back. With 30 UUIDs the answer overran its
+     1,200-token limit.
+8. **Failure.** An error, a timeout or a `search_revision` change during the
+   model stages ends with a fresh local list, `fallback: true`. L1 does not
+   keep it. The keyword-only list (`searchFts`, recall@10 0.52) is never the
+   Ask answer now.
+
+`hybridRetrieval` keeps its signature and runs `localRetrieval` inside the
+plan's hard filter. The search gate (`tests/eval/search.eval.test.ts`)
+therefore measures the same arithmetic. The filter also records the fields it
+proved for each contact (`evidence`), and `buildReason`
+(`server/services/search/reasons.ts`) turns them into the reason. The reason
+joins at most two parts, from the contact's own fields: "Product Manager at
+Northwind Logistics, based in Lisbon, Portugal." With no evidence left, the
+reason is `null`.
 
 The legacy v4 description follows for historical context (now superseded):
 
@@ -76,24 +141,31 @@ The legacy v4 description follows for historical context (now superseded):
 4. **Local Vector KNN (HyDE-enhanced)**: `sqlite-vec` cosine similarity over the filtered candidate corpus. Embedding model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally via Transformers.js).
 5. **Soft Trait Boosts**: each entry in `should.traits` is a separate ranked list — a contact matching multiple traits accumulates score, but absence of a trait is not penalized. Intersected with the hard filter set.
 6. **RRF Fusion (k=15)**: Combines FTS5 + HyDE-vector + trait boost channels into a single ranked candidate list.
-7. **Verified LLM Reranker** (`rerankCandidates`): receives the `QueryPlan` alongside the top ~30 candidates. The LLM must produce per-match evidence (`{ contact_id, verified_field, verified_value, reason }`). Server then performs three independent verifications: (a) `verified_value` must be a literal substring of the named field on the actual candidate row, (b) the candidate's actual field must satisfy at least one of the active `must.*Matchers` (word-boundary), (c) the reason text must not contain negative qualifiers. Failing any check drops the match. This is the second line of defense behind the hard pre-filter.
-8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally.
-9. **Two-Phase NDJSON Streaming**: Phase 1 (post-filter, hydrated, pre-rerank) streams in <15ms. Phase 2 (post-rerank, verified) replaces it ~500ms later.
+7. **Verified LLM Reranker** (`rerankCandidates`): receives the `QueryPlan` alongside the top 30 candidates. It runs only when the database cannot prove the plan (step 7 of the request flow). The LLM returns evidence only, `{ contact_id, verified_field, verified_value }`, with no reason sentence. `verified_field` is an enum of the nine candidate fields, and `maxOutputTokens` is 1,200 (it was 3,000). The server performs four checks, and a match that fails one is dropped:
+   - The id is one of the candidates.
+   - `verified_value` is a literal substring of the named field on the actual candidate row.
+   - The candidate's actual field satisfies at least one of the active `must.*Matchers` (word-boundary).
+   - The value passes `sanitizeAiOutputValue`, because the reason quotes it on the card.
 
-**Caching**: `parseSearchQuery`, `expandQueryForEmbedding`, `rerankCandidates`, and `synthesizeSearchResults` all cache by content-hashed query under their respective `aiCache` tiers (24h TTL). Repeat queries pay zero AI cost.
+   Verified matches come back in candidate (retrieval) order, not the model's order. With `must.temporal`, the prompt says that the database already checked recency. Candidates carry no dates. Before this change, the model rejected every recency match. The prompt also tells the model to cite a name as the candidate's field spells it. `buildReason` then starts the reason with the cited field, followed by the filter's evidence. This is the second line of defense behind the hard pre-filter.
+
+8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally. The brief streams through `streamFor` in the search lane. `safeDeltas` removes control characters from each piece before `onDelta` gets it. The pieces stop when the text so far matches an injection pattern or passes 2,000 characters. The function returns the whole brief after `sanitizeAiOutputValue`. A cache hit sends no pieces.
+9. **Two-Phase NDJSON Streaming**: Phase 1 is the `localRetrieval` list, hydrated, top 30, every match `verified: false`. Its p95 at 5,000 contacts is 15.6 to 17.6 ms. Phase 2 is the final answer, and it replaces Phase 1. A local kind, an AI-off request and an L1 hit send only the complete chunk. See the PR for the live numbers of the model stages.
+
+**Caching**: `parseSearchQuery`, `expandQueryForEmbedding` and `synthesizeSearchResults` cache by content-hashed query under their own `aiCache` tiers. The whole search answer is the L1 entry (`getCachedSearch`, the owner-keyed `rerank` tier), with the key from step 1 of the request flow. A fallback after a model failure is not cached. Repeat queries pay zero AI cost.
 
 ### AI Adapter Pipeline
 
 All AI operations route through a layered architecture in `server/ai/`:
 
-- **`provider.ts`**: Abstract `AIProvider` interface — the single contract all adapters implement. Methods: `generate(options)` (required), `getQuotaSnapshot()` (optional, Gemini-only).
-- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates` (now accepts `QueryPlan` and enforces per-filter evidence), `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults` (now accepts `QueryPlan` for grounding), `parseSearchQuery` (v5 — emits `QueryPlan { must, should, confidence, rationale }`), `expandQueryForEmbedding` (HyDE). **Never imports any SDK directly.**
+- **`provider.ts`**: Abstract `AIProvider` interface — the single contract all adapters implement. Methods: `generate(options)` (required), `generateStream(options, onDelta)` (optional), `getQuotaSnapshot()` (optional, Gemini-only). `generateStream` calls `onDelta` with each new piece of text, in order, and resolves with the result `generate` would return. Only a plain text request streams. A JSON or grounded request runs `generate` and sends one piece. A failure before the first piece falls back to `generate`, and a failure after the first piece is thrown.
+- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates` (accepts `QueryPlan`, enforces per-filter evidence, and returns evidence with no reason), `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults` (accepts `QueryPlan` for grounding, and streams pieces to `onDelta`), `parseSearchQuery` (v5 — emits `QueryPlan { must, should, confidence, rationale }`), `expandQueryForEmbedding` (HyDE). **Never imports any SDK directly.**
 - **`singleton.ts`**: Back-compat surface. `sharedProvider` is a Proxy that delegates to the registry's default provider, so per-provider state (Gemini's SmartRouter, QuotaTracker) stays singleton while the underlying provider can change at runtime. New code should call `generateFor()` from `gateway.ts` instead.
 - **`types.ts`**: Provider-agnostic type definitions including `AIProviderName = "gemini" | "openai" | "anthropic"`, `AIGenerateOptions`, `AIGenerateResult`, `JsonSchemaNode`, `RoutingPolicy`.
 - **Adapters** (`server/ai/adapters/`):
-  - `gemini.ts` — Google Gemini via `@google/genai`. SmartRouter picks the model; a 429, 5xx or timeout pauses it for Google's `retryDelay` (circuit breaker); QuotaTracker only counts usage. Sets `thinkingLevel: "low"` on 3.x models for deep and grounded work, because thinking tokens count against `maxOutputTokens`. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums.
-  - `openai.ts` — OpenAI via `openai` npm package. Chat Completions with non-strict `response_format: { type: "json_schema", json_schema: { name, schema } }`, an array root wrapped in an object (OpenAI refuses array roots). Research via the Responses API: flat non-strict `text.format`, the `web_search` tool, and `include: ["web_search_call.action.sources"]` for the sources. `reasoning_effort` per class (`none` quick, `low` deep and research), stepping to the nearest supported value when a model refuses one and remembering it.
-  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`, or prompt-guided JSON when the schema passes Claude's limits (24 optional, 16 union-typed parameters). `output_config.effort: "low"` for models that declare effort. Research uses the basic `web_search_20250305` tool with `max_uses: 5` (the dynamic-filtering variant was five times slower), resumes `pause_turn`, and returns the search results as sources. Requires explicit `max_tokens` on every request.
+  - `gemini.ts` — Google Gemini via `@google/genai`. SmartRouter picks the model; a 429, 5xx or timeout pauses it for Google's `retryDelay` (circuit breaker); QuotaTracker only counts usage. Sets `thinkingLevel: "low"` on 3.x models for deep and grounded work, because thinking tokens count against `maxOutputTokens`. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums. `generateStream` uses `generateContentStream`.
+  - `openai.ts` — OpenAI via `openai` npm package. Chat Completions with non-strict `response_format: { type: "json_schema", json_schema: { name, schema } }`, an array root wrapped in an object (OpenAI refuses array roots). Research via the Responses API: flat non-strict `text.format`, the `web_search` tool, and `include: ["web_search_call.action.sources"]` for the sources. `reasoning_effort` per class (`none` quick, `low` deep and research), stepping to the nearest supported value when a model refuses one and remembering it. `generateStream` uses Chat Completions with `stream: true`.
+  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`, or prompt-guided JSON when the schema passes Claude's limits (24 optional, 16 union-typed parameters). `output_config.effort: "low"` for models that declare effort. Research uses the basic `web_search_20250305` tool with `max_uses: 5` (the dynamic-filtering variant was five times slower), resumes `pause_turn`, and returns the search results as sources. Requires explicit `max_tokens` on every request. `generateStream` uses `messages.create` with `stream: true`.
   - Every adapter returns JSON text re-serialised from the parsed value, so a fence or a sentence of prose around the JSON never reaches a caller's `JSON.parse`.
 - **Routing** (Gemini-only, `server/ai/routing/`):
   - `SmartRouter.ts` — filter (paused, policy, grounding) then sort (preferred class, newest generation, stable before preview, cheapest). **Only used by GeminiAdapter.** No capacity check: there is no free or paid tier, and a real limit shows up as a 429.
@@ -134,7 +206,10 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 ### Concurrency / Threading Model
 
 - **Server**: Single Node.js process, async I/O. Background sweeps run on startup: relationship score recomputation in yielding batches of 200 (then hourly via `setInterval`), retroactive geocoding, local embedding backfill, dedupe embedding backfill.
-- **AI Queue**: Concurrency managed by `ParallelQueue` — max 10 concurrent workers (PAID) or 2 (FREE), respecting per-model RPM/TPM/RPD limits dynamically.
+- **AI Queue**: `GenerationQueue` (`server/ai/workQueue.ts`) runs every generation that `generateFor` or `streamFor` starts. The gateway's timeout covers the wait for a slot as well as the call.
+  - **Shared slots**: 2 at once and at most 16 waiting, interactive before background (with anti-starvation), and fair per account.
+  - **Search lane** (`lane: "search"`): 2 slots of its own and one FIFO of at most 16 waiting, then `429 AI_BUSY`. It has no priorities and no fair share. The planner, the reranker and the brief pass `GatewayOptions.lane`. A provider can therefore see up to 4 calls at once from one server. `getAIQueueSnapshot().search` reports the lane (`active`, `concurrency`, `waiting`, `capacity`). Why: on 2026-09-26 an Ask question waited 12 s behind two research calls and answered with nothing.
+  - `ParallelQueue` limits batch work, such as bulk parsing.
 
 ## 3. Data Models & Database Schema
 
@@ -237,7 +312,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/services/` — Heavy business logic:
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
-  - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
+  - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, and `hybridRetrieval` runs it inside the plan's hard filter), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `reasons.ts` (`buildReason`: the reason line from the proven fields), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
 - `server/mcp/` — Model Context Protocol (MCP) server subsystem:
@@ -272,9 +347,10 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - **Trash semantics**: `DELETE /api/contacts/:id` is a SOFT delete (`deletedAt` + `isArchived=1`; FTS row dropped by trash-aware triggers; embeddings purged). Restore clears both and re-embeds. `purgeExpiredTrash()` hard-deletes after dynamic `trashRetentionDays().value` (default 30, daily sweep). The `deletedAt` column must exist BEFORE the FTS trigger DDL in db.ts (pre-FTS ALTER).
 - `server/app.ts` — Express app factory (`createApp`/`finalizeApp`): middleware + routers + error pipeline without listen/Vite. server.ts and the integration tests both consume it.
 - `server/ai/capabilities.ts` — Capability routing (`quick` / `deep` / `research` / `embeddings`): resolves each capability to a provider + model from settings pins → env overrides (`AI_QUICK_MODEL` etc.) → Auto (legacy `AI_PROVIDER` first, then a preference order). Internal classes preserved: quick→lite, deep→flash, research→pro.
-- `server/ai/gateway.ts` — `generateFor(capability, options)`: the single entry point business logic uses for generation. Replaces calling one shared provider with `routing.prefer`.
+- `server/ai/gateway.ts` — `generateFor(capability, options)` and `streamFor(capability, options, onDelta)`: the entry points business logic uses for generation. Replaces calling one shared provider with `routing.prefer`. `streamFor` runs a text generation in the same queue, with the same lane and timeout rules, and hands each piece to `onDelta`. It falls back to `generate` with one piece when an adapter has no `generateStream`. `GatewayOptions.lane?: "search"` runs a call in the search lane.
+- `server/ai/workQueue.ts` - `GenerationQueue`: the shared slots and the search lane (see Concurrency / Threading Model).
 - `server/ai/providerRegistry.ts` — All _configured_ providers (env keys, UI-stored keys, custom OpenAI-compatible endpoints), instance-cached per id so Gemini's SmartRouter/QuotaTracker stay singleton.
-- `server/ai/adapters/openaiCompatible.ts` — One adapter for every OpenAI-format backend (Ollama, vLLM, LM Studio, xAI, DeepSeek, Mistral). Adaptive structured output: json_schema → json_object → prompt, remembered per model.
+- `server/ai/adapters/openaiCompatible.ts` — One adapter for every OpenAI-format backend (Ollama, vLLM, LM Studio, xAI, DeepSeek, Mistral). Adaptive structured output: json_schema → json_object → prompt, remembered per model. `generateStream` uses Chat Completions with `stream: true`.
 - `server/ai/embeddings.ts` — Embeddings capability + vec0 dimension lifecycle (probe → rebuild → re-embed).
 - `server/ai/promptSafety.ts` — Prompt-injection defenses: `wrapUntrusted()` fencing + `UNTRUSTED_DATA_RULE` (applied at every prompt that interpolates contact/file/web text) and `sanitizeAiOutputValue()` (write-side backstop in aiSearch mergeEngine).
 - `server/db.ts` — Database initialization, FTS5 setup (full rebuild gated behind the `user_version` pragma — bump `FTS_SCHEMA_VERSION` when FTS schema/trigger payloads change), triggers, virtual tables, performance PRAGMAs, data cleanup

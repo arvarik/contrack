@@ -497,8 +497,8 @@ export const SearchView = () => {
                       <span className={SECTION_HEADING}>
                         {isFallback
                           ? isEnriching
-                            ? "Keyword candidates"
-                            : "Keyword results"
+                            ? "Unverified candidates"
+                            : "Unverified results"
                           : "Search results"}
                       </span>
                       <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
@@ -517,7 +517,9 @@ export const SearchView = () => {
                       {isFallback && !isEnriching && (
                         <div className="flex items-center gap-1.5 text-xs text-warning">
                           <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>AI unavailable — showing keyword matches</span>
+                          <span>
+                            AI unavailable — showing unverified matches
+                          </span>
                         </div>
                       )}
                       {/*

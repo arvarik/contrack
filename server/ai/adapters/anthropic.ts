@@ -27,6 +27,7 @@ import {
 import { contentHash } from "../../utils/aiCache.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { toCitations, type RawSource } from "../citations.ts";
 import {
   withTimeout,
@@ -377,6 +378,57 @@ export class AnthropicAdapter implements AIProvider {
     );
   }
 
+  /**
+   * The same call, streamed: `onDelta` gets each piece of text as Claude
+   * sends it. A JSON or grounded call is not streamed. It runs `generate`
+   * and sends the text as one piece.
+   *
+   * A stream that fails before its first piece falls back to `generate`,
+   * which has the retries. After the first piece a failure is thrown,
+   * because a piece already sent cannot be taken back.
+   */
+  async generateStream(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    if (options.responseFormat !== "text" || options.enableSearchGrounding)
+      return this.generateInOnePiece(options, onDelta);
+    const model = options.model ?? this.resolveModel(options.routing?.prefer);
+    let sent = false;
+    try {
+      return await withTimeout(
+        (signal) =>
+          this.streamMessages(options, model, signal, (piece) => {
+            sent = true;
+            onDelta(piece);
+          }),
+        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+        options.signal,
+      );
+    } catch (error) {
+      if (options.signal?.aborted)
+        throw new AppError("AI call cancelled by caller", 499, {
+          code: "CANCELLED",
+        });
+      if (sent) throw error;
+      log.warn(
+        "AnthropicAdapter",
+        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
+      );
+      return this.generateInOnePiece(options, onDelta);
+    }
+  }
+
+  /** Run `generate` and send its text as one piece. */
+  private async generateInOnePiece(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    const result = await this.generate(options);
+    if (result.text) onDelta(result.text);
+    return result;
+  }
+
   /** The effort to send `model`, or undefined when it takes none. */
   private effortFor(
     model: string,
@@ -529,6 +581,89 @@ export class AnthropicAdapter implements AIProvider {
       latencyMs,
       citations,
       ...(searchQueries.length > 0 && { searchQueries }),
+    };
+  }
+
+  /** Stream a text call, with no tools and no schema, piece by piece. */
+  private async streamMessages(
+    options: AIGenerateOptions,
+    model: string,
+    signal: AbortSignal,
+    send: (piece: string) => void,
+  ): Promise<AIGenerateResult> {
+    const startMs = Date.now();
+    // Local event shape: the fields of the three events that carry the text
+    // and the usage. Thinking arrives in other deltas and is not sent.
+    interface ClaudeStreamEvent {
+      type?: string;
+      message?: { usage?: { input_tokens?: number } };
+      delta?: { type?: string; text?: string };
+      usage?: { output_tokens?: number };
+    }
+    const open = (effort: string | undefined) => {
+      const requestParams: Record<string, unknown> = {
+        model,
+        messages: [{ role: "user", content: options.prompt }],
+        max_tokens: options.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
+        stream: true,
+      };
+      const system = options.systemPrompt?.trim();
+      if (system) requestParams.system = system;
+      if (effort) requestParams.output_config = { effort };
+      return this.client.messages.create(
+        requestParams as unknown as Parameters<
+          typeof this.client.messages.create
+        >[0],
+        { signal },
+      ) as unknown as Promise<AsyncIterable<ClaudeStreamEvent>>;
+    };
+
+    // A refused effort is a 400 to the request, before any event, so the one
+    // retry without it works as it does in `runMessages`.
+    const effort = this.effortFor(model, options);
+    let stream: AsyncIterable<ClaudeStreamEvent>;
+    try {
+      stream = await open(effort);
+    } catch (err) {
+      if (!effort || !isEffortRejection(err)) throw err;
+      this.noEffort.add(model);
+      log.info("AnthropicAdapter", `${model} takes no effort parameter`);
+      stream = await open(undefined);
+    }
+
+    let text = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    for await (const event of stream) {
+      // The caller or the timeout ended the call, so no piece goes out.
+      signal.throwIfAborted();
+      if (event.type === "message_start") {
+        inputTokens = event.message?.usage?.input_tokens ?? inputTokens;
+      } else if (event.type === "message_delta") {
+        // The count is cumulative, so the last one is the total.
+        outputTokens = event.usage?.output_tokens ?? outputTokens;
+      } else if (
+        event.type === "content_block_delta" &&
+        event.delta?.type === "text_delta" &&
+        event.delta.text
+      ) {
+        text += event.delta.text;
+        send(event.delta.text);
+      }
+    }
+
+    const tokenCount = inputTokens + outputTokens;
+    const latencyMs = Date.now() - startMs;
+    log.info(
+      "AnthropicAdapter",
+      `${model} (stream) | ${latencyMs}ms | ${tokenCount} tokens`,
+    );
+    return {
+      text,
+      model,
+      tokenCount,
+      usage: { inputTokens, outputTokens },
+      latencyMs,
     };
   }
 }

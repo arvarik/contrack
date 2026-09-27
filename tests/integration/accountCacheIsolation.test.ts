@@ -20,6 +20,15 @@ vi.mock("../../server/ai/aiService.ts", async (importOriginal) => {
   };
 });
 
+// A provider is configured, as far as the search pipeline can tell. With
+// none, the local list is the answer and the reranker mock never runs.
+vi.mock("../../server/ai/services/shared.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../server/ai/services/shared.ts")
+  >()),
+  isMockMode: () => false,
+}));
+
 import {
   parseSearchQuery,
   rerankCandidates,
@@ -163,7 +172,11 @@ describe("Account cache isolation and shared pending requests", () => {
       );
 
       vi.mocked(rerankCandidates).mockResolvedValueOnce([
-        { contact_id: "ignored", reason: "Matches distributed systems" },
+        {
+          contact_id: "ignored",
+          verified_field: "about",
+          verified_value: "distributed database systems",
+        },
       ]);
 
       // First search by Actor A (populates cache)
@@ -224,7 +237,13 @@ describe("Account cache isolation and shared pending requests", () => {
             ]),
         );
 
-        return [{ contact_id: contactAId, reason: "Matches query" }];
+        return [
+          {
+            contact_id: contactAId,
+            verified_field: "about",
+            verified_value: "cloud infrastructure",
+          },
+        ];
       });
 
       const response = await asUser(actorA)(
@@ -339,7 +358,13 @@ describe("Account cache isolation and shared pending requests", () => {
       vi.mocked(rerankCandidates).mockImplementation(async () => {
         rerankCalls++;
         await new Promise((resolve) => setTimeout(resolve, 60));
-        return [{ contact_id: contactAId, reason: "Best match" }];
+        return [
+          {
+            contact_id: contactAId,
+            verified_field: "role",
+            verified_value: "Systems Specialist",
+          },
+        ];
       });
 
       // Fire two identical searches concurrently for Actor A
@@ -373,7 +398,13 @@ describe("Account cache isolation and shared pending requests", () => {
 
       vi.mocked(rerankCandidates).mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 80));
-        return [{ contact_id: contactAId, reason: "Match" }];
+        return [
+          {
+            contact_id: contactAId,
+            verified_field: "role",
+            verified_value: "Systems Specialist",
+          },
+        ];
       });
 
       const ac1 = new AbortController();

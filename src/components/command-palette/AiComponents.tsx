@@ -8,7 +8,7 @@ import { DURATION, EASE } from "../../lib/motion";
 import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { ITEM_CURRENT, MATCH_BADGE } from "./utils";
+import { ITEM_CURRENT, MATCH_BADGE, isUnverified } from "./utils";
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
@@ -31,6 +31,7 @@ interface AIResultCardProps {
   match: SemanticMatch;
   index: number;
   onSelect: () => void;
+  /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
   /** Enrichment props for StaleChip */
   hasGroundingCapacity: boolean;
@@ -78,7 +79,7 @@ export const AIResultCard = ({
       />
 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        {/* Name + Score Dot + Fallback Badge */}
+        {/* Name + Score Dot + Match Badge */}
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm truncate">{match.name}</span>
           <ScoreDot contact={match} />
@@ -86,8 +87,10 @@ export const AIResultCard = ({
             <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
               Approximate
             </span>
-          ) : isFallback ? (
-            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>Fallback</span>
+          ) : isUnverified(match, isFallback) ? (
+            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>
+              Unverified
+            </span>
           ) : null}
         </div>
 

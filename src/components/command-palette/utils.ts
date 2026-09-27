@@ -26,12 +26,24 @@ export const GROUP_HEADING =
 export const ITEM_CURRENT = "aria-selected:row-selected";
 
 /**
- * The badge after a result's name: "Approximate", "Keyword" or "Fallback".
+ * The badge after a result's name: "Approximate" or "Unverified".
  * Give it its tone's wash (`TONE_WASH`). The palette and the Ask page's
  * result cards both use it.
  */
 export const MATCH_BADGE =
   "text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded shrink-0";
+
+/**
+ * True when no exact answer, model or filter proved this result, so it
+ * wears the "Unverified" badge. An older server sends no `verified`, and
+ * then the chunk's `fallback` decides, as it did before.
+ */
+export function isUnverified(
+  match: { verified?: boolean },
+  fallback: boolean,
+): boolean {
+  return match.verified === false || (match.verified === undefined && fallback);
+}
 
 /** Group heading color variants */
 export const GROUP_HEADING_DEFAULT = `${GROUP_HEADING} [&_[cmdk-group-heading]]:text-on-surface-variant`;

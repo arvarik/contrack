@@ -82,6 +82,28 @@ export interface AIProvider {
   generate(options: AIGenerateOptions): Promise<AIGenerateResult>;
 
   /**
+   * Optional: the same generation, streamed.
+   *
+   * Calls `onDelta` with each new piece of text, in order, as the provider
+   * sends it, then resolves with the result `generate` would return: `text`
+   * is the whole answer, the pieces joined. The Ask brief uses it so the
+   * text grows word by word.
+   *
+   * Implementations follow the rules of `generate` for `signal`, `timeoutMs`
+   * and model routing. A request that asks for JSON or for search grounding
+   * is not streamed: the adapter runs `generate` and sends the text as one
+   * piece. A retry is allowed only before the first piece, because a piece
+   * already sent cannot be taken back.
+   *
+   * `streamFor` in the gateway calls `generate` and sends one piece when an
+   * adapter has no stream.
+   */
+  generateStream?(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult>;
+
+  /**
    * Optional: Return routing diagnostics and quota state.
    *
    * Only meaningful for providers with built-in quota tracking (Gemini).

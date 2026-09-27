@@ -1,6 +1,7 @@
-import { matchesFacet, type FacetFilter } from "../../shared/searchFacets.ts";
+import type { FacetFilter } from "../../shared/searchFacets.ts";
+import { matchesFacet } from "../../shared/searchFacets.ts";
 import { sqlite } from "../db.ts";
-import { lexicalSearch } from "./search/lexical.ts";
+import { lexicalSearch, type LexicalMatch } from "./search/lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import { log } from "../utils/logger.ts";
 import {
@@ -9,15 +10,29 @@ import {
 } from "../repositories/contactRepository.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
+import type { QueryPlan, SemanticMatchResult } from "../ai/types.ts";
 import {
   getCachedSearch,
   setCachedSearch,
   normalizeKey,
 } from "../utils/aiCache.ts";
-import { hybridRetrieval } from "./search/hybridRetrieval.ts";
+import {
+  hybridRetrieval,
+  localRetrieval,
+  type AllowedContact,
+  type RetrievalResult,
+} from "./search/hybridRetrieval.ts";
+import {
+  classifyQuery,
+  nameSignals,
+  type NamedResult,
+  type QueryIntent,
+} from "./search/intent.ts";
+import { buildReason, type ReasonEvidence } from "./search/reasons.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
+import { isMockMode } from "../ai/services/shared.ts";
 import { withTimeout } from "../ai/resilience.ts";
 import { RequestCoalescer } from "../utils/requestCoalescer.ts";
 
@@ -40,12 +55,15 @@ const PHASE1_LIMIT = 30;
  */
 const RERANKER_LIMIT = 30;
 
+/** The model stages together: the planner, then the reranker when it runs. */
+const MODEL_BUDGET_MS = 12_000;
+
 // =============================================================================
 // Types
 // =============================================================================
 
 /**
- * A fully hydrated contact row with an optional AI-generated reason.
+ * A fully hydrated contact row with an optional server-built reason.
  *
  * Uses `Record<string, unknown>` rather than `[key: string]: any` to
  * prevent silent `any`-propagation through the type system. The dynamic
@@ -57,7 +75,22 @@ export type HydratedMatch = Record<string, unknown> & {
   aiReason?: string | null;
   approximate?: boolean;
   matchType?: "exact" | "approximate";
+  /**
+   * True when local search answered exactly (a name, an email, a phone) or
+   * when the database filter or the reranker proved the match. False for a
+   * local result nobody has checked yet.
+   */
+  verified?: boolean;
 };
+
+/** Options for one Ask Contrack search. */
+export interface SemanticSearchOptions {
+  /**
+   * False when the caller has switched AI off: every model stage is skipped
+   * and the local list is the answer.
+   */
+  aiAllowed?: boolean;
+}
 
 // =============================================================================
 // Shared Helpers (DRY — used by both streaming and non-streaming paths)
@@ -111,6 +144,50 @@ function hydrateCandidates(
   return hydratedMap;
 }
 
+/** Keyword matches as contacts, each marked exact or approximate. */
+function hydrateLexical(
+  scope: Scope,
+  matches: LexicalMatch[],
+  limit: number,
+): HydratedMatch[] {
+  const hydratedMap = hydrateCandidates(
+    scope,
+    matches.map((row) => row.contactId),
+    limit,
+  );
+  return matches.flatMap((m) => {
+    const contact = hydratedMap.get(m.contactId);
+    if (!contact) return [];
+    return [
+      {
+        ...contact,
+        approximate: Boolean(m.approximate),
+        matchType: m.approximate
+          ? ("approximate" as const)
+          : ("exact" as const),
+      },
+    ];
+  });
+}
+
+/** Keyword matches with their names, for the name signals of `classifyQuery`. */
+function namedResults(scope: Scope, matches: LexicalMatch[]): NamedResult[] {
+  if (!matches.length) return [];
+  const rows = sqlite
+    .prepare(
+      "SELECT id, name FROM contacts WHERE ownerId = ? AND id IN (SELECT value FROM json_each(?))",
+    )
+    .all(scope.ownerId, JSON.stringify(matches.map((m) => m.contactId))) as {
+    id: string;
+    name: string;
+  }[];
+  const names = new Map(rows.map((row) => [row.id, row.name]));
+  return matches.flatMap((m) => {
+    const name = names.get(m.contactId);
+    return name ? [{ name, approximate: m.approximate, score: m.score }] : [];
+  });
+}
+
 /**
  * Build compressed contact profiles for the LLM reranker.
  * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
@@ -154,6 +231,79 @@ function buildCompressedCandidates(
   return compressed;
 }
 
+/**
+ * The reranker's evidence as a reason part. The candidate's `interests`
+ * holds tags and interests together, so the value is looked up in both. A
+ * name match needs no reason: the card shows the name.
+ */
+function rerankEvidence(
+  contact: HydratedMatch,
+  match: SemanticMatchResult,
+): ReasonEvidence | null {
+  const value = match.verified_value;
+  const has = (list: unknown, key: string) =>
+    Array.isArray(list) &&
+    list.some(
+      (item) =>
+        typeof item?.[key] === "string" &&
+        item[key].toLowerCase().includes(value.toLowerCase()),
+    );
+  switch (match.verified_field) {
+    case "name":
+      return null;
+    case "interests":
+      return {
+        field:
+          has(contact.tags, "tag") && !has(contact.interests, "interest")
+            ? "tag"
+            : "interest",
+        value,
+      };
+    case "role":
+    case "headline":
+    case "about":
+    case "preferences":
+      return { field: match.verified_field, value };
+    default:
+      return { field: match.verified_field };
+  }
+}
+
+/** The ids in last-contact order: never contacted first, then the oldest. */
+function byLastContact(allowed: AllowedContact[]): string[] {
+  return [...allowed]
+    .sort((a, b) => {
+      if (a.lastContactedAt === b.lastContactedAt)
+        return a.name.localeCompare(b.name);
+      if (a.lastContactedAt === null) return -1;
+      if (b.lastContactedAt === null) return 1;
+      return a.lastContactedAt < b.lastContactedAt ? -1 : 1;
+    })
+    .map((contact) => contact.id);
+}
+
+/**
+ * How the database alone proves a plan, or null when a model must check it.
+ *
+ * "filters": the planner is confident, and its hard filters hold every
+ * constraint of the question (no soft traits). "temporal": the question
+ * asks only about recency, which is a date comparison the reranker cannot
+ * make, because candidates carry no dates.
+ */
+export function databaseProof(plan: QueryPlan): "filters" | "temporal" | null {
+  if (plan.confidence === "low" || plan.should.traits?.length) return null;
+  const { temporal, locations, locationMatchers, ...rest } = plan.must;
+  const matchers =
+    !!locations?.length ||
+    !!locationMatchers?.length ||
+    !!rest.companyMatchers?.length ||
+    !!rest.roleMatchers?.length ||
+    !!rest.industryMatchers?.length;
+  if (temporal && !matchers) return "temporal";
+  if (matchers && plan.confidence === "high") return "filters";
+  return null;
+}
+
 export function searchRevision(scope: Scope): number {
   const row = sqlite
     .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
@@ -163,6 +313,7 @@ export function searchRevision(scope: Scope): number {
 
 interface SearchResult {
   matches: HydratedMatch[];
+  /** The model did not verify this list. */
   fallback: boolean;
   cached?: boolean;
 }
@@ -171,37 +322,142 @@ interface SearchChunk extends SearchResult {
   latencyMs?: number;
 }
 
-/** A short name prefix can use the local index without an AI generation. */
-function isNameLookup(query: string, matches: HydratedMatch[]): boolean {
-  const tokens = query.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  return (
-    matches.length > 0 &&
-    tokens.length > 0 &&
-    tokens.length <= 3 &&
-    matches.every((match) => {
-      const names =
-        match.name.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-      return tokens.every((token) =>
-        names.some((name) => name.startsWith(token)),
-      );
-    })
+/** Mark local results as not verified by anybody. */
+const unverified = (matches: HydratedMatch[]): HydratedMatch[] =>
+  matches.map((match) => ({ ...match, verified: false }));
+
+/**
+ * The final answer once the plan exists.
+ *
+ * When the database proves the plan, the filtered contacts are the answer
+ * and the reranker does not run: in retrieval order, then the rest of the
+ * filtered contacts by name, or by last contact for a recency question. Any
+ * other plan goes to the reranker. Every reason is built here.
+ */
+async function answerFromPlan(
+  scope: Scope,
+  query: string,
+  retrieval: RetrievalResult,
+  signal: AbortSignal,
+): Promise<{ result: SearchResult; path: string }> {
+  const { plan, candidates, allowed } = retrieval;
+  const evidence = retrieval.evidence ?? new Map<string, ReasonEvidence[]>();
+  const proof = plan && allowed ? databaseProof(plan) : null;
+
+  if (proof && allowed) {
+    let ids: string[];
+    if (proof === "temporal") ids = byLastContact(allowed);
+    else {
+      ids = candidates.map((c) => c.contactId);
+      if (ids.length < PHASE1_LIMIT) {
+        const ranked = new Set(ids);
+        ids.push(
+          ...allowed
+            .filter((contact) => !ranked.has(contact.id))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((contact) => contact.id),
+        );
+      }
+    }
+    const hydrated = hydrateCandidates(scope, ids, PHASE1_LIMIT);
+    return {
+      path: proof === "temporal" ? "sql-temporal" : "sql",
+      result: {
+        matches: [...hydrated.values()].map((contact) => ({
+          ...contact,
+          verified: true,
+          aiReason: buildReason(contact, evidence.get(contact.id) ?? []),
+        })),
+        fallback: false,
+      },
+    };
+  }
+
+  if (!candidates.length)
+    return { path: "empty", result: { matches: [], fallback: false } };
+  const pool = [
+    ...hydrateCandidates(
+      scope,
+      candidates.map((c) => c.contactId),
+      PHASE1_LIMIT,
+    ).values(),
+  ];
+  const verified = await rerankCandidates(
+    query,
+    buildCompressedCandidates(pool),
+    plan,
+    signal,
   );
+  signal.throwIfAborted();
+  const inPool = new Set(pool.map((c) => c.id));
+  const fresh = hydrateCandidates(
+    scope,
+    verified
+      .filter((match) => inPool.has(match.contact_id))
+      .map((match) => match.contact_id),
+    PHASE1_LIMIT,
+  );
+  return {
+    path: "rerank",
+    result: {
+      matches: verified.flatMap((match) => {
+        const contact = fresh.get(match.contact_id);
+        if (!contact) return [];
+        const cited = rerankEvidence(contact, match);
+        const filtered = (evidence.get(contact.id) ?? []).filter(
+          (item) => item.field !== cited?.field,
+        );
+        return [
+          {
+            ...contact,
+            verified: true,
+            aiReason: buildReason(
+              contact,
+              cited ? [cited, ...filtered] : filtered,
+            ),
+          },
+        ];
+      }),
+      fallback: false,
+    },
+  };
 }
 
-/** One pipeline supplies both streaming and JSON callers. */
+/**
+ * One pipeline supplies both streaming and JSON callers.
+ *
+ * 1. The L1 cache.
+ * 2. Strict keyword search, which also decides the query's kind.
+ * 3. A name, an email, a phone number or a quoted phrase is answered here,
+ *    verified, with no model call.
+ * 4. Otherwise the local hybrid list streams as the instant chunk.
+ * 5. With AI off or no provider, that list is the answer.
+ * 6. The planner, then the database proof or the reranker, in the search lane
+ *    within one budget.
+ * 7. On an error, a timeout or an edit mid-flight, a fresh local list is the
+ *    answer. Local results are never thrown away.
+ */
 async function runSearch(
   scope: Scope,
   query: string,
   rid: string,
   emit?: (chunk: SearchChunk) => void,
   signal?: AbortSignal,
+  options: SemanticSearchOptions = {},
 ): Promise<SearchResult> {
   signal?.throwIfAborted();
-  const start = Date.now();
+  const start = performance.now();
+  const aiAllowed = options.aiAllowed !== false;
+  const models = aiAllowed && !isMockMode();
   const revision = searchRevision(scope);
-  const capability = resolveCapability("quick");
+  const capability = models ? resolveCapability("quick") : null;
   const normalizedQuery = normalizeKey(query);
-  const cacheKey = `${revision}:${Math.floor(start / 300_000)}:${capability?.providerId}:${capability?.model}:${normalizedQuery}`;
+  // With no model to run, the answer is local, and "local" keeps it apart
+  // from every answer a model verified.
+  const answeredBy = models
+    ? `${capability?.providerId}:${capability?.model}`
+    : "local";
+  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -209,22 +465,72 @@ async function runSearch(
       matches: cached.matches as HydratedMatch[],
       cached: true,
     };
-  const keyword = searchService.searchFts(scope, query);
-  if (isNameLookup(query, keyword)) {
-    const result = { matches: keyword, fallback: false };
-    setCachedSearch(scope, cacheKey, result);
+  const elapsed = () => Math.round(performance.now() - start);
+  const done = (result: SearchResult, intent: QueryIntent, path: string) => {
+    log.info(
+      "SemanticSearch",
+      `[${rid}] "${query.slice(0, 60)}" kind=${intent.kind} path=${path} ` +
+        `→ ${result.matches.length} ${result.fallback ? "unverified" : "verified"} in ${elapsed()}ms`,
+    );
     return result;
-  }
-  emit?.({
-    phase: "instant",
-    matches: keyword,
-    fallback: true,
-    latencyMs: Date.now() - start,
-  });
+  };
 
+  // Local kinds: the keyword answer is final and verified.
+  const strict = lexicalSearch(scope, query, PHASE1_LIMIT);
+  const intent = classifyQuery(
+    query,
+    nameSignals(query, namedResults(scope, strict)),
+  );
+  if (intent.local) {
+    const result = {
+      matches: hydrateLexical(scope, strict, PHASE1_LIMIT).map((match) => ({
+        ...match,
+        verified: true,
+      })),
+      fallback: false,
+    };
+    setCachedSearch(scope, cacheKey, result);
+    return done(result, intent, "local");
+  }
+
+  const localList = async (queryVector?: Float32Array | null) => {
+    const local = await localRetrieval(scope, query, {
+      intent,
+      limit: PHASE1_LIMIT,
+      queryVector,
+      aiAllowed,
+    });
+    return {
+      local,
+      matches: unverified([
+        ...hydrateCandidates(
+          scope,
+          local.candidates.map((c) => c.contactId),
+          PHASE1_LIMIT,
+        ).values(),
+      ]),
+    };
+  };
+  if (!models) {
+    // No model can run, so this list is the answer, the same until the next
+    // edit, under a key no model answer shares.
+    const result = { matches: (await localList()).matches, fallback: true };
+    signal?.throwIfAborted();
+    setCachedSearch(scope, cacheKey, result);
+    return done(result, intent, "no-ai");
+  }
+
+  // The model stage starts now, and the local list is built while the
+  // planner's request is on the network. The list then costs the answer
+  // nothing. The stage reads the list's query vector once the planner is
+  // done, so the question is embedded once.
+  let settleVector!: (vector: Float32Array | null) => void;
+  const queryVector = new Promise<Float32Array | null>(
+    (resolve) => (settleVector = resolve),
+  );
   const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${normalizedQuery}`;
 
-  return searchCoalescer.coalesce(
+  const answer = searchCoalescer.coalesce(
     coalesceKey,
     async (sharedSignal) => {
       // Double check cache in case a previous coalesced execution just populated it
@@ -236,46 +542,28 @@ async function runSearch(
           cached: true,
         };
       }
-
-      let result: SearchResult;
-      try {
-        result = await withTimeout(
-          async (budget) => {
-            const retrieval = await hybridRetrieval(scope, query, rid, budget);
-            budget.throwIfAborted();
-            if (!retrieval.candidates.length)
-              return { matches: [], fallback: false };
-            const candidates = [
-              ...hydrateCandidates(
-                scope,
-                retrieval.candidates.map((c) => c.contactId),
-                PHASE1_LIMIT,
-              ).values(),
-            ];
-            const verified = await rerankCandidates(
-              query,
-              buildCompressedCandidates(candidates),
-              retrieval.plan,
-              budget,
-            );
-            budget.throwIfAborted();
-            const allowed = new Set(candidates.map((c) => c.id));
-            const fresh = hydrateCandidates(
-              scope,
-              verified
-                .filter((match) => allowed.has(match.contact_id))
-                .map((match) => match.contact_id),
-              PHASE1_LIMIT,
-            );
-            return {
-              matches: verified.flatMap((match) => {
-                const contact = fresh.get(match.contact_id);
-                return contact ? [{ ...contact, aiReason: match.reason }] : [];
-              }),
-              fallback: false,
-            };
+      const fallback = async (path: string) =>
+        done(
+          {
+            matches: (await localList(await queryVector)).matches,
+            fallback: true,
           },
-          12_000,
+          intent,
+          path,
+        );
+
+      let answered: { result: SearchResult; path: string };
+      try {
+        answered = await withTimeout(
+          async (budget) => {
+            const retrieval = await hybridRetrieval(scope, query, rid, budget, {
+              vector: { text: query, vector: queryVector },
+              aiAllowed,
+            });
+            budget.throwIfAborted();
+            return answerFromPlan(scope, query, retrieval, budget);
+          },
+          MODEL_BUDGET_MS,
           sharedSignal,
         );
       } catch (error) {
@@ -284,23 +572,34 @@ async function runSearch(
           "SemanticSearch",
           `[${rid}] AI refinement unavailable: ${getErrorMessage(error)}`,
         );
-        result = {
-          matches: searchService.searchFts(scope, query),
-          fallback: true,
-        };
+        return fallback("fallback");
       }
       sharedSignal?.throwIfAborted();
       // A concurrent edit in this account invalidates evidence gathered before that edit.
-      if (searchRevision(scope) !== revision)
-        return {
-          matches: searchService.searchFts(scope, query),
-          fallback: true,
-        };
-      if (!result.fallback) setCachedSearch(scope, cacheKey, result);
-      return result;
+      if (searchRevision(scope) !== revision) return fallback("edited");
+      setCachedSearch(scope, cacheKey, answered.result);
+      return done(answered.result, intent, answered.path);
     },
     signal,
   );
+  // Awaited below. This only keeps a rejection that lands first from being
+  // reported as unhandled.
+  answer.catch(() => {});
+
+  let first: Awaited<ReturnType<typeof localList>> | undefined;
+  try {
+    first = await localList();
+  } finally {
+    settleVector(first?.local.queryVector ?? null);
+  }
+  signal?.throwIfAborted();
+  emit?.({
+    phase: "instant",
+    matches: first.matches,
+    fallback: true,
+    latencyMs: elapsed(),
+  });
+  return answer;
 }
 
 // =============================================================================
@@ -349,22 +648,7 @@ export const searchService = {
           .map((row) => row.id),
       );
     }
-    const matches = lexicalSearch(scope, q, 20, allowed);
-    const ids = matches.map((row) => row.contactId);
-    const hydratedMap = hydrateCandidates(scope, ids, 20);
-    return matches.flatMap((m) => {
-      const contact = hydratedMap.get(m.contactId);
-      if (!contact) return [];
-      return [
-        {
-          ...contact,
-          approximate: Boolean(m.approximate),
-          matchType: m.approximate
-            ? ("approximate" as const)
-            : ("exact" as const),
-        },
-      ];
-    });
+    return hydrateLexical(scope, lexicalSearch(scope, q, 20, allowed), 20);
   },
 
   /**
@@ -381,13 +665,14 @@ export const searchService = {
     rid: string,
     res: Response,
     signal?: AbortSignal,
+    options?: SemanticSearchOptions,
   ) {
     const send = (chunk: SearchChunk) => {
       if (!signal?.aborted && !res.destroyed && !res.writableEnded)
         res.write(JSON.stringify(chunk) + "\n");
     };
     try {
-      const result = await runSearch(scope, query, rid, send, signal);
+      const result = await runSearch(scope, query, rid, send, signal, options);
       send({ phase: "complete", ...result });
     } catch (error) {
       if (!signal?.aborted && !res.destroyed && !res.writableEnded)
@@ -413,7 +698,8 @@ export const searchService = {
     query: string,
     rid: string,
     signal?: AbortSignal,
+    options?: SemanticSearchOptions,
   ) {
-    return runSearch(scope, query, rid, undefined, signal);
+    return runSearch(scope, query, rid, undefined, signal, options);
   },
 };

@@ -18,7 +18,10 @@ import type { SemanticMatch } from "../../types";
 import { CARD, CARD_INTERACTIVE, TAG_PILL, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { fallbackAvatarUrl } from "../../lib/avatar";
-import { MATCH_BADGE } from "../../components/command-palette/utils";
+import {
+  MATCH_BADGE,
+  isUnverified,
+} from "../../components/command-palette/utils";
 
 // =============================================================================
 // ResultCard
@@ -28,6 +31,7 @@ interface ResultCardProps {
   key?: React.Key;
   match: SemanticMatch;
   index: number;
+  /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
   onClick: () => void;
 }
@@ -55,8 +59,9 @@ export const ResultCard = ({
         className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
       />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
-        {/* Name + fallback badge */}
-        <div className="flex items-center gap-2">
+        {/* Name + match badge. The row wraps, so on a phone the badge goes
+            under the name instead of cutting it short. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-bold text-on-surface truncate">
             {match.name}
           </span>
@@ -64,8 +69,10 @@ export const ResultCard = ({
             <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
               Approximate
             </span>
-          ) : isFallback ? (
-            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>Keyword</span>
+          ) : isUnverified(match, isFallback) ? (
+            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>
+              Unverified
+            </span>
           ) : null}
         </div>
 

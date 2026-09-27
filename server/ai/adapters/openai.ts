@@ -27,6 +27,7 @@ import type {
 import { getLatestDiscoveredModel } from "../modelFilter.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { toCitations, type RawSource } from "../citations.ts";
 import {
   translateSchemaNode as translateSchema,
@@ -358,6 +359,57 @@ export class OpenAIAdapter implements AIProvider {
     );
   }
 
+  /**
+   * The same call, streamed: `onDelta` gets each piece of text as OpenAI
+   * sends it. A JSON or grounded call is not streamed. It runs `generate`
+   * and sends the text as one piece.
+   *
+   * A stream that fails before its first piece falls back to `generate`,
+   * which has the retries. After the first piece a failure is thrown,
+   * because a piece already sent cannot be taken back.
+   */
+  async generateStream(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    if (options.responseFormat !== "text" || options.enableSearchGrounding)
+      return this.generateInOnePiece(options, onDelta);
+    const model = options.model ?? this.resolveModel(options.routing?.prefer);
+    let sent = false;
+    try {
+      return await withTimeout(
+        (signal) =>
+          this.streamChatCompletion(options, model, signal, (piece) => {
+            sent = true;
+            onDelta(piece);
+          }),
+        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+        options.signal,
+      );
+    } catch (error) {
+      if (options.signal?.aborted)
+        throw new AppError("AI call cancelled by caller", 499, {
+          code: "CANCELLED",
+        });
+      if (sent) throw error;
+      log.warn(
+        "OpenAIAdapter",
+        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
+      );
+      return this.generateInOnePiece(options, onDelta);
+    }
+  }
+
+  /** Run `generate` and send its text as one piece. */
+  private async generateInOnePiece(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    const result = await this.generate(options);
+    if (result.text) onDelta(result.text);
+    return result;
+  }
+
   /** The effort to ask `model` for, given the call's class and grounding. */
   private effortFor(
     model: string,
@@ -470,6 +522,81 @@ export class OpenAIAdapter implements AIProvider {
         usage: {
           inputTokens: response.usage.prompt_tokens ?? 0,
           outputTokens: response.usage.completion_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+    };
+  }
+
+  // ── Streamed chat completion ──────────────────────────────────────────
+  private async streamChatCompletion(
+    options: AIGenerateOptions,
+    model: string,
+    signal: AbortSignal,
+    send: (piece: string) => void,
+  ): Promise<AIGenerateResult> {
+    const startMs = Date.now();
+    const messages: Array<{ role: "system" | "user"; content: string }> = [];
+    if (options.systemPrompt)
+      messages.push({ role: "system", content: options.systemPrompt });
+    messages.push({ role: "user", content: options.prompt });
+
+    // Minimal local chunk shape, for the reason `runChatCompletion` gives.
+    interface ChatCompletionChunk {
+      choices?: Array<{ delta?: { content?: string | null } }>;
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      } | null;
+    }
+    // A refused effort is a 400 to the request, before any chunk, so the
+    // correction works as it does for a call that does not stream.
+    const stream = await this.withEffort(model, options, (effort) => {
+      const requestParams: Record<string, unknown> = {
+        model,
+        messages,
+        stream: true,
+        // The usage arrives in a last chunk that has no choices.
+        stream_options: { include_usage: true },
+      };
+      const max = this.budget(options, effort);
+      if (max) requestParams.max_completion_tokens = max;
+      if (effort !== "omit") requestParams.reasoning_effort = effort;
+      return this.client.chat.completions.create(
+        requestParams as unknown as Parameters<
+          typeof this.client.chat.completions.create
+        >[0],
+        { signal },
+      ) as unknown as Promise<AsyncIterable<ChatCompletionChunk>>;
+    });
+
+    let text = "";
+    let usage: ChatCompletionChunk["usage"];
+    for await (const chunk of stream) {
+      // The caller or the timeout ended the call, so no piece goes out.
+      signal.throwIfAborted();
+      usage = chunk.usage ?? usage;
+      const piece = chunk.choices?.[0]?.delta?.content;
+      if (!piece) continue;
+      text += piece;
+      send(piece);
+    }
+
+    const tokenCount = usage?.total_tokens;
+    const latencyMs = Date.now() - startMs;
+    log.info(
+      "OpenAIAdapter",
+      `${model} (stream) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
+    );
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(usage && {
+        usage: {
+          inputTokens: usage.prompt_tokens ?? 0,
+          outputTokens: usage.completion_tokens ?? 0,
         },
       }),
       latencyMs,

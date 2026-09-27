@@ -9,36 +9,202 @@ The flagship search experience — a hybrid retrieval-augmented generation (RAG)
 ### How It Works
 
 ```
-User Query: "who works in fintech and I haven't talked to recently"
+User Query: "who in Lisbon goes rock climbing"
     │
-    ├──→ FTS5 Keyword Search (SQLite)     ──→ Top-N results
-    │                                          │
-    ├──→ Vector KNN Search (sqlite-vec)   ──→ Top-N results
-    │    384-dim MiniLM local embeddings       │
-    │                                          │
-    └──→ Reciprocal Rank Fusion (RRF)    ←────┘
-              │
-              ▼
-         Fused Results (Phase 1 — <15ms)
-              │
-              ▼
-         AI Re-ranking + Reason Generation (Phase 2 — ~500ms)
-              │
-              ▼
-         Streamed via NDJSON to client
+    ▼
+L1 cache ──────────────→ hit: the cached answer
+    │
+    ▼
+Strict keyword search (top 30)
+    │
+    ▼
+classifyQuery ─────────→ email, phone, quoted or name:
+    │                    the keyword result, verified, no model call
+    ▼
+Local retrieval (about 10 ms)
+FTS5 + vector KNN (384-dim MiniLM), fused by RRF (k = 15)
+    │
+    ├──→ AI off or no provider: this list is the answer, unverified
+    │
+    ▼
+Instant chunk: the top 30, unverified
+    │
+    ▼
+Search lane, 12 s budget: the planner, then filtered retrieval
+    │
+    ├──→ Database proof: the filtered contacts, verified, no reranker
+    ├──→ Any other plan: the compact reranker checks the top 30
+    ├──→ Error, timeout or edit: a fresh local list, unverified
+    │
+    ▼
+Complete chunk, streamed via NDJSON to the client
 ```
+
+`runSearch` in `server/services/searchService.ts` runs these steps. The JSON
+and the NDJSON callers use the same steps.
+
+1. **The L1 cache.** The key holds the owner, the account's
+   `search_revision`, a 5-minute bucket, the provider, the model and the
+   normalized query. With AI off or no provider, the key holds `local` in
+   place of the provider and the model. An AI-off request therefore never
+   reads an answer that a model verified.
+2. **Strict keyword search.** `lexicalSearch` requires every token to match,
+   then adds approximate names. It keeps the top 30. The names in this
+   result give the name signals for the next step.
+3. **The query kind.** `classifyQuery` sorts the question into one of six
+   kinds before any model runs. See [Query kinds](#query-kinds).
+4. **A local answer.** For an email, a phone number, a quoted phrase or a
+   name, the strict keyword result is the final answer. Every match is
+   verified, and no model runs. The L1 cache keeps the answer.
+5. **The local list.** For the other kinds, `localRetrieval` runs FTS5 in
+   broad mode with approximate names, and a vector KNN search. Reciprocal
+   rank fusion (k = 15) joins the two lists. No planner runs, and the step
+   takes about 10 ms. The top 30 go to the client as the instant chunk.
+6. **AI off.** When AI is off for the account, or no provider is set, the
+   local list is the final answer. No instant chunk goes out, because no
+   model stage follows.
+7. **The model stages.** The planner (`parseSearchQuery`) runs in the AI
+   queue's search lane, and the filtered retrieval follows it. These stages
+   and the reranker share a 12-second budget. The planner starts as soon as
+   step 3 knows the kind, so its request is on the network while step 5
+   builds the local list. The local list then adds no time to the answer.
+   - **Database proof, filters.** A plan with confidence "high" and no soft
+     traits, whose hard filters hold every constraint, needs no reranker.
+     The answer is the filtered contacts in retrieval order, then the other
+     filtered contacts by name, top 30. Every match is verified.
+   - **Database proof, recency.** A plan whose only constraint is recency
+     needs no reranker either, unless its confidence is "low". The answer is
+     the filtered contacts by last contact, never contacted first.
+   - **The reranker.** Any other plan goes to the compact reranker with the
+     top 30 candidates. See [Evidence and reasons](#evidence-and-reasons).
+8. **A failure.** An error, a timeout or an edit in the account during the
+   search ends with a fresh local list. The old keyword-only fallback
+   (`searchFts`, recall@10 0.52) is never the Ask answer now.
 
 ### Two-Phase Streaming
 
-Results stream to the UI in two phases:
+Results stream to the UI as NDJSON chunks, in two phases:
 
-1. **Phase 1 — Instant Retrieval (<15ms):** FTS5 keyword matches and vector KNN results are fused via Reciprocal Rank Fusion and sent immediately. These appear with no AI reason.
+1. **Phase 1, the instant chunk:** the local list from step 5, top 30. Every match carries `verified: false`, and the chunk carries `fallback: true`. The p95 at 5,000 contacts is 15.6 to 17.6 ms.
 
-2. **Phase 2 — AI Enrichment (~500ms):** The AI provider re-ranks results and generates contextual reasons explaining _why_ each contact matches the query. These stream in via NDJSON and replace the Phase 1 results.
+2. **Phase 2, the complete chunk:** the final answer. It replaces the Phase 1 list. A match that a filter or the reranker proved carries `verified: true` and a reason that the server built.
 
-This progressive approach ensures the UI feels instant while AI enrichment loads in the background.
+A local answer, an AI-off answer and a cached answer send the complete chunk only. A chunk's `fallback` means that the model did not verify its list. See the PR for the live numbers of the model stages.
+
+On screen, a match that nobody verified wears the **Unverified** badge, on the Ask page's cards and in the palette. It replaces the Keyword and Fallback badges. **Approximate** still wins over it. An older server sends no `verified`, and then the chunk's `fallback` decides the badge.
+
+- **Ask page headings:** "Unverified candidates" while AI works, and "Unverified results" when AI was unavailable.
+- **Palette headings:** "Unverified candidates · checking with AI" and "Unverified results".
+- **Warning line:** under the heading, it says that AI is unavailable and that the matches are unverified.
+- **Screen reader:** "4 unverified candidates for “q”. Enriching with AI…" while AI works, and "AI unavailable. 2 unverified matches for “q”." for an unverified final list.
+- **History pane:** a question whose last answer was unverified says "unverified" in its row.
 
 <!-- Screenshot: ai-search-results.png -->
+
+### Query kinds
+
+`classifyQuery(query, signals)` in `server/services/search/intent.ts` reads
+the question before any model runs. It is deterministic and takes under a
+millisecond. The signals come from the names in the strict keyword result.
+
+| Kind         | When                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------- |
+| `email`      | The query is an email address.                                                         |
+| `phone`      | The query has at least 7 digits, and only digits, spaces and `+()-.` make it up.       |
+| `quoted`     | The query is one quoted phrase.                                                        |
+| `name`       | The query has at most 4 tokens, no question word, and a name signal.                   |
+| `conceptual` | The query starts with a question word or has 5 or more tokens, and has no name signal. |
+| `mixed`      | Every other query.                                                                     |
+
+The question words are who, which, what, find, show, list, people, anyone,
+someone and somebody. A name signal is one of these:
+
+- Every result's name starts with the query tokens.
+- The best approximate name score is 0.85 or more.
+- The first token is a known given name or nickname, and a result's name
+  carries it.
+
+The first four kinds are local kinds. For them, the strict keyword result is
+the final answer, and no model runs. "Jonathon Smyth" finds Jonathan Smith
+with the **Approximate** badge. "Morgan Stanley" is not a name when the
+people it finds carry neither word in their names. A question that contains
+a name, such as "who is Ada Lovelace", is never a `name` query.
+
+`classifyQuery` also returns fusion weights for each kind. The local kinds
+get lexical 0.7 and dense 0.3, `conceptual` gets 0.3 and 0.7, and `mixed`
+gets 0.5 and 0.5. Nothing reads the weights yet.
+
+### Evidence and reasons
+
+The compact reranker (`rerankCandidates` in
+`server/ai/services/searchIntel.ts`) returns three values for each match:
+`contact_id`, `verified_field` and `verified_value`. It writes no reason
+sentence. Its output limit is 1,200 tokens, where it was 3,000. The server
+checks each match before it keeps it:
+
+1. The id is one of the candidates.
+2. The value is a literal substring of the named field.
+3. The hard constraints of the plan hold.
+4. The value passes `sanitizeAiOutputValue`.
+
+The candidates go to the model with short ids, `c1` to `c30`, and the server
+maps each short id back to the contact. A contact id is a UUID of about 25
+tokens. With UUIDs, 30 matches overran the 1,200-token limit, the answer
+array was cut off, and the whole answer failed its check.
+
+Verified matches keep the candidate order, which is the retrieval order.
+When the plan has a recency constraint, the prompt tells the model that the
+database already checked it. Candidates carry no dates. Before this change,
+the model rejected every recency match. The prompt also tells the model to
+cite a name as the candidate's field spells it. A misspelled name that
+reaches the model then passes the substring check.
+
+The server builds each reason with `buildReason(contact, evidence)` in
+`server/services/search/reasons.ts`. The evidence names the fields that a
+filter or the reranker proved. Each proven field adds one part:
+
+| Proven field         | Part                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Role                 | The role as written. With a proven company: "Product Manager at Northwind Logistics" |
+| Company              | "Works at X"                                                                         |
+| Location             | "Based in X"                                                                         |
+| Industry             | "Works in X"                                                                         |
+| Tag                  | "Tagged X"                                                                           |
+| Interest             | "Interested in X"                                                                    |
+| Headline             | The headline text                                                                    |
+| About or preferences | "Profile mentions “X”"                                                               |
+| Last contact         | "Last contact 4 months ago." or "No contact logged."                                 |
+
+A reason joins at most two parts: "Product Manager at Northwind Logistics,
+based in Lisbon, Portugal." A reranker match starts with the field that the
+model cited, then the filter's evidence. The text comes from the contact's
+own fields, so it is exact. When no evidence is left, the card shows no
+reason line. A name match is one example.
+
+### Speed and the search lane
+
+Measured p95 at 5,000 contacts, with
+`node scripts/benchmark-search.ts --contacts 5000`:
+
+| Step                                   | p95             |
+| -------------------------------------- | --------------- |
+| A name, answered locally               | 4.9 ms          |
+| An email, answered locally             | 5.0 ms          |
+| A phone number, answered locally       | 1.0 ms          |
+| `localRetrieval`                       | 8.3 to 11.5 ms  |
+| The instant chunk, as a person gets it | 15.6 to 17.6 ms |
+
+See the PR for the live numbers of the model stages.
+
+The planner, the reranker and the brief run in the AI queue's search lane
+(`GenerationQueue` in `server/ai/workQueue.ts`). The lane has 2 slots of its
+own and one first-in, first-out queue. At most 16 calls wait in it, and the
+next call gets `429 AI_BUSY`. An Ask search that meets this error answers
+with the local list. The lane has no priorities and no fair share, because a
+person waits for every call in it. The shared lane keeps its 2 slots, its
+priorities and its fair share. One server can therefore send up to 4 calls
+at once to a provider. On 2026-09-26 an Ask question waited 12 s behind two
+research calls and answered with nothing.
 
 ### Query Examples
 
@@ -49,6 +215,8 @@ This progressive approach ensures the UI feels instant while AI enrichment loads
 | "investors who might be interested in AI" | Investor-tagged contacts with AI-related interests     |
 | "Jane's coworkers at Stripe"              | Contacts who share Stripe as their company             |
 | "engineers who went to Stanford"          | Contacts with matching education + role                |
+| "Jonathon Smyth"                          | Jonathan Smith, marked Approximate, with no model call |
+| "+1 (415) 555-1234"                       | The contact with that phone number, with no model call |
 
 A role in the question finds the other forms of its word in a title
 (`roleVariants` in `server/ai/queryConstraints.ts`): "engineers" finds a
@@ -58,6 +226,13 @@ so "software engineers" still means software. The hard filter and the check
 after the rerank read the same forms, so a contact the filter lets in is not
 dropped later. They matched whole words only, and "engineer" found nobody in
 an Engineering role.
+
+Some place phrases in a question are places only because a planner matcher
+sits inside them (`extractQueryLocations` in `server/ai/searchLocations.ts`).
+Such a phrase now ends where the matcher ends. "who in Lisbon goes rock
+climbing" gives the place "Lisbon". It gave "Lisbon goes rock climbing"
+before, and that place matched nobody. "Cambridge, Massachusetts" still
+parses whole.
 
 **API:** `POST /api/search/semantic`
 
@@ -216,7 +391,7 @@ toast: the overlay opens in the toasts' corner and says it.
 - Maximum 100 contacts per batch
 - One batch runs at a time on a server, because the provider's limits belong to the API key the server shares. A second start by the same account joins the running batch. A start by another account is refused with `429 RATE_LIMITED` (`details.yours: false`) until the batch ends.
 - There is no cooldown between batches. A provider's own 429 pauses that model in the adapter, and the router moves to another.
-- Two concurrent AI generations and 16 waiting generations per server
+- Two concurrent AI generations and 16 waiting generations per server, in the shared slots. Ask Contrack's model calls have a lane of their own (see [Speed and the search lane](#speed-and-the-search-lane))
 - One workflow per contact, with a deadline of 4 minutes at Standard and 5 at Deep: a search ask takes from 15 s to over a minute
 - No repeated research workflow after a failed provider call or invalid output. Only the search pass is asked again, and only when it cites no pages
 
@@ -245,11 +420,21 @@ This uses the same pipeline as batch enrichment but for one contact. Returns the
 
 ## Group Synthesis
 
-From the search results view or Command Palette, click **"✨ Synthesize"** to generate an executive brief from the matched contacts:
+From the search results view or Command Palette, click **Synthesize these results** to generate an executive brief from the matched contacts:
 
 - Summarizes the group composition
 - Highlights common themes and connections
-- Streams in real-time via NDJSON
+- Streams via NDJSON as the model writes it: the text grows in one box, and the final text replaces it
+- Starts only when you press the button, never by itself
+
+The server sends each piece of the brief as the model writes it. Each piece
+loses its control characters. The pieces stop when the text so far matches
+an injection pattern or passes 2,000 characters. The final text is the whole
+brief after `sanitizeAiOutputValue`. The stream ends with an error when the
+contacts changed while the model wrote the brief, or when the sanitizer
+rejects the text. The client then removes the provisional text. A cached
+brief arrives whole, with no pieces. The "Summary status" live region
+announces only the final text. The brief runs in the search lane.
 
 **API:** `POST /api/search/synthesize`
 
@@ -281,7 +466,8 @@ Users can turn AI off for their account under **Settings → Privacy and AI** (`
 
 When AI is turned off for an account:
 
-- Outbound requests to generative AI endpoints return `403 AI_OFF_FOR_ACCOUNT` (enforced by `requireAiAllowed` middleware on all AI-cost routes).
+- Outbound requests to generative AI endpoints return `403 AI_OFF_FOR_ACCOUNT` (enforced by `requireAiAllowed` middleware on all AI-cost routes). `POST /api/search/semantic` is the one exception.
+- Ask Contrack still answers, on the Ask page and in the palette's `?` mode. `requireAiAllowed` lets `POST /api/search/semantic` through. The route reads the caller's `aiAssist` with `aiAllowedFor(req)` and passes `aiAllowed` to the service. The service skips every model stage: the planner, the reranker and a provider embedding of the query. The built-in local model still embeds the query. The answer is the local list, marked unverified. The AI rate limiters still count the path. Before this change, the Ask page and the palette's `?` mode failed with 403.
 - The client suppresses AI generation triggers including Dossier briefing buttons, contact enrichment buttons, command palette enrichment actions, and group synthesis buttons.
 - The Dashboard daily insight card displays an informative message explaining that AI is disabled for the account, with a link to Privacy settings.
 - Fast local retrieval remains fully operational: SQLite FTS5 full-text search, local vector embeddings, and direct query filtering continue running entirely on your machine with zero external network requests.

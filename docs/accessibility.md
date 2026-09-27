@@ -73,7 +73,7 @@ has to reach a screen reader without moving focus.
   restored on Back to the page are read from the page, not announced twice.
 - **The wording is in `src/lib/searchAnnouncements.ts`** and tested as
   sentences. A People search speaks at most three times: that it started,
-  that keyword candidates arrived while AI is still working, and what it
+  that unverified candidates arrived while AI is still working, and what it
   found. A Notes search speaks twice. Nothing speaks on a keystroke.
 - **Errors take `role="alert"`** on the visible error itself, which is the
   pattern the auth screens and inline field errors already use. The status

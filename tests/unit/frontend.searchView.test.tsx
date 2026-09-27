@@ -403,7 +403,8 @@ describe("the question the results belong to", () => {
       query: QUESTION,
       contactIds: MATCHES.map((m) => m.id),
     });
-    await screen.findByText("Three people, one café.");
+    // The "Summary status" live region holds the same text once it is final.
+    await screen.findByText("Three people, one café.", { selector: "p" });
   });
 
   it("records the question a ?q= link asked, so the view restores it", async () => {

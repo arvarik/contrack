@@ -3,6 +3,14 @@ import { currentScopeOrNull, getContext } from "../tenancy/requestContext.ts";
 
 export type JobPriority = "interactive" | "background";
 
+/**
+ * A lane with slots of its own. "search" holds the Ask generations: the
+ * planner, the reranker and the brief. A research call can hold a shared
+ * slot for 15 to 75 s, so without a lane of its own a question waited behind
+ * two of them (measured 2026-09-26: 12 s, then an empty answer).
+ */
+export type QueueLane = "search";
+
 export interface QueueRunOptions {
   /** Account/owner ID for multitenant fair queuing. Defaults to ALS context or "default". */
   accountId?: string;
@@ -10,6 +18,20 @@ export interface QueueRunOptions {
   priority?: JobPriority;
   /** Signal for caller cancellation. Aborted jobs are removed before starting. */
   signal?: AbortSignal;
+  /**
+   * Run in this lane instead of the shared slots. A lane has its own
+   * concurrency and one FIFO. Priority and fair share apply to the shared
+   * slots only.
+   */
+  lane?: QueueLane;
+}
+
+/** One lane's state, for the snapshot. */
+export interface LaneSnapshot {
+  active: number;
+  concurrency: number;
+  waiting: number;
+  capacity: number;
 }
 
 export interface AccountQueueStats {
@@ -27,6 +49,13 @@ export interface QueueSnapshot {
   capacity: number;
   consecutiveInteractiveDispatches: number;
   accounts: AccountQueueStats[];
+  /** The search lane. The fields above describe the shared slots only. */
+  search: LaneSnapshot;
+}
+
+/** A job that waits in the search lane. */
+interface LaneJob {
+  start: () => void;
 }
 
 interface QueuedJob {
@@ -54,6 +83,8 @@ interface AccountQueue {
  * - Gives interactive user requests priority while guaranteeing background work progresses (anti-starvation).
  * - Prevents any single account from monopolizing the waiting capacity under congestion (fair tail drop).
  * - Decouples cancellation so caller aborts cleanly remove waiting jobs without leaking state.
+ * - Keeps a separate "search" lane (default 2 slots, one FIFO) for Ask generations, so the
+ *   shared slots and the lane never wait on each other.
  */
 export class GenerationQueue {
   private active = 0;
@@ -69,12 +100,22 @@ export class GenerationQueue {
   private readonly capacity: number;
   private readonly maxConsecutiveInteractive: number;
 
+  private searchActive = 0;
+  private readonly searchWaiting: LaneJob[] = [];
+  private readonly searchConcurrency: number;
+
   // Plain fields, not parameter properties: Node strips types and does not
   // compile, and a parameter property needs compiling.
-  constructor(concurrency = 2, capacity = 16, maxConsecutiveInteractive = 3) {
+  constructor(
+    concurrency = 2,
+    capacity = 16,
+    maxConsecutiveInteractive = 3,
+    searchConcurrency = 2,
+  ) {
     this.concurrency = concurrency;
     this.capacity = capacity;
     this.maxConsecutiveInteractive = maxConsecutiveInteractive;
+    this.searchConcurrency = searchConcurrency;
   }
 
   run<T>(
@@ -98,6 +139,9 @@ export class GenerationQueue {
 
     signal?.throwIfAborted();
 
+    if (options?.lane === "search")
+      return this.runInSearchLane(operation, signal);
+
     const accountId = options?.accountId ?? this.resolveCurrentAccountId();
     const priority = options?.priority ?? this.resolveCurrentPriority();
 
@@ -107,6 +151,64 @@ export class GenerationQueue {
     }
 
     return this.enqueue(operation, accountId, priority, signal);
+  }
+
+  /**
+   * The search lane: its own slots and one FIFO of at most `capacity`
+   * waiting jobs. No priority and no fair share, because every job in it is
+   * a person waiting for an answer.
+   */
+  private runInSearchLane<T>(
+    operation: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (
+      this.searchActive < this.searchConcurrency &&
+      this.searchWaiting.length === 0
+    ) {
+      return this.startInSearchLane(operation, signal);
+    }
+    if (this.searchWaiting.length >= this.capacity) {
+      return Promise.reject(
+        new AppError("AI is busy. Please try again shortly.", 429, {
+          code: "AI_BUSY",
+        }),
+      );
+    }
+    return new Promise<T>((resolve, reject) => {
+      let onAbort: (() => void) | undefined;
+      const job: LaneJob = {
+        start: () => {
+          if (onAbort) signal?.removeEventListener("abort", onAbort);
+          this.startInSearchLane(operation, signal).then(resolve, reject);
+        },
+      };
+      if (signal) {
+        onAbort = () => {
+          const index = this.searchWaiting.indexOf(job);
+          if (index !== -1) this.searchWaiting.splice(index, 1);
+          reject(signal.reason);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+      this.searchWaiting.push(job);
+    });
+  }
+
+  private startInSearchLane<T>(
+    operation: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    this.searchActive++;
+    return Promise.resolve()
+      .then(() => {
+        signal?.throwIfAborted();
+        return operation();
+      })
+      .finally(() => {
+        this.searchActive = Math.max(0, this.searchActive - 1);
+        this.searchWaiting.shift()?.start();
+      });
   }
 
   private executeImmediate<T>(
@@ -531,6 +633,12 @@ export class GenerationQueue {
       capacity: this.capacity,
       consecutiveInteractiveDispatches: this.consecutiveInteractiveDispatches,
       accounts,
+      search: {
+        active: this.searchActive,
+        concurrency: this.searchConcurrency,
+        waiting: this.searchWaiting.length,
+        capacity: this.capacity,
+      },
     };
   }
 
@@ -544,6 +652,8 @@ export class GenerationQueue {
     this.lastBackgroundAccountIndex = -1;
     this.consecutiveInteractiveDispatches = 0;
     this.waitingCount = 0;
+    this.searchActive = 0;
+    this.searchWaiting.length = 0;
   }
 }
 
