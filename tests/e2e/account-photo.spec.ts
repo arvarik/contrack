@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { gatedTest as test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
+import { docsScreenshotDir } from "./fixtures/paths";
 import {
   ADMIN,
   SETUP_HEADING,
@@ -21,6 +22,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURE_PNG = path.join(__dirname, "fixtures", "avatar.png");
+// docs/screenshots/account-photo with DOCS_SCREENSHOTS=1, else test-results.
+const SHOTS = docsScreenshotDir("account-photo");
 
 test("account profile photo lifecycle in Settings", async ({
   page,
@@ -101,30 +104,30 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
   await page.emulateMedia({ colorScheme: "light" });
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "docs/screenshots/account-photo/settings-desktop-light.png",
+    path: path.join(SHOTS, "settings-desktop-light.png"),
     fullPage: false,
   });
   const photoCard = page.locator("section:has-text('Profile')").first();
   await photoCard.screenshot({
-    path: "docs/screenshots/account-photo/card-desktop-light.png",
+    path: path.join(SHOTS, "card-desktop-light.png"),
   });
   const sidebar = page.locator("aside").first();
   await sidebar.screenshot({
-    path: "docs/screenshots/account-photo/sidebar-desktop-light.png",
+    path: path.join(SHOTS, "sidebar-desktop-light.png"),
   });
 
   // Desktop Dark (1440x900)
   await page.emulateMedia({ colorScheme: "dark" });
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "docs/screenshots/account-photo/settings-desktop-dark.png",
+    path: path.join(SHOTS, "settings-desktop-dark.png"),
     fullPage: false,
   });
   await photoCard.screenshot({
-    path: "docs/screenshots/account-photo/card-desktop-dark.png",
+    path: path.join(SHOTS, "card-desktop-dark.png"),
   });
   await sidebar.screenshot({
-    path: "docs/screenshots/account-photo/sidebar-desktop-dark.png",
+    path: path.join(SHOTS, "sidebar-desktop-dark.png"),
   });
 
   // Mobile Light (390x844)
@@ -132,19 +135,19 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
   await page.emulateMedia({ colorScheme: "light" });
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "docs/screenshots/account-photo/settings-phone-light.png",
+    path: path.join(SHOTS, "settings-phone-light.png"),
   });
   await page.goto("/settings");
   await expect(page.locator("section.md\\:hidden img")).toBeVisible();
   await page.screenshot({
-    path: "docs/screenshots/account-photo/settings-identity-phone-light.png",
+    path: path.join(SHOTS, "settings-identity-phone-light.png"),
   });
 
   // Mobile Dark (390x844)
   await page.emulateMedia({ colorScheme: "dark" });
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "docs/screenshots/account-photo/settings-identity-phone-dark.png",
+    path: path.join(SHOTS, "settings-identity-phone-dark.png"),
   });
 });
 
@@ -194,6 +197,6 @@ test("captures screenshot of setup screen on phone", async ({ page }) => {
 
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "docs/screenshots/account-photo/setup-phone-light.png",
+    path: path.join(SHOTS, "setup-phone-light.png"),
   });
 });

@@ -86,9 +86,9 @@ function lastBody(): Record<string, unknown> {
 
 /** The Undo action of the last success toast. */
 function lastUndo(): () => void {
-  const options = toastMock.success.mock.calls.at(-1)?.[1] as {
-    action: { onClick: () => void };
-  };
+  const call = toastMock.success.mock.lastCall;
+  if (!call) throw new Error("No success toast was shown");
+  const options = call[1] as { action: { onClick: () => void } };
   return options.action.onClick;
 }
 

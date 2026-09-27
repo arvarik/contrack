@@ -111,7 +111,8 @@ depths, each with its time.
 Under **Settings → Contact enrichment**:
 
 - **Never-enriched banner:** Displays the count of contacts that have never been researched on the web, with a **Select them** button that selects them for immediate batch enrichment. It also empties the search box and sets the filters to All and Not yet, so the list shows exactly the contacts it selects.
-- **Filters:** Two rows of pills narrow the list, with one choice in each row. **Contacts** is All, Tracked, Has links, Has email or No data. **Research** is Any, Not yet, 6+ months ago (the last research is more than 183 days old) or Found nothing (the last research found no page). A contact shows when it matches both rows. Each pill counts the contacts it would show beside the other row's choice. A new choice clears the selection, so a contact the list hides is never started. A row whose last research found no page has a **No page** badge. The slim contact list carries the last run's outcome as `researchOutcome` for the filter and the badge.
+- **Filters:** Two rows of pills narrow the list, with one choice in each row. **Contacts** is All, Tracked, Has links, Has email or No data. **Research** is Any, Not yet, 6+ months ago (the last research is more than 183 days old) or Found nothing (the last research found no page). A contact shows when it matches both rows. Each pill counts the contacts it would show beside the other row's choice. A new choice clears the selection, so a contact the list hides is never started. Both choices stay in the page's address, such as `?contacts=tracked&research=stale`, so the browser's Back from a contact returns to the same list. A row whose last research found no page has a **No page** badge. On a phone a row's date is short: "Jan 20" within this year, "Dec 2025" before it. The slim contact list carries the last run's outcome as `researchOutcome` for the filter and the badge.
+- **Open a contact:** Each row ends with a link, "Open" and the contact's name, beside the row's checkbox control. The contact page's Back then says **Contact enrichment** and returns to the filtered list, which is the way to add a detail for a contact research found nothing on.
 - **Batch estimate:** Under **Start enrichment**, the depth, time and cost of the selection, such as "Standard · About 2 min and $0.45 in all".
 - **Research depth:** Standard or Deep, for the next batch, with what each does and its time and cost per contact. The page opens on Standard each time.
 - **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research at Standard depth if AI assist is turned on for the account and grounding quota is available. While the account's batch runs, the new contact joins it.
@@ -146,6 +147,8 @@ Measured on five contacts from real records, with Gemini 3.8 Flash and Gemini 3.
 
 When no first ask cites a page, two more are asked at once, at `medium`, and every answer that cites pages is kept. Deep does not ask at `high` alone: `high` found more when it answered (32 details for one contact where `medium` found 20), but it answered with nothing for two of the five contacts on every try, all three asks for one of them. Beside the `medium` ask, an empty `high` answer costs its tokens, and the `medium` one still stands. A second search after the first, told what it found, was tried and ran no searches: with the first answer's facts in front of it, the model answered from them.
 
+The figures describe research on Gemini, where they were measured. When research runs on another provider, the Enrichment page, its confirmation and the enrich menus say what each depth does and show no time or cost. The note under the tiles says "Costs are Google's 2026 Gemini prices": Gemini 3.8 Flash's token prices double in January 2027, and the figures need measuring again then.
+
 The Enrichment page describes both depths and their figures. A contact's actions menu has **Enrich contact** (Standard) and **Enrich deeply** (Deep). The dossier's **Enrich contact** and **Enrich again** open both. Automatic enrichment and the command palette's refresh run at Standard.
 
 ### What Gets Enriched
@@ -161,6 +164,9 @@ The research can add, when the contact does not have them yet:
 
 Enrichment preserves existing values. It rejects the result if the contact
 changes during research.
+
+- **One LinkedIn profile.** When the contact has a LinkedIn profile, a researched profile under another handle is someone else with the same name, and it is left out. The same handle at another address, such as `uk.linkedin.com`, is the profile the contact has. A contact with none gets the first researched profile.
+- **A removed entry stays removed.** The research record keeps every list entry research added (`addedEntries`, up to 150). A new entry that matches one of them, the way the merge matches a saved entry, is left out: the contact does not have it, so the person removed it. This holds for schools, jobs, links, emails, phones, addresses, facts, interests and tags. A field such as the location or the headline, once cleared, can be filled again.
 
 ### The research record
 

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   describePastDue,
   formatDay,
+  formatShortDay,
   formatWhen,
   parseServerTime,
 } from "../../src/lib/datetime";
@@ -47,6 +48,28 @@ describe("formatDay and formatWhen", () => {
   it("fall back to the given text when there is no date", () => {
     expect(formatDay(null, "No date")).toBe("No date");
     expect(formatWhen("garbage")).toBe("Unknown");
+  });
+});
+
+describe("formatShortDay", () => {
+  const now = new Date(2026, 8, 27);
+  it("drops the year inside this year, and the day before it", () => {
+    expect(formatShortDay("2026-01-20", now)).toBe(
+      new Date(2026, 0, 20).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+    );
+    expect(formatShortDay("2025-12-01", now)).toBe(
+      new Date(2025, 11, 1).toLocaleDateString(undefined, {
+        month: "short",
+        year: "numeric",
+      }),
+    );
+  });
+
+  it("falls back when there is no date", () => {
+    expect(formatShortDay(null, now)).toBe("Unknown");
   });
 });
 

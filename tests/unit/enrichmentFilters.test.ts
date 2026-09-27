@@ -4,8 +4,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  filtersFromParams,
   matchesContactFilter,
   matchesResearchFilter,
+  paramsWithFilters,
   STALE_AFTER_MS,
   type FilteredContact,
 } from "../../src/lib/enrichmentFilters";
@@ -66,5 +68,34 @@ describe("the Research row", () => {
     expect(matchesResearchFilter(recent, "found_nothing", NOW)).toBe(false);
     for (const each of [never, recent, old, nothing])
       expect(matchesResearchFilter(each, "any", NOW)).toBe(true);
+  });
+});
+
+describe("the filters in the page address", () => {
+  it("reads both rows, and a missing or unknown value as the first choice", () => {
+    expect(
+      filtersFromParams(
+        new URLSearchParams("contacts=tracked&research=found_nothing"),
+      ),
+    ).toEqual({ contacts: "tracked", research: "found_nothing" });
+    expect(filtersFromParams(new URLSearchParams(""))).toEqual({
+      contacts: "all",
+      research: "any",
+    });
+    expect(
+      filtersFromParams(new URLSearchParams("contacts=everyone&research=1")),
+    ).toEqual({ contacts: "all", research: "any" });
+  });
+
+  it("writes a choice, leaves out a first choice, and keeps other parameters", () => {
+    const start = new URLSearchParams("tab=list&contacts=tracked");
+    expect(paramsWithFilters(start, { research: "stale" }).toString()).toBe(
+      "tab=list&contacts=tracked&research=stale",
+    );
+    expect(
+      paramsWithFilters(start, { contacts: "all", research: "any" }).toString(),
+    ).toBe("tab=list");
+    // The parameters it was given are not changed.
+    expect(start.toString()).toBe("tab=list&contacts=tracked");
   });
 });

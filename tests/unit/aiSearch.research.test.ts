@@ -10,6 +10,7 @@
 //   normalize              one school, degree, employer or label, however
 //                          a page writes it
 //   researchDate           dates as the dossier stores them
+//   linkedInHandle         the profile a LinkedIn address names
 //   resolveCitations       Gemini's redirect links, as the pages they name
 //   shared/researchRecord  the record the dossier's Research card reads
 // =============================================================================
@@ -32,6 +33,7 @@ import {
 } from "../../server/services/aiSearch/promptTemplate.ts";
 import {
   degreeLevel,
+  linkedInHandle,
   orgKey,
   researchDate,
   sameLabel,
@@ -484,6 +486,29 @@ describe("researchDate", () => {
       expect(researchDate(input)).toBeUndefined();
     },
   );
+});
+
+describe("linkedInHandle", () => {
+  it.each([
+    ["https://www.linkedin.com/in/rowan-vale", "rowan-vale"],
+    ["https://uk.linkedin.com/in/Rowan-Vale/?trk=profile", "rowan-vale"],
+    ["linkedin.com/in/rowan-vale/", "rowan-vale"],
+    ["https://www.linkedin.com/in/ren%C3%A9-vale", "ren\u00e9-vale"],
+    ["https://www.linkedin.com/pub/rowan-vale/1/2/3", "rowan-vale"],
+  ])("reads %s as %s", (input, output) => {
+    expect(linkedInHandle(input)).toBe(output);
+  });
+
+  it.each([
+    "https://www.linkedin.com/company/northwind-partners",
+    "https://www.linkedin.com/posts/rowan-vale_activity-1",
+    "https://github.com/rowan-vale",
+    "https://notlinkedin.com/in/rowan-vale",
+    "",
+    "not a url",
+  ])("reads %s as no profile", (input) => {
+    expect(linkedInHandle(input)).toBeNull();
+  });
 });
 
 describe("tidyExtraction", () => {

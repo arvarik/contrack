@@ -4,7 +4,8 @@
  *
  * Shows:
  * - How many contacts will be searched, and at which depth
- * - The batch's time and cost at that depth, from the measured figures
+ * - The batch's time and cost at that depth, from the measured figures,
+ *   when research runs on Gemini, where they were measured
  * - How many have been previously searched (re-search info)
  * - Additive-only data safety guarantee
  */
@@ -22,6 +23,8 @@ interface Props {
   selectedContacts: Contact[];
   isStarting: boolean;
   depth: ResearchDepth;
+  /** Whether the measured figures describe this research (Gemini only). */
+  showEstimate: boolean;
 }
 
 export function AISearchConfirmModal({
@@ -31,6 +34,7 @@ export function AISearchConfirmModal({
   selectedContacts,
   isStarting,
   depth,
+  showEstimate,
 }: Props) {
   const total = selectedContacts.length;
   const previouslySearched = selectedContacts.filter(
@@ -54,7 +58,7 @@ export function AISearchConfirmModal({
         {/* Info bullets */}
         <div className="space-y-2.5">
           <InfoRow text={DEPTH_WORDS[depth].does} />
-          <InfoRow text={batchEstimate(depth, total)} />
+          {showEstimate && <InfoRow text={batchEstimate(depth, total)} />}
           <InfoRow text="Runs in the background, so you can keep working" />
         </div>
 

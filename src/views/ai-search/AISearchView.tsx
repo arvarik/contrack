@@ -1,8 +1,9 @@
 /**
  * AISearchView — Main AI Search settings sub-view.
  *
- * Displays the research depth, Standard or Deep, with what each does and
- * what a contact takes and costs, then a selectable list of non-archived
+ * Displays the research depth, Standard or Deep, with what each does and,
+ * when research runs on Gemini, where the figures were measured, what a
+ * contact takes and costs. Then a selectable list of non-archived
  * contacts with status badges (✨ previously searched, "No page" when the
  * last research found none, NEW never searched, 🔴 last search errored).
  * Two rows of filters narrow the list, one for who and one for how their
@@ -13,6 +14,7 @@
  * the subsystem behind it.
  */
 import React, { useState, useCallback, useEffect, useMemo } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   CircleDashed,
   Globe,
@@ -47,22 +49,28 @@ import {
   perContact,
 } from "../../lib/researchDepth";
 import {
+  filtersFromParams,
   matchesContactFilter,
   matchesResearchFilter,
+  paramsWithFilters,
   type ContactFilter,
+  type EnrichmentFilters,
   type ResearchFilter,
 } from "../../lib/enrichmentFilters";
+import { NAMES } from "../../lib/names";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 
-/** The two depths as tiles: what each does, and its time and cost. */
-const DEPTH_CHOICES: readonly Choice<ResearchDepth>[] = DEPTH_ORDER.map(
-  (depth) => ({
+/**
+ * The two depths as tiles: what each does, and its time and cost when the
+ * measured figures describe this research (`depthFiguresApply`).
+ */
+const depthChoices = (figures: boolean): readonly Choice<ResearchDepth>[] =>
+  DEPTH_ORDER.map((depth) => ({
     value: depth,
     label: DEPTH_WORDS[depth].name,
     hint: DEPTH_WORDS[depth].does,
-    detail: perContact(depth),
-  }),
-);
+    ...(figures && { detail: perContact(depth) }),
+  }));
 
 /** One pill: its value, its words, and its glyph. */
 interface FilterPill<T> {
@@ -126,8 +134,18 @@ export function AISearchView({
   showNotYet,
 }: AISearchViewProps = {}) {
   const { data: contacts = [], isLoading } = useContacts();
-  const { startSearch, isStarting, batch, limitMessage, clearLimit } =
-    useAISearch();
+  const {
+    startSearch,
+    isStarting,
+    batch,
+    limitMessage,
+    clearLimit,
+    depthFiguresApply,
+  } = useAISearch();
+  const choices = useMemo(
+    () => depthChoices(depthFiguresApply),
+    [depthFiguresApply],
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(
@@ -136,20 +154,45 @@ export function AISearchView({
   const selectedIds = controlledSelectedIds ?? internalSelectedIds;
   const setSelectedIds = setControlledSelectedIds ?? setInternalSelectedIds;
   const [showConfirm, setShowConfirm] = useState(false);
-  const [contactFilter, setContactFilter] = useState<ContactFilter>("all");
-  const [researchFilter, setResearchFilter] = useState<ResearchFilter>("any");
+  // The two choices live in the page's address, so Back from a contact
+  // opened from the list comes back to the same list. The search box stays
+  // in the component: the router applies an address in a transition, and a
+  // text field bound to one can drop what was typed.
+  const [params, setParams] = useSearchParams();
+  const { contacts: contactFilter, research: researchFilter } =
+    filtersFromParams(params);
+  const setFilters = (next: Partial<EnrichmentFilters>) =>
+    setParams((prev) => paramsWithFilters(prev, next), { replace: true });
   const filtered = contactFilter !== "all" || researchFilter !== "any";
+  // What a row's link hands the contact page: Back returns here, to this
+  // list, and says so.
+  const location = useLocation();
+  const openState = useMemo(
+    () => ({
+      back: {
+        to: `${location.pathname}${location.search}`,
+        label: NAMES.enrichment.label,
+      },
+    }),
+    [location.pathname, location.search],
+  );
   // Standard each time the page opens: a costlier run is a choice made for
   // this batch, not one that sticks.
   const [depth, setDepth] = useState<ResearchDepth>("standard");
 
-  // The raw setters, not chooseContactFilter and chooseResearchFilter: the
-  // selection that came with the request stays.
+  // Not chooseContactFilter and chooseResearchFilter, which clear the
+  // selection: the selection that came with the request stays.
   useEffect(() => {
     if (showNotYet === undefined) return;
     setSearchQuery("");
-    setContactFilter("all");
-    setResearchFilter("not_yet");
+    setParams(
+      (prev) =>
+        paramsWithFilters(prev, { contacts: "all", research: "not_yet" }),
+      { replace: true },
+    );
+    // A new request only. `setParams` changes with the address, and a
+    // filter chosen after the request stands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNotYet]);
 
   // Archived and ghost contacts are never researched; the search box
@@ -205,11 +248,11 @@ export function AISearchView({
   // A new filter is a new list, and a selection kept from the old one
   // would start contacts the person can no longer see.
   const chooseContactFilter = (filter: ContactFilter) => {
-    setContactFilter(filter);
+    setFilters({ contacts: filter });
     setSelectedIds(new Set());
   };
   const chooseResearchFilter = (filter: ResearchFilter) => {
-    setResearchFilter(filter);
+    setFilters({ research: filter });
     setSelectedIds(new Set());
   };
 
@@ -313,13 +356,15 @@ export function AISearchView({
               <ChoiceGroup
                 label="Research depth"
                 value={depth}
-                options={DEPTH_CHOICES}
+                options={choices}
                 onChange={setDepth}
                 className="sm:grid-cols-2"
               />
-              <p className="text-xs text-on-surface-variant text-pretty">
-                {COST_NOTE}
-              </p>
+              {depthFiguresApply && (
+                <p className="text-xs text-on-surface-variant text-pretty">
+                  {COST_NOTE}
+                </p>
+              )}
             </section>
 
             <div className={cn(CARD, "p-0 overflow-hidden")}>
@@ -388,8 +433,8 @@ export function AISearchView({
                       <button
                         type="button"
                         onClick={() => {
-                          chooseContactFilter("all");
-                          chooseResearchFilter("any");
+                          setFilters({ contacts: "all", research: "any" });
+                          setSelectedIds(new Set());
                         }}
                         className="hit-area state-layer rounded-lg px-2 py-0.5 text-sm font-semibold text-primary"
                       >
@@ -405,6 +450,7 @@ export function AISearchView({
                     isSelected={selectedIds.has(contact.id)}
                     hasError={erroredContactIds.has(contact.id)}
                     onToggle={() => toggleSelect(contact.id)}
+                    openState={openState}
                   />
                 ))}
               </div>
@@ -444,7 +490,7 @@ export function AISearchView({
             </button>
             {/* What the batch will take, before the press, at the depth
                 chosen above: the confirmation says it again. */}
-            {selectedIds.size > 0 && (
+            {selectedIds.size > 0 && depthFiguresApply && (
               <p
                 aria-live="polite"
                 className="-mt-2 text-center text-xs text-on-surface-variant tabular-nums"
@@ -464,6 +510,7 @@ export function AISearchView({
         selectedContacts={selectedContacts}
         isStarting={isStarting}
         depth={depth}
+        showEstimate={depthFiguresApply}
       />
     </div>
   );

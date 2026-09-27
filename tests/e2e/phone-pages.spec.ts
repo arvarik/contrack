@@ -18,6 +18,7 @@ import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
 import { expectFloors } from "./fixtures/metrics";
+import { docsScreenshotDir } from "./fixtures/paths";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -25,10 +26,8 @@ const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
 
 const ALLOW = [".maplibregl-ctrl-attrib"];
 
-const SCREENSHOT_DIR = path.resolve(
-  process.cwd(),
-  "docs/screenshots/phone-pages",
-);
+// docs/screenshots/phone-pages with DOCS_SCREENSHOTS=1, else test-results.
+const SCREENSHOT_DIR = docsScreenshotDir("phone-pages");
 
 async function ensureScreenshotDir() {
   await fs.mkdir(SCREENSHOT_DIR, { recursive: true });

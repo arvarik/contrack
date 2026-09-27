@@ -47,7 +47,10 @@ export interface ResearchDepthFigures {
  * three rounds and six at Deep in two. A contact no page is about took 15 to
  * 65 s and cost $0.01 to $0.06. The cost is $14 per 1,000 web searches, and
  * $0.75 and $3.75 per million input and output tokens, Gemini 3.8 Flash's
- * prices through 2026.
+ * prices through 2026. Its token prices double in January 2027, and the
+ * page names the prices' year (`COST_NOTE`), so measure again then. The
+ * figures describe research on Gemini only, and the controls leave them
+ * out on another provider (`depthFiguresApply`).
  */
 export const RESEARCH_DEPTH_FIGURES: Record<
   ResearchDepth,

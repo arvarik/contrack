@@ -70,9 +70,13 @@ export function batchEstimate(depth: ResearchDepth, count: number): string {
   return `${sentence(aboutTime(seconds))} and ${dollars(count * figures.costUsd)} in all`;
 }
 
-/** What the costs are, under the depth tiles. */
+/**
+ * What the costs are, under the depth tiles. The year is named because
+ * Gemini 3.8 Flash's token prices double in January 2027, and the figures
+ * (shared/researchDepth.ts) are 2026's until they are measured again.
+ */
 export const COST_NOTE =
-  "Costs are Google's Gemini prices. The first 5,000 web searches each month are free";
+  "Costs are Google's 2026 Gemini prices. The first 5,000 web searches each month are free";
 
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);

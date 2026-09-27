@@ -12,7 +12,8 @@
  * nothing on. The rows answer the two questions a batch starts from, who
  * matters and whose research is missing or old, so a person can pick a batch
  * worth its cost. Each pill counts what it would show beside the other row's
- * choice.
+ * choice. The page keeps both choices in its address (`filtersFromParams`),
+ * so Back from a contact opened from the list returns to the same list.
  *
  * @module lib/enrichmentFilters
  */
@@ -24,6 +25,59 @@ export type ContactFilter =
 
 /** How their research stands: the second row. */
 export type ResearchFilter = "any" | "not_yet" | "stale" | "found_nothing";
+
+/** The first row's choices, in order. */
+export const CONTACT_FILTER_IDS: readonly ContactFilter[] = [
+  "all",
+  "tracked",
+  "has_links",
+  "has_email",
+  "no_data",
+];
+
+/** The second row's choices, in order. */
+export const RESEARCH_FILTER_IDS: readonly ResearchFilter[] = [
+  "any",
+  "not_yet",
+  "stale",
+  "found_nothing",
+];
+
+/** One choice in each row. */
+export interface EnrichmentFilters {
+  contacts: ContactFilter;
+  research: ResearchFilter;
+}
+
+/**
+ * The choices a page address names: `?contacts=tracked&research=stale`. The
+ * page keeps them there, so Back from a contact opened from the list comes
+ * back to the same list. A missing or unknown value is the row's first
+ * choice.
+ */
+export function filtersFromParams(params: URLSearchParams): EnrichmentFilters {
+  const contacts = params.get("contacts") as ContactFilter | null;
+  const research = params.get("research") as ResearchFilter | null;
+  return {
+    contacts:
+      contacts && CONTACT_FILTER_IDS.includes(contacts) ? contacts : "all",
+    research:
+      research && RESEARCH_FILTER_IDS.includes(research) ? research : "any",
+  };
+}
+
+/** The address's parameters with these choices. A row's first choice is left out. */
+export function paramsWithFilters(
+  params: URLSearchParams,
+  next: Partial<EnrichmentFilters>,
+): URLSearchParams {
+  const out = new URLSearchParams(params);
+  if (next.contacts === "all") out.delete("contacts");
+  else if (next.contacts) out.set("contacts", next.contacts);
+  if (next.research === "any") out.delete("research");
+  else if (next.research) out.set("research", next.research);
+  return out;
+}
 
 /** Research older than this is due again: six months. */
 export const STALE_AFTER_MS = 183 * 24 * 60 * 60 * 1000;

@@ -320,4 +320,146 @@ describe("the research record", () => {
     expect(contact.experience).toHaveLength(1);
     expect(contact.education).toHaveLength(1);
   });
+
+  it("keeps the contact's one LinkedIn profile, and drops another handle", async () => {
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({
+        socialLinks: [
+          {
+            platform: "linkedin",
+            url: "https://www.linkedin.com/in/research-subject",
+          },
+        ],
+      })
+      .expect(200);
+    const added = merge({
+      socialLinks: [
+        // The same profile at another address.
+        {
+          platform: "linkedin",
+          url: "https://uk.linkedin.com/in/Research-Subject/?trk=profile",
+        },
+        // Someone else with the same name.
+        {
+          platform: "linkedin",
+          url: "https://www.linkedin.com/in/research-subject-4b2",
+        },
+        { platform: "github", url: "https://github.com/research-subject" },
+      ],
+    });
+    expect(added).toBe(1);
+    expect(
+      enrichmentContact(scope(), id)
+        .socialLinks.map((link) => link.url)
+        .sort(),
+    ).toEqual([
+      "https://github.com/research-subject",
+      "https://www.linkedin.com/in/research-subject",
+    ]);
+  });
+
+  it("adds one LinkedIn profile to a contact with none", () => {
+    merge({
+      socialLinks: [
+        {
+          platform: "linkedin",
+          url: "https://www.linkedin.com/in/research-subject",
+        },
+        {
+          platform: "linkedin",
+          url: "https://www.linkedin.com/in/research-subject-4b2",
+        },
+      ],
+    });
+    expect(
+      enrichmentContact(scope(), id).socialLinks.map((link) => link.url),
+    ).toEqual(["https://www.linkedin.com/in/research-subject"]);
+  });
+
+  it("does not add back an entry the person removed, however a page words it", async () => {
+    expect(
+      merge({
+        education: [
+          {
+            school: "Example High School",
+            degree: "High School Diploma",
+            endDate: "2013",
+          },
+        ],
+        experience: [
+          {
+            company: "Harbor Point Partners",
+            role: "Associate",
+            startDate: "2018-01",
+          },
+        ],
+        socialLinks: [
+          { platform: "github", url: "https://github.com/someone-else" },
+        ],
+        interests: [{ interest: "Sailing" }],
+        tags: [{ tag: "direct lending" }],
+        attributes: [{ name: "Hometown", value: "Springfield" }],
+      }),
+    ).toBe(6);
+    // The person removes what was someone else's.
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({
+        education: [],
+        experience: [],
+        socialLinks: [],
+        interests: [],
+        tags: [],
+        attributes: [],
+      })
+      .expect(200);
+    // The next run finds the same things written another way, and one new
+    // school.
+    const added = merge({
+      education: [
+        { school: "Example High School", degree: "Diploma", endDate: "2013" },
+        { school: "University of Example", degree: "BA", endDate: "2017" },
+      ],
+      experience: [
+        {
+          company: "Harbor Point Partners LLC",
+          role: "Associate",
+          startDate: "2018-01",
+        },
+      ],
+      socialLinks: [
+        { platform: "github", url: "https://github.com/someone-else/" },
+      ],
+      interests: [{ interest: "Sailing" }],
+      tags: [{ tag: "Direct lending" }],
+      attributes: [{ name: "hometown", value: "Springfield" }],
+    });
+    expect(added).toBe(1);
+    const contact = enrichmentContact(scope(), id);
+    expect(contact.education.map((entry) => entry.school)).toEqual([
+      "University of Example",
+    ]);
+    expect(contact.experience).toEqual([]);
+    expect(contact.socialLinks).toEqual([]);
+    expect(contact.interests).toEqual([]);
+    expect(contact.tags).toEqual([]);
+    expect(contact.attributes).toEqual([]);
+    // Both runs' entries are kept, the new school last.
+    expect(record().addedEntries?.map((entry) => entry.field)).toEqual([
+      "socialLinks",
+      "education",
+      "experience",
+      "tags",
+      "interests",
+      "attributes",
+      "education",
+    ]);
+    expect(record().addedEntries?.at(-1)).toEqual({
+      field: "education",
+      value: "University of Example",
+      detail: "BA",
+      date: "2017",
+    });
+  });
 });

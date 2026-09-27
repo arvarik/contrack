@@ -145,7 +145,10 @@ export const ContactActionsMenu = ({
             id: "enrich",
             label: enriching ? "Enriching…" : "Enrich contact",
             icon: Sparkles,
-            hint: enriching ? undefined : depthTime("standard"),
+            hint:
+              enriching || !search.depthFiguresApply
+                ? undefined
+                : depthTime("standard"),
             speakHint: true,
             disabled: enriching,
             onSelect: () =>
@@ -158,7 +161,10 @@ export const ContactActionsMenu = ({
             id: "enrich-deep",
             label: "Enrich deeply",
             icon: Sparkles,
-            hint: enriching ? undefined : depthTime("deep"),
+            hint:
+              enriching || !search.depthFiguresApply
+                ? undefined
+                : depthTime("deep"),
             speakHint: true,
             disabled: enriching,
             onSelect: () =>

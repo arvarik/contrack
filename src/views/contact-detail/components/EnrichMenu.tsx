@@ -7,8 +7,8 @@
  *   │ ✦ Enrich again ▾ │
  *   └──────────────────┘
  *   RESEARCH DEPTH
- *     Standard     about 30 s
- *     Deep         about 2 min
+ *     Standard     about 40 s
+ *     Deep         about 1 min
  * ```
  *
  * The dossier has two: Enrich contact in the empty dossier, and Enrich
@@ -21,7 +21,8 @@
  * (`startSearch`). While this contact's research runs, the button reads
  * "Enriching…" and waits, so a second press cannot queue the contact twice.
  * Without AI, outside the AI Search provider, or for a ghost, it is not
- * there.
+ * there. The times show only when research runs on Gemini, where they were
+ * measured (`depthFiguresApply`).
  *
  * @module views/contact-detail/components/EnrichMenu
  */
@@ -76,7 +77,7 @@ export function EnrichMenu({
   const items: ActionMenuItem[] = DEPTH_ORDER.map((depth) => ({
     id: depth,
     label: DEPTH_WORDS[depth].name,
-    hint: depthTime(depth),
+    hint: search.depthFiguresApply ? depthTime(depth) : undefined,
     speakHint: true,
     disabled: enriching,
     onSelect: () =>

@@ -53,6 +53,7 @@ const aiSearch = vi.hoisted(() => ({
     status: "processing" | "complete" | "cancelled";
     jobs: { contactId: string; status: string }[];
   },
+  depthFiguresApply: true,
 }));
 vi.mock("../../src/contexts/AISearchContext", async (original) => ({
   // The real rule for "this contact is being enriched", over the fake state.
@@ -222,9 +223,9 @@ function chooseAction(name: string) {
 
 /** The Undo action of the last plain toast. */
 function lastUndo(): () => void {
-  const options = toastMock.mock.calls.at(-1)?.[1] as {
-    action: { onClick: () => void };
-  };
+  const call = toastMock.mock.lastCall;
+  if (!call) throw new Error("No toast was shown");
+  const options = call[1] as { action: { onClick: () => void } };
   return options.action.onClick;
 }
 
