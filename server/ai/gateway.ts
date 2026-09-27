@@ -13,12 +13,13 @@
 import type { AIGenerateOptions, AIGenerateResult } from "./types.ts";
 export type { AIGenerateResult } from "./types.ts";
 import type { AICapability } from "./capabilities.ts";
-import { resolveCapability } from "./capabilities.ts";
+import { resolveCapability, type ResolvedCapability } from "./capabilities.ts";
 import { getProviderConfigs } from "./providerRegistry.ts";
 import { AppError } from "../utils/AppError.ts";
 import {
   GenerationQueue,
   type JobPriority,
+  type QueueLane,
   type QueueSnapshot,
 } from "./workQueue.ts";
 import { withTimeout } from "./resilience.ts";
@@ -31,6 +32,12 @@ export type GatewayOptions = Omit<AIGenerateOptions, "routing"> & {
   accountId?: string;
   /** Explicit priority class. Defaults to context-inferred priority. */
   priority?: JobPriority;
+  /**
+   * "search" runs the call in the Ask lane, which has two slots of its own.
+   * The planner, the reranker and the brief pass it. Everything else shares
+   * the default two slots.
+   */
+  lane?: QueueLane;
 };
 
 /** True when at least one provider has usable credentials. */
@@ -47,6 +54,46 @@ export function isAnyProviderConfigured(): boolean {
 export async function generateFor(
   capability: Exclude<AICapability, "embeddings">,
   options: GatewayOptions,
+): Promise<AIGenerateResult> {
+  return runQueued(capability, options, (resolved, request) =>
+    resolved.provider.generate(request),
+  );
+}
+
+/**
+ * Run a text generation and hand each piece of it to `onDelta` as it
+ * arrives, then resolve with the whole result.
+ *
+ * The same queue, lane and timeout rules as `generateFor`. An adapter with
+ * no `generateStream` runs `generate`, and its text arrives as one piece.
+ *
+ * @throws the same errors as `generateFor`.
+ */
+export async function streamFor(
+  capability: Exclude<AICapability, "embeddings">,
+  options: GatewayOptions,
+  onDelta: (text: string) => void,
+): Promise<AIGenerateResult> {
+  return runQueued(capability, options, async (resolved, request) => {
+    if (resolved.provider.generateStream)
+      return resolved.provider.generateStream(request, onDelta);
+    const result = await resolved.provider.generate(request);
+    if (result.text) onDelta(result.text);
+    return result;
+  });
+}
+
+/**
+ * Resolve the capability, then run `call` in the queue under one timeout.
+ * The timeout covers the wait for a slot as well as the call.
+ */
+function runQueued(
+  capability: Exclude<AICapability, "embeddings">,
+  options: GatewayOptions,
+  call: (
+    resolved: ResolvedCapability,
+    request: AIGenerateOptions,
+  ) => Promise<AIGenerateResult>,
 ): Promise<AIGenerateResult> {
   options.signal?.throwIfAborted();
   const resolved = resolveCapability(capability);
@@ -75,7 +122,7 @@ export async function generateFor(
     (signal) =>
       generations.run(
         () =>
-          resolved.provider.generate({
+          call(resolved, {
             ...options,
             signal,
             timeoutMs,
@@ -87,6 +134,7 @@ export async function generateFor(
           signal,
           accountId: options.accountId,
           priority: options.priority,
+          lane: options.lane,
         },
       ),
     timeoutMs,

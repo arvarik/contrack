@@ -37,7 +37,7 @@ export function personMatch(
 export interface PeopleAnswer {
   /** Milliseconds to hold the answer, so a loading state is observable. */
   delayMs?: number;
-  /** The server could not reach AI and answered by keyword. */
+  /** The model did not verify the answer, so the local list is unverified. */
   fallback?: boolean;
 }
 

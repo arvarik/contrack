@@ -4,19 +4,24 @@ import { z } from "zod";
 /**
  * SynthesisBar — Opt-in executive brief for AI search results (Feature 6).
  *
- * States: idle → loading → streaming → complete
+ * States: idle → loading → streaming → complete (or error)
  * Visible when ≥3 AI results are present in either Cmd+K or SearchView.
  *
  * Streams NDJSON from POST /api/search/synthesize:
- *   { phase: "start" }     — show skeleton
- *   { phase: "complete", text: "..." } — show final text
- *   { phase: "error", error: "..." }   — show error state
+ *   { phase: "start" }                   keep the skeleton
+ *   { phase: "delta", text: "..." }      add the next piece of the text
+ *   { phase: "complete", text: "..." }   show the final text, which replaces it
+ *   { phase: "error", error: "..." }     show the error state
+ *
+ * A cache hit sends start and complete with no deltas. The skeleton stays
+ * until the first delta or the complete arrives.
  *
  * @module components/command-palette/SynthesisBar
  */
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
+import { LiveStatus } from "../ui/LiveStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,11 +42,25 @@ interface SynthesisBarProps {
   compact?: boolean;
 }
 
-type SynthesisPhase = "idle" | "loading" | "complete" | "error";
+type SynthesisPhase = "idle" | "loading" | "streaming" | "complete" | "error";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MIN_RESULTS_FOR_SYNTHESIS = 3;
+
+/** The longest summary, whole or as the sum of its deltas. */
+const MAX_SUMMARY_LENGTH = 20_000;
+
+/** One line of the stream. A delta carries the next piece, not the whole text. */
+const synthesisChunkSchema = z.discriminatedUnion("phase", [
+  z.object({ phase: z.literal("start") }),
+  z.object({ phase: z.literal("delta"), text: z.string() }),
+  z.object({
+    phase: z.literal("complete"),
+    text: z.string().trim().min(1).max(MAX_SUMMARY_LENGTH),
+  }),
+  z.object({ phase: z.literal("error"), error: z.string() }),
+]);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -109,22 +128,25 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       if (!res.ok) throw new Error(`Synthesis failed (${res.status})`);
 
       let complete = false;
+      let streamed = "";
       await readNdjson(
         res,
         (value) => {
           if (controller.signal.aborted || abortRef.current !== controller)
             return;
-          const chunk = z
-            .discriminatedUnion("phase", [
-              z.object({ phase: z.literal("start") }),
-              z.object({
-                phase: z.literal("complete"),
-                text: z.string().trim().min(1).max(20_000),
-              }),
-              z.object({ phase: z.literal("error"), error: z.string() }),
-            ])
-            .parse(value);
+          // The final text is the answer. A line after it changes nothing.
+          if (complete) return;
+          const chunk = synthesisChunkSchema.parse(value);
           if (chunk.phase === "error") throw new Error(chunk.error);
+          if (chunk.phase === "delta") {
+            streamed += chunk.text;
+            if (streamed.length > MAX_SUMMARY_LENGTH)
+              throw new Error("The summary is too long");
+            // The skeleton stays until there is text to show.
+            if (!streamed.trim()) return;
+            setSynthesisText(streamed);
+            setPhase("streaming");
+          }
           if (chunk.phase === "complete") {
             complete = true;
             setSynthesisText(chunk.text);
@@ -137,6 +159,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         throw new Error("The summary connection ended early. Try again");
     } catch (err: unknown) {
       if (!controller.signal.aborted && abortRef.current === controller) {
+        // The streamed text was never confirmed, so it goes.
+        setSynthesisText("");
         setErrorMessage(
           (err instanceof Error ? err.message : String(err)) ||
             "Synthesis failed",
@@ -159,6 +183,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
   const px = compact ? "px-3 py-2" : "px-4 py-3";
   const textSize = compact ? "text-xs" : "text-sm";
+  const streaming = phase === "streaming";
+  const showsText = streaming || phase === "complete";
 
   /*
    * One slot, one keyed crossfade — deliberately NOT `<AnimatePresence
@@ -167,107 +193,128 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
    * the entire result list up and back down. Phases still change height (a
    * button is shorter than a paragraph), but now it happens once, in one
    * direction, instead of twice.
+   *
+   * Streaming and complete share one key. The final text replaces the
+   * streamed text in place, so the crossfade does not run again and the
+   * text does not flash.
    */
   return (
-    <div key={phase} className="fade-enter">
-      {/* ── Idle: Show synthesize button ── */}
-      {phase === "idle" && (
-        <div className={compact ? "px-1" : ""}>
-          <button
-            onClick={handleSynthesize}
-            className={`
-              state-layer w-full ${px} min-h-[44px] sm:min-h-0 rounded-xl flex items-center gap-2
-              bg-primary/5 transition-colors group
-              ${textSize} text-primary cursor-pointer
-            `}
-          >
-            <Sparkles
-              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} group-hover:scale-110 transition-transform`}
-            />
-            <span className="font-semibold">Synthesize these results</span>
-            <span className="text-on-surface-variant ml-auto">
-              {resultCount} contacts
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* ── Loading: Shimmer skeleton ── */}
-      {phase === "loading" && (
-        <div
-          className={`${compact ? "mx-1" : ""} rounded-xl bg-primary/5 ${px} space-y-2`}
-          style={{ minHeight: compact ? "60px" : "80px" }}
-        >
-          <div className={`flex items-center gap-2 ${textSize} text-primary`}>
-            {/*
-              Decorative: "Synthesizing…" is right beside it and says the
-              same thing, so a screen reader should hear it once.
-            */}
-            <CorvidThinking decorative size={compact ? 14 : 16} />
-            <span className="font-semibold">Synthesizing…</span>
-          </div>
-          <div className="space-y-1.5">
-            <div className="h-3 bg-primary/10 rounded-full animate-pulse w-4/5" />
-            <div className="h-3 bg-primary/10 rounded-full animate-pulse w-3/5" />
-          </div>
-        </div>
-      )}
-
-      {/*
-        ── Complete: Show synthesis text ──
-        A model wrote the summary, so it sits on the AI colour's wash with
-        the AI glyph. The button that asked for it is a control and stays
-        primary.
-      */}
-      {phase === "complete" && synthesisText && (
-        <div
-          className={`
-            ${compact ? "mx-1" : ""} rounded-xl bg-ai/5
-            ${px} relative group
-          `}
-        >
-          <div className={`flex items-start gap-2 ${textSize}`}>
-            <Sparkles
-              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} text-ai shrink-0 mt-0.5`}
-            />
-            <p className="text-on-surface leading-relaxed flex-1">
-              {synthesisText}
-            </p>
-          </div>
-          <button
-            onClick={handleDismiss}
-            className="hit-area state-layer absolute top-2 right-2 p-1 rounded-lg sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-            aria-label="Dismiss synthesis"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      )}
-
-      {/* ── Error state ── */}
-      {phase === "error" && (
-        <div className={`${compact ? "mx-1" : ""} rounded-xl bg-error/5 ${px}`}>
-          <div className={`flex items-center gap-2 ${textSize}`}>
-            <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0" />
-            <span className="text-error">
-              Synthesis failed{errorMessage ? `: ${errorMessage}` : ""}
-            </span>
+    <div>
+      <div key={showsText ? "text" : phase} className="fade-enter">
+        {/* ── Idle: Show synthesize button ── */}
+        {phase === "idle" && (
+          <div className={compact ? "px-1" : ""}>
             <button
               onClick={handleSynthesize}
-              className="hit-area ml-auto text-xs text-primary hover:underline"
+              className={`
+                state-layer w-full ${px} min-h-[44px] sm:min-h-0 rounded-xl flex items-center gap-2
+                bg-primary/5 transition-colors group
+                ${textSize} text-primary cursor-pointer
+              `}
             >
-              Retry
-            </button>
-            <button
-              onClick={handleDismiss}
-              className="hit-area state-layer p-1 rounded-lg transition-colors"
-              aria-label="Dismiss error"
-            >
-              <X className="w-3 h-3" />
+              <Sparkles
+                className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} group-hover:scale-110 transition-transform`}
+              />
+              <span className="font-semibold">Synthesize these results</span>
+              <span className="text-on-surface-variant ml-auto">
+                {resultCount} contacts
+              </span>
             </button>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ── Loading: Shimmer skeleton ── */}
+        {phase === "loading" && (
+          <div
+            className={`${compact ? "mx-1" : ""} rounded-xl bg-primary/5 ${px} space-y-2`}
+            style={{ minHeight: compact ? "60px" : "80px" }}
+          >
+            <div className={`flex items-center gap-2 ${textSize} text-primary`}>
+              {/*
+                Decorative: "Synthesizing…" is right beside it and says the
+                same thing, so a screen reader should hear it once.
+              */}
+              <CorvidThinking decorative size={compact ? 14 : 16} />
+              <span className="font-semibold">Synthesizing…</span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="h-3 bg-primary/10 rounded-full animate-pulse w-4/5" />
+              <div className="h-3 bg-primary/10 rounded-full animate-pulse w-3/5" />
+            </div>
+          </div>
+        )}
+
+        {/*
+          ── Streaming and complete: Show synthesis text ──
+          A model wrote the summary, so it sits on the AI colour's wash with
+          the AI glyph. The button that asked for it is a control and stays
+          primary. While the text streams, the box is busy and has no
+          dismiss button.
+        */}
+        {showsText && synthesisText && (
+          <div
+            aria-busy={streaming || undefined}
+            className={`
+              ${compact ? "mx-1" : ""} rounded-xl bg-ai/5
+              ${px} relative group
+            `}
+          >
+            <div className={`flex items-start gap-2 ${textSize}`}>
+              <Sparkles
+                className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} text-ai shrink-0 mt-0.5`}
+              />
+              <p className="text-on-surface leading-relaxed flex-1">
+                {synthesisText}
+              </p>
+            </div>
+            {!streaming && (
+              <button
+                onClick={handleDismiss}
+                className="hit-area state-layer absolute top-2 right-2 p-1 rounded-lg sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                aria-label="Dismiss synthesis"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Error state ── */}
+        {phase === "error" && (
+          <div
+            className={`${compact ? "mx-1" : ""} rounded-xl bg-error/5 ${px}`}
+          >
+            <div className={`flex items-center gap-2 ${textSize}`}>
+              <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0" />
+              <span className="text-error">
+                Synthesis failed{errorMessage ? `: ${errorMessage}` : ""}
+              </span>
+              <button
+                onClick={handleSynthesize}
+                className="hit-area ml-auto text-xs text-primary hover:underline"
+              >
+                Retry
+              </button>
+              <button
+                onClick={handleDismiss}
+                className="hit-area state-layer p-1 rounded-lg transition-colors"
+                aria-label="Dismiss error"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/*
+        Says the final text once. The growing text is not announced. The
+        region stays mounted outside the keyed slot, as LiveStatus requires.
+      */}
+      <LiveStatus
+        message={phase === "complete" ? synthesisText : ""}
+        label="Summary status"
+      />
     </div>
   );
 };

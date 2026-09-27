@@ -943,10 +943,42 @@ curl -X POST http://localhost:3210/api/search/semantic \
   -d '{"query":"fintech contacts"}'
 ```
 
-The `instant` event returns local keyword candidates before AI refinement.
-The `complete` event returns verified matches or explicit keyword fallback results.
-A valid empty result ends the search. AI refinement has a 12-second deadline.
-Both JSON and streaming callers use the same pipeline.
+Both JSON and streaming callers use the same pipeline. The JSON response is
+the final result: `{"matches":[…],"fallback":false}`, plus `"cached": true`
+when the cache answered.
+
+The stream sends one JSON object per line:
+
+- `{"phase":"instant","matches":[…],"fallback":true,"latencyMs":16}` is the
+  local list before the model stages: keyword and vector search, fused, and
+  the top 30 kept. Every match has `verified: false`.
+- `{"phase":"complete","matches":[…],"fallback":false}` is the final result.
+  It is the last line.
+- `{"phase":"error","error":"Search failed. Please try again.","requestId":"…"}`
+  takes the place of `complete` when the search fails.
+
+Each match is the full contact, plus these fields:
+
+| Field                     | Meaning                                                                                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `verified`                | `true` when an exact local answer, a database filter or the reranker proved the match. `false` for a local result nobody checked.                                                                                                    |
+| `aiReason`                | One sentence that the server builds from the proven fields, for example "Works at Northwind Logistics, based in Lisbon, Portugal." It is `null` on a local answer, on an unverified list, and when no proven field is left to quote. |
+| `approximate`/`matchType` | Only on a local answer. `approximate: true` and `matchType: "approximate"` mark a close name. Otherwise `matchType` is `exact`.                                                                                                      |
+
+A chunk's `fallback` means that the model did not verify its list.
+
+- **A name, an email, a phone number or one quoted phrase** gets its answer
+  from the keyword index, with no model call. The stream sends only
+  `complete`, and every match has `verified: true`.
+- **AI off for the account, or no provider:** the route still answers. The
+  local list is the final result, with `fallback: true`. The stream sends
+  only `complete`, because no model stage follows. The AI rate limiters
+  still count the route.
+- **A cached result** sends only `complete`, with `"cached": true`.
+- **The model stages have a 12-second budget.** An error, a timeout or an
+  edit in the account during the search ends with a fresh local list and
+  `fallback: true`.
+- A valid empty result ends the search.
 
 ---
 
@@ -1036,6 +1068,23 @@ curl -X POST http://localhost:3210/api/search/synthesize \
   -H "Accept: application/x-ndjson" \
   -d '{"query":"fintech contacts","contactIds":["abc123","def456"]}'
 ```
+
+The stream sends one JSON object per line:
+
+1. `{"phase":"start"}`
+2. `{"phase":"delta","text":"…"}`, zero or more times. Each one holds the
+   next piece of the brief, not the whole text so far.
+3. `{"phase":"complete","text":"…"}` holds the whole brief after
+   `sanitizeAiOutputValue`. The client shows this text in place of the
+   pieces. Or `{"phase":"error","error":"Could not create a summary. Please try again."}`
+   takes its place, and the client removes the pieces it showed.
+
+Each piece loses its control characters. The pieces stop when the text so
+far matches an injection pattern or passes 2,000 characters. The stream ends
+with `error` when the contacts changed while the model wrote the brief, or
+when the sanitizer rejects the text. A cached brief sends `start` and
+`complete` with no pieces. An account with AI off gets
+`403 AI_OFF_FOR_ACCOUNT`.
 
 ---
 

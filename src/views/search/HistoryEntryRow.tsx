@@ -43,8 +43,9 @@ export const HistoryEntryRow = React.memo(
     const renderMeta = () => {
       const parts: string[] = [];
       if (entry.fallback) {
-        // The semantic index could not answer, so the words were matched.
-        parts.push("keyword search");
+        // The model did not check this answer: AI was off, failed or ran
+        // out of time, and the local list answered.
+        parts.push("unverified");
       } else if (entry.resultCount === 0) {
         parts.push("no matches");
       } else if (

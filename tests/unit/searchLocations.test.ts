@@ -181,6 +181,42 @@ describe("structured search locations", () => {
   it("ignores ungrounded planner locations", () => {
     expect(extractQueryLocations("Find engineers", ["London"])).toEqual([]);
   });
+  it("ends a grounded place phrase where the planner's matcher ends", () => {
+    // The phrase pattern stops at "who", "with" and "at", not at a verb.
+    expect(
+      extractQueryLocations("who in Lisbon goes rock climbing", ["Lisbon"]),
+    ).toEqual([{ sourcePhrase: "Lisbon", literal: "lisbon" }]);
+    expect(
+      matches("who in Lisbon goes rock climbing", "Lisbon, Portugal", [
+        "Lisbon",
+      ]),
+    ).toBe(true);
+    expect(
+      matches("who in Lisbon goes rock climbing", "Porto, Portugal", [
+        "Lisbon",
+      ]),
+    ).toBe(false);
+  });
+  it("still parses a qualified place whole", () => {
+    expect(
+      extractQueryLocations("Researchers in Cambridge, Massachusetts", [
+        "Cambridge",
+        "Massachusetts",
+      ]),
+    ).toEqual([
+      {
+        sourcePhrase: "Cambridge, Massachusetts",
+        city: "cambridge",
+        region: "massachusetts",
+        country: "us",
+      },
+    ]);
+  });
+  it("keeps an ungrounded literal phrase out", () => {
+    expect(extractQueryLocations("who in Lisbon goes rock climbing")).toEqual(
+      [],
+    );
+  });
   it("preserves exact source phrases", () => {
     expect(
       extractQueryLocations("Biotech contacts in Cambridge, UK with funding")[0]

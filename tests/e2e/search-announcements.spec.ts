@@ -76,7 +76,7 @@ test.describe("people", () => {
     ).toHaveCount(0);
   });
 
-  test("says that AI was unavailable and the matches are by keyword", async ({
+  test("says that AI was unavailable and the matches are unverified", async ({
     page,
     seed,
   }) => {
@@ -95,10 +95,10 @@ test.describe("people", () => {
     await input.press("Enter");
 
     await expect(status(page)).toHaveText(
-      "AI unavailable. 1 match for “Linus” by keyword.",
+      "AI unavailable. 1 unverified match for “Linus”.",
     );
     await expect(
-      page.getByText("AI unavailable — showing keyword matches"),
+      page.getByText("AI unavailable — showing unverified matches"),
     ).toBeVisible();
   });
 

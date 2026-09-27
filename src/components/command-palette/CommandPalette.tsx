@@ -882,9 +882,9 @@ export const CommandPalette = () => {
                     <Command.Group
                       heading={
                         isAiLoading
-                          ? "Keyword candidates · checking with AI"
+                          ? "Unverified candidates · checking with AI"
                           : aiFallback
-                            ? "Keyword results (AI fallback)"
+                            ? "Unverified results"
                             : "AI query results"
                       }
                       className={GROUP_HEADING_PRIMARY}
@@ -892,7 +892,9 @@ export const CommandPalette = () => {
                       {aiFallback && !isAiLoading && (
                         <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-warning">
                           <AlertTriangle className="w-3 h-3" />
-                          <span>AI unavailable — showing keyword matches</span>
+                          <span>
+                            AI unavailable — showing unverified matches
+                          </span>
                         </div>
                       )}
                       {aiResults.map((match, i) => (

@@ -162,7 +162,6 @@ describe("query constraints through real retrieval and evidence verification", (
                   contact_id: row.id,
                   verified_field: "role",
                   verified_value: row.role,
-                  reason: `${row.name} is a ${row.role}.`,
                 })),
           ),
           model: "fixture",
@@ -176,13 +175,78 @@ describe("query constraints through real retrieval and evidence verification", (
       );
       expect(result.fallback).toBe(false);
       expect(result.matches.map((match) => match.id)).toEqual(["paired-0"]);
+      expect(result.matches[0].verified).toBe(true);
+      // Each compiled plan is confident and its hard filters hold the whole
+      // question, so the database proves the match and no reranker runs.
       const rerank = vi
         .mocked(generateFor)
         .mock.calls.find(([, options]) =>
           options.systemPrompt?.includes("data analyst"),
         );
-      expect(rerank?.[1].prompt).toContain("paired-0");
-      expect(rerank?.[1].prompt).not.toContain("paired-1");
+      expect(rerank).toBeUndefined();
     },
   );
+
+  it("reranks only the filtered candidates when the question also names a trait", async () => {
+    const rows = [
+      { id: "paired-0", name: "Pair 0", role: "Investor", about: "Climbs" },
+      { id: "paired-1", name: "Pair 1", role: "Talent Scout", about: "Climbs" },
+    ];
+    for (const row of rows)
+      sqlite
+        .prepare(
+          "INSERT INTO contacts(id,ownerId,name,role,location,company,about) VALUES (?,?,?,?,?,?,?)",
+        )
+        .run(
+          row.id,
+          scope.ownerId,
+          row.name,
+          row.role,
+          "London",
+          "Sequoia Capital",
+          row.about,
+        );
+    const plan: QueryPlan = {
+      must: {
+        roleMatchers: ["Investor"],
+        companyMatchers: ["Sequoia Capital"],
+      },
+      should: { traits: ["climbing"] },
+      confidence: "high",
+      rationale: "Test query interpretation",
+    };
+    vi.mocked(generateFor).mockImplementation(async (_capability, options) => ({
+      text: JSON.stringify(
+        options.systemPrompt?.includes("query planner")
+          ? plan
+          : rows.map((row) => ({
+              contact_id: row.id,
+              verified_field: "about",
+              verified_value: row.about,
+            })),
+      ),
+      model: "fixture",
+      latencyMs: 1,
+    }));
+    const result = await searchService.semanticSearch(
+      scope,
+      "Investors at Sequoia Capital who go climbing",
+      "paired-trait",
+    );
+    expect(result.matches.map((match) => match.id)).toEqual(["paired-0"]);
+    const rerank = vi
+      .mocked(generateFor)
+      .mock.calls.find(([, options]) =>
+        options.systemPrompt?.includes("data analyst"),
+      );
+    // Candidates travel with short ids, so the names show who was sent.
+    expect(rerank?.[1].prompt).toContain('"name":"Pair 0"');
+    expect(rerank?.[1].prompt).not.toContain("Pair 1");
+    expect(rerank?.[1].lane).toBe("search");
+    // The reason leads with the cited evidence, then what the filter proved.
+    // A role stays as the contact wrote it.
+    expect(result.matches[0].aiReason).toBe(
+      "Profile mentions “Climbs”, Investor at Sequoia Capital.",
+    );
+  });
 });

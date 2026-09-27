@@ -489,12 +489,14 @@ export interface DedupeScanProgress {
  */
 export interface SemanticMatch extends Contact {
   aiReason: string | null;
+  /** True when an exact answer, the model or a filter proved it. Older servers omit it. */
+  verified?: boolean;
 }
 
 /**
  * Full response envelope from POST /api/search/semantic.
- * `fallback: true` signals that the AI provider was unavailable and the results
- * are plain FTS5 keyword matches with no AI reasoning.
+ * `fallback: true` signals that the model did not verify this list: the
+ * instant local list, or a final list when AI was off, failed or timed out.
  */
 export interface SemanticSearchResult {
   /**

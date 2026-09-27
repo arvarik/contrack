@@ -1,7 +1,9 @@
 import { matchesQueryLocations } from "../../ai/searchLocations.ts";
 // Hybrid retrieval applies a bounded AI query plan, then combines local
-// keyword and vector rankings. SearchService sends local results before this
-// stage starts. Every semantic result still requires verified field evidence.
+// keyword and vector rankings. `localRetrieval` is the part with no plan:
+// SearchService sends its list before the plan exists, and falls back to it
+// when the model fails. Every semantic result still requires verified field
+// evidence, from the plan's hard filter or from the reranker.
 
 import { sqlite } from "../../db.ts";
 import { lexicalSearch } from "./lexical.ts";
@@ -16,8 +18,11 @@ import {
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
 import { roleVariants } from "../../ai/queryConstraints.ts";
+import { resolveEmbeddings } from "../../ai/embeddings.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";
+import type { QueryIntent } from "./intent.ts";
+import type { ReasonEvidence } from "./reasons.ts";
 
 // =============================================================================
 // Types
@@ -43,9 +48,24 @@ export interface RetrievalResult {
    * candidates against the user's structured intent.
    */
   plan: QueryPlan | null;
+  /**
+   * The contacts the plan's hard filter allowed, name and last contact
+   * included, or null when no filter applied. When the filter holds every
+   * constraint, these are the answer.
+   */
+  allowed?: AllowedContact[] | null;
+  /** For each allowed contact, the fields the filter proved. */
+  evidence?: Map<string, ReasonEvidence[]>;
 }
 
-interface RankedItem {
+/** A contact that passed the hard filter. */
+export interface AllowedContact {
+  id: string;
+  name: string;
+  lastContactedAt: string | null;
+}
+
+export interface RankedItem {
   contactId: string;
   rank: number;
   channel: "fts" | "vector";
@@ -87,8 +107,20 @@ const BOOST_LIMIT = 50;
 interface HardFilterResult {
   /** Set of contact IDs allowed downstream, or null = "no filter". */
   allowedIds: Set<string> | null;
+  /** The allowed contacts in database order, or null = "no filter". */
+  allowed: AllowedContact[] | null;
+  /** For each allowed contact, the fields the filter proved, in reason order. */
+  evidence: Map<string, ReasonEvidence[]>;
   /** Per-dimension active matcher counts, for logging. */
   summary: string;
+}
+
+/** The text a regex matched, without the boundary character it consumed. */
+function matchedText(re: RegExp, haystack: string): string | undefined {
+  return re
+    .exec(haystack)?.[0]
+    .replace(/^[^\p{L}\p{N}]/u, "")
+    .trim();
 }
 
 /**
@@ -127,7 +159,12 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
   // Low-confidence parses skip hard filters entirely — exploratory queries
   // shouldn't get gated on a possibly-wrong extraction.
   if (plan.confidence === "low") {
-    return { allowedIds: null, summary: "low-confidence (no hard filter)" };
+    return {
+      allowedIds: null,
+      allowed: null,
+      evidence: new Map(),
+      summary: "low-confidence (no hard filter)",
+    };
   }
 
   const locRe = buildMatcherRegex(plan.must.locationMatchers ?? []);
@@ -147,7 +184,12 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
     !indRe &&
     !temporal
   ) {
-    return { allowedIds: null, summary: "no hard filters" };
+    return {
+      allowedIds: null,
+      allowed: null,
+      evidence: new Map(),
+      summary: "no hard filters",
+    };
   }
 
   // Build the temporal predicate as SQL — it's cheaper than streaming
@@ -165,25 +207,33 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
   }
 
   // Fetch only the columns we need to evaluate the matchers; for industry,
-  // we also fetch tags + interests inline as a coalesced text blob.
+  // we also fetch tags + interests inline as a coalesced text blob. Only for
+  // industry: the two subqueries cost a lookup per contact.
+  const childText = indRe
+    ? `COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
+        COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText`
+    : `'' AS tagsText, '' AS interestsText`;
   const rows = sqlite
     .prepare(
       `
       SELECT
         c.id,
+        c.name,
+        c.lastContactedAt,
         c.location,
         c.company,
         c.role,
         c.headline,
         c.industry,
-        COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
-        COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText
+        ${childText}
       FROM contacts c
       WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}
     `,
     )
     .all(scope.ownerId, ...temporalParams) as {
     id: string;
+    name: string;
+    lastContactedAt: string | null;
     location: string | null;
     company: string | null;
     role: string | null;
@@ -193,25 +243,48 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
     interestsText: string;
   }[];
 
-  const allowed = new Set<string>();
+  const allowedIds = new Set<string>();
+  const allowed: AllowedContact[] = [];
+  const evidence = new Map<string, ReasonEvidence[]>();
+  const hasLocation = !!plan.must.locations?.length || !!locRe;
   for (const r of rows) {
     if (plan.must.locations?.length) {
       if (!matchesQueryLocations(r.location ?? "", plan.must.locations))
         continue;
     } else if (locRe && !(r.location && locRe.test(r.location))) continue;
     if (coRe && !(r.company && coRe.test(r.company))) continue;
+    // The current role takes precedence over a headline about prior work.
+    const currentRole = r.role?.trim() || r.headline;
     if (roleRe) {
-      // The current role takes precedence over a headline about prior work.
-      const currentRole = r.role?.trim() || r.headline;
       if (!currentRole || !roleRe.test(currentRole)) continue;
     }
+    let industryProof: ReasonEvidence | undefined;
     if (indRe) {
       const inIndustry = r.industry && indRe.test(r.industry);
       const inTags = r.tagsText && indRe.test(r.tagsText);
       const inInterests = r.interestsText && indRe.test(r.interestsText);
       if (!inIndustry && !inTags && !inInterests) continue;
+      industryProof = inIndustry
+        ? { field: "industry" }
+        : inTags
+          ? { field: "tag", value: matchedText(indRe, r.tagsText) }
+          : { field: "interest", value: matchedText(indRe, r.interestsText) };
     }
-    allowed.add(r.id);
+    allowedIds.add(r.id);
+    allowed.push({
+      id: r.id,
+      name: r.name,
+      lastContactedAt: r.lastContactedAt,
+    });
+    // What the filter proved, in the order a reason reads it.
+    const proven: ReasonEvidence[] = [];
+    if (roleRe && currentRole)
+      proven.push({ field: "role", value: currentRole });
+    if (coRe) proven.push({ field: "company" });
+    if (hasLocation) proven.push({ field: "location" });
+    if (industryProof) proven.push(industryProof);
+    if (temporal) proven.push({ field: "lastContact" });
+    evidence.set(r.id, proven);
   }
 
   const summaryParts: string[] = [];
@@ -224,8 +297,10 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
   if (temporal) summaryParts.push(`temporal(${temporal.type})`);
 
   return {
-    allowedIds: allowed,
-    summary: `${summaryParts.join("+")}=${allowed.size}`,
+    allowedIds,
+    allowed,
+    evidence,
+    summary: `${summaryParts.join("+")}=${allowedIds.size}`,
   };
 }
 
@@ -255,35 +330,44 @@ async function vectorRetrieval(
   scope: Scope,
   embedInputText: string,
   preFilterIds: Set<string> | null,
-): Promise<RankedItem[]> {
+  queryVector?: Float32Array | null,
+  aiAllowed = true,
+): Promise<{ items: RankedItem[]; vector: Float32Array | null }> {
   // The count is per owner now. An account with no vectors of its own skips
   // the channel instead of asking a partition that holds nothing.
   if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0) {
-    return [];
+    return { items: [], vector: null };
   }
+  // A provider's embedding model is a model call. With AI off for the
+  // account only the built-in model may embed the query.
+  if (!aiAllowed && !queryVector && resolveEmbeddings().kind === "provider")
+    return { items: [], vector: null };
 
   try {
-    const queryVec = await embedText(embedInputText);
-    if (!queryVec) return [];
+    const vector = queryVector ?? (await embedText(embedInputText));
+    if (!vector) return { items: [], vector: null };
 
     const neighbors = findSearchNeighbors(
       scope,
-      queryVec,
+      vector,
       VECTOR_LIMIT,
       preFilterIds ?? undefined,
     );
 
-    return neighbors.map((n, i) => ({
-      contactId: n.contactId,
-      rank: i + 1,
-      channel: "vector" as const,
-    }));
+    return {
+      items: neighbors.map((n, i) => ({
+        contactId: n.contactId,
+        rank: i + 1,
+        channel: "vector" as const,
+      })),
+      vector,
+    };
   } catch (err: unknown) {
     log.warn(
       "HybridRetrieval",
       `Vector channel failed: ${getErrorMessage(err)}`,
     );
-    return [];
+    return { items: [], vector: null };
   }
 }
 
@@ -398,8 +482,85 @@ export function reciprocalRankFusion(
 }
 
 // =============================================================================
+// Local retrieval: keyword and vector channels, fused, with no plan
+// =============================================================================
+
+export interface LocalRetrievalOptions {
+  /** Contacts a plan's hard filter allows, or null for no filter. */
+  allowedIds?: Set<string> | null;
+  /** The query's kind. Prompt 2 of the search-engine plan weights the channels by it. */
+  intent?: QueryIntent;
+  /** How many fused candidates to return. All of them when unset. */
+  limit?: number;
+  /** The text the vector channel embeds. The query when unset. */
+  embedInput?: string;
+  /** A vector already computed for `embedInput`, so it is not embedded twice. */
+  queryVector?: Float32Array | null;
+  /** False when AI is off for the account: a provider may not embed the query. */
+  aiAllowed?: boolean;
+}
+
+export interface LocalRetrievalResult {
+  /** The keyword and vector lists fused by reciprocal rank. */
+  candidates: RetrievalCandidate[];
+  /** The keyword channel: FTS in broad mode, then approximate names. */
+  lexical: RankedItem[];
+  /** The vector channel. Empty when no embedding model is ready. */
+  dense: RankedItem[];
+  /** The vector the dense channel used, for reuse by a later stage. */
+  queryVector: Float32Array | null;
+  /** Wall time in milliseconds. */
+  ms: number;
+}
+
+/**
+ * Keyword and vector retrieval fused by reciprocal rank, with no model call.
+ *
+ * About 10 ms at 5,000 contacts. Ask Contrack shows this list before the
+ * planner answers, and keeps it when the model fails. `hybridRetrieval`
+ * runs the same arithmetic inside the plan's hard filter.
+ */
+export async function localRetrieval(
+  scope: Scope,
+  query: string,
+  options: LocalRetrievalOptions = {},
+): Promise<LocalRetrievalResult> {
+  const t0 = performance.now();
+  const allowedIds = options.allowedIds ?? null;
+  const lexical = ftsRetrieval(scope, query, allowedIds);
+  const dense = await vectorRetrieval(
+    scope,
+    options.embedInput ?? query,
+    allowedIds,
+    options.queryVector,
+    options.aiAllowed,
+  );
+  return {
+    candidates: reciprocalRankFusion([lexical, dense.items], options.limit),
+    lexical,
+    dense: dense.items,
+    queryVector: dense.vector,
+    ms: performance.now() - t0,
+  };
+}
+
+// =============================================================================
 // Main Entry Point
 // =============================================================================
+
+export interface HybridRetrievalOptions {
+  /**
+   * A query vector already computed, or being computed, and the text it
+   * embeds. The planner runs first, so a vector still on its way is ready by
+   * the time it is read.
+   */
+  vector?: {
+    text: string;
+    vector: Float32Array | null | Promise<Float32Array | null>;
+  };
+  /** False when AI is off for the account: a provider may not embed the query. */
+  aiAllowed?: boolean;
+}
 
 /** Apply hard filters before keyword/vector limits, then fuse ranked candidates. */
 export async function hybridRetrieval(
@@ -407,19 +568,25 @@ export async function hybridRetrieval(
   query: string,
   rid: string,
   signal?: AbortSignal,
+  options: HybridRetrievalOptions = {},
 ): Promise<RetrievalResult> {
   const t0 = Date.now();
 
   signal?.throwIfAborted();
   const plan = await parseSearchQuery(query, signal);
   signal?.throwIfAborted();
+  const planned = Date.now();
 
   // ── Phase 0: hard pre-filter ──────────────────────────────────────────
   let allowedIds: Set<string> | null = null;
+  let allowed: AllowedContact[] | null = null;
+  let evidence = new Map<string, ReasonEvidence[]>();
   let hardFilterSummary = "skipped (no plan)";
   if (plan) {
     const hf = applyHardFilters(scope, plan);
     allowedIds = hf.allowedIds;
+    allowed = hf.allowed;
+    evidence = hf.evidence;
     hardFilterSummary = hf.summary;
 
     if (allowedIds !== null && allowedIds.size === 0) {
@@ -436,28 +603,34 @@ export async function hybridRetrieval(
         highConfidence: false,
         preFilterSummary: `no-match: ${hardFilterSummary}`,
         plan,
+        allowed,
+        evidence,
       };
     }
   }
 
   const embedInput = buildSearchEmbeddingInput(query, plan);
+  const filtered = Date.now();
 
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
-  const [ftsResults, vectorResults] = await Promise.all([
-    Promise.resolve(ftsRetrieval(scope, query, allowedIds)),
-    vectorRetrieval(scope, embedInput, allowedIds),
-  ]);
+  const local = await localRetrieval(scope, query, {
+    allowedIds,
+    embedInput,
+    queryVector:
+      options.vector?.text === embedInput
+        ? await options.vector.vector
+        : undefined,
+    aiAllowed: options.aiAllowed,
+  });
 
   // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
   signal?.throwIfAborted();
   const traitBoosts = plan ? buildTraitBoosts(scope, plan, allowedIds) : [];
 
   // ── Phase 2: RRF fusion across FTS + vector + trait boosts ────────────
-  const fused = reciprocalRankFusion([
-    ftsResults,
-    vectorResults,
-    ...traitBoosts,
-  ]);
+  const fused = traitBoosts.length
+    ? reciprocalRankFusion([local.lexical, local.dense, ...traitBoosts])
+    : local.candidates;
 
   // ── Phase 3: confidence assessment ─────────────────────────────────────
   // A high FTS ratio does not prove a natural-language constraint.
@@ -468,9 +641,10 @@ export async function hybridRetrieval(
   log.info(
     "HybridRetrieval",
     `[${rid}] "${query.slice(0, 60)}" → ` +
-      `FTS:${ftsResults.length} + Vec:${vectorResults.length}` +
+      `FTS:${local.lexical.length} + Vec:${local.dense.length}` +
       ` + Traits:${traitBoosts.length}ch ` +
       `→ ${fused.length} fused in ${elapsed}ms ` +
+      `[planner ${planned - t0}ms, filter ${filtered - planned}ms, retrieval ${Date.now() - filtered}ms] ` +
       `(plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +
       `filter: ${hardFilterSummary}, ` +
       `confidence: ${highConfidence ? "HIGH" : "low"})`,
@@ -481,6 +655,8 @@ export async function hybridRetrieval(
     highConfidence,
     preFilterSummary: hardFilterSummary,
     plan,
+    allowed,
+    evidence,
   };
 }
 

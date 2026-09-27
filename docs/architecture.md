@@ -273,15 +273,20 @@ Frontend caching via React Query v5 with:
 
 ## Search Pipeline
 
-Ask Contrack sends local keyword candidates before it calls AI.
-A short name lookup uses only the local index.
+Ask Contrack sends the local hybrid list (keyword and vector) before it calls AI.
+A name, an email, a phone number or a quoted phrase uses only the local index.
+The model never runs for these queries.
 
 1. The query planner produces bounded hard filters and optional traits.
 2. The retrieval engine applies those filters before keyword and vector limits.
 3. It combines local keyword rankings and local vector rankings.
-4. The reranker checks at most 30 compact profiles.
-5. The server verifies claimed field values and hard constraints.
-6. The response ends with verified matches, an empty result, or keyword fallback.
+4. When the filters hold every constraint, the filtered contacts are the answer.
+   The reranker does not run.
+5. Otherwise the reranker checks at most 30 compact profiles.
+6. The server verifies claimed field values and hard constraints, and builds
+   each reason from the proven fields.
+7. The response ends with verified matches, an empty result, or the local
+   list, marked unverified.
 
 A shared 12-second deadline bounds refinement. Client disconnects cancel active work.
 Search caches include the data revision, model, and a five-minute time bucket.

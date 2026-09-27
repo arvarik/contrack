@@ -3,7 +3,8 @@
 // =============================================================================
 // When an account sets `aiAssist: false`, every endpoint that incurs an AI cost
 // answers 403 AI_OFF_FOR_ACCOUNT for that account, but remains accessible for
-// other accounts and for non-AI routes.
+// other accounts and for non-AI routes. Ask Contrack is the exception: its
+// search is local, so it answers with the local results and runs no model.
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -44,7 +45,6 @@ describe("requireAiAllowed middleware", () => {
   const aiCostPaths: { method: "get" | "post"; path: string; body?: object }[] =
     [
       { method: "get", path: "/api/dashboard/insight" },
-      { method: "post", path: "/api/search/semantic", body: { query: "test" } },
       {
         method: "post",
         path: "/api/search/synthesize",
@@ -98,6 +98,40 @@ describe("requireAiAllowed middleware", () => {
       }
     });
   }
+
+  it("answers POST /api/search/semantic from local data when aiAssist is false", async () => {
+    const created = await asUser(userOff)(
+      request(app)
+        .post("/api/contacts")
+        .send({ name: "Zelda Offline", role: "Engineer" }),
+    );
+    expect(created.status).toBe(201);
+
+    const res = await asUser(userOff)(
+      request(app).post("/api/search/semantic").send({ query: "engineer" }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.fallback).toBe(true);
+    expect(res.body.matches).toEqual([
+      expect.objectContaining({ name: "Zelda Offline", verified: false }),
+    ]);
+
+    // The Ask page streams. The stream carries no instant chunk, because no
+    // model stage follows the local list.
+    const stream = await asUser(userOff)(
+      request(app)
+        .post("/api/search/semantic")
+        .set("Accept", "application/x-ndjson")
+        .send({ query: "engineer" }),
+    );
+    const chunks = stream.text
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(chunks).toEqual([
+      expect.objectContaining({ phase: "complete", fallback: true }),
+    ]);
+  });
 
   it("does not block non-AI endpoints for the account with AI off", async () => {
     const res = await asUser(userOff)(request(app).get("/api/contacts"));

@@ -16,6 +16,7 @@ import { AppError } from "../../utils/AppError.ts";
 
 import type {
   CompressedContact,
+  EvidenceField,
   SemanticMatchResult,
   QueryPlan,
 } from "../types.ts";
@@ -29,23 +30,37 @@ import {
   sanitizeAiOutputValue,
 } from "../promptSafety.ts";
 import { resolveCapability } from "../capabilities.ts";
-import { generateFor } from "../gateway.ts";
+import { generateFor, streamFor } from "../gateway.ts";
 import { isMockMode, safeParseJson } from "./shared.ts";
 import type { Scope } from "../../tenancy/scope.ts";
+
+/** The fields the reranker may cite, as the server checks them. */
+const EVIDENCE_FIELDS: [EvidenceField, ...EvidenceField[]] = [
+  "name",
+  "role",
+  "headline",
+  "company",
+  "location",
+  "about",
+  "industry",
+  "preferences",
+  "interests",
+];
 
 /**
  * LLM-based reranker for Ask Contrack hybrid retrieval pipeline.
  *
  * Takes ~30 pre-filtered candidate contacts (from the hybrid retrieval
  * engine) and uses the LLM to determine which ones *definitively* match
- * the user's query, providing evidence-based reasons for each.
+ * the user's query. For each match the model names one field and quotes a
+ * literal substring of it. It writes no reason: the server builds one from
+ * that evidence (`buildReason`), because the model's sentences were most of
+ * this call's output tokens and most of its 3 to 6 s.
  *
  * This is the Stage 2 of the pipeline. Stage 1 (hybrid retrieval) narrows
- * ~960 contacts to ~30 candidates using FTS5 + vector KNN + SQL filters.
- * This function evaluates only those 30, making it:
- * - Much faster: ~1.5K input tokens vs ~100K+ in the old brute-force approach
- * - Much more accurate: the LLM judges pre-screened candidates, not haystacks
- * - Much cheaper: uses "lite" model class for a pure filtering task
+ * the network to ~30 candidates using FTS5 + vector KNN + SQL filters.
+ * The service calls this only when the SQL filter cannot prove every
+ * constraint. The verified matches come back in candidate order.
  */
 export async function rerankCandidates(
   query: string,
@@ -92,6 +107,11 @@ export async function rerankCandidates(
     );
   }
   const hasHardConstraints = planDirectives.length > 0;
+  // Candidates carry no dates. The database has already applied the
+  // recency constraint, and a model asked to verify it rejected everybody.
+  const recency = plan?.must.temporal
+    ? `\n\nCONTACT RECENCY: the database has already checked when each candidate was last contacted. Every candidate satisfies the recency part of the query. Do not exclude a candidate for it, and do not cite it as evidence.`
+    : "";
 
   const systemPrompt = `${UNTRUSTED_DATA_RULE}
 
@@ -99,22 +119,16 @@ You are a precise CRM data analyst. You verify whether each candidate contact DE
 
 These contacts have already been pre-filtered by a retrieval system — your job is the LAST line of defense against false positives. Be ruthlessly precise.
 
-OUTPUT SHAPE (per match):
+OUTPUT SHAPE (per match, nothing else):
   {
     "contact_id": "<id from candidate>",
     "verified_field": "<exact field name like 'location' or 'company'>",
-    "verified_value": "<EXACT substring from that field that proves the match>",
-    "reason": "<one short third-person sentence ABOUT the contact — never address the user>"
+    "verified_value": "<EXACT substring from that field that proves the match>"
   }
 
-REASON STYLE:
-- Third person, describing the contact. Start with their name OR an impersonal descriptor.
-- ✓ "John is based in Los Angeles, California."
-- ✓ "Located in Chicago, Illinois — a US city."
-- ✓ "Works as a VC at Sequoia Capital."
-- ✗ "You are located in California..." (wrong subject — this isn't about the user)
-- ✗ "Your contact in California..." (still addresses the user)
-- Keep it under ~15 words.
+When the query asks for an interest, a trait or a topic as well as a place, company or role, cite the field that proves the interest, trait or topic (often interests or about). The database checks the hard constraints below as well. Keep verified_value short: the words that prove the match, not the whole field.
+
+A name in the query may be misspelled or a nickname ("Jon" for Jonathan). When a candidate is that person, cite the name as the candidate's name field spells it, never as the query spells it.
 
 CRITICAL RULES (in priority order):
 1. EVIDENCE OR EXCLUDE: \`verified_value\` MUST be a literal substring of the named field. If the candidate has no such substring, OMIT them entirely. Do not approximate, do not infer, do not paraphrase.
@@ -131,13 +145,25 @@ ${planDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n")}
 
 A contact that fails any hard constraint MUST be excluded, regardless of how well other fields match.`
       : ""
-  }`;
+  }${recency}`;
+
+  // Candidates travel with short ids, "c1" to "c30". A contact id is a UUID
+  // of about 25 tokens, and 30 matches of them overran the 1,200-token
+  // budget (measured 2026-09-27): the array was cut off, and the answer
+  // with it. The server maps the short ids back.
+  const listed = candidates.map((candidate, index) => ({
+    ...candidate,
+    id: `c${index + 1}`,
+  }));
+  const byListedId = new Map(
+    listed.map((candidate, index) => [candidate.id, candidates[index]]),
+  );
 
   const prompt = `${wrapUntrusted("query", query)}
 ${plan?.rationale ? `\nPLANNER RATIONALE: ${plan.rationale}` : ""}
 
 CANDIDATES (${candidates.length}):
-${wrapUntrusted("candidate contacts JSON", JSON.stringify(candidates), 24_000)}
+${wrapUntrusted("candidate contacts JSON", JSON.stringify(listed), 24_000)}
 
 Return a JSON array of VERIFIED matches with field-level evidence. If no candidate can be grounded, return [].`;
 
@@ -146,19 +172,19 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     prompt,
     responseFormat: "json",
     signal,
+    lane: "search",
     timeoutMs: 8_000,
-    maxOutputTokens: 3_000,
+    maxOutputTokens: 1_200,
     jsonSchema: {
       type: "array",
       items: {
         type: "object",
         properties: {
           contact_id: { type: "string" },
-          verified_field: { type: "string" },
+          verified_field: { type: "string", enum: [...EVIDENCE_FIELDS] },
           verified_value: { type: "string" },
-          reason: { type: "string" },
         },
-        required: ["contact_id", "verified_field", "verified_value", "reason"],
+        required: ["contact_id", "verified_field", "verified_value"],
       },
     },
   });
@@ -168,18 +194,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     .array(
       z.object({
         contact_id: z.string().min(1).max(100),
-        reason: z.string().trim().min(1).max(600),
-        verified_field: z.enum([
-          "name",
-          "role",
-          "headline",
-          "company",
-          "location",
-          "about",
-          "industry",
-          "preferences",
-          "interests",
-        ]),
+        verified_field: z.enum(EVIDENCE_FIELDS),
         verified_value: z.string().trim().min(1).max(600),
       }),
     )
@@ -191,13 +206,12 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
 
   // ── Server-side evidence verification ───────────────────────────────────
   // We re-check the LLM's claimed evidence against the actual candidate
-  // data to catch hallucinations and ungrounded matches. Three checks:
+  // data to catch hallucinations and ungrounded matches. Four checks:
   //  1. contact_id must exist in our candidate set
   //  2. verified_value must be a literal substring of the named field
   //  3. if a hard constraint applies to that field, the value must satisfy it
-  const reasonNegativePattern =
-    /\bdoes not\b|\bdoesn't\b|\bno evidence\b|\bunrelated\b|\bnot related\b|\bnot in\b|\bnot a match\b/i;
-
+  //  4. the quoted value must pass the output sanitizer, because the reason
+  //     built from it is shown on the card
   const wordBoundaryMatch = (haystack: string, needle: string): boolean => {
     if (!haystack || !needle) return false;
     const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -210,18 +224,16 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
   const filtered: SemanticMatchResult[] = [];
   let droppedNoEvidence = 0;
   let droppedHardConstraint = 0;
-  let droppedNegativeReason = 0;
+  let droppedUnsafe = 0;
   let droppedHallucinated = 0;
 
   for (const m of parsed) {
-    const cand = candidates.find((c) => c.id === m.contact_id);
+    // A short id, or the contact's own id when a model sends that instead.
+    const cand =
+      byListedId.get(m.contact_id) ??
+      candidates.find((c) => c.id === m.contact_id);
     if (!cand) {
       droppedHallucinated++;
-      continue;
-    }
-
-    if (reasonNegativePattern.test(m.reason ?? "")) {
-      droppedNegativeReason++;
       continue;
     }
 
@@ -305,24 +317,34 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       )
     )
       continue;
-    if (filtered.some((item) => item.contact_id === m.contact_id)) continue;
-    const sanitizedReason = sanitizeAiOutputValue(m.reason, 600);
-    if (!sanitizedReason) {
-      droppedNegativeReason++;
+    if (filtered.some((item) => item.contact_id === cand.id)) continue;
+    const sanitizedValue = sanitizeAiOutputValue(value, 600);
+    if (!sanitizedValue) {
+      droppedUnsafe++;
       log.warn(
         "Reranker",
-        `Dropped ${cand.name}: reason contained adversarial or invalid content`,
+        `Dropped ${cand.name}: evidence contained adversarial or invalid content`,
       );
       continue;
     }
-    filtered.push({ contact_id: m.contact_id, reason: sanitizedReason });
+    filtered.push({
+      contact_id: cand.id,
+      verified_field: m.verified_field,
+      verified_value: sanitizedValue,
+    });
   }
+  // The retrieval order, not the order the model wrote.
+  const position = new Map(candidates.map((c, index) => [c.id, index]));
+  filtered.sort(
+    (a, b) =>
+      (position.get(a.contact_id) ?? 0) - (position.get(b.contact_id) ?? 0),
+  );
 
   log.info(
     "AIService",
     `Reranker "${query}" → ${filtered.length}/${candidates.length} verified ` +
       `(LLM said ${parsed.length}, dropped: ${droppedNoEvidence} no-evidence, ` +
-      `${droppedHardConstraint} hard-constraint, ${droppedNegativeReason} negative, ${droppedHallucinated} hallucinated) ` +
+      `${droppedHardConstraint} hard-constraint, ${droppedUnsafe} unsafe, ${droppedHallucinated} hallucinated) ` +
       `in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
   );
   recordInvocation({
@@ -411,14 +433,54 @@ You generate search expansion keywords. Given a contact profile, output a comma-
   }
 }
 
+/** Control characters never reach the screen, streamed or final. */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+
+/** The longest brief kept, streamed or final. */
+const MAX_BRIEF = 2_000;
+
+/**
+ * Pass streamed pieces on while the text so far is safe to show.
+ *
+ * Each piece loses its control characters. Once the text so far matches an
+ * injection pattern, or passes the length cap, nothing more is sent: the
+ * final text then fails the same check, and the client removes what it
+ * showed.
+ */
+function safeDeltas(onDelta?: (text: string) => void) {
+  let sent = "";
+  let stopped = !onDelta;
+  return (piece: string) => {
+    if (stopped) return;
+    const clean = piece.replace(CONTROL_CHARACTERS, "");
+    if (!clean) return;
+    const next = sent + clean;
+    if (
+      next.length > MAX_BRIEF ||
+      (next.trim() && !sanitizeAiOutputValue(next, MAX_BRIEF))
+    ) {
+      stopped = true;
+      return;
+    }
+    sent = next;
+    onDelta?.(clean);
+  };
+}
+
 /**
  * Generates a concise 2-3 sentence executive summary of a set of AI search
  * results. This is an opt-in feature — the user clicks "Synthesize these
  * results" after seeing their matches.
  *
+ * The text streams: `onDelta` receives each piece as the model writes it.
+ * The returned text is the whole brief after `sanitizeAiOutputValue`, and
+ * it is what the client keeps. A cache hit sends no pieces.
+ *
  * @param scope    - The owner the brief is cached for
  * @param query    - The original user query
  * @param contacts - Compressed contact objects from the search results
+ * @param onDelta  - Receives each streamed piece of text
  * @returns        - A plain-text executive brief
  */
 export async function synthesizeSearchResults(
@@ -434,6 +496,7 @@ export async function synthesizeSearchResults(
   }[],
   plan?: QueryPlan | null,
   signal?: AbortSignal,
+  onDelta?: (text: string) => void,
 ): Promise<string> {
   signal?.throwIfAborted();
   if (isMockMode()) throw new AppError("AI summary is unavailable", 503);
@@ -550,19 +613,24 @@ ${wrapUntrusted("contact summaries", contactSummaries, 24_000)}
 Write a 2-3 sentence executive brief. Every claim must be true for the contacts shown.`;
 
   try {
-    const result = await generateFor("quick", {
-      systemPrompt,
-      prompt,
-      responseFormat: "text",
-      maxOutputTokens: 1500,
-      signal,
-      timeoutMs: 8_000,
-    });
+    const result = await streamFor(
+      "quick",
+      {
+        systemPrompt,
+        prompt,
+        responseFormat: "text",
+        maxOutputTokens: 1500,
+        signal,
+        lane: "search",
+        timeoutMs: 8_000,
+      },
+      safeDeltas(onDelta),
+    );
 
     signal?.throwIfAborted();
     const text = result.text?.trim();
     if (!text) throw new Error("Empty synthesis response");
-    const sanitized = sanitizeAiOutputValue(text, 2000);
+    const sanitized = sanitizeAiOutputValue(text, MAX_BRIEF);
     if (!sanitized) {
       throw new AppError("Summary contained unsafe or invalid content", 502);
     }
@@ -663,6 +731,7 @@ Return the structured QueryPlan JSON.`;
       timeoutMs: 4_000,
       maxOutputTokens: 2_000,
       signal,
+      lane: "search",
       jsonSchema: {
         type: "object",
         properties: {

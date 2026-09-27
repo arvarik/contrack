@@ -84,29 +84,41 @@ vi.mock("../../server/ai/capabilities.ts", async (importOriginal) => {
   };
 });
 
-// Mock AI Gateway to replay recorded LLM completions
+// Mock AI Gateway to replay recorded LLM completions. The brief streams, so
+// `streamFor` replays its recording as one piece.
 vi.mock("../../server/ai/gateway.ts", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../../server/ai/gateway.ts")>();
+  const replay = async (options: {
+    prompt?: string;
+    systemPrompt?: string;
+  }) => {
+    const { identifyAnswerCall } =
+      await import("../../scripts/answer-eval/recording.ts");
+    const call = identifyAnswerCall(options);
+    const text = call ? recorded[call.operation].get(call.queryKey) : undefined;
+    if (text === undefined) {
+      const message = `Missing recorded response for ${call?.operation ?? "unknown"}: ${call?.queryKey ?? "unrecognized prompt"}`;
+      recorded.failures.push(message);
+      throw new Error(message);
+    }
+    return { text, model: "recorded-replay", latencyMs: 2 };
+  };
   return {
     ...actual,
     isAnyProviderConfigured: () => true,
     generateFor: async (
       _capability: unknown,
       options: { prompt?: string; systemPrompt?: string },
+    ) => replay(options),
+    streamFor: async (
+      _capability: unknown,
+      options: { prompt?: string; systemPrompt?: string },
+      onDelta: (text: string) => void,
     ) => {
-      const { identifyAnswerCall } =
-        await import("../../scripts/answer-eval/recording.ts");
-      const call = identifyAnswerCall(options);
-      const text = call
-        ? recorded[call.operation].get(call.queryKey)
-        : undefined;
-      if (text === undefined) {
-        const message = `Missing recorded response for ${call?.operation ?? "unknown"}: ${call?.queryKey ?? "unrecognized prompt"}`;
-        recorded.failures.push(message);
-        throw new Error(message);
-      }
-      return { text, model: "recorded-replay", latencyMs: 2 };
+      const result = await replay(options);
+      onDelta(result.text);
+      return result;
     },
   };
 });

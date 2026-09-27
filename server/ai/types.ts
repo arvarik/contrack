@@ -290,12 +290,27 @@ export interface CompressedContact {
   interests?: string;
 }
 
+/** A candidate field the reranker may cite as proof of a match. */
+export type EvidenceField =
+  | "name"
+  | "role"
+  | "headline"
+  | "company"
+  | "location"
+  | "about"
+  | "industry"
+  | "preferences"
+  | "interests";
+
 /**
- * A single match returned by the semantic search engine.
+ * A match the reranker verified: the field it cited and a literal substring
+ * of that field, which the server has checked. The model writes no reason.
+ * The server builds one from this evidence (`buildReason`).
  */
 export interface SemanticMatchResult {
   contact_id: string;
-  reason: string;
+  verified_field: EvidenceField;
+  verified_value: string;
 }
 
 /** A grounded place. Fields within a constraint use AND. Separate constraints use OR. */

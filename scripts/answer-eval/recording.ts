@@ -22,7 +22,13 @@ export function identifyAnswerCall(
   return { operation, queryKey: query.toLowerCase().trim() };
 }
 
-/** Record only fresh provider calls and audit failures that production catches. */
+/**
+ * Record only fresh provider calls and audit failures that production catches.
+ *
+ * Both entry points are wrapped: the planner and the reranker call
+ * `generate`, and the brief streams through `generateStream` when the
+ * adapter has it. A streamed call is recorded by its whole text.
+ */
 export function installAnswerRecorder(provider: AIProvider): {
   responses: RecordedResponses;
   models: Set<string>;
@@ -30,6 +36,7 @@ export function installAnswerRecorder(provider: AIProvider): {
   restore: () => void;
 } {
   const original = provider.generate;
+  const originalStream = provider.generateStream;
   const responses: RecordedResponses = {
     queryParse: {},
     rerank: {},
@@ -38,7 +45,10 @@ export function installAnswerRecorder(provider: AIProvider): {
   const models = new Set<string>();
   const failures: string[] = [];
   let pending = 0;
-  provider.generate = async (options) => {
+  const record = async (
+    options: AIGenerateOptions,
+    send: () => ReturnType<AIProvider["generate"]>,
+  ) => {
     const call = identifyAnswerCall(options);
     pending++;
     const onAbort = () =>
@@ -50,7 +60,7 @@ export function installAnswerRecorder(provider: AIProvider): {
         throw new Error("Unrecognized answer evaluation provider call");
       // Adapters already implement bounded retries. Extra retries here can
       // outlive the gateway timeout and overwrite a later recording.
-      const result = await original.call(provider, options);
+      const result = await send();
       options.signal?.throwIfAborted();
       if (!result.text?.trim())
         throw new Error("Empty answer evaluation provider response");
@@ -71,6 +81,11 @@ export function installAnswerRecorder(provider: AIProvider): {
       options.signal?.removeEventListener("abort", onAbort);
     }
   };
+  provider.generate = (options) =>
+    record(options, () => original.call(provider, options));
+  if (originalStream)
+    provider.generateStream = (options, onDelta) =>
+      record(options, () => originalStream.call(provider, options, onDelta));
   return {
     responses,
     models,
@@ -89,6 +104,7 @@ export function installAnswerRecorder(provider: AIProvider): {
     },
     restore: () => {
       provider.generate = original;
+      if (originalStream) provider.generateStream = originalStream;
     },
   };
 }

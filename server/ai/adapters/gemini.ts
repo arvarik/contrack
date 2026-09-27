@@ -11,7 +11,11 @@
 // what was sent, for the Health page.
 // =============================================================================
 
-import { GoogleGenAI, Type } from "@google/genai";
+import {
+  GoogleGenAI,
+  Type,
+  type GenerateContentResponseUsageMetadata,
+} from "@google/genai";
 import type { AIProvider } from "../provider.ts";
 import type { ModelInfo, ModelCapability } from "../provider.ts";
 import type {
@@ -37,6 +41,7 @@ import {
   isRetryableError,
 } from "../resilience.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { AppError } from "../../utils/AppError.ts";
 
 // ---------------------------------------------------------------------------
 // JSON Schema Translation (unchanged from v1.0)
@@ -158,6 +163,23 @@ export function isFreeTierError(error: unknown): boolean {
 }
 
 /**
+ * The tokens billed as input and as output. The search results Gemini read
+ * count as input, and its thinking is billed as output.
+ */
+function usageOf(
+  metadata: GenerateContentResponseUsageMetadata | undefined,
+): AIGenerateResult["usage"] {
+  if (!metadata) return undefined;
+  return {
+    inputTokens:
+      (metadata.promptTokenCount ?? 0) +
+      (metadata.toolUsePromptTokenCount ?? 0),
+    outputTokens:
+      (metadata.candidatesTokenCount ?? 0) + (metadata.thoughtsTokenCount ?? 0),
+  };
+}
+
+/**
  * Whether a discovered Gemini model can use the `googleSearch` tool.
  *
  * The list-models API says nothing about tool support, so this is derived:
@@ -227,6 +249,41 @@ export class GeminiAdapter implements AIProvider {
   private pause(model: string, ms: number): void {
     this.circuitBreakers.add(model);
     setTimeout(() => this.circuitBreakers.delete(model), ms).unref();
+  }
+
+  /**
+   * The bookkeeping after a failed call. A request Google refused is not
+   * counted, a free-tier quota is noted, and a routed model sits out so the
+   * retry picks another. A cancelled call says nothing about the model.
+   */
+  private recordFailure(
+    error: unknown,
+    model: string,
+    reservation: number,
+    options: AIGenerateOptions,
+    groundingDate?: string,
+  ): void {
+    const status =
+      (error as { status?: number; statusCode?: number })?.status ??
+      (error as { statusCode?: number })?.statusCode;
+    // Only explicit rejections prove that the provider did not execute the request.
+    if (status && [400, 401, 403, 404, 422, 429].includes(status)) {
+      this.tracker.rollback(model, reservation);
+      if (groundingDate) this.tracker.rollbackGrounding(groundingDate);
+    }
+    if (status === 429 && isFreeTierError(error) && !this.freeTier) {
+      this.freeTier = true;
+      log.warn(
+        "GeminiAdapter",
+        "Google answered with a free-tier quota. On the free tier Google may use prompts and responses to improve its products. A key from a Cloud project with billing keeps them out.",
+      );
+    }
+    if (options.signal?.aborted) return;
+    // A pinned model is the caller's choice, so there is nothing to
+    // route around. A routed one sits out and the retry picks another.
+    if (isRetryableError(error, false) && !options.model) {
+      this.pause(model, pauseForError(error));
+    }
   }
 
   /**
@@ -351,33 +408,100 @@ export class GeminiAdapter implements AIProvider {
           );
           return result;
         } catch (error) {
-          const status =
-            (error as { status?: number; statusCode?: number })?.status ??
-            (error as { statusCode?: number })?.statusCode;
-          // Only explicit rejections prove that the provider did not execute the request.
-          if (status && [400, 401, 403, 404, 422, 429].includes(status)) {
-            this.tracker.rollback(model, reservation);
-            if (requiresGrounding)
-              this.tracker.rollbackGrounding(groundingDate);
-          }
-          if (status === 429 && isFreeTierError(error) && !this.freeTier) {
-            this.freeTier = true;
-            log.warn(
-              "GeminiAdapter",
-              "Google answered with a free-tier quota. On the free tier Google may use prompts and responses to improve its products. A key from a Cloud project with billing keeps them out.",
-            );
-          }
+          this.recordFailure(error, model, reservation, options, groundingDate);
           options.signal?.throwIfAborted();
-          // A pinned model is the caller's choice, so there is nothing to
-          // route around. A routed one sits out and the retry picks another.
-          if (isRetryableError(error, false) && !options.model) {
-            this.pause(model, pauseForError(error));
-          }
           throw error;
         }
       },
       { signal: options.signal },
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API: AIProvider.generateStream()
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The same call, streamed: `onDelta` gets each piece of text as Gemini
+   * sends it. A JSON or grounded call is not streamed. It runs `generate`
+   * and sends the text as one piece.
+   *
+   * A stream that fails before its first piece falls back to `generate`,
+   * which retries on another model. After the first piece a failure is
+   * thrown, because a piece already sent cannot be taken back.
+   */
+  async generateStream(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    if (options.responseFormat !== "text" || options.enableSearchGrounding)
+      return this.generateInOnePiece(options, onDelta);
+    let sent = false;
+    try {
+      return await this.streamOnce(options, (piece) => {
+        sent = true;
+        onDelta(piece);
+      });
+    } catch (error) {
+      if (options.signal?.aborted)
+        throw new AppError("AI call cancelled by caller", 499, {
+          code: "CANCELLED",
+        });
+      if (sent) throw error;
+      log.warn(
+        "GeminiAdapter",
+        `stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
+      );
+      return this.generateInOnePiece(options, onDelta);
+    }
+  }
+
+  /** Run `generate` and send its text as one piece. */
+  private async generateInOnePiece(
+    options: AIGenerateOptions,
+    onDelta: (text: string) => void,
+  ): Promise<AIGenerateResult> {
+    const result = await this.generate(options);
+    if (result.text) onDelta(result.text);
+    return result;
+  }
+
+  /** One streamed call, routed and counted like an attempt of `generate`. */
+  private async streamOnce(
+    options: AIGenerateOptions,
+    send: (piece: string) => void,
+  ): Promise<AIGenerateResult> {
+    options.signal?.throwIfAborted();
+    const startMs = Date.now();
+    const model =
+      options.model ??
+      this.router.getNextAvailableRoute(
+        options.routing,
+        this.circuitBreakers,
+        false,
+      ).modelId;
+    const estimatedTokens = this.tracker.estimateTokens(
+      options.prompt,
+      options.systemPrompt,
+    );
+    const reservation = this.tracker.reserve(model, estimatedTokens);
+    try {
+      const result = await withTimeout(
+        (signal) => this.streamWithModel(options, model, signal, startMs, send),
+        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+        options.signal,
+      );
+      this.tracker.reconcile(
+        model,
+        estimatedTokens,
+        result.tokenCount ?? estimatedTokens,
+        reservation,
+      );
+      return result;
+    } catch (error) {
+      this.recordFailure(error, model, reservation, options);
+      throw error;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -392,45 +516,11 @@ export class GeminiAdapter implements AIProvider {
     model: string,
     startMs: number,
   ): Promise<AIGenerateResult> {
-    const config: Record<string, unknown> = {};
-    if (options.maxOutputTokens)
-      config.maxOutputTokens = options.maxOutputTokens;
-
-    const thinkingLevel = this.noThinkingLevel.has(model)
-      ? undefined
-      : thinkingLevelFor(
-          model,
-          options.routing?.prefer,
-          !!options.enableSearchGrounding,
-          options.thinkingLevel,
-        );
-    if (thinkingLevel) config.thinkingConfig = { thinkingLevel };
-
-    if (options.enableSearchGrounding) {
-      // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
-      // responseSchema. Must use text output for grounded retrieval.
-      // The TwoPassStrategy in aiSearch handles schema extraction separately.
-      config.tools = [{ googleSearch: {} }];
-      config.responseMimeType = "text/plain";
-    } else if (options.responseFormat === "json") {
-      config.responseMimeType = "application/json";
-      if (options.jsonSchema) {
-        config.responseSchema = translateSchema(options.jsonSchema);
-      }
-    } else {
-      config.responseMimeType = "text/plain";
-    }
-
-    // Use native systemInstruction when a systemPrompt is provided.
-    // This gives the model a much cleaner signal than concatenating
-    // [SYSTEM]...[USER] markers into the prompt text, and saves tokens.
-    if (options.systemPrompt) {
-      config.systemInstruction = options.systemPrompt;
-    }
+    const config = this.configFor(options, model);
 
     // Forward cancellation to the SDK and bound callers even if the transport stalls.
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
-    const call = () =>
+    const response = await this.withThinkingLevel(model, config, () =>
       withTimeout(
         async (abortSignal) =>
           this.client.models.generateContent({
@@ -440,33 +530,13 @@ export class GeminiAdapter implements AIProvider {
           }),
         timeoutMs,
         options.signal,
-      );
-    let response: Awaited<ReturnType<typeof call>>;
-    try {
-      response = await call();
-    } catch (err) {
-      // A model that takes no thinking level says so in a 400. Send it none,
-      // now and from then on.
-      if (!thinkingLevel || !/thinking/i.test(getErrorMessage(err))) throw err;
-      this.noThinkingLevel.add(model);
-      delete config.thinkingConfig;
-      log.info("GeminiAdapter", `${model} takes no thinking level`);
-      response = await call();
-    }
+      ),
+    );
 
     let text = response.text ?? "";
     const metadata = response.usageMetadata;
     const tokenCount = metadata?.totalTokenCount;
-    // The search results Gemini read count as input, and its thinking is
-    // billed as output.
-    const usage = metadata && {
-      inputTokens:
-        (metadata.promptTokenCount ?? 0) +
-        (metadata.toolUsePromptTokenCount ?? 0),
-      outputTokens:
-        (metadata.candidatesTokenCount ?? 0) +
-        (metadata.thoughtsTokenCount ?? 0),
-    };
+    const usage = usageOf(metadata);
     const latencyMs = Date.now() - startMs;
 
     // Validate JSON at the adapter boundary so downstream callers never
@@ -534,5 +604,111 @@ export class GeminiAdapter implements AIProvider {
       ...(searchQueries.length > 0 && { searchQueries }),
       ...(supports.length > 0 && { supports }),
     };
+  }
+
+  /** Stream a text call on `model` and send each piece of text as it comes. */
+  private async streamWithModel(
+    options: AIGenerateOptions,
+    model: string,
+    signal: AbortSignal,
+    startMs: number,
+    send: (piece: string) => void,
+  ): Promise<AIGenerateResult> {
+    const config = this.configFor(options, model);
+    const stream = await this.withThinkingLevel(model, config, () =>
+      this.client.models.generateContentStream({
+        model,
+        contents: options.prompt,
+        config: { ...config, abortSignal: signal },
+      }),
+    );
+
+    let text = "";
+    let metadata: GenerateContentResponseUsageMetadata | undefined;
+    for await (const chunk of stream) {
+      // The caller or the timeout ended the call, so no piece goes out.
+      signal.throwIfAborted();
+      metadata = chunk.usageMetadata ?? metadata;
+      const piece = chunk.text;
+      if (!piece) continue;
+      text += piece;
+      send(piece);
+    }
+
+    // The last chunk carries the usage of the whole call.
+    const tokenCount = metadata?.totalTokenCount;
+    const usage = usageOf(metadata);
+    const latencyMs = Date.now() - startMs;
+    log.info(
+      "GeminiAdapter",
+      `${model} (stream) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
+    );
+    return { text, model, tokenCount, ...(usage && { usage }), latencyMs };
+  }
+
+  /** The request config for `options` on `model`, without the abort signal. */
+  private configFor(
+    options: AIGenerateOptions,
+    model: string,
+  ): Record<string, unknown> {
+    const config: Record<string, unknown> = {};
+    if (options.maxOutputTokens)
+      config.maxOutputTokens = options.maxOutputTokens;
+
+    const thinkingLevel = this.noThinkingLevel.has(model)
+      ? undefined
+      : thinkingLevelFor(
+          model,
+          options.routing?.prefer,
+          !!options.enableSearchGrounding,
+          options.thinkingLevel,
+        );
+    if (thinkingLevel) config.thinkingConfig = { thinkingLevel };
+
+    if (options.enableSearchGrounding) {
+      // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
+      // responseSchema. Must use text output for grounded retrieval.
+      // The TwoPassStrategy in aiSearch handles schema extraction separately.
+      config.tools = [{ googleSearch: {} }];
+      config.responseMimeType = "text/plain";
+    } else if (options.responseFormat === "json") {
+      config.responseMimeType = "application/json";
+      if (options.jsonSchema) {
+        config.responseSchema = translateSchema(options.jsonSchema);
+      }
+    } else {
+      config.responseMimeType = "text/plain";
+    }
+
+    // Use native systemInstruction when a systemPrompt is provided.
+    // This gives the model a much cleaner signal than concatenating
+    // [SYSTEM]...[USER] markers into the prompt text, and saves tokens.
+    if (options.systemPrompt) {
+      config.systemInstruction = options.systemPrompt;
+    }
+    return config;
+  }
+
+  /**
+   * Send a request, and send it again with no thinking level when the model
+   * refuses the one in `config`.
+   */
+  private async withThinkingLevel<T>(
+    model: string,
+    config: Record<string, unknown>,
+    send: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await send();
+    } catch (err) {
+      // A model that takes no thinking level says so in a 400. Send it none,
+      // now and from then on.
+      if (!config.thinkingConfig || !/thinking/i.test(getErrorMessage(err)))
+        throw err;
+      this.noThinkingLevel.add(model);
+      delete config.thinkingConfig;
+      log.info("GeminiAdapter", `${model} takes no thinking level`);
+      return send();
+    }
   }
 }

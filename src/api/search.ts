@@ -187,7 +187,15 @@ const searchChunkSchema = z.discriminatedUnion("phase", [
   z.object({
     phase: z.enum(["instant", "enriched", "complete"]),
     matches: z
-      .array(z.object({ id: z.string(), name: z.string() }).passthrough())
+      .array(
+        z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            verified: z.boolean().optional(),
+          })
+          .passthrough(),
+      )
       .max(30),
     fallback: z.boolean(),
   }),

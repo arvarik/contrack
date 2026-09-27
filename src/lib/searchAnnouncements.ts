@@ -10,7 +10,7 @@
  *
  * Pure functions, so the wording is tested without a DOM. The rule for each:
  * say what the reader would otherwise have to find, and no more. A search
- * speaks at most three times — that it started, that keyword candidates
+ * speaks at most three times — that it started, that unverified candidates
  * arrived while AI is still working, and what it found — and never on every
  * keystroke.
  *
@@ -27,7 +27,7 @@ const quoted = (query: string) => `“${query.trim()}”`;
 export interface PeopleSearchState {
   /** A question is being answered and nothing is on screen yet. */
   isLoading: boolean;
-  /** Keyword candidates are on screen while AI still refines them. */
+  /** Unverified candidates are on screen while AI still refines them. */
   isEnriching: boolean;
   /** The search failed. The visible error is an alert, so this says nothing. */
   isError: boolean;
@@ -37,7 +37,7 @@ export interface PeopleSearchState {
   count: number;
   /** The question these people answer, or the one being asked. */
   query: string;
-  /** AI was unavailable and the results are keyword matches. */
+  /** AI was unavailable and the results are unverified matches. */
   fallback: boolean;
 }
 
@@ -51,13 +51,12 @@ export function peopleSearchStatus(state: PeopleSearchState): string {
   if (state.isError) return "";
   if (state.isLoading) return `Searching your network for ${quoted(q)}…`;
   if (state.isEnriching)
-    return `${plural(state.count, "keyword candidate", "keyword candidates")} for ${quoted(q)}. Enriching with AI…`;
+    return `${plural(state.count, "unverified candidate", "unverified candidates")} for ${quoted(q)}. Enriching with AI…`;
   if (!state.hasSearched) return "";
   if (state.count === 0) return `No matches for ${quoted(q)}.`;
-  const matches = plural(state.count, "match", "matches");
   return state.fallback
-    ? `AI unavailable. ${matches} for ${quoted(q)} by keyword.`
-    : `${matches} for ${quoted(q)}.`;
+    ? `AI unavailable. ${plural(state.count, "unverified match", "unverified matches")} for ${quoted(q)}.`
+    : `${plural(state.count, "match", "matches")} for ${quoted(q)}.`;
 }
 
 export interface NoteSearchState {

@@ -21,6 +21,7 @@ import {
   drainIndexQueue,
 } from "../services/search/indexQueue.ts";
 import { searchHistoryService } from "../services/searchHistoryService.ts";
+import { aiAllowedFor } from "../middleware/aiAllowed.ts";
 import {
   recordHistorySchema,
   patchHistorySchema,
@@ -107,7 +108,10 @@ router.get(
   }),
 );
 
-/** Stream local candidates before AI refinement, followed by one terminal result. */
+/**
+ * Stream local candidates before AI refinement, followed by one terminal
+ * result. With AI off for the caller, the local results are the answer.
+ */
 router.post(
   "/semantic",
   asyncHandler(async (req, res) => {
@@ -116,6 +120,7 @@ router.post(
     // stream, and rule 6 keeps the owner an argument rather than something
     // read back out of the async context after the first await.
     const scope = scopeOf(req);
+    const options = { aiAllowed: aiAllowedFor(req) };
     const { query } = req.body as { query?: string };
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
@@ -156,6 +161,7 @@ router.post(
           rid,
           res,
           controller.signal,
+          options,
         );
       } catch (err: unknown) {
         if (
@@ -181,6 +187,7 @@ router.post(
           query,
           rid,
           controller.signal,
+          options,
         );
         if (!res.destroyed) res.json(result);
       } catch (err: unknown) {
@@ -208,7 +215,10 @@ router.post(
  *
  * Streams:
  *   { phase: "start" }
- *   { phase: "complete", text: "..." }
+ *   { phase: "delta", text: "..." }   the next piece, zero or more times
+ *   { phase: "complete", text: "..." } the whole sanitized brief
+ *   { phase: "error", error: "..." }   instead of complete. Drop the pieces.
+ * A cached brief sends no pieces.
  */
 router.post(
   "/synthesize",
@@ -266,26 +276,38 @@ router.post(
     // Send start signal
     res.write(JSON.stringify({ phase: "start" }) + "\n");
 
+    // Once the terminal chunk is written, a late piece from an abandoned
+    // stream must not follow it.
+    let settled = false;
+    const write = (chunk: object) => {
+      if (!settled && !res.destroyed && !res.writableEnded)
+        res.write(JSON.stringify(chunk) + "\n");
+    };
     try {
       const text = await withTimeout(
         (signal) =>
-          synthesizeSearchResults(scope, query, contacts, null, signal),
+          synthesizeSearchResults(
+            scope,
+            query,
+            contacts,
+            null,
+            signal,
+            (piece) => write({ phase: "delta", text: piece }),
+          ),
         10_000,
         controller.signal,
       );
       if (JSON.stringify(readContacts()) !== source)
         throw new Error("Contacts changed. Generate a new summary.");
-      if (!res.destroyed)
-        res.write(JSON.stringify({ phase: "complete", text }) + "\n");
+      write({ phase: "complete", text });
+      settled = true;
     } catch (err: unknown) {
       log.error("API", `[${rid}] Synthesis failed: ${getErrorMessage(err)}`);
-      if (!res.destroyed)
-        res.write(
-          JSON.stringify({
-            phase: "error",
-            error: "Could not create a summary. Please try again.",
-          }) + "\n",
-        );
+      write({
+        phase: "error",
+        error: "Could not create a summary. Please try again.",
+      });
+      settled = true;
     }
 
     res.off("close", onClose);

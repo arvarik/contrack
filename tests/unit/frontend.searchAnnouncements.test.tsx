@@ -61,17 +61,21 @@ describe("peopleSearchStatus", () => {
     );
   });
 
-  it("says keyword candidates arrived while AI is still working", () => {
+  it("says unverified candidates arrived while AI is still working", () => {
     expect(
       peopleSearchStatus(
         people({ isEnriching: true, count: 4, fallback: true }),
       ),
-    ).toBe("4 keyword candidates for “who likes espresso”. Enriching with AI…");
+    ).toBe(
+      "4 unverified candidates for “who likes espresso”. Enriching with AI…",
+    );
     expect(
       peopleSearchStatus(
         people({ isEnriching: true, count: 1, fallback: true }),
       ),
-    ).toBe("1 keyword candidate for “who likes espresso”. Enriching with AI…");
+    ).toBe(
+      "1 unverified candidate for “who likes espresso”. Enriching with AI…",
+    );
   });
 
   it("counts the matches when the answer is complete", () => {
@@ -89,12 +93,17 @@ describe("peopleSearchStatus", () => {
     );
   });
 
-  it("says that AI was unavailable and the matches are by keyword", () => {
+  it("says that AI was unavailable and the matches are unverified", () => {
     expect(
       peopleSearchStatus(
         people({ hasSearched: true, count: 2, fallback: true }),
       ),
-    ).toBe("AI unavailable. 2 matches for “who likes espresso” by keyword.");
+    ).toBe("AI unavailable. 2 unverified matches for “who likes espresso”.");
+    expect(
+      peopleSearchStatus(
+        people({ hasSearched: true, count: 1, fallback: true }),
+      ),
+    ).toBe("AI unavailable. 1 unverified match for “who likes espresso”.");
   });
 
   it("says nothing on an error, which the visible alert announces", () => {
