@@ -303,6 +303,12 @@ export const contacts = sqliteTable("contacts", {
   geoSource: text("geoSource"),
   aiBriefing: text("aiBriefing"),
   aiBackground: text("aiBackground"),
+  /**
+   * The research record: every enrichment, what it added, the facts it
+   * reported and the pages it cited. JSON in the shape of
+   * shared/researchRecord.ts, written only by the enrichment merge.
+   */
+  aiResearch: text("aiResearch"),
   aiSummary: text("aiSummary"),
   aiHydratedAt: text("aiHydratedAt"),
   aiBriefingAt: text("aiBriefingAt"),

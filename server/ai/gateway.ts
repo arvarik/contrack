@@ -63,9 +63,13 @@ export async function generateFor(
     Number.isFinite(overrideMs) && overrideMs > 0
       ? overrideMs
       : (options.timeoutMs ?? 60_000);
+  // The ceiling was 90 s. Contact research's search pass asks for 120: at
+  // thinking "high", Gemini 3.8 Flash took from 20 s to more than 75 s on
+  // one contact's research prompt (2026-09-26). No other caller asks for
+  // more than 90.
   const timeoutMs =
     Number.isFinite(requestedMs) && requestedMs > 0
-      ? Math.min(requestedMs, 90_000)
+      ? Math.min(requestedMs, 150_000)
       : 60_000;
   return withTimeout(
     (signal) =>

@@ -182,26 +182,64 @@ describe("batch research lifecycle", () => {
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe("AI_GROUNDING_MISSING");
-    // The search pass runs once more, told to search, and extraction never
-    // starts. A model decides for itself whether to search.
-    expect(generateFor).toHaveBeenCalledTimes(2);
+    // The search pass is asked twice more, at once, each time in another
+    // form, and extraction never starts. A model decides for itself whether
+    // to search.
+    expect(generateFor).toHaveBeenCalledTimes(3);
     expect(vi.mocked(generateFor).mock.calls[1][1].prompt).toContain(
       "Run Google Search now",
+    );
+    expect(vi.mocked(generateFor).mock.calls[2][1].prompt).toMatch(
+      /^Run Google searches about one person/,
     );
     expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
     expect(enrichmentContact(scope(), id).role).toBeNull();
   });
-  it("asks once more when the first search pass read nothing", async () => {
+  it("asks twice more when the first search pass read nothing, and uses the answer that cites pages", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
+      .mockResolvedValueOnce(reply("A source-backed biography"))
+      .mockResolvedValueOnce({ ...reply("From memory again"), citations: [] })
+      .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.status).toBe(200);
+    expect(generateFor).toHaveBeenCalledTimes(4);
+    expect(vi.mocked(generateFor).mock.calls[3][1].prompt).toContain(
+      "A source-backed biography",
+    );
+    expect(enrichmentContact(scope(), id).aiResearch).toContain(
+      "https://example.com/profile",
+    );
+  });
+  it("asks again when the first search pass returns no answer and no pages", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce({ ...reply(""), citations: [] })
+      .mockRejectedValueOnce(new Error("AI call exceeded 120000ms timeout"))
       .mockResolvedValueOnce(reply("A source-backed biography"))
       .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
-    expect(generateFor).toHaveBeenCalledTimes(3);
-    expect(enrichmentContact(scope(), id).aiBackground).toContain(
-      "https://example.com/profile",
+    expect(generateFor).toHaveBeenCalledTimes(4);
+    expect(enrichmentContact(scope(), id).about).toBe(
+      "Researcher in test software",
     );
+  });
+  it("reports the provider's error when both further asks fail", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
+      .mockRejectedValue(new Error("Network 500"));
+    await expect(
+      new TwoPassStrategy().execute(enrichmentContact(scope(), id), "test"),
+    ).rejects.toThrow("Network 500");
+    expect(generateFor).toHaveBeenCalledTimes(3);
+  });
+  it("reports a failed call, not missing information, when no search pass answers", async () => {
+    vi.mocked(generateFor).mockResolvedValue({ ...reply(""), citations: [] });
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.status).toBe(502);
+    expect(response.body.error.code).toBe("AI_NO_ANSWER");
+    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
   });
   it("persists safe provider source links with the validated research", async () => {
     vi.mocked(generateFor)
@@ -209,9 +247,16 @@ describe("batch research lifecycle", () => {
       .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
-    expect(enrichmentContact(scope(), id).aiBackground).toContain(
-      "https://example.com/profile",
+    // The sources are in the research record, not in a dossier text.
+    const record = JSON.parse(
+      enrichmentContact(scope(), id).aiResearch ?? "{}",
     );
+    expect(record.sources.map((source: { url: string }) => source.url)).toEqual(
+      ["https://example.com/profile"],
+    );
+    expect(record.runs).toHaveLength(1);
+    expect(record.runs[0]).toMatchObject({ outcome: "added" });
+    expect(enrichmentContact(scope(), id).aiBackground).toBeNull();
     expect(generateFor).toHaveBeenCalledTimes(2);
   });
   it("does not retry the complete workflow after a failed provider stage", async () => {

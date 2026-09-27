@@ -119,6 +119,23 @@ interface ContentBlock {
   text?: string;
   citations?: Array<{ url?: string; title?: string }>;
   content?: unknown;
+  name?: string;
+  input?: unknown;
+}
+
+/** The web searches a response ran: its `web_search` server tool calls. */
+function queriesOf(content: ContentBlock[]): string[] {
+  const queries = new Set<string>();
+  for (const block of content) {
+    const query = (block.input as { query?: unknown } | undefined)?.query;
+    if (
+      block.type === "server_tool_use" &&
+      block.name === "web_search" &&
+      typeof query === "string"
+    )
+      queries.add(query);
+  }
+  return [...queries];
 }
 
 /** The pages a response says it read: text citations first, then results. */
@@ -501,6 +518,16 @@ export class AnthropicAdapter implements AIProvider {
       `${model} | ${latencyMs}ms | ${tokenCount} tokens` +
         (citations ? ` | ${citations.length} sources` : ""),
     );
-    return { text, model, tokenCount, latencyMs, citations };
+    const searchQueries = options.enableSearchGrounding
+      ? queriesOf(content)
+      : [];
+    return {
+      text,
+      model,
+      tokenCount,
+      latencyMs,
+      citations,
+      ...(searchQueries.length > 0 && { searchQueries }),
+    };
   }
 }

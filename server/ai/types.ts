@@ -52,6 +52,14 @@ export interface AIGenerateOptions {
   enableSearchGrounding?: boolean;
 
   /**
+   * How much the model may think, for models that take a level (Gemini 3).
+   * Without it the adapter picks, and a grounded call runs at "low". Other
+   * adapters ignore it. Thinking counts against `maxOutputTokens`, so a call
+   * that asks for "high" needs room: several thousand tokens.
+   */
+  thinkingLevel?: "low" | "medium" | "high";
+
+  /**
    * Override the default model selection for this specific call.
    * Used by strategies that need to target specific models for each pass
    * (e.g., TwoPassStrategy uses grounding-capable models for Pass 1 and
@@ -134,6 +142,13 @@ export interface RoutingPolicy {
 export interface AIGenerateResult {
   /** Source links reported by the provider grounding metadata. */
   citations?: Array<{ title: string; uri: string }>;
+  /** The web searches a grounded answer ran, when the provider reports them. */
+  searchQueries?: string[];
+  /**
+   * Which pages back which passage of the answer, when the provider says so
+   * (Gemini's groundingSupports): the passage and the source addresses.
+   */
+  supports?: Array<{ text: string; uris: string[] }>;
   /** Raw text content of the model's response. */
   text: string;
 

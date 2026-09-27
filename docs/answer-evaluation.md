@@ -10,7 +10,7 @@ The answer evaluation checks query planning, retrieval, reranking, and summary g
 
 Live runs require a configured provider and can incur provider charges. Both commands use a temporary database and remove it after the run.
 
-Recording does not reuse previous responses. Provider failures, empty provider responses, and cancelled calls prevent successful recording. The gateway caps each generation at 90 seconds.
+Recording does not reuse previous responses. Provider failures, empty provider responses, and cancelled calls prevent successful recording. The gateway caps each generation at 150 seconds.
 
 ## What the scores mean
 

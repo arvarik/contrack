@@ -151,6 +151,8 @@ export interface ContactScalarPayload {
   nextFollowUpAt?: string | null;
   aiSummary?: string | null;
   aiBackground?: string | null;
+  /** Research record JSON (shared/researchRecord.ts). */
+  aiResearch?: string | null;
   aiBriefing?: string | null;
   aiBriefingAt?: string | null;
   birthday?: string | null;

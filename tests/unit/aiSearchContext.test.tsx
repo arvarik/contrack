@@ -108,13 +108,14 @@ describe("startSearch", () => {
     expect(latest().limitMessage).toBeNull();
   });
 
-  it("toasts the start for one contact in the singular", () => {
+  it("starts without a toast: the progress panel says it", () => {
+    // The panel opens at the toasts' corner, and a success toast over it
+    // said what the panel already showed.
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { limitAs: "toast" }));
     act(() => lastCallbacks().onSuccess({ batchId: "b1", jobCount: 1 }));
-    expect(toastMock.success).toHaveBeenCalledWith(
-      "Enrichment started for 1 contact",
-    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(latest().isVisible).toBe(true);
   });
 
   it("keeps one identity across renders, so the context value stays put", () => {

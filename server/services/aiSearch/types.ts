@@ -6,6 +6,7 @@
 // =============================================================================
 
 import type { HydratedContact } from "../../repositories/types.ts";
+import type { ResearchFinding } from "../../../shared/researchRecord.ts";
 
 // =============================================================================
 // Job Lifecycle
@@ -32,10 +33,19 @@ export interface AISearchResult {
   tokenCount?: number;
   /** Wall-clock total across all passes */
   latencyMs: number;
-  /** Grounding citations from Pass 1 groundingMetadata — for provenance */
+  /** The pages the research cited, with real addresses — for provenance */
   citations?: Array<{ title: string; uri: string }>;
-  /** Raw grounded text from Pass 1 — saved as aiBackground (dossier) */
+  /** Raw grounded text from Pass 1 */
   groundedText?: string;
+  /** The facts Pass 1 reported, one per line, kept for the dossier */
+  findings?: ResearchFinding[];
+  /** The web searches Pass 1 ran, when the provider reports them */
+  searchQueries?: string[];
+  /**
+   * `"no-public-info"` when the research searched and no page was about this
+   * person. The data is empty then, and the run is recorded, not failed.
+   */
+  outcome?: "found" | "no-public-info";
 }
 
 /**

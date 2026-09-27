@@ -3,8 +3,13 @@
  *
  * Provides:
  * - startSearch(contactIds, options?): kicks off a batch and opens the
- *   overlay. Two callers: the Enrichment settings page, for many contacts,
- *   and "Enrich contact" in a contact's actions menu, for one.
+ *   overlay, or adds the contacts to the batch already running. Callers: the
+ *   Enrichment settings page, for many contacts, and "Enrich contact" in a
+ *   contact's actions menu and "Enrich again" on its dossier, for one.
+ *
+ * A start says nothing in a toast. The overlay opens at the same corner as
+ * the toasts, and a success toast over it ("Enrichment started for 1
+ * contact") said what the overlay already showed, and hid part of it.
  * - batch: current batch state (live-updated via SSE)
  * - isVisible: whether the overlay is showing
  * - dismiss(): close the overlay entirely
@@ -75,6 +80,15 @@ export function useAISearch() {
   return ctx;
 }
 
+/**
+ * The AI Search context, or null outside its provider. For a part that also
+ * renders on its own, like the dossier's Research card in a test: it offers
+ * "Enrich again" only when there is a provider to start it.
+ */
+export function useOptionalAISearch(): AISearchContextValue | null {
+  return useContext(AISearchContext);
+}
+
 export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const [batch, setBatch] = useState<AISearchBatch | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
@@ -114,13 +128,13 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
     (contactIds: string[], { limitAs = "page" }: StartSearchOptions = {}) => {
       startMutate(contactIds, {
         onSuccess: (result) => {
-          setBatch(null);
+          // A start that joined the running batch keeps the batch on screen:
+          // the stream is already live, and it may have sent the longer job
+          // list before this response arrived.
+          if (!result.appended) setBatch(null);
           setBatchId(result.batchId);
           setIsVisible(true);
           setLimitMessage(null);
-          toast.success(
-            `Enrichment started for ${result.jobCount} contact${result.jobCount !== 1 ? "s" : ""}`,
-          );
         },
         onError: (err) => {
           // A cooldown or a lock held by somebody else is not a failure, and

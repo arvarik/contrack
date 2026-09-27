@@ -189,3 +189,97 @@ describe("Gemini 429s", () => {
     expect(isFreeTierError(quotaError("1s"))).toBe(false);
   });
 });
+
+describe("Gemini research calls", () => {
+  it("thinks at the level the caller asks for, and reports the searches it ran", async () => {
+    // Contact research asks for "high": at the adapter's "low", Gemini 3.8
+    // Flash answered research prompts without searching.
+    sdk.generate.mockResolvedValue({
+      text: "- Past role: Associate, Example Co, 2020 to 2022 [example.com]",
+      candidates: [
+        {
+          groundingMetadata: {
+            webSearchQueries: [
+              '"Ada Lovelace" Example Co',
+              '"Ada Lovelace" Example Co',
+            ],
+            groundingChunks: [
+              { web: { title: "example.com", uri: "https://example.com/ada" } },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await new GeminiAdapter("test-only-key").generate({
+      prompt: "test",
+      model: "gemini-3.8-flash",
+      responseFormat: "text",
+      enableSearchGrounding: true,
+      thinkingLevel: "high",
+      maxOutputTokens: 16_384,
+    });
+    expect(sdk.generate.mock.calls[0][0].config.thinkingConfig).toEqual({
+      thinkingLevel: "high",
+    });
+    expect(result.searchQueries).toEqual(['"Ada Lovelace" Example Co']);
+  });
+
+  it("says which page backs which passage of the answer", async () => {
+    sdk.generate.mockResolvedValue({
+      text: "- Past role: Associate [example.com]\n- Award: Fellow",
+      candidates: [
+        {
+          groundingMetadata: {
+            groundingChunks: [
+              { web: { title: "example.com", uri: "https://example.com/ada" } },
+              { web: { title: "other.org", uri: "https://other.org/fellows" } },
+            ],
+            groundingSupports: [
+              {
+                segment: { text: "- Past role: Associate [example.com]" },
+                groundingChunkIndices: [0],
+              },
+              {
+                segment: { text: "- Award: Fellow" },
+                groundingChunkIndices: [1, 7],
+              },
+              { segment: { text: "" }, groundingChunkIndices: [0] },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await new GeminiAdapter("test-only-key").generate({
+      prompt: "test",
+      model: "gemini-3.8-flash",
+      responseFormat: "text",
+      enableSearchGrounding: true,
+      thinkingLevel: "high",
+      maxOutputTokens: 16_384,
+    });
+    expect(result.supports).toEqual([
+      {
+        text: "- Past role: Associate [example.com]",
+        uris: ["https://example.com/ada"],
+      },
+      { text: "- Award: Fellow", uris: ["https://other.org/fellows"] },
+    ]);
+  });
+
+  it("keeps a grounded call at low when the caller names no level", async () => {
+    // The research model's save-time test sends 16 tokens with the search
+    // tool on; thinking "high" would spend them all before the answer.
+    sdk.generate.mockResolvedValue({ text: "OK" });
+    const result = await new GeminiAdapter("test-only-key").generate({
+      prompt: "test",
+      model: "gemini-3.8-flash",
+      responseFormat: "text",
+      enableSearchGrounding: true,
+      maxOutputTokens: 16,
+    });
+    expect(sdk.generate.mock.calls[0][0].config.thinkingConfig).toEqual({
+      thinkingLevel: "low",
+    });
+    expect(result.searchQueries).toBeUndefined();
+  });
+});

@@ -404,7 +404,7 @@ describe("Provider Factory (singleton.ts)", () => {
 // =============================================================================
 // 5. Strategy Selection Contract
 // =============================================================================
-// Contract: OpenAI/Anthropic use single-pass, Gemini uses two-pass
+// Contract: every provider defaults to two-pass; single-pass stays by name
 // Source: ARCHITECTURE.md §2 (strategies/)
 // =============================================================================
 
@@ -441,8 +441,9 @@ describe("AI Search Strategy Selection", () => {
   it("getDefaultStrategyForProvider resolves appropriate strategy per provider", async () => {
     const { getDefaultStrategyForProvider } =
       await import("../../server/services/aiSearch/strategies/index.ts");
-    expect(getDefaultStrategyForProvider("openai")).toBe("single-pass");
-    expect(getDefaultStrategyForProvider("anthropic")).toBe("single-pass");
+    // Two-pass keeps a source beside every fact, on every provider.
+    expect(getDefaultStrategyForProvider("openai")).toBe("two-pass");
+    expect(getDefaultStrategyForProvider("anthropic")).toBe("two-pass");
     expect(getDefaultStrategyForProvider("gemini")).toBe("two-pass");
     // When provider is null and no SearXNG is configured, fallback is two-pass
     expect(getDefaultStrategyForProvider(null)).toBe("two-pass");

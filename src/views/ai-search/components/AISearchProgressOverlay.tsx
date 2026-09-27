@@ -70,6 +70,12 @@ export function AISearchProgressOverlay({
     () => batch.jobs.reduce((sum, j) => sum + j.fieldsUpdated, 0),
     [batch.jobs],
   );
+  // Every finished job searched and found no page about its person.
+  const nobodyFound =
+    succeeded > 0 &&
+    batch.jobs.every(
+      (j) => j.status !== "success" || j.outcome === "no-public-info",
+    );
   const total = batch.jobs.length;
   const progress = total > 0 ? (completed / total) * 100 : 0;
   const isComplete =
@@ -210,7 +216,11 @@ export function AISearchProgressOverlay({
                     ? "Research stopped"
                     : failed
                       ? "Research could not complete"
-                      : "No new data found"}
+                      : nobodyFound
+                        ? succeeded > 1
+                          ? "No web page about these people"
+                          : "No web page about this person"
+                        : "No new data found"}
                 </span>
               )}
             </span>
@@ -264,7 +274,11 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
           <span className="ml-1 opacity-60">+{job.fieldsUpdated}</span>
         )}
         {job.status === "success" && job.fieldsUpdated === 0 && (
-          <span className="ml-1 opacity-40">✓ Up to date</span>
+          <span className="ml-1 opacity-60">
+            {job.outcome === "no-public-info"
+              ? "No public info"
+              : "Nothing new"}
+          </span>
         )}
         {job.status === "error" && (
           <span className="text-error font-bold" title={job.error}>

@@ -33,7 +33,13 @@ export const useStartAISearch = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contactIds }),
       });
-      return res.json() as Promise<{ batchId: string; jobCount: number }>;
+      // `appended`: the contacts joined this account's running batch, whose
+      // id this is, instead of starting one.
+      return res.json() as Promise<{
+        batchId: string;
+        jobCount: number;
+        appended?: boolean;
+      }>;
     },
   });
 };

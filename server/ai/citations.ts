@@ -45,3 +45,88 @@ export function toCitations(
   }
   return out;
 }
+
+/** Google's grounding redirect, the one kind of source link resolved. */
+function isGroundingRedirect(uri: string): boolean {
+  try {
+    const url = new URL(uri);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "vertexaisearch.cloud.google.com" &&
+      url.pathname.startsWith("/grounding-api-redirect/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The page each Gemini grounding redirect points to.
+ *
+ * Gemini names a source by a vertexaisearch.cloud.google.com link and the
+ * bare domain. The link says nothing about the page, and it stops working
+ * after a while. So each one is resolved once, while the research runs: a
+ * HEAD request to Google, whose `Location` header is the page. The page itself
+ * is never requested. A link that does not answer in time is left out of the
+ * map, so its caller keeps the redirect.
+ *
+ * @param uris - Addresses as a provider gave them; others are ignored.
+ * @param options.signal - The research job's abort signal.
+ * @param options.timeoutMs - Per link. Every link resolves in parallel.
+ * @param options.fetchImpl - Test seam; the global fetch by default.
+ * @returns Each resolved redirect, mapped to its page.
+ */
+export async function resolveRedirects(
+  uris: readonly string[],
+  options: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    fetchImpl?: typeof fetch;
+  } = {},
+): Promise<Map<string, string>> {
+  const { signal, timeoutMs = 5_000, fetchImpl = fetch } = options;
+  const pages = new Map<string, string>();
+  await Promise.all(
+    [...new Set(uris)].filter(isGroundingRedirect).map(async (uri) => {
+      try {
+        const timeout = AbortSignal.timeout(timeoutMs);
+        const response = await fetchImpl(uri, {
+          method: "HEAD",
+          redirect: "manual",
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        });
+        const location = response.headers.get("location");
+        if (response.status >= 300 && response.status < 400 && location)
+          pages.set(uri, new URL(location, uri).toString());
+      } catch {
+        // Keep the redirect.
+      }
+    }),
+  );
+  signal?.throwIfAborted();
+  return pages;
+}
+
+/**
+ * Replace each Gemini grounding redirect with the page it points to, and
+ * merge sources that land on the same page (see `resolveRedirects`).
+ *
+ * @param citations - Sources as `toCitations` returns them.
+ * @param options - As for `resolveRedirects`.
+ * @returns The sources with real addresses, deduplicated, in the same order.
+ */
+export async function resolveCitations(
+  citations: Array<{ title: string; uri: string }>,
+  options: Parameters<typeof resolveRedirects>[1] = {},
+): Promise<Array<{ title: string; uri: string }>> {
+  const pages = await resolveRedirects(
+    citations.map((citation) => citation.uri),
+    options,
+  );
+  return toCitations(
+    citations.map((citation) => ({
+      url: pages.get(citation.uri) ?? citation.uri,
+      title: citation.title,
+    })),
+  );
+}

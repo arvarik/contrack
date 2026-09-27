@@ -167,6 +167,8 @@ export interface Contact {
   aiBriefingAt?: string | null;
   aiSummary?: string | null;
   aiBackground?: string | null;
+  /** Research record JSON (shared/researchRecord.ts), from enrichment. */
+  aiResearch?: string | null;
   aiHydratedAt?: string | null;
   // Relations (populated by server JOINs)
   emails: ContactEmail[];

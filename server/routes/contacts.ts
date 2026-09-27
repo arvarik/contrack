@@ -33,11 +33,11 @@ import { importIdSchema } from "./imports.ts";
 import type { NewContactPayload } from "../repositories/types.ts";
 import { providerIdFor } from "../ai/gateway.ts";
 import { getStrategy } from "../services/aiSearch/strategies/index.ts";
+import { buildSearchPrompt } from "../services/aiSearch/promptTemplate.ts";
 import {
-  buildSearchPrompt,
-  type AISearchOutput,
-} from "../services/aiSearch/promptTemplate.ts";
-import { mergeSearchResult } from "../services/aiSearch/mergeEngine.ts";
+  mergeSearchResult,
+  researchHistory,
+} from "../services/aiSearch/mergeEngine.ts";
 import {
   contactRepo,
   RELATION_REGISTRY,
@@ -633,16 +633,19 @@ router.post(
       // not the legacy default provider.
       const researchProvider = providerIdFor("research");
       const strategy = getStrategy(strategyName);
-      const prompt = buildSearchPrompt(contact);
+      const prompt = buildSearchPrompt(contact, researchHistory(contact));
 
       log.info(
         "API",
         `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
       );
 
+      // Both passes, and two more search asks when the first cites nothing:
+      // the same allowance a batch job has. Node's own request timeout is
+      // 300 s, and server.ts sets no shorter one.
       const result = await withTimeout(
         (signal) => strategy.execute(contact, prompt, signal),
-        90_000,
+        240_000,
         controller.signal,
       );
       controller.signal.throwIfAborted();
@@ -650,8 +653,8 @@ router.post(
         scope,
         id,
         contact,
-        result.data as AISearchOutput,
-        result.citations,
+        result.data,
+        result,
       );
       const latencyMs = Date.now() - startMs;
 
@@ -663,6 +666,12 @@ router.post(
       res.json({
         success: true,
         fieldsUpdated,
+        outcome:
+          result.outcome === "no-public-info"
+            ? "no-public-info"
+            : fieldsUpdated > 0
+              ? "added"
+              : "nothing-new",
         latencyMs,
         models: result.models,
         tokenCount: result.tokenCount,

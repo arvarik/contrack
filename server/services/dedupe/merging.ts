@@ -531,6 +531,7 @@ export function executeMerge(
       "aiHydratedAt",
       "aiBriefing",
       "aiBackground",
+      "aiResearch",
       "aiSummary",
       "aiBriefingAt",
     ] as const;

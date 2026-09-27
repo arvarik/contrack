@@ -82,6 +82,7 @@ import {
   type Seeded,
 } from "./tenancy/helpers.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
+import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPass.ts";
 import { recordInvocation } from "../../server/services/aiStatsService.ts";
 import { runWithContext } from "../../server/tenancy/requestContext.ts";
 import {
@@ -1954,10 +1955,10 @@ describe("search history (/api/search/history)", () => {
 describe("AI Search batches belong to the account that started them", () => {
   afterAll(() => jobQueue.__resetForTests());
 
-  it("holds the cooldown against one account and the run lock against the instance", async () => {
+  it("sets no cooldown after a batch", async () => {
     // A real run, with no provider configured, so every job fails at once and
-    // the batch finishes in milliseconds. That is enough to set the cooldown,
-    // which is the thing under test.
+    // the batch finishes in milliseconds. It used to set a five-minute
+    // cooldown, so a second enrichment answered 429 with no request made.
     jobQueue.__resetForTests();
     const subject = await asUser(A)(
       request(app).post("/api/contacts").send({ name: "Cooldown Subject" }),
@@ -1971,19 +1972,86 @@ describe("AI Search batches belong to the account that started them", () => {
     await jobQueue.processBatch(batch.id);
     expect(batch.status).toBe("complete");
 
-    // A waits. B does not: the cooldown exists to stop one person burning
-    // tokens, and used to make everybody else wait five minutes as well.
-    const forA = jobQueue.canStartBatch(A.scope);
-    expect(forA.allowed).toBe(false);
-    expect(forA.yours).toBe(true);
-    expect(forA.retryAfterSeconds).toBeGreaterThan(0);
+    expect(jobQueue.canStartBatch(A.scope)).toEqual({
+      allowed: true,
+      yours: true,
+    });
     expect(jobQueue.canStartBatch(B.scope).allowed).toBe(true);
-
-    // The run lock stays global. One provider API key serves the instance, so
-    // two accounts researching at once would spend one quota twice as fast.
     expect(jobQueue.isProcessing()).toBe(false);
     jobQueue.__resetForTests();
   });
+
+  it("adds a second start to the account's running batch, and holds the run lock against other accounts", async () => {
+    jobQueue.__resetForTests();
+    const second = await asUser(A)(
+      request(app).post("/api/contacts").send({ name: "Second Subject" }),
+    );
+    // Each job answers after a moment, so the batch is running while the
+    // test asks. The answer is "no page about this person": nothing to merge.
+    const execute = vi
+      .spyOn(TwoPassStrategy.prototype, "execute")
+      .mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  data: {},
+                  models: ["test-model"],
+                  latencyMs: 1,
+                  citations: [],
+                  findings: [],
+                  searchQueries: [],
+                  outcome: "no-public-info",
+                }),
+              50,
+            ),
+          ),
+      );
+    const running = jobQueue.createBatch(
+      A.scope,
+      [{ id: zebulonId, name: ZEBULON }],
+      "two-pass",
+    );
+    const done = jobQueue.processBatch(running.id);
+    expect(jobQueue.isProcessing()).toBe(true);
+
+    // A's start joins A's batch. The run lock stays global: one provider API
+    // key serves the instance, so B waits while A's research runs.
+    expect(jobQueue.canStartBatch(A.scope)).toMatchObject({
+      allowed: true,
+      appendTo: running.id,
+    });
+    expect(jobQueue.canStartBatch(B.scope)).toMatchObject({
+      allowed: false,
+      yours: false,
+    });
+    // B cannot add to A's batch, and a contact already queued is not queued
+    // twice.
+    expect(
+      jobQueue.appendToBatch(B.scope, running.id, [
+        { id: zebulonId, name: ZEBULON },
+      ]),
+    ).toBeNull();
+    const joined = jobQueue.appendToBatch(A.scope, running.id, [
+      { id: zebulonId, name: ZEBULON },
+      { id: second.body.id, name: "Second Subject" },
+    ]);
+    expect(joined?.added).toBe(1);
+    expect(running.jobs.map((job) => job.contactName)).toEqual([
+      ZEBULON,
+      "Second Subject",
+    ]);
+
+    await done;
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(running.jobs.map((job) => [job.status, job.outcome])).toEqual([
+      ["success", "no-public-info"],
+      ["success", "no-public-info"],
+    ]);
+    execute.mockRestore();
+    jobQueue.__resetForTests();
+  }, 10_000);
 
   it("shows a batch only to its own account", () => {
     jobQueue.__resetForTests();
@@ -2126,23 +2194,24 @@ describe("POST /api/ai-search", () => {
     expect(Object.keys(res.body).sort()).toEqual(["batchId", "jobCount"]);
   });
 
-  it("refuses a cooldown with the standard error envelope", async () => {
+  it("refuses a start while another account researches, with the standard error envelope", async () => {
     // The queue's decision is stubbed so the route's translation of it is what
     // is under test. The decision itself is proven above, against a real run.
     vi.spyOn(jobQueue, "canStartBatch").mockReturnValue({
       allowed: false,
-      reason: "Please wait 42s before starting another batch.",
-      yours: true,
-      retryAfterSeconds: 42,
+      reason:
+        "Another account is enriching contacts right now. Try again in a minute.",
+      yours: false,
+      retryAfterSeconds: 60,
     });
     const res = await start(B, [seedB.contactIds[0]]);
     expect(res.status).toBe(429);
     expect(res.body.error.code).toBe("RATE_LIMITED");
-    expect(res.body.error.message).toContain("Please wait 42s");
+    expect(res.body.error.message).toContain("Another account");
     expect(res.body.error.details).toMatchObject({
-      yours: true,
+      yours: false,
       queued: false,
-      retryAfterSeconds: 42,
+      retryAfterSeconds: 60,
     });
     expect(res.body.error.requestId).toBeTruthy();
   });

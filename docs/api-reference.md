@@ -753,15 +753,19 @@ The server accepts one active research request per contact. It validates the
 result before it writes any fields. It fills empty fields and adds missing
 child records. It preserves existing contact data.
 
-The request has a 90-second deadline. A disconnected client cancels further
+The request has a 240-second deadline. A disconnected client cancels further
 work. The provider can still charge for a request it already accepted.
 
 **Error codes:** `409` (research already active, contact unavailable, or contact
 changed during research), `429` (queue or quota full), `502` (invalid AI output),
 `503` (research or extraction model unavailable).
 
-Two-pass research requires source links. Missing provider sources return
-`502 AI_GROUNDING_MISSING` before extraction or database changes.
+Two-pass research requires source links. A search pass that cites no pages
+is asked twice more, at once. Missing provider sources then return
+`502 AI_GROUNDING_MISSING` before extraction or database changes. No answer
+from any search pass returns `502 AI_NO_ANSWER`. The prompt's own reply for a
+person with no web pages is not an error: the response has
+`outcome: "no-public-info"`, and the research record keeps the run.
 
 ---
 

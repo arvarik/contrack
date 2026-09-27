@@ -746,14 +746,15 @@ test.describe("the contact header", () => {
     await kebab.click();
     await page.getByRole("menuitem", { name: "Enrich contact" }).click();
 
-    // No confirmation for one contact: the toast, and the panel.
-    await expect(
-      page.getByText("Enrichment started for 1 contact"),
-    ).toBeVisible();
-    expect(started).toEqual([id]);
+    // No confirmation for one contact, and no toast: the panel opens, in
+    // the corner the toasts use, and says it by itself.
     await expect(
       page.getByText("Contact enrichment", { exact: true }),
     ).toBeVisible();
+    expect(started).toEqual([id]);
+    await expect(
+      page.getByText("Enrichment started for 1 contact"),
+    ).toHaveCount(0);
 
     // While the run has this contact, the item says so and waits.
     await kebab.click();

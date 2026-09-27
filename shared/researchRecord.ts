@@ -1,0 +1,153 @@
+// =============================================================================
+// Contact research record — what enrichment read and what it added
+// =============================================================================
+// Stored as JSON in `contacts.aiResearch`, written only by the enrichment
+// merge, and read by the dossier's Research card. One record per contact:
+//
+//   runs     every enrichment, newest last: when, which models, what it added
+//            field by field, the searches it ran and the facts it reported
+//   sources  every page the runs cited, deduplicated by address
+//
+// The dossier used to carry this as markdown inside `aiBackground`: the
+// sources as "Source 1", "Source 2" links to Google redirects, and a copy of
+// the about, career and education cards. Structured, the card can say where
+// each fact came from, and a second enrichment adds to the record instead of
+// being dropped because a dossier already existed.
+// =============================================================================
+
+import { z } from "zod";
+
+/** Runs kept per contact. Older runs drop off the front. */
+export const MAX_RESEARCH_RUNS = 12;
+/** Sources kept per contact, across runs. */
+export const MAX_RESEARCH_SOURCES = 60;
+
+/** One page a run cited. */
+export const researchSourceSchema = z.object({
+  url: z.string().max(2000),
+  title: z.string().max(300),
+  /** When a run first cited it. */
+  firstSeenAt: z.string().max(40),
+});
+
+/**
+ * One fact the search pass reported, as it wrote it:
+ * "Past role: Associate, Harbor Point Partners, 2018 to 2020 [finra.org]".
+ */
+export const researchFindingSchema = z.object({
+  topic: z.string().max(60),
+  text: z.string().max(600),
+  /** The site the search pass named for the fact, when it named one. */
+  site: z.string().max(200).optional(),
+  /** The page the provider says backs the fact, when it says one. */
+  url: z.string().max(2000).optional(),
+});
+
+/** How many entries one run added to one field: education, 2. */
+export const researchAdditionSchema = z.object({
+  field: z.string().max(40),
+  count: z.number().int().positive(),
+});
+
+/**
+ * One enrichment.
+ *
+ * `outcome` is what the person reads first: it added details, it read pages
+ * but everything on them was already known, or no page matched the person.
+ */
+export const researchRunSchema = z.object({
+  at: z.string().max(40),
+  models: z.array(z.string().max(120)).max(4),
+  outcome: z.enum(["added", "nothing-new", "no-public-info"]),
+  added: z.array(researchAdditionSchema).max(30),
+  sourceCount: z.number().int().nonnegative(),
+  queries: z.array(z.string().max(300)).max(24),
+  findings: z.array(researchFindingSchema).max(80),
+});
+
+export const researchRecordSchema = z.object({
+  version: z.literal(1),
+  runs: z.array(researchRunSchema).max(MAX_RESEARCH_RUNS),
+  sources: z.array(researchSourceSchema).max(MAX_RESEARCH_SOURCES),
+});
+
+export type ResearchSource = z.infer<typeof researchSourceSchema>;
+export type ResearchFinding = z.infer<typeof researchFindingSchema>;
+export type ResearchAddition = z.infer<typeof researchAdditionSchema>;
+export type ResearchRun = z.infer<typeof researchRunSchema>;
+export type ResearchRecord = z.infer<typeof researchRecordSchema>;
+export type ResearchOutcome = ResearchRun["outcome"];
+
+/**
+ * The record in a stored value, or null.
+ *
+ * The column is JSON text, and a value that does not parse or match is read
+ * as no record rather than thrown on: the dossier still renders, and the next
+ * enrichment writes a fresh record.
+ */
+export function parseResearchRecord(value: unknown): ResearchRecord | null {
+  if (value == null || value === "") return null;
+  let raw: unknown = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  const parsed = researchRecordSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * The site part of an address, for display and for matching a finding's
+ * "[finra.org]" to a source: "files.brokercheck.finra.org".
+ */
+export function siteOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The source a finding names, if any.
+ *
+ * The search pass names a site loosely: "finra.org" for a page on
+ * brokercheck.finra.org, or "LinkedIn" for linkedin.com. A source matches
+ * when its host is the named site, ends with it, or starts with its first
+ * label.
+ */
+export function sourceForSite(
+  site: string | undefined,
+  sources: readonly ResearchSource[],
+): ResearchSource | null {
+  const named = site
+    ?.trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+  if (!named) return null;
+  const label = named.split(".")[0];
+  let loose: ResearchSource | null = null;
+  for (const source of sources) {
+    const host = siteOf(source.url);
+    if (!host) continue;
+    if (host === named || host.endsWith(`.${named}`)) return source;
+    if (!loose && label.length >= 3 && host.split(".").includes(label))
+      loose = source;
+  }
+  return loose;
+}
+
+/**
+ * The dossier the enrichment merge wrote until 2026-09-26: a copy of the
+ * about, career and education cards, and its sources as "Source 1" links to
+ * Google redirects. The dossier tab builds those parts from the fields
+ * themselves, and the next enrichment replaces this text with a record.
+ */
+export function isLegacyDossier(text: string | null | undefined): boolean {
+  return !!text && /\n### Sources\n- \[Source 1\]\(</.test(text);
+}

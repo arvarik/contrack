@@ -300,6 +300,10 @@ if (readTenancyVersion() < 1) {
 // `trackedAt` is the moment the flag last turned on, written by the two
 // `contacts_track_stamp_*` triggers in §4 and by nothing else. It is the
 // clock for a tracked contact nobody has logged a note on yet.
+//
+// `aiResearch` is the contact's research record: every enrichment, what it
+// added, the facts it reported and the pages it cited, as JSON in the shape
+// of shared/researchRecord.ts. Only the enrichment merge writes it.
 // =============================================================================
 
 for (const column of [
@@ -312,6 +316,7 @@ for (const column of [
   "geoSource TEXT",
   "isTracked INTEGER NOT NULL DEFAULT 0",
   "trackedAt TEXT",
+  "aiResearch TEXT",
 ]) {
   const name = column.split(" ")[0];
   const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];

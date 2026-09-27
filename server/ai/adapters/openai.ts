@@ -484,7 +484,11 @@ export class OpenAIAdapter implements AIProvider {
           text?: string;
           annotations?: Array<{ type?: string; url?: string; title?: string }>;
         }>;
-        action?: { sources?: ResponsesSource[] };
+        action?: {
+          sources?: ResponsesSource[];
+          query?: string;
+          queries?: string[];
+        };
       }>;
       usage?: { total_tokens?: number };
     }
@@ -516,9 +520,15 @@ export class OpenAIAdapter implements AIProvider {
     let text = "";
     const cited: ResponsesSource[] = [];
     const consulted: ResponsesSource[] = [];
+    const queries: string[] = [];
     for (const item of response.output ?? []) {
-      if (item.type === "web_search_call")
+      if (item.type === "web_search_call") {
         consulted.push(...(item.action?.sources ?? []));
+        queries.push(
+          ...(item.action?.queries ??
+            (item.action?.query ? [item.action.query] : [])),
+        );
+      }
       if (item.type !== "message" || !Array.isArray(item.content)) continue;
       for (const block of item.content) {
         if (block.type !== "output_text" || typeof block.text !== "string")
@@ -537,6 +547,14 @@ export class OpenAIAdapter implements AIProvider {
       "OpenAIAdapter",
       `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens | ${citations.length} sources`,
     );
-    return { text, model, tokenCount, latencyMs, citations };
+    const searchQueries = [...new Set(queries)];
+    return {
+      text,
+      model,
+      tokenCount,
+      latencyMs,
+      citations,
+      ...(searchQueries.length > 0 && { searchQueries }),
+    };
   }
 }

@@ -10,6 +10,8 @@
 // - Field name allowlist guard (defense-in-depth against SQL injection)
 // - Deduplication logic per child table (see table below)
 // - Always stamps aiHydratedAt, even if no new data was found
+// - Every run is recorded in `aiResearch`: what it added, field by field, the
+//   facts it reported and the pages it cited (shared/researchRecord.ts)
 // - Invalidates semantic search cache after merge
 //
 // PERF: FTS triggers fire per-row within the transaction. This is acceptable
@@ -26,11 +28,30 @@ import type {
   HydratedContact,
   ChildRecordsPayload,
 } from "../../repositories/types.ts";
-import { aiSearchOutputSchema, type AISearchOutput } from "./promptTemplate.ts";
+import { aiSearchOutputSchema } from "./promptTemplate.ts";
+import {
+  degreeLevel,
+  orgKey,
+  sameLabel,
+  sameOrg,
+  textKey,
+} from "./normalize.ts";
 import { contactFingerprint, enrichmentContact } from "./contactSnapshot.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import type { Scope } from "../../tenancy/scope.ts";
+import {
+  isLegacyDossier,
+  MAX_RESEARCH_RUNS,
+  MAX_RESEARCH_SOURCES,
+  parseResearchRecord,
+  researchRecordSchema,
+  type ResearchAddition,
+  type ResearchFinding,
+  type ResearchOutcome,
+  type ResearchRecord,
+  type ResearchRun,
+} from "../../../shared/researchRecord.ts";
 
 // =============================================================================
 // Allowed Scalar Fields
@@ -51,18 +72,142 @@ const ALLOWED_SCALAR_FIELDS = new Set([
   "pronouns",
   "birthday",
   "aiBackground",
+  "aiResearch",
 ]);
+
+/** Runs that keep their fact lines. Older runs keep their summary only. */
+const RUNS_WITH_FINDINGS = 2;
+
+/** A school entry, saved or researched, as the merge compares it. */
+interface SchoolEntry {
+  school: string;
+  degree?: string | null;
+  endDate?: string | null;
+}
+
+/** A job entry, saved or researched, as the merge compares it. */
+interface JobEntry {
+  company: string;
+  role?: string | null;
+  startDate?: string | null;
+}
+
+/** End years a year apart or less, or a year missing on either side. */
+function yearsClose(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return true;
+  return Math.abs(Number(a.slice(0, 4)) - Number(b.slice(0, 4))) <= 1;
+}
+
+// =============================================================================
+// Research history
+// =============================================================================
+
+/** What a strategy says about the research behind its data. */
+export interface ResearchProvenance {
+  /** The pages the research cited, with real addresses. */
+  citations?: Array<{ title: string; uri: string }>;
+  /** The facts the search pass reported, one per line. */
+  findings?: ResearchFinding[];
+  /** The models that ran, search pass first. */
+  models?: string[];
+  /** The searches the search pass ran. */
+  searchQueries?: string[];
+  /** `"no-public-info"` when no page was about this person. */
+  outcome?: "found" | "no-public-info";
+}
+
+/**
+ * This contact's research so far, or null before any.
+ *
+ * A contact enriched before the record existed has `aiHydratedAt` and no
+ * record. It counts as one earlier run whose details were not kept, so the
+ * next enrichment is told it is a second round, and the dossier's history
+ * says the earlier one happened.
+ */
+export function researchHistory(
+  contact: Pick<HydratedContact, "aiResearch" | "aiHydratedAt">,
+): ResearchRecord | null {
+  const record = parseResearchRecord(contact.aiResearch);
+  if (record) return record;
+  if (!contact.aiHydratedAt) return null;
+  return {
+    version: 1,
+    runs: [
+      {
+        at: contact.aiHydratedAt,
+        models: [],
+        outcome: "added",
+        added: [],
+        sourceCount: 0,
+        queries: [],
+        findings: [],
+      },
+    ],
+    sources: [],
+  };
+}
+
+/**
+ * The record with this run added.
+ *
+ * Sources merge by address and keep the time a run first cited them. Only
+ * the latest runs keep their fact lines, because the record travels with
+ * the contact on every read.
+ */
+function recordRun(
+  history: ResearchRecord | null,
+  run: Omit<ResearchRun, "sourceCount">,
+  citations: Array<{ title: string; uri: string }>,
+): ResearchRecord {
+  const sources = [...(history?.sources ?? [])];
+  const known = new Set(sources.map((source) => source.url));
+  for (const citation of citations) {
+    if (known.has(citation.uri) || citation.uri.length > 2000) continue;
+    known.add(citation.uri);
+    sources.push({
+      url: citation.uri,
+      title: citation.title.slice(0, 300),
+      firstSeenAt: run.at,
+    });
+  }
+  const runs = [
+    ...(history?.runs ?? []),
+    { ...run, sourceCount: citations.length },
+  ].slice(-MAX_RESEARCH_RUNS);
+  return {
+    version: 1,
+    runs: runs.map((entry, index) =>
+      index < runs.length - RUNS_WITH_FINDINGS
+        ? { ...entry, findings: [] }
+        : entry,
+    ),
+    sources: sources.slice(-MAX_RESEARCH_SOURCES),
+  };
+}
 
 // =============================================================================
 // Merge Function
 // =============================================================================
 
+/**
+ * Merge one research result into a contact, and record the run.
+ *
+ * @param scope - The account that owns the contact.
+ * @param contactId - The contact researched.
+ * @param existing - The contact as it was when the research started. The
+ *   merge refuses when it has changed since, so research never writes over
+ *   an edit made while it ran.
+ * @param output - The structured result, validated here again.
+ * @param provenance - What the strategy says about the research: the pages,
+ *   the fact lines, the models and the searches. Recorded, not merged.
+ * @returns How many fields and entries the run added.
+ */
 export function mergeSearchResult(
   scope: Scope,
   contactId: string,
   existing: HydratedContact,
   output: unknown,
-  citations: Array<{ title: string; uri: string }> = [],
+  provenance: ResearchProvenance = {},
 ): number {
   const fresh = enrichmentContact(scope, contactId);
   if (contactFingerprint(fresh) !== contactFingerprint(existing))
@@ -84,13 +229,13 @@ export function mergeSearchResult(
     socialLinks: (entry: { url: string }) =>
       entry.url.toLowerCase().replace(/\/$/, ""),
     education: (entry: { school: string; degree?: string }) =>
-      `${entry.school}|${entry.degree ?? ""}`.toLowerCase(),
+      `${orgKey(entry.school)}|${textKey(entry.degree)}`,
     experience: (entry: {
       company: string;
       role?: string;
       startDate?: string;
     }) =>
-      `${entry.company}|${entry.role ?? ""}|${entry.startDate ?? ""}`.toLowerCase(),
+      `${orgKey(entry.company)}|${textKey(entry.role)}|${(entry.startDate ?? "").slice(0, 4)}`,
     tags: (entry: { tag: string }) => entry.tag.toLowerCase(),
     interests: (entry: { interest: string }) => entry.interest.toLowerCase(),
     attributes: (entry: { name: string }) => entry.name.toLowerCase(),
@@ -111,6 +256,10 @@ export function mergeSearchResult(
     });
   }
   let fieldsUpdated = 0;
+  const added: ResearchAddition[] = [];
+  const note = (field: string, count: number) => {
+    if (count > 0) added.push({ field, count });
+  };
   const scalarUpdate: Record<string, unknown> = {};
 
   // 1. Scalar fields — only fill if currently null/empty
@@ -139,18 +288,7 @@ export function mergeSearchResult(
       if (safeVal === null) continue;
       scalarUpdate[field] = safeVal;
       fieldsUpdated++;
-    }
-  }
-
-  // 1b. aiBackground (dossier) — synthesize a clean markdown brief from extraction
-  if (!existing.aiBackground) {
-    const dossier = synthesizeDossier(existing, searchResult, citations);
-    if (dossier) {
-      const safeDossier = sanitizeAiOutputValue(dossier, 12_000);
-      if (safeDossier !== null) {
-        scalarUpdate["aiBackground"] = safeDossier;
-        fieldsUpdated++;
-      }
+      note(field, 1);
     }
   }
 
@@ -165,7 +303,6 @@ export function mergeSearchResult(
     childData.emails = searchResult.emails.filter(
       (e) => e.email && !existingEmails.has(e.email.toLowerCase()),
     );
-    fieldsUpdated += childData.emails.length;
   }
 
   // ── Phones: deduplicate by phone (normalized — digits only) ──────
@@ -177,7 +314,6 @@ export function mergeSearchResult(
     childData.phones = searchResult.phones.filter(
       (p) => p.phone && !existingPhones.has(normalize(p.phone)),
     );
-    fieldsUpdated += childData.phones.length;
   }
 
   // ── Social Links: deduplicate by URL (normalized) ────────────────
@@ -192,28 +328,32 @@ export function mergeSearchResult(
     childData.socialLinks = searchResult.socialLinks.filter(
       (s) => s.url && !existingUrls.has(normalizeUrl(s.url)),
     );
-    fieldsUpdated += childData.socialLinks.length;
   }
 
-  // ── Education: deduplicate by school + degree ────────────────────
+  // ── Education: one school and one degree, however a page writes them ──
+  // A second round found "The University of Example", "AB", 2017, for the
+  // "University of Example" "BA" of 2013 to 2017, and a school's short name
+  // for its long one (2026-09-26). A degree missing on either side matches
+  // any: a roster names the school, a profile the degree. End years more
+  // than a year apart are two entries.
   if (
     Array.isArray(searchResult.education) &&
     searchResult.education.length > 0
   ) {
-    const existingEdu = new Set(
-      existing.education.map(
-        (e) =>
-          `${(e.school || "").toLowerCase()}|${(e.degree || "").toLowerCase()}`,
-      ),
-    );
-    childData.education = searchResult.education.filter(
-      (e) =>
-        e.school &&
-        !existingEdu.has(
-          `${e.school.toLowerCase()}|${(e.degree || "").toLowerCase()}`,
-        ),
-    );
-    fieldsUpdated += childData.education.length;
+    const sameEntry = (a: SchoolEntry, b: SchoolEntry) =>
+      sameOrg(a.school, b.school) &&
+      (!a.degree ||
+        !b.degree ||
+        degreeLevel(a.degree) === degreeLevel(b.degree)) &&
+      yearsClose(a.endDate, b.endDate);
+    const kept: NonNullable<typeof searchResult.education> = [];
+    for (const entry of searchResult.education) {
+      if (!entry.school) continue;
+      if (existing.education.some((saved) => sameEntry(saved, entry))) continue;
+      if (kept.some((other) => sameEntry(other, entry))) continue;
+      kept.push(entry);
+    }
+    childData.education = kept;
   }
 
   // ── Experience: deduplicate by company + role (+ startDate year when available)
@@ -225,29 +365,30 @@ export function mergeSearchResult(
     searchResult.experience.length > 0
   ) {
     const getYear = (d?: string | null) => (d ? d.slice(0, 4) : "");
-    const existingExpFull = new Set(
-      existing.experience.map(
-        (e) =>
-          `${(e.company || "").toLowerCase()}|${(e.role || "").toLowerCase()}|${getYear(e.startDate)}`,
-      ),
-    );
-    // Loose key: company + role only (for entries without startDate)
-    const existingExpLoose = new Set(
-      existing.experience.map(
-        (e) =>
-          `${(e.company || "").toLowerCase()}|${(e.role || "").toLowerCase()}`,
-      ),
-    );
-    childData.experience = searchResult.experience
-      .filter((e) => {
-        if (!e.company) return false;
-        const looseKey = `${e.company.toLowerCase()}|${(e.role || "").toLowerCase()}`;
-        const fullKey = `${looseKey}|${getYear(e.startDate)}`;
-        // If the incoming entry has no startDate, use loose matching
-        if (!e.startDate) return !existingExpLoose.has(looseKey);
-        // Otherwise, use full matching (company + role + year)
-        return !existingExpFull.has(fullKey);
-      })
+    // One employer however it is written ("Kestrel" and "Kestrel Securities
+    // International, Inc."), and either the same start month, however the
+    // title is worded, or the same role and the same start year when both
+    // sides have one. A second round wrote "Associate" for a saved
+    // "Associate, Restructuring Group" that started the same month
+    // (2026-09-26).
+    const month = (d?: string | null) =>
+      d && d.length >= 7 ? d.slice(0, 7) : "";
+    const sameJob = (a: JobEntry, b: JobEntry) =>
+      sameOrg(a.company, b.company) &&
+      ((month(a.startDate) !== "" &&
+        month(a.startDate) === month(b.startDate)) ||
+        (textKey(a.role) === textKey(b.role) &&
+          (!a.startDate ||
+            !b.startDate ||
+            getYear(a.startDate) === getYear(b.startDate))));
+    const kept: NonNullable<typeof searchResult.experience> = [];
+    for (const entry of searchResult.experience) {
+      if (!entry.company) continue;
+      if (existing.experience.some((saved) => sameJob(saved, entry))) continue;
+      if (kept.some((other) => sameJob(other, entry))) continue;
+      kept.push(entry);
+    }
+    childData.experience = kept
       // Sanitize: strip the literal string "null" from date fields.
       // LLMs sometimes return "null" as a string instead of omitting the field.
       .map((e) => ({
@@ -256,18 +397,20 @@ export function mergeSearchResult(
           e.startDate && e.startDate !== "null" ? e.startDate : undefined,
         endDate: e.endDate && e.endDate !== "null" ? e.endDate : undefined,
       }));
-    fieldsUpdated += childData.experience.length;
   }
 
-  // ── Tags: deduplicate by tag (exact match) ───────────────────────
+  // ── Tags: one tag however it is worded ("statistics", "statistical
+  // analysis") ───────────────────────────────────────────────────────
   if (Array.isArray(searchResult.tags) && searchResult.tags.length > 0) {
-    const existingTags = new Set(
-      (existing.tags || []).map((t) => t.tag.toLowerCase()),
-    );
-    childData.tags = searchResult.tags
-      .filter((t) => t.tag && !existingTags.has(t.tag.toLowerCase()))
-      .map((t) => ({ tag: t.tag }));
-    fieldsUpdated += childData.tags.length;
+    const kept: string[] = [];
+    for (const { tag } of searchResult.tags) {
+      if (!tag) continue;
+      if ((existing.tags || []).some((saved) => sameLabel(saved.tag, tag)))
+        continue;
+      if (kept.some((other) => sameLabel(other, tag))) continue;
+      kept.push(tag);
+    }
+    childData.tags = kept.map((tag) => ({ tag }));
   }
 
   // ── Interests: upsert via ON CONFLICT (handled by insertChildRecords) ──
@@ -277,19 +420,22 @@ export function mergeSearchResult(
     Array.isArray(searchResult.interests) &&
     searchResult.interests.length > 0
   ) {
-    childData.interests = searchResult.interests
-      .filter(
-        (i) =>
-          !existing.interests.some(
-            (saved) =>
-              saved.interest.toLowerCase() === i.interest.toLowerCase(),
-          ),
+    // One interest however it is worded: a second round wrote "Distance
+    // running coach" for "Distance running" (2026-09-26).
+    const kept: string[] = [];
+    for (const { interest } of searchResult.interests) {
+      if (!interest) continue;
+      if (
+        existing.interests.some((saved) => sameLabel(saved.interest, interest))
       )
-      .map((i) => ({
-        interest: i.interest,
-        isAiGenerated: true,
-      }));
-    fieldsUpdated += childData.interests.length;
+        continue;
+      if (kept.some((other) => sameLabel(other, interest))) continue;
+      kept.push(interest);
+    }
+    childData.interests = kept.map((interest) => ({
+      interest,
+      isAiGenerated: true,
+    }));
   }
 
   // ── Attributes: upsert via ON CONFLICT (handled by insertChildRecords) ──
@@ -303,7 +449,6 @@ export function mergeSearchResult(
           (saved) => saved.name.toLowerCase() === attribute.name.toLowerCase(),
         ),
     );
-    fieldsUpdated += childData.attributes.length;
   }
 
   // ── Addresses: deduplicate by address string (case-insensitive) ──
@@ -317,10 +462,54 @@ export function mergeSearchResult(
     childData.addresses = searchResult.addresses.filter(
       (a) => a.address && !existingAddrs.has(a.address.toLowerCase()),
     );
-    fieldsUpdated += childData.addresses.length;
   }
 
-  // 3. TRANSACTION: Apply all mutations atomically
+  for (const [field, entries] of Object.entries(childData)) {
+    const count = Array.isArray(entries) ? entries.length : 0;
+    fieldsUpdated += count;
+    note(field, count);
+  }
+
+  // 3. The research record — every run, whatever it found
+  const outcome: ResearchOutcome =
+    provenance.outcome === "no-public-info"
+      ? "no-public-info"
+      : fieldsUpdated > 0
+        ? "added"
+        : "nothing-new";
+  const findings = (provenance.findings ?? []).flatMap((finding) => {
+    // Web text shown on the dossier: the same backstop as the fields.
+    const text = sanitizeAiOutputValue(finding.text, 600);
+    return text ? [{ ...finding, text }] : [];
+  });
+  const record = recordRun(
+    researchHistory(existing),
+    {
+      at: new Date().toISOString(),
+      models: (provenance.models ?? []).slice(0, 4),
+      outcome,
+      added: added.slice(0, 30),
+      queries: (provenance.searchQueries ?? [])
+        .map((query) => query.slice(0, 300))
+        .slice(0, 24),
+      findings: findings.slice(0, 80),
+    },
+    provenance.citations ?? [],
+  );
+  const checked = researchRecordSchema.safeParse(record);
+  if (checked.success)
+    scalarUpdate["aiResearch"] = JSON.stringify(checked.data);
+  else
+    log.warn(
+      "MergeEngine",
+      `Contact ${contactId}: research record did not validate; not saved`,
+    );
+  // The old dossier copied the cards the tab now builds, and linked its
+  // sources as "Source 1". The record replaces it.
+  if (isLegacyDossier(existing.aiBackground))
+    scalarUpdate["aiBackground"] = null;
+
+  // 4. TRANSACTION: Apply all mutations atomically
   const txn = sqlite.transaction(() => {
     // Apply scalar updates via direct UPDATE (skip hydration overhead)
     if (Object.keys(scalarUpdate).length > 0) {
@@ -373,127 +562,7 @@ export function mergeSearchResult(
 
   log.info(
     "MergeEngine",
-    `Contact ${contactId}: ${fieldsUpdated} field(s) merged`,
+    `Contact ${contactId}: ${fieldsUpdated} field(s) merged (${outcome}; ${added.map((a) => `${a.field} ${a.count}`).join(", ") || "none"})`,
   );
   return fieldsUpdated;
-}
-
-// =============================================================================
-// Dossier Synthesis
-// =============================================================================
-// Generates a clean, human-readable markdown dossier from the structured
-// extraction result. This is what appears in the "AI Dossier" card on the
-// contact detail page — rendered via ReactMarkdown.
-//
-// Design: Combine new findings with existing contact data to produce the
-// richest possible brief. Only include sections that have content.
-// =============================================================================
-
-function synthesizeDossier(
-  existing: HydratedContact,
-  searchResult: AISearchOutput,
-  citations: Array<{ title: string; uri: string }>,
-): string | null {
-  const name = existing.name || "This contact";
-  const sections: string[] = [];
-
-  // ── Professional Summary ───────────────────────────────────────────
-  const about = searchResult.about || existing.about;
-  const headline = searchResult.headline || existing.headline;
-  if (about) {
-    sections.push(about);
-  } else if (headline) {
-    sections.push(`${name} is ${headline}.`);
-  }
-
-  // ── Industry & Location ────────────────────────────────────────────
-  const industry = searchResult.industry || existing.industry;
-  const location = searchResult.location || existing.location;
-  if (industry || location) {
-    const parts: string[] = [];
-    if (industry) parts.push(`**Industry:** ${industry}`);
-    if (location) parts.push(`**Location:** ${location}`);
-    sections.push(parts.join("  \n"));
-  }
-
-  // ── Career Highlights ──────────────────────────────────────────────
-  const experience = searchResult.experience?.length
-    ? searchResult.experience
-    : existing.experience;
-  if (experience && experience.length > 0) {
-    const lines = experience.map((exp) => {
-      const current = exp.isCurrent ? " *(Current)*" : "";
-      const dates = formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
-      const loc = exp.location ? ` · ${exp.location}` : "";
-      let line = `- **${exp.role || "Role"}** at ${exp.company}${current}`;
-      if (dates || loc) line += `  \n  ${dates}${loc}`;
-      if (exp.description) line += `  \n  ${exp.description}`;
-      return line;
-    });
-    sections.push(`### Career\n${lines.join("\n")}`);
-  }
-
-  // ── Education ──────────────────────────────────────────────────────
-  const education = searchResult.education?.length
-    ? searchResult.education
-    : existing.education;
-  if (education && education.length > 0) {
-    const lines = education.map((edu) => {
-      const field = edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : "";
-      const dates = formatDateRange(edu.startDate, edu.endDate);
-      let line = `- **${edu.degree || "Degree"}**${field} — ${edu.school}`;
-      if (dates) line += ` (${dates})`;
-      return line;
-    });
-    sections.push(`### Education\n${lines.join("\n")}`);
-  }
-
-  // ── Notable Details (attributes) ──────────────────────────────────
-  if (searchResult.attributes && searchResult.attributes.length > 0) {
-    const lines = searchResult.attributes.map(
-      (a) => `- **${a.name}:** ${a.value}`,
-    );
-    sections.push(`### Notable\n${lines.join("\n")}`);
-  }
-
-  // ── Interests ──────────────────────────────────────────────────────
-  const interests = searchResult.interests?.length
-    ? searchResult.interests.map((i) => i.interest || i)
-    : existing.interests?.map((i) => i.interest);
-  if (interests && interests.length > 0) {
-    sections.push(`### Interests\n${interests.join(" · ")}`);
-  }
-
-  // Only produce a dossier if we have at least one substantive section
-  if (sections.length === 0) return null;
-
-  const urls = [...new Set(citations.map((source) => source.uri))]
-    .filter((uri) => {
-      try {
-        const url = new URL(uri);
-        return /^https?:$/.test(url.protocol) && !url.username && !url.password;
-      } catch {
-        return false;
-      }
-    })
-    .slice(0, 10);
-  if (urls.length)
-    sections.push(
-      `### Sources\n${urls.map((uri, index) => `- [Source ${index + 1}](<${uri.replace(/[<>\s]/g, (character) => encodeURIComponent(character))}>)`).join("\n")}`,
-    );
-  return sections.join("\n\n");
-}
-
-/** Format a date range, handling null/"null" sentinel values */
-function formatDateRange(
-  start?: string | null,
-  end?: string | null,
-  isCurrent?: boolean,
-): string {
-  const s = start && start !== "null" ? start : "";
-  const e = end && end !== "null" ? end : isCurrent ? "Present" : "";
-  if (s && e) return `${s} – ${e}`;
-  if (s) return `${s} – Present`;
-  if (e && e !== "Present") return `Until ${e}`;
-  return "";
 }

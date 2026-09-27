@@ -98,6 +98,9 @@ Contact enrichment (Settings → Contact enrichment) fills in contact profiles w
 3. Click **Start enrichment**
 4. Watch real-time progress via the SSE-powered progress overlay
 
+For one contact, choose **Enrich contact** in the contact's actions menu, or
+**Enrich again** on the Research card at the bottom of its Dossier tab.
+
 <!-- Screenshot: batch-enrichment.png -->
 
 ### Automatic Enrichment and Page Controls
@@ -108,38 +111,55 @@ Under **Settings → Contact enrichment**:
 - **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research if AI assist is turned on for the account and grounding quota is available.
 - **Grounding meter:** For administrators with Gemini configured, a live meter tracks daily grounding search usage and remaining requests.
 
-### Search Strategies
+### How research runs
 
-The enrichment strategy varies by AI provider:
+Every provider runs the two-pass strategy (`server/services/aiSearch/strategies/twoPass.ts`):
 
-| Provider  | Strategy    | How it works                                                                                               |
-| --------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Gemini    | Two-Pass    | **Pass 1:** Discover facts via grounding-based web search. **Pass 2:** Merge and validate discovered data. |
-| OpenAI    | Single-Pass | Single prompt with context to generate enrichment data                                                     |
-| Anthropic | Single-Pass | Single prompt with context to generate enrichment data                                                     |
+1. **Search.** The research model searches the web and reports what the matching pages say, one fact per line with the site it came from: `- Past role: Associate, Harbor Point Partners, 2018 to 2020 [finra.org]`. The prompt starts from the contact's own details and suggests searches built from them (the company, the role, past employers, schools, profile handles). A page counts only when it names the person and matches at least one of those details. When a page calls another employer current, the job is reported as a past one, because pages about people go out of date. Relatives, health and home addresses are left out.
+2. **Extraction.** The quick model reads those lines into the contact's fields. The answer is checked field by field, so one bad value, such as a malformed email address, drops only that value. Broker registrations (FINRA "Registered Representative" records) become a **Registrations** fact rather than jobs, and only a job at the contact's recorded company stays current. Dates are stored as `YYYY` or `YYYY-MM`.
+
+The model decides for itself whether to search, and Gemini has no setting that forces a search. The search pass therefore runs at thinking level `high`: at the adapter's usual `low`, Gemini 3.8 Flash answered research prompts without searching. A search pass that cites no pages, or returns nothing, is asked twice more at the same time: once with the searches first, and once in a short form. The first of those answers that cites pages is used. An answer with no pages behind it is refused and changes nothing, unless the model answers `NO MATCHING PAGES`, which records the plain outcome **No public information**. An empty answer from every ask returns `502 AI_NO_ANSWER`, and a later try can succeed.
+
+Gemini's source links are Google redirects. Each one is resolved once to the page it names (a HEAD request to Google; the page itself is not fetched), and Gemini's grounding supports link each fact to its page.
+
+`single-pass` (search and schema in one request, OpenAI and Anthropic only) can still be asked for by name in `POST /api/ai-search`.
 
 ### What Gets Enriched
 
-The AI searches the internet for each contact and can update:
+The research can add, when the contact does not have them yet:
 
-- Role and company when the fields are empty
-- Headline / professional summary
-- Social links (LinkedIn, GitHub, Twitter)
-- Education and experience history
-- Industry classification
-- Website
-- AI-generated summary and background
+- Role, company, headline, industry and location
+- A professional summary (about)
+- Past roles with employers, cities and dates; schools with degrees and dates
+- Profiles (LinkedIn, GitHub, X and others; a post is not a profile)
+- Facts such as awards, licences, registrations, publications, talks, volunteer roles and a hometown
+- Interests and tags
 
 Enrichment preserves existing values. It rejects the result if the contact
-changes during research. Gemini source links appear under **Dossier → Research
-notes and sources**. The section also shows research for contacts with no other
-dossier fields.
+changes during research.
+
+### The research record
+
+Every enrichment is recorded on the contact, in `contacts.aiResearch` (shape: `shared/researchRecord.ts`): when it ran, which models, what it added field by field, the searches it ran, the facts it reported and the pages it cited. The **Research** card at the bottom of the Dossier tab shows it:
+
+- **History:** each enrichment and what it added, like "Added 25 from 9 pages: Roles ×6, Education ×3, Location", "Read 10 pages, nothing new" or "No web page about this person"
+- **What the research found:** the latest facts, each linked to its page
+- **Sources:** every page the research cited, by site and address
+
+Before this record existed, enrichment wrote a dossier text into `aiBackground` that copied the about, career and education cards and listed its sources as "Source 1" links. The next enrichment of such a contact replaces that text with the record, and the history counts the earlier enrichment. Notes in `aiBackground` from anywhere else stay, under **Research notes**.
+
+### Enriching again
+
+A second enrichment is told what the contact already has, which sites the earlier rounds read, and what is still missing, and it prefers searches and sites the earlier rounds did not use. It adds only what is new, so it usually adds less than the first. A detail written another way counts as known: one school under two names, "AB" and "BA" at one school in one year, one employer and start month under two job titles, and "Distance running coach" for "Distance running".
+
+Measured on three contacts from real records, with Gemini 3.8 Flash and Gemini 3.5 Flash-Lite (2026-09-26): the first round added 0, 22 and 23 fields, and the second added 0, 4 and 4. No web page matched the first contact's records, and both rounds recorded that. One of the second round's additions was a job the contact already had, under a shorter title. The merge now reads the same employer and start month as one job.
 
 ### Progress Tracking
 
 Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 
 - Per-contact status: `queued` → `searching` → `merging` → `success` / `error` / `cancelled`
+- Per-contact outcome when done: `added`, `nothing-new` or `no-public-info`, and the models that ran
 - Error classification: rate_limit, validation, network, auth, ambiguous
 - Token usage tracking
 - Latency per contact
@@ -147,20 +167,21 @@ Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 The overlay supports scrolling, visible error text, and **Stop research**.
 Minimizing the overlay keeps a progress button available. Status polling
 continues if the stream disconnects. A server restart clears progress, while
-completed contact updates remain in the database.
+completed contact updates remain in the database. Starting a batch shows no
+toast: the overlay opens in the toasts' corner and says it.
 
-### Rate Limiting
+### Limits
 
 - Maximum 100 contacts per batch
-- 5-minute cooldown between batches
+- One batch runs at a time on a server, because the provider's limits belong to the API key the server shares. A second start by the same account joins the running batch. A start by another account is refused with `429 RATE_LIMITED` (`details.yours: false`) until the batch ends.
+- There is no cooldown between batches. A provider's own 429 pauses that model in the adapter, and the router moves to another.
 - Two concurrent AI generations and 16 waiting generations per server
-- One workflow per contact, with a 90-second deadline
-- At most one retry for a transient provider failure within the deadline
-- No repeated research workflow after empty or invalid model output
+- One workflow per contact, with a 4-minute deadline: a search pass at thinking `high` takes from 20 s to over a minute
+- No repeated research workflow after a failed provider call or invalid output. Only the search pass is asked again, and only when it cites no pages
 
 **APIs:**
 
-- `POST /api/ai-search` — Start a batch
+- `POST /api/ai-search` — Start a batch, or add to the running one (`appended: true`)
 - `GET /api/ai-search/status?batchId=` — Poll status
 - `GET /api/ai-search/stream?batchId=` — SSE stream
 - `POST /api/ai-search/:batchId/cancel` — Stop a batch
@@ -175,7 +196,7 @@ Enrich a single contact via the **Enrich** button on their profile:
 curl -X POST http://localhost:3000/api/contacts/abc123/enrich
 ```
 
-This uses the same pipeline as batch enrichment but for one contact. Returns the number of fields updated, latency, models used, and token count.
+This uses the same pipeline as batch enrichment but for one contact. Returns the number of fields updated, the outcome, latency, models used, and token count.
 
 ---
 

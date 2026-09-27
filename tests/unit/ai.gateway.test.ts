@@ -23,7 +23,9 @@ afterEach(() => vi.unstubAllEnvs());
 describe("gateway timeout limits", () => {
   it.each([
     ["90000", 90000],
-    ["900000", 90000],
+    // Contact research's search pass asks for 120 s; the ceiling is 150.
+    ["120000", 120000],
+    ["900000", 150000],
     ["Infinity", 8000],
     ["-1", 8000],
     ["NaN", 8000],
