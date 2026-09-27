@@ -31,6 +31,7 @@ import type {
 import { aiSearchOutputSchema } from "./promptTemplate.ts";
 import {
   degreeLevel,
+  linkedInHandle,
   orgKey,
   sameLabel,
   sameOrg,
@@ -42,10 +43,12 @@ import { log } from "../../utils/logger.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import {
   isLegacyDossier,
+  MAX_ADDED_ENTRIES,
   MAX_RESEARCH_RUNS,
   MAX_RESEARCH_SOURCES,
   parseResearchRecord,
   researchRecordSchema,
+  type ResearchAddedEntry,
   type ResearchAddition,
   type ResearchFinding,
   type ResearchOutcome,
@@ -158,13 +161,18 @@ export function researchHistory(
  *
  * Sources merge by address and keep the time a run first cited them. Only
  * the latest runs keep their fact lines, because the record travels with
- * the contact on every read.
+ * the contact on every read. The entries the run added join the earlier
+ * runs' entries, and the oldest drop off past `MAX_ADDED_ENTRIES`.
  */
 function recordRun(
   history: ResearchRecord | null,
   run: Omit<ResearchRun, "sourceCount">,
   citations: Array<{ title: string; uri: string }>,
+  addedEntries: ResearchAddedEntry[],
 ): ResearchRecord {
+  const entries = [...(history?.addedEntries ?? []), ...addedEntries].slice(
+    -MAX_ADDED_ENTRIES,
+  );
   const sources = [...(history?.sources ?? [])];
   const known = new Set(sources.map((source) => source.url));
   for (const citation of citations) {
@@ -188,6 +196,29 @@ function recordRun(
         : entry,
     ),
     sources: sources.slice(-MAX_RESEARCH_SOURCES),
+    ...(entries.length > 0 && { addedEntries: entries }),
+  };
+}
+
+/** A child record's text, whether it is written as a string or an object. */
+function entryText(entry: unknown, key: string): string {
+  if (typeof entry === "string") return entry;
+  const value = (entry as Record<string, unknown> | null)?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** An entry as the record keeps it, each part cut to the schema's length. */
+function addedEntry(
+  field: string,
+  value: string,
+  detail?: string | null,
+  date?: string | null,
+): ResearchAddedEntry {
+  return {
+    field,
+    value: value.slice(0, 300),
+    ...(detail && { detail: detail.slice(0, 200) }),
+    ...(date && { date: date.slice(0, 20) }),
   };
 }
 
@@ -261,6 +292,14 @@ export function mergeSearchResult(
       }),
     });
   }
+  // What earlier runs added. An entry among them that the contact still has
+  // is filtered below as a saved one. The rest the person removed, and
+  // research does not add them back: a school deleted as someone else's
+  // came back at the next Enrich again.
+  const history = researchHistory(existing);
+  const before = (field: string) =>
+    (history?.addedEntries ?? []).filter((entry) => entry.field === field);
+
   let fieldsUpdated = 0;
   const added: ResearchAddition[] = [];
   const note = (field: string, count: number) => {
@@ -303,37 +342,64 @@ export function mergeSearchResult(
 
   // ── Emails: deduplicate by email (case-insensitive) ──────────────
   if (Array.isArray(searchResult.emails) && searchResult.emails.length > 0) {
-    const existingEmails = new Set(
-      existing.emails.map((e) => e.email.toLowerCase()),
+    // Saved, or added before and removed.
+    const skip = new Set(
+      [
+        ...existing.emails.map((e) => e.email),
+        ...before("emails").map((e) => e.value),
+      ].map((email) => email.toLowerCase()),
     );
     childData.emails = searchResult.emails.filter(
-      (e) => e.email && !existingEmails.has(e.email.toLowerCase()),
+      (e) => e.email && !skip.has(e.email.toLowerCase()),
     );
   }
 
   // ── Phones: deduplicate by phone (normalized — digits only) ──────
   if (Array.isArray(searchResult.phones) && searchResult.phones.length > 0) {
     const normalize = (p: string) => p.replace(/\D/g, "");
-    const existingPhones = new Set(
-      existing.phones.map((p) => normalize(p.phone)),
+    const skip = new Set(
+      [
+        ...existing.phones.map((p) => p.phone),
+        ...before("phones").map((p) => p.value),
+      ].map(normalize),
     );
     childData.phones = searchResult.phones.filter(
-      (p) => p.phone && !existingPhones.has(normalize(p.phone)),
+      (p) => p.phone && !skip.has(normalize(p.phone)),
     );
   }
 
   // ── Social Links: deduplicate by URL (normalized) ────────────────
+  // A person has one LinkedIn profile. When the contact has one, from an
+  // import or by hand, a researched profile under another handle is someone
+  // else with the same name: a second round added one to a contact imported
+  // from LinkedIn (2026-09-26). The same handle at another address, such as
+  // "uk.linkedin.com", is the profile the contact has. With none saved, the
+  // first researched profile is kept and any other one dropped.
   if (
     Array.isArray(searchResult.socialLinks) &&
     searchResult.socialLinks.length > 0
   ) {
     const normalizeUrl = (u: string) => u.toLowerCase().replace(/\/$/, "");
-    const existingUrls = new Set(
-      existing.socialLinks.map((s) => normalizeUrl(s.url)),
+    const removed = before("socialLinks").map((s) => s.value);
+    const skip = new Set(
+      [...existing.socialLinks.map((s) => s.url), ...removed].map(normalizeUrl),
     );
-    childData.socialLinks = searchResult.socialLinks.filter(
-      (s) => s.url && !existingUrls.has(normalizeUrl(s.url)),
+    const removedHandles = new Set(
+      removed
+        .map(linkedInHandle)
+        .filter((handle): handle is string => handle !== null),
     );
+    let hasLinkedIn = existing.socialLinks.some(
+      (s) => linkedInHandle(s.url) !== null,
+    );
+    childData.socialLinks = searchResult.socialLinks.filter((s) => {
+      if (!s.url || skip.has(normalizeUrl(s.url))) return false;
+      const handle = linkedInHandle(s.url);
+      if (handle === null) return true;
+      if (hasLinkedIn || removedHandles.has(handle)) return false;
+      hasLinkedIn = true;
+      return true;
+    });
   }
 
   // ── Education: one school and one degree, however a page writes them ──
@@ -352,10 +418,16 @@ export function mergeSearchResult(
         !b.degree ||
         degreeLevel(a.degree) === degreeLevel(b.degree)) &&
       yearsClose(a.endDate, b.endDate);
+    const removed: SchoolEntry[] = before("education").map((e) => ({
+      school: e.value,
+      degree: e.detail,
+      endDate: e.date,
+    }));
     const kept: NonNullable<typeof searchResult.education> = [];
     for (const entry of searchResult.education) {
       if (!entry.school) continue;
       if (existing.education.some((saved) => sameEntry(saved, entry))) continue;
+      if (removed.some((gone) => sameEntry(gone, entry))) continue;
       if (kept.some((other) => sameEntry(other, entry))) continue;
       kept.push(entry);
     }
@@ -387,10 +459,16 @@ export function mergeSearchResult(
           (!a.startDate ||
             !b.startDate ||
             getYear(a.startDate) === getYear(b.startDate))));
+    const removed: JobEntry[] = before("experience").map((e) => ({
+      company: e.value,
+      role: e.detail,
+      startDate: e.date,
+    }));
     const kept: NonNullable<typeof searchResult.experience> = [];
     for (const entry of searchResult.experience) {
       if (!entry.company) continue;
       if (existing.experience.some((saved) => sameJob(saved, entry))) continue;
+      if (removed.some((gone) => sameJob(gone, entry))) continue;
       if (kept.some((other) => sameJob(other, entry))) continue;
       kept.push(entry);
     }
@@ -408,11 +486,13 @@ export function mergeSearchResult(
   // ── Tags: one tag however it is worded ("statistics", "statistical
   // analysis") ───────────────────────────────────────────────────────
   if (Array.isArray(searchResult.tags) && searchResult.tags.length > 0) {
+    const removed = before("tags").map((e) => e.value);
     const kept: string[] = [];
     for (const { tag } of searchResult.tags) {
       if (!tag) continue;
       if ((existing.tags || []).some((saved) => sameLabel(saved.tag, tag)))
         continue;
+      if (removed.some((gone) => sameLabel(gone, tag))) continue;
       if (kept.some((other) => sameLabel(other, tag))) continue;
       kept.push(tag);
     }
@@ -428,6 +508,7 @@ export function mergeSearchResult(
   ) {
     // One interest however it is worded: a second round wrote "Distance
     // running coach" for "Distance running" (2026-09-26).
+    const removed = before("interests").map((e) => e.value);
     const kept: string[] = [];
     for (const { interest } of searchResult.interests) {
       if (!interest) continue;
@@ -435,6 +516,7 @@ export function mergeSearchResult(
         existing.interests.some((saved) => sameLabel(saved.interest, interest))
       )
         continue;
+      if (removed.some((gone) => sameLabel(gone, interest))) continue;
       if (kept.some((other) => sameLabel(other, interest))) continue;
       kept.push(interest);
     }
@@ -449,8 +531,12 @@ export function mergeSearchResult(
     Array.isArray(searchResult.attributes) &&
     searchResult.attributes.length > 0
   ) {
+    const removed = new Set(
+      before("attributes").map((e) => e.value.toLowerCase()),
+    );
     childData.attributes = searchResult.attributes.filter(
       (attribute) =>
+        !removed.has(attribute.name.toLowerCase()) &&
         !existing.attributes.some(
           (saved) => saved.name.toLowerCase() === attribute.name.toLowerCase(),
         ),
@@ -462,11 +548,14 @@ export function mergeSearchResult(
     Array.isArray(searchResult.addresses) &&
     searchResult.addresses.length > 0
   ) {
-    const existingAddrs = new Set(
-      (existing.addresses || []).map((a) => a.address.toLowerCase()),
+    const skip = new Set(
+      [
+        ...(existing.addresses || []).map((a) => a.address),
+        ...before("addresses").map((a) => a.value),
+      ].map((address) => address.toLowerCase()),
     );
     childData.addresses = searchResult.addresses.filter(
-      (a) => a.address && !existingAddrs.has(a.address.toLowerCase()),
+      (a) => a.address && !skip.has(a.address.toLowerCase()),
     );
   }
 
@@ -475,6 +564,37 @@ export function mergeSearchResult(
     fieldsUpdated += count;
     note(field, count);
   }
+
+  // What this run adds, in the words the next run compares.
+  const addedNow: ResearchAddedEntry[] = [
+    ...(childData.emails ?? []).map((e) =>
+      addedEntry("emails", entryText(e, "email")),
+    ),
+    ...(childData.phones ?? []).map((p) =>
+      addedEntry("phones", entryText(p, "phone")),
+    ),
+    ...(childData.socialLinks ?? []).map((s) =>
+      addedEntry("socialLinks", entryText(s, "url")),
+    ),
+    ...(childData.education ?? []).map((e) =>
+      addedEntry("education", e.school, e.degree, e.endDate),
+    ),
+    ...(childData.experience ?? []).map((e) =>
+      addedEntry("experience", e.company, e.role, e.startDate),
+    ),
+    ...(childData.tags ?? []).map((t) =>
+      addedEntry("tags", entryText(t, "tag")),
+    ),
+    ...(childData.interests ?? []).map((i) =>
+      addedEntry("interests", entryText(i, "interest")),
+    ),
+    ...(childData.attributes ?? []).map((a) =>
+      addedEntry("attributes", a.name),
+    ),
+    ...(childData.addresses ?? []).map((a) =>
+      addedEntry("addresses", entryText(a, "address")),
+    ),
+  ].filter((entry) => entry.value);
 
   // 3. The research record — every run, whatever it found
   const outcome: ResearchOutcome =
@@ -489,7 +609,7 @@ export function mergeSearchResult(
     return text ? [{ ...finding, text }] : [];
   });
   const record = recordRun(
-    researchHistory(existing),
+    history,
     {
       at: new Date().toISOString(),
       models: (provenance.models ?? []).slice(0, 4),
@@ -503,6 +623,7 @@ export function mergeSearchResult(
       findings: findings.slice(0, 80),
     },
     provenance.citations ?? [],
+    addedNow,
   );
   const checked = researchRecordSchema.safeParse(record);
   if (checked.success)

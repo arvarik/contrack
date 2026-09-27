@@ -9,6 +9,7 @@
 //   degreeLevel       one degree, however a page names it: "AB" is a "BA"
 //   sameLabel         one interest or tag, however a page words it
 //   researchDate      a date as the dossier stores it: "YYYY" or "YYYY-MM"
+//   linkedInHandle    the profile a LinkedIn address names
 // =============================================================================
 
 /**
@@ -150,4 +151,31 @@ export function researchDate(
     return month >= 1 && month <= 12 ? `${match[2]}-${pad(month)}` : undefined;
   }
   return undefined;
+}
+
+/**
+ * The profile a LinkedIn address names, or null for any other address:
+ * "rowan-vale" for "https://uk.linkedin.com/in/Rowan-Vale/?trk=x". A country
+ * subdomain, the case, a trailing slash and a query all name one profile.
+ */
+export function linkedInHandle(url: string | null | undefined): string | null {
+  const text = url?.trim();
+  if (!text) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(
+      /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`,
+    );
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return null;
+  const match = /^\/(?:in|pub)\/([^/]+)/i.exec(parsed.pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]).toLowerCase();
+  } catch {
+    return match[1].toLowerCase();
+  }
 }

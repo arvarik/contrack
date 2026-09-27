@@ -523,9 +523,11 @@ test.describe("Settings — Tools and Data", () => {
     await expect(notYet).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("enrichment page names and prices both research depths, Standard chosen", async ({
+  test("enrichment page names both research depths, and prices them only for Gemini", async ({
     page,
   }) => {
+    // This instance has no AI key, so research runs on no provider, and the
+    // figures, measured on Gemini, describe nothing here.
     await page.goto("/settings/enrichment");
     const depth = page.getByRole("radiogroup", { name: "Research depth" });
     await expect(depth.getByRole("radio")).toHaveCount(2);
@@ -533,11 +535,36 @@ test.describe("Settings — Tools and Data", () => {
       depth.getByRole("radio", { name: /^Standard/ }),
     ).toHaveAttribute("aria-checked", "true");
     const deep = depth.getByRole("radio", { name: /^Deep/ });
+    await expect(deep).toContainText("Adds a longer search");
+    await expect(deep).not.toContainText("a contact");
+    await expect(page.getByText(/web searches each month/)).toHaveCount(0);
+
+    // The same page when AI settings say research runs on Gemini.
+    await page.route("**/api/settings/ai", (route) =>
+      route.fulfill({
+        json: {
+          providers: [],
+          availableProviders: [],
+          customEndpoints: [],
+          capabilities: {
+            research: {
+              assignment: { mode: "auto" },
+              resolved: {
+                providerId: "gemini",
+                providerLabel: "Google Gemini",
+                model: "gemini-3.8-flash",
+              },
+            },
+          },
+        },
+      }),
+    );
+    await page.reload();
     await expect(deep).toContainText("a contact");
     await deep.click();
     await expect(deep).toHaveAttribute("aria-checked", "true");
     await expect(
-      page.getByText("The first 5,000 web searches each month are free", {
+      page.getByText("Costs are Google's 2026 Gemini prices", {
         exact: false,
       }),
     ).toBeVisible();

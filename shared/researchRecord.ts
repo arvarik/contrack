@@ -4,9 +4,12 @@
 // Stored as JSON in `contacts.aiResearch`, written only by the enrichment
 // merge, and read by the dossier's Research card. One record per contact:
 //
-//   runs     every enrichment, newest last: when, which models, what it added
-//            field by field, the searches it ran and the facts it reported
-//   sources  every page the runs cited, deduplicated by address
+//   runs          every enrichment, newest last: when, which models, what it
+//                 added field by field, the searches it ran and the facts it
+//                 reported
+//   sources       every page the runs cited, deduplicated by address
+//   addedEntries  every list entry research added, so that it never adds
+//                 back one the person removed
 //
 // The dossier used to carry this as markdown inside `aiBackground`: the
 // sources as "Source 1", "Source 2" links to Google redirects, and a copy of
@@ -22,6 +25,8 @@ import { researchDepthSchema } from "./researchDepth.ts";
 export const MAX_RESEARCH_RUNS = 12;
 /** Sources kept per contact, across runs. */
 export const MAX_RESEARCH_SOURCES = 60;
+/** Entries research added, kept per contact across runs, newest last. */
+export const MAX_ADDED_ENTRIES = 150;
 
 /** One page a run cited. */
 export const researchSourceSchema = z.object({
@@ -81,15 +86,39 @@ export const researchRunSchema = z.object({
   findings: z.array(researchFindingSchema).max(80),
 });
 
+/**
+ * One entry a run added to a list field, in the words the merge compares:
+ * "education", "University of Example", "BA", "2017".
+ */
+export const researchAddedEntrySchema = z.object({
+  field: z.string().max(40),
+  /** The school, the employer, the address, the email, the tag or the name. */
+  value: z.string().max(300),
+  /** A school's degree, or a job's role. */
+  detail: z.string().max(200).optional(),
+  /** A school's end date, or a job's start date. */
+  date: z.string().max(20).optional(),
+});
+
 export const researchRecordSchema = z.object({
   version: z.literal(1),
   runs: z.array(researchRunSchema).max(MAX_RESEARCH_RUNS),
   sources: z.array(researchSourceSchema).max(MAX_RESEARCH_SOURCES),
+  /**
+   * Every entry research added, newest last. One that the contact no longer
+   * has, the person removed, and research does not add it back. Absent on
+   * records written before it was kept.
+   */
+  addedEntries: z
+    .array(researchAddedEntrySchema)
+    .max(MAX_ADDED_ENTRIES)
+    .optional(),
 });
 
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchFinding = z.infer<typeof researchFindingSchema>;
 export type ResearchAddition = z.infer<typeof researchAdditionSchema>;
+export type ResearchAddedEntry = z.infer<typeof researchAddedEntrySchema>;
 export type ResearchRun = z.infer<typeof researchRunSchema>;
 export type ResearchUsage = z.infer<typeof researchUsageSchema>;
 export type ResearchRecord = z.infer<typeof researchRecordSchema>;

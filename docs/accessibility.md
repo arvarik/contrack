@@ -48,6 +48,16 @@ ready.
 
 The first run needs Chromium: `npx playwright install chromium`.
 
+Two specs save screenshots for the docs, `phone-pages.spec.ts` and
+`account-photo.spec.ts`. A normal run saves them under
+`test-results/docs-screenshots/`, which git ignores, so the committed images
+stay as they are. To refresh the images under `docs/screenshots/`, run the
+suite with `DOCS_SCREENSHOTS=1`:
+
+```bash
+DOCS_SCREENSHOTS=1 npx playwright test tests/e2e/phone-pages.spec.ts tests/e2e/account-photo.spec.ts
+```
+
 ## The contracts the suite holds up
 
 ### Status messages

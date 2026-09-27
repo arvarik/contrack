@@ -410,7 +410,9 @@ describe("DetailsCard", () => {
     const input = within(group).getByRole("textbox", { name: "New interest" });
     fireEvent.change(input, { target: { value: "Sailing" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    const last = mutate.mock.lastCall?.[0] as {
+    const call = mutate.mock.lastCall;
+    if (!call) throw new Error("The new interest was not saved");
+    const last = call[0] as {
       data: { interests: { interest: string; isAiGenerated: boolean }[] };
     };
     expect(last.data.interests.map((i) => i.interest)).toEqual([

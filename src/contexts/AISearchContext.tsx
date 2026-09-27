@@ -15,6 +15,8 @@
  * - batch: current batch state (live-updated via SSE)
  * - isVisible: whether the overlay is showing
  * - dismiss(): close the overlay entirely
+ * - depthFiguresApply: whether the depths' measured time and cost describe
+ *   this instance's research, which they do only when Gemini runs it
  *
  * The AISearchProgressOverlay is rendered via portal from this provider,
  * so it floats above all content regardless of routing.
@@ -34,6 +36,7 @@ import {
   useCancelAISearch,
 } from "../api/aiSearch";
 import { toast } from "sonner";
+import { useAISettings } from "../api/aiSettings";
 import { ApiError, rateLimitFacts } from "../api/client";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 import type { AISearchBatch } from "../types";
@@ -75,6 +78,13 @@ interface AISearchContextValue {
   limitMessage: string | null;
   /** Forget the message — the reader has seen it, or is trying again. */
   clearLimit: () => void;
+  /**
+   * Whether the depths' time and cost describe this instance's research.
+   * They were measured on Gemini (shared/researchDepth.ts), so on another
+   * provider the controls leave them out rather than show Gemini's figures
+   * for a model the instance does not run.
+   */
+  depthFiguresApply: boolean;
 }
 
 const AISearchContext = createContext<AISearchContextValue | null>(null);
@@ -126,6 +136,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   // `mutate` is the one stable part of a mutation: the object around it is
   // new on every render, and a callback that closed over it changed with it.
   const { mutate: startMutate, isPending: isStarting } = useStartAISearch();
+  const { data: aiSettings } = useAISettings();
+  const depthFiguresApply =
+    aiSettings?.capabilities?.research?.resolved?.providerId === "gemini";
 
   // SSE stream hook — updates batch state in real-time
   const handleUpdate = useCallback((updatedBatch: AISearchBatch) => {
@@ -225,6 +238,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       isStarting,
       limitMessage,
       clearLimit,
+      depthFiguresApply,
     }),
     [
       startSearch,
@@ -234,6 +248,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       isStarting,
       limitMessage,
       clearLimit,
+      depthFiguresApply,
     ],
   );
 

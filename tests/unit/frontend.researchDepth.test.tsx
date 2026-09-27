@@ -17,7 +17,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 /** The enrichment context: what is running, and what was started. */
 const aiSearch = vi.hoisted(() => ({
@@ -29,6 +29,7 @@ const aiSearch = vi.hoisted(() => ({
   },
   limitMessage: null,
   clearLimit: vi.fn(),
+  depthFiguresApply: true,
 }));
 vi.mock("../../src/contexts/AISearchContext", async (original) => ({
   isEnriching: (
@@ -62,6 +63,48 @@ import { ResearchCard } from "../../src/views/contact-detail/components/Research
 import { DossierTab } from "../../src/views/contact-detail/components/DossierTab";
 import { AISearchView } from "../../src/views/ai-search/AISearchView";
 import { AISearchProgressOverlay } from "../../src/views/ai-search/components/AISearchProgressOverlay";
+
+/** Where the router is: the address, and the state a link handed over. */
+function Where() {
+  const location = useLocation();
+  return (
+    <output
+      data-testid="where"
+      data-state={JSON.stringify(location.state ?? null)}
+    >
+      {location.pathname}
+      {location.search}
+    </output>
+  );
+}
+
+/**
+ * The Enrichment page's view at an address, beside the contact route a row
+ * opens. `rerenderView` gives the view new props in the same router.
+ */
+function renderView(
+  props: React.ComponentProps<typeof AISearchView> = {},
+  path = "/settings/enrichment",
+) {
+  const tree = (viewProps: React.ComponentProps<typeof AISearchView>) => (
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path="/settings/enrichment"
+          element={<AISearchView {...viewProps} />}
+        />
+        <Route path="/contact/:id" element={null} />
+      </Routes>
+      <Where />
+    </MemoryRouter>
+  );
+  const view = render(tree(props));
+  return {
+    ...view,
+    rerenderView: (next: React.ComponentProps<typeof AISearchView>) =>
+      view.rerender(tree(next)),
+  };
+}
 import type { AISearchBatch, Contact } from "../../src/types";
 
 afterEach(() => {
@@ -69,6 +112,7 @@ afterEach(() => {
   aiSearch.startSearch.mockClear();
   aiSearch.isStarting = false;
   aiSearch.batch = null;
+  aiSearch.depthFiguresApply = true;
   ai.allowed = true;
   contacts.list = [];
 });
@@ -131,6 +175,22 @@ describe("EnrichMenu", () => {
       limitAs: "toast",
       depth: "deep",
     });
+  });
+
+  it("gives no time when research runs on a provider the figures were not measured on", () => {
+    aiSearch.depthFiguresApply = false;
+    render(
+      <EnrichMenu contact={person} label="Enrich again" variant="secondary" />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Enrich again, choose how deep/ }),
+    );
+    const menu = screen.getByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Standard", "Deep"]);
   });
 
   it("reads Enriching… and waits while this contact's research runs", () => {
@@ -380,7 +440,7 @@ describe("the Enrichment page's depth", () => {
 
   it("names, describes and prices both depths, Standard chosen", () => {
     contacts.list = people;
-    render(<AISearchView />);
+    renderView();
     const group = screen.getByRole("radiogroup", { name: "Research depth" });
     const tiles = within(group).getAllByRole("radio");
     expect(tiles.map((tile) => tile.getAttribute("aria-checked"))).toEqual([
@@ -394,7 +454,7 @@ describe("the Enrichment page's depth", () => {
 
   it("starts the batch at the chosen depth, after saying its time and cost", () => {
     contacts.list = people;
-    render(<AISearchView />);
+    renderView();
     fireEvent.click(screen.getByRole("radio", { name: /^Deep/ }));
     fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
     fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
@@ -406,6 +466,22 @@ describe("the Enrichment page's depth", () => {
     expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
       depth: "deep",
     });
+  });
+
+  it("leaves out Gemini's figures when research runs on another provider", () => {
+    aiSearch.depthFiguresApply = false;
+    contacts.list = people;
+    renderView();
+    const tiles = within(
+      screen.getByRole("radiogroup", { name: "Research depth" }),
+    ).getAllByRole("radio");
+    expect(tiles[0].textContent).not.toContain(perContact("standard"));
+    expect(tiles[1].textContent).not.toContain(perContact("deep"));
+    expect(screen.queryByText(/The first 5,000 web searches/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    expect(screen.queryByText(/in all/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
+    expect(screen.getByRole("dialog").textContent).not.toContain("in all");
   });
 });
 
@@ -450,7 +526,7 @@ describe("the Enrichment page's filters", () => {
 
   it("counts every pill beside the other row's choice", () => {
     contacts.list = people;
-    render(<AISearchView />);
+    renderView();
     expect(pills("Contacts")).toEqual([
       "All3",
       "Tracked2",
@@ -481,7 +557,7 @@ describe("the Enrichment page's filters", () => {
 
   it("shows the contacts that match both rows, and marks a found-nothing row", () => {
     contacts.list = people;
-    render(<AISearchView />);
+    renderView();
     fireEvent.click(screen.getByRole("button", { name: /^Found nothing/ }));
     expect(screen.getByText("Juniper Hale")).toBeTruthy();
     expect(screen.queryByText("Rowan Vale")).toBeNull();
@@ -498,13 +574,13 @@ describe("the Enrichment page's filters", () => {
 
   it("shows everyone never researched when the page's Select them asks", () => {
     contacts.list = people;
-    const { rerender } = render(<AISearchView />);
+    const { rerenderView } = renderView();
     fireEvent.click(screen.getByRole("button", { name: /^Tracked/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Filter contacts" }), {
       target: { value: "Rowan" },
     });
     expect(screen.queryByText("Kestrel Ames")).toBeNull();
-    rerender(<AISearchView showNotYet={1} />);
+    rerenderView({ showNotYet: 1 });
     expect(
       (
         screen.getByRole("textbox", {
@@ -523,9 +599,45 @@ describe("the Enrichment page's filters", () => {
     expect(screen.queryByText("Rowan Vale")).toBeNull();
   });
 
+  it("keeps the filters in the page address, so Back comes back to the same list", () => {
+    contacts.list = people;
+    renderView({}, "/settings/enrichment?research=found_nothing");
+    expect(
+      within(screen.getByRole("group", { name: "Research" }))
+        .getByRole("button", { name: /^Found nothing/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getByText("Juniper Hale")).toBeTruthy();
+    expect(screen.queryByText("Rowan Vale")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Tracked/ }));
+    expect(screen.getByTestId("where").textContent).toBe(
+      "/settings/enrichment?research=found_nothing&contacts=tracked",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByTestId("where").textContent).toBe(
+      "/settings/enrichment",
+    );
+  });
+
+  it("opens a contact from its row, and hands the contact page the way back", () => {
+    contacts.list = people;
+    renderView({}, "/settings/enrichment?research=found_nothing");
+    const open = screen.getByRole("link", { name: "Open Juniper Hale" });
+    expect(open.getAttribute("href")).toBe("/contact/c3");
+    fireEvent.click(open);
+    const where = screen.getByTestId("where");
+    expect(where.textContent).toBe("/contact/c3");
+    expect(JSON.parse(where.getAttribute("data-state") ?? "null")).toEqual({
+      back: {
+        to: "/settings/enrichment?research=found_nothing",
+        label: "Contact enrichment",
+      },
+    });
+  });
+
   it("says the selection's time and cost under the start button", () => {
     contacts.list = people;
-    render(<AISearchView />);
+    renderView();
     expect(screen.queryByText(/in all/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
     expect(

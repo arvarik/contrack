@@ -48,6 +48,22 @@ export function formatDay(
 }
 
 /**
+ * A date in a few characters, for a narrow badge: "Jan 20" in this year,
+ * and "Dec 2025" before it, where a day without its year would mislead.
+ */
+export function formatShortDay(
+  value: string | null | undefined,
+  now: Date = new Date(),
+  fallback = "Unknown",
+): string {
+  const date = parseServerTime(value);
+  if (!date) return fallback;
+  return date.getFullYear() === now.getFullYear()
+    ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+/**
  * "3 days ago", "in 2 hours", "just now".
  *
  * Used where the exact instant matters less than the distance from now: when

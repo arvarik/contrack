@@ -547,12 +547,13 @@ test.describe("the contact header", () => {
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
     // Change avatar left for the pencil on the avatar, and the two enrich
-    // depths follow the colour: AI actions about this contact, each with the
-    // time it takes at the end of its row.
+    // depths follow the colour: AI actions about this contact. Each ends
+    // with its time when research runs on Gemini, and this instance has no
+    // AI key, so the rows are the words alone.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
-      /^Enrich contact\s*about/,
-      /^Enrich deeply\s*about/,
+      "Enrich contact",
+      "Enrich deeply",
       "Copy basic details",
       "Copy full details",
       "Archive",

@@ -21,6 +21,21 @@ const toastMock = vi.hoisted(() =>
 );
 vi.mock("sonner", () => ({ toast: toastMock }));
 
+/** What research resolves to in AI settings: a provider id, or nothing. */
+const settings = vi.hoisted(() => ({ research: "gemini" as string | null }));
+vi.mock("../../src/api/aiSettings", () => ({
+  useAISettings: () => ({
+    data:
+      settings.research === null
+        ? undefined
+        : {
+            capabilities: {
+              research: { resolved: { providerId: settings.research } },
+            },
+          },
+  }),
+}));
+
 /** The start mutation, as `useStartAISearch` hands it out. */
 const start = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
 vi.mock("../../src/api/aiSearch", () => ({
@@ -56,7 +71,9 @@ function mount() {
 
 /** The callbacks the last start passed to `mutate`. */
 function lastCallbacks() {
-  return start.mutate.mock.calls.at(-1)?.[1] as {
+  const call = start.mutate.mock.lastCall;
+  if (!call) throw new Error("startSearch did not call mutate");
+  return call[1] as {
     onSuccess: (result: { batchId: string; jobCount: number }) => void;
     onError: (err: unknown) => void;
   };
@@ -75,6 +92,20 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   start.isPending = false;
+  settings.research = "gemini";
+});
+
+describe("the depths' figures", () => {
+  it("apply when research runs on Gemini, where they were measured, and not elsewhere", () => {
+    expect(mount().latest().depthFiguresApply).toBe(true);
+    cleanup();
+    settings.research = "openai";
+    expect(mount().latest().depthFiguresApply).toBe(false);
+    cleanup();
+    // Settings not loaded, or no provider for research.
+    settings.research = null;
+    expect(mount().latest().depthFiguresApply).toBe(false);
+  });
 });
 
 describe("startSearch", () => {
