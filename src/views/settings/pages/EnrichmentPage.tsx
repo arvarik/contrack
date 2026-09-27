@@ -25,6 +25,7 @@ export const EnrichmentPage = () => {
   const { isAdmin } = useAuth();
   const { data: groundingCapacity } = useGroundingCapacity();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showNotYet, setShowNotYet] = useState<number>();
 
   // Filter contacts that have never been enriched
   const neverEnrichedContacts = useMemo(
@@ -33,8 +34,11 @@ export const EnrichmentPage = () => {
     [contacts],
   );
 
+  // Selects them, and has the list show exactly them: a filter or a search
+  // left on from before would hide some of the contacts selected.
   const handleEnrichThem = () => {
     setSelectedIds(new Set(neverEnrichedContacts.map((c) => c.id)));
+    setShowNotYet(Date.now());
   };
 
   return (
@@ -48,7 +52,7 @@ export const EnrichmentPage = () => {
           title={`${neverEnrichedContacts.length} ${
             neverEnrichedContacts.length === 1 ? "contact has" : "contacts have"
           } never been enriched`}
-          body="Select them to research their work, websites, and bio"
+          body="Select them to research their work, schools and profiles"
         >
           <button
             type="button"
@@ -93,6 +97,7 @@ export const EnrichmentPage = () => {
       <AISearchView
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
+        showNotYet={showNotYet}
         hideHeaderDescription
       />
     </div>

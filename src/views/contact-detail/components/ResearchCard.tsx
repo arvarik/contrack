@@ -12,27 +12,46 @@
  *   - the facts the latest one reported, each beside the page it came from
  *   - every page the research cited, by site and address
  *
- * Enrich again opens the two research depths (`EnrichMenu`). It reads
- * `contact.aiResearch` (shared/researchRecord.ts), which only the
+ * Enrich again opens the two research depths (`EnrichMenu`). When the
+ * latest research found no page about the person, the card says what it
+ * searched with and offers the details that would help it (`NoPageNextSteps`).
+ * It reads `contact.aiResearch` (shared/researchRecord.ts), which only the
  * enrichment merge writes.
  */
 import { useId, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { ExternalLink, Globe } from "lucide-react";
+import {
+  ExternalLink,
+  Globe,
+  Link as LinkIcon,
+  Mail,
+  MapPin,
+  SearchX,
+  type LucideIcon,
+} from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 import type { Contact } from "../../../types";
 import { cn } from "../../../lib/utils";
 import { CARD, FIELD_LABEL, SECTION_HEADING_SPACED } from "../../../lib/styles";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
-import { EnrichMenu } from "./EnrichMenu";
+import { EnrichMenu, useCanEnrich } from "./EnrichMenu";
 import {
   isLegacyDossier,
   parseResearchRecord,
   sourceForSite,
+  type ResearchRun,
   type ResearchSource,
 } from "../../../../shared/researchRecord";
-import { modelName, runSummary, sourceDisplay } from "../../../lib/research";
+import {
+  listInWords,
+  missingAnchors,
+  modelName,
+  researchedWith,
+  runSummary,
+  sourceDisplay,
+  type ResearchAnchor,
+} from "../../../lib/research";
 
 /** Findings shown before "Show all". */
 const FINDINGS_SHOWN = 8;
@@ -123,7 +142,115 @@ function ShowAll({
   );
 }
 
-export function ResearchCard({ contact }: { contact: Contact }) {
+/**
+ * Each detail's button: its words and its glyph. A contact with a LinkedIn
+ * profile only is offered another link, since it has one already.
+ */
+const ANCHOR_BUTTONS: Record<
+  ResearchAnchor,
+  { label: string; another?: string; icon: LucideIcon }
+> = {
+  city: { label: "Add a city", icon: MapPin },
+  workEmail: { label: "Add a work email", icon: Mail },
+  link: { label: "Add a link", another: "Add another link", icon: LinkIcon },
+};
+
+/**
+ * The latest research found no page about the person: what it searched with,
+ * and the details that would help it, each a button that opens the field
+ * for it on this page (`onAddDetail`). A page counts only when it names the
+ * person with a detail the records have, so one more detail is what a retry
+ * needs. Deep is offered when the run was Standard.
+ *
+ * It offers only what the page can take. A city and a work email go in
+ * Details, and a link in the header. Schools and past jobs would help as
+ * much, but the page has no field for them, so they are not offered.
+ */
+function NoPageNextSteps({
+  contact,
+  lastRun,
+  onAddDetail,
+}: {
+  contact: Contact;
+  lastRun: ResearchRun;
+  onAddDetail?: (anchor: ResearchAnchor) => void;
+}) {
+  const headingId = useId();
+  const first = contact.firstName || contact.name.split(" ")[0];
+  const used = researchedWith(contact);
+  const missing = onAddDetail ? missingAnchors(contact) : [];
+  const deepNext = lastRun.depth !== "deep";
+  const hasLink = (contact.socialLinks?.length ?? 0) > 0;
+  // With research off, or for a ghost, there is no Enrich again to name.
+  const canEnrich = useCanEnrich(contact);
+  const closing =
+    missing.length > 0
+      ? canEnrich
+        ? `Then choose Enrich again${deepNext ? ". Deep runs a longer search" : ""}`
+        : null
+      : deepNext && canEnrich
+        ? "Choose Enrich again, then Deep, for a longer search"
+        : "A page about them may not exist yet";
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="mt-5 rounded-xl bg-surface-container-low p-4"
+    >
+      <h3
+        id={headingId}
+        className="flex items-center gap-2 text-sm font-bold text-on-surface"
+      >
+        <SearchX
+          aria-hidden="true"
+          className="w-4 h-4 shrink-0 text-on-surface-variant"
+        />
+        No web page matched {first}
+      </h3>
+      <p className="mt-1 text-sm text-on-surface-variant text-pretty">
+        {used.length > 0
+          ? `Research searched with ${listInWords([`${first}’s name`, ...used])}`
+          : `Research searched with ${first}’s name alone`}
+      </p>
+      {missing.length > 0 && (
+        <>
+          <p className="mt-3 text-sm text-on-surface text-pretty">
+            One more detail helps it find the right person
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {missing.map((anchor) => {
+              const { label, another, icon: Icon } = ANCHOR_BUTTONS[anchor];
+              return (
+                <button
+                  key={anchor}
+                  type="button"
+                  onClick={() => onAddDetail?.(anchor)}
+                  className="btn-secondary btn-sm"
+                >
+                  <Icon aria-hidden="true" className="w-3.5 h-3.5" />
+                  {another && hasLink ? another : label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {closing && (
+        <p className="mt-3 text-xs text-on-surface-variant text-pretty">
+          {closing}
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function ResearchCard({
+  contact,
+  onAddDetail,
+}: {
+  contact: Contact;
+  /** Opens the field for a detail that helps research: see `NoPageNextSteps`. */
+  onAddDetail?: (anchor: ResearchAnchor) => void;
+}) {
   const headingId = useId();
   const findingsId = useId();
   const sourcesId = useId();
@@ -183,9 +310,12 @@ export function ResearchCard({ contact }: { contact: Contact }) {
           {summary && (
             <p className="text-sm text-on-surface text-pretty">{summary}</p>
           )}
-          <p className="mt-1 text-sm text-on-surface-variant text-pretty">
-            Check a detail against its page before you rely on it
-          </p>
+          {/* Only when there is a page to check a detail against. */}
+          {(findings.length > 0 || sources.length > 0) && (
+            <p className="mt-1 text-sm text-on-surface-variant text-pretty">
+              Check a detail against its page before you rely on it
+            </p>
+          )}
         </div>
         <EnrichMenu
           contact={contact}
@@ -194,6 +324,14 @@ export function ResearchCard({ contact }: { contact: Contact }) {
           className="shrink-0"
         />
       </div>
+
+      {runs.at(-1)?.outcome === "no-public-info" && (
+        <NoPageNextSteps
+          contact={contact}
+          lastRun={runs.at(-1)!}
+          onAddDetail={onAddDetail}
+        />
+      )}
 
       {runs.length > 0 && (
         <div className="mt-5">

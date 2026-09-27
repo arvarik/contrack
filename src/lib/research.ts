@@ -1,9 +1,16 @@
 /**
  * How the dossier's Research card words a research record
  * (shared/researchRecord.ts): model names, field names, one line per run,
- * and a source's link text.
+ * and a source's link text. And, when research found no page, what it
+ * searched with and which details would help it (`researchedWith`,
+ * `missingAnchors`), by the prompt's own rules (shared/researchIdentity.ts).
  */
 import type { ResearchRun, ResearchSource } from "../../shared/researchRecord";
+import {
+  placeFromAddresses,
+  workEmailDomain,
+} from "../../shared/researchIdentity";
+import type { Contact } from "../types";
 
 /**
  * "gemini-3.8-flash" reads "Gemini 3.8 Flash", "claude-haiku-4-5-20251001"
@@ -131,4 +138,97 @@ export function sourceDisplay(source: ResearchSource): {
   const title =
     source.title && !titleIsDomain(source.title) ? source.title : trail;
   return { title, site, trail };
+}
+
+/**
+ * A detail a person can add on the contact page that helps research find
+ * the right person: a city, an email at their employer, a link of their own.
+ * Schools and past jobs help too, but the contact page has no field for
+ * them.
+ */
+export type ResearchAnchor = "city" | "workEmail" | "link";
+
+/** The contact fields the identity advice reads. */
+export type IdentityContact = Pick<
+  Contact,
+  "company" | "role" | "location" | "addresses" | "emails" | "socialLinks"
+> & {
+  education?: Contact["education"];
+  experience?: Contact["experience"];
+};
+
+/** The place research reads: the location, else an address that names a city. */
+function placeOf(contact: IdentityContact): string | null {
+  return contact.location || placeFromAddresses(contact.addresses);
+}
+
+/** "LinkedIn" for "linkedin": a profile's platform, as its owner writes it. */
+const PLATFORM_NAMES: Record<string, string> = {
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  x: "X",
+  twitter: "X",
+  youtube: "YouTube",
+  scholar: "Google Scholar",
+};
+
+/** "LinkedIn profile" for one link on a named platform, else "link" or "3 links". */
+function linkWords(
+  links: readonly { platform?: string | null }[],
+): string | null {
+  if (links.length === 0) return null;
+  if (links.length > 1) return `${links.length} links`;
+  const name = PLATFORM_NAMES[links[0].platform?.toLowerCase() ?? ""];
+  return name ? `${name} profile` : "link";
+}
+
+/**
+ * The kinds of detail research searched with, beside the name: "company",
+ * "role", "LinkedIn profile". Empty when it had the name alone.
+ *
+ * Kinds, not values. The values are on the page already, and a role such as
+ * "Associate, Restructuring Group" or a city such as "Austin, TX" has a
+ * comma of its own, which a list of values in a sentence cannot show.
+ */
+export function researchedWith(contact: IdentityContact): string[] {
+  const details: string[] = [];
+  if (contact.company) details.push("company");
+  if (contact.role) details.push("role");
+  if (placeOf(contact)) details.push("city");
+  if (contact.experience?.some((job) => !job.isCurrent))
+    details.push("past jobs");
+  const schools = contact.education?.length ?? 0;
+  if (schools > 0) details.push(schools === 1 ? "school" : "schools");
+  const emails = contact.emails ?? [];
+  if (emails.some((entry) => workEmailDomain(entry.email)))
+    details.push("work email");
+  else if (emails.length > 0) details.push("personal email");
+  const links = linkWords(contact.socialLinks ?? []);
+  if (links) details.push(links);
+  return details;
+}
+
+/**
+ * The details the person could add that would help research, in the order
+ * they help most. A LinkedIn profile does not count as a link here: the
+ * search research runs does not return LinkedIn pages (2026-09-26).
+ */
+export function missingAnchors(contact: IdentityContact): ResearchAnchor[] {
+  const missing: ResearchAnchor[] = [];
+  if (!placeOf(contact)) missing.push("city");
+  if (!contact.emails?.some((entry) => workEmailDomain(entry.email)))
+    missing.push("workEmail");
+  if (
+    !contact.socialLinks?.some(
+      (link) => link.platform?.toLowerCase() !== "linkedin",
+    )
+  )
+    missing.push("link");
+  return missing;
+}
+
+/** "A, B and C": a list in a sentence. */
+export function listInWords(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

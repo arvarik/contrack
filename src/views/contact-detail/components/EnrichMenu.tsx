@@ -51,6 +51,17 @@ export interface EnrichMenuProps {
   className?: string;
 }
 
+/**
+ * Whether the menu shows for this contact: research is on for the account,
+ * and the contact is not a ghost. Words that point to Enrich again ask it
+ * too, so they never name a button that is not there.
+ */
+export function useCanEnrich(contact: Pick<Contact, "isGhost">): boolean {
+  const search = useOptionalAISearch();
+  const aiAllowed = useAiAllowed();
+  return !!search && aiAllowed && !contact.isGhost;
+}
+
 export function EnrichMenu({
   contact,
   label,
@@ -58,8 +69,8 @@ export function EnrichMenu({
   className,
 }: EnrichMenuProps) {
   const search = useOptionalAISearch();
-  const aiAllowed = useAiAllowed();
-  if (!search || !aiAllowed || contact.isGhost) return null;
+  const canEnrich = useCanEnrich(contact);
+  if (!search || !canEnrich) return null;
   const enriching = isEnriching(search, contact.id);
 
   const items: ActionMenuItem[] = DEPTH_ORDER.map((depth) => ({

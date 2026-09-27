@@ -41,6 +41,7 @@ import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { ResearchCard } from "./ResearchCard";
 import { EnrichMenu } from "./EnrichMenu";
+import type { ResearchAnchor } from "../../../lib/research";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -58,6 +59,11 @@ export interface BriefingMutation {
 export interface DossierTabProps {
   contact: Contact;
   generateBriefing?: BriefingMutation;
+  /**
+   * Opens the field for a detail that helps research, when research found
+   * no page: the Research card's "Add a city" and the rest.
+   */
+  onAddDetail?: (anchor: ResearchAnchor) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -72,7 +78,9 @@ export interface DossierTabProps {
  * answer is here, not on another page: Enrich contact researches this
  * person at the depth chosen from its menu, and the progress panel opens.
  * It linked to the Enrichment settings page when that page was the only
- * place research could start.
+ * place research could start. The hand-made path it names is the one the
+ * page has: a city and an email in Details, and a link in the header. It
+ * used to offer "paste a bio into a note", and a note fills no field.
  */
 const EmptyDossier = ({ contact }: { contact: Contact }) => {
   const aiAllowed = useAiAllowed();
@@ -92,7 +100,7 @@ const EmptyDossier = ({ contact }: { contact: Contact }) => {
         <p className="text-sm text-on-surface-variant text-pretty">
           {canEnrich
             ? `Enrichment searches the web for ${first}\u2019s work, schools and profiles, and links each fact to its page`
-            : `Add ${first}\u2019s work, schools and profiles in the details, or paste a bio into a note`}
+            : "The dossier fills in from enrichment and imports. You can add a city, an email or a link by hand"}
         </p>
       </div>
       <EnrichMenu
@@ -102,7 +110,7 @@ const EmptyDossier = ({ contact }: { contact: Contact }) => {
       />
       {canEnrich && (
         <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
-          Or add details by hand, or paste a bio into a note
+          Or add a city, an email or a link by hand
         </p>
       )}
     </motion.div>
@@ -254,6 +262,7 @@ function BriefingCard({
 const DossierTabInner: React.FC<DossierTabProps> = ({
   contact,
   generateBriefing,
+  onAddDetail,
 }) => {
   // Every section below is conditional, so "nothing to show" needs answering
   // once, here, rather than as a blank space.
@@ -271,7 +280,7 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
       {/* First, and shown whether or not there is a dossier yet. */}
       <BriefingCard contact={contact} generateBriefing={generateBriefing} />
       {hasContent ? (
-        <DossierContent contact={contact} />
+        <DossierContent contact={contact} onAddDetail={onAddDetail} />
       ) : (
         <EmptyDossier contact={contact} />
       )}
@@ -318,7 +327,13 @@ const dateSpan = (
 };
 
 /** Every dossier section that has something to show. */
-const DossierContent = ({ contact }: { contact: Contact }) => {
+const DossierContent = ({
+  contact,
+  onAddDetail,
+}: {
+  contact: Contact;
+  onAddDetail?: (anchor: ResearchAnchor) => void;
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -425,7 +440,7 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       )}
 
       {/* Last: where the details above came from. */}
-      <ResearchCard contact={contact} />
+      <ResearchCard contact={contact} onAddDetail={onAddDetail} />
     </motion.div>
   );
 };

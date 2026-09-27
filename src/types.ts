@@ -186,6 +186,11 @@ export interface Contact {
   relationshipScore?: number;
   /** Computed by API — number of social links (available in slim view) */
   socialLinkCount?: number;
+  /**
+   * Computed by the API in the slim view: the last research run's outcome,
+   * or null before any run.
+   */
+  researchOutcome?: "added" | "nothing-new" | "no-public-info" | null;
   /** True when returned via approximate/fuzzy matching rather than exact FTS5 match */
   approximate?: boolean;
   matchType?: "exact" | "approximate";

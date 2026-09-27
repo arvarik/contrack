@@ -5,7 +5,10 @@
 import { describe, it, expect } from "vitest";
 import {
   fieldLabel,
+  listInWords,
+  missingAnchors,
   modelName,
+  researchedWith,
   runSummary,
   sourceDisplay,
 } from "../../src/lib/research";
@@ -101,5 +104,115 @@ describe("sourceDisplay", () => {
       site: "fellows.example.org",
       trail: "fellows.example.org › people › rowan-vale",
     });
+  });
+});
+
+describe("what research searched with, and what would help it", () => {
+  const person = (fields: Record<string, unknown> = {}) =>
+    ({
+      company: "Northwind Partners",
+      role: "Associate",
+      location: null,
+      addresses: [],
+      emails: [],
+      socialLinks: [
+        { platform: "linkedin", url: "https://www.linkedin.com/in/rowanv" },
+      ],
+      education: [],
+      ...fields,
+    }) as unknown as Parameters<typeof researchedWith>[0];
+
+  it("names the kinds of detail research had, and a profile by its platform", () => {
+    expect(listInWords(researchedWith(person()))).toBe(
+      "company, role and LinkedIn profile",
+    );
+    expect(
+      researchedWith(
+        person({
+          emails: [
+            { email: "rowan@gmail.com" },
+            { email: "rv@northwind.example" },
+          ],
+          socialLinks: [],
+          addresses: [{ address: "San Francisco, CA", isPrimary: true }],
+          experience: [
+            { company: "Northwind Partners", isCurrent: true },
+            { company: "Acme Bank", isCurrent: false },
+          ],
+          education: [{ school: "University of Example" }],
+        }),
+      ),
+    ).toEqual(["company", "role", "city", "past jobs", "school", "work email"]);
+    // A free mailbox is a personal email. Links on no named platform, or
+    // more than one, are counted.
+    expect(
+      researchedWith(
+        person({
+          company: null,
+          role: null,
+          emails: [{ email: "rowan@gmail.com" }],
+          socialLinks: [{ platform: "website", url: "https://rowan.example" }],
+        }),
+      ),
+    ).toEqual(["personal email", "link"]);
+    expect(
+      researchedWith(
+        person({
+          company: null,
+          role: null,
+          socialLinks: [
+            { platform: "linkedin", url: "https://www.linkedin.com/in/rowanv" },
+            { platform: "github", url: "https://github.com/rowanv" },
+          ],
+        }),
+      ),
+    ).toEqual(["2 links"]);
+    expect(
+      researchedWith(person({ company: null, role: null, socialLinks: [] })),
+    ).toEqual([]);
+  });
+
+  it("asks for a city, a work email and a link of their own, when the records lack them", () => {
+    expect(missingAnchors(person())).toEqual(["city", "workEmail", "link"]);
+    // A street address is not read as a city, and a free mailbox is not a
+    // work email. A LinkedIn profile is not a link research can read.
+    expect(
+      missingAnchors(
+        person({
+          addresses: [
+            { address: "12 Harbor Street, Springfield", isPrimary: true },
+          ],
+          emails: [{ email: "rowan@gmail.com" }],
+        }),
+      ),
+    ).toEqual(["city", "workEmail", "link"]);
+    // A city added after the street counts, as research reads it.
+    expect(
+      missingAnchors(
+        person({
+          addresses: [
+            { address: "12 Harbor Street, Springfield", isPrimary: true },
+            { address: "Austin, TX", isPrimary: false },
+          ],
+        }),
+      ),
+    ).toEqual(["workEmail", "link"]);
+    expect(
+      missingAnchors(
+        person({
+          location: "New York, NY",
+          emails: [{ email: "rv@northwind.example" }],
+          socialLinks: [
+            { platform: "github", url: "https://github.com/rowanv" },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("joins a list the way a sentence does", () => {
+    expect(listInWords([])).toBe("");
+    expect(listInWords(["a city"])).toBe("a city");
+    expect(listInWords(["a", "b", "c"])).toBe("a, b and c");
   });
 });

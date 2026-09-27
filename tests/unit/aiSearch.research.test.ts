@@ -201,6 +201,72 @@ describe("what the prompt knows about the person", () => {
     );
   });
 
+  it("reads a city from the addresses, and never a street", () => {
+    const at = (address: string) =>
+      contact({
+        addresses: [
+          { id: "a1", address, label: "home", isPrimary: true, source: null },
+        ] as HydratedContact["addresses"],
+      });
+    expect(buildSearchPrompt(at("San Francisco, CA"))).toContain(
+      "Location: San Francisco, CA",
+    );
+    expect(suggestedSearches(at("San Francisco, CA"))).toContain(
+      '"Rowan Vale" San Francisco, CA',
+    );
+    // A house number or a postcode: a street, which is private.
+    for (const street of ["12 Harbor Street, Springfield", "Springfield 02110"])
+      expect(buildSearchPrompt(at(street))).not.toContain(street);
+    expect(missingTopics(at("12 Harbor Street, Springfield"))).toContain(
+      "location",
+    );
+    // A city added after a street address: the Research card's Add a city
+    // appends it, and the street stays private.
+    const both = contact({
+      addresses: [
+        ...at("12 Harbor Street, Springfield").addresses,
+        {
+          id: "a2",
+          address: "Austin, TX",
+          label: "work",
+          isPrimary: false,
+          source: null,
+        },
+      ] as HydratedContact["addresses"],
+    });
+    expect(buildSearchPrompt(both)).toContain("Location: Austin, TX");
+    expect(buildSearchPrompt(both)).not.toContain("Harbor Street");
+    // The records' own location comes first.
+    expect(
+      buildSearchPrompt(
+        contact({
+          location: "New York, NY",
+          addresses: at("San Francisco, CA").addresses,
+        }),
+      ),
+    ).toContain("Location: New York, NY");
+  });
+
+  it("searches with a work email's domain, even one after a personal email", () => {
+    const withEmails = (...emails: string[]) =>
+      contact({
+        emails: emails.map((email, index) => ({
+          id: `e${index}`,
+          email,
+          label: null,
+          isPrimary: index === 0,
+          source: null,
+        })) as HydratedContact["emails"],
+      });
+    // The Research card's Add a work email appends the new email.
+    expect(
+      suggestedSearches(withEmails("rowan@gmail.com", "rv@northwind.example")),
+    ).toContain('"Rowan Vale" northwind.example');
+    expect(
+      suggestedSearches(withEmails("rowan@gmail.com")).join(" "),
+    ).not.toContain("gmail.com");
+  });
+
   it("searches the formal name behind a short one, and only an unambiguous one", () => {
     expect(formalName("Tom Ashby")).toBe("Thomas Ashby");
     expect(formalName("Chris Lee")).toBeNull();

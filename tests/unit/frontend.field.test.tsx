@@ -82,7 +82,10 @@ const ADA = {
   interests: [],
 };
 
-const drawCard = (over: Record<string, unknown> = {}) => {
+const drawCard = (
+  over: Record<string, unknown> = {},
+  props: Partial<React.ComponentProps<typeof DetailsCard>> = {},
+) => {
   const onUpdate = vi.fn();
   const mutate = vi.fn();
   render(
@@ -92,6 +95,7 @@ const drawCard = (over: Record<string, unknown> = {}) => {
         contactId="c1"
         onUpdate={onUpdate}
         updateContact={{ mutate }}
+        {...props}
       />
     </MemoryRouter>,
   );
@@ -652,5 +656,59 @@ describe("MultiValueField", () => {
       "Map pin updated to: 2 High St, Leeds",
       { duration: 3000 },
     );
+  });
+});
+
+describe("an add form opened from elsewhere on the page", () => {
+  it("opens with the label asked for, focuses its input, and spends the request", () => {
+    const done = vi.fn();
+    drawEmails(EMAILS, {
+      openRequest: 1,
+      openLabel: "personal",
+      onOpenRequestDone: done,
+    });
+    const input = screen.getByRole("textbox", { name: "New email" });
+    expect(document.activeElement).toBe(input);
+    expect(
+      screen.getByRole("combobox", { name: "Label for new email" }).textContent,
+    ).toContain("personal");
+    // Spent at once, so a later mount of the field does not open it again.
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays closed without a request", () => {
+    drawEmails(EMAILS, { onOpenRequestDone: vi.fn() });
+    expect(screen.queryByRole("textbox", { name: "New email" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Add email" })).toBeTruthy();
+  });
+
+  it("opens Location for the Research card's Add a city, and Email for its work email, both labelled work", () => {
+    const done = vi.fn();
+    drawCard(
+      { addresses: [], emails: [] },
+      { detailRequest: { anchor: "city", key: 1 }, onDetailRequestDone: done },
+    );
+    const city = screen.getByRole("textbox", { name: "New address" });
+    expect(document.activeElement).toBe(city);
+    expect(
+      screen.getByRole("combobox", { name: "Label for new address" })
+        .textContent,
+    ).toContain("work");
+    // Only the field asked for opens.
+    expect(screen.queryByRole("textbox", { name: "New email" })).toBeNull();
+    expect(done).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    drawCard(
+      { addresses: [], emails: [] },
+      {
+        detailRequest: { anchor: "workEmail", key: 2 },
+        onDetailRequestDone: vi.fn(),
+      },
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Label for new email" }).textContent,
+    ).toContain("work");
+    expect(screen.queryByRole("textbox", { name: "New address" })).toBeNull();
   });
 });

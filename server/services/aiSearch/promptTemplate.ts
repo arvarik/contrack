@@ -41,25 +41,14 @@ import {
   type ResearchRecord,
 } from "../../../shared/researchRecord.ts";
 import { researchDate, sameOrg } from "./normalize.ts";
+import {
+  placeFromAddresses,
+  workEmailDomain,
+} from "../../../shared/researchIdentity.ts";
 
 // =============================================================================
 // Prompt Builder
 // =============================================================================
-
-/** Common free-email domains that offer zero disambiguation signal. */
-const FREE_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "yahoo.com",
-  "hotmail.com",
-  "outlook.com",
-  "icloud.com",
-  "aol.com",
-  "protonmail.com",
-  "live.com",
-  "mail.com",
-  "zoho.com",
-  "yandex.com",
-]);
 
 /** What the search pass answers when no page is about this person. */
 export const NO_MATCHING_PAGES = "NO MATCHING PAGES";
@@ -95,13 +84,26 @@ export const FINDING_TOPICS = [
   "Other",
 ] as const;
 
+/**
+ * Where the person is, for research: the records' location, else an address
+ * that names a place and not a street (`placeFromAddresses`). A city a
+ * person typed on the contact page reaches research this way, and a home
+ * street address never does.
+ */
+export function researchPlace(
+  contact: Pick<HydratedContact, "location" | "addresses">,
+): string | null {
+  return contact.location || placeFromAddresses(contact.addresses);
+}
+
 /** The records' facts, one per line, for both passes. */
 function knownFacts(contact: HydratedContact): string {
   const known: string[] = [`Full name: ${contact.name}`];
   if (contact.company) known.push(`Company: ${contact.company}`);
   if (contact.role) known.push(`Current role: ${contact.role}`);
   if (contact.headline) known.push(`Headline: ${contact.headline}`);
-  if (contact.location) known.push(`Location: ${contact.location}`);
+  const place = researchPlace(contact);
+  if (place) known.push(`Location: ${place}`);
   if (contact.industry) known.push(`Industry: ${contact.industry}`);
   if (contact.website) known.push(`Website: ${contact.website}`);
   if (contact.about) known.push(`Bio: ${contact.about.slice(0, 800)}`);
@@ -262,10 +264,14 @@ export function suggestedSearches(contact: HydratedContact): string[] {
     .slice(0, 2))
     if (job.company !== contact.company)
       searches.push(`${name} ${job.company}`);
-  if (contact.location) searches.push(`${name} ${contact.location}`);
-  const domain = contact.emails?.[0]?.email.split("@")[1]?.toLowerCase();
-  if (domain && !FREE_EMAIL_DOMAINS.has(domain))
-    searches.push(`${name} ${domain}`);
+  const place = researchPlace(contact);
+  if (place) searches.push(`${name} ${place}`);
+  // The first email at an employer's domain, wherever it is in the list: a
+  // work email added after a personal one still counts.
+  const domain = contact.emails
+    ?.map((entry) => workEmailDomain(entry.email))
+    .find(Boolean);
+  if (domain) searches.push(`${name} ${domain}`);
   for (const link of (contact.socialLinks ?? []).slice(0, 3)) {
     const handle = profileHandle(link.url);
     if (handle) searches.push(`"${handle}"`);
@@ -279,7 +285,7 @@ export function missingTopics(contact: HydratedContact): string[] {
   if (!contact.experience?.some((e) => !e.isCurrent))
     missing.push("past roles");
   if (!contact.education?.length) missing.push("education");
-  if (!contact.location) missing.push("location");
+  if (!researchPlace(contact)) missing.push("location");
   if (!contact.socialLinks?.length) missing.push("public profiles");
   if (!contact.about) missing.push("a professional summary");
   if (!contact.attributes?.length)
@@ -428,7 +434,7 @@ function personLine(contact: HydratedContact): string {
   return [
     contact.name,
     [contact.role, contact.company].filter(Boolean).join(" at "),
-    contact.location,
+    researchPlace(contact),
     ...(contact.education ?? []).slice(0, 2).map((school) => school.school),
     ...(contact.socialLinks ?? []).slice(0, 2).map((link) => link.url),
   ]

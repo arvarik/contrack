@@ -181,6 +181,26 @@ describe("the research record", () => {
     expect(record().runs.map((run) => run.models.length)).toEqual([0, 2]);
   });
 
+  it("tells the contact list how the latest run ended", async () => {
+    const outcome = async () =>
+      (
+        (await request(app).get("/api/contacts?view=slim")).body as Array<{
+          id: string;
+          researchOutcome: string | null;
+        }>
+      ).find((row) => row.id === id)?.researchOutcome;
+    expect(await outcome()).toBeNull();
+    merge({}, { outcome: "no-public-info", models: ["gemini-3.8-flash"] });
+    expect(await outcome()).toBe("no-public-info");
+    merge({ location: "New York, NY" }, { citations: [finra] });
+    expect(await outcome()).toBe("added");
+    // A record the list cannot read is no outcome, not a failed list.
+    sqlite
+      .prepare("UPDATE contacts SET aiResearch = ? WHERE id = ?")
+      .run("not json", id);
+    expect(await outcome()).toBeNull();
+  });
+
   it("keeps notes that the old merge did not write", () => {
     sqlite
       .prepare("UPDATE contacts SET aiBackground = ? WHERE id = ?")

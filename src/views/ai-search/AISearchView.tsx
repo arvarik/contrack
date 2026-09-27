@@ -3,14 +3,29 @@
  *
  * Displays the research depth, Standard or Deep, with what each does and
  * what a contact takes and costs, then a selectable list of non-archived
- * contacts with status badges (✨ previously searched, NEW never searched,
- * 🔴 last search errored). Users choose the depth, select contacts, then
- * click "Start enrichment" to begin a batch. The page is named "Contact
+ * contacts with status badges (✨ previously searched, "No page" when the
+ * last research found none, NEW never searched, 🔴 last search errored).
+ * Two rows of filters narrow the list, one for who and one for how their
+ * research stands (`lib/enrichmentFilters`), each pill with its count. Users
+ * choose the depth, select contacts, and see the batch's time and cost under
+ * "Start enrichment" before they press it. The page is named "Contact
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  */
-import React, { useState, useCallback, useMemo } from "react";
-import { Sparkles, Search, User, Link, Mail, Hourglass } from "lucide-react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
+import {
+  CircleDashed,
+  Globe,
+  History,
+  Hourglass,
+  Link,
+  Mail,
+  Radar,
+  Search,
+  SearchX,
+  Sparkles,
+  User,
+} from "lucide-react";
 import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
@@ -25,11 +40,18 @@ import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
 import {
+  batchEstimate,
   COST_NOTE,
   DEPTH_ORDER,
   DEPTH_WORDS,
   perContact,
 } from "../../lib/researchDepth";
+import {
+  matchesContactFilter,
+  matchesResearchFilter,
+  type ContactFilter,
+  type ResearchFilter,
+} from "../../lib/enrichmentFilters";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 
 /** The two depths as tiles: what each does, and its time and cost. */
@@ -42,18 +64,66 @@ const DEPTH_CHOICES: readonly Choice<ResearchDepth>[] = DEPTH_ORDER.map(
   }),
 );
 
-type DataFilter = "all" | "has_links" | "has_email" | "no_data";
+/** One pill: its value, its words, and its glyph. */
+interface FilterPill<T> {
+  id: T;
+  label: string;
+  icon: React.ReactNode;
+}
+
+/** Who: every contact, the tracked ones, or by what the records have. */
+const CONTACT_FILTERS: readonly FilterPill<ContactFilter>[] = [
+  { id: "all", label: "All", icon: <User className="w-3 h-3" /> },
+  { id: "tracked", label: "Tracked", icon: <Radar className="w-3 h-3" /> },
+  { id: "has_links", label: "Has links", icon: <Link className="w-3 h-3" /> },
+  { id: "has_email", label: "Has email", icon: <Mail className="w-3 h-3" /> },
+  { id: "no_data", label: "No data", icon: <Search className="w-3 h-3" /> },
+];
+
+/** How their research stands: never run, old, or found no page. */
+const RESEARCH_FILTERS: readonly FilterPill<ResearchFilter>[] = [
+  { id: "any", label: "Any", icon: <Globe className="w-3 h-3" /> },
+  {
+    id: "not_yet",
+    label: "Not yet",
+    icon: <CircleDashed className="w-3 h-3" />,
+  },
+  {
+    id: "stale",
+    label: "6+ months ago",
+    icon: <History className="w-3 h-3" />,
+  },
+  {
+    id: "found_nothing",
+    label: "Found nothing",
+    icon: <SearchX className="w-3 h-3" />,
+  },
+];
+
+/**
+ * The label of a row of pills: above the pills on a phone, where the pills
+ * need the width, and before them from `sm`, level with their first line.
+ */
+const ROW_LABEL =
+  "shrink-0 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant sm:w-[4.5rem] sm:pt-2";
 
 export interface AISearchViewProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   hideHeaderDescription?: boolean;
+  /**
+   * A new value shows everyone never researched: the search box empties,
+   * and the filters go to All and Not yet. The page's "Select them" sends
+   * one with its selection, so no one it selects is hidden from the list.
+   */
+  showNotYet?: number;
 }
 
 export function AISearchView({
   selectedIds: controlledSelectedIds,
   onSelectionChange: setControlledSelectedIds,
   hideHeaderDescription = false,
+  showNotYet,
 }: AISearchViewProps = {}) {
   const { data: contacts = [], isLoading } = useContacts();
   const { startSearch, isStarting, batch, limitMessage, clearLimit } =
@@ -66,41 +136,82 @@ export function AISearchView({
   const selectedIds = controlledSelectedIds ?? internalSelectedIds;
   const setSelectedIds = setControlledSelectedIds ?? setInternalSelectedIds;
   const [showConfirm, setShowConfirm] = useState(false);
-  const [dataFilter, setDataFilter] = useState<DataFilter>("all");
+  const [contactFilter, setContactFilter] = useState<ContactFilter>("all");
+  const [researchFilter, setResearchFilter] = useState<ResearchFilter>("any");
+  const filtered = contactFilter !== "all" || researchFilter !== "any";
   // Standard each time the page opens: a costlier run is a choice made for
   // this batch, not one that sticks.
   const [depth, setDepth] = useState<ResearchDepth>("standard");
 
-  // Filter out archived and ghost contacts; apply search + data filter
+  // The raw setters, not chooseContactFilter and chooseResearchFilter: the
+  // selection that came with the request stays.
+  useEffect(() => {
+    if (showNotYet === undefined) return;
+    setSearchQuery("");
+    setContactFilter("all");
+    setResearchFilter("not_yet");
+  }, [showNotYet]);
+
+  // Archived and ghost contacts are never researched; the search box
+  // narrows the rest before either row of filters does.
+  const searchedContacts = useMemo(() => {
+    const list = contacts.filter((c) => !c.isArchived && !c.isGhost);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.company || "").toLowerCase().includes(q) ||
+        (c.role || "").toLowerCase().includes(q),
+    );
+  }, [contacts, searchQuery]);
+
   const filteredContacts = useMemo(() => {
-    let list = contacts.filter((c) => !c.isArchived && !c.isGhost);
+    const now = Date.now();
+    return searchedContacts.filter(
+      (c) =>
+        matchesContactFilter(c, contactFilter) &&
+        matchesResearchFilter(c, researchFilter, now),
+    );
+  }, [searchedContacts, contactFilter, researchFilter]);
 
-    // Data filter
-    if (dataFilter === "has_links") {
-      list = list.filter(
-        (c) => (c.socialLinkCount ?? c.socialLinks?.length ?? 0) > 0,
+  // What each pill would show, beside the other row's choice: a pill says
+  // how many it holds before it is pressed.
+  const counts = useMemo(() => {
+    const now = Date.now();
+    const contactCounts = new Map<ContactFilter, number>();
+    const researchCounts = new Map<ResearchFilter, number>();
+    for (const pill of CONTACT_FILTERS)
+      contactCounts.set(
+        pill.id,
+        searchedContacts.filter(
+          (c) =>
+            matchesContactFilter(c, pill.id) &&
+            matchesResearchFilter(c, researchFilter, now),
+        ).length,
       );
-    } else if (dataFilter === "has_email") {
-      list = list.filter((c) => c.emails && c.emails.length > 0);
-    } else if (dataFilter === "no_data") {
-      list = list.filter(
-        (c) =>
-          (!c.emails || c.emails.length === 0) &&
-          (c.socialLinkCount ?? c.socialLinks?.length ?? 0) === 0,
+    for (const pill of RESEARCH_FILTERS)
+      researchCounts.set(
+        pill.id,
+        searchedContacts.filter(
+          (c) =>
+            matchesContactFilter(c, contactFilter) &&
+            matchesResearchFilter(c, pill.id, now),
+        ).length,
       );
-    }
+    return { contactCounts, researchCounts };
+  }, [searchedContacts, contactFilter, researchFilter]);
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          (c.company || "").toLowerCase().includes(q) ||
-          (c.role || "").toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [contacts, searchQuery, dataFilter]);
+  // A new filter is a new list, and a selection kept from the old one
+  // would start contacts the person can no longer see.
+  const chooseContactFilter = (filter: ContactFilter) => {
+    setContactFilter(filter);
+    setSelectedIds(new Set());
+  };
+  const chooseResearchFilter = (filter: ResearchFilter) => {
+    setResearchFilter(filter);
+    setSelectedIds(new Set());
+  };
 
   // Track which contacts errored in the current/last batch
   const erroredContactIds = useMemo(() => {
@@ -143,13 +254,6 @@ export function AISearchView({
     setSelectedIds(new Set());
   };
 
-  const FILTERS: { id: DataFilter; label: string; icon: React.ReactNode }[] = [
-    { id: "all", label: "All", icon: <User className="w-3 h-3" /> },
-    { id: "has_links", label: "Has links", icon: <Link className="w-3 h-3" /> },
-    { id: "has_email", label: "Has email", icon: <Mail className="w-3 h-3" /> },
-    { id: "no_data", label: "No data", icon: <Search className="w-3 h-3" /> },
-  ];
-
   return (
     <div className="space-y-4">
       {/*
@@ -181,7 +285,7 @@ export function AISearchView({
       {!isLoading &&
         filteredContacts.length === 0 &&
         !searchQuery &&
-        dataFilter === "all" && (
+        !filtered && (
           <EmptyState
             icon={Sparkles}
             title="No contacts available"
@@ -191,9 +295,7 @@ export function AISearchView({
 
       {/* Contact list */}
       {!isLoading &&
-        (filteredContacts.length > 0 ||
-          searchQuery ||
-          dataFilter !== "all") && (
+        (filteredContacts.length > 0 || searchQuery || filtered) && (
           <>
             {/* How deep: named, described and priced before anything is
                 chosen, so the cost of a batch is no surprise. */}
@@ -236,27 +338,25 @@ export function AISearchView({
                 </div>
 
                 {/*
-                  Data filter pills. The active one is the selected tint,
-                  like every filter pill, not a filled button.
+                  Two rows of filter pills, one choice in each, and a contact
+                  shows when it matches both. The active pill is the selected
+                  tint, like every filter pill, not a filled button, and each
+                  pill counts what it would show.
                 */}
-                <div className="flex gap-1.5 flex-wrap">
-                  {FILTERS.map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => {
-                        setDataFilter(f.id);
-                        setSelectedIds(new Set());
-                      }}
-                      className={cn(
-                        "hit-area",
-                        filterPill(dataFilter === f.id),
-                      )}
-                    >
-                      {f.icon}
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
+                <FilterRow
+                  label="Contacts"
+                  pills={CONTACT_FILTERS}
+                  value={contactFilter}
+                  counts={counts.contactCounts}
+                  onChange={chooseContactFilter}
+                />
+                <FilterRow
+                  label="Research"
+                  pills={RESEARCH_FILTERS}
+                  value={researchFilter}
+                  counts={counts.researchCounts}
+                  onChange={chooseResearchFilter}
+                />
               </div>
 
               {/* Count + select all */}
@@ -281,12 +381,23 @@ export function AISearchView({
 
               {/* Contact rows — reduced max height to avoid scrolling on 14" */}
               <div className="max-h-[360px] overflow-y-auto">
-                {filteredContacts.length === 0 &&
-                  (searchQuery || dataFilter !== "all") && (
-                    <div className="px-6 py-6 text-center text-sm text-on-surface-variant">
-                      No contacts match the current filter
-                    </div>
-                  )}
+                {filteredContacts.length === 0 && (searchQuery || filtered) && (
+                  <div className="px-6 py-6 text-center text-sm text-on-surface-variant space-y-2">
+                    <p>No contacts match the current filter</p>
+                    {filtered && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          chooseContactFilter("all");
+                          chooseResearchFilter("any");
+                        }}
+                        className="hit-area state-layer rounded-lg px-2 py-0.5 text-sm font-semibold text-primary"
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                )}
                 {filteredContacts.map((contact) => (
                   <ContactRow
                     key={contact.id}
@@ -331,6 +442,17 @@ export function AISearchView({
                 ? `Start enrichment (${selectedIds.size} selected)`
                 : "Select contacts to search"}
             </button>
+            {/* What the batch will take, before the press, at the depth
+                chosen above: the confirmation says it again. */}
+            {selectedIds.size > 0 && (
+              <p
+                aria-live="polite"
+                className="-mt-2 text-center text-xs text-on-surface-variant tabular-nums"
+              >
+                {DEPTH_WORDS[depth].name} ·{" "}
+                {batchEstimate(depth, selectedIds.size)}
+              </p>
+            )}
           </>
         )}
 
@@ -343,6 +465,55 @@ export function AISearchView({
         isStarting={isStarting}
         depth={depth}
       />
+    </div>
+  );
+}
+
+/**
+ * One row of filter pills: a label, then one choice among the pills, each
+ * with the number of contacts it would show. A group of toggle buttons, so a
+ * screen reader hears the row's name and which pill is pressed.
+ */
+function FilterRow<T extends string>({
+  label,
+  pills,
+  value,
+  counts,
+  onChange,
+}: {
+  label: string;
+  pills: readonly FilterPill<T>[];
+  value: T;
+  counts: ReadonlyMap<T, number>;
+  onChange: (value: T) => void;
+}) {
+  const labelId = `enrichment-filter-${label.toLowerCase()}`;
+  return (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-2">
+      <span id={labelId} className={ROW_LABEL}>
+        {label}
+      </span>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className="flex flex-1 flex-wrap gap-1.5"
+      >
+        {pills.map((pill) => (
+          <button
+            key={pill.id}
+            type="button"
+            aria-pressed={value === pill.id}
+            onClick={() => onChange(pill.id)}
+            className={cn("hit-area", filterPill(value === pill.id))}
+          >
+            {pill.icon}
+            {pill.label}
+            <span className="font-medium tabular-nums opacity-70">
+              {counts.get(pill.id) ?? 0}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

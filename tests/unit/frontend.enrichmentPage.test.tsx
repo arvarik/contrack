@@ -19,8 +19,14 @@ vi.mock("../../src/api/enrichment", () => ({
 }));
 
 vi.mock("../../src/views/ai-search", () => ({
-  AISearchView: ({ selectedIds }: { selectedIds?: Set<string> }) => (
-    <div data-testid="ai-search-view">
+  AISearchView: ({
+    selectedIds,
+    showNotYet,
+  }: {
+    selectedIds?: Set<string>;
+    showNotYet?: number;
+  }) => (
+    <div data-testid="ai-search-view" data-show-not-yet={showNotYet ?? ""}>
       Selected: {selectedIds ? Array.from(selectedIds).join(",") : "none"}
     </div>
   ),
@@ -104,8 +110,17 @@ describe("EnrichmentPage", () => {
     const enrichBtn = screen.getByRole("button", { name: /Select them/i });
     expect(enrichBtn).toBeTruthy();
 
+    const view = screen.getByTestId("ai-search-view");
+    expect(view.dataset.showNotYet).toBe("");
     fireEvent.click(enrichBtn);
     expect(screen.getByText("Selected: c1,c2")).toBeTruthy();
+    // The list is asked to show exactly them, whatever filter was on.
+    expect(view.dataset.showNotYet).not.toBe("");
+    expect(
+      screen.getByText(
+        "Select them to research their work, schools and profiles",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders autoEnrich switch and the admin's research count", () => {

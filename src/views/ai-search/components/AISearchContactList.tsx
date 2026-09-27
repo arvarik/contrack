@@ -5,12 +5,13 @@
  * Each row shows: checkbox, avatar, name/role, and a status badge.
  *
  * Status badge logic:
+ * - "No page" + date: the last research found no page about this person
  * - ✨ + date: previously searched (aiHydratedAt is non-null)
  * - New: never searched (gray pill)
  * - 🔴 Error: last batch errored for this contact
  */
 import React from "react";
-import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
+import { Sparkles, CheckCheck, AlertCircle, SearchX } from "lucide-react";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../../../shared/scoreBand";
 import { formatDay } from "../../../lib/datetime";
@@ -111,6 +112,22 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
       <span className={cn(TONE_WASH.error, BADGE, "flex items-center gap-1")}>
         <AlertCircle className="w-3 h-3" />
         Error
+      </span>
+    );
+  }
+
+  // The last research searched and found no page about this person: the
+  // "Found nothing" filter's rows, which want a detail more before a retry.
+  if (contact.aiHydratedAt && contact.researchOutcome === "no-public-info") {
+    return (
+      <span className={cn(TONE_WASH.neutral, BADGE, "flex items-center gap-1")}>
+        <SearchX className="w-3 h-3" />
+        No page
+        {/* The date, from `sm`: on a phone it would cut the name short. */}
+        <span className="hidden sm:inline">
+          {" "}
+          · {formatDay(contact.aiHydratedAt)}
+        </span>
       </span>
     );
   }
