@@ -40,6 +40,10 @@ import {
   type Scope,
 } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
+import {
+  DEFAULT_RESEARCH_DEPTH,
+  type ResearchDepth,
+} from "../../../shared/researchDepth.ts";
 
 // =============================================================================
 // Error Classification
@@ -126,13 +130,17 @@ const GC_TTL_MS = 30 * 60 * 1000;
 const INTER_JOB_DELAY_MS = 2_500;
 
 /**
- * Time allowed for one contact: the search pass, the two asks that follow it
- * at once when it cites nothing, and the extraction. At thinking "high" a
- * search pass took from 20 s to more than 80 s, and one that returned
- * nothing took as long (2026-09-26). Three asks one after the other ran past
- * this limit; two in a row stay inside it.
+ * Time allowed for one contact, by depth: the first asks, the two that
+ * follow them at once when none cites a page, and the extraction. A search
+ * ask took from 15 s to more than 80 s, and one that returned nothing took
+ * as long (2026-09-26). Three asks one after the other ran past 240 s; two
+ * rounds stay inside it. A deep run's ask at thinking "high" can take the
+ * whole 120 s an ask has, hence its minute more.
  */
-const JOB_TIMEOUT_MS = 240_000;
+export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
+  standard: 240_000,
+  deep: 300_000,
+};
 
 class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, OwnedBatch>();
@@ -185,6 +193,7 @@ class AISearchJobQueue extends EventEmitter {
     scope: Scope,
     batchId: string,
     contacts: Array<{ id: string; name: string }>,
+    depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
   ): { batch: AISearchBatch; added: number } | null {
     const batch = this.getBatch(scope, batchId);
     if (!batch || batch.status !== "processing") return null;
@@ -205,6 +214,7 @@ class AISearchJobQueue extends EventEmitter {
         contactName: contact.name,
         status: "queued",
         fieldsUpdated: 0,
+        depth,
       });
       added += 1;
     }
@@ -221,6 +231,7 @@ class AISearchJobQueue extends EventEmitter {
     scope: Scope,
     contacts: Array<{ id: string; name: string }>,
     strategyName: string,
+    depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
   ): AISearchBatch {
     // Lazy GC: clean up old completed batches
     this.gc();
@@ -234,6 +245,7 @@ class AISearchJobQueue extends EventEmitter {
       contactName: c.name,
       status: "queued" as AISearchJobStatus,
       fieldsUpdated: 0,
+      depth,
     }));
 
     const batch: AISearchBatch = {
@@ -248,7 +260,7 @@ class AISearchJobQueue extends EventEmitter {
     this.batches.set(batchId, { batch, ownerId: scope.ownerId });
     log.info(
       "AISearchQueue",
-      `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}`,
+      `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}, depth: ${depth}`,
     );
     return batch;
   }
@@ -300,10 +312,13 @@ class AISearchJobQueue extends EventEmitter {
           this.emit(batchId, batch);
           // A contact researched before gets a second round: the prompt
           // names what is known, the sites already read, and what is missing.
-          const prompt = buildSearchPrompt(contact, researchHistory(contact));
+          const depth = job.depth ?? DEFAULT_RESEARCH_DEPTH;
+          const history = researchHistory(contact);
+          const prompt = buildSearchPrompt(contact, history);
           const result = await withTimeout(
-            (signal) => strategy.execute(contact, prompt, signal),
-            JOB_TIMEOUT_MS,
+            (signal) =>
+              strategy.execute(contact, prompt, signal, { depth, history }),
+            RESEARCH_TIMEOUT_MS[depth],
             controller.signal,
           );
           controller.signal.throwIfAborted();

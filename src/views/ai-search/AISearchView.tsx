@@ -1,11 +1,13 @@
 /**
  * AISearchView — Main AI Search settings sub-view.
  *
- * Displays a selectable list of non-archived contacts with status badges
- * (✨ previously searched, NEW never searched, 🔴 last search errored).
- * Users select contacts, then click "Start enrichment" to begin a batch. The
- * page is named "Contact enrichment" in the UI (`lib/names`). The code keeps
- * the `aiSearch` name of the subsystem behind it.
+ * Displays the research depth, Standard or Deep, with what each does and
+ * what a contact takes and costs, then a selectable list of non-archived
+ * contacts with status badges (✨ previously searched, NEW never searched,
+ * 🔴 last search errored). Users choose the depth, select contacts, then
+ * click "Start enrichment" to begin a batch. The page is named "Contact
+ * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
+ * the subsystem behind it.
  */
 import React, { useState, useCallback, useMemo } from "react";
 import { Sparkles, Search, User, Link, Mail, Hourglass } from "lucide-react";
@@ -21,6 +23,24 @@ import {
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
+import {
+  COST_NOTE,
+  DEPTH_ORDER,
+  DEPTH_WORDS,
+  perContact,
+} from "../../lib/researchDepth";
+import type { ResearchDepth } from "../../../shared/researchDepth";
+
+/** The two depths as tiles: what each does, and its time and cost. */
+const DEPTH_CHOICES: readonly Choice<ResearchDepth>[] = DEPTH_ORDER.map(
+  (depth) => ({
+    value: depth,
+    label: DEPTH_WORDS[depth].name,
+    hint: DEPTH_WORDS[depth].does,
+    detail: perContact(depth),
+  }),
+);
 
 type DataFilter = "all" | "has_links" | "has_email" | "no_data";
 
@@ -47,6 +67,9 @@ export function AISearchView({
   const setSelectedIds = setControlledSelectedIds ?? setInternalSelectedIds;
   const [showConfirm, setShowConfirm] = useState(false);
   const [dataFilter, setDataFilter] = useState<DataFilter>("all");
+  // Standard each time the page opens: a costlier run is a choice made for
+  // this batch, not one that sticks.
+  const [depth, setDepth] = useState<ResearchDepth>("standard");
 
   // Filter out archived and ghost contacts; apply search + data filter
   const filteredContacts = useMemo(() => {
@@ -115,7 +138,7 @@ export function AISearchView({
 
   const handleConfirmStart = () => {
     const ids = Array.from(selectedIds);
-    startSearch(ids);
+    startSearch(ids, { depth });
     setShowConfirm(false);
     setSelectedIds(new Set());
   };
@@ -172,6 +195,31 @@ export function AISearchView({
           searchQuery ||
           dataFilter !== "all") && (
           <>
+            {/* How deep: named, described and priced before anything is
+                chosen, so the cost of a batch is no surprise. */}
+            <section
+              aria-labelledby="research-depth-heading"
+              className={cn(CARD, "space-y-3")}
+            >
+              <h3
+                id="research-depth-heading"
+                className={cn(SECTION_HEADING, "flex items-center gap-2")}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Research depth
+              </h3>
+              <ChoiceGroup
+                label="Research depth"
+                value={depth}
+                options={DEPTH_CHOICES}
+                onChange={setDepth}
+                className="sm:grid-cols-2"
+              />
+              <p className="text-xs text-on-surface-variant text-pretty">
+                {COST_NOTE}
+              </p>
+            </section>
+
             <div className={cn(CARD, "p-0 overflow-hidden")}>
               {/* Search bar + filters */}
               <div className="px-4 py-2.5 bg-surface-container-low space-y-2">
@@ -293,6 +341,7 @@ export function AISearchView({
         onConfirm={handleConfirmStart}
         selectedContacts={selectedContacts}
         isStarting={isStarting}
+        depth={depth}
       />
     </div>
   );

@@ -302,7 +302,11 @@ export class OpenAICompatibleAdapter implements AIProvider {
           reasoning_content?: string | null;
         };
       }>;
-      usage?: { total_tokens?: number };
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      };
     }
     const response = (await this.client.chat.completions.create(
       requestParams as unknown as Parameters<
@@ -336,6 +340,17 @@ export class OpenAICompatibleAdapter implements AIProvider {
       "OpenAICompatible",
       `${this.name} ${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
     );
-    return { text, model, tokenCount, latencyMs };
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(response.usage && {
+        usage: {
+          inputTokens: response.usage.prompt_tokens ?? 0,
+          outputTokens: response.usage.completion_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+    };
   }
 }

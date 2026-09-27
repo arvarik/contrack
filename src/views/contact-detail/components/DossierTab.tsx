@@ -21,7 +21,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 import type {
@@ -41,6 +40,7 @@ import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { ResearchCard } from "./ResearchCard";
+import { EnrichMenu } from "./EnrichMenu";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -68,12 +68,16 @@ export interface DossierTabProps {
  * Empty state: a contact with no bio, no work history, no education, and no
  * notes to pull a dossier from.
  *
- * This used to be a card with a header and a disabled-looking subhead that
- * had nothing to say. An empty state has to answer "what is missing and how do
- * I get it", and here the answer is a specific place to go.
+ * An empty state has to answer "what is missing and how do I get it". The
+ * answer is here, not on another page: Enrich contact researches this
+ * person at the depth chosen from its menu, and the progress panel opens.
+ * It linked to the Enrichment settings page when that page was the only
+ * place research could start.
  */
-const EmptyDossier = ({ name }: { name: string }) => {
+const EmptyDossier = ({ contact }: { contact: Contact }) => {
   const aiAllowed = useAiAllowed();
+  const canEnrich = aiAllowed && !contact.isGhost;
+  const first = contact.firstName || contact.name.split(" ")[0];
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -86,21 +90,21 @@ const EmptyDossier = ({ name }: { name: string }) => {
       <div className="space-y-1.5 max-w-sm">
         <h3 className="font-bold text-on-surface">No dossier yet</h3>
         <p className="text-sm text-on-surface-variant text-pretty">
-          The dossier collects background on {name}: what they do, where they
-          have worked and studied, and anything else worth remembering. Contact
-          enrichment researches that from the web and fills it in
+          {canEnrich
+            ? `Enrichment searches the web for ${first}\u2019s work, schools and profiles, and links each fact to its page`
+            : `Add ${first}\u2019s work, schools and profiles in the details, or paste a bio into a note`}
         </p>
       </div>
-      {aiAllowed && (
-        <Link to="/settings/enrichment" className="btn-primary">
-          <Sparkles className="w-4 h-4" />
-          Enrich contacts
-        </Link>
+      <EnrichMenu
+        contact={contact}
+        label="Enrich contact"
+        variant="primaryLarge"
+      />
+      {canEnrich && (
+        <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
+          Or add details by hand, or paste a bio into a note
+        </p>
       )}
-      <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
-        You can also fill any of this in by hand from the contact&rsquo;s
-        details, or paste a bio into a note and let Contrack pull it apart
-      </p>
     </motion.div>
   );
 };
@@ -269,7 +273,7 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
       {hasContent ? (
         <DossierContent contact={contact} />
       ) : (
-        <EmptyDossier name={contact.name} />
+        <EmptyDossier contact={contact} />
       )}
     </div>
   );

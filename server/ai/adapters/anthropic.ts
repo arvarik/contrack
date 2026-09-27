@@ -525,6 +525,7 @@ export class AnthropicAdapter implements AIProvider {
       text,
       model,
       tokenCount,
+      usage: { inputTokens, outputTokens },
       latencyMs,
       citations,
       ...(searchQueries.length > 0 && { searchQueries }),

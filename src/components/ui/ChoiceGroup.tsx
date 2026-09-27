@@ -26,8 +26,9 @@
  * 3. `pending` holds every tile while a change saves, and `locked` holds
  *    them for good, dimmed, when the environment sets the value. Both use
  *    `aria-disabled`, not `disabled`, so the focused tile keeps its focus.
- * 4. A tile with a hint puts it under the label. Pressing the chosen tile
- *    does nothing, so a click cannot save the same value twice.
+ * 4. A tile with a hint puts it under the label, and a `detail`, such as a
+ *    time and a cost, on a line of its own under that. Pressing the chosen
+ *    tile does nothing, so a click cannot save the same value twice.
  *
  * The columns are the caller's (`className`, a grid), one by default.
  *
@@ -39,11 +40,13 @@ import { SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { RadioDot } from "./RadioDot";
 
-/** One tile: its value, its words, and an optional second line. */
+/** One tile: its value, its words, and up to two lines under them. */
 export interface Choice<T> {
   value: T;
   label: string;
   hint?: string;
+  /** A third line, in figures: "About 30 s and $0.13 a contact". */
+  detail?: string;
 }
 
 export interface ChoiceGroupProps<T> {
@@ -118,6 +121,11 @@ export function ChoiceGroup<T>({
               {option.hint && (
                 <span className="block text-xs text-on-surface-variant mt-0.5">
                   {option.hint}
+                </span>
+              )}
+              {option.detail && (
+                <span className="block text-xs font-semibold text-on-surface tabular-nums mt-1">
+                  {option.detail}
                 </span>
               )}
             </span>

@@ -731,10 +731,20 @@ curl -X DELETE http://localhost:3210/api/auth/me/avatar \
 
 ### `POST /api/contacts/:id/enrich`
 
-Single-contact enrichment via AI web grounding. Uses the provider-appropriate strategy (two-pass for Gemini, single-pass for OpenAI/Anthropic).
+Single-contact enrichment via AI web grounding. Every provider runs the two-pass strategy.
+
+**Request Body (optional):**
+
+```json
+{ "depth": "deep" }
+```
+
+`depth` is `standard`, the default, or `deep`. An empty body is Standard. Any other value returns `400`. See [Research depth](features/ai-search.md#research-depth).
 
 ```bash
-curl -X POST http://localhost:3210/api/contacts/abc123/enrich
+curl -X POST http://localhost:3210/api/contacts/abc123/enrich \
+  -H "Content-Type: application/json" \
+  -d '{"depth":"deep"}'
 ```
 
 **Response:**
@@ -743,18 +753,23 @@ curl -X POST http://localhost:3210/api/contacts/abc123/enrich
 {
   "success": true,
   "fieldsUpdated": 5,
-  "latencyMs": 2340,
-  "models": ["gemini-2.5-flash"],
-  "tokenCount": 1250
+  "outcome": "added",
+  "latencyMs": 48210,
+  "models": ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+  "tokenCount": 21250
 }
 ```
+
+`outcome` is `added`, `nothing-new` or `no-public-info`.
 
 The server accepts one active research request per contact. It validates the
 result before it writes any fields. It fills empty fields and adds missing
 child records. It preserves existing contact data.
 
-The request has a 240-second deadline. A disconnected client cancels further
-work. The provider can still charge for a request it already accepted.
+The request has a deadline of 240 seconds at Standard and 290 seconds at
+Deep, under Node's 300-second request timeout. A disconnected client cancels
+further work. The provider can still charge for a
+request it already accepted.
 
 **Error codes:** `409` (research already active, contact unavailable, or contact
 changed during research), `429` (queue or quota full), `502` (invalid AI output),
@@ -1125,11 +1140,15 @@ Start a batch enrichment job for selected contacts.
 ```json
 {
   "contactIds": ["abc123", "def456", "ghi789"],
-  "strategy": "two-pass"
+  "strategy": "two-pass",
+  "depth": "standard"
 }
 ```
 
-Strategy defaults to the provider-appropriate strategy if omitted.
+Strategy defaults to the provider-appropriate strategy if omitted. `depth` is
+`standard`, the default, or `deep`, for every contact of the start. While the
+account's own batch runs, a start joins it (`appended: true`), and each joined
+contact keeps the depth its own start named.
 
 Use 1 to 100 unique, nonempty contact IDs. Supported strategies are `two-pass`,
 `single-pass`, and `searxng`. The server checks the selected strategy and every
@@ -1150,6 +1169,10 @@ curl -X POST http://localhost:3210/api/ai-search \
   "jobCount": 2
 }
 ```
+
+A start that joined the running batch answers with that batch's id, the
+number of contacts that joined, and `"appended": true`. Each job in the status
+and the stream carries its `depth`.
 
 ---
 

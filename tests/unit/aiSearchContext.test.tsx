@@ -81,7 +81,10 @@ describe("startSearch", () => {
   it("keeps a limit on the page and out of the toasts by default", () => {
     const { latest } = mount();
     act(() => latest().startSearch(["c1"]));
-    expect(start.mutate).toHaveBeenCalledWith(["c1"], expect.any(Object));
+    expect(start.mutate).toHaveBeenCalledWith(
+      { contactIds: ["c1"], depth: undefined },
+      expect.any(Object),
+    );
 
     act(() => lastCallbacks().onError(lockedByOthers()));
     expect(latest().limitMessage).toBe(MESSAGE);
@@ -106,6 +109,15 @@ describe("startSearch", () => {
     expect(toastMock.error).toHaveBeenCalledWith("AI is not set up");
     expect(toastMock.info).not.toHaveBeenCalled();
     expect(latest().limitMessage).toBeNull();
+  });
+
+  it("sends the depth the caller chose", () => {
+    const { latest } = mount();
+    act(() => latest().startSearch(["c1"], { depth: "deep" }));
+    expect(start.mutate).toHaveBeenCalledWith(
+      { contactIds: ["c1"], depth: "deep" },
+      expect.any(Object),
+    );
   });
 
   it("starts without a toast: the progress panel says it", () => {

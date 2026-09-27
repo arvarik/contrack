@@ -38,6 +38,12 @@ import {
   mergeSearchResult,
   researchHistory,
 } from "../services/aiSearch/mergeEngine.ts";
+import { RESEARCH_TIMEOUT_MS } from "../services/aiSearch/jobQueue.ts";
+import {
+  DEFAULT_RESEARCH_DEPTH,
+  researchDepthSchema,
+  type ResearchDepth,
+} from "../../shared/researchDepth.ts";
 import {
   contactRepo,
   RELATION_REGISTRY,
@@ -607,13 +613,21 @@ router.post(
  * Quota-aware: Returns 429 if grounding RPD is exhausted.
  * Returns 503 if AI provider is not configured.
  */
+/** The single enrichment's body: nothing, or the depth. */
+const enrichBodySchema = z.preprocess(
+  (body) => body ?? {},
+  z.object({ depth: researchDepthSchema.optional() }),
+);
+
 router.post(
   "/contacts/:id/enrich",
   requireContact,
+  validateBody(enrichBodySchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);
     const scope = scopeOf(req);
+    const depth: ResearchDepth = req.body.depth ?? DEFAULT_RESEARCH_DEPTH;
     // requireContact above already checked the owner. This repeats it against
     // the repository so the check is visible at the call that spends money.
     contactRepo.requireOwned(scope, id);
@@ -633,19 +647,20 @@ router.post(
       // not the legacy default provider.
       const researchProvider = providerIdFor("research");
       const strategy = getStrategy(strategyName);
-      const prompt = buildSearchPrompt(contact, researchHistory(contact));
+      const history = researchHistory(contact);
+      const prompt = buildSearchPrompt(contact, history);
 
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
+        `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} (${depth}) for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
       );
 
-      // Both passes, and two more search asks when the first cites nothing:
-      // the same allowance a batch job has. Node's own request timeout is
-      // 300 s, and server.ts sets no shorter one.
+      // The allowance a batch job has at this depth, under Node's own
+      // request timeout of 300 s (server.ts sets no shorter one).
       const result = await withTimeout(
-        (signal) => strategy.execute(contact, prompt, signal),
-        240_000,
+        (signal) =>
+          strategy.execute(contact, prompt, signal, { depth, history }),
+        Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000),
         controller.signal,
       );
       controller.signal.throwIfAborted();

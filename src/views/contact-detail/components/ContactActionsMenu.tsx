@@ -7,22 +7,23 @@
  * every visit, so they all live here now, in one menu built on `ActionMenu`:
  *
  * 1. Change colour, which opens the colour picker under this button.
- * 2. Enrich contact, which researches this one contact on the web.
+ * 2. Enrich contact and Enrich deeply, which research this one contact on
+ *    the web at the Standard or the Deep depth. Each row's hint is the time
+ *    a contact takes.
  * 3. Copy basic details and Copy full details.
  * 4. Archive or Unarchive.
  * 5. Delete, last and on its own surface tone.
  *
- * Enrich contact starts the same background run as the Enrichment settings
- * page, for one contact (`startSearch` in `AISearchContext`). It asks for
- * no confirmation, because one contact is one request: the start toasts,
- * the progress panel opens at the bottom right, and the person keeps
- * working. The item is not there when AI assistance is off or for a ghost,
- * which has nothing yet to search from. While a start is on its way, or
- * while the running batch still has a job for this contact, it reads
- * "Enriching…" and is disabled, so a second press cannot queue the same
- * contact twice. A limit (a cooldown, or the lock another account holds)
- * comes back as a toast, since the menu has closed and has no page to say
- * it on.
+ * The enrich rows start the same background run as the Enrichment settings
+ * page, for one contact (`startSearch` in `AISearchContext`). They ask for
+ * no confirmation, because one contact is one request: the progress panel
+ * opens at the bottom right, and the person keeps working. They are not
+ * there when AI assistance is off or for a ghost, which has nothing yet to
+ * search from. While a start is on its way, or while the running batch
+ * still has a job for this contact, they read "Enriching…" and are
+ * disabled, so a second press cannot queue the same contact twice. The lock
+ * another account holds comes back as a toast, since the menu has closed
+ * and has no page to say it on.
  *
  * Change avatar was here. It is the pencil on the avatar now, beside the
  * thing it changes (`ProfileHeader`).
@@ -40,13 +41,14 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { AISearchJobStatus, Contact } from "../../../types";
+import type { Contact } from "../../../types";
 import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
-import { useAISearch } from "../../../contexts/AISearchContext";
+import { isEnriching, useAISearch } from "../../../contexts/AISearchContext";
+import { depthTime } from "../../../lib/researchDepth";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
@@ -81,13 +83,6 @@ export function fullDetailsText(contact: Contact): string {
   return textChunks.join("\n");
 }
 
-/** A job that has not finished yet: waiting, searching, or merging. */
-const UNFINISHED: ReadonlySet<AISearchJobStatus> = new Set([
-  "queued",
-  "searching",
-  "merging",
-]);
-
 type ContactActionsMenuProps = Pick<
   ProfileHeaderProps,
   | "contact"
@@ -108,16 +103,8 @@ export const ContactActionsMenu = ({
   const trigger = useRef<HTMLButtonElement>(null);
   const closePicker = useCallback(() => setPickerOpen(false), []);
   const aiAllowed = useAiAllowed();
-  const { startSearch, isStarting, batch } = useAISearch();
-
-  // This contact is being enriched: a start is on its way, or the running
-  // batch still has an unfinished job for it.
-  const enriching =
-    isStarting ||
-    (batch?.status === "processing" &&
-      batch.jobs.some(
-        (job) => job.contactId === contact.id && UNFINISHED.has(job.status),
-      ));
+  const search = useAISearch();
+  const enriching = isEnriching(search, contact.id);
 
   const copy = (text: string, success: string) => {
     copyToClipboard(text).then(
@@ -158,8 +145,27 @@ export const ContactActionsMenu = ({
             id: "enrich",
             label: enriching ? "Enriching…" : "Enrich contact",
             icon: Sparkles,
+            hint: enriching ? undefined : depthTime("standard"),
+            speakHint: true,
             disabled: enriching,
-            onSelect: () => startSearch([contact.id], { limitAs: "toast" }),
+            onSelect: () =>
+              search.startSearch([contact.id], {
+                limitAs: "toast",
+                depth: "standard",
+              }),
+          },
+          {
+            id: "enrich-deep",
+            label: "Enrich deeply",
+            icon: Sparkles,
+            hint: enriching ? undefined : depthTime("deep"),
+            speakHint: true,
+            disabled: enriching,
+            onSelect: () =>
+              search.startSearch([contact.id], {
+                limitAs: "toast",
+                depth: "deep",
+              }),
           },
         ]
       : []),

@@ -66,7 +66,7 @@ export const EnrichmentPage = () => {
           id="auto-enrich"
           title="Enrich new contacts automatically"
           prefKey="autoEnrich"
-          description="Researches every contact you add. Each run uses some of the provider's quota"
+          description="Researches every contact you add, at Standard depth"
           inline
         >
           <Switch

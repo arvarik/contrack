@@ -498,6 +498,26 @@ test.describe("Settings — Tools and Data", () => {
     });
     await expect(autoEnrichSwitch).toHaveAttribute("aria-checked", "false");
   });
+
+  test("enrichment page names and prices both research depths, Standard chosen", async ({
+    page,
+  }) => {
+    await page.goto("/settings/enrichment");
+    const depth = page.getByRole("radiogroup", { name: "Research depth" });
+    await expect(depth.getByRole("radio")).toHaveCount(2);
+    await expect(
+      depth.getByRole("radio", { name: /^Standard/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    const deep = depth.getByRole("radio", { name: /^Deep/ });
+    await expect(deep).toContainText("a contact");
+    await deep.click();
+    await expect(deep).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByText("The first 5,000 web searches each month are free", {
+        exact: false,
+      }),
+    ).toBeVisible();
+  });
 });
 
 test.describe("Tracked contacts", () => {

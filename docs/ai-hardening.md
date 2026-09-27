@@ -6,15 +6,15 @@ failures and preserves access to active batch progress.
 
 ## Request limits
 
-| Control             | Behavior                                                                                                                                                  |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generation queue    | Two active calls and 16 waiting calls per server. Overflow returns `429 AI_BUSY`.                                                                         |
-| Generation deadline | 60 seconds by default, capped at 150 seconds. Queue time and retries consume this deadline.                                                               |
-| Output limit        | 4,096 tokens by default. Individual features set smaller limits where appropriate.                                                                        |
-| Transient failures  | At most one application retry. Native SDK automatic retries are disabled.                                                                                 |
-| Invalid output      | JSON and schema failures do not trigger another generation.                                                                                               |
-| Enrichment          | One workflow per contact. The two-pass strategy makes one search call and one extraction call. A search that cites no pages is asked twice more, at once. |
-| Batch size          | 1 to 100 unique active contacts. A start while the account's own batch runs joins that batch.                                                             |
+| Control             | Behavior                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generation queue    | Two active calls and 16 waiting calls per server. Overflow returns `429 AI_BUSY`.                                                                                           |
+| Generation deadline | 60 seconds by default, capped at 150 seconds. Queue time and retries consume this deadline.                                                                                 |
+| Output limit        | 4,096 tokens by default. Individual features set smaller limits where appropriate.                                                                                          |
+| Transient failures  | At most one application retry. Native SDK automatic retries are disabled.                                                                                                   |
+| Invalid output      | JSON and schema failures do not trigger another generation.                                                                                                                 |
+| Enrichment          | One workflow per contact. The two-pass strategy makes one search call, two at Deep, and one extraction call. When no first search cites a page, two more are asked at once. |
+| Batch size          | 1 to 100 unique active contacts. A start while the account's own batch runs joins that batch.                                                                               |
 
 Cancellation removes queued work and stops later steps. The SDK receives the
 abort signal for active work. Cancellation cannot reverse provider charges

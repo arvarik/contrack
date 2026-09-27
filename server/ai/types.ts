@@ -158,6 +158,13 @@ export interface AIGenerateResult {
   /** Total token count (prompt + completion), if reported by the provider. */
   tokenCount?: number;
 
+  /**
+   * The tokens billed as input and as output, thinking included in output,
+   * when the provider reports them. A price is per input or output token,
+   * so the total alone cannot give a cost.
+   */
+  usage?: { inputTokens: number; outputTokens: number };
+
   /** Wall-clock latency of the generate call in milliseconds. */
   latencyMs: number;
 }

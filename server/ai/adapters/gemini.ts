@@ -455,7 +455,18 @@ export class GeminiAdapter implements AIProvider {
     }
 
     let text = response.text ?? "";
-    const tokenCount = response.usageMetadata?.totalTokenCount;
+    const metadata = response.usageMetadata;
+    const tokenCount = metadata?.totalTokenCount;
+    // The search results Gemini read count as input, and its thinking is
+    // billed as output.
+    const usage = metadata && {
+      inputTokens:
+        (metadata.promptTokenCount ?? 0) +
+        (metadata.toolUsePromptTokenCount ?? 0),
+      outputTokens:
+        (metadata.candidatesTokenCount ?? 0) +
+        (metadata.thoughtsTokenCount ?? 0),
+    };
     const latencyMs = Date.now() - startMs;
 
     // Validate JSON at the adapter boundary so downstream callers never
@@ -517,6 +528,7 @@ export class GeminiAdapter implements AIProvider {
       text,
       model,
       tokenCount,
+      ...(usage && { usage }),
       latencyMs,
       citations,
       ...(searchQueries.length > 0 && { searchQueries }),

@@ -7,23 +7,25 @@
  * its sources as "Source 1" links to Google redirects. Here the fields stay
  * in their own cards above, and this card holds what only it can say:
  *
- *   - each enrichment, when, with which model, and what it added
+ *   - each enrichment, when, at which depth, with which model, and what it
+ *     added
  *   - the facts the latest one reported, each beside the page it came from
  *   - every page the research cited, by site and address
  *
- * It reads `contact.aiResearch` (shared/researchRecord.ts), which only the
+ * Enrich again opens the two research depths (`EnrichMenu`). It reads
+ * `contact.aiResearch` (shared/researchRecord.ts), which only the
  * enrichment merge writes.
  */
 import { useId, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { ExternalLink, Globe, Sparkles } from "lucide-react";
+import { ExternalLink, Globe } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 import type { Contact } from "../../../types";
 import { cn } from "../../../lib/utils";
 import { CARD, FIELD_LABEL, SECTION_HEADING_SPACED } from "../../../lib/styles";
-import { useAiAllowed } from "../../../hooks/useAiAllowed";
-import { useOptionalAISearch } from "../../../contexts/AISearchContext";
+import { DEPTH_WORDS } from "../../../lib/researchDepth";
+import { EnrichMenu } from "./EnrichMenu";
 import {
   isLegacyDossier,
   parseResearchRecord,
@@ -36,9 +38,6 @@ import { modelName, runSummary, sourceDisplay } from "../../../lib/research";
 const FINDINGS_SHOWN = 8;
 /** Sources shown before "Show all". */
 const SOURCES_SHOWN = 8;
-
-/** The job states that mean research for a contact is still under way. */
-const UNFINISHED = new Set(["queued", "searching", "merging"]);
 
 /** "Sep 26, 3:21 PM", or the raw value when it is no date. */
 function when(value: string): string {
@@ -128,8 +127,6 @@ export function ResearchCard({ contact }: { contact: Contact }) {
   const headingId = useId();
   const findingsId = useId();
   const sourcesId = useId();
-  const aiAllowed = useAiAllowed();
-  const search = useOptionalAISearch();
   const [allFindings, setAllFindings] = useState(false);
   const [allSources, setAllSources] = useState(false);
 
@@ -158,13 +155,6 @@ export function ResearchCard({ contact }: { contact: Contact }) {
     );
   }, [record]);
   const researched = runs.length > 0 || legacy || !!contact.aiHydratedAt;
-
-  const enriching =
-    !!search?.isStarting ||
-    (search?.batch?.status === "processing" &&
-      search.batch.jobs.some(
-        (job) => job.contactId === contact.id && UNFINISHED.has(job.status),
-      ));
 
   if (!researched && !notes) return null;
 
@@ -197,20 +187,12 @@ export function ResearchCard({ contact }: { contact: Contact }) {
             Check a detail against its page before you rely on it
           </p>
         </div>
-        {search && aiAllowed && !contact.isGhost && (
-          <button
-            type="button"
-            onClick={() =>
-              search.startSearch([contact.id], { limitAs: "toast" })
-            }
-            disabled={enriching}
-            aria-busy={enriching}
-            className="btn-secondary shrink-0"
-          >
-            <Sparkles aria-hidden="true" className="w-4 h-4" />
-            {enriching ? "Enriching…" : "Enrich again"}
-          </button>
-        )}
+        <EnrichMenu
+          contact={contact}
+          label="Enrich again"
+          variant="secondary"
+          className="shrink-0"
+        />
       </div>
 
       {runs.length > 0 && (
@@ -222,17 +204,23 @@ export function ResearchCard({ contact }: { contact: Contact }) {
                 key={`${run.at}-${index}`}
                 className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 text-sm"
               >
-                {/* When, and with what, in one column; what it did beside. */}
-                <span className="shrink-0 sm:w-36">
+                {/* When, how deep and with what, in one column; what it
+                    did beside. */}
+                <span className="shrink-0 sm:w-48">
                   <time
                     dateTime={run.at}
                     className="block tabular-nums text-on-surface-variant"
                   >
                     {when(run.at)}
                   </time>
-                  {run.models[0] && (
+                  {(run.depth || run.models[0]) && (
                     <span className="block text-xs text-on-surface-variant">
-                      {modelName(run.models[0])}
+                      {[
+                        run.depth && DEPTH_WORDS[run.depth].name,
+                        run.models[0] && modelName(run.models[0]),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   )}
                 </span>

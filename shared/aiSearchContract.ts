@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { researchDepthSchema } from "./researchDepth.ts";
 
 /** Shared status contract for batch polling, live updates, and cancellation. */
 export const aiSearchBatchSchema = z.object({
@@ -40,6 +41,8 @@ export const aiSearchBatchSchema = z.object({
         outcome: z.enum(["added", "nothing-new", "no-public-info"]).optional(),
         /** The models that ran, search pass first. */
         models: z.array(z.string().max(120)).max(4).optional(),
+        /** How thoroughly this contact is researched. */
+        depth: researchDepthSchema.optional(),
         startedAt: z.string().optional(),
         completedAt: z.string().optional(),
         latencyMs: z.number().nonnegative().optional(),

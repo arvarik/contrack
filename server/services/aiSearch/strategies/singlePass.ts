@@ -85,7 +85,7 @@ export class SinglePassStrategy implements AISearchStrategy {
     );
     if (citations.length === 0)
       throw new AppError(
-        "Research did not include source links. No contact fields changed. Choose another research model in AI settings.",
+        "Research did not include source links. No contact fields changed. Try again, or choose another research model in AI settings.",
         502,
         { code: "AI_GROUNDING_MISSING" },
       );

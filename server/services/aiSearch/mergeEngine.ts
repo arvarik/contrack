@@ -51,7 +51,9 @@ import {
   type ResearchOutcome,
   type ResearchRecord,
   type ResearchRun,
+  type ResearchUsage,
 } from "../../../shared/researchRecord.ts";
+import type { ResearchDepth } from "../../../shared/researchDepth.ts";
 
 // =============================================================================
 // Allowed Scalar Fields
@@ -114,6 +116,10 @@ export interface ResearchProvenance {
   searchQueries?: string[];
   /** `"no-public-info"` when no page was about this person. */
   outcome?: "found" | "no-public-info";
+  /** How thoroughly the research ran. */
+  depth?: ResearchDepth;
+  /** What it spent, over every call. */
+  usage?: ResearchUsage;
 }
 
 /**
@@ -487,6 +493,8 @@ export function mergeSearchResult(
     {
       at: new Date().toISOString(),
       models: (provenance.models ?? []).slice(0, 4),
+      ...(provenance.depth && { depth: provenance.depth }),
+      ...(provenance.usage && { usage: provenance.usage }),
       outcome,
       added: added.slice(0, 30),
       queries: (provenance.searchQueries ?? [])

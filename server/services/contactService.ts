@@ -492,7 +492,13 @@ export const contactService = {
           try {
             const strategy = validateEnrichmentStrategy();
             const check = jobQueue.canStartBatch(scope);
-            if (check.allowed) {
+            // While this account's batch runs, the new contact joins it. A
+            // batch created beside it would never run.
+            if (check.appendTo) {
+              jobQueue.appendToBatch(scope, check.appendTo, [
+                { id, name: body.name },
+              ]);
+            } else if (check.allowed) {
               const batch = jobQueue.createBatch(
                 scope,
                 [{ id, name: body.name }],

@@ -18,6 +18,7 @@ import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/inde
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
 import { AppError, RateLimitedError } from "../utils/AppError.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { researchDepthSchema } from "../../shared/researchDepth.ts";
 
 export const aiSearchRouter = Router();
 
@@ -40,6 +41,8 @@ const aiSearchBodySchema = z.object({
       "Contact IDs must be unique",
     ),
   strategy: z.enum(["two-pass", "single-pass", "searxng"]).optional(),
+  /** How thoroughly to research each contact. Default "standard". */
+  depth: researchDepthSchema.optional(),
 });
 
 // =============================================================================
@@ -51,7 +54,7 @@ aiSearchRouter.post(
   validateBody(aiSearchBodySchema),
   asyncHandler(async (req, res, next) => {
     const scope = scopeOf(req);
-    const { contactIds, strategy: requestedStrategy } = req.body;
+    const { contactIds, strategy: requestedStrategy, depth } = req.body;
 
     const strategy = validateEnrichmentStrategy(requestedStrategy);
 
@@ -84,7 +87,12 @@ aiSearchRouter.post(
     // running holds the lock, so a second batch started beside it would never
     // run: a join that fails is refused, not turned into a new batch.
     if (check.appendTo) {
-      const joined = jobQueue.appendToBatch(scope, check.appendTo, contacts);
+      const joined = jobQueue.appendToBatch(
+        scope,
+        check.appendTo,
+        contacts,
+        depth,
+      );
       if (!joined)
         throw new AppError(
           "Research is finishing. Try again in a moment.",
@@ -98,7 +106,7 @@ aiSearchRouter.post(
     }
 
     // Create batch
-    const batch = jobQueue.createBatch(scope, contacts, strategy);
+    const batch = jobQueue.createBatch(scope, contacts, strategy, depth);
 
     // Kick off processing async (fire-and-forget — don't await)
     jobQueue.processBatch(batch.id).catch((err) => {

@@ -18,7 +18,8 @@ import {
 import { motion } from "motion/react";
 import type { AISearchBatch, AISearchJob } from "../../../types";
 import { cn } from "../../../lib/utils";
-import { BTN_QUIET, CARD, ICON_BTN } from "../../../lib/styles";
+import { BTN_QUIET, CARD, ICON_BTN, TAG_PILL } from "../../../lib/styles";
+import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { DURATION, EASE } from "../../../lib/motion";
 import { NAMES } from "../../../lib/names";
 
@@ -263,6 +264,13 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
       >
         {job.contactName}
       </span>
+      {/* The default depth goes unsaid: a row says only a Deep run, which
+          takes minutes where Standard takes seconds. */}
+      {job.depth === "deep" && (
+        <span className={cn(TAG_PILL, "shrink-0")}>
+          {DEPTH_WORDS.deep.name}
+        </span>
+      )}
       {/* Right side: latency or status text */}
       <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">
         {job.status === "success" && job.latencyMs != null && (

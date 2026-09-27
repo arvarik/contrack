@@ -21,6 +21,7 @@ import {
   buildExtractionPrompt,
   buildSearchPrompt,
   buildShortSearchPrompt,
+  formalName,
   missingTopics,
   NO_MATCHING_PAGES,
   parseExtraction,
@@ -162,6 +163,67 @@ describe("the search prompt", () => {
         }),
       ),
     ).not.toContain("education");
+  });
+});
+
+describe("what the prompt knows about the person", () => {
+  const imported = contact({
+    socialLinks: [
+      { platform: "linkedin", url: "https://www.linkedin.com/in/rowanv" },
+    ] as HydratedContact["socialLinks"],
+    sources: [
+      {
+        id: "s1",
+        platform: "linkedin",
+        externalId: "https://www.linkedin.com/in/rowanv",
+        connectedOn: "14 Oct 2013",
+        importedAt: "2026-09-24 20:39:22",
+      },
+    ],
+  });
+
+  it("says where the records came from, and when", () => {
+    expect(buildSearchPrompt(imported)).toContain(
+      "Where these records came from:\n  - the user's LinkedIn connections, imported 2026-09-24, connected since 14 Oct 2013",
+    );
+  });
+
+  it("says a page that links to the person's own profile is about them", () => {
+    expect(buildSearchPrompt(imported)).toContain(
+      "The profile addresses in the records are this person's own. A page that links to one of them is about them.",
+    );
+    expect(buildSearchPrompt(contact())).not.toContain(
+      "profile addresses in the records",
+    );
+    // The short form names the profile too.
+    expect(buildShortSearchPrompt(imported)).toContain(
+      "https://www.linkedin.com/in/rowanv",
+    );
+  });
+
+  it("searches the formal name behind a short one, and only an unambiguous one", () => {
+    expect(formalName("Tom Ashby")).toBe("Thomas Ashby");
+    expect(formalName("Chris Lee")).toBeNull();
+    expect(formalName("Tom")).toBeNull();
+    expect(
+      suggestedSearches(contact({ name: "Tom Vale" })).slice(0, 2),
+    ).toEqual([
+      '"Tom Vale" Northwind Partners',
+      '"Thomas Vale" Northwind Partners',
+    ]);
+  });
+});
+
+describe("the search budget", () => {
+  it("asks the first search for four to six searches", () => {
+    expect(buildSearchPrompt(contact())).toContain("Run four to six searches.");
+  });
+
+  it("asks a deep run's second ask for a complete profile, with ten or more searches", () => {
+    const prompt = buildSearchPrompt(contact(), null, "complete");
+    expect(prompt).toContain("Aim for a complete profile");
+    expect(prompt).toContain("Run at least ten different searches");
+    expect(prompt).not.toContain("Run four to six searches.");
   });
 });
 

@@ -428,7 +428,11 @@ export class OpenAIAdapter implements AIProvider {
     // can't narrow them at our call site. We assert the non-streaming branch here.
     interface ChatCompletionResponse {
       choices?: Array<{ message?: { content?: string | null } }>;
-      usage?: { total_tokens?: number };
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      };
     }
     const response = await this.withEffort(model, options, (effort) => {
       const requestParams: Record<string, unknown> = { model, messages };
@@ -458,7 +462,18 @@ export class OpenAIAdapter implements AIProvider {
       "OpenAIAdapter",
       `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
     );
-    return { text, model, tokenCount, latencyMs };
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(response.usage && {
+        usage: {
+          inputTokens: response.usage.prompt_tokens ?? 0,
+          outputTokens: response.usage.completion_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+    };
   }
 
   // ── Responses API with web_search tool ────────────────────────────────
@@ -490,7 +505,11 @@ export class OpenAIAdapter implements AIProvider {
           queries?: string[];
         };
       }>;
-      usage?: { total_tokens?: number };
+      usage?: {
+        total_tokens?: number;
+        input_tokens?: number;
+        output_tokens?: number;
+      };
     }
     const response = await this.withEffort(model, options, (effort) => {
       const requestParams: Record<string, unknown> = {
@@ -552,6 +571,12 @@ export class OpenAIAdapter implements AIProvider {
       text,
       model,
       tokenCount,
+      ...(response.usage && {
+        usage: {
+          inputTokens: response.usage.input_tokens ?? 0,
+          outputTokens: response.usage.output_tokens ?? 0,
+        },
+      }),
       latencyMs,
       citations,
       ...(searchQueries.length > 0 && { searchQueries }),

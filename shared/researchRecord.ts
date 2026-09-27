@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { z } from "zod";
+import { researchDepthSchema } from "./researchDepth.ts";
 
 /** Runs kept per contact. Older runs drop off the front. */
 export const MAX_RESEARCH_RUNS = 12;
@@ -55,9 +56,24 @@ export const researchAdditionSchema = z.object({
  * `outcome` is what the person reads first: it added details, it read pages
  * but everything on them was already known, or no page matched the person.
  */
+/**
+ * What a run spent: the web searches the provider reported, and the tokens
+ * of every call, thinking included. Gemini does not always report the
+ * searches of a pass that found nothing, so the count can be low.
+ */
+export const researchUsageSchema = z.object({
+  calls: z.number().int().nonnegative(),
+  searches: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+});
+
 export const researchRunSchema = z.object({
   at: z.string().max(40),
   models: z.array(z.string().max(120)).max(4),
+  /** Absent on runs recorded before there were two depths. */
+  depth: researchDepthSchema.optional(),
+  usage: researchUsageSchema.optional(),
   outcome: z.enum(["added", "nothing-new", "no-public-info"]),
   added: z.array(researchAdditionSchema).max(30),
   sourceCount: z.number().int().nonnegative(),
@@ -75,6 +91,7 @@ export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchFinding = z.infer<typeof researchFindingSchema>;
 export type ResearchAddition = z.infer<typeof researchAdditionSchema>;
 export type ResearchRun = z.infer<typeof researchRunSchema>;
+export type ResearchUsage = z.infer<typeof researchUsageSchema>;
 export type ResearchRecord = z.infer<typeof researchRecordSchema>;
 export type ResearchOutcome = ResearchRun["outcome"];
 
