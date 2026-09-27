@@ -15,6 +15,9 @@ Search cache keys include the database revision and a five-minute time window.
 An Ask Contrack key also holds the provider and the model, or `local` when AI is off or no provider is set.
 An AI-off request therefore never reads an entry that a model verified.
 An older request cannot repopulate the current search cache after a contact change.
+The semantic cache (L2) keeps verified answers by question vector, with the same revision in each entry.
+An edit or a merge bumps the revision, so no older entry matches a later question.
+Each entry also carries the facets, the provider and model, and the question's entity key, and one account never reads another's.
 
 Automatic contact refreshes use local embeddings of saved fields.
 Contact edits no longer request AI keyword expansion. The migration clears older inferred expansion terms.
@@ -39,6 +42,11 @@ The planner, the reranker and the brief run in the AI queue's search lane, which
 Research calls hold only the shared slots, so an Ask question does not wait behind them.
 
 ## The contact index
+
+Every row carries the owner's token, "o" and the owner's id in hex, and every query matches it first.
+The query's words never match that column: `scopedMatch` excludes it with `- {ownerTok} :`.
+Before, the word "of" matched the token of every owner whose id starts with f, in every one of that owner's rows.
+The note index shares the same rule.
 
 `contacts_fts` is at FTS version 5 (`FTS_SCHEMA_VERSION` in `server/services/search/ftsIndex.ts`).
 Version 5 gives tags and interests a column of their own, `tags`.
@@ -99,6 +107,29 @@ Three facets need more than one column:
 Ask Contrack puts it in the L1 cache key and in the key that lets identical requests share one search.
 `tests/unit/search.facetSql.test.ts` checks that every facet keeps the same rows in SQL as in `matchesFacet`.
 
+## Local models and vector storage
+
+A local cross-encoder reorders the top 30 of the local list for a `conceptual` question.
+It runs on the CPU worker inside `SEARCH_RERANK_BUDGET_MS`, 25 ms by default.
+Scores that arrive later are dropped, and the list keeps its fused order, so the stage cannot delay the list past its budget.
+Names, emails, phone numbers, quoted phrases and short `mixed` queries keep their fused order, because a cross-encoder is not typo-tolerant.
+See [The local cross-encoder](features/ai-search.md#the-local-cross-encoder) for the measurements.
+
+`search_embeddings` stores int8 vectors, one byte per component at one scale for the table.
+The scale lives in `app_settings` as `search.vectorScale`, and the query goes through the same scale.
+A byte is at most ±90: sqlite-vec 0.1.9 squares each byte difference in 16 bits on its NEON path, and a difference of 182 or more overflows.
+The boot migration turns a float table into int8 in one transaction, with no re-embedding, and keeps the partition key and the status columns.
+Compared with float on the same vectors:
+
+| Contacts | Bytes per vector | Table             | KNN p95, k = 100 | int8 top 10 in float's top 10 |
+| -------- | ---------------- | ----------------- | ---------------- | ----------------------------- |
+| 5,000    | 1,536 → 384      | 8.2 MB → 2.6 MB   | 0.6 ms → 0.5 ms  | 0.98                          |
+| 50,000   | 1,536 → 384      | 80.1 MB → 24.9 MB | 6.0 ms → 4.3 ms  | 0.97                          |
+
+The top 10 differ in near ties among look-alike generated profiles.
+The contacts the golden questions expect stay in them: the vector channel alone scores recall@10 0.762 with both at 5,000, and 0.591 with both at 50,000.
+The search gate's `hybrid` channel moved by one rank on one question, from MRR 0.983 to 0.982, inside the gate's tolerance.
+
 ## Ranking and the fusion constant
 
 The local list fuses the keyword and vector lists by weighted reciprocal rank (`reciprocalRankFusion` in `server/services/search/hybridRetrieval.ts`).
@@ -147,21 +178,23 @@ The search gate (`tests/eval/search.eval.test.ts`, with `tests/eval/harness.ts`)
 It had 50. Five kinds are new, with 4 queries each.
 They are a nickname and a surname, a phone number as digits, an email address, a hyphenated name, and the first letters of a rare name.
 Eight targets now have emails or phone numbers, and "Anne-Marie Dubois-Laurent" is a new target.
-The gate scores four channels:
+The gate scores five channels:
 
 - `sidebar` is `searchService.searchFts`, the sidebar search.
 - `lexical` is `lexicalSearch` in broad mode.
 - `fused` is `hybridRetrieval` with no plan: the keyword and vector lists, fused by weighted RRF. The weights and k move this number.
-- `hybrid` is what Ask Contrack answers without a model. A name, an email or a phone number gets the strict keyword answer. A question that names a known place, company or industry gets its implicit facets. Every other question gets the fused list.
+- `hybrid` is what Ask Contrack answers without a model, with the cross-encoder off. A name, an email or a phone number gets the strict keyword answer. A question that names a known place, company or industry gets its implicit facets. Every other question gets the fused list.
+- `reranked` is `hybrid` with the cross-encoder on. It replays the scores recorded in `tests/fixtures/search-eval/rerank-scores.json`, so the gate needs no model, and a pair the recording lacks fails the gate.
 
 The baseline at 300 contacts, as recall@10 / MRR:
 
-| Channel   | Now           | v2.0, 50 queries                     |
-| --------- | ------------- | ------------------------------------ |
-| `sidebar` | 0.657 / 0.657 | 0.52 / 0.52                          |
-| `lexical` | 1.000 / 0.936 | 0.98 / 0.89                          |
-| `fused`   | 1.000 / 0.950 | 1.00 / 0.86, under the name `hybrid` |
-| `hybrid`  | 1.000 / 0.983 | No channel                           |
+| Channel    | Now           | v2.0, 50 queries                     |
+| ---------- | ------------- | ------------------------------------ |
+| `sidebar`  | 0.657 / 0.657 | 0.52 / 0.52                          |
+| `lexical`  | 1.000 / 0.936 | 0.98 / 0.89                          |
+| `fused`    | 1.000 / 0.949 | 1.00 / 0.86, under the name `hybrid` |
+| `hybrid`   | 1.000 / 0.982 | No channel                           |
+| `reranked` | 1.000 / 1.000 | No channel                           |
 
 `scripts/benchmark-search.ts` has three modes. Each mode uses a temporary database and never opens the user's database.
 

@@ -11,7 +11,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { faker } from "@faker-js/faker";
-import { ensureLocalOwner } from "../../server/db.ts";
+import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
@@ -182,5 +182,44 @@ describe("keyword search finds the forms of a name among 5,000 contacts", () => 
     expect(result.matches.map((m) => [m.name, m.verified])).toEqual([
       ["Marcus Delgado", true],
     ]);
+  });
+});
+
+describe("a query word and the owner token", () => {
+  it("never matches the owner token, whatever the owner's id", async () => {
+    // The owner token is "o" and the owner's id in hex, and a query word is
+    // a prefix clause. For an id that starts with f the token starts with
+    // "of", and the clause for "of" matched it in every row the owner has:
+    // "cup of tea" found every contact, and every BM25 score moved. One
+    // account in sixteen has such an id.
+    const ownerId = "f00d1e2d-3c4b-4a59-8687-a0b1c2d3e4f5";
+    sqlite
+      .prepare(
+        "INSERT INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, ?)",
+      )
+      .run(ownerId, "tea@example.com", "teaowner", "x$y");
+    const owner = scopeForOwnerId(ownerId);
+    await contactService.bulkCreateContacts(owner, [
+      { name: "Wren Ashby", about: "Always asks for a cup of tea" },
+      { name: "Tamsin Hale", about: "Plain notes only" },
+      { name: "Ivo Marsh", role: "Engineer" },
+    ]);
+    const names = new Map(
+      (
+        sqlite
+          .prepare("SELECT id, name FROM contacts WHERE ownerId = ?")
+          .all(ownerId) as { id: string; name: string }[]
+      ).map((row) => [row.id, row.name]),
+    );
+    const found = (query: string) =>
+      lexicalSearch(owner, query, 20, null, true).map((row) =>
+        names.get(row.contactId),
+      );
+
+    expect(found("of")).toEqual(["Wren Ashby"]);
+    expect(found("cup of tea")).toEqual(["Wren Ashby"]);
+    expect(
+      searchService.searchFts(owner, "tea of").map((row) => row.name),
+    ).toEqual(["Wren Ashby"]);
   });
 });

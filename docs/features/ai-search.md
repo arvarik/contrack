@@ -29,8 +29,14 @@ classifyQuery ─────────→ email, phone, quoted or name:
 Implicit facets ───────→ a known place, company or industry, and nothing
     │                    more: the matching contacts, verified, no model call
     ▼
+L2 cache, when a model would run ──→ the same question in other words:
+    │                                 the cached answer, no model call
+    ▼
 Local retrieval (about 10 ms)
-FTS5 + vector KNN (384-dim MiniLM), fused by weighted RRF (k = 15)
+FTS5 + vector KNN (384-dim MiniLM, int8), fused by weighted RRF (k = 15)
+    │
+    ▼
+Cross-encoder, questions only, 25 ms budget: reorders the top 30
     │
     ├──→ AI off or no provider: this list is the answer, unverified
     │
@@ -52,10 +58,11 @@ Complete chunk, streamed via NDJSON to the client
 and the NDJSON callers use the same steps.
 
 1. **The L1 cache.** The key holds the owner, the account's
-   `search_revision`, a 5-minute bucket, the provider, the model, the facets
-   and the normalized query. With AI off or no provider, the key holds
-   `local` in place of the provider and the model. An AI-off request
-   therefore never reads an answer that a model verified.
+   `search_revision`, a 5-minute bucket, the provider, the model, the facets,
+   the cross-encoder once it has loaded, and the normalized query. With AI
+   off or no provider, the key holds `local` in place of the provider and the
+   model. An AI-off request therefore never reads an answer that a model
+   verified.
 2. **The facets.** The request's `filters` and the facets typed in the
    question make one set. A facet sent both ways counts once. Every later
    stage applies the facets before its limit. See [Facets](#facets).
@@ -76,18 +83,24 @@ and the NDJSON callers use the same steps.
    nothing more, the answer is a facet answer, as in step 3, and no model
    runs. Otherwise the implicit facets join the facets of step 2. See
    [Implicit facets](#implicit-facets).
-8. **The local list.** For the other questions, `localRetrieval` runs FTS5
+8. **The L2 cache.** When a model would run, the question's vector first
+   looks for a verified answer to the same question in other words. A hit
+   is the answer, with no model call. See
+   [The semantic cache](#the-semantic-cache).
+9. **The local list.** For the other questions, `localRetrieval` runs FTS5
    in broad mode and a vector KNN search. Weighted reciprocal rank fusion
    (k = 15) joins the two lists, with the weights of the query's kind. See
-   [Ranking](#ranking). No planner runs, and the step takes about 10 ms. The
-   top 30 go to the client as the instant chunk.
-9. **AI off.** When AI is off for the account, or no provider is set, the
-   local list is the final answer. No instant chunk goes out, because no
-   model stage follows.
-10. **The model stages.** The planner (`parseSearchQuery`) runs in the AI
+   [Ranking](#ranking). No planner runs, and the step takes about 10 ms. For
+   a question, the local cross-encoder then reorders the top 30. See
+   [The local cross-encoder](#the-local-cross-encoder). The top 30 go to the
+   client as the instant chunk.
+10. **AI off.** When AI is off for the account, or no provider is set, the
+    local list is the final answer. No instant chunk goes out, because no
+    model stage follows.
+11. **The model stages.** The planner (`parseSearchQuery`) runs in the AI
     queue's search lane, and the filtered retrieval follows it. These stages
     and the reranker share a 12-second budget. The planner starts before
-    step 8 builds the local list, so its request is on the network while the
+    step 9 builds the local list, so its request is on the network while the
     list is built. The local list then adds no time to the answer. The
     planner reads the question without its typed facets. The facets hold
     for the plan's hard filter, the retrieval and the trait lists.
@@ -100,7 +113,7 @@ and the NDJSON callers use the same steps.
       is the filtered contacts by last contact, never contacted first.
     - **The reranker.** Any other plan goes to the compact reranker with the
       top 30 candidates. See [Evidence and reasons](#evidence-and-reasons).
-11. **A failure.** An error, a timeout or an edit in the account during the
+12. **A failure.** An error, a timeout or an edit in the account during the
     search ends with a fresh local list. The old keyword-only fallback
     (`searchFts`, recall@10 0.52) is never the Ask answer now.
 
@@ -108,7 +121,7 @@ and the NDJSON callers use the same steps.
 
 Results stream to the UI as NDJSON chunks, in two phases:
 
-1. **Phase 1, the instant chunk:** the local list from step 8, top 30. Every match carries `verified: false`, and the chunk carries `fallback: true`. The p95 at 5,000 contacts is 13.0 to 13.1 ms.
+1. **Phase 1, the instant chunk:** the local list from step 9, top 30. Every match carries `verified: false`, and the chunk carries `fallback: true`. The p95 at 5,000 contacts is 25.1 ms for a question, which the cross-encoder reorders, and 13.2 ms for any other query.
 
 2. **Phase 2, the complete chunk:** the final answer. It replaces the Phase 1 list. A match that a filter or the reranker proved carries `verified: true` and a reason that the server built.
 
@@ -306,6 +319,53 @@ the lists reached the contacts, so every run gives the same order.
 recall@10 1.00, and k = 15 gave the best fused MRR. See
 [Search reliability](../search-hardening.md#ranking-and-the-fusion-constant).
 
+### The local cross-encoder
+
+A cross-encoder reads the question and one profile together and scores how
+well they fit. `rerankLocal` (`server/services/search/crossEncoder.ts`)
+scores the top 30 of the local list for a question and sorts them by that
+score. The rest of the list stays in its fused order. The model is
+`Xenova/ms-marco-TinyBERT-L-2-v2`, 4.5 MB at 8 bits, and it runs on the CPU
+worker beside the embedding model. It loads once when the server starts.
+
+- **Questions only.** The stage runs for the `conceptual` kind: a question
+  word or five words or more. A name, an email, a phone number and a quoted
+  phrase never reach it. A short `mixed` query keeps its fused order too,
+  because it is usually a misspelled name or the first letters of one, and
+  a cross-encoder is not typo-tolerant. On the search gate's corpus at 5,000
+  contacts it moved "Shivaun Murphey" from 2nd to 9th and "Thwa" from 1st
+  to 4th.
+- **What it reads.** The name, role, company, location, industry, headline,
+  the first 200 characters of the about text, the tags and the interests,
+  cut to 128 tokens with the question. Without the about text, the golden
+  questions that quote a note ("lorry full of rose stuck at the border")
+  lost their contact.
+- **The budget.** `SEARCH_RERANK_BUDGET_MS`, 25 ms by default. The scores
+  that come back later are dropped, and the list keeps its fused order. A
+  job still waiting behind an embedding backfill is cancelled.
+- **Off.** `SEARCH_RERANK_MODEL=off`. With no model, or a worker that did
+  not start, the stage is skipped.
+- **Where it runs.** On the instant chunk, and on every local final answer:
+  AI off, a failed or slow model, an edit during the search. The planner's
+  answer is not reordered.
+
+Measured with `node scripts/benchmark-search.ts --rerank-sweep`: the stage's
+p95 on the golden questions, and recall@10 / MRR of the local answer on all
+70 golden queries.
+
+| Model                 | Candidates | p95, 5,000 contacts | 300 contacts  | 5,000 contacts |
+| --------------------- | ---------- | ------------------- | ------------- | -------------- |
+| none (fused order)    |            |                     | 1.000 / 0.983 | 1.000 / 0.983  |
+| TinyBERT-L-2 (chosen) | 10         | 3.3 ms              | 1.000 / 1.000 | 1.000 / 0.993  |
+| TinyBERT-L-2 (chosen) | 30         | 10.5 ms             | 1.000 / 1.000 | 1.000 / 0.993  |
+| TinyBERT-L-2          | 50         | 17.7 ms             | 1.000 / 1.000 | 1.000 / 0.993  |
+| MiniLM-L-6            | 10         | 30.8 ms             | 1.000 / 1.000 | 1.000 / 0.993  |
+| MiniLM-L-6            | 30         | 100.4 ms            | 1.000 / 1.000 | 1.000 / 0.993  |
+
+Both models give the same answers here, so the budget decides: MiniLM-L-6
+does not fit 25 ms even for 10 candidates. 30 candidates reorder the whole
+instant list with no extra retrieval.
+
 ### Evidence and reasons
 
 The compact reranker (`rerankCandidates` in
@@ -364,15 +424,16 @@ no part.
 Measured p95 at 5,000 contacts, with
 `node scripts/benchmark-search.ts --contacts 5000`:
 
-| Step                                                 | p95             |
-| ---------------------------------------------------- | --------------- |
-| A name, answered locally                             | 4.5 ms          |
-| An email, answered locally                           | 3.2 ms          |
-| A phone number, answered locally                     | 0.8 ms          |
-| A question that is only facets                       | 2.7 ms          |
-| A known place, company or industry, answered locally | 4.4 ms          |
-| `localRetrieval`                                     | 8.6 to 14.1 ms  |
-| The instant chunk, as a person gets it               | 13.0 to 13.1 ms |
+| Step                                                     | p95            |
+| -------------------------------------------------------- | -------------- |
+| A name, answered locally                                 | 4.5 ms         |
+| An email, answered locally                               | 3.2 ms         |
+| A phone number, answered locally                         | 0.8 ms         |
+| A question that is only facets                           | 2.7 ms         |
+| A known place, company or industry, answered locally     | 4.4 ms         |
+| `localRetrieval`                                         | 8.7 to 14.5 ms |
+| The instant chunk for a question, with the cross-encoder | 25.1 ms        |
+| The instant chunk for any other query                    | 13.2 ms        |
 
 The benchmark calls `localRetrieval` with no kind, so the row also holds
 the strict keyword search that decides the kind. Ask Contrack passes the
@@ -387,6 +448,37 @@ person waits for every call in it. The shared lane keeps its 2 slots, its
 priorities and its fair share. One server can therefore send up to 4 calls
 at once to a provider. On 2026-09-26 an Ask question waited 12 s behind two
 research calls and answered with nothing.
+
+### The semantic cache
+
+L1 answers a question typed the same way twice. L2
+(`server/services/search/semanticCache.ts`) answers the same question asked
+in other words, such as "founders of Berlin startups" after "Berlin startup
+founders", with no model call. It keeps the verified answers of the last 5
+minutes, at most 100 per account, with the question's vector. A new
+question reuses one when all of these hold:
+
+- the same account and the same `search_revision`, so no contact has
+  changed and no merge has happened since;
+- the same facets, and the same provider and model;
+- the same entity key: the capitalized words, numbers, quoted phrases and
+  email addresses of the question, with case and accents folded, and without
+  the words that only ask ("Who", "Find", "I");
+- a cosine similarity of 0.97 or more between the two question vectors.
+
+The entity key keeps "founders in Munich" from the answer to "founders in
+Berlin", however close their vectors are. Measured on the built-in model,
+city swaps score 0.79 to 0.85 and word-order paraphrases 0.96 to 0.99. The
+threshold holds for the built-in model only, so a provider's embedding
+model leaves L2 off. The question is embedded once, in about 1 ms, before
+the planner starts, and the local list and the planner stage read the same
+vector.
+
+An answer is kept only when a model or the database verified it. A hit goes
+into L1 for its exact words, but not into L2 again, so a chain of near
+questions cannot drift away from the one that was answered. An edit or a
+merge bumps the revision, and every older entry stops matching. A change of
+AI settings empties both tiers.
 
 ### Query Examples
 
@@ -431,7 +523,33 @@ Every contact gets a 384-dimension vector embedding generated locally using Tran
 - Are generated on first boot and when contacts are created/updated
 - Power the vector KNN arm of the search pipeline
 - Run entirely locally — no API calls, no network dependency
-- Are stored in a `vec0` virtual table (`search_embeddings`)
+- Are stored in a `vec0` virtual table (`search_embeddings`), one byte per component
+
+**int8 storage.** `search_embeddings` is `INT8[384]`: 384 bytes per vector,
+a quarter of the 1,536 a float vector takes. One scale for the whole table
+turns a component into a byte, `round(component × scale)`, clamped to ±90.
+The scale is 90 over the largest component the table held when it was set,
+and `app_settings` keeps it as `search.vectorScale`. The query goes through
+the same scale, so the order of the neighbours is kept up to rounding
+(`server/services/search/vectorScale.ts`).
+
+The range stops at ±90, not ±127, because sqlite-vec 0.1.9 squares each
+byte difference in 16 bits on its NEON path. A difference of 182 or more
+overflows, and the distance comes back NULL or small: at ±127 a vector
+pointing the opposite way could rank as the nearest. At ±90 no difference
+passes 180.
+
+- **The boot migration.** A float table is read out, quantized with one
+  scale over all its vectors, recreated as int8 and written back, in one
+  transaction. Nothing is re-embedded, and the owner partition and the
+  status columns carry across.
+- **A new table.** The first write to an empty table sets the scale from
+  the vectors it carries: the first backfill batch of 64, or a whole
+  evaluation corpus. A later vector with a larger component is clamped.
+- **A new model.** Changing the embedding model rebuilds the table and
+  drops the scale. The first write after it sets a new one.
+- `contact_embeddings`, the dedupe store, stays float. Dedupe compares its
+  distances with fixed thresholds.
 
 ---
 

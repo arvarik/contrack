@@ -1,7 +1,7 @@
 // =============================================================================
 // Search quality gate
 // =============================================================================
-// Three hundred contacts, fifty queries, three rankings, two numbers each,
+// Three hundred contacts, seventy queries, five rankings, two numbers each,
 // all compared with a committed baseline.
 //
 // WHEN THIS FAILS. Either a change moved search ranking and the baseline has
@@ -20,10 +20,12 @@
 // without anybody looking, because the total still passes.
 //
 // WHAT IS REAL HERE. The database, the FTS5 index and its triggers, the BM25
-// weights, the vec0 store, the KNN, and the reciprocal rank fusion. What is
-// recorded is the embedding of each contact and each query: the model runs in
-// `scripts/record-search-eval.ts`, not here, so this needs no model, no
-// download and no network.
+// weights, the int8 vec0 store and its scale, the KNN, the reciprocal rank
+// fusion, and the cross-encoder stage's budget, cut and reorder. What is
+// recorded is the embedding of each contact and each query, and the
+// cross-encoder's score for each (question, profile) pair it reads: the
+// models run in `scripts/record-search-eval.ts`, not here, so this needs no
+// model, no download and no network.
 //
 // WHAT IT CATCHES, measured by breaking the code on purpose:
 //
@@ -40,7 +42,7 @@
 // that produced it.
 // =============================================================================
 
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const recorded = vi.hoisted(() => ({
   /** Query text to its recorded vector. Filled before the first search. */
@@ -49,7 +51,7 @@ const recorded = vi.hoisted(() => ({
 
 // `embedText` is the one place a model would be needed, and
 // `isSearchEmbeddingReady` is its gate. Everything else in the module —
-// `upsertSearchEmbedding`, `findSearchNeighbors`, `getSearchEmbeddingCount` —
+// `upsertSearchEmbeddings`, `findSearchNeighbors`, `getSearchEmbeddingCount` —
 // stays real, because the KNN is a thing under test and not a thing to fake.
 vi.mock(
   "../../server/services/search/localEmbeddings.ts",
@@ -68,17 +70,24 @@ vi.mock(
 );
 
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
-import { upsertSearchEmbedding } from "../../server/services/search/localEmbeddings.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
+import {
+  rerankModel,
+  setPairScorer,
+} from "../../server/services/search/crossEncoder.ts";
 import {
   CHANNELS,
   EVAL_DIMENSION,
   loadBaseline,
   loadFixture,
+  loadRerankScores,
   measure,
+  replayScorer,
   seedCorpus,
+  seedVectors,
   type Baseline,
   type Measurement,
+  type RerankScores,
 } from "./harness.ts";
 
 /**
@@ -96,6 +105,9 @@ let baseline: Baseline;
 let measurement: Measurement;
 let seededContacts: number;
 let storedVectors: number;
+let rerankScores: RerankScores;
+/** Cross-encoder pairs the gate asked for and the recording does not hold. */
+const missingPairs: string[] = [];
 
 beforeAll(async () => {
   baseline = loadBaseline();
@@ -106,12 +118,17 @@ beforeAll(async () => {
   const scope = scopeForOwnerId(ensureLocalOwner());
   const { idByKey } = await seedCorpus(scope, fixture.contacts);
 
-  fixture.contacts.forEach((contact, i) => {
-    upsertSearchEmbedding(idByKey.get(contact.key)!, fixture.contactVectors[i]);
-  });
+  seedVectors(fixture.contacts, fixture.contactVectors, idByKey);
   fixture.queries.forEach((query, i) => {
     recorded.byText.set(query.q, fixture.queryVectors[i]);
   });
+
+  // The cross-encoder answers from the recording. A replayed score is
+  // instant, and the budget is lifted so a slow machine cannot drop one and
+  // turn a timing into a ranking change.
+  rerankScores = loadRerankScores();
+  process.env.SEARCH_RERANK_BUDGET_MS = "60000";
+  setPairScorer(replayScorer(rerankScores, missingPairs));
 
   seededContacts = (
     sqlite
@@ -126,6 +143,11 @@ beforeAll(async () => {
 
   measurement = await measure(scope, fixture.queries, idByKey);
 }, 120_000);
+
+afterAll(() => {
+  setPairScorer(null);
+  delete process.env.SEARCH_RERANK_BUDGET_MS;
+});
 
 describe("search quality gate", () => {
   // Everything below averages over what it was given, and an average over
@@ -157,6 +179,18 @@ describe("search quality gate", () => {
         );
         expect(hits.length).toBeGreaterThan(0);
       }
+    });
+
+    // The `reranked` channel is only as real as its recording. A pair the
+    // recorder never scored leaves that question in its fused order, which
+    // would pass as "the cross-encoder changed nothing".
+    it("replayed every cross-encoder pair from the recording", () => {
+      expect(
+        missingPairs,
+        "The cross-encoder read pairs the recording does not hold. Run `npm run eval:record` and commit the fixture.",
+      ).toEqual([]);
+      expect(rerankScores.model).toBe(rerankModel());
+      expect(rerankScores.pairs).toBeGreaterThan(0);
     });
   });
 

@@ -991,13 +991,15 @@ curl -X POST http://localhost:3210/api/search/semantic \
 
 Both JSON and streaming callers use the same pipeline. The JSON response is
 the final result: `{"matches":[…],"fallback":false}`, plus `"cached": true`
-when the cache answered.
+when a cache answered: L1 for the same words, or L2 for the same question in
+other words.
 
 The stream sends one JSON object per line:
 
 - `{"phase":"instant","matches":[…],"fallback":true,"latencyMs":16}` is the
   local list before the model stages: keyword and vector search, fused, and
-  the top 30 kept. Every match has `verified: false`.
+  the top 30 kept. For a question, the local cross-encoder has reordered
+  them within its budget. Every match has `verified: false`.
 - `{"phase":"complete","matches":[…],"fallback":false}` is the final result.
   It is the last line.
 - `{"phase":"error","error":"Search failed. Please try again.","requestId":"…"}`
@@ -1035,7 +1037,10 @@ A chunk's `fallback` means that the model did not verify its list.
   local list is the final result, with `fallback: true`. The stream sends
   only `complete`, because no model stage follows. The AI rate limiters
   still count the route.
-- **A cached result** sends only `complete`, with `"cached": true`.
+- **A cached result** sends only `complete`, with `"cached": true`. L2, the
+  semantic cache, answers a question asked in other words from a verified
+  answer of the last 5 minutes. See
+  [The semantic cache](features/ai-search.md#the-semantic-cache).
 - **The model stages have a 12-second budget.** An error, a timeout or an
   edit in the account during the search ends with a fresh local list and
   `fallback: true`.

@@ -1,8 +1,8 @@
 {
   "scoringVersion": 3,
   "measurementSource": "provider-recording",
-  "measuredAt": "2026-09-27T08:09:14.145Z",
-  "recordedAt": "2026-09-27T08:09:14.145Z",
+  "measuredAt": "2026-09-27T16:54:38.526Z",
+  "recordedAt": "2026-09-27T16:54:38.526Z",
   "provider": "gemini",
   "model": "gemini-3.5-flash-lite",
   "corpus": {
@@ -11,9 +11,9 @@
     "adversarialContacts": 5
   },
   "filterScore": {
-    "precision": 0.9868,
-    "recall": 1,
-    "f1": 0.9925,
+    "precision": 0.9605,
+    "recall": 0.9737,
+    "f1": 0.9662,
     "confidenceAccuracy": 1,
     "evaluatedQueries": 19
   },
@@ -37,11 +37,11 @@
     "totalAttempts": 4
   },
   "synthesisScore": {
-    "faithfulnessScore": 0.9744,
-    "unsupportedClaimRate": 0.0256,
-    "supportedClaims": 114,
-    "unsupportedClaims": 3,
-    "summariesEvaluated": 19
+    "faithfulnessScore": 0.9907,
+    "unsupportedClaimRate": 0.0093,
+    "supportedClaims": 106,
+    "unsupportedClaims": 1,
+    "summariesEvaluated": 18
   },
   "byCategory": {
     "filter-interpretation": {
@@ -49,7 +49,7 @@
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
-      "faithfulness": 0.9464
+      "faithfulness": 1
     },
     "ambiguous-location": {
       "filterF1": 1,
@@ -59,7 +59,7 @@
       "faithfulness": 0.975
     },
     "empty-answers": {
-      "filterF1": 1,
+      "filterF1": 0.875,
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,

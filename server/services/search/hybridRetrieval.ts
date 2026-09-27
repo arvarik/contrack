@@ -351,6 +351,33 @@ function ftsRetrieval(
 // Phase 1b: Local Vector KNN Retrieval (HyDE-expanded query)
 // =============================================================================
 
+/**
+ * The vector of a question, or null when nothing here can embed it.
+ *
+ * The vector channel's own gates: an embedding backend is ready, the owner
+ * has vectors to search, and with AI off only the built-in model may embed.
+ * Ask computes it once, and the semantic cache, the local list and the model
+ * stage all read the same vector. A failure is logged and counts as none.
+ */
+export async function embedQuery(
+  scope: Scope,
+  text: string,
+  aiAllowed = true,
+): Promise<Float32Array | null> {
+  if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0)
+    return null;
+  if (!aiAllowed && resolveEmbeddings().kind === "provider") return null;
+  try {
+    return await embedText(text);
+  } catch (err: unknown) {
+    log.warn(
+      "HybridRetrieval",
+      `Query embedding failed: ${getErrorMessage(err)}`,
+    );
+    return null;
+  }
+}
+
 async function vectorRetrieval(
   scope: Scope,
   embedInputText: string,

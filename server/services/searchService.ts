@@ -17,12 +17,20 @@ import {
   normalizeKey,
 } from "../utils/aiCache.ts";
 import {
+  embedQuery,
   hybridRetrieval,
   localRetrieval,
   queryIntent,
   type AllowedContact,
   type RetrievalResult,
 } from "./search/hybridRetrieval.ts";
+import {
+  entityKey,
+  getSemanticAnswer,
+  setSemanticAnswer,
+  type SemanticKey,
+} from "./search/semanticCache.ts";
+import { resolveEmbeddings } from "../ai/embeddings.ts";
 import { buildReason, type ReasonEvidence } from "./search/reasons.ts";
 import {
   compileFacets,
@@ -33,6 +41,14 @@ import {
   findImplicitFacets,
   hasContentWords,
 } from "./search/implicitFacets.ts";
+import {
+  isCrossEncoderReady,
+  RERANK_CANDIDATES,
+  rerankBudgetMs,
+  rerankLocal,
+  rerankModel,
+  type RerankOptions,
+} from "./search/crossEncoder.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
@@ -101,6 +117,11 @@ export interface SemanticSearchOptions {
   filters?: FacetFilter[];
   /** The fusion constant. `RRF_K` when unset. The benchmark's k sweep sets it. */
   rrfK?: number;
+  /**
+   * False skips the local cross-encoder. The search gate measures the local
+   * list both ways, and the benchmark names a model and a candidate count.
+   */
+  crossEncoder?: boolean | RerankOptions;
 }
 
 // =============================================================================
@@ -544,7 +565,23 @@ async function runSearch(
     ? `${capability?.providerId}:${capability?.model}`
     : "local";
   const facetPart = facetKey(filters);
-  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${facetPart}:${normalizedQuery}`;
+  // The cross-encoder orders the local list once its model has loaded, so a
+  // list cached before that must not answer after it.
+  const rerank =
+    options.crossEncoder === false
+      ? null
+      : {
+          model: rerankModel(),
+          count: RERANK_CANDIDATES,
+          ...(typeof options.crossEncoder === "object"
+            ? options.crossEncoder
+            : {}),
+        };
+  const reorderBy =
+    rerank?.model && isCrossEncoderReady(rerank.model)
+      ? `${rerank.model}@${rerank.count}`
+      : "fused";
+  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -562,8 +599,13 @@ async function runSearch(
     );
     return result;
   };
+  // Set once the question's vector exists, on the model path only.
+  let semanticKey: SemanticKey | null = null;
   const final = (result: SearchResult, kind: string, path: string) => {
     setCachedSearch(scope, cacheKey, result);
+    // L2 keeps only answers someone verified, with the question's vector.
+    if (semanticKey && !result.fallback)
+      setSemanticAnswer(scope, semanticKey, result);
     return done(result, kind, path);
   };
 
@@ -609,25 +651,39 @@ async function runSearch(
       );
   }
 
+  // The local list: keyword and vector results fused, then, for a question,
+  // the top of the list reordered by the cross-encoder inside its budget,
+  // then cut to the list's length. A cross-encoder is not typo-tolerant, so
+  // it reads questions only: never a name, an email or a phone number (they
+  // do not reach here), and never a short `mixed` query, which is usually a
+  // misspelled name or a prefix.
+  const reorder =
+    rerank && reorderBy !== "fused" && intent.kind === "conceptual"
+      ? rerank
+      : null;
+  const listLength = reorder
+    ? Math.max(PHASE1_LIMIT, reorder.count)
+    : PHASE1_LIMIT;
   const localList = async (queryVector?: Float32Array | null) => {
     const local = await localRetrieval(scope, text, {
       intent,
-      limit: PHASE1_LIMIT,
+      limit: listLength,
       queryVector,
       aiAllowed,
       facets,
       rrfK: options.rrfK,
     });
-    return {
-      local,
-      matches: unverified([
-        ...hydrateCandidates(
-          scope,
-          local.candidates.map((c) => c.contactId),
-          PHASE1_LIMIT,
-        ).values(),
-      ]),
-    };
+    const fused = [
+      ...hydrateCandidates(
+        scope,
+        local.candidates.map((c) => c.contactId),
+        listLength,
+      ).values(),
+    ];
+    const ordered = reorder
+      ? await rerankLocal(text, fused, rerankBudgetMs(), reorder)
+      : fused;
+    return { local, matches: unverified(ordered.slice(0, PHASE1_LIMIT)) };
   };
   if (!models) {
     // No model can run, so this list is the answer, the same until the next
@@ -637,14 +693,38 @@ async function runSearch(
     return final(result, intent.kind, "no-ai");
   }
 
+  // The question is embedded once. The local list and the model stage read
+  // the same vector, and so does L2, the semantic cache.
+  const queryVector = embedQuery(scope, text, aiAllowed);
+
+  // L2 answers a question asked in other words, with no model call. Its
+  // 0.97 threshold was measured on the built-in model, so a provider's
+  // embedding model leaves it off, and that vector is not waited for here.
+  // The built-in model takes about a millisecond.
+  if (resolveEmbeddings().kind === "builtin") {
+    const vector = await queryVector;
+    if (vector) {
+      semanticKey = {
+        revision,
+        facets: facetKey(allFilters),
+        answeredBy,
+        entities: entityKey(text),
+        vector,
+      };
+      const hit = getSemanticAnswer<SearchResult>(scope, semanticKey);
+      if (hit) {
+        // Into L1 for the exact words, but not into L2 again: a chain of
+        // near questions could otherwise drift from the one that was
+        // answered.
+        setCachedSearch(scope, cacheKey, hit);
+        return { ...done(hit, intent.kind, "semantic-cache"), cached: true };
+      }
+    }
+  }
+
   // The model stage starts now, and the local list is built while the
   // planner's request is on the network. The list then costs the answer
-  // nothing. The stage reads the list's query vector once the planner is
-  // done, so the question is embedded once.
-  let settleVector!: (vector: Float32Array | null) => void;
-  const queryVector = new Promise<Float32Array | null>(
-    (resolve) => (settleVector = resolve),
-  );
+  // nothing.
   const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
 
   const answer = searchCoalescer.coalesce(
@@ -705,12 +785,7 @@ async function runSearch(
   // reported as unhandled.
   answer.catch(() => {});
 
-  let first: Awaited<ReturnType<typeof localList>> | undefined;
-  try {
-    first = await localList();
-  } finally {
-    settleVector(first?.local.queryVector ?? null);
-  }
+  const first = await localList(await queryVector);
   signal?.throwIfAborted();
   emit?.({
     phase: "instant",

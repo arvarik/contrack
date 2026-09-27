@@ -88,7 +88,7 @@ describe("the worker thread", () => {
     const payload = await result;
 
     expect(payload.kind).toBe("embed");
-    expect(payload.count).toBe(0);
+    expect(payload.kind === "embed" && payload.count).toBe(0);
     expect(hasSpawnedWorker()).toBe(true);
   });
 
@@ -107,6 +107,21 @@ describe("the worker thread", () => {
     // load and leave a worker that can never be replaced, in exchange for no
     // vectors at all.
     expect(payload.kind === "embed" && payload.modelLoaded).toBe(false);
+    expect(isModelSpent()).toBe(false);
+  });
+
+  it("does not load a cross-encoder for a rerank job with no documents", async () => {
+    // The same rule for the second job kind: an empty rerank job must not
+    // spend the process's one onnxruntime load either.
+    const payload = await startJob({
+      kind: "rerank",
+      model: "Xenova/ms-marco-TinyBERT-L-2-v2",
+      query: "who knows about beekeeping",
+      docs: [],
+      maxLength: 128,
+    }).result;
+
+    expect(payload).toEqual({ kind: "rerank", scores: [], modelLoaded: false });
     expect(isModelSpent()).toBe(false);
   });
 

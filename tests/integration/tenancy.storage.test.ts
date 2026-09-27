@@ -14,7 +14,12 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
-import { sqlite, assertVecVersion, vecTableDdl } from "../../server/db.ts";
+import {
+  sqlite,
+  assertVecVersion,
+  vecElementFor,
+  vecTableDdl,
+} from "../../server/db.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
 import { rebuildSearchEmbeddingTable } from "../../server/services/search/localEmbeddings.ts";
 import { rebuildDedupeEmbeddingTable } from "../../server/services/dedupe/embeddings.ts";
@@ -60,13 +65,15 @@ describe("vec0 table DDL", () => {
     const probe = new Database(":memory:");
     sqliteVec.load(probe);
     try {
-      for (const [table, dimension] of [
-        ["search_embeddings", 384],
-        ["contact_embeddings", 768],
+      // Search vectors are int8 since the search-engine work, dedupe vectors
+      // float.
+      for (const [table, dimension, column] of [
+        ["search_embeddings", 384, "INT8[384]"],
+        ["contact_embeddings", 768, "FLOAT[768]"],
       ] as const) {
-        const ddl = vecTableDdl(table, dimension);
+        const ddl = vecTableDdl(table, dimension, vecElementFor(table));
         expect(ddl).toContain("ownerId TEXT PARTITION KEY");
-        expect(ddl).toContain(`FLOAT[${dimension}]`);
+        expect(ddl).toContain(`embedding ${column}`);
         // And it is DDL SQLite actually accepts, not a plausible string.
         expect(() => probe.exec(ddl)).not.toThrow();
       }
@@ -90,7 +97,9 @@ describe("vec0 table DDL", () => {
       // Compare what SQLite stored against what db.ts would have written,
       // ignoring the whitespace SQLite normalises away.
       const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-      expect(squash(actual)).toBe(squash(vecTableDdl(table, dimension)));
+      expect(squash(actual)).toBe(
+        squash(vecTableDdl(table, dimension, vecElementFor(table))),
+      );
     }
   });
 });

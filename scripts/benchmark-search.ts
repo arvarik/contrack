@@ -25,10 +25,24 @@
 //       The same database, then the Ask pipeline with the configured
 //       provider: ten queries, three cold runs each, each model stage from
 //       the adapter's own latency, then one query again while two 15 s
-//       background jobs hold both shared AI slots. Needs a provider key in
+//       background jobs hold both shared AI slots, then two questions asked
+//       again in other words, for the semantic cache. Needs a provider key in
 //       the environment:
 //         (set -a; . ../contrack/.env; set +a; node scripts/benchmark-search.ts --live)
 //       A run costs a few cents.
+//
+//   node scripts/benchmark-search.ts --contacts 50000 --vector-ab
+//       Search vectors as int8 against float, on the same contacts and
+//       queries: each contact is embedded once, written as int8 through the
+//       product's path and as float into a twin table. Prints bytes per
+//       vector, table size from dbstat, KNN p50 and p95 at k = 100, and the
+//       int8 KNN's recall@10 against the float one.
+//
+//   node scripts/benchmark-search.ts --contacts 5000 --rerank-sweep
+//       The same database, then both cross-encoders on 10, 20, 30 and 50
+//       candidates: the stage's p50 and p95 on the sentence questions, and
+//       recall@10 and MRR of the local answer with each. Run it with
+//       --contacts 300 for the search gate's corpus alone.
 //
 // Flags: --json prints one JSON document instead of the report. --runs N sets
 // the timed repetitions per query (default 5, 3 for --live). --rrf-k N sets
@@ -50,9 +64,12 @@ const option = (name: string): string | undefined => {
   return index >= 0 && value && !value.startsWith("--") ? value : undefined;
 };
 const live = flag("--live");
+const rerankSweepMode = flag("--rerank-sweep");
+const vectorAbMode = flag("--vector-ab");
 const json = flag("--json");
 const verbose = flag("--verbose");
-const corpusMode = live || flag("--contacts");
+const corpusMode =
+  live || rerankSweepMode || vectorAbMode || flag("--contacts");
 const contactCount = Number(option("--contacts") ?? 5_000);
 const runs = Number(option("--runs") ?? (live ? 3 : 5));
 const rrfK =
@@ -320,10 +337,19 @@ async function seedCorpus() {
   await localEmbeddings.initLocalEmbeddings();
   let embedded = 0;
   let embedMs = 0;
-  if (localEmbeddings.isLocalEmbeddingReady())
+  // The A/B mode embeds each contact once itself, for both tables.
+  if (localEmbeddings.isLocalEmbeddingReady() && !vectorAbMode)
     [embedded, embedMs] = await timed(() =>
       localEmbeddings.backfillSearchEmbeddings(),
     );
+  // The server loads the cross-encoder at boot. With background jobs off,
+  // the benchmark loads it here, so the instant chunk includes it.
+  const crossEncoder = await load<
+    typeof import("../server/services/search/crossEncoder.ts")
+  >("server/services/search/crossEncoder.ts");
+  const reranker = (await crossEncoder.initCrossEncoder())
+    ? crossEncoder.rerankModel()
+    : null;
 
   return {
     scope,
@@ -333,6 +359,7 @@ async function seedCorpus() {
     phones: generated.flatMap((c) => c.phones).slice(0, 10),
     exactNames: corpus.contacts.slice(0, 10).map((c) => c.name),
     embedded,
+    reranker,
     timings: { seedMs: seedMs + generateMs, embedMs },
   };
 }
@@ -362,6 +389,12 @@ async function modules() {
     harness: await load<typeof import("../tests/eval/harness.ts")>(
       "tests/eval/harness.ts",
     ),
+    crossEncoder: await load<
+      typeof import("../server/services/search/crossEncoder.ts")
+    >("server/services/search/crossEncoder.ts"),
+    contacts: await load<
+      typeof import("../server/repositories/contactRepository.ts")
+    >("server/repositories/contactRepository.ts"),
   };
 }
 
@@ -603,6 +636,325 @@ function printLocal(result: Awaited<ReturnType<typeof localBenchmark>>) {
 }
 
 // ---------------------------------------------------------------------------
+// Mode 2a: int8 search vectors against float
+// ---------------------------------------------------------------------------
+
+/** The float twin of `search_embeddings`, the shape it had before int8. */
+const FLOAT_TWIN = "bench_float_vectors";
+
+async function vectorAb(seeded: Seeded) {
+  const m = await modules();
+  const db = await load<Db>("server/db.ts");
+  const { scope, corpus } = seeded;
+  const ids = (
+    sqlite
+      .prepare("SELECT id FROM contacts WHERE ownerId = ? ORDER BY id")
+      .all(scope.ownerId) as { id: string }[]
+  ).map((row) => row.id);
+
+  // Each contact embedded once, in the backfill's batch size.
+  sqlite.exec(`DROP TABLE IF EXISTS ${FLOAT_TWIN}`);
+  sqlite.exec(db.vecTableDdl(FLOAT_TWIN, 384, "float"));
+  const insertFloat = sqlite.prepare(
+    `INSERT INTO ${FLOAT_TWIN} (contactId, ownerId, isGhost, isArchived, active, embedding)
+     SELECT c.id, c.ownerId, ${db.VEC_METADATA_SQL}, ? FROM contacts c WHERE c.id = ?`,
+  );
+  const [, embedMs] = await timed(async () => {
+    for (let i = 0; i < ids.length; i += 64) {
+      const batch = ids.slice(i, i + 64);
+      const vectors = await m.embeddings.embedBatch(
+        batch.map((id) => m.embeddings.currentSearchText(id) ?? ""),
+      );
+      m.embeddings.upsertSearchEmbeddings(
+        batch.map((contactId, j) => ({ contactId, embedding: vectors[j]! })),
+      );
+      sqlite.transaction(() =>
+        batch.forEach((id, j) =>
+          insertFloat.run(Buffer.from(vectors[j]!.buffer.slice(0)), id),
+        ),
+      )();
+    }
+  });
+
+  const floatKnn = sqlite.prepare(
+    `SELECT contactId FROM ${FLOAT_TWIN}
+      WHERE embedding MATCH ? AND ownerId = ? AND ${db.VEC_ACTIVE_MATCH}
+        AND k = 100 ORDER BY distance`,
+  );
+  const queries: { vector: Float32Array; expected: Set<string> }[] = [];
+  for (const query of corpus.queries) {
+    const vector = await m.embeddings.embedText(query.q);
+    if (vector)
+      queries.push({
+        vector,
+        expected: new Set(query.expect.map((key) => seeded.idByKey.get(key)!)),
+      });
+  }
+  const int8Times: number[] = [];
+  const floatTimes: number[] = [];
+  let recall = 0;
+  let sameFirst = 0;
+  const golden = {
+    float: [] as { ranked: string[]; expected: Set<string> }[],
+    int8: [] as { ranked: string[]; expected: Set<string> }[],
+  };
+  for (const { vector, expected } of queries) {
+    let int8Ids: string[] = [];
+    let floatIds: string[] = [];
+    for (let run = 0; run <= runs; run++) {
+      const [a, int8Ms] = await timed(() =>
+        m.embeddings.findSearchNeighbors(scope, vector, 100),
+      );
+      const [b, floatMs] = await timed(
+        () =>
+          floatKnn.all(Buffer.from(vector.buffer.slice(0)), scope.ownerId) as {
+            contactId: string;
+          }[],
+      );
+      if (run === 0) {
+        int8Ids = a.map((row) => row.contactId);
+        floatIds = b.map((row) => row.contactId);
+        continue;
+      }
+      int8Times.push(int8Ms);
+      floatTimes.push(floatMs);
+    }
+    const top = new Set(floatIds.slice(0, 10));
+    recall += int8Ids.slice(0, 10).filter((id) => top.has(id)).length / 10;
+    if (int8Ids[0] === floatIds[0]) sameFirst++;
+    golden.float.push({ ranked: floatIds, expected });
+    golden.int8.push({ ranked: int8Ids, expected });
+  }
+
+  /** Every page of a vec0 table: its shadow tables and their indexes. */
+  const tableBytes = (table: string) => {
+    const escaped = table.replace(/_/g, "!_");
+    return (
+      sqlite
+        .prepare(
+          `SELECT COALESCE(SUM(pgsize), 0) AS bytes FROM dbstat
+            WHERE name LIKE ? ESCAPE '!' OR name LIKE ? ESCAPE '!'`,
+        )
+        .get(`${escaped}!_%`, `sqlite!_autoindex!_${escaped}!_%`) as {
+        bytes: number;
+      }
+    ).bytes;
+  };
+  const bytesPerVector = (table: string) =>
+    (
+      sqlite
+        .prepare(`SELECT length(embedding) AS n FROM ${table} LIMIT 1`)
+        .get() as { n: number }
+    ).n;
+  const result = {
+    contacts: contactCount,
+    vectors: ids.length,
+    queries: queries.length,
+    runs,
+    embedMs: Math.round(embedMs),
+    scale: m.embeddings.searchVectorScale(),
+    float: {
+      bytesPerVector: bytesPerVector(FLOAT_TWIN),
+      tableBytes: tableBytes(FLOAT_TWIN),
+      knn: stat(floatTimes),
+    },
+    int8: {
+      bytesPerVector: bytesPerVector("search_embeddings"),
+      tableBytes: tableBytes("search_embeddings"),
+      knn: stat(int8Times),
+    },
+    recallAt10: +(recall / queries.length).toFixed(4),
+    sameFirst,
+    // The vector channel alone on the golden questions: are the contacts
+    // each question expects in its first ten?
+    golden: {
+      float: m.harness.scoreRankings(golden.float),
+      int8: m.harness.scoreRankings(golden.int8),
+    },
+  };
+  sqlite.exec(`DROP TABLE ${FLOAT_TWIN}`);
+  return result;
+}
+
+function printVectorAb(result: Awaited<ReturnType<typeof vectorAb>>) {
+  const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
+  const row = (label: string, side: typeof result.float) =>
+    `${pad(label, 10)}${pad(`${side.bytesPerVector} B`, 12)}${pad(mb(side.tableBytes), 12)}` +
+    `${pad(ms(side.knn.p50), 10)}${ms(side.knn.p95)}`;
+  console.log(
+    [
+      `Search vectors, ${result.vectors.toLocaleString("en-US")} contacts ` +
+        `(embedded once in ${seconds(result.embedMs)}), ${result.queries} queries, ${result.runs} timed runs each, ` +
+        `int8 scale ${result.scale?.toFixed(1)}`,
+      "",
+      `${pad("Element", 10)}${pad("per vector", 12)}${pad("table", 12)}${pad("KNN p50", 10)}KNN p95 (k = 100)`,
+      row("float", result.float),
+      row("int8", result.int8),
+      "",
+      `int8 recall@10 against float: ${result.recallAt10.toFixed(4)}, ` +
+        `same nearest contact for ${result.sameFirst} of ${result.queries} queries`,
+      `The vector channel alone on the golden queries, recall@10 / MRR: ` +
+        `float ${result.golden.float.recallAt10.toFixed(3)} / ${result.golden.float.mrr.toFixed(3)}, ` +
+        `int8 ${result.golden.int8.recallAt10.toFixed(3)} / ${result.golden.int8.mrr.toFixed(3)}`,
+    ].join("\n"),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mode 2b: the cross-encoder sweep
+// ---------------------------------------------------------------------------
+
+/**
+ * The live mode's semantic cache check: a question, then the same question
+ * in other words. MiniLM puts each pair at cosine 0.97 or more, and each
+ * pair has the same facets and the same entity key.
+ */
+const REWORDED: [string, string][] = [
+  ["who in Lisbon goes rock climbing", "who goes rock climbing in Lisbon"],
+  [
+    "product manager at Northwind Logistics",
+    "product managers at Northwind Logistics",
+  ],
+];
+
+const RERANK_MODELS = [
+  "Xenova/ms-marco-TinyBERT-L-2-v2",
+  "Xenova/ms-marco-MiniLM-L-6-v2",
+];
+const RERANK_COUNTS = [10, 20, 30, 50];
+
+async function rerankSweep(seeded: Seeded) {
+  const m = await modules();
+  const { scope, corpus, idByKey } = seeded;
+  const questions = corpus.queries.filter((q) =>
+    ["company-role", "location-interest", "note-phrase"].includes(q.kind),
+  );
+
+  /**
+   * recall@10 and MRR of the local answer for every golden query, and for
+   * the questions whose answer is the local list, where the stage runs.
+   */
+  const quality = async (
+    crossEncoder: false | { model: string; count: number },
+  ) => {
+    const every: { ranked: string[]; expected: Set<string> }[] = [];
+    const listed: typeof every = [];
+    for (const query of corpus.queries) {
+      m.cache.aiCache.invalidateAll();
+      const answer = await m.search.searchService.semanticSearch(
+        scope,
+        query.q,
+        "bench",
+        undefined,
+        { aiAllowed: false, rrfK, crossEncoder },
+      );
+      const row = {
+        ranked: answer.matches.map((match) => match.id),
+        expected: new Set(query.expect.map((key) => idByKey.get(key)!)),
+      };
+      every.push(row);
+      if (
+        answer.fallback &&
+        m.hybrid.queryIntent(scope, query.q).intent.kind === "conceptual"
+      )
+        listed.push(row);
+    }
+    return {
+      all: m.harness.scoreRankings(every),
+      list: m.harness.scoreRankings(listed),
+      listQueries: listed.length,
+    };
+  };
+
+  const off = await quality(false);
+  // MRR measures the scores, not the budget, so the budget is lifted while
+  // the sweep runs. Each row's latency says whether it fits the real one.
+  const budget = process.env.SEARCH_RERANK_BUDGET_MS;
+  process.env.SEARCH_RERANK_BUDGET_MS = "60000";
+  const rows: {
+    model: string;
+    count: number;
+    stage: Stat;
+    docs: number;
+    all: { recallAt10: number; mrr: number };
+    list: { recallAt10: number; mrr: number };
+  }[] = [];
+  try {
+    for (const model of RERANK_MODELS) {
+      if (!(await m.crossEncoder.initCrossEncoder(model)))
+        throw new Error(`${model} did not load`);
+      for (const count of RERANK_COUNTS) {
+        const times: number[] = [];
+        let docs = 0;
+        for (const query of questions) {
+          const local = await m.hybrid.localRetrieval(scope, query.q, {
+            limit: count,
+            rrfK,
+          });
+          const candidates = m.contacts.contactRepo.hydrateMany(
+            m.contacts.contactRepo.findManyOwned(
+              scope,
+              local.candidates.map((c) => c.contactId),
+            ),
+          );
+          docs += Math.min(candidates.length, count);
+          for (let run = 0; run <= runs; run++) {
+            const [, stageMs] = await timed(() =>
+              m.crossEncoder.rerankLocal(query.q, candidates, 60_000, {
+                model,
+                count,
+              }),
+            );
+            if (run > 0) times.push(stageMs);
+          }
+        }
+        const scored = await quality({ model, count });
+        rows.push({
+          model,
+          count,
+          stage: stat(times),
+          docs: Math.round(docs / questions.length),
+          all: scored.all,
+          list: scored.list,
+        });
+      }
+    }
+  } finally {
+    if (budget === undefined) delete process.env.SEARCH_RERANK_BUDGET_MS;
+    else process.env.SEARCH_RERANK_BUDGET_MS = budget;
+  }
+  return {
+    contacts: contactCount,
+    vectors: seeded.embedded,
+    runs,
+    questions: questions.length,
+    queries: corpus.queries.length,
+    listQueries: off.listQueries,
+    off: { all: off.all, list: off.list },
+    rows,
+  };
+}
+
+function printSweep(result: Awaited<ReturnType<typeof rerankSweep>>) {
+  const score = (s: { recallAt10: number; mrr: number }) =>
+    `${s.recallAt10.toFixed(3)} / ${s.mrr.toFixed(3)}`;
+  const lines = [
+    `Cross-encoder sweep, ${result.contacts.toLocaleString("en-US")} contacts, ` +
+      `${result.vectors.toLocaleString("en-US")} vectors, ${result.runs} timed runs on ${result.questions} questions`,
+    `Quality is recall@10 / MRR on all ${result.queries} golden queries, and on the ${result.listQueries} questions the stage reorders.`,
+    "",
+    `${pad("Model", 34)}${pad("N", 5)}${pad("docs", 6)}${pad("p50", 10)}${pad("p95", 10)}${pad("all", 17)}questions`,
+    `${pad("none (fused order)", 34)}${pad("", 5)}${pad("", 6)}${pad("", 10)}${pad("", 10)}${pad(score(result.off.all), 17)}${score(result.off.list)}`,
+  ];
+  for (const row of result.rows)
+    lines.push(
+      `${pad(row.model.replace("Xenova/", ""), 34)}${pad(String(row.count), 5)}${pad(String(row.docs), 6)}` +
+        `${pad(ms(row.stage.p50), 10)}${pad(ms(row.stage.p95), 10)}${pad(score(row.all), 17)}${score(row.list)}`,
+    );
+  console.log(lines.join("\n"));
+}
+
+// ---------------------------------------------------------------------------
 // Mode 3: the live pipeline with the configured provider
 // ---------------------------------------------------------------------------
 
@@ -655,15 +1007,19 @@ async function liveBenchmark(seeded: Seeded) {
     "investors in Berlin",
   ];
 
-  /** One cold run: caches cleared, the stream read chunk by chunk. */
-  const ask = async (query: string) => {
-    m.cache.aiCache.invalidateAll();
+  /**
+   * One run, the stream read chunk by chunk. A cold run clears the caches
+   * first. A warm one keeps them, for the semantic cache.
+   */
+  const ask = async (query: string, cold = true) => {
+    if (cold) m.cache.aiCache.invalidateAll();
     calls.length = 0;
     const start = performance.now();
     let instantMs: number | null = null;
     let complete: {
       matches: { verified?: boolean }[];
       fallback: boolean;
+      cached?: boolean;
     } | null = null;
     const res = {
       destroyed: false,
@@ -692,10 +1048,12 @@ async function liveBenchmark(seeded: Seeded) {
     const done = complete as {
       matches: { verified?: boolean }[];
       fallback: boolean;
+      cached?: boolean;
     } | null;
     return {
       totalMs,
       instantMs,
+      cached: done?.cached ?? false,
       plannerMs: stage("queryParse"),
       rerankMs: stage("rerank"),
       modelCalls: calls.length,
@@ -730,6 +1088,15 @@ async function liveBenchmark(seeded: Seeded) {
   const sharedWhileBusy = gateway.getAIQueueSnapshot().active;
   await Promise.all(holds);
 
+  // The semantic cache: a question answered cold, then the same question in
+  // other words with the caches warm. The second needs no model call.
+  const reworded = [];
+  for (const [first, second] of REWORDED) {
+    const cold = await ask(first);
+    const warm = await ask(second, false);
+    reworded.push({ first, second, cold, warm });
+  }
+
   const aiTotals = Object.values(results)
     .flat()
     .filter((run) => run.modelCalls > 0)
@@ -744,6 +1111,7 @@ async function liveBenchmark(seeded: Seeded) {
     runs,
     results,
     busy: { query: busyQuery, sharedSlotsBusy: sharedWhileBusy, ...busy },
+    reworded,
     ai: stat(aiTotals),
     local: stat(localTotals),
   };
@@ -785,6 +1153,12 @@ function printLive(result: Awaited<ReturnType<typeof liveBenchmark>>) {
   lines.push(
     `Local runs: p50 ${ms(result.local.p50)}, p95 ${ms(result.local.p95)} (${result.local.samples} runs, no model call)`,
   );
+  for (const { first, second, cold, warm } of result.reworded)
+    lines.push(
+      `"${second}" after "${first}": ${seconds(warm.totalMs)}, ` +
+        `${warm.modelCalls} model call(s), ${warm.cached ? "from the cache" : "not cached"}, ` +
+        `${warm.answers} people (the first took ${seconds(cold.totalMs)}, ${cold.answers} people)`,
+    );
   lines.push(
     `"${result.busy.query}" with ${result.busy.sharedSlotsBusy} shared slots busy: ` +
       `${seconds(result.busy.totalMs)} (planner ${seconds(result.busy.plannerMs)}, ` +
@@ -804,6 +1178,14 @@ try {
       const result = await liveBenchmark(seeded);
       if (json) console.log(JSON.stringify(result));
       else printLive(result);
+    } else if (vectorAbMode) {
+      const result = await vectorAb(seeded);
+      if (json) console.log(JSON.stringify(result));
+      else printVectorAb(result);
+    } else if (rerankSweepMode) {
+      const result = await rerankSweep(seeded);
+      if (json) console.log(JSON.stringify(result));
+      else printSweep(result);
     } else {
       const result = await localBenchmark(seeded);
       if (json) console.log(JSON.stringify(result));

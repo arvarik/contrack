@@ -200,9 +200,8 @@ function handle(message: WorkerMessage): void {
   }
   pending.delete(message.id);
   if (message.type === "result") {
-    if (message.payload.kind === "embed" && message.payload.modelLoaded) {
-      modelSpent = true;
-    }
+    // Either kind of job can be the first to load onnxruntime on the worker.
+    if (message.payload.modelLoaded) modelSpent = true;
     entry.resolve(message.payload);
   } else {
     entry.reject(new Error(message.message));

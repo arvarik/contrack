@@ -134,7 +134,7 @@ vi.mock("../../server/ai/services/shared.ts", async (importOriginal) => {
 });
 
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
-import { upsertSearchEmbedding } from "../../server/services/search/localEmbeddings.ts";
+import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import {
   ANSWER_SCORING_VERSION,
@@ -187,9 +187,14 @@ beforeAll(async () => {
   const scope = scopeForOwnerId(ensureLocalOwner());
   const { idByKey, keyById } = await seedAnswerCorpus(scope, fixture.contacts);
 
-  fixture.contacts.forEach((contact, i) => {
-    upsertSearchEmbedding(idByKey.get(contact.key)!, fixture.contactVectors[i]);
-  });
+  // One batch, so the int8 scale comes from the whole corpus, as the
+  // recorder's does.
+  upsertSearchEmbeddings(
+    fixture.contacts.map((contact, i) => ({
+      contactId: idByKey.get(contact.key)!,
+      embedding: fixture.contactVectors[i],
+    })),
+  );
 
   seededContacts = (
     sqlite

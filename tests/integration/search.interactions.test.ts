@@ -554,3 +554,43 @@ describe("the MCP route", () => {
     ).toBe(400);
   });
 });
+
+describe("a query word and the owner token", () => {
+  it("never matches the owner token, whatever the owner's id", () => {
+    // The note index carries the same owner token, "o" and the owner's id in
+    // hex. For an id that starts with dd the token starts with "odd", and the
+    // prefix clause for "odd" matched it in every note the owner has.
+    const ownerId = "dd0f1e2d-3c4b-4a59-8687-a0b1c2d3e4f5";
+    sqlite
+      .prepare(
+        "INSERT INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, ?)",
+      )
+      .run(ownerId, "odd@example.com", "oddowner", "x$y");
+    const insertContact = sqlite.prepare(
+      "INSERT INTO contacts (id, name, ownerId) VALUES (?, ?, ?)",
+    );
+    const insertNote = sqlite.prepare(
+      "INSERT INTO interactions (id, contactId, ownerId, type, title, content, date) VALUES (?, ?, ?, 'note', ?, ?, ?)",
+    );
+    insertContact.run("odd-person", "Wren Ashby", ownerId);
+    insertNote.run(
+      "odd-1",
+      "odd-person",
+      ownerId,
+      "Coffee",
+      "An odd request about cedar",
+      new Date().toISOString(),
+    );
+    insertNote.run(
+      "odd-2",
+      "odd-person",
+      ownerId,
+      "Lunch",
+      "Plain notes only",
+      new Date().toISOString(),
+    );
+
+    const result = searchInteractions(scopeForOwnerId(ownerId), { q: "odd" });
+    expect(result.hits.map((hit) => hit.id)).toEqual(["odd-1"]);
+  });
+});

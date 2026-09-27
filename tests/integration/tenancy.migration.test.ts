@@ -25,6 +25,11 @@ import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { makeV1Database, V1_TRIGGERS } from "../fixtures/make-v1-database.ts";
 import { FTS_SCHEMA_VERSION } from "../../server/services/search/ftsIndex.ts";
+import {
+  VECTOR_SCALE_KEY,
+  floatsOf,
+  quantize,
+} from "../../server/services/search/vectorScale.ts";
 import { verify } from "../../scripts/tenancy-verify.ts";
 
 // Boot must not reach an embedding provider. The mock throws rather than
@@ -44,6 +49,17 @@ process.env.DATA_DIR = fixture.dataDir;
 
 // Importing this runs the migration. Everything below inspects the result.
 const { sqlite } = await import("../../server/db.ts");
+
+/**
+ * The fixture's query vector as `search_embeddings` now reads it: int8 at the
+ * scale the boot migration stored when it quantized the float vectors.
+ */
+function int8Query(): Buffer {
+  const row = sqlite
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get(VECTOR_SCALE_KEY) as { value: string };
+  return quantize(floatsOf(fixture.queryVector), JSON.parse(row.value));
+}
 
 const uploads = path.join(fixture.dataDir, "uploads");
 const backupDir = path.join(fixture.dataDir, "backups");
@@ -176,13 +192,14 @@ describe("upgrading a 1.5.5 database", () => {
     };
     expect(counts).toEqual(fixture.vectorCounts);
 
-    // The same query vector finds the same contact, so the bytes survived the
-    // drop-and-recreate intact.
+    // The same query vector finds the same contact, so the vectors survived
+    // the drop-and-recreate. They are int8 now, so the query goes through the
+    // scale the migration stored, as every search does.
     const nearest = sqlite
       .prepare(
-        "SELECT contactId FROM search_embeddings WHERE embedding MATCH ? AND k = 1",
+        "SELECT contactId FROM search_embeddings WHERE embedding MATCH vec_int8(?) AND k = 1",
       )
-      .get(fixture.queryVector) as { contactId: string };
+      .get(int8Query()) as { contactId: string };
     expect(nearest.contactId).toBe(fixture.nearestSearch);
   });
 
@@ -194,9 +211,9 @@ describe("upgrading a 1.5.5 database", () => {
     // search relies on.
     const scoped = sqlite
       .prepare(
-        "SELECT contactId FROM search_embeddings WHERE embedding MATCH ? AND k = 1 AND ownerId = ?",
+        "SELECT contactId FROM search_embeddings WHERE embedding MATCH vec_int8(?) AND k = 1 AND ownerId = ?",
       )
-      .get(fixture.queryVector, owner) as { contactId: string };
+      .get(int8Query(), owner) as { contactId: string };
     expect(scoped.contactId).toBe(fixture.nearestSearch);
   });
 

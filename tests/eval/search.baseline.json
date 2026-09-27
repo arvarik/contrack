@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-27T08:07:47.909Z",
+  "recordedAt": "2026-09-27T16:34:50.288Z",
   "model": "Xenova/all-MiniLM-L6-v2",
   "corpus": {
     "contacts": 300,
@@ -16,11 +16,15 @@
     },
     "fused": {
       "recallAt10": 1,
-      "mrr": 0.95
+      "mrr": 0.9488
     },
     "hybrid": {
       "recallAt10": 1,
-      "mrr": 0.9833
+      "mrr": 0.9821
+    },
+    "reranked": {
+      "recallAt10": 1,
+      "mrr": 1
     }
   },
   "byKind": {
@@ -123,7 +127,7 @@
       },
       "location-interest": {
         "recallAt10": 1,
-        "mrr": 0.8167
+        "mrr": 0.8083
       },
       "name-typo": {
         "recallAt10": 1,
@@ -165,7 +169,49 @@
       },
       "location-interest": {
         "recallAt10": 1,
-        "mrr": 0.9333
+        "mrr": 0.925
+      },
+      "name-typo": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "nickname": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "nickname-only": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "phone": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "prefix": {
+        "recallAt10": 1,
+        "mrr": 1
+      }
+    },
+    "reranked": {
+      "company-role": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "email": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "hyphenated": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "location-interest": {
+        "recallAt10": 1,
+        "mrr": 1
       },
       "name-typo": {
         "recallAt10": 1,

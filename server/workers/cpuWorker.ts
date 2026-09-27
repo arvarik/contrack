@@ -3,7 +3,8 @@
 // =============================================================================
 // Runs on a `worker_threads` thread and holds the embedding model, which is
 // the one piece of work that used to hold the event loop for seconds at a
-// time. A backfill of 2,000 contacts blocked it for 2.19 of its 2.4 seconds,
+// time. It also holds the search cross-encoder, which scores the top of a
+// result list in a few milliseconds per job. A backfill of 2,000 contacts blocked it for 2.19 of its 2.4 seconds,
 // in bursts of up to 83 ms; through this worker the same backfill takes the
 // same 2.4 seconds and blocks for 0.03.
 //
@@ -16,7 +17,7 @@
 // The module graph is the other constraint, and it is easy to break by
 // accident. Importing anything that reaches `server/db.ts` would open the
 // database a second time and re-run every migration on this thread. The
-// imports below are the protocol and the model, and nothing else.
+// imports below are the protocol and the models, and nothing else.
 //
 // ONE LOAD PER PROCESS. onnxruntime-node's native addon registers itself with
 // the Node environment that loads it first, and every later load anywhere in
@@ -41,9 +42,14 @@ import path from "path";
 import {
   type EmbedJob,
   type HostMessage,
+  type RerankJob,
   type WorkerMessage,
 } from "./protocol.ts";
-import type { FeatureExtractionPipeline } from "@huggingface/transformers";
+import type {
+  FeatureExtractionPipeline,
+  PreTrainedModel,
+  PreTrainedTokenizer,
+} from "@huggingface/transformers";
 
 if (!parentPort) {
   throw new Error("cpuWorker.ts was imported on the main thread");
@@ -61,6 +67,21 @@ function send(message: WorkerMessage, transfer?: Transferable[]): void {
 let extractor: FeatureExtractionPipeline | null = null;
 let loading: Promise<void> | null = null;
 
+/** The library, with its model cache set the way the server reads it. */
+async function transformers() {
+  const library = await import("@huggingface/transformers");
+  const cacheDir =
+    process.env.TRANSFORMERS_CACHE ??
+    (process.env.DATA_DIR
+      ? path.join(process.env.DATA_DIR, ".cache")
+      : undefined);
+  if (cacheDir) library.env.cacheDir = cacheDir;
+  return library;
+}
+
+/** The same session options for every model: two threads, one pass at a time. */
+const SESSION_OPTIONS = { intraOpNumThreads: 2, interOpNumThreads: 1 };
+
 /**
  * Load the model once, on this thread.
  *
@@ -72,26 +93,89 @@ async function ensureModel(): Promise<FeatureExtractionPipeline> {
   if (extractor) return extractor;
   if (!loading) {
     loading = (async () => {
-      const { pipeline, env } = await import("@huggingface/transformers");
-      const cacheDir =
-        process.env.TRANSFORMERS_CACHE ??
-        (process.env.DATA_DIR
-          ? path.join(process.env.DATA_DIR, ".cache")
-          : undefined);
-      if (cacheDir) env.cacheDir = cacheDir;
+      const { pipeline } = await transformers();
       extractor = await pipeline(
         "feature-extraction",
         "Xenova/all-MiniLM-L6-v2",
-        {
-          dtype: "q8",
-          session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
-        },
+        { dtype: "q8", session_options: SESSION_OPTIONS },
       );
     })();
   }
   await loading;
   if (!extractor) throw new Error("The embedding model did not load");
   return extractor;
+}
+
+interface CrossEncoder {
+  tokenizer: PreTrainedTokenizer;
+  model: PreTrainedModel;
+}
+
+/**
+ * Cross-encoders by model id, each loaded once.
+ *
+ * The server uses one. The benchmark compares two in one process, which is
+ * why this is a map. A load that failed is removed, so the next job tries
+ * again rather than failing forever on one bad download.
+ */
+const crossEncoders = new Map<string, Promise<CrossEncoder>>();
+
+function ensureCrossEncoder(id: string): Promise<CrossEncoder> {
+  let loaded = crossEncoders.get(id);
+  if (!loaded) {
+    loaded = (async () => {
+      const { AutoTokenizer, AutoModelForSequenceClassification } =
+        await transformers();
+      const [tokenizer, model] = await Promise.all([
+        AutoTokenizer.from_pretrained(id),
+        AutoModelForSequenceClassification.from_pretrained(id, {
+          dtype: "q8",
+          session_options: SESSION_OPTIONS,
+        }),
+      ]);
+      return { tokenizer, model };
+    })();
+    crossEncoders.set(id, loaded);
+    loaded.catch(() => crossEncoders.delete(id));
+  }
+  return loaded;
+}
+
+/**
+ * Score every document against the query in one forward pass.
+ *
+ * Each pair is the query and one document, cut to `maxLength` tokens. An
+ * MS MARCO cross-encoder returns one logit per pair, and that logit is the
+ * score. No documents means no model, for the reason `runEmbed` gives.
+ */
+async function runRerank(id: number, job: RerankJob): Promise<void> {
+  if (job.docs.length === 0) {
+    send({
+      type: "result",
+      id,
+      payload: { kind: "rerank", scores: [], modelLoaded: false },
+    });
+    return;
+  }
+  const { tokenizer, model } = await ensureCrossEncoder(job.model);
+  const inputs = tokenizer(new Array<string>(job.docs.length).fill(job.query), {
+    text_pair: job.docs,
+    padding: true,
+    truncation: true,
+    max_length: job.maxLength,
+  });
+  const { logits } = (await model(inputs)) as {
+    logits: { tolist(): number[][] };
+  };
+  send({
+    type: "result",
+    id,
+    payload: {
+      kind: "rerank",
+      scores: logits.tolist().map((row) => row[0]),
+      modelLoaded: true,
+    },
+  });
 }
 
 /**
@@ -169,7 +253,8 @@ port.on("message", (message: HostMessage) => {
   if (message.type === "cancel") return;
 
   const { id, job } = message;
-  runEmbed(id, job).catch((err: unknown) => {
+  const run = job.kind === "rerank" ? runRerank(id, job) : runEmbed(id, job);
+  run.catch((err: unknown) => {
     send({
       type: "error",
       id,
