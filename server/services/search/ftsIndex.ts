@@ -7,17 +7,19 @@ export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) =
   AND c.canonicalId IS NULL AND c.deletedAt IS NULL`;
 
 // Version 3 adds `ownerTok`. Version 4 adds interactions_fts, the note index
-// in interactionFtsIndex.ts, which lives under the same gate. The gate below
-// drops and rebuilds both tables when the stored user_version differs, so the
-// first boot after upgrade re-indexes every active contact and every note.
-// Measured at 233 ms for 50,000 contacts.
+// in interactionFtsIndex.ts, which lives under the same gate. Version 5 gives
+// tags and interests their own column, `tags`, and adds the digit forms of
+// each phone number to `extras`. The gate below drops and rebuilds both
+// tables when the stored user_version differs, so the first boot after
+// upgrade re-indexes every active contact and every note. Measured at 233 ms
+// for 50,000 contacts.
 /**
  * The FTS schema version, kept in `PRAGMA user_version`.
  *
  * Exported so the admin health panel can report what this database is on
  * without opening it, which is the whole point of the panel.
  */
-export const FTS_SCHEMA_VERSION = 4;
+export const FTS_SCHEMA_VERSION = 5;
 const VERSION = FTS_SCHEMA_VERSION;
 
 /**
@@ -30,7 +32,60 @@ const VERSION = FTS_SCHEMA_VERSION;
  * pushes down only MATCH, rowid and rank.
  */
 export const COLUMNS =
-  "contactId, name, company, role, headline, location, about, industry, extras, searchExpansion, ownerTok";
+  "contactId, name, company, role, headline, location, about, industry, tags, extras, searchExpansion, ownerTok";
+
+/**
+ * Characters people put between the digits of a phone number. SQLite has no
+ * regular expressions, so a number's digits are what is left once these are
+ * removed. A number with any other character left, such as an extension
+ * written "x12", gets no digit forms and is found by its written tokens.
+ * The backslash is here because escaped exports write "\+1 \(415\)".
+ */
+const PHONE_SEPARATORS = [
+  " ",
+  "-",
+  ".",
+  "(",
+  ")",
+  "+",
+  "/",
+  "\\",
+  "\t",
+  "\u00a0",
+  "\u2009",
+  "\u2011",
+  "\u2013",
+  "\u2014",
+  "\u202f",
+];
+
+/** One character as a SQL literal: printable ASCII quoted, the rest as char(). */
+const sqlChar = (ch: string) =>
+  /^[ -~]$/.test(ch)
+    ? `'${ch.replace(/'/g, "''")}'`
+    : `char(${ch.codePointAt(0)})`;
+
+/**
+ * Each phone number followed by its digit forms: all digits, the last 10 and
+ * the last 7, each once.
+ *
+ * "+1 (415) 555-1234" is indexed as the tokens 1, 415, 555 and 1234, so the
+ * number typed as "4155551234" found nobody. With "14155551234",
+ * "4155551234" and "5551234" beside it, the number typed with or without its
+ * country code, or as a local number, finds the contact. Plain SQL, not a
+ * function registered on the server's connection: every connection that
+ * writes a contact runs these triggers, a backup check or `sqlite3` in a
+ * shell among them.
+ */
+const PHONE_DIGITS = PHONE_SEPARATORS.reduce(
+  (expression, ch) => `replace(${expression}, ${sqlChar(ch)}, '')`,
+  "phone",
+);
+const PHONES = `COALESCE((SELECT GROUP_CONCAT(phone || CASE WHEN d = '' OR d GLOB '*[^0-9]*' THEN ''
+    ELSE ' ' || d
+      || CASE WHEN length(d) > 10 THEN ' ' || substr(d, -10) ELSE '' END
+      || CASE WHEN length(d) > 7 THEN ' ' || substr(d, -7) ELSE '' END END, ' ')
+    FROM (SELECT phone, ${PHONE_DIGITS} AS d FROM contact_phones WHERE contactId = c.id)), '')`;
 
 /**
  * The owner token expression.
@@ -44,11 +99,13 @@ export const COLUMNS =
 const OWNER_TOKEN_SQL = (alias: string) =>
   `'o' || replace(${alias}.ownerId, '-', '')`;
 
+// `tags` holds tags and interests. `extras` holds emails, and each phone
+// number followed by its digit forms.
 const VALUES = `c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
   COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
-  COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), ''),
   COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-  COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+  ${PHONES},
   COALESCE(c.searchExpansion, ''), ${OWNER_TOKEN_SQL("c")}`;
 
 /**
@@ -127,7 +184,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
     if (rebuilt) sqlite.exec("DROP TABLE IF EXISTS contacts_fts");
     sqlite.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
-        contactId UNINDEXED, name, company, role, headline, location, about, industry, extras, searchExpansion,
+        contactId UNINDEXED, name, company, role, headline, location, about, industry, tags, extras, searchExpansion,
         ownerTok,
         prefix='2 3 4'
       );
@@ -219,7 +276,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
     };
     log.info(
       "Database",
-      `contacts_fts rebuilt at v${VERSION} with ownerTok: ${rows.n} rows, ` +
+      `contacts_fts rebuilt at v${VERSION}: ${rows.n} rows, ` +
         `interactions_fts: ${noteRows} rows, in ${(performance.now() - started).toFixed(0)}ms`,
     );
   } else if (noteRows > 0) {

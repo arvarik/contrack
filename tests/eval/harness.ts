@@ -31,10 +31,10 @@ import type {
 
 export type { EvalContact, EvalQuery, QueryKind };
 
-/** The three rankings this eval scores. */
-export type Channel = "sidebar" | "lexical" | "hybrid";
+/** The four rankings this eval scores. */
+export type Channel = "sidebar" | "lexical" | "fused" | "hybrid";
 
-export const CHANNELS: Channel[] = ["sidebar", "lexical", "hybrid"];
+export const CHANNELS: Channel[] = ["sidebar", "lexical", "fused", "hybrid"];
 
 /** 384, the width of the built-in model. Asserted against the fixture. */
 export const EVAL_DIMENSION = 384;
@@ -212,6 +212,8 @@ export async function seedCorpus(
         about: c.about,
         tags: c.tags,
         interests: c.interests,
+        emails: c.emails ?? [],
+        phones: c.phones ?? [],
       })),
     ));
   } finally {
@@ -296,8 +298,14 @@ function round(n: number): number {
   return Math.round(n * 10_000) / 10_000;
 }
 
+/** Options for one measurement. */
+export interface MeasureOptions {
+  /** The fusion constant. The code's `RRF_K` when unset. The benchmark's k sweep sets it. */
+  rrfK?: number;
+}
+
 /**
- * Run every query through all three rankings and score them.
+ * Run every query through all four rankings and score them.
  *
  * `sidebar` is `searchService.searchFts`, the quick search box. It joins its
  * tokens with AND and has no fallback, which is why it scores nothing at all
@@ -311,20 +319,28 @@ function round(n: number): number {
  * string of eleven numbers that anybody can edit, and nothing else in the
  * suite would notice a change.
  *
- * `hybrid` is `hybridRetrieval`, what a semantic search actually returns.
- * With no AI provider configured `parseSearchQuery` returns null, so there is
- * no query plan, no hard pre-filter and no trait boost: what is measured is
- * the keyword and vector channels fused by reciprocal rank, and nothing that
- * needs a network.
+ * `fused` is `hybridRetrieval`. With no AI provider configured
+ * `parseSearchQuery` returns null, so there is no query plan, no hard
+ * pre-filter and no trait boost: what is measured is the keyword and vector
+ * channels fused by weighted reciprocal rank, and nothing that needs a
+ * network. This is the number the fusion weights and `k` move.
+ *
+ * `hybrid` is what Ask Contrack answers without a model: a name, an email or
+ * a phone number from strict keyword search, a question that names a known
+ * place, company or industry inside those facets, and everything else as
+ * the fused list. It is what a person sees before the model answers, and
+ * what they keep when it fails.
  */
 export async function measure(
   scope: Scope,
   queries: EvalQuery[],
   idByKey: Map<string, string>,
+  options: MeasureOptions = {},
 ): Promise<Measurement> {
   const results: Record<Channel, QueryResult[]> = {
     sidebar: [],
     lexical: [],
+    fused: [],
     hybrid: [],
   };
 
@@ -340,7 +356,20 @@ export async function measure(
       }),
     );
 
-    const retrieval = await hybridRetrieval(scope, query.q, `eval-${query.id}`);
+    const retrieval = await hybridRetrieval(
+      scope,
+      query.q,
+      `eval-${query.id}`,
+      undefined,
+      { rrfK: options.rrfK },
+    );
+    const answer = await searchService.semanticSearch(
+      scope,
+      query.q,
+      `eval-${query.id}`,
+      undefined,
+      { aiAllowed: false, rrfK: options.rrfK },
+    );
     const ranked: Record<Channel, string[]> = {
       sidebar: searchService
         .searchFts(scope, query.q)
@@ -348,7 +377,8 @@ export async function measure(
       lexical: lexicalSearch(scope, query.q, 20, null, true).map(
         (row) => row.contactId,
       ),
-      hybrid: retrieval.candidates.map((c) => c.contactId),
+      fused: retrieval.candidates.map((c) => c.contactId),
+      hybrid: answer.matches.map((match) => match.id),
     };
 
     for (const channel of CHANNELS) {

@@ -15,14 +15,22 @@ User Query: "who in Lisbon goes rock climbing"
 L1 cache ──────────────→ hit: the cached answer
     │
     ▼
+Facets: the request's filters and the facets typed in the question
+    │
+    ├──→ Only facets: the matching contacts, verified, no model call
+    │
+    ▼
 Strict keyword search (top 30)
     │
     ▼
 classifyQuery ─────────→ email, phone, quoted or name:
     │                    the keyword result, verified, no model call
     ▼
+Implicit facets ───────→ a known place, company or industry, and nothing
+    │                    more: the matching contacts, verified, no model call
+    ▼
 Local retrieval (about 10 ms)
-FTS5 + vector KNN (384-dim MiniLM), fused by RRF (k = 15)
+FTS5 + vector KNN (384-dim MiniLM), fused by weighted RRF (k = 15)
     │
     ├──→ AI off or no provider: this list is the answer, unverified
     │
@@ -44,52 +52,67 @@ Complete chunk, streamed via NDJSON to the client
 and the NDJSON callers use the same steps.
 
 1. **The L1 cache.** The key holds the owner, the account's
-   `search_revision`, a 5-minute bucket, the provider, the model and the
-   normalized query. With AI off or no provider, the key holds `local` in
-   place of the provider and the model. An AI-off request therefore never
-   reads an answer that a model verified.
-2. **Strict keyword search.** `lexicalSearch` requires every token to match,
+   `search_revision`, a 5-minute bucket, the provider, the model, the facets
+   and the normalized query. With AI off or no provider, the key holds
+   `local` in place of the provider and the model. An AI-off request
+   therefore never reads an answer that a model verified.
+2. **The facets.** The request's `filters` and the facets typed in the
+   question make one set. A facet sent both ways counts once. Every later
+   stage applies the facets before its limit. See [Facets](#facets).
+3. **A facet-only answer.** A question that holds only facets, such as
+   `tag:investor contacted:>90d`, is a filter. The answer is the matching
+   contacts in name order, at most 30. Every match is verified, and no model
+   runs.
+4. **Strict keyword search.** `lexicalSearch` requires every token to match,
    then adds approximate names. It keeps the top 30. The names in this
    result give the name signals for the next step.
-3. **The query kind.** `classifyQuery` sorts the question into one of six
+5. **The query kind.** `classifyQuery` sorts the question into one of six
    kinds before any model runs. See [Query kinds](#query-kinds).
-4. **A local answer.** For an email, a phone number, a quoted phrase or a
+6. **A local answer.** For an email, a phone number, a quoted phrase or a
    name, the strict keyword result is the final answer. Every match is
    verified, and no model runs. The L1 cache keeps the answer.
-5. **The local list.** For the other kinds, `localRetrieval` runs FTS5 in
-   broad mode with approximate names, and a vector KNN search. Reciprocal
-   rank fusion (k = 15) joins the two lists. No planner runs, and the step
-   takes about 10 ms. The top 30 go to the client as the instant chunk.
-6. **AI off.** When AI is off for the account, or no provider is set, the
+7. **Implicit facets.** `findImplicitFacets` reads a company, a place or an
+   industry from the words of the question. When the other words ask for
+   nothing more, the answer is a facet answer, as in step 3, and no model
+   runs. Otherwise the implicit facets join the facets of step 2. See
+   [Implicit facets](#implicit-facets).
+8. **The local list.** For the other questions, `localRetrieval` runs FTS5
+   in broad mode and a vector KNN search. Weighted reciprocal rank fusion
+   (k = 15) joins the two lists, with the weights of the query's kind. See
+   [Ranking](#ranking). No planner runs, and the step takes about 10 ms. The
+   top 30 go to the client as the instant chunk.
+9. **AI off.** When AI is off for the account, or no provider is set, the
    local list is the final answer. No instant chunk goes out, because no
    model stage follows.
-7. **The model stages.** The planner (`parseSearchQuery`) runs in the AI
-   queue's search lane, and the filtered retrieval follows it. These stages
-   and the reranker share a 12-second budget. The planner starts as soon as
-   step 3 knows the kind, so its request is on the network while step 5
-   builds the local list. The local list then adds no time to the answer.
-   - **Database proof, filters.** A plan with confidence "high" and no soft
-     traits, whose hard filters hold every constraint, needs no reranker.
-     The answer is the filtered contacts in retrieval order, then the other
-     filtered contacts by name, top 30. Every match is verified.
-   - **Database proof, recency.** A plan whose only constraint is recency
-     needs no reranker either, unless its confidence is "low". The answer is
-     the filtered contacts by last contact, never contacted first.
-   - **The reranker.** Any other plan goes to the compact reranker with the
-     top 30 candidates. See [Evidence and reasons](#evidence-and-reasons).
-8. **A failure.** An error, a timeout or an edit in the account during the
-   search ends with a fresh local list. The old keyword-only fallback
-   (`searchFts`, recall@10 0.52) is never the Ask answer now.
+10. **The model stages.** The planner (`parseSearchQuery`) runs in the AI
+    queue's search lane, and the filtered retrieval follows it. These stages
+    and the reranker share a 12-second budget. The planner starts before
+    step 8 builds the local list, so its request is on the network while the
+    list is built. The local list then adds no time to the answer. The
+    planner reads the question without its typed facets. The facets hold
+    for the plan's hard filter, the retrieval and the trait lists.
+    - **Database proof, filters.** A plan with confidence "high" and no
+      soft traits, whose hard filters hold every constraint, needs no
+      reranker. The answer is the filtered contacts in retrieval order, then
+      the other filtered contacts by name, top 30. Every match is verified.
+    - **Database proof, recency.** A plan whose only constraint is recency
+      needs no reranker either, unless its confidence is "low". The answer
+      is the filtered contacts by last contact, never contacted first.
+    - **The reranker.** Any other plan goes to the compact reranker with the
+      top 30 candidates. See [Evidence and reasons](#evidence-and-reasons).
+11. **A failure.** An error, a timeout or an edit in the account during the
+    search ends with a fresh local list. The old keyword-only fallback
+    (`searchFts`, recall@10 0.52) is never the Ask answer now.
 
 ### Two-Phase Streaming
 
 Results stream to the UI as NDJSON chunks, in two phases:
 
-1. **Phase 1, the instant chunk:** the local list from step 5, top 30. Every match carries `verified: false`, and the chunk carries `fallback: true`. The p95 at 5,000 contacts is 15.6 to 17.6 ms.
+1. **Phase 1, the instant chunk:** the local list from step 8, top 30. Every match carries `verified: false`, and the chunk carries `fallback: true`. The p95 at 5,000 contacts is 13.0 to 13.1 ms.
 
 2. **Phase 2, the complete chunk:** the final answer. It replaces the Phase 1 list. A match that a filter or the reranker proved carries `verified: true` and a reason that the server built.
 
-A local answer, an AI-off answer and a cached answer send the complete chunk only. A chunk's `fallback` means that the model did not verify its list. See the PR for the live numbers of the model stages.
+A local answer, a facet answer, an AI-off answer and a cached answer send the complete chunk only. A chunk's `fallback` means that the model did not verify its list. See the PR for the live numbers of the model stages.
 
 On screen, a match that nobody verified wears the **Unverified** badge, on the Ask page's cards and in the palette. It replaces the Keyword and Fallback badges. **Approximate** still wins over it. An older server sends no `verified`, and then the chunk's `fallback` decides the badge.
 
@@ -132,7 +155,156 @@ a name, such as "who is Ada Lovelace", is never a `name` query.
 
 `classifyQuery` also returns fusion weights for each kind. The local kinds
 get lexical 0.7 and dense 0.3, `conceptual` gets 0.3 and 0.7, and `mixed`
-gets 0.5 and 0.5. Nothing reads the weights yet.
+gets 0.5 and 0.5. The fusion of the local list reads them. See
+[Ranking](#ranking).
+
+`queryIntent(scope, query, facets)` in `hybridRetrieval.ts` runs the strict
+keyword search inside the facets, then `classifyQuery` on its names. Ask
+Contrack uses it for steps 4 and 5.
+
+### Facets
+
+Ask Contrack reads the palette's facets, such as `tag:investor`,
+`location:lisbon` and `contacted:>90d`. See
+[Command Palette](command-palette.md#faceted-filters) for each facet.
+
+- **From the request.** `POST /api/search/semantic` takes `filters`, a list
+  of up to 8 facets. The palette's AI (`?`) mode sends its pills there. A
+  pill that you add or remove asks the question again.
+- **From the question.** The server reads the facets typed in the question
+  with `parseFacetQuery` (`shared/facetQuery.ts`). The palette's tokenizer
+  uses the same parser. On the Ask page, type the facets in the question.
+
+`compileFacets` (`server/services/search/facetSql.ts`) turns the facets into
+one SQL predicate. The keyword search in both modes, the approximate
+names, the vector KNN, the plan's hard filter and the trait lists all apply
+it before their limit. A contact that the facets keep is therefore never lost to a
+cut. The facets are part of the L1 cache key, in a fixed order. They are
+also part of the key that lets two identical requests share one search.
+
+A question that is only facets gets its answer from the database: the
+matching contacts in name order, at most 30. Every match is verified, and no
+model runs. The reason comes from the facets. See
+[Evidence and reasons](#evidence-and-reasons).
+
+### Implicit facets
+
+`findImplicitFacets` (`server/services/search/implicitFacets.ts`) reads
+facets from the words of a question. It reads these phrases only:
+
+| Phrase                                     | Facet      | Rule                                                                                  |
+| ------------------------------------------ | ---------- | ------------------------------------------------------------------------------------- |
+| "at X", "works at X"                       | `company`  | X is a company in your contacts.                                                      |
+| "in X", "based in X", "near X", "around X" | `location` | X is a place in your contacts: a whole location, or one of its comma-separated parts. |
+| "in X"                                     | `industry` | X is an industry in your contacts.                                                    |
+
+X must be equal to a known value. The comparison ignores case and accents.
+A value that only contains X does not count, so "at Sequoia" does not find
+the company "Sequoia Capital". The server reads the known values from your
+active contacts once per search revision. It keeps them for at most 50
+accounts.
+
+The planner decides these cases, because a facet here could be wrong:
+
+- A place with a comma and another word after it: "Paris, Texas" when only
+  "Paris" is known. A question word or a filler word after the comma is the
+  one exception.
+- A place with "and" or "or" after it: "New York and London".
+- A place with a word such as "State", "City" or "County" after it:
+  "Washington State".
+- A place with another known place after it.
+- A value that is both a place and an industry.
+
+A comma with a question word after it ends a clause. "In Lisbon, who
+climbs?" therefore still gives the Lisbon facet.
+
+When the other words of the question ask for nothing, the answer is a facet
+answer, and no model runs. Question words and filler words such as "who",
+"people", "works", "lives", "based" and "the" ask for nothing. These
+questions need no model:
+
+- "people in Lisbon"
+- "who works at Northwind Logistics"
+- "who works in fintech"
+
+In "who in Lisbon goes rock climbing", the words "goes rock climbing" ask
+for more. The planner reads the whole question, and the Lisbon facet holds
+for every stage. Every list then has only contacts whose location names
+Lisbon.
+
+### Ranking
+
+`lexicalSearch` (`server/services/search/lexical.ts`) is the keyword search.
+It has two modes:
+
+- **Strict mode** is the sidebar search and the check that decides the
+  query's kind. It returns the contacts that match every token, then
+  approximate names by score.
+- **Broad mode** is the keyword list of the local list. It ranks four tiers,
+  each in its own order:
+  1. Every token matched, by BM25.
+  2. Approximate names with a score of 0.85 or more, by score.
+  3. Partial matches, with some tokens but not all, by BM25. A one-letter
+     token, such as the O of O'Callahan, counts only when the query has no
+     longer token.
+  4. Approximate names with a score from 0.75 to 0.85, by score.
+
+Before this change, every partial match ranked above every approximate
+name. At 5,000 contacts a misspelled name then fell behind the people who
+shared one word of it.
+
+**Nicknames.** When the first token of a query is in a nickname group, the
+other names of the group also match, on the name column only. "Bob
+Castellanos" finds Robert Castellanos, and "Peggy Ellington" finds Margaret
+Ellington. Only the first token gets the other names, so a sentence such as
+"people I will meet" does not look for William. The query as typed matches
+first, and the nickname matches follow it. A rare nickname scores higher in
+BM25 than a common name, so "Margaret" would otherwise list Maggie and Peggy
+above every Margaret. Partial matches use the query as typed only. The
+approximate-name step uses the other names of every token.
+
+**Phone numbers.** A query is a phone number when it has at least 7 digits
+and nothing but digits, spaces and `+()-.` (`isPhoneQuery` in
+`server/utils/nlp/phone.ts`). The index keeps each stored number with its
+digit forms: all its digits, its last 10 digits and its last 7 digits. The
+query looks for its own digits, its last 10 digits and its last 7 digits. A
+number typed with or without its country code, with a trunk zero, or as a
+local number therefore finds its contact. "4155550142", "14155550123",
+"01614960321" and "5550147" all work. A phone number that matches is the
+whole keyword answer.
+
+**Approximate names.** `findApproximateNameMatches`
+(`server/services/search/approximateName.ts`) gets its candidates from two
+sources:
+
+1. One FTS query on the name column. It asks for each token's 3-letter
+   prefix (for tokens of 4 letters or more), its 2-letter prefix and its
+   nickname variants. BM25 sorts the rows, and the first 200 stay. The
+   2-letter prefix stays because "Kristof" and "Krzysztof" share only "kr".
+2. The Double Metaphone codes of the whole query and of each token. The
+   index on (ownerId, phoneticHash) finds the contacts whose stored code is
+   equal, in id order, at most 200.
+
+`nameScorer` then scores each candidate, and a score of 0.75 or more is a
+match. Before this change, the step took 50 prefix rows in no order and
+compared the phonetic codes with `LIKE`.
+
+**Weighted fusion.** `reciprocalRankFusion` joins ranked lists. Each list
+has a channel and a weight. A contact's score is the sum of
+`weight / (k + rank)` over the lists that rank it, and ranks start at 1. The
+query's kind gives the keyword (`lexical`) and vector (`dense`) lists their
+weights. In Ask Contrack a local kind never reaches the fusion, because the
+strict keyword result answers it.
+
+Each soft trait of a plan (`should.traits`) adds a `trait` list. The trait
+lists share a weight of 0.3. Each trait list ranks its contacts in the fused
+order of the keyword and vector lists. Before this change, every trait match
+had rank 1, under the `vector` label. Equal scores keep the order in which
+the lists reached the contacts, so every run gives the same order.
+
+`RRF_K` stays 15. On the 70 golden queries, k = 15, 30 and 60 all gave
+recall@10 1.00, and k = 15 gave the best fused MRR. See
+[Search reliability](../search-hardening.md#ranking-and-the-fusion-constant).
 
 ### Evidence and reasons
 
@@ -161,7 +333,7 @@ reaches the model then passes the substring check.
 
 The server builds each reason with `buildReason(contact, evidence)` in
 `server/services/search/reasons.ts`. The evidence names the fields that a
-filter or the reranker proved. Each proven field adds one part:
+filter, a facet or the reranker proved. Each proven field adds one part:
 
 | Proven field         | Part                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------ |
@@ -181,20 +353,30 @@ model cited, then the filter's evidence. The text comes from the contact's
 own fields, so it is exact. When no evidence is left, the card shows no
 reason line. A name match is one example.
 
+A facet proves its field too. `tag:rare` gives "Tagged rare.", and
+`location:lisbon` gives "Based in Lisbon, Portugal." when that is the
+contact's location. `contacted:` proves the last contact. A facet on a
+score, an edit date, a list, a distance, a missing field or tracking adds
+no part.
+
 ### Speed and the search lane
 
 Measured p95 at 5,000 contacts, with
 `node scripts/benchmark-search.ts --contacts 5000`:
 
-| Step                                   | p95             |
-| -------------------------------------- | --------------- |
-| A name, answered locally               | 4.9 ms          |
-| An email, answered locally             | 5.0 ms          |
-| A phone number, answered locally       | 1.0 ms          |
-| `localRetrieval`                       | 8.3 to 11.5 ms  |
-| The instant chunk, as a person gets it | 15.6 to 17.6 ms |
+| Step                                                 | p95             |
+| ---------------------------------------------------- | --------------- |
+| A name, answered locally                             | 4.5 ms          |
+| An email, answered locally                           | 3.2 ms          |
+| A phone number, answered locally                     | 0.8 ms          |
+| A question that is only facets                       | 2.7 ms          |
+| A known place, company or industry, answered locally | 4.4 ms          |
+| `localRetrieval`                                     | 8.6 to 14.1 ms  |
+| The instant chunk, as a person gets it               | 13.0 to 13.1 ms |
 
-See the PR for the live numbers of the model stages.
+The benchmark calls `localRetrieval` with no kind, so the row also holds
+the strict keyword search that decides the kind. Ask Contrack passes the
+kind it already has. See the PR for the live numbers of the model stages.
 
 The planner, the reranker and the brief run in the AI queue's search lane
 (`GenerationQueue` in `server/ai/workQueue.ts`). The lane has 2 slots of its
@@ -208,15 +390,19 @@ research calls and answered with nothing.
 
 ### Query Examples
 
-| Query                                     | What it finds                                          |
-| ----------------------------------------- | ------------------------------------------------------ |
-| "fintech contacts in SF"                  | Contacts at fintech companies located in San Francisco |
-| "people I haven't talked to in 3 months"  | Contacts with stale interaction history                |
-| "investors who might be interested in AI" | Investor-tagged contacts with AI-related interests     |
-| "Jane's coworkers at Stripe"              | Contacts who share Stripe as their company             |
-| "engineers who went to Stanford"          | Contacts with matching education + role                |
-| "Jonathon Smyth"                          | Jonathan Smith, marked Approximate, with no model call |
-| "+1 (415) 555-1234"                       | The contact with that phone number, with no model call |
+| Query                                     | What it finds                                            |
+| ----------------------------------------- | -------------------------------------------------------- |
+| "fintech contacts in SF"                  | Contacts at fintech companies located in San Francisco   |
+| "people I haven't talked to in 3 months"  | Contacts with stale interaction history                  |
+| "investors who might be interested in AI" | Investor-tagged contacts with AI-related interests       |
+| "Jane's coworkers at Stripe"              | Contacts who share Stripe as their company               |
+| "engineers who went to Stanford"          | Contacts with matching education + role                  |
+| "Jonathon Smyth"                          | Jonathan Smith, marked Approximate, with no model call   |
+| "+1 (415) 555-1234"                       | The contact with that phone number, with no model call   |
+| "4155551234"                              | The same contact, from the digits alone                  |
+| "Peggy Ellington"                         | Margaret Ellington, from her nickname                    |
+| "people in Lisbon"                        | The contacts based in Lisbon, with no model call         |
+| "tag:investor contacted:>90d"             | Investors with no contact in 90 days, with no model call |
 
 A role in the question finds the other forms of its word in a title
 (`roleVariants` in `server/ai/queryConstraints.ts`): "engineers" finds a

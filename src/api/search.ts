@@ -89,8 +89,13 @@ export const useSemanticSearch = (externalState?: {
     },
     [],
   );
+  /**
+   * Ask a question. `filters` are the palette's facet pills. The server also
+   * reads facets typed into the question, and counts a facet sent both ways
+   * once.
+   */
   const mutate = useCallback(
-    async (query: string) => {
+    async (query: string, filters: FacetFilter[] = []) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -110,7 +115,7 @@ export const useSemanticSearch = (externalState?: {
             "Content-Type": "application/json",
             Accept: "application/x-ndjson",
           },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify(filters.length ? { query, filters } : { query }),
           signal: controller.signal,
         });
         await readNdjson(

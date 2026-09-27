@@ -1,8 +1,8 @@
 {
   "scoringVersion": 3,
   "measurementSource": "provider-recording",
-  "measuredAt": "2026-09-27T06:45:19.572Z",
-  "recordedAt": "2026-09-27T06:45:19.572Z",
+  "measuredAt": "2026-09-27T08:09:14.145Z",
+  "recordedAt": "2026-09-27T08:09:14.145Z",
   "provider": "gemini",
   "model": "gemini-3.5-flash-lite",
   "corpus": {
@@ -11,9 +11,9 @@
     "adversarialContacts": 5
   },
   "filterScore": {
-    "precision": 0.9693,
+    "precision": 0.9868,
     "recall": 1,
-    "f1": 0.982,
+    "f1": 0.9925,
     "confidenceAccuracy": 1,
     "evaluatedQueries": 19
   },
@@ -37,9 +37,9 @@
     "totalAttempts": 4
   },
   "synthesisScore": {
-    "faithfulnessScore": 0.9727,
-    "unsupportedClaimRate": 0.0273,
-    "supportedClaims": 107,
+    "faithfulnessScore": 0.9744,
+    "unsupportedClaimRate": 0.0256,
+    "supportedClaims": 114,
     "unsupportedClaims": 3,
     "summariesEvaluated": 19
   },
@@ -49,7 +49,7 @@
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
-      "faithfulness": 0.9821
+      "faithfulness": 0.9464
     },
     "ambiguous-location": {
       "filterF1": 1,
@@ -59,7 +59,7 @@
       "faithfulness": 0.975
     },
     "empty-answers": {
-      "filterF1": 0.95,
+      "filterF1": 1,
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
@@ -77,7 +77,7 @@
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
-      "faithfulness": 0.9
+      "faithfulness": 1
     }
   }
 }

@@ -41,6 +41,7 @@ import {
 // Type-only import — fully erased at compile time, so the runtime module
 // graph still loads @huggingface/transformers lazily via dynamic import.
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
+import type { CompiledFacets } from "./facetSql.ts";
 
 // =============================================================================
 // Types & State
@@ -331,20 +332,25 @@ export function findSearchNeighbors(
   queryVec: Float32Array,
   k: number,
   preFilterIds?: Set<string>,
+  facets?: CompiledFacets | null,
 ): { contactId: string; distance: number }[] {
   if (preFilterIds?.size === 0 || !Number.isFinite(k) || k < 1) return [];
   const buf = Buffer.from(new Float32Array(queryVec).buffer);
   const hardFilter = preFilterIds
     ? "AND contactId IN (SELECT value FROM json_each(?))"
     : "";
-  const params = preFilterIds
-    ? [
-        buf,
-        scope.ownerId,
-        JSON.stringify([...preFilterIds]),
-        Math.min(Math.floor(k), 500),
-      ]
-    : [buf, scope.ownerId, Math.min(Math.floor(k), 500)];
+  // The facets run inside the KNN, before `k`, so a contact the facets keep
+  // is never lost to closer neighbours they drop.
+  const facetFilter = facets
+    ? `AND contactId IN (SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql}))`
+    : "";
+  const params = [
+    buf,
+    scope.ownerId,
+    ...(preFilterIds ? [JSON.stringify([...preFilterIds])] : []),
+    ...(facets ? [scope.ownerId, ...facets.params] : []),
+    Math.min(Math.floor(k), 500),
+  ];
   return sqlite
     .prepare(
       `
@@ -353,6 +359,7 @@ export function findSearchNeighbors(
       AND ownerId = ?
       AND ${VEC_ACTIVE_MATCH}
       ${hardFilter}
+      ${facetFilter}
       AND k = ? ORDER BY distance
   `,
     )

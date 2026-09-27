@@ -168,3 +168,40 @@ describe("the submitted question", () => {
     expect(hook.current.submittedQuery).toBe("Kept");
   });
 });
+describe("the facets a question carries", () => {
+  const sentBody = () =>
+    JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)) as unknown;
+
+  it("sends the palette's pills as filters", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(result("Alice") + "\n")),
+    );
+    const { result: hook } = renderHook(() => useSemanticSearch());
+    await act(async () => {
+      await hook.current.mutate("who climbs", [
+        { field: "list", value: "core-team" },
+        { field: "contacted", value: "90d", operator: ">" },
+      ]);
+    });
+    expect(sentBody()).toEqual({
+      query: "who climbs",
+      filters: [
+        { field: "list", value: "core-team" },
+        { field: "contacted", value: "90d", operator: ">" },
+      ],
+    });
+  });
+
+  it("sends the question alone when there are no pills", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(result("Alice") + "\n")),
+    );
+    const { result: hook } = renderHook(() => useSemanticSearch());
+    await act(async () => {
+      await hook.current.mutate("Alice");
+    });
+    expect(sentBody()).toEqual({ query: "Alice" });
+  });
+});

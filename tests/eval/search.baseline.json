@@ -1,22 +1,26 @@
 {
-  "recordedAt": "2026-09-14T22:31:11.992Z",
+  "recordedAt": "2026-09-27T08:07:47.909Z",
   "model": "Xenova/all-MiniLM-L6-v2",
   "corpus": {
     "contacts": 300,
-    "queries": 50
+    "queries": 70
   },
   "channels": {
     "sidebar": {
-      "recallAt10": 0.52,
-      "mrr": 0.52
+      "recallAt10": 0.6571,
+      "mrr": 0.6571
     },
     "lexical": {
-      "recallAt10": 0.98,
-      "mrr": 0.89
+      "recallAt10": 1,
+      "mrr": 0.9357
+    },
+    "fused": {
+      "recallAt10": 1,
+      "mrr": 0.95
     },
     "hybrid": {
       "recallAt10": 1,
-      "mrr": 0.8617
+      "mrr": 0.9833
     }
   },
   "byKind": {
@@ -24,6 +28,14 @@
       "company-role": {
         "recallAt10": 0,
         "mrr": 0
+      },
+      "email": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "hyphenated": {
+        "recallAt10": 1,
+        "mrr": 1
       },
       "location-interest": {
         "recallAt10": 0.2,
@@ -37,19 +49,39 @@
         "recallAt10": 0.4,
         "mrr": 0.4
       },
+      "nickname-only": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "phone": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "prefix": {
         "recallAt10": 1,
         "mrr": 1
       }
     },
     "lexical": {
       "company-role": {
-        "recallAt10": 0.9,
-        "mrr": 0.5
+        "recallAt10": 1,
+        "mrr": 0.55
+      },
+      "email": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "hyphenated": {
+        "recallAt10": 1,
+        "mrr": 1
       },
       "location-interest": {
         "recallAt10": 1,
-        "mrr": 0.95
+        "mrr": 1
       },
       "name-typo": {
         "recallAt10": 1,
@@ -59,7 +91,61 @@
         "recallAt10": 1,
         "mrr": 1
       },
+      "nickname-only": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "phone": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "prefix": {
+        "recallAt10": 1,
+        "mrr": 1
+      }
+    },
+    "fused": {
+      "company-role": {
+        "recallAt10": 1,
+        "mrr": 0.8333
+      },
+      "email": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "hyphenated": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "location-interest": {
+        "recallAt10": 1,
+        "mrr": 0.8167
+      },
+      "name-typo": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "nickname": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "nickname-only": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "phone": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "prefix": {
         "recallAt10": 1,
         "mrr": 1
       }
@@ -67,21 +153,41 @@
     "hybrid": {
       "company-role": {
         "recallAt10": 1,
-        "mrr": 0.5833
+        "mrr": 0.95
+      },
+      "email": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "hyphenated": {
+        "recallAt10": 1,
+        "mrr": 1
       },
       "location-interest": {
         "recallAt10": 1,
-        "mrr": 0.775
+        "mrr": 0.9333
       },
       "name-typo": {
         "recallAt10": 1,
-        "mrr": 0.95
+        "mrr": 1
       },
       "nickname": {
         "recallAt10": 1,
         "mrr": 1
       },
+      "nickname-only": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "phone": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "prefix": {
         "recallAt10": 1,
         "mrr": 1
       }

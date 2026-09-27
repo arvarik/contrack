@@ -122,10 +122,14 @@ function asInitial(token: string): string | null {
   return null;
 }
 
-function tokenSimilarity(tokensA: string[], tokensB: string[]): number {
+function tokenSimilarity(
+  tokensA: string[],
+  tokensB: string[],
+  pairScore: (a: string, b: string) => number = singleTokenScore,
+): number {
   if (tokensA.length === 0 || tokensB.length === 0) return 0;
   if (tokensA.length === 1 && tokensB.length === 1) {
-    return singleTokenScore(tokensA[0], tokensB[0]);
+    return pairScore(tokensA[0], tokensB[0]);
   }
 
   const [shorter, longer] =
@@ -139,7 +143,7 @@ function tokenSimilarity(tokensA: string[], tokensB: string[]): number {
     let bestIdx = -1;
     for (let li = 0; li < longer.length; li++) {
       if (used.has(li)) continue;
-      const score = singleTokenScore(sToken, longer[li]);
+      const score = pairScore(sToken, longer[li]);
       if (score > bestScore) {
         bestScore = score;
         bestIdx = li;
@@ -174,15 +178,19 @@ function singleTokenScore(a: string, b: string): number {
       (dmA.alternate === dmB.primary || dmA.alternate === dmB.alternate)),
   );
 
-  const dist = damerauLevenshtein(a, b);
-  const maxLen = Math.max(a.length, b.length);
-  const minLen = Math.min(a.length, b.length);
-
   // If phonetically equivalent, reward with high score
   if (phoneticMatch) {
     const jw = jaroWinkler(a, b);
     return Math.max(jw, 0.88);
   }
+
+  // The edit distance is at least the difference in length, so a pair more
+  // than 2 letters apart fails the test below without the table.
+  if (Math.abs(a.length - b.length) > 2) return 0;
+
+  const dist = damerauLevenshtein(a, b);
+  const maxLen = Math.max(a.length, b.length);
+  const minLen = Math.min(a.length, b.length);
 
   // Without phonetic equivalence, two tokens with > 2 edits are not typos.
   // Also require distance to be at most half of the shorter word.
@@ -240,26 +248,55 @@ export function isMiddleNameExtension(a: string[], b: string[]): boolean {
  * Production-grade name similarity — multi-signal comparator.
  */
 export function nameSimilarity(a: string, b: string): number {
-  if (!a || !b) return 0;
+  return nameScorer(a)(b);
+}
 
-  const la = a.toLowerCase().trim();
-  const lb = b.toLowerCase().trim();
-  if (la === lb) return 1;
+/**
+ * `nameSimilarity` against one name, for scoring many names against it.
+ *
+ * Search scores a few hundred candidates against one query. The query is
+ * tokenized once, and each token pair is scored once: candidates share
+ * first names and surnames, so most pairs repeat. The scores are the ones
+ * `nameSimilarity` gives.
+ */
+export function nameScorer(a: string): (b: string) => number {
+  const la = a ? a.toLowerCase().trim() : "";
+  const tokA = a ? tokenizeName(a) : [];
+  const pairs = new Map<string, number>();
+  const pairScore = (x: string, y: string): number => {
+    const key = `${x}\u0000${y}`;
+    let score = pairs.get(key);
+    if (score === undefined) {
+      score = singleTokenScore(x, y);
+      pairs.set(key, score);
+    }
+    return score;
+  };
 
-  const tokA = tokenizeName(a);
-  const tokB = tokenizeName(b);
+  return (b: string) => {
+    if (!a || !b) return 0;
 
-  const tokenScore = tokenSimilarity(tokA, tokB);
+    const lb = b.toLowerCase().trim();
+    if (la === lb) return 1;
 
-  // Full-string similarity only applies when both have the same token structure
-  // (e.g. both single words or both full names) to avoid a short token
-  // artificially matching a substring across full names.
-  if (tokA.length === tokB.length) {
-    const fullJW = jaroWinkler(la, lb);
-    const maxLen = Math.max(la.length, lb.length);
-    const fullDL = maxLen > 0 ? 1 - damerauLevenshtein(la, lb) / maxLen : 0;
-    return Math.max(tokenScore, fullJW, fullDL);
-  }
+    const tokB = tokenizeName(b);
 
-  return tokenScore;
+    const tokenScore = tokenSimilarity(tokA, tokB, pairScore);
+
+    // Full-string similarity only applies when both have the same token structure
+    // (e.g. both single words or both full names) to avoid a short token
+    // artificially matching a substring across full names.
+    if (tokA.length === tokB.length) {
+      const fullJW = jaroWinkler(la, lb);
+      const maxLen = Math.max(la.length, lb.length);
+      const best = Math.max(tokenScore, fullJW);
+      // The edit distance is at least the difference in length, so when
+      // even that bound cannot beat `best`, the table is not needed.
+      if (maxLen === 0 || 1 - Math.abs(la.length - lb.length) / maxLen <= best)
+        return best;
+      return Math.max(best, 1 - damerauLevenshtein(la, lb) / maxLen);
+    }
+
+    return tokenScore;
+  };
 }

@@ -400,5 +400,165 @@
     "expect": [
       "emeka-onyeka"
     ]
+  },
+  {
+    "id": "q51",
+    "kind": "nickname-only",
+    "q": "Peggy Ellington",
+    "expect": [
+      "margaret-ellington"
+    ]
+  },
+  {
+    "id": "q52",
+    "kind": "nickname-only",
+    "q": "Bob Castellanos",
+    "expect": [
+      "robert-castellanos"
+    ]
+  },
+  {
+    "id": "q53",
+    "kind": "nickname-only",
+    "q": "Ted Lindgren",
+    "expect": [
+      "theodore-lindgren"
+    ]
+  },
+  {
+    "id": "q54",
+    "kind": "nickname-only",
+    "q": "Sasha Petrova",
+    "expect": [
+      "alexandra-petrova"
+    ]
+  },
+  {
+    "id": "q55",
+    "kind": "phone",
+    "q": "4155550142",
+    "expect": [
+      "marcus-delgado"
+    ]
+  },
+  {
+    "id": "q56",
+    "kind": "phone",
+    "q": "01614960321",
+    "expect": [
+      "jonathan-smith"
+    ]
+  },
+  {
+    "id": "q57",
+    "kind": "phone",
+    "q": "5550147",
+    "expect": [
+      "katherine-oconnell"
+    ]
+  },
+  {
+    "id": "q58",
+    "kind": "phone",
+    "q": "14155550123",
+    "expect": [
+      "priya-raghunathan"
+    ]
+  },
+  {
+    "id": "q59",
+    "kind": "email",
+    "q": "margaret.ellington@crestwoodcapital.com",
+    "expect": [
+      "margaret-ellington"
+    ]
+  },
+  {
+    "id": "q60",
+    "kind": "email",
+    "q": "rob.castellanos@fleetwise.io",
+    "expect": [
+      "robert-castellanos"
+    ]
+  },
+  {
+    "id": "q61",
+    "kind": "email",
+    "q": "katherine@halcyonstudio.ie",
+    "expect": [
+      "katherine-oconnell"
+    ]
+  },
+  {
+    "id": "q62",
+    "kind": "email",
+    "q": "nadia.benali@kestrelanalytics.com",
+    "expect": [
+      "nadia-benali"
+    ]
+  },
+  {
+    "id": "q63",
+    "kind": "hyphenated",
+    "q": "Anne-Marie Dubois-Laurent",
+    "expect": [
+      "anne-marie-dubois-laurent"
+    ]
+  },
+  {
+    "id": "q64",
+    "kind": "hyphenated",
+    "q": "Dubois-Laurent",
+    "expect": [
+      "anne-marie-dubois-laurent"
+    ]
+  },
+  {
+    "id": "q65",
+    "kind": "hyphenated",
+    "q": "Anne Marie Dubois Laurent",
+    "expect": [
+      "anne-marie-dubois-laurent"
+    ]
+  },
+  {
+    "id": "q66",
+    "kind": "hyphenated",
+    "q": "Annemarie Dubois",
+    "expect": [
+      "anne-marie-dubois-laurent"
+    ]
+  },
+  {
+    "id": "q67",
+    "kind": "prefix",
+    "q": "Xiom",
+    "expect": [
+      "xiomara-reyes"
+    ]
+  },
+  {
+    "id": "q68",
+    "kind": "prefix",
+    "q": "Thwa",
+    "expect": [
+      "geoffrey-thwaite"
+    ]
+  },
+  {
+    "id": "q69",
+    "kind": "prefix",
+    "q": "Krzy",
+    "expect": [
+      "krzysztof-nowak"
+    ]
+  },
+  {
+    "id": "q70",
+    "kind": "prefix",
+    "q": "Siob",
+    "expect": [
+      "siobhan-murphy"
+    ]
   }
 ]

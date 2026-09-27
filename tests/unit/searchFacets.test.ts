@@ -268,4 +268,56 @@ describe("searchFacets matchesFacet", () => {
       expect(matchesFacet(untracked, filter)).toBe(false);
     });
   });
+
+  // `contacted:` reads the last contact: more than N ago or never, within N,
+  // or never. A date that cannot be read counts as never.
+  describe("contacted: facet", () => {
+    const daysAgo = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString();
+    const recent: FacetContact = { lastContactedAt: daysAgo(5) };
+    const lapsed: FacetContact = { lastContactedAt: daysAgo(120) };
+    // SQLite's own form is UTC with a space and no zone.
+    const lapsedSqlite: FacetContact = {
+      lastContactedAt: daysAgo(120).replace("T", " ").slice(0, 19),
+    };
+    const never: FacetContact = { lastContactedAt: null };
+    const unreadable: FacetContact = { lastContactedAt: "someday" };
+
+    it("contacted:>90d is more than 90 days ago, or never", () => {
+      const filter = {
+        field: "contacted" as const,
+        value: "90d",
+        operator: ">" as const,
+      };
+      expect(matchesFacet(lapsed, filter)).toBe(true);
+      expect(matchesFacet(lapsedSqlite, filter)).toBe(true);
+      expect(matchesFacet(never, filter)).toBe(true);
+      expect(matchesFacet(unreadable, filter)).toBe(true);
+      expect(matchesFacet(recent, filter)).toBe(false);
+    });
+
+    it("contacted:<30d is within the last 30 days", () => {
+      const filter = {
+        field: "contacted" as const,
+        value: "30d",
+        operator: "<" as const,
+      };
+      expect(matchesFacet(recent, filter)).toBe(true);
+      expect(matchesFacet(lapsed, filter)).toBe(false);
+      expect(matchesFacet(never, filter)).toBe(false);
+    });
+
+    it("contacted:never is never", () => {
+      const filter = { field: "contacted" as const, value: "never" };
+      expect(matchesFacet(never, filter)).toBe(true);
+      expect(matchesFacet(unreadable, filter)).toBe(true);
+      expect(matchesFacet(recent, filter)).toBe(false);
+    });
+
+    it("a value that is not a duration matches nobody", () => {
+      const filter = { field: "contacted" as const, value: "lately" };
+      expect(matchesFacet(never, filter)).toBe(false);
+      expect(matchesFacet(recent, filter)).toBe(false);
+    });
+  });
 });
