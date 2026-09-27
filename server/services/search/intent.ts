@@ -5,10 +5,12 @@
 // quoted phrases are "local" kinds: local retrieval is the final answer and
 // no model runs. Everything else shows the local list first and then asks
 // the model. The weights are the reciprocal rank fusion weights for each
-// kind, which the fusion reads from Prompt 2 of the search-engine plan on.
+// kind: `localRetrieval` gives the keyword and vector lists these weights.
 // =============================================================================
 
 import { searchTokens } from "./lexical.ts";
+import { STRONG_APPROXIMATE_SCORE } from "./approximateName.ts";
+import { isPhoneQuery } from "../../utils/nlp/phone.ts";
 import { lookupGivenName, foldName } from "../../utils/nlp/givenNames.ts";
 import {
   NICKNAME_GROUPS,
@@ -71,7 +73,7 @@ const QUESTION_WORDS = new Set([
 ]);
 
 /** An approximate name this close is a name, not a coincidence. */
-export const NAME_SIGNAL_SCORE = 0.85;
+export const NAME_SIGNAL_SCORE = STRONG_APPROXIMATE_SCORE;
 
 const WEIGHTS: Record<"local" | "conceptual" | "mixed", IntentWeights> = {
   local: { lexical: 0.7, dense: 0.3 },
@@ -80,7 +82,6 @@ const WEIGHTS: Record<"local" | "conceptual" | "mixed", IntentWeights> = {
 };
 
 const EMAIL = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
-const PHONE_CHARACTERS = /^[\d+()\-. ]+$/;
 const QUOTED = /^(?:"[^"]+"|“[^“”]+”)$/;
 
 const NICKNAMES = new Set(NICKNAME_GROUPS.flat());
@@ -163,8 +164,7 @@ export function classifyQuery(
   };
 
   if (EMAIL.test(text)) return result("email");
-  if (PHONE_CHARACTERS.test(text) && (text.match(/\d/g)?.length ?? 0) >= 7)
-    return result("phone");
+  if (isPhoneQuery(text)) return result("phone");
   if (QUOTED.test(text)) return result("quoted");
 
   const nameSignal =

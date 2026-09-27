@@ -17,10 +17,18 @@
 // approach purely using existing SQLite FTS5 prefix indexing, Double Metaphone
 // phonetic hashing, and in-memory Damerau-Levenshtein / Jaro-Winkler scoring:
 //  - Candidate Bounding:
-//      a) contacts_fts has prefix='2 3 4' on `name`. Querying 2-character prefixes
-//         prunes SQLite retrieval to a tiny candidate set (<= 25-50 rows) in < 0.3ms.
+//      a) contacts_fts has prefix='2 3 4' on `name`. One query asks for each
+//         token's 3-letter prefix (tokens of 4 letters or more), its 2-letter
+//         prefix, and the other names of its nickname group. BM25 orders the
+//         rows, so a name that shares more of the query ranks first, and the
+//         first 200 are kept. The 2-letter prefix is kept because a typo in
+//         the third letter is common: "Kristof" and "Krzysztof" share "kr".
 //      b) contacts has composite index `idx_contacts_owner_phonetic` on (ownerId, phoneticHash),
-//         providing instant phonetic blocking for alternate spellings.
+//         providing instant phonetic blocking for alternate spellings. The
+//         stored hash is the code of the whole name, so it is compared by
+//         equality with the code of the whole query and of each token.
+//      Both sources have a fixed order and a limit of 200, so no arbitrary
+//      cut drops a better match. The old step took 50 prefix rows in no order.
 //  - Scoring:
 //      In-memory multi-signal scoring via `nameSimilarity` (Damerau-Levenshtein
 //      transpositions + Jaro-Winkler prefix weighting + Double Metaphone equivalence).
@@ -31,8 +39,10 @@
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { ownerToken, type Scope } from "../../tenancy/scope.ts";
-import { tokenizeName, nameSimilarity } from "../../utils/nlp/names.ts";
+import { tokenizeName, nameScorer } from "../../utils/nlp/names.ts";
 import { doubleMetaphone } from "../../utils/nlp/phonetics.ts";
+import { nicknameVariants } from "../../utils/nlp/nicknames.ts";
+import type { CompiledFacets } from "./facetSql.ts";
 
 export interface ApproximateNameMatch {
   contactId: string;
@@ -46,6 +56,20 @@ export interface ApproximateNameMatch {
 export const APPROXIMATE_NAME_THRESHOLD = 0.75;
 
 /**
+ * An approximate name this close is strong evidence. Broad keyword search
+ * ranks it above partial matches, and `classifyQuery` reads it as a name.
+ */
+export const STRONG_APPROXIMATE_SCORE = 0.85;
+
+/** Rows each candidate source may return, in its fixed order. */
+const CANDIDATE_LIMIT = 200;
+
+interface Candidate {
+  id: string;
+  name: string;
+}
+
+/**
  * Find bounded approximate name matches for a query against active contacts.
  *
  * @param scope       - Tenancy scope ensuring cross-tenant isolation.
@@ -53,6 +77,8 @@ export const APPROXIMATE_NAME_THRESHOLD = 0.75;
  * @param limit       - Maximum number of matches to return.
  * @param allowedIds  - Optional set of contact IDs permitted by upstream filters.
  * @param excludeIds  - Optional set of contact IDs to exclude (e.g. exact matches already found).
+ * @param facets      - Optional facet predicate, applied before each source's limit.
+ * @returns every match scoring 0.75 or more, best first, at most `limit`.
  */
 export function findApproximateNameMatches(
   scope: Scope,
@@ -60,6 +86,7 @@ export function findApproximateNameMatches(
   limit = 20,
   allowedIds?: Set<string> | null,
   excludeIds?: Set<string>,
+  facets?: CompiledFacets | null,
 ): ApproximateNameMatch[] {
   if (limit <= 0 || allowedIds?.size === 0) return [];
 
@@ -67,111 +94,93 @@ export function findApproximateNameMatches(
   // Name queries rarely exceed 4 tokens. Longer queries are usually sentences or note phrases.
   if (!qTokens.length || qTokens.length > 5) return [];
 
-  // ── Step 1: Bounded candidate retrieval via FTS prefix index on name ───
   // Split tokens on punctuation/hyphens/apostrophes (e.g. "O'Callahan" → "o", "callahan")
-  const subTokens = qTokens.flatMap((t) => t.split(/['\s-]+/)).filter(Boolean);
-  const prefixClauses: string[] = [];
-  for (const t of subTokens) {
-    const clean = t.replace(/[^\p{L}\p{N}]/gu, "");
-    if (clean.length >= 2) {
-      prefixClauses.push(`name:"${clean.slice(0, 2)}"*`);
-    }
+  const subTokens = qTokens
+    .flatMap((t) => t.split(/['\s-]+/))
+    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(Boolean);
+
+  // The upstream filters, as SQL and the values they bind.
+  const allowedClause = allowedIds
+    ? "AND c.id IN (SELECT value FROM json_each(?))"
+    : "";
+  const facetClause = facets ? `AND (${facets.sql})` : "";
+  const restrictions = [
+    ...(allowedIds ? [JSON.stringify([...allowedIds])] : []),
+    ...(facets?.params ?? []),
+  ];
+
+  const candidates = new Map<string, Candidate>();
+  const add = (rows: Candidate[]) => {
+    for (const row of rows)
+      if (!excludeIds?.has(row.id) && !candidates.has(row.id))
+        candidates.set(row.id, row);
+  };
+
+  // ── Step 1: name prefixes and nickname variants, by BM25 ─────────────────
+  const clauses = new Set<string>();
+  for (const token of subTokens) {
+    if (token.length >= 4) clauses.add(`name:"${token.slice(0, 3)}"*`);
+    if (token.length >= 2) clauses.add(`name:"${token.slice(0, 2)}"*`);
   }
+  for (const token of qTokens)
+    for (const variant of nicknameVariants(token))
+      clauses.add(`name:"${variant}"`);
 
-  const candidateMap = new Map<string, { id: string; name: string }>();
-
-  if (prefixClauses.length > 0) {
-    const ftsQuery = `ownerTok:${ownerToken(scope)} AND (${prefixClauses.join(" OR ")})`;
-    const allowedClause = allowedIds
-      ? "AND c.id IN (SELECT value FROM json_each(?))"
-      : "";
-    const ftsStmt = sqlite.prepare(`
+  if (clauses.size > 0) {
+    const ftsQuery = `ownerTok:${ownerToken(scope)} AND (${[...clauses].join(" OR ")})`;
+    // Every phrase is on the name column, and the owner token is the same on
+    // every row, so plain bm25() orders the rows by the name alone.
+    add(
+      sqlite
+        .prepare(
+          `
       SELECT c.id, c.name FROM contacts_fts f
       JOIN contacts c ON c.rowid = f.rowid
       WHERE contacts_fts MATCH ? AND c.ownerId = ?
-        AND ${ACTIVE_CONTACT_SQL} ${allowedClause}
-      LIMIT 50
-    `);
-    const ftsParams = allowedIds
-      ? [ftsQuery, scope.ownerId, JSON.stringify([...allowedIds])]
-      : [ftsQuery, scope.ownerId];
-    const ftsRows = ftsStmt.all(...ftsParams) as { id: string; name: string }[];
-    for (const r of ftsRows) {
-      if (!excludeIds?.has(r.id)) {
-        candidateMap.set(r.id, r);
-      }
-    }
+        AND ${ACTIVE_CONTACT_SQL} ${allowedClause} ${facetClause}
+      ORDER BY bm25(contacts_fts), c.id
+      LIMIT ${CANDIDATE_LIMIT}
+    `,
+        )
+        .all(ftsQuery, scope.ownerId, ...restrictions) as Candidate[],
+    );
   }
 
-  // ── Step 2: Bounded candidate retrieval via phoneticHash (Double Metaphone) ──
-  const dm = doubleMetaphone(query);
-  const phoneticCodes = [dm.primary, dm.alternate].filter(Boolean) as string[];
-  if (phoneticCodes.length > 0) {
-    const placeholders = phoneticCodes.map(() => "?").join(",");
-    const allowedClause = allowedIds
-      ? "AND c.id IN (SELECT value FROM json_each(?))"
-      : "";
-    const phoneStmt = sqlite.prepare(`
+  // ── Step 2: phonetic codes, by the (ownerId, phoneticHash) index ─────────
+  const codes = new Set<string>();
+  const addCodes = (text: string) => {
+    const dm = doubleMetaphone(text);
+    if (dm.primary) codes.add(dm.primary);
+    if (dm.alternate) codes.add(dm.alternate);
+  };
+  addCodes(query);
+  for (const token of subTokens) if (token.length >= 3) addCodes(token);
+
+  if (codes.size > 0) {
+    const placeholders = [...codes].map(() => "?").join(",");
+    add(
+      sqlite
+        .prepare(
+          `
       SELECT c.id, c.name FROM contacts c
       WHERE c.ownerId = ? AND c.phoneticHash IN (${placeholders})
-        AND ${ACTIVE_CONTACT_SQL} ${allowedClause}
-      LIMIT 30
-    `);
-    const phoneParams = allowedIds
-      ? [scope.ownerId, ...phoneticCodes, JSON.stringify([...allowedIds])]
-      : [scope.ownerId, ...phoneticCodes];
-    const phoneRows = phoneStmt.all(...phoneParams) as {
-      id: string;
-      name: string;
-    }[];
-    for (const r of phoneRows) {
-      if (!excludeIds?.has(r.id)) {
-        candidateMap.set(r.id, r);
-      }
-    }
+        AND ${ACTIVE_CONTACT_SQL} ${allowedClause} ${facetClause}
+      ORDER BY c.id
+      LIMIT ${CANDIDATE_LIMIT}
+    `,
+        )
+        .all(scope.ownerId, ...codes, ...restrictions) as Candidate[],
+    );
   }
 
-  // Also query per-token phonetics for tokens with length >= 3
-  for (const t of subTokens) {
-    const clean = t.replace(/[^\p{L}\p{N}]/gu, "");
-    if (clean.length >= 3) {
-      const tDm = doubleMetaphone(clean);
-      const tCodes = [tDm.primary, tDm.alternate].filter(Boolean) as string[];
-      for (const code of tCodes) {
-        const allowedClause = allowedIds
-          ? "AND c.id IN (SELECT value FROM json_each(?))"
-          : "";
-        const tokenPhoneStmt = sqlite.prepare(`
-          SELECT c.id, c.name FROM contacts c
-          WHERE c.ownerId = ? AND c.phoneticHash LIKE ?
-            AND ${ACTIVE_CONTACT_SQL} ${allowedClause}
-          LIMIT 20
-        `);
-        const tokenPhoneParams = allowedIds
-          ? [scope.ownerId, `%${code}%`, JSON.stringify([...allowedIds])]
-          : [scope.ownerId, `%${code}%`];
-        const tokenRows = tokenPhoneStmt.all(...tokenPhoneParams) as {
-          id: string;
-          name: string;
-        }[];
-        for (const r of tokenRows) {
-          if (!excludeIds?.has(r.id)) {
-            candidateMap.set(r.id, r);
-          }
-        }
-      }
-    }
-  }
-
-  if (candidateMap.size === 0) return [];
+  if (candidates.size === 0) return [];
 
   // ── Step 3: In-memory multi-signal scoring & filtering ─────────────────
+  const similarity = nameScorer(query);
   const scored: ApproximateNameMatch[] = [];
-  for (const candidate of candidateMap.values()) {
-    if (allowedIds && !allowedIds.has(candidate.id)) continue;
-    if (excludeIds?.has(candidate.id)) continue;
-
-    const score = nameSimilarity(query, candidate.name);
+  for (const candidate of candidates.values()) {
+    const score = similarity(candidate.name);
     if (score >= APPROXIMATE_NAME_THRESHOLD) {
       scored.push({
         contactId: candidate.id,
@@ -183,8 +192,13 @@ export function findApproximateNameMatches(
     }
   }
 
-  // Sort descending by similarity score, then ascending by name
-  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  // Sort descending by similarity score, then ascending by name and id
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.name.localeCompare(b.name) ||
+      (a.contactId < b.contactId ? -1 : 1),
+  );
 
   return scored.slice(0, limit);
 }

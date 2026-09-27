@@ -14,11 +14,12 @@
 //       The search-gate corpus (300 contacts) plus generated contacts up to
 //       N (default 5,000), 70 percent with an email, 50 percent with a phone,
 //       600 with a last-contact date. Real MiniLM vectors when the model is
-//       available. Prints p50 and p95 for the sidebar search, lexical search,
-//       the query embedding, the KNN, `localRetrieval` per query kind, and
-//       the local answer as a person gets it (a local kind's final answer,
-//       or the instant chunk with hydration), then recall@10 and MRR per
-//       channel for the 50 golden queries.
+//       available. Prints p50 and p95 for the sidebar search with and
+//       without a facet, lexical search, the query embedding, the KNN,
+//       `localRetrieval` per query kind, and the local answer as a person
+//       gets it (a local kind's final answer, a facet answer, or the instant
+//       chunk with hydration), then recall@10 and MRR per channel for the
+//       golden queries.
 //
 //   node scripts/benchmark-search.ts --live
 //       The same database, then the Ask pipeline with the configured
@@ -30,8 +31,9 @@
 //       A run costs a few cents.
 //
 // Flags: --json prints one JSON document instead of the report. --runs N sets
-// the timed repetitions per query (default 5, 3 for --live). --verbose keeps
-// the server's log lines. The script never prints a key.
+// the timed repetitions per query (default 5, 3 for --live). --rrf-k N sets
+// the fusion constant for the k sweep (default: the code's RRF_K).
+// --verbose keeps the server's log lines. The script never prints a key.
 // =============================================================================
 
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -53,10 +55,14 @@ const verbose = flag("--verbose");
 const corpusMode = live || flag("--contacts");
 const contactCount = Number(option("--contacts") ?? 5_000);
 const runs = Number(option("--runs") ?? (live ? 3 : 5));
+const rrfK =
+  option("--rrf-k") === undefined ? undefined : Number(option("--rrf-k"));
 if (!Number.isInteger(contactCount) || contactCount < 300)
   throw new Error("--contacts needs a whole number of at least 300");
 if (!Number.isInteger(runs) || runs < 1 || runs > 50)
   throw new Error("--runs needs a whole number from 1 to 50");
+if (rrfK !== undefined && (!Number.isInteger(rrfK) || rrfK < 1 || rrfK > 1000))
+  throw new Error("--rrf-k needs a whole number from 1 to 1000");
 
 // Each run uses synthetic data in a temporary database, including when comparing branches.
 const dataDir = mkdtempSync(path.join(tmpdir(), "contrack-search-bench-"));
@@ -399,14 +405,25 @@ async function localBenchmark(seeded: Seeded) {
       .map((q) => q.q),
     email: seeded.emails,
     phone: seeded.phones,
+    // The sentence kinds. Nickname questions start with a name, and the
+    // other kinds are names, emails, phone numbers and prefixes.
     question: corpus.queries
-      .filter((q) => q.kind !== "name-typo" && q.kind !== "nickname")
+      .filter((q) =>
+        ["company-role", "location-interest", "note-phrase"].includes(q.kind),
+      )
       .map((q) => q.q),
   };
 
   const samples = new Map<string, number[]>();
   const add = (key: string, value: number) =>
     samples.set(key, [...(samples.get(key) ?? []), value]);
+  /** One facet per sidebar search, in turn: a tag, an industry, a last contact, a place. */
+  const FACETS = [
+    { field: "tag" as const, value: "founder" },
+    { field: "industry" as const, value: "Fintech" },
+    { field: "contacted" as const, value: "90d", operator: ">" as const },
+    { field: "location" as const, value: "a" },
+  ];
   const kinds = new Map<string, Record<string, number>>();
   /** The kind each group should get, when it has one. */
   const expected: Record<string, string> = {
@@ -431,6 +448,11 @@ async function localBenchmark(seeded: Seeded) {
         const [, sidebar] = await timed(() =>
           m.search.searchService.searchFts(scope, query),
         );
+        const [, facetSearch] = await timed(() =>
+          m.search.searchService.searchFts(scope, query, [
+            FACETS[run % FACETS.length],
+          ]),
+        );
         const [, lexical] = await timed(() =>
           m.lexical.lexicalSearch(scope, query, 20, null, true),
         );
@@ -439,7 +461,7 @@ async function localBenchmark(seeded: Seeded) {
           vector ? m.embeddings.findSearchNeighbors(scope, vector, 100) : [],
         );
         const [, retrieval] = await timed(() =>
-          m.hybrid.localRetrieval(scope, query, { limit: 30 }),
+          m.hybrid.localRetrieval(scope, query, { limit: 30, rrfK }),
         );
         m.cache.aiCache.invalidateAll();
         const [answer, answerMs] = await timed(() =>
@@ -448,11 +470,12 @@ async function localBenchmark(seeded: Seeded) {
             query,
             "bench",
             undefined,
-            { aiAllowed: false },
+            { aiAllowed: false, rrfK },
           ),
         );
         if (!warm) continue;
         add(`sidebar:${group}`, sidebar);
+        add("facet", facetSearch);
         add(`lexical:${group}`, lexical);
         if (vector) {
           add("embed", embed);
@@ -464,8 +487,30 @@ async function localBenchmark(seeded: Seeded) {
     }
   }
 
+  // Ask questions a filter answers, with no model call: typed facets, and
+  // facets read from the words.
+  const facetQuestions = {
+    "facets only": ["tag:founder", "industry:Fintech contacted:>90d"],
+    "implicit facets": ["who works in fintech", "people in Berlin"],
+  };
+  for (const [kind, questions] of Object.entries(facetQuestions))
+    for (const query of questions)
+      for (let run = 0; run <= runs; run++) {
+        m.cache.aiCache.invalidateAll();
+        const [, answerMs] = await timed(() =>
+          m.search.searchService.semanticSearch(
+            scope,
+            query,
+            "bench",
+            undefined,
+            { aiAllowed: false },
+          ),
+        );
+        if (run > 0) add(`facets:${kind}`, answerMs);
+      }
+
   const [quality, qualityMs] = await timed(() =>
-    m.harness.measure(scope, corpus.queries, seeded.idByKey),
+    m.harness.measure(scope, corpus.queries, seeded.idByKey, { rrfK }),
   );
 
   const stats = Object.fromEntries(
@@ -477,6 +522,8 @@ async function localBenchmark(seeded: Seeded) {
     seedMs: Math.round(seeded.timings.seedMs),
     embedMs: Math.round(seeded.timings.embedMs),
     runs,
+    rrfK: rrfK ?? m.hybrid.RRF_K,
+    queries: corpus.queries.length,
     kinds: Object.fromEntries(kinds),
     unexpected,
     stats,
@@ -490,13 +537,16 @@ function printLocal(result: Awaited<ReturnType<typeof localBenchmark>>) {
   lines.push(
     `Ask Contrack, ${result.contacts.toLocaleString("en-US")} contacts, ` +
       `${result.vectors.toLocaleString("en-US")} vectors ` +
-      `(seeded in ${seconds(result.seedMs)}, embedded in ${seconds(result.embedMs)}), ${result.runs} timed runs per query`,
+      `(seeded in ${seconds(result.seedMs)}, embedded in ${seconds(result.embedMs)}), ${result.runs} timed runs per query, RRF k = ${result.rrfK}`,
   );
   lines.push("");
   lines.push(`${pad("Stage", 44)}${pad("p50", 10)}${pad("p95", 10)}samples`);
   const order = [
     ["sidebar:exact name", "Sidebar keyword search, exact name"],
     ["sidebar:typo name", "Sidebar keyword search, typo name"],
+    ["facet", "Sidebar keyword search with one facet"],
+    ["facets:facets only", "Ask, facets only (no model)"],
+    ["facets:implicit facets", "Ask, implicit facets (no model)"],
     ["lexical:exact name", "Lexical search, exact name"],
     ["lexical:question", "Lexical search, question"],
     ["embed", "Query embedding on the worker"],
@@ -535,16 +585,20 @@ function printLocal(result: Awaited<ReturnType<typeof localBenchmark>>) {
   for (const { group, query, kind } of result.unexpected)
     lines.push(`  not local: "${query}" (${group}) is ${kind}`);
   lines.push("");
-  lines.push("Quality on the 50 golden queries (recall@10 / MRR):");
+  lines.push(
+    `Quality on the ${result.queries} golden queries (recall@10 / MRR):`,
+  );
   for (const [channel, score] of Object.entries(result.quality.channels))
     lines.push(
-      `  ${pad(channel, 10)}${score.recallAt10.toFixed(2)} / ${score.mrr.toFixed(2)}`,
+      `  ${pad(channel, 10)}${score.recallAt10.toFixed(3)} / ${score.mrr.toFixed(3)}`,
     );
-  const typo = result.quality.byKind.hybrid?.["name-typo"];
-  if (typo)
-    lines.push(
-      `  ${pad("hybrid, name-typo queries only", 32)}${typo.recallAt10.toFixed(2)} / ${typo.mrr.toFixed(2)}`,
-    );
+  for (const channel of ["fused", "hybrid"] as const) {
+    const typo = result.quality.byKind[channel]?.["name-typo"];
+    if (typo)
+      lines.push(
+        `  ${pad(`${channel}, name-typo queries only`, 32)}${typo.recallAt10.toFixed(2)} / ${typo.mrr.toFixed(2)}`,
+      );
+  }
   console.log(lines.join("\n"));
 }
 

@@ -26,7 +26,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { scoreContactMatch } from "../../../lib/contactMatch";
-import { parseFacetTokens } from "../../../hooks/useQueryTokenizer";
+import { parseFacetQuery } from "../../../../shared/facetQuery";
 import { matchesFacet } from "../../../../shared/searchFacets";
 import type { Contact } from "../../../types";
 
@@ -271,7 +271,7 @@ export function useContactListFilters(contacts: Contact[]) {
     //    used to score "missing:company" as a name, which matched nobody. The
     //    facets are the palette's, from `shared/searchFacets`. `near:` needs
     //    a geocoder the list does not have, so it is left to the palette.
-    const { filters, freeText } = parseFacetTokens(searchQuery);
+    const { filters, freeText } = parseFacetQuery(searchQuery);
     const facets = filters.filter((f) => f.field !== "near");
     if (facets.length > 0) {
       result = result.filter((contact) =>

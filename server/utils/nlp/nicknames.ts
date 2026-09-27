@@ -125,6 +125,19 @@ for (let gi = 0; gi < NICKNAME_GROUPS.length; gi++) {
   }
 }
 
+/**
+ * The other names in a token's nickname group, lower case. "bob" gives
+ * "robert", "bobby", "rob" and the rest of its group. A token in no group
+ * gives none. Search uses these to find Robert when somebody types Bob.
+ */
+export function nicknameVariants(token: string): string[] {
+  const name = token.toLowerCase();
+  const group = _nicknameMap.get(name);
+  return group === undefined
+    ? []
+    : NICKNAME_GROUPS[group].filter((variant) => variant !== name);
+}
+
 /** Check if two name tokens are nickname-equivalent (e.g., "bob" ↔ "robert") */
 export function areNicknameEquivalent(a: string, b: string): boolean {
   if (a === b) return true;

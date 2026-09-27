@@ -271,9 +271,11 @@ describe("the database proves a plan without the reranker", () => {
     ]);
   });
 
-  it("lists filtered contacts that no retrieval channel ranked", async () => {
-    // No word of the question is in either profile, and the test has no
-    // vectors, so only the filter knows these two are the answer.
+  it("lists every contact the filter found", async () => {
+    // The filter holds the whole question, so its contacts are the answer,
+    // ranked ones first, then the rest by name. There is no preposition in
+    // front of the place, so implicit facets leave the question to the
+    // planner.
     script({
       must: { locationMatchers: ["Lisbon"] },
       should: {},
@@ -282,7 +284,7 @@ describe("the database proves a plan without the reranker", () => {
     });
     const result = await searchService.semanticSearch(
       scope(),
-      "folks around Lisbon",
+      "Lisbon folks",
       "fast-complete",
     );
     expect(calls()).toEqual(["planner"]);

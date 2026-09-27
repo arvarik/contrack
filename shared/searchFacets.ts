@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { parseServerTime } from "./dates.ts";
 import { haversineKm, isValidLatLng } from "./geo.ts";
 
 export type FacetField =
@@ -8,15 +10,32 @@ export type FacetField =
   | "tag"
   | "score"
   | "updated"
+  | "contacted"
   | "missing"
   | "list"
   | "near"
   | "tracked";
 
+/** Every facet field, in the order the palette documents them. */
+export const FACET_FIELDS = [
+  "role",
+  "company",
+  "location",
+  "industry",
+  "tag",
+  "score",
+  "updated",
+  "contacted",
+  "missing",
+  "list",
+  "near",
+  "tracked",
+] as const satisfies readonly FacetField[];
+
 export interface FacetFilter {
   field: FacetField;
   value: string;
-  /** For score: and updated: operators (e.g., >80, <40) */
+  /** For score:, updated: and contacted: operators (e.g., >80, <40, >90d) */
   operator?: ">" | "<";
   /** Distance in kilometers for near: filter (default 25) */
   km?: number;
@@ -38,6 +57,7 @@ export interface FacetContact {
   /** A person chose to keep up with this contact. */
   isTracked?: boolean;
   updatedAt?: string | null;
+  lastContactedAt?: string | null;
   emails?: { email: string }[];
   phones?: { phone: string }[];
   lists?: { id: string; name: string }[];
@@ -45,12 +65,44 @@ export interface FacetContact {
   lng?: number | null;
 }
 
+/**
+ * The facets a search request may carry, as `GET /api/search` and
+ * `POST /api/search/semantic` accept them: at most 8. A `near:` facet
+ * carries its resolved `point`. Fields the palette keeps for itself, such as
+ * `resolving`, are dropped.
+ */
+export const facetFiltersSchema = z
+  .array(
+    z.object({
+      field: z.enum(FACET_FIELDS),
+      value: z.string().trim().min(1).max(100),
+      operator: z.enum([">", "<"]).optional(),
+      km: z.number().positive().max(20_000).optional(),
+      point: z
+        .object({
+          lat: z.number().min(-90).max(90),
+          lng: z.number().min(-180).max(180),
+          km: z.number().positive().max(20_000),
+        })
+        .optional(),
+    }),
+  )
+  .max(8);
+
+/**
+ * The value a text facet looks for: lower case, one pair of quotes removed.
+ * `compileFacets` on the server passes the same string to its SQL.
+ */
+export function facetNeedle(filter: FacetFilter): string {
+  return filter.value.toLowerCase().replace(/^["']|["']$/g, "");
+}
+
 /** Match a facet filter against a SlimSearchContact */
 export function matchesFacet(
   contact: FacetContact,
   filter: FacetFilter,
 ): boolean {
-  const v = filter.value.toLowerCase().replace(/^["']|["']$/g, "");
+  const v = facetNeedle(filter);
 
   switch (filter.field) {
     case "role":
@@ -71,6 +123,8 @@ export function matchesFacet(
       return matchesTrackedFilter(contact.isTracked ?? false, v);
     case "updated":
       return matchesDateFilter(contact.updatedAt ?? null, filter);
+    case "contacted":
+      return matchesContactedFilter(contact.lastContactedAt ?? null, filter);
     case "missing":
       return matchesMissingFilter(contact, v);
     case "list": {
@@ -146,27 +200,64 @@ function matchesScoreFilter(
   return op === ">" ? score >= threshold : score <= threshold;
 }
 
-/** Date comparison: updated:>3m (older than 3 months), updated:<1m (newer than 1 month) */
-function matchesDateFilter(
-  dateStr: string | null,
-  filter: FacetFilter,
-): boolean {
-  if (!dateStr) return false;
-
-  const match = filter.value.match(/^(\d+)([dwmy])$/i);
-  if (!match) return false;
+/**
+ * The moment a duration value points back to: "3m" is 90 days before now,
+ * counted in days on the local calendar. Null when the value is not a
+ * whole number followed by d, w, m or y.
+ */
+export function facetCutoff(value: string, now = new Date()): Date | null {
+  const match = value.match(/^(\d+)([dwmy])$/i);
+  if (!match) return null;
 
   const amount = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
   const daysMap: Record<string, number> = { d: 1, w: 7, m: 30, y: 365 };
   const days = amount * (daysMap[unit] ?? 30);
 
-  const cutoffDate = new Date();
+  const cutoffDate = new Date(now);
   cutoffDate.setDate(cutoffDate.getDate() - days);
+  return cutoffDate;
+}
 
-  const contactDate = new Date(dateStr);
+/**
+ * A stored timestamp as a moment, or null. `parseServerTime` reads each
+ * form the columns hold, and `compileFacets` registers the same reading as
+ * a SQL function, so the server and the client agree on every row.
+ */
+export function facetTime(value: string | null | undefined): number | null {
+  return parseServerTime(value)?.getTime() ?? null;
+}
+
+/** Date comparison: updated:>3m (older than 3 months), updated:<1m (newer than 1 month) */
+function matchesDateFilter(
+  dateStr: string | null,
+  filter: FacetFilter,
+): boolean {
+  const cutoffDate = facetCutoff(filter.value);
+  const contactDate = facetTime(dateStr);
+  if (cutoffDate === null || contactDate === null) return false;
   const op = filter.operator || ">";
 
   // "updated:>3m" means "last updated MORE than 3 months ago" (older)
-  return op === ">" ? contactDate < cutoffDate : contactDate >= cutoffDate;
+  return op === ">"
+    ? contactDate < cutoffDate.getTime()
+    : contactDate >= cutoffDate.getTime();
+}
+
+/**
+ * Last contact: `contacted:>90d` is more than 90 days ago or never,
+ * `contacted:<30d` is within the last 30 days, and `contacted:never` is
+ * never. A date that cannot be read counts as never.
+ */
+function matchesContactedFilter(
+  lastContactedAt: string | null,
+  filter: FacetFilter,
+): boolean {
+  const last = facetTime(lastContactedAt);
+  if (filter.value.toLowerCase() === "never") return last === null;
+  const cutoffDate = facetCutoff(filter.value);
+  if (cutoffDate === null) return false;
+  return (filter.operator || ">") === ">"
+    ? last === null || last < cutoffDate.getTime()
+    : last !== null && last >= cutoffDate.getTime();
 }

@@ -47,6 +47,17 @@ const UPDATED_PRESETS = [
   { label: "Very stale (>6 months)", value: "6m", operator: ">" as const },
 ];
 
+/** Last contact: `contacted:<30d`, `contacted:>90d` (or never), `contacted:never`. */
+const CONTACTED_PRESETS = [
+  { label: "Within 30 days", value: "30d", operator: "<" as const },
+  {
+    label: "Over 90 days ago, or never",
+    value: "90d",
+    operator: ">" as const,
+  },
+  { label: "Never", value: "never" },
+];
+
 const MISSING_PRESETS = [
   { label: "Company", value: "company" },
   { label: "Location", value: "location" },
@@ -94,6 +105,22 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
       ).map((p) => ({
         label: p.label,
         filter: { field, value: p.value, operator: p.operator } as FacetFilter,
+      }));
+    }
+
+    if (field === "contacted") {
+      return CONTACTED_PRESETS.filter(
+        (p) =>
+          !partial ||
+          p.value.includes(partial.toLowerCase()) ||
+          p.label.toLowerCase().includes(partial.toLowerCase()),
+      ).map((p) => ({
+        label: p.label,
+        filter: {
+          field,
+          value: p.value,
+          ...("operator" in p ? { operator: p.operator } : {}),
+        } as FacetFilter,
       }));
     }
 
@@ -251,7 +278,9 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
                 i === selectedIndex && MENU_ITEM_SELECTED,
               )}
             >
-              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant w-16 shrink-0">
+              {/* At least the width of the short field names, so their
+                  values line up, and wider for "contacted:". */}
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant min-w-16 shrink-0">
                 {field}:
               </span>
               <span className="truncate">{s.label}</span>

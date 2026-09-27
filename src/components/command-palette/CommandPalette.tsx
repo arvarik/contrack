@@ -18,7 +18,10 @@ import { useDebounce } from "../../hooks/useDebounce";
 import { useRecentContacts } from "../../hooks/useRecentContacts";
 import { useSearchHistory } from "../../hooks/useSearchHistory";
 import { useInstantSearch } from "../../hooks/useInstantSearch";
-import { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
+import {
+  useQueryTokenizer,
+  type FacetFilter,
+} from "../../hooks/useQueryTokenizer";
 import {
   Search,
   UserPlus,
@@ -72,6 +75,9 @@ const ICON_SWAP = {
 
 /** The 11 px uppercase type of a badge or a status line in the list. */
 const SMALL_CAPS = "text-[11px] font-bold uppercase tracking-[0.08em]";
+
+/** No pills: one array, so a question without pills keeps one identity. */
+const NO_FILTERS: FacetFilter[] = [];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -217,6 +223,11 @@ export const CommandPalette = () => {
     return map;
   }, [instantSearch.results, aiResults, mode]);
 
+  // The pills go with the question. A pill that is removed, or added from
+  // the autocomplete, changes the question the palette asks.
+  const aiFilters = mode === "ai" ? parsed.filters : NO_FILTERS;
+  const aiFilterKey = JSON.stringify(aiFilters);
+
   // Fire semantic search only when the *debounced* AI query settles.
   // Previously this read the live `aiQuery` but listed `debouncedSearch` as a
   // dependency, so the effect re-ran per keystroke and the debounce was a
@@ -232,10 +243,19 @@ export const CommandPalette = () => {
       aiQuery !== debouncedAiQuery
     )
       return;
-    if (debouncedAiQuery === prevAiQueryRef.current) return;
-    prevAiQueryRef.current = debouncedAiQuery;
-    runSemanticSearch(debouncedAiQuery);
-  }, [open, mode, aiQuery, debouncedAiQuery, runSemanticSearch]);
+    const asked = `${debouncedAiQuery}\u0000${aiFilterKey}`;
+    if (asked === prevAiQueryRef.current) return;
+    prevAiQueryRef.current = asked;
+    runSemanticSearch(debouncedAiQuery, aiFilters);
+  }, [
+    open,
+    mode,
+    aiQuery,
+    debouncedAiQuery,
+    runSemanticSearch,
+    aiFilters,
+    aiFilterKey,
+  ]);
 
   // Reset mutation state when mode changes away from AI
   useEffect(() => {

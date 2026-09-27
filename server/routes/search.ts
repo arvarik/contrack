@@ -1,7 +1,10 @@
 import { sqlite } from "../db.ts";
 import { ACTIVE_CONTACT_SQL } from "../services/search/ftsIndex.ts";
 import { withTimeout } from "../ai/resilience.ts";
-import type { FacetFilter } from "../../shared/searchFacets.ts";
+import {
+  facetFiltersSchema,
+  type FacetFilter,
+} from "../../shared/searchFacets.ts";
 import { z } from "zod";
 import { ValidationError } from "../utils/AppError.ts";
 import { Router } from "express";
@@ -43,6 +46,8 @@ router.get(
     if (!q) return res.json([]);
     if (q.length > 500) throw new AppError("q must be ≤ 500 characters", 400);
 
+    // Every palette facet, `near:` with its resolved point included. The
+    // facets run in SQL inside the keyword search.
     let filters: FacetFilter[] = [];
     if (req.query.filters !== undefined) {
       if (
@@ -51,25 +56,7 @@ router.get(
       )
         throw new ValidationError("Invalid search filters");
       try {
-        filters = z
-          .array(
-            z.object({
-              field: z.enum([
-                "role",
-                "company",
-                "location",
-                "industry",
-                "tag",
-                "score",
-                "updated",
-                "tracked",
-              ]),
-              value: z.string().trim().min(1).max(100),
-              operator: z.enum([">", "<"]).optional(),
-            }),
-          )
-          .max(8)
-          .parse(JSON.parse(req.query.filters));
+        filters = facetFiltersSchema.parse(JSON.parse(req.query.filters));
       } catch {
         throw new ValidationError("Invalid search filters");
       }
@@ -111,6 +98,9 @@ router.get(
 /**
  * Stream local candidates before AI refinement, followed by one terminal
  * result. With AI off for the caller, the local results are the answer.
+ *
+ * Body: `{ query: string, filters?: FacetFilter[] }`. The palette sends its
+ * pills as `filters`. Facets typed into the query are read from it too.
  */
 router.post(
   "/semantic",
@@ -120,8 +110,10 @@ router.post(
     // stream, and rule 6 keeps the owner an argument rather than something
     // read back out of the async context after the first await.
     const scope = scopeOf(req);
-    const options = { aiAllowed: aiAllowedFor(req) };
-    const { query } = req.body as { query?: string };
+    const { query, filters: rawFilters } = req.body as {
+      query?: string;
+      filters?: unknown;
+    };
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
       throw new AppError("query is required", 400);
@@ -129,6 +121,16 @@ router.post(
     if (query.trim().length > 500) {
       throw new AppError("query must be ≤ 500 characters", 400);
     }
+    const parsedFilters =
+      rawFilters === undefined
+        ? { success: true as const, data: [] }
+        : facetFiltersSchema.safeParse(rawFilters);
+    if (!parsedFilters.success)
+      throw new ValidationError("Invalid search filters");
+    const options = {
+      aiAllowed: aiAllowedFor(req),
+      filters: parsedFilters.data,
+    };
 
     const accept = req.headers.accept || "";
     // Only stream when explicitly requested — Accept: */* (the default for

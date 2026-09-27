@@ -19,18 +19,46 @@ This "latency masking" pattern ensures you never see a loading spinner for basic
 
 Use GitHub-style prefix operators to narrow results:
 
-| Prefix        | Example          | Description                      |
-| ------------- | ---------------- | -------------------------------- |
-| `role:`       | `role:engineer`  | Filter by job title              |
-| `company:`    | `company:stripe` | Filter by company name           |
-| `tag:`        | `tag:investor`   | Filter by tag                    |
-| `score:>N`    | `score:>80`      | Filter by relationship score     |
-| `updated:>Nm` | `updated:>3m`    | Filter by last update (N months) |
-| `tracked:`    | `tracked:yes`    | The people you track, or `no`    |
+| Prefix          | Example            | Description                                                     |
+| --------------- | ------------------ | --------------------------------------------------------------- |
+| `role:`         | `role:engineer`    | Filter by job title                                             |
+| `company:`      | `company:stripe`   | Filter by company name                                          |
+| `location:`     | `location:lisbon`  | Filter by location                                              |
+| `industry:`     | `industry:fintech` | Filter by industry                                              |
+| `tag:`          | `tag:investor`     | Filter by tag                                                   |
+| `score:>N`      | `score:>80`        | Filter by relationship score                                    |
+| `updated:>Nm`   | `updated:>3m`      | Filter by last update (N months)                                |
+| `contacted:>Nd` | `contacted:>90d`   | Filter by last contact. See [Last contact](#last-contact)       |
+| `missing:`      | `missing:email`    | No `company`, `location`, `email` or `phone`                    |
+| `list:`         | `list:investors`   | Members of a list, by its name, its name with dashes, or its id |
+| `near:`         | `near:London/50km` | Within a distance of a place, 25 km when the facet names none   |
+| `tracked:`      | `tracked:yes`      | The people you track, or `no`                                   |
 
 Active filters display as **color-coded pills** below the search input. Press `Backspace` on an empty input to remove the last pill.
 
 Typing a prefix (e.g., `role:`) triggers **autocomplete** sourced from the contact cache, showing all known values for that facet.
+
+### Last contact
+
+`contacted:` reads the date of the last logged contact:
+
+| Value             | Keeps                                                                  |
+| ----------------- | ---------------------------------------------------------------------- |
+| `contacted:>90d`  | Contacts whose last contact is more than 90 days ago, or who have none |
+| `contacted:<30d`  | Contacts whose last contact is within the last 30 days                 |
+| `contacted:never` | Contacts with no logged contact                                        |
+
+The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). A value with no operator means `>`. A date that the app cannot read counts as no contact. The autocomplete offers three presets: **Within 30 days**, **Over 90 days ago, or never** and **Never**.
+
+`updated:` and `contacted:` read a SQLite timestamp such as `2026-09-10 05:33:50` as UTC, as the rest of the app does. Before this change, `updated:` read it as local time.
+
+### Facets on the server
+
+The palette filters its cached contacts first. Then it asks the server's keyword search (`GET /api/search`) with the same facets. The server turns every facet into SQL and applies it before its result limit. `list:`, `missing:`, `near:` and `contacted:` work there too. Before this change, the server refused `list:`, `missing:` and `near:` with `400`.
+
+`near:` narrows the results only when it carries a resolved point. The map resolves the place with the geocoder. Without a point, `near:` keeps everyone.
+
+In AI (`?`) mode, the palette sends its pills with the question, as `filters`. Ask Contrack applies them at every stage. A pill that you add or remove asks the question again. See [Facets](ai-search.md#facets).
 
 ## Action Sub-Menu
 

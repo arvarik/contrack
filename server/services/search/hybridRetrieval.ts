@@ -6,7 +6,7 @@ import { matchesQueryLocations } from "../../ai/searchLocations.ts";
 // evidence, from the plan's hard filter or from the reranker.
 
 import { sqlite } from "../../db.ts";
-import { lexicalSearch } from "./lexical.ts";
+import { lexicalSearch, type LexicalMatch } from "./lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
 import {
@@ -21,19 +21,23 @@ import { roleVariants } from "../../ai/queryConstraints.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";
-import type { QueryIntent } from "./intent.ts";
+import { classifyQuery, nameSignals, type QueryIntent } from "./intent.ts";
 import type { ReasonEvidence } from "./reasons.ts";
+import type { CompiledFacets } from "./facetSql.ts";
 
 // =============================================================================
 // Types
 // =============================================================================
+
+/** The ranked lists reciprocal rank fusion combines. */
+export type FusionChannel = "lexical" | "dense" | "trait";
 
 export interface RetrievalCandidate {
   contactId: string;
   /** Fused RRF score (higher = more relevant) */
   score: number;
   /** Which channels contributed to this candidate */
-  channels: ("fts" | "vector")[];
+  channels: FusionChannel[];
 }
 
 export interface RetrievalResult {
@@ -65,10 +69,17 @@ export interface AllowedContact {
   lastContactedAt: string | null;
 }
 
+/** One contact in a ranked list. Ranks start at 1. */
 export interface RankedItem {
   contactId: string;
   rank: number;
-  channel: "fts" | "vector";
+}
+
+/** One ranked list for the fusion, with its channel and its weight. */
+export interface FusionList {
+  channel: FusionChannel;
+  weight: number;
+  items: RankedItem[];
 }
 
 // =============================================================================
@@ -80,8 +91,16 @@ export interface RankedItem {
  * k=15 provides sharper discrimination than k=60 for ~960 rows:
  *   top-1 = 1/16 = 0.0625 vs top-10 = 1/25 = 0.04 (~36% drop)
  *   (k=60: top-1 = 0.0164 vs top-10 = 0.0143 — too flat)
+ *
+ * Measured with the weighted lists on the 70 golden queries
+ * (`node scripts/benchmark-search.ts --contacts N --rrf-k K`). Recall@10 was
+ * 1.00 at every k. The fused MRR was 0.950, 0.942 and 0.942 at 300 contacts
+ * and 0.917, 0.915 and 0.906 at 5,000 for k = 15, 30 and 60, so 15 stays.
  */
-const RRF_K = 15;
+export const RRF_K = 15;
+
+/** The weight all trait lists share. Each of n lists has 0.3 / n. */
+const TRAIT_WEIGHT = 0.3;
 
 /** Max results for FTS5 (generous — let BM25 scoring do the work) */
 const FTS_LIMIT = 100;
@@ -91,6 +110,9 @@ const VECTOR_LIMIT = 100;
 
 /** Limit per soft boost channel — keeps RRF math bounded. */
 const BOOST_LIMIT = 50;
+
+/** Trait matches read before they are ranked and cut to BOOST_LIMIT. */
+const TRAIT_SCAN_LIMIT = 500;
 
 // =============================================================================
 // Phase 0: Hard Pre-Filter (QueryPlan.must → Set<contactId>)
@@ -155,7 +177,11 @@ function buildMatcherRegex(matchers: string[]): RegExp | null {
  * active contact corpus. Returns the set of allowed contact IDs, or null
  * if no filters apply.
  */
-function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
+function applyHardFilters(
+  scope: Scope,
+  plan: QueryPlan,
+  facets?: CompiledFacets | null,
+): HardFilterResult {
   // Low-confidence parses skip hard filters entirely — exploratory queries
   // shouldn't get gated on a possibly-wrong extraction.
   if (plan.confidence === "low") {
@@ -213,6 +239,8 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
     ? `COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
         COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText`
     : `'' AS tagsText, '' AS interestsText`;
+  // The request's facets narrow the filter too, so its contacts hold both.
+  const facetClause = facets ? ` AND (${facets.sql})` : "";
   const rows = sqlite
     .prepare(
       `
@@ -227,10 +255,10 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
         c.industry,
         ${childText}
       FROM contacts c
-      WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}
+      WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}${facetClause}
     `,
     )
-    .all(scope.ownerId, ...temporalParams) as {
+    .all(scope.ownerId, ...temporalParams, ...(facets?.params ?? [])) as {
     id: string;
     name: string;
     lastContactedAt: string | null;
@@ -312,13 +340,10 @@ function ftsRetrieval(
   scope: Scope,
   query: string,
   preFilterIds: Set<string> | null,
+  facets?: CompiledFacets | null,
 ): RankedItem[] {
-  return lexicalSearch(scope, query, FTS_LIMIT, preFilterIds, true).map(
-    (row, i) => ({
-      contactId: row.contactId,
-      rank: i + 1,
-      channel: "fts" as const,
-    }),
+  return lexicalSearch(scope, query, FTS_LIMIT, preFilterIds, true, facets).map(
+    (row, i) => ({ contactId: row.contactId, rank: i + 1 }),
   );
 }
 
@@ -332,6 +357,7 @@ async function vectorRetrieval(
   preFilterIds: Set<string> | null,
   queryVector?: Float32Array | null,
   aiAllowed = true,
+  facets?: CompiledFacets | null,
 ): Promise<{ items: RankedItem[]; vector: Float32Array | null }> {
   // The count is per owner now. An account with no vectors of its own skips
   // the channel instead of asking a partition that holds nothing.
@@ -352,14 +378,11 @@ async function vectorRetrieval(
       vector,
       VECTOR_LIMIT,
       preFilterIds ?? undefined,
+      facets,
     );
 
     return {
-      items: neighbors.map((n, i) => ({
-        contactId: n.contactId,
-        rank: i + 1,
-        channel: "vector" as const,
-      })),
+      items: neighbors.map((n, i) => ({ contactId: n.contactId, rank: i + 1 })),
       vector,
     };
   } catch (err: unknown) {
@@ -376,18 +399,25 @@ async function vectorRetrieval(
 // =============================================================================
 // Traits are a SOFT signal — a contact matching multiple traits ranks
 // higher but is not gated on them. Each trait becomes its own ranked list
-// in the RRF fusion. Always intersected with the hard pre-filter set
-// (if any) so boosts can't surface excluded contacts.
+// in the RRF fusion, labelled `trait`, and the lists share one weight.
+// Always intersected with the hard pre-filter set (if any) and the facets,
+// so boosts can't surface excluded contacts.
 
 function buildTraitBoosts(
   scope: Scope,
   plan: QueryPlan,
   allowedIds: Set<string> | null,
-): RankedItem[][] {
+  facets: CompiledFacets | null | undefined,
+  fused: RetrievalCandidate[],
+): FusionList[] {
   const traits = plan.should.traits ?? [];
   if (traits.length === 0) return [];
 
-  const channels: RankedItem[][] = [];
+  // Every contact in a list matches the trait, so the list is ranked by the
+  // fused keyword and vector order: the best of the query's matches get the
+  // biggest boost. Matches neither channel ranked follow, in table order.
+  const fusedRank = new Map(fused.map((c, i) => [c.contactId, i]));
+  const lists: RankedItem[][] = [];
 
   for (const trait of traits) {
     try {
@@ -403,6 +433,7 @@ function buildTraitBoosts(
             AND (c.isArchived = 0 OR c.isArchived IS NULL)
             AND c.canonicalId IS NULL AND c.deletedAt IS NULL
             AND (${allowedIds ? "c.id IN (SELECT value FROM json_each(?))" : "1"})
+            AND (${facets ? facets.sql : "1"})
             AND (
               c.about LIKE ? ESCAPE '\\' OR c.preferences LIKE ? ESCAPE '\\' OR c.headline LIKE ? ESCAPE '\\'
               OR c.searchExpansion LIKE ? ESCAPE '\\'
@@ -414,24 +445,29 @@ function buildTraitBoosts(
         .all(
           scope.ownerId,
           ...(allowedIds ? [JSON.stringify([...allowedIds])] : []),
+          ...(facets?.params ?? []),
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
-          BOOST_LIMIT,
+          TRAIT_SCAN_LIMIT,
         ) as { id: string }[];
 
-      const items: RankedItem[] = rows
-        .filter((r) => !allowedIds || allowedIds.has(r.id))
-        .map((r) => ({
-          contactId: r.id,
-          rank: 1,
-          channel: "vector" as const,
-        }));
+      const ids = rows
+        .map((r) => r.id)
+        .filter((id) => !allowedIds || allowedIds.has(id))
+        .map((id, order) => ({ id, order }))
+        .sort(
+          (a, b) =>
+            (fusedRank.get(a.id) ?? Infinity) -
+              (fusedRank.get(b.id) ?? Infinity) || a.order - b.order,
+        )
+        .slice(0, BOOST_LIMIT);
 
-      if (items.length > 0) channels.push(items);
+      if (ids.length > 0)
+        lists.push(ids.map(({ id }, i) => ({ contactId: id, rank: i + 1 })));
     } catch (err: unknown) {
       log.warn(
         "HybridRetrieval",
@@ -440,30 +476,43 @@ function buildTraitBoosts(
     }
   }
 
-  return channels;
+  return lists.map((items) => ({
+    channel: "trait" as const,
+    weight: TRAIT_WEIGHT / lists.length,
+    items,
+  }));
 }
 
 // =============================================================================
 // Reciprocal Rank Fusion (RRF)
 // =============================================================================
 
+/**
+ * Weighted reciprocal rank fusion.
+ *
+ * `score(d)` is the sum over the lists that rank d of `weight / (k + rank)`,
+ * with 1-based ranks. The weights come from the query's kind: a name leans
+ * on the keyword list, a question on the vector list. A tie keeps the order
+ * in which the lists first reached the contact, so the result is the same
+ * on every run.
+ */
 export function reciprocalRankFusion(
-  rankedLists: RankedItem[][],
-  limit?: number,
+  lists: FusionList[],
+  k: number = RRF_K,
 ): RetrievalCandidate[] {
   const scoreMap = new Map<
     string,
-    { score: number; channels: Set<"fts" | "vector"> }
+    { score: number; channels: Set<FusionChannel> }
   >();
 
-  for (const list of rankedLists) {
-    for (const item of list) {
+  for (const list of lists) {
+    for (const item of list.items) {
       const entry = scoreMap.get(item.contactId) ?? {
         score: 0,
-        channels: new Set<"fts" | "vector">(),
+        channels: new Set<FusionChannel>(),
       };
-      entry.score += 1 / (RRF_K + item.rank);
-      entry.channels.add(item.channel);
+      entry.score += list.weight / (k + item.rank);
+      entry.channels.add(list.channel);
       scoreMap.set(item.contactId, entry);
     }
   }
@@ -477,8 +526,47 @@ export function reciprocalRankFusion(
     });
   }
 
+  // Array.prototype.sort is stable, so equal scores keep insertion order.
   candidates.sort((a, b) => b.score - a.score);
-  return limit ? candidates.slice(0, limit) : candidates;
+  return candidates;
+}
+
+// =============================================================================
+// The query's kind, from its strict keyword matches
+// =============================================================================
+
+/**
+ * Classify a query from its strict keyword matches.
+ *
+ * `classifyQuery` needs local name evidence: the names of the contacts the
+ * query matches exactly or approximately. Returns the strict matches too,
+ * because they are the whole answer for a name, an email or a phone.
+ */
+export function queryIntent(
+  scope: Scope,
+  query: string,
+  facets?: CompiledFacets | null,
+  limit = 30,
+): { intent: QueryIntent; strict: LexicalMatch[] } {
+  const strict = lexicalSearch(scope, query, limit, null, false, facets);
+  if (!strict.length) return { intent: classifyQuery(query), strict };
+  const rows = sqlite
+    .prepare(
+      "SELECT id, name FROM contacts WHERE ownerId = ? AND id IN (SELECT value FROM json_each(?))",
+    )
+    .all(scope.ownerId, JSON.stringify(strict.map((m) => m.contactId))) as {
+    id: string;
+    name: string;
+  }[];
+  const names = new Map(rows.map((row) => [row.id, row.name]));
+  const results = strict.flatMap((m) => {
+    const name = names.get(m.contactId);
+    return name ? [{ name, approximate: m.approximate, score: m.score }] : [];
+  });
+  return {
+    intent: classifyQuery(query, nameSignals(query, results)),
+    strict,
+  };
 }
 
 // =============================================================================
@@ -488,7 +576,7 @@ export function reciprocalRankFusion(
 export interface LocalRetrievalOptions {
   /** Contacts a plan's hard filter allows, or null for no filter. */
   allowedIds?: Set<string> | null;
-  /** The query's kind. Prompt 2 of the search-engine plan weights the channels by it. */
+  /** The query's kind, which weights the channels. Read from the query when unset. */
   intent?: QueryIntent;
   /** How many fused candidates to return. All of them when unset. */
   limit?: number;
@@ -498,23 +586,42 @@ export interface LocalRetrievalOptions {
   queryVector?: Float32Array | null;
   /** False when AI is off for the account: a provider may not embed the query. */
   aiAllowed?: boolean;
+  /** Facets every channel applies before its limit. */
+  facets?: CompiledFacets | null;
+  /** The fusion constant. `RRF_K` when unset. The benchmark's k sweep sets it. */
+  rrfK?: number;
 }
 
 export interface LocalRetrievalResult {
-  /** The keyword and vector lists fused by reciprocal rank. */
+  /** The keyword and vector lists fused by weighted reciprocal rank. */
   candidates: RetrievalCandidate[];
-  /** The keyword channel: FTS in broad mode, then approximate names. */
+  /** The keyword channel: FTS in broad mode, in four tiers. */
   lexical: RankedItem[];
   /** The vector channel. Empty when no embedding model is ready. */
   dense: RankedItem[];
   /** The vector the dense channel used, for reuse by a later stage. */
   queryVector: Float32Array | null;
+  /** The kind whose weights the fusion used. */
+  intent: QueryIntent;
   /** Wall time in milliseconds. */
   ms: number;
 }
 
+/** The keyword and vector lists with the weights of the query's kind. */
+function channelLists(
+  intent: QueryIntent,
+  lexical: RankedItem[],
+  dense: RankedItem[],
+): FusionList[] {
+  return [
+    { channel: "lexical", weight: intent.weights.lexical, items: lexical },
+    { channel: "dense", weight: intent.weights.dense, items: dense },
+  ];
+}
+
 /**
- * Keyword and vector retrieval fused by reciprocal rank, with no model call.
+ * Keyword and vector retrieval fused by weighted reciprocal rank, with no
+ * model call.
  *
  * About 10 ms at 5,000 contacts. Ask Contrack shows this list before the
  * planner answers, and keeps it when the model fails. `hybridRetrieval`
@@ -527,19 +634,27 @@ export async function localRetrieval(
 ): Promise<LocalRetrievalResult> {
   const t0 = performance.now();
   const allowedIds = options.allowedIds ?? null;
-  const lexical = ftsRetrieval(scope, query, allowedIds);
+  const intent =
+    options.intent ?? queryIntent(scope, query, options.facets).intent;
+  const lexical = ftsRetrieval(scope, query, allowedIds, options.facets);
   const dense = await vectorRetrieval(
     scope,
     options.embedInput ?? query,
     allowedIds,
     options.queryVector,
     options.aiAllowed,
+    options.facets,
+  );
+  const candidates = reciprocalRankFusion(
+    channelLists(intent, lexical, dense.items),
+    options.rrfK,
   );
   return {
-    candidates: reciprocalRankFusion([lexical, dense.items], options.limit),
+    candidates: options.limit ? candidates.slice(0, options.limit) : candidates,
     lexical,
     dense: dense.items,
     queryVector: dense.vector,
+    intent,
     ms: performance.now() - t0,
   };
 }
@@ -560,6 +675,12 @@ export interface HybridRetrievalOptions {
   };
   /** False when AI is off for the account: a provider may not embed the query. */
   aiAllowed?: boolean;
+  /** The query's kind, when the caller has it. Read from the query when unset. */
+  intent?: QueryIntent;
+  /** The request's facets, applied by every stage before its limit. */
+  facets?: CompiledFacets | null;
+  /** The fusion constant. `RRF_K` when unset. */
+  rrfK?: number;
 }
 
 /** Apply hard filters before keyword/vector limits, then fuse ranked candidates. */
@@ -576,6 +697,7 @@ export async function hybridRetrieval(
   const plan = await parseSearchQuery(query, signal);
   signal?.throwIfAborted();
   const planned = Date.now();
+  const facets = options.facets ?? null;
 
   // ── Phase 0: hard pre-filter ──────────────────────────────────────────
   let allowedIds: Set<string> | null = null;
@@ -583,7 +705,7 @@ export async function hybridRetrieval(
   let evidence = new Map<string, ReasonEvidence[]>();
   let hardFilterSummary = "skipped (no plan)";
   if (plan) {
-    const hf = applyHardFilters(scope, plan);
+    const hf = applyHardFilters(scope, plan, facets);
     allowedIds = hf.allowedIds;
     allowed = hf.allowed;
     evidence = hf.evidence;
@@ -615,21 +737,32 @@ export async function hybridRetrieval(
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
   const local = await localRetrieval(scope, query, {
     allowedIds,
+    intent: options.intent,
     embedInput,
     queryVector:
       options.vector?.text === embedInput
         ? await options.vector.vector
         : undefined,
     aiAllowed: options.aiAllowed,
+    facets,
+    rrfK: options.rrfK,
   });
 
   // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
   signal?.throwIfAborted();
-  const traitBoosts = plan ? buildTraitBoosts(scope, plan, allowedIds) : [];
+  const traitBoosts = plan
+    ? buildTraitBoosts(scope, plan, allowedIds, facets, local.candidates)
+    : [];
 
-  // ── Phase 2: RRF fusion across FTS + vector + trait boosts ────────────
+  // ── Phase 2: weighted RRF across keyword, vector and trait lists ──────
   const fused = traitBoosts.length
-    ? reciprocalRankFusion([local.lexical, local.dense, ...traitBoosts])
+    ? reciprocalRankFusion(
+        [
+          ...channelLists(local.intent, local.lexical, local.dense),
+          ...traitBoosts,
+        ],
+        options.rrfK,
+      )
     : local.candidates;
 
   // ── Phase 3: confidence assessment ─────────────────────────────────────
@@ -645,7 +778,7 @@ export async function hybridRetrieval(
       ` + Traits:${traitBoosts.length}ch ` +
       `→ ${fused.length} fused in ${elapsed}ms ` +
       `[planner ${planned - t0}ms, filter ${filtered - planned}ms, retrieval ${Date.now() - filtered}ms] ` +
-      `(plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +
+      `(kind=${local.intent.kind}, plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +
       `filter: ${hardFilterSummary}, ` +
       `confidence: ${highConfidence ? "HIGH" : "low"})`,
   );

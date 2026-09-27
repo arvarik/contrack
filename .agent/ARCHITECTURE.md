@@ -51,8 +51,8 @@ quality guarantee:
 | Stage      | Goal                                | Mechanism                                                                                                                                                              | Failure mode                                           |
 | ---------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **Plan**   | Understand user intent              | `parseSearchQuery` → `QueryPlan { must, should, confidence }`                                                                                                          | LLM unavailable → empty plan, pipeline still runs      |
-| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list                                                                 | Empty filter set → honest "no matches" response        |
-| **Rank**   | Surface relevance within candidates | FTS5 (BM25) + HyDE-vector KNN + soft trait boosts → RRF fusion (k=15)                                                                                                  | One channel down → others still produce results        |
+| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list, plus the request's facets as SQL (`compileFacets`)             | Empty filter set → honest "no matches" response        |
+| **Rank**   | Surface relevance within candidates | FTS5 (BM25, four tiers in broad mode) + HyDE-vector KNN + soft trait lists → weighted RRF (k=15, weights from the query's kind)                                        | One channel down → others still produce results        |
 | **Verify** | Reject false positives              | `rerankCandidates` returns `contact_id`, `verified_field` and `verified_value`. The server re-checks the value and the plan. Skipped when the database proves the plan | LLM unavailable → a fresh local list, `fallback: true` |
 
 The architectural fix for "Sydney leaking into 'Who lives in America'" is the
@@ -66,41 +66,72 @@ strong vector similarity on irrelevant signals.
 
 1. **L1 cache** (`getCachedSearch`, the `rerank` tier of `aiCache`). The key
    holds the owner, `search_revision`, a 5-minute bucket, the quick
-   capability's provider and model, and the normalized query. With AI off or
-   no provider, `local` takes the place of the provider and model. An AI-off
-   request therefore never reads an entry that a model verified.
-2. **Strict keyword search** (`lexicalSearch`). Every token must match, then
-   approximate names follow, top 30. The result's names give the name
-   signals for step 3.
-3. **Classify** (`classifyQuery(query, signals)` in
-   `server/services/search/intent.ts`). The kinds are `email`, `phone`,
-   `quoted`, `name`, `conceptual` and `mixed`. The first four are local
-   kinds. The result also carries fusion weights per kind: lexical 0.7 and
-   dense 0.3 for the local kinds, 0.3 and 0.7 for `conceptual`, and 0.5 and
-   0.5 for `mixed`. Prompt 2 of the search-engine plan uses the weights.
-   Nothing reads them yet.
-4. **Local kinds.** The strict keyword result is the final answer. Every
+   capability's provider and model, the facets (`facetKey`, in a fixed
+   order), the benchmark's `rrfK` when it is set, and the normalized query.
+   With AI off or no provider, `local` takes the place of the provider and
+   model. An AI-off request therefore never reads an entry that a model
+   verified.
+2. **Facets.** `parseFacetQuery` (`shared/facetQuery.ts`) takes the typed
+   facets out of the question. They join the request's `filters`
+   (`SemanticSearchOptions.filters`), and a facet sent both ways counts
+   once. `compileFacets(scope, filters)` (`server/services/search/facetSql.ts`)
+   turns them into one predicate over the alias `c`. Every later stage
+   applies it before its limit.
+3. **Facet-only answer.** A question with no free text left is a filter.
+   `facetAnswer` returns the matching contacts in name order, top 30,
+   `verified: true`, with no model call. `facetEvidence` gives the reason
+   from the role, company, location, industry, tag and `contacted:` facets.
+4. **Strict keyword search and the kind** (`queryIntent(scope, text, facets)`
+   in `hybridRetrieval.ts`). `lexicalSearch` in strict mode runs inside the
+   facets: every token must match, then approximate names follow, top 30.
+   `classifyQuery(query, signals)` (`server/services/search/intent.ts`) then
+   reads the result's names. The kinds are `email`, `phone`, `quoted`,
+   `name`, `conceptual` and `mixed`. The first four are local kinds. The
+   result also carries fusion weights per kind: lexical 0.7 and dense 0.3
+   for the local kinds, 0.3 and 0.7 for `conceptual`, and 0.5 and 0.5 for
+   `mixed`. `localRetrieval` gives the keyword and vector lists these
+   weights.
+5. **Local kinds.** The strict keyword result is the final answer. Every
    match has `verified: true`, no model runs, and L1 keeps the answer.
    "Approximate" still marks a close name. The p95 at 5,000 contacts is
-   4.9 ms for a name, 5.0 ms for an email and 1.0 ms for a phone number.
-5. **Local list** (`localRetrieval` in `hybridRetrieval.ts`). FTS5 in broad
-   mode with approximate names, vector KNN, and RRF with k = 15, with no
-   planner, in about 10 ms. The top 30 are hydrated and stream as the
-   instant chunk, `fallback: true`, every match `verified: false`. The p95
-   at 5,000 contacts is 15.6 to 17.6 ms.
-6. **AI off or no provider.** The route reads the caller's `aiAssist` with
+   4.5 ms for a name, 3.2 ms for an email and 0.8 ms for a phone number.
+6. **Implicit facets** (`findImplicitFacets(scope, text)` in
+   `server/services/search/implicitFacets.ts`). "at X" and "works at X" give
+   a company facet. "in X", "based in X", "near X" and "around X" give a
+   location facet, and "in X" gives an industry facet. X must equal a
+   company, a place or an industry of the owner's active contacts, with case
+   and accents folded. A place stays with the planner when a comma and a
+   word that is not a filler word follow it, or when "and" or "or" follows
+   it. The same holds when a word such as "State" or another known place
+   follows it, and for a value that is both a place and an industry. When
+   `hasContentWords(remainder)` is false, the answer is the facet answer of
+   step 3, with no model call. Otherwise the implicit facets join the facets
+   for every later stage, and the planner still reads the whole question.
+   The known values are cached per owner and `search_revision`, for at most
+   50 owners.
+7. **Local list** (`localRetrieval` in `hybridRetrieval.ts`). FTS5 in broad
+   mode, vector KNN, and weighted RRF with k = 15, with no planner, in about
+   10 ms. Broad mode ranks four tiers: every token, approximate names from
+   0.85, partial matches, and approximate names from 0.75. The top 30 are
+   hydrated and stream as the instant chunk, `fallback: true`, every match
+   `verified: false`. The p95 at 5,000 contacts is 13.0 to 13.1 ms.
+8. **AI off or no provider.** The route reads the caller's `aiAssist` with
    `aiAllowedFor(req)` (`server/middleware/aiAllowed.ts`) and passes
    `aiAllowed` to the service. With AI off, or with `isMockMode()`, the local
    list is the final answer with `fallback: true`. The stream sends only the
    complete chunk, because no model stage follows. With AI off, a provider
    embedding model does not embed the query. The built-in local model still
    embeds it.
-7. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start as soon as
-   step 3 knows the kind, so the planner's request is on the network while
-   step 5 builds the local list. `hybridRetrieval` runs the planner
+9. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start before
+   step 7 builds the local list, so the planner's request is on the network
+   while the list is built. `hybridRetrieval` runs the planner
    (`parseSearchQuery`) in the search lane, then the hard filter, then
-   `localRetrieval` inside the filter, with the query vector step 5 made.
-   `answerFromPlan` then picks the final answer with `databaseProof(plan)`:
+   `localRetrieval` inside the filter, with the query vector step 7 made.
+   It passes the kind of step 4 and the facets to every stage: the hard
+   filter, the keyword and vector lists, and the trait lists. The
+   coalescing key holds the facets too. `answerFromPlan` then picks the
+   final answer with `databaseProof(plan)`, and the facets add their
+   evidence to the plan's:
    - `"filters"`: confidence "high", no `should.traits`, and hard filters
      that hold every constraint. The answer is the filtered contacts in
      retrieval order, then the other filtered contacts by name, top 30,
@@ -112,19 +143,20 @@ strong vector similarity on irrelevant signals.
      top 30 candidates. They travel to the model with short ids, `c1` to
      `c30`, which the server maps back. With 30 UUIDs the answer overran its
      1,200-token limit.
-8. **Failure.** An error, a timeout or a `search_revision` change during the
-   model stages ends with a fresh local list, `fallback: true`. L1 does not
-   keep it. The keyword-only list (`searchFts`, recall@10 0.52) is never the
-   Ask answer now.
+10. **Failure.** An error, a timeout or a `search_revision` change during
+    the model stages ends with a fresh local list, `fallback: true`. L1 does
+    not keep it. The keyword-only list (`searchFts`, recall@10 0.52) is
+    never the Ask answer now.
 
 `hybridRetrieval` keeps its signature and runs `localRetrieval` inside the
-plan's hard filter. The search gate (`tests/eval/search.eval.test.ts`)
-therefore measures the same arithmetic. The filter also records the fields it
-proved for each contact (`evidence`), and `buildReason`
-(`server/services/search/reasons.ts`) turns them into the reason. The reason
-joins at most two parts, from the contact's own fields: "Product Manager at
-Northwind Logistics, based in Lisbon, Portugal." With no evidence left, the
-reason is `null`.
+plan's hard filter. The search gate's `fused` channel
+(`tests/eval/search.eval.test.ts`) therefore measures the same arithmetic.
+Its `hybrid` channel measures what `runSearch` answers with no model. The
+filter also records the fields it proved for each contact (`evidence`), and
+`buildReason` (`server/services/search/reasons.ts`) turns them into the
+reason. The reason joins at most two parts, from the contact's own fields:
+"Product Manager at Northwind Logistics, based in Lisbon, Portugal." With no
+evidence left, the reason is `null`.
 
 The legacy v4 description follows for historical context (now superseded):
 
@@ -136,11 +168,11 @@ The legacy v4 description follows for historical context (now superseded):
    - `parseSearchQuery()` emits a `QueryPlan { must, should, confidence, rationale }`. The planner expands each concept into an _exhaustive synonym set_ a contact field could literally contain (for "America": ["United States","USA","America","CA","NY","TX",...,"San Francisco","Boston",...]). The split into `must` (hard) and `should` (soft) is the planner's responsibility — high-confidence structured intent ("who lives in X", "VCs at Y") goes to `must`; vague descriptive intent ("loves climbing") goes to `should.traits`.
    - `expandQueryForEmbedding()` rewrites the query as a hypothetical contact-shaped paragraph (HyDE — Gao et al., 2022) for the vector channel.
    - Both fail gracefully. On AI outage, the pipeline runs FTS + HyDE-or-raw vector with no hard filter — still produces results.
-2. **Hard Pre-Filter** (`applyHardFilters` in `hybridRetrieval.ts`): For each populated `must.*Matchers` list, build a case-insensitive **word-boundary** regex and pass only contacts whose corresponding field matches. Word-boundary is `(?:^|[^a-zA-Z0-9])` so 2-letter codes like `CA` match `"Los Angeles, CA"` but not `"Casablanca"`. When `confidence: "low"` the hard filter is skipped — exploratory queries shouldn't be gated. Empty result set returns early with `candidates: []` rather than falling through to broad retrieval.
-3. **FTS5 Weighted BM25**: Runs over the filtered candidate corpus (or full corpus if no plan). Column priority via BM25 weights `(name 10, company 5, role 3, headline 2, location 2, about 1, industry 1, extras 1, expansion 1)`.
+2. **Hard Pre-Filter** (`applyHardFilters` in `hybridRetrieval.ts`): For each populated `must.*Matchers` list, build a case-insensitive **word-boundary** regex and pass only contacts whose corresponding field matches. Word-boundary is `(?:^|[^a-zA-Z0-9])` so 2-letter codes like `CA` match `"Los Angeles, CA"` but not `"Casablanca"`. When `confidence: "low"` the hard filter is skipped — exploratory queries shouldn't be gated. Empty result set returns early with `candidates: []` rather than falling through to broad retrieval. The request's facets narrow the same SQL query.
+3. **FTS5 Weighted BM25**: Runs over the filtered candidate corpus (or full corpus if no plan). Column priority via BM25 weights (FTS version 5) `(name 10, company 5, role 3, tags 3, headline 2, location 2, about 1, industry 1, extras 1, expansion 0.5)`. `tags` holds tags and interests. `extras` holds emails, and each phone number followed by its digit forms.
 4. **Local Vector KNN (HyDE-enhanced)**: `sqlite-vec` cosine similarity over the filtered candidate corpus. Embedding model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally via Transformers.js).
-5. **Soft Trait Boosts**: each entry in `should.traits` is a separate ranked list — a contact matching multiple traits accumulates score, but absence of a trait is not penalized. Intersected with the hard filter set.
-6. **RRF Fusion (k=15)**: Combines FTS5 + HyDE-vector + trait boost channels into a single ranked candidate list.
+5. **Soft Trait Boosts**: each entry in `should.traits` is a separate ranked list — a contact matching multiple traits accumulates score, but absence of a trait is not penalized. Intersected with the hard filter set and the facets. Each trait list ranks its matches in the fused keyword and vector order.
+6. **Weighted RRF Fusion (k=15)**: `reciprocalRankFusion` combines the FTS5, HyDE-vector and trait lists into a single ranked candidate list. Each list is `{ channel, weight, items }`, and a contact scores `weight / (k + rank)` per list. The query's kind weighs the keyword and vector lists, and the trait lists share 0.3.
 7. **Verified LLM Reranker** (`rerankCandidates`): receives the `QueryPlan` alongside the top 30 candidates. It runs only when the database cannot prove the plan (step 7 of the request flow). The LLM returns evidence only, `{ contact_id, verified_field, verified_value }`, with no reason sentence. `verified_field` is an enum of the nine candidate fields, and `maxOutputTokens` is 1,200 (it was 3,000). The server performs four checks, and a match that fails one is dropped:
    - The id is one of the candidates.
    - `verified_value` is a literal substring of the named field on the actual candidate row.
@@ -150,7 +182,7 @@ The legacy v4 description follows for historical context (now superseded):
    Verified matches come back in candidate (retrieval) order, not the model's order. With `must.temporal`, the prompt says that the database already checked recency. Candidates carry no dates. Before this change, the model rejected every recency match. The prompt also tells the model to cite a name as the candidate's field spells it. `buildReason` then starts the reason with the cited field, followed by the filter's evidence. This is the second line of defense behind the hard pre-filter.
 
 8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally. The brief streams through `streamFor` in the search lane. `safeDeltas` removes control characters from each piece before `onDelta` gets it. The pieces stop when the text so far matches an injection pattern or passes 2,000 characters. The function returns the whole brief after `sanitizeAiOutputValue`. A cache hit sends no pieces.
-9. **Two-Phase NDJSON Streaming**: Phase 1 is the `localRetrieval` list, hydrated, top 30, every match `verified: false`. Its p95 at 5,000 contacts is 15.6 to 17.6 ms. Phase 2 is the final answer, and it replaces Phase 1. A local kind, an AI-off request and an L1 hit send only the complete chunk. See the PR for the live numbers of the model stages.
+9. **Two-Phase NDJSON Streaming**: Phase 1 is the `localRetrieval` list, hydrated, top 30, every match `verified: false`. Its p95 at 5,000 contacts is 13.0 to 13.1 ms. Phase 2 is the final answer, and it replaces Phase 1. A local kind, a facet answer, an AI-off request and an L1 hit send only the complete chunk. See the PR for the live numbers of the model stages.
 
 **Caching**: `parseSearchQuery`, `expandQueryForEmbedding` and `synthesizeSearchResults` cache by content-hashed query under their own `aiCache` tiers. The whole search answer is the L1 entry (`getCachedSearch`, the owner-keyed `rerank` tier), with the key from step 1 of the request flow. A fallback after a model failure is not cached. Repeat queries pay zero AI cost.
 
@@ -257,11 +289,11 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 
 ### Virtual Tables (NOT managed by Drizzle — defined in `server/db.ts`)
 
-| Table                | Engine | Dimensions | Purpose                                                                                                                            |
-| -------------------- | ------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `contacts_fts`       | FTS5   | N/A        | Full-text search index with weighted columns. Rebuilt on every startup. Maintained by 12+ SQL triggers on contacts + child tables. |
-| `search_embeddings`  | `vec0` | 384-dim    | Local embeddings via `Xenova/all-MiniLM-L6-v2` (Transformers.js). Powers KNN search in Spotlight.                                  |
-| `contact_embeddings` | `vec0` | 768-dim    | Gemini API embeddings exclusively for deduplication NLP.                                                                           |
+| Table                | Engine | Dimensions | Purpose                                                                                                                                                            |
+| -------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `contacts_fts`       | FTS5   | N/A        | Full-text search index with weighted columns, FTS version 5. Rebuilt when `FTS_SCHEMA_VERSION` changes. Maintained by 12+ SQL triggers on contacts + child tables. |
+| `search_embeddings`  | `vec0` | 384-dim    | Local embeddings via `Xenova/all-MiniLM-L6-v2` (Transformers.js). Powers KNN search in Spotlight.                                                                  |
+| `contact_embeddings` | `vec0` | 768-dim    | Gemini API embeddings exclusively for deduplication NLP.                                                                                                           |
 
 ### Critical Rules (Virtual Tables)
 
@@ -312,7 +344,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/services/` — Heavy business logic:
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
-  - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, and `hybridRetrieval` runs it inside the plan's hard filter), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `reasons.ts` (`buildReason`: the reason line from the proven fields), `localEmbeddings.ts` (Transformers.js)
+  - `server/services/search/` — `hybridRetrieval.ts` (weighted RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, `hybridRetrieval` runs it inside the plan's hard filter, and `queryIntent` reads the kind from the strict keyword matches), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `lexical.ts` (`lexicalSearch`: strict mode, and broad mode in four tiers), `approximateName.ts` (name candidates by prefix, nickname and phonetic code), `ftsIndex.ts` (the `contacts_fts` columns, triggers and version gate), `facetSql.ts` (`compileFacets` and `facetKey`: facets as one SQL predicate, with the `facet_contains`, `facet_time` and `haversine_km` functions), `implicitFacets.ts` (`findImplicitFacets` and `hasContentWords`: company, place and industry facets read from the words of a question), `reasons.ts` (`buildReason`: the reason line from the proven fields), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
 - `server/mcp/` — Model Context Protocol (MCP) server subsystem:
@@ -322,9 +354,11 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `prompts.ts` — Workflow prompts `catch_me_up` and `weekly_review`
   - `tools/` — 15 tools across `contacts.ts`, `search.ts`, `interactions.ts`, `actions.ts`, `pulse.ts`, and `taxonomy.ts`
 - `shared/mcpTools.ts` — Canonical registry of 15 MCP tools and descriptions shared between server and UI
+- `shared/searchFacets.ts` - The facet fields (`FACET_FIELDS`), `matchesFacet`, and `facetFiltersSchema`, the zod schema for the facets that `GET /api/search` and `POST /api/search/semantic` accept
+- `shared/facetQuery.ts` - `parseFacetQuery` and `parseFilterValue`: the one facet parser for the palette's tokenizer, the Network list and Ask Contrack
 - `server/repositories/` — Data-access patterns: `contactRepository.ts`, `types.ts`
 - `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts` (the default avatar's look: pronouns, then a title, then the first name in `nlp/givenNames.tsv.gz`), `avatarUrl.ts`, `unionFind.ts`
-  - `server/utils/nlp/` — NLP primitives: `names.ts`, `nicknames.ts`, `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts`
+  - `server/utils/nlp/` — NLP primitives: `names.ts` (`nameScorer`, `nameSimilarity`), `nicknames.ts` (`nicknameVariants`), `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts` (`isPhoneQuery`)
 - `server/middleware/auth.ts` — Resolves a `Principal` (`anonymous` | `user` | `service`) onto every request via `attachPrincipal`, then gates `/api` + `/uploads` with `requireAuth` when `AUTH_REQUIRED=true` or `API_TOKEN` is set. `requireUser` additionally rejects service tokens for endpoints that need a real account. Cookie helpers set `Secure` only over HTTPS (honouring `X-Forwarded-Proto`, one proxy hop). Timing-safe token comparison; env read per request so tests can toggle. `AUTH_TOKEN` is a deprecated alias for `API_TOKEN`.
 - `server/routes/auth.ts` - `/api/auth` router mounted pre-gate: status, setup (closes itself once an account exists), login, logout, me, me/avatar (POST profile photo normalised with sharp, DELETE removal), change-password, sessions, passkey registration/login, password reset, and magic link endpoints. Credential endpoints are rate limited per IP.
 - `server/services/authService.ts` - Accounts and sessions. Sessions are server-side rows keyed by the SHA-256 of the cookie secret, tracking the sign-in `method` (`"password"`, `"passkey"`, or `"email-link"`). `reconcileOwnership()` calls `ensureLocalOwner()` and `claimUnownedData()` from `server/db.ts` on every boot. `convertLocalOwner` is what `POST /api/auth/setup` calls on an instance that has been used without auth: it turns the local owner into a real account in place, keeping the id, so nothing has to be re-owned.

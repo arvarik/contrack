@@ -1,5 +1,5 @@
-import type { FacetFilter } from "../../shared/searchFacets.ts";
-import { matchesFacet } from "../../shared/searchFacets.ts";
+import { facetNeedle, type FacetFilter } from "../../shared/searchFacets.ts";
+import { parseFacetQuery } from "../../shared/facetQuery.ts";
 import { sqlite } from "../db.ts";
 import { lexicalSearch, type LexicalMatch } from "./search/lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
@@ -19,16 +19,20 @@ import {
 import {
   hybridRetrieval,
   localRetrieval,
+  queryIntent,
   type AllowedContact,
   type RetrievalResult,
 } from "./search/hybridRetrieval.ts";
-import {
-  classifyQuery,
-  nameSignals,
-  type NamedResult,
-  type QueryIntent,
-} from "./search/intent.ts";
 import { buildReason, type ReasonEvidence } from "./search/reasons.ts";
+import {
+  compileFacets,
+  facetKey,
+  type CompiledFacets,
+} from "./search/facetSql.ts";
+import {
+  findImplicitFacets,
+  hasContentWords,
+} from "./search/implicitFacets.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
@@ -90,6 +94,13 @@ export interface SemanticSearchOptions {
    * and the local list is the answer.
    */
   aiAllowed?: boolean;
+  /**
+   * Facets the request carries, as the palette sends its pills. Facets typed
+   * into the question are read from it as well.
+   */
+  filters?: FacetFilter[];
+  /** The fusion constant. `RRF_K` when unset. The benchmark's k sweep sets it. */
+  rrfK?: number;
 }
 
 // =============================================================================
@@ -170,22 +181,82 @@ function hydrateLexical(
   });
 }
 
-/** Keyword matches with their names, for the name signals of `classifyQuery`. */
-function namedResults(scope: Scope, matches: LexicalMatch[]): NamedResult[] {
-  if (!matches.length) return [];
-  const rows = sqlite
-    .prepare(
-      "SELECT id, name FROM contacts WHERE ownerId = ? AND id IN (SELECT value FROM json_each(?))",
-    )
-    .all(scope.ownerId, JSON.stringify(matches.map((m) => m.contactId))) as {
-    id: string;
-    name: string;
-  }[];
-  const names = new Map(rows.map((row) => [row.id, row.name]));
-  return matches.flatMap((m) => {
-    const name = names.get(m.contactId);
-    return name ? [{ name, approximate: m.approximate, score: m.score }] : [];
+/** The same facets once each, whether typed, sent as a pill, or both. */
+function uniqueFacets(filters: FacetFilter[]): FacetFilter[] {
+  const seen = new Set<string>();
+  return filters.filter((filter) => {
+    const key = facetKey([filter]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+/**
+ * What the facets prove about a contact, as reason evidence. A facet on a
+ * score, a date of edit, a list, a distance or a missing field says nothing
+ * a reason line would show.
+ */
+function facetEvidence(
+  contact: HydratedMatch,
+  filters: FacetFilter[],
+): ReasonEvidence[] {
+  const evidence: ReasonEvidence[] = [];
+  for (const filter of filters) {
+    switch (filter.field) {
+      case "role":
+      case "company":
+      case "location":
+      case "industry":
+        evidence.push({ field: filter.field });
+        break;
+      case "tag": {
+        const needle = facetNeedle(filter);
+        const tags = Array.isArray(contact.tags) ? contact.tags : [];
+        const tag = tags.find(
+          (item) =>
+            typeof item?.tag === "string" &&
+            item.tag.toLowerCase().includes(needle),
+        )?.tag;
+        if (tag) evidence.push({ field: "tag", value: tag });
+        break;
+      }
+      case "contacted":
+        evidence.push({ field: "lastContact" });
+        break;
+    }
+  }
+  return evidence;
+}
+
+/**
+ * The answer to a question that is only facets: the matching contacts in
+ * name order, proved by the database, with no model call.
+ */
+function facetAnswer(
+  scope: Scope,
+  facets: CompiledFacets,
+  filters: FacetFilter[],
+): SearchResult {
+  const ids = (
+    sqlite
+      .prepare(
+        `SELECT c.id FROM contacts c
+         WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND (${facets.sql})
+         ORDER BY c.name COLLATE NOCASE, c.id LIMIT ?`,
+      )
+      .all(scope.ownerId, ...facets.params, PHASE1_LIMIT) as { id: string }[]
+  ).map((row) => row.id);
+  return {
+    matches: [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
+      (contact) => ({
+        ...contact,
+        verified: true,
+        aiReason: buildReason(contact, facetEvidence(contact, filters)),
+      }),
+    ),
+    fallback: false,
+  };
 }
 
 /**
@@ -332,16 +403,23 @@ const unverified = (matches: HydratedMatch[]): HydratedMatch[] =>
  * When the database proves the plan, the filtered contacts are the answer
  * and the reranker does not run: in retrieval order, then the rest of the
  * filtered contacts by name, or by last contact for a recency question. Any
- * other plan goes to the reranker. Every reason is built here.
+ * other plan goes to the reranker. Every reason is built here, from what the
+ * plan's filter, the facets and the reranker proved.
  */
 async function answerFromPlan(
   scope: Scope,
   query: string,
   retrieval: RetrievalResult,
   signal: AbortSignal,
+  filters: FacetFilter[] = [],
 ): Promise<{ result: SearchResult; path: string }> {
   const { plan, candidates, allowed } = retrieval;
-  const evidence = retrieval.evidence ?? new Map<string, ReasonEvidence[]>();
+  const planEvidence =
+    retrieval.evidence ?? new Map<string, ReasonEvidence[]>();
+  const evidenceOf = (contact: HydratedMatch) => [
+    ...(planEvidence.get(contact.id) ?? []),
+    ...facetEvidence(contact, filters),
+  ];
   const proof = plan && allowed ? databaseProof(plan) : null;
 
   if (proof && allowed) {
@@ -366,7 +444,7 @@ async function answerFromPlan(
         matches: [...hydrated.values()].map((contact) => ({
           ...contact,
           verified: true,
-          aiReason: buildReason(contact, evidence.get(contact.id) ?? []),
+          aiReason: buildReason(contact, evidenceOf(contact)),
         })),
         fallback: false,
       },
@@ -404,7 +482,7 @@ async function answerFromPlan(
         const contact = fresh.get(match.contact_id);
         if (!contact) return [];
         const cited = rerankEvidence(contact, match);
-        const filtered = (evidence.get(contact.id) ?? []).filter(
+        const filtered = evidenceOf(contact).filter(
           (item) => item.field !== cited?.field,
         );
         return [
@@ -426,15 +504,19 @@ async function answerFromPlan(
 /**
  * One pipeline supplies both streaming and JSON callers.
  *
- * 1. The L1 cache.
- * 2. Strict keyword search, which also decides the query's kind.
- * 3. A name, an email, a phone number or a quoted phrase is answered here,
+ * 1. The L1 cache. Its key holds the facets.
+ * 2. Facets: the request's, and any typed into the question. A question
+ *    that is only facets is answered by the database, in name order.
+ * 3. Strict keyword search, which also decides the query's kind.
+ * 4. A name, an email, a phone number or a quoted phrase is answered here,
  *    verified, with no model call.
- * 4. Otherwise the local hybrid list streams as the instant chunk.
- * 5. With AI off or no provider, that list is the answer.
- * 6. The planner, then the database proof or the reranker, in the search lane
- *    within one budget.
- * 7. On an error, a timeout or an edit mid-flight, a fresh local list is the
+ * 5. Implicit facets: "people in Lisbon" or "who works at Northwind
+ *    Logistics" is a filter, and needs no model when nothing else is asked.
+ * 6. Otherwise the local hybrid list streams as the instant chunk.
+ * 7. With AI off or no provider, that list is the answer.
+ * 8. The planner, then the database proof or the reranker, in the search lane
+ *    within one budget. The facets constrain every stage.
+ * 9. On an error, a timeout or an edit mid-flight, a fresh local list is the
  *    answer. Local results are never thrown away.
  */
 async function runSearch(
@@ -451,13 +533,18 @@ async function runSearch(
   const models = aiAllowed && !isMockMode();
   const revision = searchRevision(scope);
   const capability = models ? resolveCapability("quick") : null;
-  const normalizedQuery = normalizeKey(query);
+  // Facets typed into the question count with the ones the request carries.
+  const typed = parseFacetQuery(query);
+  const filters = uniqueFacets([...(options.filters ?? []), ...typed.filters]);
+  const text = typed.freeText.trim();
+  const normalizedQuery = normalizeKey(text);
   // With no model to run, the answer is local, and "local" keeps it apart
   // from every answer a model verified.
   const answeredBy = models
     ? `${capability?.providerId}:${capability?.model}`
     : "local";
-  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${normalizedQuery}`;
+  const facetPart = facetKey(filters);
+  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${facetPart}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -466,39 +553,70 @@ async function runSearch(
       cached: true,
     };
   const elapsed = () => Math.round(performance.now() - start);
-  const done = (result: SearchResult, intent: QueryIntent, path: string) => {
+  const done = (result: SearchResult, kind: string, path: string) => {
     log.info(
       "SemanticSearch",
-      `[${rid}] "${query.slice(0, 60)}" kind=${intent.kind} path=${path} ` +
+      `[${rid}] "${query.slice(0, 60)}" kind=${kind} path=${path}` +
+        `${filters.length ? ` facets=${filters.length}` : ""} ` +
         `→ ${result.matches.length} ${result.fallback ? "unverified" : "verified"} in ${elapsed()}ms`,
     );
     return result;
   };
+  const final = (result: SearchResult, kind: string, path: string) => {
+    setCachedSearch(scope, cacheKey, result);
+    return done(result, kind, path);
+  };
+
+  // A question made only of facets is a filter.
+  let facets = filters.length ? compileFacets(scope, filters) : null;
+  if (!text)
+    return final(
+      facets
+        ? facetAnswer(scope, facets, filters)
+        : { matches: [], fallback: false },
+      "facets",
+      "facets",
+    );
 
   // Local kinds: the keyword answer is final and verified.
-  const strict = lexicalSearch(scope, query, PHASE1_LIMIT);
-  const intent = classifyQuery(
-    query,
-    nameSignals(query, namedResults(scope, strict)),
-  );
-  if (intent.local) {
-    const result = {
-      matches: hydrateLexical(scope, strict, PHASE1_LIMIT).map((match) => ({
-        ...match,
-        verified: true,
-      })),
-      fallback: false,
-    };
-    setCachedSearch(scope, cacheKey, result);
-    return done(result, intent, "local");
+  const { intent, strict } = queryIntent(scope, text, facets, PHASE1_LIMIT);
+  if (intent.local)
+    return final(
+      {
+        matches: hydrateLexical(scope, strict, PHASE1_LIMIT).map((match) => ({
+          ...match,
+          verified: true,
+        })),
+        fallback: false,
+      },
+      intent.kind,
+      "local",
+    );
+
+  // Facets in the words: a company, a place or an industry the owner's
+  // contacts hold. When they are all the question asks, no model runs.
+  // Otherwise they join the request's facets for every stage below.
+  const implicit = findImplicitFacets(scope, text);
+  let allFilters = filters;
+  if (implicit.filters.length) {
+    allFilters = uniqueFacets([...filters, ...implicit.filters]);
+    facets = compileFacets(scope, allFilters);
+    if (!hasContentWords(implicit.remainder))
+      return final(
+        facetAnswer(scope, facets, allFilters),
+        intent.kind,
+        "facets",
+      );
   }
 
   const localList = async (queryVector?: Float32Array | null) => {
-    const local = await localRetrieval(scope, query, {
+    const local = await localRetrieval(scope, text, {
       intent,
       limit: PHASE1_LIMIT,
       queryVector,
       aiAllowed,
+      facets,
+      rrfK: options.rrfK,
     });
     return {
       local,
@@ -516,8 +634,7 @@ async function runSearch(
     // edit, under a key no model answer shares.
     const result = { matches: (await localList()).matches, fallback: true };
     signal?.throwIfAborted();
-    setCachedSearch(scope, cacheKey, result);
-    return done(result, intent, "no-ai");
+    return final(result, intent.kind, "no-ai");
   }
 
   // The model stage starts now, and the local list is built while the
@@ -528,7 +645,7 @@ async function runSearch(
   const queryVector = new Promise<Float32Array | null>(
     (resolve) => (settleVector = resolve),
   );
-  const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${normalizedQuery}`;
+  const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
 
   const answer = searchCoalescer.coalesce(
     coalesceKey,
@@ -548,7 +665,7 @@ async function runSearch(
             matches: (await localList(await queryVector)).matches,
             fallback: true,
           },
-          intent,
+          intent.kind,
           path,
         );
 
@@ -556,12 +673,15 @@ async function runSearch(
       try {
         answered = await withTimeout(
           async (budget) => {
-            const retrieval = await hybridRetrieval(scope, query, rid, budget, {
-              vector: { text: query, vector: queryVector },
+            const retrieval = await hybridRetrieval(scope, text, rid, budget, {
+              vector: { text, vector: queryVector },
               aiAllowed,
+              intent,
+              facets,
+              rrfK: options.rrfK,
             });
             budget.throwIfAborted();
-            return answerFromPlan(scope, query, retrieval, budget);
+            return answerFromPlan(scope, text, retrieval, budget, allFilters);
           },
           MODEL_BUDGET_MS,
           sharedSignal,
@@ -577,8 +697,7 @@ async function runSearch(
       sharedSignal?.throwIfAborted();
       // A concurrent edit in this account invalidates evidence gathered before that edit.
       if (searchRevision(scope) !== revision) return fallback("edited");
-      setCachedSearch(scope, cacheKey, answered.result);
-      return done(answered.result, intent, answered.path);
+      return final(answered.result, intent.kind, answered.path);
     },
     signal,
   );
@@ -612,43 +731,13 @@ export const searchService = {
    * Simple, fast, exact-match search.
    */
   searchFts(scope: Scope, q: string, filters: FacetFilter[] = []) {
-    let allowed: Set<string> | undefined;
-    if (filters.length) {
-      const rows = sqlite
-        .prepare(
-          `SELECT c.id, c.role, c.company, c.location, c.industry, c.relationshipScore, c.isTracked, c.updatedAt,
-        (SELECT json_group_array(json_object('tag', tag)) FROM contact_tags WHERE contactId = c.id) AS tagsJson
-        FROM contacts c WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}`,
-        )
-        .all(scope.ownerId) as {
-        id: string;
-        role: string | null;
-        company: string | null;
-        location: string | null;
-        industry: string | null;
-        relationshipScore: number | null;
-        isTracked: number;
-        updatedAt: string;
-        tagsJson: string;
-      }[];
-      allowed = new Set(
-        rows
-          .filter((row) =>
-            filters.every((filter) =>
-              matchesFacet(
-                {
-                  ...row,
-                  isTracked: !!row.isTracked,
-                  tags: JSON.parse(row.tagsJson),
-                },
-                filter,
-              ),
-            ),
-          )
-          .map((row) => row.id),
-      );
-    }
-    return hydrateLexical(scope, lexicalSearch(scope, q, 20, allowed), 20);
+    // The facets run inside the keyword search, before its limit.
+    const facets = filters.length ? compileFacets(scope, filters) : null;
+    return hydrateLexical(
+      scope,
+      lexicalSearch(scope, q, 20, null, false, facets),
+      20,
+    );
   },
 
   /**

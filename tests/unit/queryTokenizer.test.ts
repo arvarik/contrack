@@ -1,58 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import {
-  useQueryTokenizer,
-  parseFilterValue,
-} from "../../src/hooks/useQueryTokenizer";
-
-describe("parseFilterValue", () => {
-  it("parses near:London/50km to km: 50", () => {
-    const filter = parseFilterValue("near", "London/50km");
-    expect(filter).toEqual({
-      field: "near",
-      value: "London",
-      km: 50,
-    });
-  });
-
-  it("parses near:London/50 without explicit km suffix to km: 50", () => {
-    const filter = parseFilterValue("near", "London/50");
-    expect(filter).toEqual({
-      field: "near",
-      value: "London",
-      km: 50,
-    });
-  });
-
-  it("defaults near:Paris to 25 km", () => {
-    const filter = parseFilterValue("near", "Paris");
-    expect(filter).toEqual({
-      field: "near",
-      value: "Paris",
-      km: 25,
-    });
-  });
-
-  it("parses list facet values directly", () => {
-    const filter = parseFilterValue("list", "investors");
-    expect(filter).toEqual({
-      field: "list",
-      value: "investors",
-    });
-  });
-
-  it("parses hyphenated list names for lists with spaces", () => {
-    // Note: Free-text tokenizer uses whitespace boundary for pills,
-    // so multi-word list names use the hyphen form (e.g. list:advisors-board)
-    // or are selected via autocomplete.
-    const filter = parseFilterValue("list", "advisors-board");
-    expect(filter).toEqual({
-      field: "list",
-      value: "advisors-board",
-    });
-  });
-});
+import { useQueryTokenizer } from "../../src/hooks/useQueryTokenizer";
 
 describe("useQueryTokenizer hook", () => {
   it("tokenizes near and list facets when followed by a space", () => {

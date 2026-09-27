@@ -3,14 +3,17 @@
  *
  * Supports GitHub-style faceted filters:
  *   role:founder, company:stripe, location:london, industry:fintech,
- *   tag:investor, score:>80, updated:>6m, tracked:yes
+ *   tag:investor, score:>80, updated:>6m, contacted:>90d, tracked:yes
  *
  * A token becomes "locked" (a pill) when followed by a space.
- * Remaining free-text is forwarded to FTS5/vector search.
+ * Remaining free-text is forwarded to FTS5/vector search. The value parser
+ * and the whole-query parser live in `shared/facetQuery.ts`, which the
+ * server's Ask pipeline reads too.
  *
  * @module hooks/useQueryTokenizer
  */
 import { useMemo, useCallback, useState } from "react";
+import { FACET_FIELD_PATTERN, parseFilterValue } from "../../shared/facetQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,72 +31,24 @@ export interface ParsedQuery {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Valid facet field names */
-const FACET_FIELDS: ReadonlySet<string> = new Set([
-  "role",
-  "company",
-  "location",
-  "industry",
-  "tag",
-  "score",
-  "updated",
-  "missing",
-  "list",
-  "near",
-  "tracked",
-]);
-
 /**
  * Regex to match completed facet tokens (followed by whitespace or EOL).
  * Captures: field name, colon, value, then whitespace.
  * Non-greedy value match stops at whitespace boundary.
  */
-const COMPLETED_FACET_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing|list|near|tracked):(\S+)\s/gi;
+const COMPLETED_FACET_REGEX = new RegExp(
+  `\\b(${FACET_FIELD_PATTERN}):(\\S+)\\s`,
+  "gi",
+);
 
 /**
  * Regex to detect an in-progress facet at the end of input.
  * e.g., "role:" or "role:eng" (no trailing space).
  */
-const ACTIVE_PREFIX_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing|list|near|tracked):(\S*)$/i;
-
-/**
- * Split a query into its facet filters and its free text, as pure data.
- *
- * The hook above treats a facet at the end of the input with no space after
- * it as one still being typed, so the autocomplete can open. A query that
- * arrives whole, from a link like `/?q=tracked:no` or from the Inbox's
- * `/?q=missing:company`, has no typist, so here a trailing facet is a facet.
- * A field the value parser rejects (`score:abc`) stays in the free text.
- */
-export function parseFacetTokens(rawInput: string): {
-  filters: FacetFilter[];
-  freeText: string;
-} {
-  const filters: FacetFilter[] = [];
-  const words = rawInput.split(/\s+/).filter(Boolean);
-  const rest: string[] = [];
-  for (const word of words) {
-    const match = word.match(/^([a-z]+):(.+)$/i);
-    const field = match?.[1].toLowerCase();
-    if (match && field && FACET_FIELDS.has(field)) {
-      const filter = parseFilterValue(field as FacetField, match[2]);
-      if (filter) {
-        if (
-          !filters.some(
-            (f) => f.field === filter.field && f.value === filter.value,
-          )
-        ) {
-          filters.push(filter);
-        }
-        continue;
-      }
-    }
-    rest.push(word);
-  }
-  return { filters, freeText: rest.join(" ") };
-}
+const ACTIVE_PREFIX_REGEX = new RegExp(
+  `\\b(${FACET_FIELD_PATTERN}):(\\S*)$`,
+  "i",
+);
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -132,8 +87,6 @@ export function useQueryTokenizer(
 
     // Merge completed tokens into the filter set (locked filters first)
     for (const cm of completedMatches) {
-      if (!FACET_FIELDS.has(cm.field)) continue;
-
       const filter = parseFilterValue(cm.field as FacetField, cm.value);
       if (filter) {
         // Don't add duplicates
@@ -265,48 +218,4 @@ export function useQueryTokenizer(
     clearFilters,
     hasFilters: parsed.filters.length > 0,
   };
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Parse a raw value string into a structured filter, handling operators for score/updated and near distance */
-export function parseFilterValue(
-  field: FacetField,
-  rawValue: string,
-): FacetFilter | null {
-  if (!rawValue) return null;
-
-  if (field === "score") {
-    const opMatch = rawValue.match(/^([><]?)(\d+)$/);
-    if (!opMatch) return null;
-    return {
-      field,
-      value: opMatch[2],
-      operator: (opMatch[1] as ">" | "<") || ">",
-    };
-  }
-
-  if (field === "updated") {
-    const opMatch = rawValue.match(/^([><]?)(\d+[dwmy])$/i);
-    if (!opMatch) return null;
-    return {
-      field,
-      value: opMatch[2],
-      operator: (opMatch[1] as ">" | "<") || ">",
-    };
-  }
-
-  if (field === "near") {
-    const match = rawValue.match(/^([^/]+)(?:\/(\d+)(?:km)?)?$/i);
-    if (!match) return null;
-    const place = match[1].trim();
-    const km = match[2] ? parseInt(match[2], 10) : 25;
-    return {
-      field,
-      value: place,
-      km,
-    };
-  }
-
-  return { field, value: rawValue };
 }

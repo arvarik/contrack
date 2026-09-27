@@ -14,7 +14,7 @@ Dates accept a valid ISO date or timestamp. Timestamps include an offset or use 
 
 Bulk operations accept up to 5,000 unique IDs and report the number of rows they change. Bulk updates accept scalar profile fields. They reject child arrays such as tags, emails, and phones. Lists exclude archived, ghost, merged, and trashed members from their counts and contact results.
 
-`GET /api/search` accepts a literal prefix query in `q`. Its optional `filters` parameter contains a JSON array of up to eight `{field, value}` facets. Supported fields are `company`, `role`, `location`, `industry`, `tag`, `score`, and `updated`. The server applies facets before its result limit. The command palette uses the same facet predicate.
+`GET /api/search` accepts a literal prefix query in `q`. Its optional `filters` parameter contains a JSON array of up to eight facets. Every palette field is supported: `role`, `company`, `location`, `industry`, `tag`, `score`, `updated`, `contacted`, `missing`, `list`, `near`, and `tracked`. The server applies facets in SQL before its result limit. The command palette uses the same facet predicate. `POST /api/search/semantic` takes the same facets.
 
 ---
 
@@ -32,9 +32,9 @@ curl http://localhost:3210/healthz
 ```json
 {
   "status": "ok",
-  "schema": { "tenancy": 2, "fts": 3 },
+  "schema": { "tenancy": 2, "fts": 5 },
   "vec": "v0.1.9",
-  "expects": { "tenancy": 2, "fts": 3 }
+  "expects": { "tenancy": 2, "fts": 5 }
 }
 ```
 
@@ -906,11 +906,51 @@ curl -X POST http://localhost:3210/api/contacts/abc123/attachments \
 
 ### `GET /api/search?q=`
 
-FTS5 keyword search (used by the sidebar search bar).
+FTS5 keyword search (used by the sidebar search bar and the command palette).
 
 ```bash
 curl "http://localhost:3210/api/search?q=engineer+san+francisco"
 ```
+
+**Query parameters:**
+
+| Parameter | Meaning                                                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `q`       | The query, up to 500 characters. An empty `q` returns `[]`.                                                                      |
+| `filters` | Optional. A JSON array of up to 8 facets, at most 4,000 characters long. Each facet is `{field, value, operator?, km?, point?}`. |
+
+- `field` is one of `role`, `company`, `location`, `industry`, `tag`,
+  `score`, `updated`, `contacted`, `missing`, `list`, `near` and `tracked`.
+- `value` holds 1 to 100 characters.
+- `operator` is `>` or `<`, for `score`, `updated` and `contacted`.
+- A `near` facet carries `km` and its resolved `point`, `{lat, lng, km}`.
+  The server measures with the point. Without a point, `near` keeps
+  everyone.
+- The server drops the keys it does not know, such as the palette's
+  `resolving`.
+
+An unknown field or a malformed array returns `400` "Invalid search
+filters". The server compiles the facets into SQL and applies them before
+its limit of 20 results. Every facet must hold. `list`, `missing` and
+`near` now work here too. The route refused them with `400` before.
+
+```bash
+# Engineers with no contact in 90 days, or no contact at all
+curl -G "http://localhost:3210/api/search" \
+  --data-urlencode "q=engineer" \
+  --data-urlencode 'filters=[{"field":"contacted","value":"90d","operator":">"}]'
+
+# Consultants on the list "Core Team", by its name with dashes
+curl -G "http://localhost:3210/api/search" \
+  --data-urlencode "q=consultant" \
+  --data-urlencode 'filters=[{"field":"list","value":"core-team"}]'
+```
+
+`contacted` takes a duration with `>` (more than that long ago, or never)
+or `<` (within that time), or the value `never`. The units are `d`, `w`,
+`m` (30 days) and `y` (365 days). See
+[Command Palette](features/command-palette.md#faceted-filters) for every
+facet.
 
 ---
 
@@ -922,9 +962,15 @@ Hybrid semantic search (Ask Contrack v3). Supports NDJSON streaming for progress
 
 ```json
 {
-  "query": "who works in fintech and I haven't talked to recently"
+  "query": "who works in fintech and I haven't talked to recently",
+  "filters": [{ "field": "tag", "value": "investor" }]
 }
 ```
+
+| Field     | Meaning                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`   | The question, up to 500 characters. It can hold typed facets, such as `tag:investor contacted:>90d`.                                                                            |
+| `filters` | Optional. Up to 8 facets, in the shape that `GET /api/search` takes. The palette sends its pills here in AI (`?`) mode. An invalid list returns `400` "Invalid search filters". |
 
 **Standard JSON response:**
 
@@ -961,7 +1007,7 @@ Each match is the full contact, plus these fields:
 
 | Field                     | Meaning                                                                                                                                                                                                                              |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `verified`                | `true` when an exact local answer, a database filter or the reranker proved the match. `false` for a local result nobody checked.                                                                                                    |
+| `verified`                | `true` when an exact local answer, a database filter, a facet or the reranker proved the match. `false` for a local result nobody checked.                                                                                           |
 | `aiReason`                | One sentence that the server builds from the proven fields, for example "Works at Northwind Logistics, based in Lisbon, Portugal." It is `null` on a local answer, on an unverified list, and when no proven field is left to quote. |
 | `approximate`/`matchType` | Only on a local answer. `approximate: true` and `matchType: "approximate"` mark a close name. Otherwise `matchType` is `exact`.                                                                                                      |
 
@@ -969,7 +1015,22 @@ A chunk's `fallback` means that the model did not verify its list.
 
 - **A name, an email, a phone number or one quoted phrase** gets its answer
   from the keyword index, with no model call. The stream sends only
-  `complete`, and every match has `verified: true`.
+  `complete`, and every match has `verified: true`. A phone number can be
+  its digits alone, such as `4155550142`.
+- **Facets.** The server reads the facets in `filters` and the facets typed
+  in `query`. A facet sent both ways counts once. The facets hold at every
+  stage, and they are part of the cache key.
+- **A question that is only facets** gets its answer from the database,
+  with no model call. The answer is the matching contacts in name order, at
+  most 30. The stream sends only `complete`, and every match has
+  `verified: true`. The `aiReason` comes from the facets, for example
+  "Tagged rare.".
+- **Implicit facets.** A question can name a company, a place or an
+  industry of your contacts, such as "people in Lisbon" or "who works at
+  Northwind Logistics". When it asks for nothing more, it gets the same
+  facet answer. When it asks for more, the planner runs, and the facets
+  narrow every stage. See
+  [Implicit facets](features/ai-search.md#implicit-facets).
 - **AI off for the account, or no provider:** the route still answers. The
   local list is the final result, with `fallback: true`. The stream sends
   only `complete`, because no model stage follows. The AI rate limiters

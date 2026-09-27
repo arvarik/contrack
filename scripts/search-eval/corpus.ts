@@ -1,7 +1,7 @@
 // =============================================================================
 // The search evaluation corpus
 // =============================================================================
-// Three hundred contacts and fifty queries, written once and committed as
+// Three hundred contacts and seventy queries, written once and committed as
 // JSON. This file is the source the JSON is generated from: it is here so a
 // reader can see why each contact exists, which the generated file cannot
 // show.
@@ -35,6 +35,10 @@ export interface EvalContact {
   about: string;
   tags: string[];
   interests: string[];
+  /** Email addresses, on the targets the email queries look up. */
+  emails?: string[];
+  /** Phone numbers as people write them, on the targets the phone queries dial. */
+  phones?: string[];
 }
 
 export type QueryKind =
@@ -42,7 +46,12 @@ export type QueryKind =
   | "company-role"
   | "location-interest"
   | "nickname"
-  | "note-phrase";
+  | "note-phrase"
+  | "nickname-only"
+  | "phone"
+  | "email"
+  | "hyphenated"
+  | "prefix";
 
 export interface EvalQuery {
   id: string;
@@ -681,7 +690,50 @@ const TARGETS: TargetRow[] = [
     "robotics,autonomy",
     "running,jollof",
   ],
+
+  // ── A hyphenated first name and surname. ─────────────────────────────────
+  // FTS splits both at the hyphen, and people type the name with the
+  // hyphens, with spaces, or run together.
+  [
+    "anne-marie-dubois-laurent",
+    "Anne-Marie Dubois-Laurent",
+    "Maison Vireo",
+    "Head of Partnerships",
+    "Lyon",
+    "Hospitality",
+    "Partner programmes for boutique hotels",
+    "Signed forty independent hotels in one winter by turning up at each front desk in person.",
+    "partnerships,hospitality",
+    "fencing,opera",
+  ],
 ];
+
+// ---------------------------------------------------------------------------
+// Emails and phone numbers
+// ---------------------------------------------------------------------------
+// On the targets of the email and phone queries, written the way people
+// write them: with a country code or without, with spaces, brackets and
+// dashes. The phone queries type the digits only.
+
+const CONTACT_POINTS: Record<string, { emails?: string[]; phones?: string[] }> =
+  {
+    "jonathan-smith": { phones: ["+44 161 496 0321"] },
+    "katherine-oconnell": {
+      emails: ["katherine@halcyonstudio.ie"],
+      phones: ["+353 1 555 0147"],
+    },
+    "marcus-delgado": { phones: ["+1 (415) 555-0142"] },
+    "priya-raghunathan": { phones: ["(415) 555-0123"] },
+    "nadia-benali": { emails: ["nadia.benali@kestrelanalytics.com"] },
+    "robert-castellanos": { emails: ["rob.castellanos@fleetwise.io"] },
+    "margaret-ellington": {
+      emails: ["margaret.ellington@crestwoodcapital.com"],
+    },
+    "anne-marie-dubois-laurent": {
+      emails: ["am.duboislaurent@maisonvireo.fr"],
+      phones: ["+33 4 72 00 15 15"],
+    },
+  };
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -863,6 +915,54 @@ const QUERIES: [id: string, kind: QueryKind, q: string, expect: string][] = [
     "drew the autonomy stack on a whiteboard from memory",
     "emeka-onyeka",
   ],
+
+  // A nickname and a surname, nothing else. "Peggy" never appears in
+  // Margaret's record.
+  ["q51", "nickname-only", "Peggy Ellington", "margaret-ellington"],
+  ["q52", "nickname-only", "Bob Castellanos", "robert-castellanos"],
+  ["q53", "nickname-only", "Ted Lindgren", "theodore-lindgren"],
+  ["q54", "nickname-only", "Sasha Petrova", "alexandra-petrova"],
+
+  // Phone numbers typed as digits: without the country code the number was
+  // stored with, with a trunk zero, as a local number, and with a country
+  // code the number was stored without.
+  ["q55", "phone", "4155550142", "marcus-delgado"],
+  ["q56", "phone", "01614960321", "jonathan-smith"],
+  ["q57", "phone", "5550147", "katherine-oconnell"],
+  ["q58", "phone", "14155550123", "priya-raghunathan"],
+
+  // A whole email address.
+  [
+    "q59",
+    "email",
+    "margaret.ellington@crestwoodcapital.com",
+    "margaret-ellington",
+  ],
+  ["q60", "email", "rob.castellanos@fleetwise.io", "robert-castellanos"],
+  ["q61", "email", "katherine@halcyonstudio.ie", "katherine-oconnell"],
+  ["q62", "email", "nadia.benali@kestrelanalytics.com", "nadia-benali"],
+
+  // A hyphenated name, typed four ways.
+  [
+    "q63",
+    "hyphenated",
+    "Anne-Marie Dubois-Laurent",
+    "anne-marie-dubois-laurent",
+  ],
+  ["q64", "hyphenated", "Dubois-Laurent", "anne-marie-dubois-laurent"],
+  [
+    "q65",
+    "hyphenated",
+    "Anne Marie Dubois Laurent",
+    "anne-marie-dubois-laurent",
+  ],
+  ["q66", "hyphenated", "Annemarie Dubois", "anne-marie-dubois-laurent"],
+
+  // The first letters of a rare name, as somebody types them.
+  ["q67", "prefix", "Xiom", "xiomara-reyes"],
+  ["q68", "prefix", "Thwa", "geoffrey-thwaite"],
+  ["q69", "prefix", "Krzy", "krzysztof-nowak"],
+  ["q70", "prefix", "Siob", "siobhan-murphy"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -1384,6 +1484,7 @@ export function buildCorpus(): {
         about,
         tags: tags.split(","),
         interests: interests.split(","),
+        ...CONTACT_POINTS[key],
       };
     },
   );
