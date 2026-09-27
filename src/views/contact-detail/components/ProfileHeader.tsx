@@ -138,6 +138,12 @@ export interface ProfileHeaderProps {
     ) => void;
     isPending: boolean;
   };
+  /**
+   * The Research card asked for a link: a new number opens "+ link", and
+   * `onLinkRequestDone` spends the request.
+   */
+  linkRequest?: number;
+  onLinkRequestDone?: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -436,6 +442,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   unarchiveContact,
   updateContact,
   promoteGhost,
+  linkRequest,
+  onLinkRequestDone,
 }) => {
   const navigate = useNavigate();
   const narrow = layout === "narrow";
@@ -877,6 +885,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   links={knownLinks}
                   onAdd={addSocialLink}
                   iconOnly={narrow}
+                  openRequest={linkRequest}
+                  onOpenRequestDone={onLinkRequestDone}
                 />
               </span>
             </div>

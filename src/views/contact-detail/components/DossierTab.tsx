@@ -1,15 +1,17 @@
 /**
- * DossierTab — The "Dossier" tab content showing AI-generated background
- * research, custom attributes, about section, work experience, and education.
+ * DossierTab — The "Dossier" tab content: the briefing, the about section,
+ * custom attributes, work experience and education, and last the research
+ * that filled them in.
  *
  * The briefing card sits at the top. A briefing is a read-before-you-meet
  * summary of the profile and the past notes, which is the same kind of
- * reading as the dossier under it.
+ * reading as the dossier under it. The research card sits at the bottom: it
+ * says where the details above came from, which a reader wants after the
+ * details, not before them.
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
 import React, { useId, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import {
   Briefcase,
   ChevronDown,
@@ -19,7 +21,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 import type {
@@ -38,6 +39,9 @@ import { parseBriefingPoints } from "../../../lib/safeParse";
 import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
+import { ResearchCard } from "./ResearchCard";
+import { EnrichMenu } from "./EnrichMenu";
+import type { ResearchAnchor } from "../../../lib/research";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -55,6 +59,11 @@ export interface BriefingMutation {
 export interface DossierTabProps {
   contact: Contact;
   generateBriefing?: BriefingMutation;
+  /**
+   * Opens the field for a detail that helps research, when research found
+   * no page: the Research card's "Add a city" and the rest.
+   */
+  onAddDetail?: (anchor: ResearchAnchor) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,12 +74,18 @@ export interface DossierTabProps {
  * Empty state: a contact with no bio, no work history, no education, and no
  * notes to pull a dossier from.
  *
- * This used to be a card with a header and a disabled-looking subhead that
- * had nothing to say. An empty state has to answer "what is missing and how do
- * I get it", and here the answer is a specific place to go.
+ * An empty state has to answer "what is missing and how do I get it". The
+ * answer is here, not on another page: Enrich contact researches this
+ * person at the depth chosen from its menu, and the progress panel opens.
+ * It linked to the Enrichment settings page when that page was the only
+ * place research could start. The hand-made path it names is the one the
+ * page has: a city and an email in Details, and a link in the header. It
+ * used to offer "paste a bio into a note", and a note fills no field.
  */
-const EmptyDossier = ({ name }: { name: string }) => {
+const EmptyDossier = ({ contact }: { contact: Contact }) => {
   const aiAllowed = useAiAllowed();
+  const canEnrich = aiAllowed && !contact.isGhost;
+  const first = contact.firstName || contact.name.split(" ")[0];
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -83,21 +98,21 @@ const EmptyDossier = ({ name }: { name: string }) => {
       <div className="space-y-1.5 max-w-sm">
         <h3 className="font-bold text-on-surface">No dossier yet</h3>
         <p className="text-sm text-on-surface-variant text-pretty">
-          The dossier collects background on {name}: what they do, where they
-          have worked and studied, and anything else worth remembering. Contact
-          enrichment researches that from the web and fills it in
+          {canEnrich
+            ? `Enrichment searches the web for ${first}\u2019s work, schools and profiles, and links each fact to its page`
+            : "The dossier fills in from enrichment and imports. You can add a city, an email or a link by hand"}
         </p>
       </div>
-      {aiAllowed && (
-        <Link to="/settings/enrichment" className="btn-primary">
-          <Sparkles className="w-4 h-4" />
-          Enrich contacts
-        </Link>
+      <EnrichMenu
+        contact={contact}
+        label="Enrich contact"
+        variant="primaryLarge"
+      />
+      {canEnrich && (
+        <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
+          Or add a city, an email or a link by hand
+        </p>
       )}
-      <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
-        You can also fill any of this in by hand from the contact&rsquo;s
-        details, or paste a bio into a note and let Contrack pull it apart
-      </p>
     </motion.div>
   );
 };
@@ -247,11 +262,14 @@ function BriefingCard({
 const DossierTabInner: React.FC<DossierTabProps> = ({
   contact,
   generateBriefing,
+  onAddDetail,
 }) => {
   // Every section below is conditional, so "nothing to show" needs answering
   // once, here, rather than as a blank space.
   const hasContent =
     !!contact.aiBackground ||
+    !!contact.aiResearch ||
+    !!contact.aiHydratedAt ||
     !!contact.about ||
     (contact.attributes?.length ?? 0) > 0 ||
     (contact.experience?.length ?? 0) > 0 ||
@@ -262,9 +280,9 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
       {/* First, and shown whether or not there is a dossier yet. */}
       <BriefingCard contact={contact} generateBriefing={generateBriefing} />
       {hasContent ? (
-        <DossierContent contact={contact} />
+        <DossierContent contact={contact} onAddDetail={onAddDetail} />
       ) : (
-        <EmptyDossier name={contact.name} />
+        <EmptyDossier contact={contact} />
       )}
     </div>
   );
@@ -309,7 +327,13 @@ const dateSpan = (
 };
 
 /** Every dossier section that has something to show. */
-const DossierContent = ({ contact }: { contact: Contact }) => {
+const DossierContent = ({
+  contact,
+  onAddDetail,
+}: {
+  contact: Contact;
+  onAddDetail?: (anchor: ResearchAnchor) => void;
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -317,38 +341,6 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       className="flex flex-col gap-6"
     >
       {contact.about && <AboutSection about={contact.about} />}
-      {contact.aiBackground && (
-        <details className={cn(CARD, "min-w-0")}>
-          <summary className="hit-area state-layer w-fit -mx-1.5 rounded-lg px-1.5 py-0.5 cursor-pointer font-semibold text-sm text-primary transition-colors">
-            Research notes and sources
-          </summary>
-          <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
-            <p className="text-xs not-prose mb-3">
-              Review the source dates and contact identity before you use these
-              details
-            </p>
-            <ReactMarkdown
-              skipHtml
-              urlTransform={(url) => (/^https?:\/\//i.test(url) ? url : "")}
-              components={{
-                a: ({ children, href }) => (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline"
-                  >
-                    {children}
-                  </a>
-                ),
-                img: () => null,
-              }}
-            >
-              {contact.aiBackground}
-            </ReactMarkdown>
-          </div>
-        </details>
-      )}
 
       {/* AI custom attributes. Enrichment writes them, so each name wears
           the AI colour. */}
@@ -446,6 +438,9 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
           )}
         </div>
       )}
+
+      {/* Last: where the details above came from. */}
+      <ResearchCard contact={contact} onAddDetail={onAddDetail} />
     </motion.div>
   );
 };

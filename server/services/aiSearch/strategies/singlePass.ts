@@ -23,8 +23,9 @@ import { toCitations } from "../../../ai/citations.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import {
-  aiSearchOutputSchema,
   extractionJsonSchema,
+  parseExtraction,
+  tidyExtraction,
 } from "../promptTemplate.ts";
 import { recordInvocation } from "../../../services/aiStatsService.ts";
 import { log } from "../../../utils/logger.ts";
@@ -38,7 +39,7 @@ export class SinglePassStrategy implements AISearchStrategy {
   readonly name = "single-pass";
 
   async execute(
-    _contact: HydratedContact,
+    contact: HydratedContact,
     prompt: string,
     signal?: AbortSignal,
   ): Promise<AISearchResult> {
@@ -47,14 +48,16 @@ export class SinglePassStrategy implements AISearchStrategy {
 
     // Single combined request: web search + structured JSON output.
     const result = await generateFor("research", {
-      prompt,
+      // The research prompt asks for fact lines, for the two-pass strategy.
+      // This one call has to answer in the schema instead.
+      prompt: `${prompt}\n\nReturn what you find as JSON in the response schema, not as lines.`,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
       enableSearchGrounding: true,
       signal,
       // One call does the searching and the writing, and the research prompt
       // leads to four or five searches: GPT-6 Sol took 35 to 48 s on it
-      // (2026-09-26). The job around this call allows 90 s.
+      // (2026-09-26). The job around this call allows 240 s.
       timeoutMs: 85_000,
       maxOutputTokens: 4_000,
     });
@@ -67,7 +70,7 @@ export class SinglePassStrategy implements AISearchStrategy {
       tokenCount: result.tokenCount,
       latencyMs: result.latencyMs,
       cached: false,
-      description: `AI Search single-pass: ${_contact.name}`,
+      description: `AI Search single-pass: ${contact.name}`,
     });
 
     log.info(
@@ -82,7 +85,7 @@ export class SinglePassStrategy implements AISearchStrategy {
     );
     if (citations.length === 0)
       throw new AppError(
-        "Research did not include source links. No contact fields changed. Choose another research model in AI settings.",
+        "Research did not include source links. No contact fields changed. Try again, or choose another research model in AI settings.",
         502,
         { code: "AI_GROUNDING_MISSING" },
       );
@@ -98,18 +101,18 @@ export class SinglePassStrategy implements AISearchStrategy {
       );
     }
 
-    const validated = aiSearchOutputSchema.safeParse(rawParsed);
-    if (!validated.success) {
-      throw new AppError("AI research failed schema validation", 502, {
-        code: "AI_SCHEMA_MISMATCH",
-      });
-    }
-
-    const structuredData = validated.data as Record<string, unknown>;
+    // Field by field: a value that fails its schema is left out.
+    const { data: parsed, dropped } = parseExtraction(rawParsed);
+    const structuredData = tidyExtraction(parsed, contact);
+    if (dropped.length > 0)
+      log.warn(
+        "SinglePassStrategy",
+        `${result.model} wrote values the schema refused; left out: ${dropped.join(", ")}`,
+      );
     const latencyMs = Date.now() - startMs;
 
     return {
-      data: structuredData,
+      data: structuredData as Record<string, unknown>,
       models: [result.model],
       tokenCount: result.tokenCount,
       latencyMs,

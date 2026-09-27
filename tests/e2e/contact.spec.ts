@@ -546,11 +546,13 @@ test.describe("the contact header", () => {
     await expect(kebab).toHaveAttribute("aria-haspopup", "menu");
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
-    // Change avatar left for the pencil on the avatar, and Enrich contact
-    // follows the colour: an AI action about this contact.
+    // Change avatar left for the pencil on the avatar, and the two enrich
+    // depths follow the colour: AI actions about this contact, each with the
+    // time it takes at the end of its row.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
-      "Enrich contact",
+      /^Enrich contact\s*about/,
+      /^Enrich deeply\s*about/,
       "Copy basic details",
       "Copy full details",
       "Archive",
@@ -711,11 +713,13 @@ test.describe("the contact header", () => {
   }) => {
     const id = await ownContact(instance, "Zion Enrich");
     // No real run: the start and its status are answered here.
-    let started: string[] | null = null;
+    let started: { contactIds: string[]; depth?: string } | null = null;
     await page.route("**/api/ai-search", async (route) => {
       if (route.request().method() !== "POST") return route.fallback();
-      started = (route.request().postDataJSON() as { contactIds: string[] })
-        .contactIds;
+      started = route.request().postDataJSON() as {
+        contactIds: string[];
+        depth?: string;
+      };
       await route.fulfill({ json: { batchId: "e2e-batch", jobCount: 1 } });
     });
     await page.route("**/api/ai-search/status**", (route) =>
@@ -746,14 +750,15 @@ test.describe("the contact header", () => {
     await kebab.click();
     await page.getByRole("menuitem", { name: "Enrich contact" }).click();
 
-    // No confirmation for one contact: the toast, and the panel.
-    await expect(
-      page.getByText("Enrichment started for 1 contact"),
-    ).toBeVisible();
-    expect(started).toEqual([id]);
+    // No confirmation for one contact, and no toast: the panel opens, in
+    // the corner the toasts use, and says it by itself.
     await expect(
       page.getByText("Contact enrichment", { exact: true }),
     ).toBeVisible();
+    expect(started).toEqual({ contactIds: [id], depth: "standard" });
+    await expect(
+      page.getByText("Enrichment started for 1 contact"),
+    ).toHaveCount(0);
 
     // While the run has this contact, the item says so and waits.
     await kebab.click();

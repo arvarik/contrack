@@ -6,8 +6,149 @@ import { MemoryRouter } from "react-router-dom";
 import { THINKING_CLASS } from "../../src/components/brand/CorvidThinking";
 import type { Contact } from "../../src/types";
 afterEach(cleanup);
-describe("research notes", () => {
-  it("shows research-only dossiers and opens sources without replacing the app", () => {
+/** A research record with two runs, as the enrichment merge writes it. */
+const RECORD = JSON.stringify({
+  version: 1,
+  runs: [
+    {
+      at: "2026-09-26T22:00:00.000Z",
+      models: [],
+      outcome: "added",
+      added: [],
+      sourceCount: 0,
+      queries: [],
+      findings: [],
+    },
+    {
+      at: "2026-09-26T23:00:00.000Z",
+      models: ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+      outcome: "added",
+      added: [
+        { field: "experience", count: 2 },
+        { field: "location", count: 1 },
+      ],
+      sourceCount: 2,
+      queries: [],
+      findings: [
+        {
+          topic: "Past role",
+          text: "Associate, Harbor Point Partners, 2018 to 2020",
+          site: "finra.org",
+        },
+        {
+          topic: "Award",
+          text: "Distinguished Fellow",
+          url: "https://fellows.example.org/people/rowan-vale",
+        },
+      ],
+    },
+  ],
+  sources: [
+    {
+      url: "https://brokercheck.finra.org/individual/summary/1234567",
+      title: "finra.org",
+      firstSeenAt: "2026-09-26T23:00:00.000Z",
+    },
+    {
+      url: "https://fellows.example.org/people/rowan-vale",
+      title: "Rowan Vale, Fellows Program",
+      firstSeenAt: "2026-09-26T23:00:00.000Z",
+    },
+  ],
+});
+
+describe("the Research card", () => {
+  it("comes last, after the details it says the source of", () => {
+    const { container } = render(
+      <DossierTab
+        contact={
+          {
+            id: "test",
+            name: "Test",
+            about: "Banker in New York",
+            aiResearch: RECORD,
+            experience: [
+              { id: "e1", company: "Northwind Partners", role: "Associate" },
+            ],
+          } as Contact
+        }
+      />,
+    );
+    const headings = [...container.querySelectorAll("h2, h3")].map((heading) =>
+      heading.textContent?.trim(),
+    );
+    expect(headings.at(-4)).toBe("Research");
+    // The old card sat between About and Experience, closed, with its own
+    // scroll. It is gone.
+    expect(screen.queryByText("Research notes and sources")).toBeNull();
+  });
+
+  it("lists each run, what the latest found beside its page, and every page", () => {
+    render(
+      <DossierTab
+        contact={{ id: "test", name: "Test", aiResearch: RECORD } as Contact}
+      />,
+    );
+    expect(
+      screen.getByText(/^Enriched 2 times · last .* ago · 2 web pages$/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Enriched before details were recorded"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Added 3 from 2 pages: Roles ×2, Location"),
+    ).toBeTruthy();
+    expect(screen.getByText("Gemini 3.8 Flash")).toBeTruthy();
+
+    // The finding names finra.org; the link opens the page that matched it.
+    const finding = screen.getByText(
+      "Associate, Harbor Point Partners, 2018 to 2020",
+    );
+    const link = finding.querySelector("a")!;
+    expect(link.getAttribute("href")).toBe(
+      "https://brokercheck.finra.org/individual/summary/1234567",
+    );
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    // A fact with no site of its own links to the page the provider matched.
+    expect(
+      screen
+        .getByText("Distinguished Fellow")
+        .querySelector("a")
+        ?.getAttribute("href"),
+    ).toBe("https://fellows.example.org/people/rowan-vale");
+
+    // A page Gemini named by its domain shows its address; a titled page
+    // shows its title.
+    expect(
+      screen.getByText(
+        "brokercheck.finra.org › individual › summary › 1234567",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Rowan Vale, Fellows Program")).toBeTruthy();
+    expect(screen.getByText("Sources")).toBeTruthy();
+  });
+
+  it("says the old dossier kept no pages, and does not show its copy of the cards", () => {
+    render(
+      <DossierTab
+        contact={
+          {
+            id: "test",
+            name: "Test",
+            aiHydratedAt: "2026-09-26T22:21:58.046Z",
+            aiBackground:
+              "Copied about.\n\n### Sources\n- [Source 1](<https://vertexaisearch.cloud.google.com/grounding-api-redirect/X>)",
+          } as Contact
+        }
+      />,
+    );
+    expect(screen.getByText(/kept no list of the pages it read/)).toBeTruthy();
+    expect(screen.queryByText("Copied about.")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Source 1" })).toBeNull();
+  });
+
+  it("shows notes from elsewhere as they were written, and opens their links outside the app", () => {
     render(
       <DossierTab
         contact={
@@ -20,12 +161,13 @@ describe("research notes", () => {
         }
       />,
     );
-    expect(screen.getByText("Research notes and sources")).toBeTruthy();
+    expect(screen.getByText("Research notes")).toBeTruthy();
     const source = screen.getByRole("link", { name: "Source", hidden: true });
     expect(source.getAttribute("href")).toBe("https://example.com/research");
     expect(source.getAttribute("rel")).toBe("noopener noreferrer");
     expect(source.getAttribute("target")).toBe("_blank");
   });
+
   it("blocks embedded HTML, remote images, and unsafe source schemes", () => {
     const { container } = render(
       <DossierTab

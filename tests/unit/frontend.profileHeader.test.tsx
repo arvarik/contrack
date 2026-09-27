@@ -54,8 +54,13 @@ const aiSearch = vi.hoisted(() => ({
     jobs: { contactId: string; status: string }[];
   },
 }));
-vi.mock("../../src/contexts/AISearchContext", () => ({
+vi.mock("../../src/contexts/AISearchContext", async (original) => ({
+  // The real rule for "this contact is being enriched", over the fake state.
+  isEnriching: (
+    await original<typeof import("../../src/contexts/AISearchContext")>()
+  ).isEnriching,
   useAISearch: () => aiSearch,
+  useOptionalAISearch: () => aiSearch,
 }));
 
 /** Whether AI assistance is on for the account. */
@@ -64,6 +69,7 @@ vi.mock("../../src/hooks/useAiAllowed", () => ({
   useAiAllowed: () => ai.allowed,
 }));
 
+import { depthTime } from "../../src/lib/researchDepth";
 import {
   ContactIntro,
   ProfileHeader,
@@ -306,14 +312,16 @@ describe("the contact header", () => {
     }
   });
 
-  it("lists the six contact actions in order, Enrich contact after the colour", () => {
+  it("lists the seven contact actions in order, the two enrich depths after the colour", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     const menu = screen.getByRole("menu", { name: "Contact actions" });
     const items = within(menu).getAllByRole("menuitem");
+    // Each enrich row says the time a contact takes, to a screen reader too.
     const names = [
       "Change colour",
-      "Enrich contact",
+      `Enrich contact, ${depthTime("standard")}`,
+      `Enrich deeply, ${depthTime("deep")}`,
       "Copy basic details",
       "Copy full details",
       "Archive",
@@ -652,20 +660,33 @@ describe("the contact actions", () => {
 });
 
 describe("Enrich contact", () => {
-  /** The kebab's enrich item, by either of its two names. */
+  /** The kebab's Standard enrich item, by either of its two names. */
   function enrichItem() {
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
-    return screen.queryByRole("menuitem", { name: /^Enrich/ });
+    return screen.queryByRole("menuitem", {
+      name: /^Enrich contact|^Enriching/,
+    });
   }
 
-  it("starts a run for this one contact, with any limit said in a toast", () => {
+  it("starts a Standard run for this one contact, with any limit said in a toast", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(enrichItem()!);
     expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
       limitAs: "toast",
+      depth: "standard",
     });
     // No confirmation for one contact: the run starts on the choice.
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("starts a Deep run from Enrich deeply", () => {
+    mount(<ProfileHeader {...makeProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Enrich deeply/ }));
+    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
+      limitAs: "toast",
+      depth: "deep",
+    });
   });
 
   it("is not offered when AI assistance is off, or for a ghost", () => {
@@ -715,7 +736,7 @@ describe("Enrich contact", () => {
     };
     const again = mount(<ProfileHeader {...makeProps()} />);
     const item = enrichItem()!;
-    expect(item.textContent).toBe("Enrich contact");
+    expect(item.textContent).toContain("Enrich contact");
     expect(item.getAttribute("aria-disabled")).toBeNull();
     again.unmount();
 

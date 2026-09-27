@@ -498,6 +498,50 @@ test.describe("Settings — Tools and Data", () => {
     });
     await expect(autoEnrichSwitch).toHaveAttribute("aria-checked", "false");
   });
+
+  test("enrichment page filters by who and by research state, each pill counted", async ({
+    page,
+  }) => {
+    await page.goto("/settings/enrichment");
+    const who = page.getByRole("group", { name: "Contacts" });
+    const research = page.getByRole("group", { name: "Research" });
+    await expect(who.getByRole("button")).toHaveCount(5);
+    await expect(research.getByRole("button")).toHaveCount(4);
+    await expect(
+      research.getByRole("button", { name: /^Any/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Each pill ends with its count.
+    await expect(research.getByRole("button", { name: /^Not yet/ })).toHaveText(
+      /^Not yet\d+$/,
+    );
+    const notYet = research.getByRole("button", { name: /^Not yet/ });
+    await notYet.click();
+    await expect(notYet).toHaveAttribute("aria-pressed", "true");
+    const tracked = who.getByRole("button", { name: /^Tracked/ });
+    await tracked.click();
+    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    await expect(notYet).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("enrichment page names and prices both research depths, Standard chosen", async ({
+    page,
+  }) => {
+    await page.goto("/settings/enrichment");
+    const depth = page.getByRole("radiogroup", { name: "Research depth" });
+    await expect(depth.getByRole("radio")).toHaveCount(2);
+    await expect(
+      depth.getByRole("radio", { name: /^Standard/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    const deep = depth.getByRole("radio", { name: /^Deep/ });
+    await expect(deep).toContainText("a contact");
+    await deep.click();
+    await expect(deep).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByText("The first 5,000 web searches each month are free", {
+        exact: false,
+      }),
+    ).toBeVisible();
+  });
 });
 
 test.describe("Tracked contacts", () => {

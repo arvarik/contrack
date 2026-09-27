@@ -123,8 +123,13 @@ export interface ActionMenuProps {
    * The trigger's look. `ghost` (the default) is the flat icon button with
    * the hover layer. `primary` is the page's call to action, a small
    * pressable `.btn-primary` with its edge, such as the Network list's New.
+   * `primaryLarge` and `secondary` are the full-size buttons, for a menu
+   * that stands where a button would: the dossier's Enrich contact and
+   * Enrich again, which open the two research depths.
    */
-  variant?: "ghost" | "primary";
+  variant?: "ghost" | "primary" | "primaryLarge" | "secondary";
+  /** The trigger waits: the thing its rows start is already under way. */
+  disabled?: boolean;
 }
 
 /** The trigger's base classes, by variant. `triggerClassName` adds to these. */
@@ -135,6 +140,8 @@ const TRIGGER_VARIANT: Record<
   ghost:
     "hit-area state-layer p-2 rounded-xl text-on-surface-variant hover:text-on-surface transition-colors flex items-center justify-center",
   primary: "btn-primary btn-sm",
+  primaryLarge: "btn-primary",
+  secondary: "btn-secondary",
 };
 
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
@@ -158,6 +165,7 @@ export const ActionMenu = ({
   title,
   heading,
   variant = "ghost",
+  disabled = false,
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   /** Which item takes focus when the menu opens: the first or the last. */
@@ -375,6 +383,7 @@ export const ActionMenu = ({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
+        disabled={disabled}
         onClick={() => (open ? close() : openMenu("first"))}
         onKeyDown={onTriggerKeyDown}
         className={cn(

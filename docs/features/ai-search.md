@@ -94,9 +94,15 @@ Contact enrichment (Settings → Contact enrichment) fills in contact profiles w
 ### How to Use
 
 1. Navigate to **Settings → Contact enrichment**
-2. Select contacts to enrich (individually or "Select All")
-3. Click **Start enrichment**
-4. Watch real-time progress via the SSE-powered progress overlay
+2. Choose the **Research depth**, Standard or Deep (see below)
+3. Narrow the list with the two rows of filters (see below), then select contacts, one by one or with **Select all**
+4. Read the batch's time and cost at that depth under **Start enrichment**, then click it. The confirmation gives them again
+5. Watch real-time progress via the SSE-powered progress overlay
+
+For one contact, choose **Enrich contact** or **Enrich deeply** in the
+contact's actions menu. In its Dossier tab, **Enrich contact** in an empty
+dossier and **Enrich again** on the Research card open a menu of the two
+depths, each with its time.
 
 <!-- Screenshot: batch-enrichment.png -->
 
@@ -104,42 +110,91 @@ Contact enrichment (Settings → Contact enrichment) fills in contact profiles w
 
 Under **Settings → Contact enrichment**:
 
-- **Never-enriched banner:** Displays the count of contacts that have never been researched on the web, with an "Enrich them" button that selects them in the table for immediate batch enrichment.
-- **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research if AI assist is turned on for the account and grounding quota is available.
+- **Never-enriched banner:** Displays the count of contacts that have never been researched on the web, with a **Select them** button that selects them for immediate batch enrichment. It also empties the search box and sets the filters to All and Not yet, so the list shows exactly the contacts it selects.
+- **Filters:** Two rows of pills narrow the list, with one choice in each row. **Contacts** is All, Tracked, Has links, Has email or No data. **Research** is Any, Not yet, 6+ months ago (the last research is more than 183 days old) or Found nothing (the last research found no page). A contact shows when it matches both rows. Each pill counts the contacts it would show beside the other row's choice. A new choice clears the selection, so a contact the list hides is never started. A row whose last research found no page has a **No page** badge. The slim contact list carries the last run's outcome as `researchOutcome` for the filter and the badge.
+- **Batch estimate:** Under **Start enrichment**, the depth, time and cost of the selection, such as "Standard · About 2 min and $0.45 in all".
+- **Research depth:** Standard or Deep, for the next batch, with what each does and its time and cost per contact. The page opens on Standard each time.
+- **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research at Standard depth if AI assist is turned on for the account and grounding quota is available. While the account's batch runs, the new contact joins it.
 - **Grounding meter:** For administrators with Gemini configured, a live meter tracks daily grounding search usage and remaining requests.
 
-### Search Strategies
+### How research runs
 
-The enrichment strategy varies by AI provider:
+Every provider runs the two-pass strategy (`server/services/aiSearch/strategies/twoPass.ts`):
 
-| Provider  | Strategy    | How it works                                                                                               |
-| --------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Gemini    | Two-Pass    | **Pass 1:** Discover facts via grounding-based web search. **Pass 2:** Merge and validate discovered data. |
-| OpenAI    | Single-Pass | Single prompt with context to generate enrichment data                                                     |
-| Anthropic | Single-Pass | Single prompt with context to generate enrichment data                                                     |
+1. **Search.** The research model searches the web and reports what the matching pages say, one fact per line with the site it came from: `- Past role: Associate, Harbor Point Partners, 2018 to 2020 [finra.org]`. The prompt starts from the contact's own details and where they came from (for a LinkedIn import, the connections list, the import date and the date the user connected). The place is the contact's location, or else the first address in Details with no digit in it, such as "Austin, TX", the primary address first. A street address or a postcode is never sent. It suggests four to six searches built from them: the company, the role, the formal first name behind a short one ("Thomas" for "Tom"), past employers, schools and profile handles. A page counts only when it names the person and matches at least one of those details, and a page that links to the person's own profile is about them. When a page calls another employer current, the job is reported as a past one, because pages about people go out of date. Relatives, health, religion, politics, sexuality, home addresses and home purchases are left out.
+2. **Extraction.** The quick model reads those lines into the contact's fields. The answer is checked field by field, so one bad value, such as a malformed email address, drops only that value. Broker registrations (FINRA "Registered Representative" records) become a **Registrations** fact rather than jobs, and only a job at the contact's recorded company stays current. Dates are stored as `YYYY` or `YYYY-MM`.
+
+The model decides for itself whether to search, and Gemini has no setting that forces a search. The search pass therefore runs at thinking level `medium`: at the adapter's usual `low`, Gemini 3.8 Flash answered research prompts without searching, and at `high` it came back empty for the same two contacts of five on every try. A search pass that cites no pages, or returns nothing, is asked twice more at the same time: once with the searches first, and once in a short form. The first of those answers that cites pages is used. An answer with no pages behind it is refused and changes nothing, unless the model answers `NO MATCHING PAGES`, which records the plain outcome **No public information**. An empty answer from every ask returns `502 AI_NO_ANSWER`, and a later try can succeed.
+
+Gemini's source links are Google redirects. Each one is resolved once to the page it names (a HEAD request to Google; the page itself is not fetched), and Gemini's grounding supports link each fact to its page.
+
+`single-pass` (search and schema in one request, OpenAI and Anthropic only) can still be asked for by name in `POST /api/ai-search`.
+
+### Research depth
+
+Every start names one of two depths, and Standard is the default. The API takes it as `depth`, the job and the research record keep it, the progress panel marks a Deep job, and the Research card's history names the depth of each run.
+
+|                          | Standard                                                                           | Deep                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| What it runs             | One search ask at thinking `medium`, for the main facts, with four to six searches | The same ask, and beside it one at thinking `high` for a complete profile, with ten or more searches. What both cite is kept |
+| Time per contact         | about 40 s                                                                         | about 1 min                                                                                                                  |
+| Web searches per contact | about 8                                                                            | about 18                                                                                                                     |
+| Cost per contact         | about $0.15                                                                        | about $0.32                                                                                                                  |
+| Time limit               | 4 min                                                                              | 5 min                                                                                                                        |
+
+Measured on five contacts from real records, with Gemini 3.8 Flash and Gemini 3.5 Flash-Lite (2026-09-26). The figures are means over the runs that found pages: ten Standard runs in three rounds of the five, and six Deep runs in two rounds. Standard added 11 to 40 details to a contact, and Deep 8 to 40: about a fifth more for the same person, from nearly twice the pages. A contact no page is about costs $0.01 to $0.06. The cost is Google's prices: $14 per 1,000 web searches after 5,000 free a month, $0.75 and $3.75 per million input and output tokens for Gemini 3.8 Flash through 2026, and $0.30 and $2.50 for Flash-Lite. The figures live in `shared/researchDepth.ts`, which the Enrichment page reads.
+
+When no first ask cites a page, two more are asked at once, at `medium`, and every answer that cites pages is kept. Deep does not ask at `high` alone: `high` found more when it answered (32 details for one contact where `medium` found 20), but it answered with nothing for two of the five contacts on every try, all three asks for one of them. Beside the `medium` ask, an empty `high` answer costs its tokens, and the `medium` one still stands. A second search after the first, told what it found, was tried and ran no searches: with the first answer's facts in front of it, the model answered from them.
+
+The Enrichment page describes both depths and their figures. A contact's actions menu has **Enrich contact** (Standard) and **Enrich deeply** (Deep). The dossier's **Enrich contact** and **Enrich again** open both. Automatic enrichment and the command palette's refresh run at Standard.
 
 ### What Gets Enriched
 
-The AI searches the internet for each contact and can update:
+The research can add, when the contact does not have them yet:
 
-- Role and company when the fields are empty
-- Headline / professional summary
-- Social links (LinkedIn, GitHub, Twitter)
-- Education and experience history
-- Industry classification
-- Website
-- AI-generated summary and background
+- Role, company, headline, industry and location
+- A professional summary (about)
+- Past roles with employers, cities and dates; schools with degrees and dates
+- Profiles (LinkedIn, GitHub, X and others; a post is not a profile)
+- Facts such as awards, licences, registrations, publications, talks, volunteer roles and a hometown
+- Interests and tags
 
 Enrichment preserves existing values. It rejects the result if the contact
-changes during research. Gemini source links appear under **Dossier → Research
-notes and sources**. The section also shows research for contacts with no other
-dossier fields.
+changes during research.
+
+### The research record
+
+Every enrichment is recorded on the contact, in `contacts.aiResearch` (shape: `shared/researchRecord.ts`): when it ran, which models, what it added field by field, the searches it ran, the facts it reported and the pages it cited. The **Research** card at the bottom of the Dossier tab shows it:
+
+- **History:** each enrichment and what it added, like "Added 25 from 9 pages: Roles ×6, Education ×3, Location", "Read 10 pages, nothing new" or "No web page about this person"
+- **What the research found:** the latest facts, each linked to its page
+- **Sources:** every page the research cited, by site and address
+
+Before this record existed, enrichment wrote a dossier text into `aiBackground` that copied the about, career and education cards and listed its sources as "Source 1" links. The next enrichment of such a contact replaces that text with the record, and the history counts the earlier enrichment. Notes in `aiBackground` from anywhere else stay, under **Research notes**.
+
+### When research finds no page
+
+When the latest research found no page about the person, the Research card says so under its heading, and offers the next step:
+
+- **No web page matched Mara**, and the kinds of detail research searched with: "Research searched with Mara’s name, company, role and LinkedIn profile". It names kinds, not values, because a role or a city can hold a comma of its own.
+- A button for each detail the contact lacks that helps research find the right person. **Add a city** shows when there is no location and no address that names a city. **Add a work email** shows when no email is at an employer's domain. **Add a link** shows when there is no link other than LinkedIn, since LinkedIn pages do not come back in the research search. Beside a LinkedIn profile it reads **Add another link**.
+- Each button opens its field on the contact page, with the input focused. The city and the work email open in Details, labelled work. The link opens in the header. On a phone the page moves to the Details tab first.
+- The last line says what to do next: choose Enrich again, and after a Standard run, Deep runs a longer search.
+
+The card offers only what the page can take. Schools and past jobs help as much, but the contact page has no field for them. The rules for a work email and a city are the prompt's own (`shared/researchIdentity.ts`), so the card asks for what research reads. The Enrichment page's **Found nothing** filter lists every contact in this state.
+
+### Enriching again
+
+A second enrichment is told what the contact already has, which sites the earlier rounds read, and what is still missing, and it prefers searches and sites the earlier rounds did not use. It adds only what is new, so it usually adds less than the first. A detail written another way counts as known: one school under two names, "AB" and "BA" at one school in one year, one employer and start month under two job titles, and "Distance running coach" for "Distance running".
+
+Measured on three contacts from real records, with Gemini 3.8 Flash and Gemini 3.5 Flash-Lite (2026-09-26): the first round added 0, 22 and 23 fields, and the second added 0, 4 and 4. No web page matched the first contact's records, and both rounds recorded that. One of the second round's additions was a job the contact already had, under a shorter title. The merge now reads the same employer and start month as one job.
 
 ### Progress Tracking
 
 Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 
 - Per-contact status: `queued` → `searching` → `merging` → `success` / `error` / `cancelled`
+- Per-contact outcome when done: `added`, `nothing-new` or `no-public-info`, and the models that ran
 - Error classification: rate_limit, validation, network, auth, ambiguous
 - Token usage tracking
 - Latency per contact
@@ -147,20 +202,21 @@ Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 The overlay supports scrolling, visible error text, and **Stop research**.
 Minimizing the overlay keeps a progress button available. Status polling
 continues if the stream disconnects. A server restart clears progress, while
-completed contact updates remain in the database.
+completed contact updates remain in the database. Starting a batch shows no
+toast: the overlay opens in the toasts' corner and says it.
 
-### Rate Limiting
+### Limits
 
 - Maximum 100 contacts per batch
-- 5-minute cooldown between batches
+- One batch runs at a time on a server, because the provider's limits belong to the API key the server shares. A second start by the same account joins the running batch. A start by another account is refused with `429 RATE_LIMITED` (`details.yours: false`) until the batch ends.
+- There is no cooldown between batches. A provider's own 429 pauses that model in the adapter, and the router moves to another.
 - Two concurrent AI generations and 16 waiting generations per server
-- One workflow per contact, with a 90-second deadline
-- At most one retry for a transient provider failure within the deadline
-- No repeated research workflow after empty or invalid model output
+- One workflow per contact, with a deadline of 4 minutes at Standard and 5 at Deep: a search ask takes from 15 s to over a minute
+- No repeated research workflow after a failed provider call or invalid output. Only the search pass is asked again, and only when it cites no pages
 
 **APIs:**
 
-- `POST /api/ai-search` — Start a batch
+- `POST /api/ai-search` — Start a batch at a `depth`, or add to the running one (`appended: true`)
 - `GET /api/ai-search/status?batchId=` — Poll status
 - `GET /api/ai-search/stream?batchId=` — SSE stream
 - `POST /api/ai-search/:batchId/cancel` — Stop a batch
@@ -169,13 +225,15 @@ completed contact updates remain in the database.
 
 ## Single-Contact Enrichment
 
-Enrich a single contact via the **Enrich** button on their profile:
+Enrich a single contact at a depth, Standard when the body names none:
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/enrich
+curl -X POST http://localhost:3000/api/contacts/abc123/enrich \
+  -H "Content-Type: application/json" \
+  -d '{"depth":"deep"}'
 ```
 
-This uses the same pipeline as batch enrichment but for one contact. Returns the number of fields updated, latency, models used, and token count.
+This uses the same pipeline as batch enrichment but for one contact. Returns the number of fields updated, the outcome, latency, models used, and token count.
 
 ---
 

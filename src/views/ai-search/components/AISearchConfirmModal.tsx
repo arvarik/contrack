@@ -1,16 +1,19 @@
 /**
- * AISearchConfirmModal — Credit warning + confirmation before starting.
+ * AISearchConfirmModal — the cost and time of a batch, confirmed before it
+ * starts.
  *
  * Shows:
- * - How many contacts will be searched
+ * - How many contacts will be searched, and at which depth
+ * - The batch's time and cost at that depth, from the measured figures
  * - How many have been previously searched (re-search info)
- * - Estimated time
  * - Additive-only data safety guarantee
  */
 import React from "react";
 import { Sparkles } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import type { Contact } from "../../../types";
+import type { ResearchDepth } from "../../../../shared/researchDepth";
+import { batchEstimate, DEPTH_WORDS } from "../../../lib/researchDepth";
 
 interface Props {
   isOpen: boolean;
@@ -18,6 +21,7 @@ interface Props {
   onConfirm: () => void;
   selectedContacts: Contact[];
   isStarting: boolean;
+  depth: ResearchDepth;
 }
 
 export function AISearchConfirmModal({
@@ -26,6 +30,7 @@ export function AISearchConfirmModal({
   onConfirm,
   selectedContacts,
   isStarting,
+  depth,
 }: Props) {
   const total = selectedContacts.length;
   const previouslySearched = selectedContacts.filter(
@@ -39,22 +44,18 @@ export function AISearchConfirmModal({
         <p className="text-sm text-on-surface-variant leading-relaxed">
           You're about to research{" "}
           <span className="font-bold text-on-surface">{total}</span> contact
-          {total !== 1 ? "s" : ""} using AI-powered internet search
+          {total !== 1 ? "s" : ""} on the web, at{" "}
+          <span className="font-bold text-on-surface">
+            {DEPTH_WORDS[depth].name}
+          </span>{" "}
+          depth
         </p>
 
         {/* Info bullets */}
         <div className="space-y-2.5">
-          <InfoRow
-            text={`Uses approximately ${total} enrichment credit${total !== 1 ? "s" : ""}`}
-          />
-          <InfoRow
-            text={
-              total === 1
-                ? "Takes about 1 minute to complete"
-                : `Takes about ${Math.ceil(total * 0.4)}–${Math.ceil(total * 0.6)} minutes to complete`
-            }
-          />
-          <InfoRow text="Runs in the background — you can keep working" />
+          <InfoRow text={DEPTH_WORDS[depth].does} />
+          <InfoRow text={batchEstimate(depth, total)} />
+          <InfoRow text="Runs in the background, so you can keep working" />
         </div>
 
         {/* Re-search info */}

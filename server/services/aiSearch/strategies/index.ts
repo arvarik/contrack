@@ -6,11 +6,11 @@ import { AppError } from "../../../utils/AppError.ts";
 // Factory registry for AI Search strategies. New strategies plug in here
 // without modifying any other code in the system.
 //
-// Strategy auto-selection:
-// - Gemini → 'two-pass' (grounding and schema can't coexist)
-// - OpenAI/Anthropic → 'single-pass' (grounding + schema in one request)
-//
-// Can be overridden via explicit strategy name parameter.
+// Strategy auto-selection: 'two-pass' for every provider. Gemini cannot
+// search and fill a schema in one request, and on OpenAI and Anthropic the
+// split keeps a source beside every fact, which the dossier's Research card
+// shows. 'single-pass' (search and schema in one request, OpenAI and
+// Anthropic only) stays available by name.
 // =============================================================================
 
 import type { AISearchStrategy } from "../types.ts";
@@ -43,26 +43,20 @@ export function getStrategy(name: string = "two-pass"): AISearchStrategy {
 }
 
 /**
- * Resolve the default strategy name for a given provider.
- * - Gemini uses two-pass (grounding + schema incompatible)
- * - OpenAI/Anthropic use single-pass (both supported together)
+ * Resolve the default strategy name for a given provider: two-pass, or
+ * SearXNG when no provider serves research and a SearXNG instance is set.
+ *
+ * OpenAI and Anthropic ran single-pass until 2026-09-26. Two-pass on them was
+ * measured the same day, on one contact: GPT-6 Sol with GPT-6 Luna filled 26
+ * fields, and Claude Sonnet 5 with Haiku 4.5 filled 16 and 17 in two runs.
  */
 export function getDefaultStrategyForProvider(
   providerName: string | null,
 ): string {
   // No grounding-capable provider serves the research capability — fall back
   // to a self-hosted SearXNG instance when one is configured.
-  if (!providerName) {
-    if (getSearxngUrl()) return "searxng";
-    return "two-pass";
-  }
-  switch (providerName.toLowerCase()) {
-    case "openai":
-    case "anthropic":
-      return "single-pass";
-    default:
-      return "two-pass";
-  }
+  if (!providerName && getSearxngUrl()) return "searxng";
+  return "two-pass";
 }
 
 /** Validate configuration locally before accepting an enrichment action. */

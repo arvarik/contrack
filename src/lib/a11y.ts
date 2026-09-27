@@ -119,3 +119,18 @@ export function focusOnPointer(event: PointerEvent<HTMLElement>) {
   if (row.getAttribute("aria-disabled") === "true") return;
   if (document.activeElement !== row) row.focus({ preventScroll: true });
 }
+
+/**
+ * How a scroll the app starts should move: at once when less motion is asked
+ * for, by the account's Motion setting or by the system, and smoothly
+ * otherwise. The CSS already stops smooth scrolling for "reduced", but a
+ * script that asks for "smooth" overrides the CSS, so it asks here first.
+ */
+export function scrollBehavior(): ScrollBehavior {
+  const motion = document.documentElement.getAttribute("data-motion");
+  if (motion === "reduced") return "auto";
+  if (motion === "full") return "smooth";
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+}

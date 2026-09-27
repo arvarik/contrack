@@ -7,11 +7,15 @@
 // Jobs are ephemeral (lost on server restart). This is acceptable because
 // AI Search is a discrete user action, not persistent state.
 //
-// Concurrency: V1 is strictly sequential (1 contact at a time) to avoid
-// rate limits. Can be upgraded to p-limit(2) in the future.
+// Concurrency: strictly sequential (1 contact at a time) to avoid rate
+// limits. One batch runs at a time on the instance, because the provider's
+// limits belong to the API key the instance shares. A second start by the
+// same account joins the running batch instead of being refused.
 //
-// Rate protection: 5-minute cooldown between batch starts + single-batch
-// concurrency lock. No express-rate-limit needed for a single-user local app.
+// There is no cooldown. It was five minutes after every batch, so enriching
+// one contact and then another answered 429 "Please wait 187s" without a
+// request reaching the provider (2026-09-26). A real 429 from the provider
+// pauses that model in the adapter, and the router moves to another.
 // =============================================================================
 
 import { EventEmitter } from "events";
@@ -23,8 +27,8 @@ import type {
   AISearchErrorType,
 } from "./types.ts";
 import type { AIProvider } from "../../ai/provider.ts";
-import { buildSearchPrompt, type AISearchOutput } from "./promptTemplate.ts";
-import { mergeSearchResult } from "./mergeEngine.ts";
+import { buildSearchPrompt } from "./promptTemplate.ts";
+import { mergeSearchResult, researchHistory } from "./mergeEngine.ts";
 import { getStrategy } from "./strategies/index.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -36,6 +40,10 @@ import {
   type Scope,
 } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
+import {
+  DEFAULT_RESEARCH_DEPTH,
+  type ResearchDepth,
+} from "../../../shared/researchDepth.ts";
 
 // =============================================================================
 // Error Classification
@@ -103,9 +111,6 @@ function classifyError(error: unknown): AISearchErrorType {
 // Job Queue
 // =============================================================================
 
-/** 5-minute cooldown between batch starts to prevent token abuse */
-const COOLDOWN_MS = 5 * 60 * 1000;
-
 /**
  * A batch and the account that started it.
  *
@@ -124,52 +129,98 @@ const GC_TTL_MS = 30 * 60 * 1000;
 /** Delay between sequential jobs to avoid Gemini grounding API rate limits */
 const INTER_JOB_DELAY_MS = 2_500;
 
+/**
+ * Time allowed for one contact, by depth: the first asks, the two that
+ * follow them at once when none cites a page, and the extraction. A search
+ * ask took from 15 s to more than 80 s, and one that returned nothing took
+ * as long (2026-09-26). Three asks one after the other ran past 240 s; two
+ * rounds stay inside it. A deep run's ask at thinking "high" can take the
+ * whole 120 s an ask has, hence its minute more.
+ */
+export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
+  standard: 240_000,
+  deep: 300_000,
+};
+
 class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, OwnedBatch>();
   private processing = false;
   private controllers = new Map<string, AbortController>();
-  private lastBatchCompletedAt = new Map<OwnerId, Date>();
 
   /**
-   * Check whether this account can start a new batch.
+   * Check whether this account can start research now.
    *
-   * The run lock stays global: provider rate limits are a property of the API
+   * The run lock is global: provider rate limits are a property of the API
    * key, which the whole instance shares, so two accounts researching at once
-   * would spend one quota twice as fast. The cooldown is per account, because
-   * it exists to stop one person burning tokens and had no business making
-   * everybody else wait five minutes after a stranger's batch.
-   *
-   * `yours` says which of the two refused, so the route can send an honest
-   * message and the UI can tell "your own cooldown" from "somebody else is
-   * researching right now".
+   * would spend one quota twice as fast. While this account's own batch runs,
+   * a new start joins it: `appendTo` names the batch. Only another account's
+   * batch refuses, and `yours: false` says so, so the UI can say "somebody
+   * else is researching right now" rather than blaming the reader.
    */
   canStartBatch(scope: Scope): {
     allowed: boolean;
     reason?: string;
     yours: boolean;
     retryAfterSeconds?: number;
+    appendTo?: string;
   } {
     if (this.processing) {
+      const own = this.getActiveBatches(scope)[0];
+      if (own) return { allowed: true, yours: true, appendTo: own.id };
       return {
         allowed: false,
-        reason: "A batch is already in progress.",
-        yours: this.hasActiveBatch(scope),
+        reason:
+          "Another account is enriching contacts right now. Try again in a minute.",
+        yours: false,
+        retryAfterSeconds: 60,
       };
     }
-    const last = this.lastBatchCompletedAt.get(scope.ownerId);
-    if (last) {
-      const elapsed = Date.now() - last.getTime();
-      if (elapsed < COOLDOWN_MS) {
-        const waitSec = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
-        return {
-          allowed: false,
-          reason: `Please wait ${waitSec}s before starting another batch.`,
-          yours: true,
-          retryAfterSeconds: waitSec,
-        };
-      }
-    }
     return { allowed: true, yours: true };
+  }
+
+  /**
+   * Add contacts to this account's running batch.
+   *
+   * The batch loop reads the job list as it goes, so a job added here runs
+   * after the ones already queued. A contact already queued or running in
+   * the batch is not added twice; one that finished can run again, which is
+   * a second research round.
+   *
+   * @returns The batch and how many jobs joined it, or null when the batch
+   *   is not this account's or has finished.
+   */
+  appendToBatch(
+    scope: Scope,
+    batchId: string,
+    contacts: Array<{ id: string; name: string }>,
+    depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
+  ): { batch: AISearchBatch; added: number } | null {
+    const batch = this.getBatch(scope, batchId);
+    if (!batch || batch.status !== "processing") return null;
+    const pending = new Set(
+      batch.jobs
+        .filter((job) =>
+          ["queued", "searching", "merging"].includes(job.status),
+        )
+        .map((job) => job.contactId),
+    );
+    let added = 0;
+    for (const contact of contacts) {
+      if (pending.has(contact.id) || batch.jobs.length >= 100) continue;
+      pending.add(contact.id);
+      batch.jobs.push({
+        id: crypto.randomUUID(),
+        contactId: contact.id,
+        contactName: contact.name,
+        status: "queued",
+        fieldsUpdated: 0,
+        depth,
+      });
+      added += 1;
+    }
+    log.info("AISearchQueue", `Batch ${batchId}: ${added} job(s) joined`);
+    this.emit(batchId, batch);
+    return { batch, added };
   }
 
   /**
@@ -180,6 +231,7 @@ class AISearchJobQueue extends EventEmitter {
     scope: Scope,
     contacts: Array<{ id: string; name: string }>,
     strategyName: string,
+    depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
   ): AISearchBatch {
     // Lazy GC: clean up old completed batches
     this.gc();
@@ -193,6 +245,7 @@ class AISearchJobQueue extends EventEmitter {
       contactName: c.name,
       status: "queued" as AISearchJobStatus,
       fieldsUpdated: 0,
+      depth,
     }));
 
     const batch: AISearchBatch = {
@@ -207,7 +260,7 @@ class AISearchJobQueue extends EventEmitter {
     this.batches.set(batchId, { batch, ownerId: scope.ownerId });
     log.info(
       "AISearchQueue",
-      `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}`,
+      `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}, depth: ${depth}`,
     );
     return batch;
   }
@@ -257,10 +310,15 @@ class AISearchJobQueue extends EventEmitter {
           job.status = "searching";
           job.startedAt = new Date().toISOString();
           this.emit(batchId, batch);
-          const prompt = buildSearchPrompt(contact);
+          // A contact researched before gets a second round: the prompt
+          // names what is known, the sites already read, and what is missing.
+          const depth = job.depth ?? DEFAULT_RESEARCH_DEPTH;
+          const history = researchHistory(contact);
+          const prompt = buildSearchPrompt(contact, history);
           const result = await withTimeout(
-            (signal) => strategy.execute(contact, prompt, signal),
-            90_000,
+            (signal) =>
+              strategy.execute(contact, prompt, signal, { depth, history }),
+            RESEARCH_TIMEOUT_MS[depth],
             controller.signal,
           );
           controller.signal.throwIfAborted();
@@ -270,9 +328,16 @@ class AISearchJobQueue extends EventEmitter {
             scope,
             job.contactId,
             contact,
-            result.data as AISearchOutput,
-            result.citations,
+            result.data,
+            result,
           );
+          job.models = result.models.slice(0, 4);
+          job.outcome =
+            result.outcome === "no-public-info"
+              ? "no-public-info"
+              : job.fieldsUpdated > 0
+                ? "added"
+                : "nothing-new";
           job.status = "success";
           batch.totalTokens += result.tokenCount ?? 0;
         } catch (error) {
@@ -299,7 +364,6 @@ class AISearchJobQueue extends EventEmitter {
     } finally {
       if (this.controllers.get(batchId) === controller) {
         this.processing = false;
-        this.lastBatchCompletedAt.set(owned.ownerId, new Date());
         this.controllers.delete(batchId);
       }
       batch.status = controller.signal.aborted ? "cancelled" : "complete";
@@ -359,8 +423,8 @@ class AISearchJobQueue extends EventEmitter {
    * Who is enriching and how much is left, across the whole instance.
    *
    * For the admin health panel. Unlike the dedupe queue this one has no line:
-   * a second account's batch is refused with a cooldown rather than booked,
-   * so there is a running owner and nothing behind it.
+   * a second account's batch is refused rather than booked, so there is a
+   * running owner and nothing behind it.
    */
   instanceState(): {
     running: OwnerId | null;
@@ -409,7 +473,6 @@ class AISearchJobQueue extends EventEmitter {
     this.controllers.clear();
     this.batches.clear();
     this.processing = false;
-    this.lastBatchCompletedAt.clear();
   }
 }
 

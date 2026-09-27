@@ -15,6 +15,7 @@ import type {
   ContactAddress,
 } from "../../../types";
 import { cn } from "../../../lib/utils";
+import type { ResearchAnchor } from "../../../lib/research";
 import { formatWhen } from "../../../lib/datetime";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 
@@ -41,6 +42,19 @@ export interface DetailsCardProps {
   updateContact: {
     mutate: (args: { id: string; data: ContactUpdateData }) => void;
   };
+  /**
+   * The Research card asked for a detail: "city" opens Location's add form
+   * and "workEmail" opens Email's, labelled work. `onDetailRequestDone`
+   * spends the request once the field has opened.
+   */
+  detailRequest?: DetailRequest | null;
+  onDetailRequestDone?: () => void;
+}
+
+/** A detail another part of the page asked to add, once per `key`. */
+export interface DetailRequest {
+  anchor: ResearchAnchor;
+  key: number;
 }
 
 /**
@@ -70,7 +84,13 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   contactId,
   onUpdate,
   updateContact,
+  detailRequest,
+  onDetailRequestDone,
 }) => {
+  // The Research card's "Add a city" and "Add a work email" open these
+  // fields labelled "work": research looks for the person at their job.
+  const requestFor = (anchor: ResearchAnchor) =>
+    detailRequest?.anchor === anchor ? detailRequest.key : undefined;
   /**
    * The addresses, from the address list or from the single legacy
    * `location` field. The mini map under the rows reads the same list, so a
@@ -165,6 +185,9 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           noun="address"
           addLabel="Add location"
           inputPlaceholder="San Francisco, CA"
+          openRequest={requestFor("city")}
+          openLabel="work"
+          onOpenRequestDone={onDetailRequestDone}
           isAddress
           mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
           afterRows={
@@ -199,6 +222,9 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           noun="email"
           addLabel="Add email"
           inputPlaceholder="email@example.com"
+          openRequest={requestFor("workEmail")}
+          openLabel="work"
+          onOpenRequestDone={onDetailRequestDone}
         />
       </Field>
 

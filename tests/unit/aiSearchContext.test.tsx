@@ -81,7 +81,10 @@ describe("startSearch", () => {
   it("keeps a limit on the page and out of the toasts by default", () => {
     const { latest } = mount();
     act(() => latest().startSearch(["c1"]));
-    expect(start.mutate).toHaveBeenCalledWith(["c1"], expect.any(Object));
+    expect(start.mutate).toHaveBeenCalledWith(
+      { contactIds: ["c1"], depth: undefined },
+      expect.any(Object),
+    );
 
     act(() => lastCallbacks().onError(lockedByOthers()));
     expect(latest().limitMessage).toBe(MESSAGE);
@@ -108,13 +111,23 @@ describe("startSearch", () => {
     expect(latest().limitMessage).toBeNull();
   });
 
-  it("toasts the start for one contact in the singular", () => {
+  it("sends the depth the caller chose", () => {
+    const { latest } = mount();
+    act(() => latest().startSearch(["c1"], { depth: "deep" }));
+    expect(start.mutate).toHaveBeenCalledWith(
+      { contactIds: ["c1"], depth: "deep" },
+      expect.any(Object),
+    );
+  });
+
+  it("starts without a toast: the progress panel says it", () => {
+    // The panel opens at the toasts' corner, and a success toast over it
+    // said what the panel already showed.
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { limitAs: "toast" }));
     act(() => lastCallbacks().onSuccess({ batchId: "b1", jobCount: 1 }));
-    expect(toastMock.success).toHaveBeenCalledWith(
-      "Enrichment started for 1 contact",
-    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(latest().isVisible).toBe(true);
   });
 
   it("keeps one identity across renders, so the context value stays put", () => {

@@ -37,6 +37,7 @@ export function contactFingerprint(contact: object): string {
     "aiBriefing",
     "aiBriefingAt",
     "aiHydratedAt",
+    "aiResearch",
   ]);
   return contentHash(
     JSON.stringify(contact, (key, value) =>

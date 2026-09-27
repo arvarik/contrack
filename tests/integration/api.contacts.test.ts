@@ -352,4 +352,39 @@ describe("dedupeOnCreate and autoEnrich preferences on contact creation", () => 
     batchSpy.mockRestore();
     processSpy.mockRestore();
   });
+
+  it("adds the new contact to the account's running batch instead of starting another", async () => {
+    const { jobQueue } =
+      await import("../../server/services/aiSearch/jobQueue.ts");
+    const strat =
+      await import("../../server/services/aiSearch/strategies/index.ts");
+    const stratSpy = vi
+      .spyOn(strat, "validateEnrichmentStrategy")
+      .mockReturnValue("two-pass");
+    const checkSpy = vi
+      .spyOn(jobQueue, "canStartBatch")
+      .mockReturnValue({ allowed: true, yours: true, appendTo: "running" });
+    const appendSpy = vi.spyOn(jobQueue, "appendToBatch").mockReturnValue(null);
+    const batchSpy = vi.spyOn(jobQueue, "createBatch");
+
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ autoEnrich: true });
+    const res = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Joining Person" });
+    expect(res.status).toBe(201);
+    expect(appendSpy).toHaveBeenCalledWith(expect.anything(), "running", [
+      { id: res.body.id, name: "Joining Person" },
+    ]);
+    expect(batchSpy).not.toHaveBeenCalled();
+
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ autoEnrich: false });
+    stratSpy.mockRestore();
+    checkSpy.mockRestore();
+    appendSpy.mockRestore();
+    batchSpy.mockRestore();
+  });
 });

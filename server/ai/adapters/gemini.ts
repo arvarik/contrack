@@ -132,10 +132,16 @@ export function thinkingLevelFor(
   model: string,
   modelClass: ModelClass | undefined,
   grounded: boolean,
-): "low" | undefined {
+  requested?: "low" | "medium" | "high",
+): "low" | "medium" | "high" | undefined {
   const config = getModelConfig(model);
   const generation = config?.generation ?? extractGeneration(model) ?? 0;
   if (generation < 3) return undefined;
+  // A caller that asks for a level gets it. Contact research's search pass
+  // asks for "high" with a 16,384-token budget: on the same research prompt,
+  // Gemini 3.8 Flash searched 0 of 3 times at "low" and 5 of 5 at "high"
+  // (2026-09-26).
+  if (requested) return requested;
   const cls = config?.modelClass ?? modelClass;
   if (!grounded && cls === "lite") return undefined;
   if (/flash-lite/i.test(model) && !grounded) return undefined;
@@ -396,6 +402,7 @@ export class GeminiAdapter implements AIProvider {
           model,
           options.routing?.prefer,
           !!options.enableSearchGrounding,
+          options.thinkingLevel,
         );
     if (thinkingLevel) config.thinkingConfig = { thinkingLevel };
 
@@ -448,7 +455,18 @@ export class GeminiAdapter implements AIProvider {
     }
 
     let text = response.text ?? "";
-    const tokenCount = response.usageMetadata?.totalTokenCount;
+    const metadata = response.usageMetadata;
+    const tokenCount = metadata?.totalTokenCount;
+    // The search results Gemini read count as input, and its thinking is
+    // billed as output.
+    const usage = metadata && {
+      inputTokens:
+        (metadata.promptTokenCount ?? 0) +
+        (metadata.toolUsePromptTokenCount ?? 0),
+      outputTokens:
+        (metadata.candidatesTokenCount ?? 0) +
+        (metadata.thoughtsTokenCount ?? 0),
+    };
     const latencyMs = Date.now() - startMs;
 
     // Validate JSON at the adapter boundary so downstream callers never
@@ -477,6 +495,44 @@ export class GeminiAdapter implements AIProvider {
           ) ?? [],
       )
       .slice(0, 30);
-    return { text, model, tokenCount, latencyMs, citations };
+    // The searches Gemini chose to run. A grounded answer that cites nothing
+    // still lists them, which tells "searched and found nobody" apart from
+    // "answered without searching".
+    const searchQueries = [
+      ...new Set(
+        response.candidates?.flatMap(
+          (candidate) => candidate.groundingMetadata?.webSearchQueries ?? [],
+        ) ?? [],
+      ),
+    ];
+    // Which pages back which passage: the dossier links each fact to its page
+    // from these, even when the answer forgot to name the site.
+    const supports =
+      response.candidates?.flatMap((candidate) => {
+        const chunks = candidate.groundingMetadata?.groundingChunks ?? [];
+        return (candidate.groundingMetadata?.groundingSupports ?? []).flatMap(
+          (support) => {
+            const passage = support.segment?.text?.trim();
+            const uris = (support.groundingChunkIndices ?? [])
+              .map((index) => chunks[index]?.web?.uri)
+              .filter(
+                (uri): uri is string => !!uri && /^https?:\/\//i.test(uri),
+              );
+            return passage && uris.length > 0
+              ? [{ text: passage.slice(0, 600), uris }]
+              : [];
+          },
+        );
+      }) ?? [];
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(usage && { usage }),
+      latencyMs,
+      citations,
+      ...(searchQueries.length > 0 && { searchQueries }),
+      ...(supports.length > 0 && { supports }),
+    };
   }
 }

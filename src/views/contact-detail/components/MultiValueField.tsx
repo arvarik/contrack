@@ -25,6 +25,7 @@
  * @module views/contact-detail/components/MultiValueField
  */
 import React, { useEffect, useId, useRef, useState } from "react";
+import { scrollBehavior } from "../../../lib/a11y";
 import { toast } from "sonner";
 import { Check, GripVertical, MapPin, Star, Trash2 } from "lucide-react";
 import {
@@ -300,6 +301,16 @@ export interface MultiValueFieldProps {
    * value goes in under it.
    */
   afterRows?: React.ReactNode;
+  /**
+   * A request from elsewhere on the page to open the add form, such as the
+   * Research card's "Add a city". A new number opens it, brings it into
+   * view, and calls `onOpenRequestDone`, so the request is spent and the
+   * form does not open again when the field mounts later.
+   */
+  openRequest?: number;
+  /** The label the requested form starts with: "work" for a work email. */
+  openLabel?: string;
+  onOpenRequestDone?: () => void;
 }
 
 export const MultiValueField = ({
@@ -312,6 +323,9 @@ export const MultiValueField = ({
   isAddress = false,
   mapHref,
   afterRows,
+  openRequest,
+  openLabel,
+  onOpenRequestDone,
 }: MultiValueFieldProps) => {
   const firstLabel = labelOptions[0] || "work";
   const [adding, setAdding] = useState(false);
@@ -354,6 +368,21 @@ export const MultiValueField = ({
     focusAdd.current = false;
     addButton.current?.focus();
   }, [adding]);
+
+  // Opened from elsewhere: the form opens with its input focused (it
+  // autofocuses as it appears), and the field scrolls to the middle of the
+  // view so the person sees where the typing goes.
+  useEffect(() => {
+    if (openRequest === undefined) return;
+    addOpen.current = true;
+    setAdding(true);
+    if (openLabel) setDraftLabel(openLabel);
+    wrapper.current?.scrollIntoView?.({
+      block: "center",
+      behavior: scrollBehavior(),
+    });
+    onOpenRequestDone?.();
+  }, [openRequest, openLabel, onOpenRequestDone]);
 
   useEffect(() => {
     const target = focusAfterSave.current;

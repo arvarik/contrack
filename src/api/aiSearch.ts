@@ -1,6 +1,7 @@
 import { apiFetch, ApiError } from "./client";
 import { aiSearchBatchSchema } from "../../shared/aiSearchContract";
 import { invalidateContactViews } from "./contactCache";
+import type { ResearchDepth } from "../../shared/researchDepth";
 /**
  * AI Search — React Query hooks and SSE streaming.
  *
@@ -21,7 +22,14 @@ const API_BASE = "/api";
 
 export const useStartAISearch = () => {
   return useMutation({
-    mutationFn: async (contactIds: string[]) => {
+    mutationFn: async ({
+      contactIds,
+      depth,
+    }: {
+      contactIds: string[];
+      /** How thoroughly to research. The server's default is "standard". */
+      depth?: ResearchDepth;
+    }) => {
       // `apiFetch` throws `ApiError` for any non-2xx, with the message read
       // out of the standard `{ error: { code, message } }` envelope, so the
       // caller's `onError` toast shows the server's own words. The cooldown
@@ -31,9 +39,15 @@ export const useStartAISearch = () => {
       const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds }),
+        body: JSON.stringify({ contactIds, depth }),
       });
-      return res.json() as Promise<{ batchId: string; jobCount: number }>;
+      // `appended`: the contacts joined this account's running batch, whose
+      // id this is, instead of starting one.
+      return res.json() as Promise<{
+        batchId: string;
+        jobCount: number;
+        appended?: boolean;
+      }>;
     },
   });
 };

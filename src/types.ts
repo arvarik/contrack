@@ -167,6 +167,8 @@ export interface Contact {
   aiBriefingAt?: string | null;
   aiSummary?: string | null;
   aiBackground?: string | null;
+  /** Research record JSON (shared/researchRecord.ts), from enrichment. */
+  aiResearch?: string | null;
   aiHydratedAt?: string | null;
   // Relations (populated by server JOINs)
   emails: ContactEmail[];
@@ -184,6 +186,11 @@ export interface Contact {
   relationshipScore?: number;
   /** Computed by API — number of social links (available in slim view) */
   socialLinkCount?: number;
+  /**
+   * Computed by the API in the slim view: the last research run's outcome,
+   * or null before any run.
+   */
+  researchOutcome?: "added" | "nothing-new" | "no-public-info" | null;
   /** True when returned via approximate/fuzzy matching rather than exact FTS5 match */
   approximate?: boolean;
   matchType?: "exact" | "approximate";

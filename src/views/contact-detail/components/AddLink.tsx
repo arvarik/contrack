@@ -35,6 +35,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
+import { scrollBehavior } from "../../../lib/a11y";
 
 /**
  * A scheme: letters before the first colon, with no dot, so that
@@ -102,9 +103,22 @@ export interface AddLinkProps {
   onAdd: (url: string) => void;
   /** The narrow header's form: the plus alone, with the words in the name. */
   iconOnly?: boolean;
+  /**
+   * A request from elsewhere on the page to open the field, such as the
+   * Research card's "Add a link". A new number opens it and brings it into
+   * view, and `onOpenRequestDone` spends the request.
+   */
+  openRequest?: number;
+  onOpenRequestDone?: () => void;
 }
 
-export const AddLink = ({ links, onAdd, iconOnly = false }: AddLinkProps) => {
+export const AddLink = ({
+  links,
+  onAdd,
+  iconOnly = false,
+  openRequest,
+  onOpenRequestDone,
+}: AddLinkProps) => {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +138,20 @@ export const AddLink = ({ links, onAdd, iconOnly = false }: AddLinkProps) => {
     refocus.current = false;
     button.current?.focus();
   }, [adding]);
+
+  // Opened from elsewhere: the header scrolls into view, and the field
+  // opens in the button's place with its input focused.
+  useEffect(() => {
+    if (openRequest === undefined) return;
+    button.current?.scrollIntoView?.({
+      block: "center",
+      behavior: scrollBehavior(),
+    });
+    closing.current = false;
+    setError(null);
+    setAdding(true);
+    onOpenRequestDone?.();
+  }, [openRequest, onOpenRequestDone]);
 
   const open = () => {
     closing.current = false;

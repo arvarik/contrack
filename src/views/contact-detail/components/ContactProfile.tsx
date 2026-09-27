@@ -59,7 +59,8 @@ import { useFitsHeight } from "../../../hooks/useFitsHeight";
 import { ContactIntro, ProfileHeader } from "./ProfileHeader";
 import { useTrackShortcut } from "./useTrackShortcut";
 import { ContactTags } from "./ContactTags";
-import { DetailsCard } from "./DetailsCard";
+import { DetailsCard, type DetailRequest } from "./DetailsCard";
+import type { ResearchAnchor } from "../../../lib/research";
 /**
  * Behind a tab the user has to click, so it has no business in the chunk that
  * blocks the first render of a contact.
@@ -156,6 +157,17 @@ export const ContactProfile = ({
   /** The pencil on the avatar, where focus goes back when the picker closes. */
   const avatarEdit = useRef<HTMLButtonElement>(null);
   const [activeTab, setActiveTab] = useState<Section>("timeline");
+  /**
+   * A detail the Research card asked for, when research found no page: the
+   * field it names opens, in Details or in the header. Narrow, Details is a
+   * tab, so that tab opens first, and the field opens as it mounts. The field
+   * spends the request once it has opened, so a later visit to the tab does
+   * not open it again.
+   */
+  const [detailRequest, setDetailRequest] = useState<DetailRequest | null>(
+    null,
+  );
+  const spendDetailRequest = useCallback(() => setDetailRequest(null), []);
 
   // ── Layout ────────────────────────────────────────────────────────────
   // Elements from callback refs, so the hooks see them on the render that
@@ -166,6 +178,13 @@ export const ContactProfile = ({
   // Only the answer, not the width: a drag of the list's edge resizes this
   // pane on every frame, and the page renders again only when it crosses.
   const wide = useElementWidthAtLeast(root, WIDE_CONTACT_MIN_PX) ?? false;
+  const addDetail = useCallback(
+    (anchor: ResearchAnchor) => {
+      if (!wide && anchor !== "link") setActiveTab("details");
+      setDetailRequest({ anchor, key: Date.now() });
+    },
+    [wide],
+  );
   // 16 px above the column and 32 px under it.
   const detailsFit = useFitsHeight(details, scroller, 48);
   /**
@@ -303,7 +322,11 @@ export const ContactProfile = ({
 
   const dossier = (
     <Suspense fallback={<DossierFallback />}>
-      <DossierTab contact={contact} generateBriefing={generateBriefing} />
+      <DossierTab
+        contact={contact}
+        generateBriefing={generateBriefing}
+        onAddDetail={addDetail}
+      />
     </Suspense>
   );
 
@@ -330,6 +353,10 @@ export const ContactProfile = ({
             unarchiveContact={unarchiveContact}
             updateContact={updateContact}
             promoteGhost={promoteGhost}
+            linkRequest={
+              detailRequest?.anchor === "link" ? detailRequest.key : undefined
+            }
+            onLinkRequestDone={spendDetailRequest}
           />
 
           {/* ── Dupe Suggestion Banner ──────────────────────────────────── */}
@@ -402,6 +429,8 @@ export const ContactProfile = ({
                     contactId={id}
                     onUpdate={handleUpdate}
                     updateContact={updateContact}
+                    detailRequest={detailRequest}
+                    onDetailRequestDone={spendDetailRequest}
                   />
                 </div>
               )}

@@ -428,7 +428,11 @@ export class OpenAIAdapter implements AIProvider {
     // can't narrow them at our call site. We assert the non-streaming branch here.
     interface ChatCompletionResponse {
       choices?: Array<{ message?: { content?: string | null } }>;
-      usage?: { total_tokens?: number };
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      };
     }
     const response = await this.withEffort(model, options, (effort) => {
       const requestParams: Record<string, unknown> = { model, messages };
@@ -458,7 +462,18 @@ export class OpenAIAdapter implements AIProvider {
       "OpenAIAdapter",
       `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
     );
-    return { text, model, tokenCount, latencyMs };
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(response.usage && {
+        usage: {
+          inputTokens: response.usage.prompt_tokens ?? 0,
+          outputTokens: response.usage.completion_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+    };
   }
 
   // ── Responses API with web_search tool ────────────────────────────────
@@ -484,9 +499,17 @@ export class OpenAIAdapter implements AIProvider {
           text?: string;
           annotations?: Array<{ type?: string; url?: string; title?: string }>;
         }>;
-        action?: { sources?: ResponsesSource[] };
+        action?: {
+          sources?: ResponsesSource[];
+          query?: string;
+          queries?: string[];
+        };
       }>;
-      usage?: { total_tokens?: number };
+      usage?: {
+        total_tokens?: number;
+        input_tokens?: number;
+        output_tokens?: number;
+      };
     }
     const response = await this.withEffort(model, options, (effort) => {
       const requestParams: Record<string, unknown> = {
@@ -516,9 +539,15 @@ export class OpenAIAdapter implements AIProvider {
     let text = "";
     const cited: ResponsesSource[] = [];
     const consulted: ResponsesSource[] = [];
+    const queries: string[] = [];
     for (const item of response.output ?? []) {
-      if (item.type === "web_search_call")
+      if (item.type === "web_search_call") {
         consulted.push(...(item.action?.sources ?? []));
+        queries.push(
+          ...(item.action?.queries ??
+            (item.action?.query ? [item.action.query] : [])),
+        );
+      }
       if (item.type !== "message" || !Array.isArray(item.content)) continue;
       for (const block of item.content) {
         if (block.type !== "output_text" || typeof block.text !== "string")
@@ -537,6 +566,20 @@ export class OpenAIAdapter implements AIProvider {
       "OpenAIAdapter",
       `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens | ${citations.length} sources`,
     );
-    return { text, model, tokenCount, latencyMs, citations };
+    const searchQueries = [...new Set(queries)];
+    return {
+      text,
+      model,
+      tokenCount,
+      ...(response.usage && {
+        usage: {
+          inputTokens: response.usage.input_tokens ?? 0,
+          outputTokens: response.usage.output_tokens ?? 0,
+        },
+      }),
+      latencyMs,
+      citations,
+      ...(searchQueries.length > 0 && { searchQueries }),
+    };
   }
 }

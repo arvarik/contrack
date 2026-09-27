@@ -210,3 +210,21 @@ describe("AddLink", () => {
     expect(add.className).toContain("size-6");
   });
 });
+
+describe("AddLink, opened from elsewhere on the page", () => {
+  it("opens its field focused, and spends the request", () => {
+    const done = vi.fn();
+    render(
+      <AddLink
+        links={[]}
+        onAdd={vi.fn()}
+        openRequest={1}
+        onOpenRequestDone={done}
+      />,
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "New link" }),
+    );
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+});

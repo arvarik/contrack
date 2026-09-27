@@ -413,7 +413,13 @@ type SlimContactRow = Pick<
   | "trackedAt"
   | "aiHydratedAt"
   | "birthday"
->;
+> & {
+  /** The last research run's outcome, read from `aiResearch` in SQL. */
+  researchOutcome: string | null;
+};
+
+/** The outcomes a research run records (shared/researchRecord.ts). */
+const RESEARCH_OUTCOMES = new Set(["added", "nothing-new", "no-public-info"]);
 
 export const contactService = {
   createContact(
@@ -492,7 +498,13 @@ export const contactService = {
           try {
             const strategy = validateEnrichmentStrategy();
             const check = jobQueue.canStartBatch(scope);
-            if (check.allowed) {
+            // While this account's batch runs, the new contact joins it. A
+            // batch created beside it would never run.
+            if (check.appendTo) {
+              jobQueue.appendToBatch(scope, check.appendTo, [
+                { id, name: body.name },
+              ]);
+            } else if (check.allowed) {
               const batch = jobQueue.createBatch(
                 scope,
                 [{ id, name: body.name }],
@@ -1064,7 +1076,11 @@ export const contactService = {
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday
+             lat, lng, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday,
+             -- The last run's outcome, for the Enrichment page's "Found
+             -- nothing" filter, without sending every record's JSON.
+             CASE WHEN json_valid(aiResearch)
+               THEN json_extract(aiResearch, '$.runs[#-1].outcome') END AS researchOutcome
       FROM contacts
       WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC
@@ -1171,6 +1187,10 @@ export const contactService = {
       isGhost: !!r.isGhost,
       isArchived: !!r.isArchived,
       isTracked: !!r.isTracked,
+      researchOutcome:
+        r.researchOutcome && RESEARCH_OUTCOMES.has(r.researchOutcome)
+          ? r.researchOutcome
+          : null,
       tags: tagsByContact.get(r.id) || [],
       lists: listsByContact.get(r.id) || [],
       interactionCount: interactionMap.get(r.id) || 0,

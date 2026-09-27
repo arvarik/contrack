@@ -18,6 +18,7 @@ import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/inde
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
 import { AppError, RateLimitedError } from "../utils/AppError.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { researchDepthSchema } from "../../shared/researchDepth.ts";
 
 export const aiSearchRouter = Router();
 
@@ -26,10 +27,10 @@ export const aiSearchRouter = Router();
 // =============================================================================
 
 /** Caps batch size at 100 to prevent accidental mega-batches */
-// NOTE: The design doc (§8) specifies express-rate-limit on this endpoint
-// (max 5/hr). Omitted intentionally — this is a single-user local app and
-// the in-memory 5-minute cooldown in jobQueue.canStartBatch() provides
-// equivalent protection. Add express-rate-limit if deploying multi-tenant.
+// NOTE: There is no rate limit of our own here. A 5-minute cooldown refused a
+// second enrichment with 429 while the provider had capacity to spare, and
+// the provider's own 429 already pauses a model in the adapter. One batch
+// runs at a time, and a second start by the same account joins it.
 const aiSearchBodySchema = z.object({
   contactIds: z
     .array(z.string().trim().min(1).max(100))
@@ -40,6 +41,8 @@ const aiSearchBodySchema = z.object({
       "Contact IDs must be unique",
     ),
   strategy: z.enum(["two-pass", "single-pass", "searxng"]).optional(),
+  /** How thoroughly to research each contact. Default "standard". */
+  depth: researchDepthSchema.optional(),
 });
 
 // =============================================================================
@@ -51,17 +54,18 @@ aiSearchRouter.post(
   validateBody(aiSearchBodySchema),
   asyncHandler(async (req, res, next) => {
     const scope = scopeOf(req);
-    const { contactIds, strategy: requestedStrategy } = req.body;
+    const { contactIds, strategy: requestedStrategy, depth } = req.body;
 
     const strategy = validateEnrichmentStrategy(requestedStrategy);
 
-    // Canary guard — the global run lock and this account's own cooldown.
+    // The global run lock: another account's batch holds it. This account's
+    // own running batch does not refuse; the new contacts join it below.
     const check = jobQueue.canStartBatch(scope);
     if (!check.allowed) {
       // This used to be a bare `res.status(429).json({ error: string })`,
       // which is the one place in the API that did not send the standard
-      // envelope. `details.yours` says whether the caller's own cooldown
-      // refused, or somebody else's batch holds the shared provider lock.
+      // envelope. `details.yours` is false: somebody else's batch holds the
+      // shared provider lock.
       return next(
         new RateLimitedError(check.reason ?? "Please try again shortly.", {
           yours: check.yours,
@@ -79,8 +83,30 @@ aiSearchRouter.post(
       contacts.push({ id: contact.id, name: contact.name });
     }
 
+    // Join this account's running batch, when there is one. A batch that is
+    // running holds the lock, so a second batch started beside it would never
+    // run: a join that fails is refused, not turned into a new batch.
+    if (check.appendTo) {
+      const joined = jobQueue.appendToBatch(
+        scope,
+        check.appendTo,
+        contacts,
+        depth,
+      );
+      if (!joined)
+        throw new AppError(
+          "Research is finishing. Try again in a moment.",
+          409,
+        );
+      return res.json({
+        batchId: joined.batch.id,
+        jobCount: joined.added,
+        appended: true,
+      });
+    }
+
     // Create batch
-    const batch = jobQueue.createBatch(scope, contacts, strategy);
+    const batch = jobQueue.createBatch(scope, contacts, strategy, depth);
 
     // Kick off processing async (fire-and-forget — don't await)
     jobQueue.processBatch(batch.id).catch((err) => {

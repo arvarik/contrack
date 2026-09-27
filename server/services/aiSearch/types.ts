@@ -6,6 +6,12 @@
 // =============================================================================
 
 import type { HydratedContact } from "../../repositories/types.ts";
+import type {
+  ResearchFinding,
+  ResearchRecord,
+  ResearchUsage,
+} from "../../../shared/researchRecord.ts";
+import type { ResearchDepth } from "../../../shared/researchDepth.ts";
 
 // =============================================================================
 // Job Lifecycle
@@ -32,10 +38,34 @@ export interface AISearchResult {
   tokenCount?: number;
   /** Wall-clock total across all passes */
   latencyMs: number;
-  /** Grounding citations from Pass 1 groundingMetadata — for provenance */
+  /** The pages the research cited, with real addresses — for provenance */
   citations?: Array<{ title: string; uri: string }>;
-  /** Raw grounded text from Pass 1 — saved as aiBackground (dossier) */
+  /** Raw grounded text from Pass 1 */
   groundedText?: string;
+  /** The facts Pass 1 reported, one per line, kept for the dossier */
+  findings?: ResearchFinding[];
+  /** The web searches Pass 1 ran, when the provider reports them */
+  searchQueries?: string[];
+  /**
+   * `"no-public-info"` when the research searched and no page was about this
+   * person. The data is empty then, and the run is recorded, not failed.
+   */
+  outcome?: "found" | "no-public-info";
+  /** The depth the research ran at. */
+  depth?: ResearchDepth;
+  /** What the research spent, over every call it made. */
+  usage?: ResearchUsage;
+}
+
+/** How one research run should go. */
+export interface ResearchOptions {
+  /** How thoroughly to research. Default "standard". */
+  depth?: ResearchDepth;
+  /**
+   * The contact's research so far, which the prompt was built from. A deep
+   * run builds its second, complete-profile ask from it too.
+   */
+  history?: ResearchRecord | null;
 }
 
 /**
@@ -51,6 +81,8 @@ export interface AISearchStrategy {
    *
    * @param contact - Fully hydrated contact with all child records
    * @param prompt - Pre-built research prompt from promptTemplate
+   * @param options - The depth and the deadline. Single-pass and SearXNG
+   *   research have one depth, and ignore them.
    * @returns Structured result with extracted data, models used, and metrics
    * @throws Error if both passes fail (rate limit, validation, network, etc.)
    */
@@ -58,5 +90,6 @@ export interface AISearchStrategy {
     contact: HydratedContact,
     prompt: string,
     signal?: AbortSignal,
+    options?: ResearchOptions,
   ): Promise<AISearchResult>;
 }

@@ -378,6 +378,25 @@ describe("AI_DEFAULTS", () => {
   });
 });
 
+describe("withRetry: an account out of credit", () => {
+  it("says so, in the provider's words, without retrying", async () => {
+    const op = vi.fn(async () => {
+      throw Object.assign(
+        new Error(
+          '{"error":{"code":402,"message":"Your prepayment credits are depleted. Please go to AI Studio to manage your project and billing.","status":"RESOURCE_EXHAUSTED"}}',
+        ),
+        { status: 402 },
+      );
+    });
+    await expect(withRetry(op)).rejects.toMatchObject({
+      code: "AI_BILLING",
+      statusCode: 402,
+      message: expect.stringContaining("prepayment credits are depleted"),
+    });
+    expect(op).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("withRetry: a model the provider does not serve", () => {
   it("says so, in the provider's words, without retrying", async () => {
     const op = vi.fn(async () => {

@@ -6,15 +6,15 @@ failures and preserves access to active batch progress.
 
 ## Request limits
 
-| Control             | Behavior                                                                                        |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| Generation queue    | Two active calls and 16 waiting calls per server. Overflow returns `429 AI_BUSY`.               |
-| Generation deadline | 60 seconds by default, capped at 90 seconds. Queue time and retries consume this deadline.      |
-| Output limit        | 4,096 tokens by default. Individual features set smaller limits where appropriate.              |
-| Transient failures  | At most one application retry. Native SDK automatic retries are disabled.                       |
-| Invalid output      | JSON and schema failures do not trigger another generation.                                     |
-| Enrichment          | One workflow per contact. One grounding call and one extraction call for the two-pass strategy. |
-| Batch size          | 1 to 100 unique active contacts. A five-minute cooldown follows a batch.                        |
+| Control             | Behavior                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generation queue    | Two active calls and 16 waiting calls per server. Overflow returns `429 AI_BUSY`.                                                                                           |
+| Generation deadline | 60 seconds by default, capped at 150 seconds. Queue time and retries consume this deadline.                                                                                 |
+| Output limit        | 4,096 tokens by default. Individual features set smaller limits where appropriate.                                                                                          |
+| Transient failures  | At most one application retry. Native SDK automatic retries are disabled.                                                                                                   |
+| Invalid output      | JSON and schema failures do not trigger another generation.                                                                                                                 |
+| Enrichment          | One workflow per contact. The two-pass strategy makes one search call, two at Deep, and one extraction call. When no first search cites a page, two more are asked at once. |
+| Batch size          | 1 to 100 unique active contacts. A start while the account's own batch runs joins that batch.                                                                               |
 
 Cancellation removes queued work and stops later steps. The SDK receives the
 abort signal for active work. Cancellation cannot reverse provider charges
@@ -49,13 +49,18 @@ the delay Google names, and the retry goes to the next model.
 - Missing AI configuration returns an actionable error. It does not return
   demonstration summaries as real results.
 
-Gemini enrichment carries provider source links into the dossier. The UI
-renders safe external links and ignores raw HTML and images. Source links
-help users review research. They do not prove every extracted claim.
+Enrichment records the pages the provider cited in the contact's research
+record (`aiResearch`). The server resolves Gemini's redirect links to the real
+addresses with a `HEAD` request and does not read the pages. The Research card
+renders safe external links and ignores raw HTML and images. Source links help
+users review research. They do not prove every extracted claim.
 
-The two-pass strategy requires source links from the provider. If the provider
-omits them, the server returns `502 AI_GROUNDING_MISSING` before extraction.
-It saves no contact changes and makes no additional generation call.
+The two-pass strategy requires source links from the provider. A search pass
+that cites no pages is asked twice more, at once, in two other forms. If no
+ask cites a page, the prompt's own reply for that case records "no public
+information" and changes no field. Any other answer returns
+`502 AI_GROUNDING_MISSING` before extraction. If no ask returns any text, the
+server returns `502 AI_NO_ANSWER`. Neither error saves a contact change.
 
 ## Progress and recovery
 
