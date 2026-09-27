@@ -236,6 +236,14 @@ export async function withRetry<T>(
       503,
       { code: "AI_AUTH_FAILED" },
     );
+  // Gemini answers 402 when a prepaid project has used its credit
+  // (2026-09-26). Time does not fix it, and "failed after retries" hid why.
+  if (status === 402)
+    throw new AppError(
+      `The AI provider refused the request for billing. ${providerMessage(e?.message)}`.trim(),
+      402,
+      { code: "AI_BILLING" },
+    );
   if (status === 404)
     throw new AppError(
       `The AI provider has no such model for this key. ${providerMessage(e?.message)}`.trim(),
