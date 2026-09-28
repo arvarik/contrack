@@ -1,3 +1,4 @@
+import { installPassageIndex } from "./services/search/passageIndex.ts";
 /**
  * Database Initialization — SQLite connection, Drizzle ORM, FTS5, and triggers.
  *
@@ -2544,4 +2545,5 @@ if (contactsMissingHash.length > 0) {
   );
 }
 
+installPassageIndex(sqlite, Number(vecTableWidth("search_embeddings")));
 installSearchVectorTriggers(sqlite);

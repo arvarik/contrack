@@ -333,6 +333,8 @@ async function startServer() {
     })
     .catch((err) => {
       log.warn("Server", `Embedding init/backfill failed: ${err.message}`);
+      // The backfill persists unfinished jobs before it calls the embedding model.
+      initSearchIndexQueue();
     });
 }
 

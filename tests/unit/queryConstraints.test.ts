@@ -170,6 +170,23 @@ describe("query constraint compilation", () => {
     expect(result.must.industryMatchers).toBeUndefined();
   });
 
+  it.each([
+    [
+      "Who builds artificial hands for people with limb loss?",
+      "artificial hands",
+    ],
+    ["Who repairs surgical instruments?", "surgical instruments"],
+    ["Who studied satellite measurements?", "satellite measurements"],
+  ])(
+    "does not turn an activity into a current industry: %s",
+    (query, industry) => {
+      expect(
+        compileQueryPlan(query, plan({ industryMatchers: [industry] })).must
+          .industryMatchers,
+      ).toBeUndefined();
+    },
+  );
+
   it("does not infer an industry from a role", () => {
     const result = compileQueryPlan(
       "Software engineers",

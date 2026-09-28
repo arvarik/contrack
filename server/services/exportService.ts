@@ -51,6 +51,44 @@ export function buildFullExport(scope: Scope): FullExport {
       .prepare("SELECT * FROM contacts WHERE ownerId = ? ORDER BY addedAt ASC")
       .all(owner),
   );
+  // Preserve import payloads and history provenance in the complete account export.
+  // Normal contact responses omit rawData to keep list requests small.
+  const byId = new Map(contacts.map((contact) => [contact.id, contact]));
+  const sourceRows = sqlite
+    .prepare(
+      `SELECT s.* FROM contact_sources s JOIN contacts c ON c.id = s.contactId WHERE c.ownerId = ?`,
+    )
+    .all(owner) as (HydratedContact["sources"][number] & {
+    contactId: string;
+  })[];
+  const experienceRows = sqlite
+    .prepare(
+      `SELECT e.* FROM contact_experience e JOIN contacts c ON c.id = e.contactId WHERE c.ownerId = ?`,
+    )
+    .all(owner) as (Omit<HydratedContact["experience"][number], "isCurrent"> & {
+    contactId: string;
+    isCurrent: number;
+  })[];
+  const educationRows = sqlite
+    .prepare(
+      `SELECT e.* FROM contact_education e JOIN contacts c ON c.id = e.contactId WHERE c.ownerId = ?`,
+    )
+    .all(owner) as (HydratedContact["education"][number] & {
+    contactId: string;
+  })[];
+  for (const contact of contacts) {
+    contact.sources = [];
+    contact.experience = [];
+    contact.education = [];
+  }
+  for (const { contactId, ...row } of sourceRows)
+    byId.get(contactId)?.sources.push(row);
+  for (const { contactId, ...row } of experienceRows)
+    byId
+      .get(contactId)
+      ?.experience.push({ ...row, isCurrent: row.isCurrent === 1 });
+  for (const { contactId, ...row } of educationRows)
+    byId.get(contactId)?.education.push(row);
   const interactions = sqlite
     .prepare("SELECT * FROM interactions WHERE ownerId = ? ORDER BY date ASC")
     .all(owner);

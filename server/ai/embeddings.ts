@@ -45,6 +45,8 @@ export interface ResolvedEmbeddings {
 
 /** Persisted state describing what the vec0 tables were built with. */
 interface EmbeddingsState {
+  representationVersion?: number;
+  generation?: string;
   signature: string;
   dimension: number;
 }

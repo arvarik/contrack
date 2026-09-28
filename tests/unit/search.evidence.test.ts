@@ -45,6 +45,112 @@ const brief = (text: string) =>
       return { text, latencyMs: 1, model: "mock" };
     });
 describe("AI search evidence", () => {
+  it("maps short passage ids to exact, contact-bound evidence", async () => {
+    const passage = {
+      id: "source-revision-123",
+      field: "about",
+      context: "about",
+      text: "Restores medieval clocks.",
+    };
+    reply([
+      {
+        contact_id: "c1",
+        verified_field: "passage",
+        passage_id: "p1",
+        verified_value: "medieval clocks",
+      },
+    ]);
+    expect(
+      await rerankCandidates("clock restorers", [
+        { ...contact, passages: [passage] },
+      ]),
+    ).toEqual([
+      {
+        contact_id: "a",
+        verified_field: "passage",
+        passage_id: passage.id,
+        verified_value: "medieval clocks",
+      },
+    ]);
+    expect(vi.mocked(generateFor).mock.calls[0][1].prompt).toContain(
+      '"id":"p1"',
+    );
+  });
+  it.each([undefined, "invented", "p2"])(
+    "rejects missing or cross-contact passage ids: %s",
+    async (passage_id) => {
+      reply([
+        {
+          contact_id: "c1",
+          verified_field: "passage",
+          passage_id,
+          verified_value: "medieval clocks",
+        },
+      ]);
+      expect(
+        await rerankCandidates("clock restorers", [
+          {
+            ...contact,
+            passages: [
+              {
+                id: "first",
+                field: "about",
+                context: "about",
+                text: "Builds boats.",
+              },
+            ],
+          },
+          {
+            ...contact,
+            id: "b",
+            passages: [
+              {
+                id: "p2",
+                field: "about",
+                context: "about",
+                text: "Restores medieval clocks.",
+              },
+            ],
+          },
+        ]),
+      ).toEqual([]);
+    },
+  );
+  it("does not use a former employer passage to satisfy a current company filter", async () => {
+    reply([
+      {
+        contact_id: "c1",
+        verified_field: "passage",
+        passage_id: "p1",
+        verified_value: "OldCo",
+      },
+    ]);
+    expect(
+      await rerankCandidates(
+        "engineers at OldCo",
+        [
+          {
+            ...contact,
+            company: "NewCo",
+            passages: [
+              {
+                id: "job",
+                field: "experience",
+                context: "Former employment",
+                text: "Engineer at OldCo",
+              },
+            ],
+          },
+        ],
+        {
+          must: { companyMatchers: ["OldCo"] },
+          should: {},
+          confidence: "high",
+          rationale: "",
+        },
+      ),
+    ).toEqual([]);
+  });
   it.each([
     {},
     [null],

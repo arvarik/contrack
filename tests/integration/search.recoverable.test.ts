@@ -378,10 +378,10 @@ describe("search coverage API and metrics", () => {
 
     const cov = getSearchCoverage(scope());
     expect(cov.total).toBe(3);
-    expect(cov.indexed).toBe(1);
+    expect(cov.indexed).toBe(0); // A prefix vector alone does not cover the passages.
     expect(cov.pending).toBe(1);
-    expect(cov.missing).toBe(2);
-    expect(cov.coverage).toBe(33); // 1/3 * 100 rounded
+    expect(cov.missing).toBe(3);
+    expect(cov.coverage).toBe(0);
   });
 
   it("GET /api/search/coverage returns coverage data", async () => {
@@ -392,11 +392,11 @@ describe("search coverage API and metrics", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       total: 1,
-      indexed: 1,
-      missing: 0,
+      indexed: 0,
+      missing: 1,
       pending: 0,
       failed: 0,
-      coverage: 100,
+      coverage: 0,
     });
     expect(res.body.provider).toBeDefined();
     expect(Array.isArray(res.body.failedItems)).toBe(true);

@@ -524,6 +524,48 @@ export const contactSources = sqliteTable("contact_sources", {
   rawData: text("rawData"),
 });
 
+/** Rebuildable search evidence. Offsets refer to the exact source text. */
+export const searchPassages = sqliteTable(
+  "search_passages",
+  {
+    id: text("id").primaryKey(),
+    contactId: text("contactId")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    ownerId: text("ownerId").notNull(),
+    field: text("field").notNull(),
+    sourceId: text("sourceId").notNull(),
+    sourceHash: text("sourceHash").notNull(),
+    active: integer("active").notNull().default(1),
+    context: text("context").notNull(),
+    startOffset: integer("startOffset").notNull(),
+    endOffset: integer("endOffset").notNull(),
+    text: text("text").notNull(),
+  },
+  (table) => [
+    index("idx_search_passages_contact").on(table.contactId),
+    index("idx_search_passages_owner").on(table.ownerId),
+  ],
+);
+
+/** A transaction writes this marker only after every passage vector succeeds. */
+export const searchPassageState = sqliteTable(
+  "search_passage_state",
+  {
+    contactId: text("contactId")
+      .primaryKey()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    ownerId: text("ownerId").notNull(),
+    representationVersion: integer("representationVersion").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    signature: text("signature").notNull(),
+    indexedAt: text("indexedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [index("idx_search_passage_state_owner").on(table.ownerId)],
+);
+
 /**
  * contact_tags — Flexible free-form tagging system for pipeline stages,
  * custom grouping, and relationship categorization.

@@ -249,6 +249,8 @@ export interface RerankOptions {
   model?: string | null;
   /** How many candidates to score. `RERANK_CANDIDATES` when unset. */
   count?: number;
+  /** Query-selected evidence, in candidate order. */
+  documents?: string[];
 }
 
 /**
@@ -280,7 +282,14 @@ export async function rerankLocal<T extends ProfileFields>(
   try {
     scores = await Promise.race([
       (replacement ?? scoreOnWorker)(
-        { model, query, docs: top.map(profileText) },
+        {
+          model,
+          query,
+          docs: top.map(
+            (candidate, index) =>
+              options.documents?.[index] ?? profileText(candidate),
+          ),
+        },
         late.signal,
       ),
       deadline,

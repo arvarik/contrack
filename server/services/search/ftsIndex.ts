@@ -230,7 +230,14 @@ export function installSearchIndex(sqlite: Database.Database): void {
           ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
       END;
     `);
-    for (const table of ["tags", "interests", "emails", "phones"]) {
+    for (const table of [
+      "tags",
+      "interests",
+      "emails",
+      "phones",
+      "experience",
+      "education",
+    ]) {
       for (const [suffix, event, ids] of [
         ["ai", "INSERT", "new.contactId"],
         ["ad", "DELETE", "old.contactId"],
@@ -333,6 +340,8 @@ export function installSearchVectorTriggers(sqlite: Database.Database): void {
 
     DROP TRIGGER IF EXISTS search_vector_update;
     CREATE TRIGGER search_vector_update AFTER UPDATE OF ${SEARCH_VECTOR_COLUMNS} ON contacts BEGIN
+      DELETE FROM search_passages WHERE contactId = old.id;
+      DELETE FROM search_passage_state WHERE contactId = old.id;
       DELETE FROM search_embeddings WHERE contactId = old.id;
       DELETE FROM search_index_queue WHERE contactId = old.id AND NOT (${ACTIVE_CONTACT_SQL.replace(/c\./g, "new.")});
       INSERT INTO search_index_queue (contactId, ownerId, status, attempts, queuedAt, nextAttemptAt, contactUpdatedAt)
@@ -349,6 +358,8 @@ export function installSearchVectorTriggers(sqlite: Database.Database): void {
     END;
     DROP TRIGGER IF EXISTS search_vector_delete;
     CREATE TRIGGER search_vector_delete AFTER DELETE ON contacts BEGIN
+      DELETE FROM search_passages WHERE contactId = old.id;
+      DELETE FROM search_passage_state WHERE contactId = old.id;
       DELETE FROM search_embeddings WHERE contactId = old.id;
       DELETE FROM search_index_queue WHERE contactId = old.id;
     END;

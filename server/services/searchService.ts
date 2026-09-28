@@ -1,6 +1,8 @@
 import { facetNeedle, type FacetFilter } from "../../shared/searchFacets.ts";
 import { parseFacetQuery } from "../../shared/facetQuery.ts";
 import { sqlite } from "../db.ts";
+import { selectPassages, currentPassage } from "./search/passages.ts";
+import { findPassageNeighbors } from "./search/localEmbeddings.ts";
 import { lexicalSearch, type LexicalMatch } from "./search/lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import { log } from "../utils/logger.ts";
@@ -47,6 +49,7 @@ import {
   RERANK_CANDIDATES,
   rerankBudgetMs,
   rerankLocal,
+  profileText,
   rerankModel,
   type RerankOptions,
 } from "./search/crossEncoder.ts";
@@ -287,7 +290,22 @@ function facetAnswer(
  */
 function buildCompressedCandidates(
   matches: HydratedMatch[],
+  scope: Scope,
+  query: string,
+  queryVector?: Float32Array | null,
 ): CompressedContact[] {
+  const selected = selectPassages(
+    scope,
+    query,
+    matches.map((match) => match.id),
+    queryVector
+      ? findPassageNeighbors(
+          scope,
+          queryVector,
+          new Set(matches.map((match) => match.id)),
+        )
+      : [],
+  );
   const compressed: CompressedContact[] = [];
   let size = 2;
   for (const match of matches.slice(0, RERANKER_LIMIT)) {
@@ -316,6 +334,39 @@ function buildCompressedCandidates(
       .filter((v) => typeof v === "string")
       .join(", ")
       .slice(0, 400);
+    const passages = selected.get(match.id);
+    if (passages?.length) {
+      entry.passages = passages.map(({ id, field, context, text }) => ({
+        id,
+        field,
+        context,
+        text,
+      }));
+      // Relevant passages replace the fixed prefix of these fields.
+      if (passages.some((passage) => passage.field === "about"))
+        delete entry.about;
+      if (passages.some((passage) => passage.field === "preferences"))
+        delete entry.preferences;
+    }
+    // Reserve room for every candidate. Drop duplicate context before evidence.
+    const budget = Math.floor(
+      (23_000 - size) /
+        (Math.min(matches.length, RERANKER_LIMIT) - compressed.length),
+    );
+    while (
+      JSON.stringify(entry).length > budget &&
+      (entry.passages?.length ?? 0) > 1
+    )
+      entry.passages!.pop();
+    for (const field of [
+      "about",
+      "preferences",
+      "headline",
+      "interests",
+    ] as const) {
+      if (JSON.stringify(entry).length <= budget) break;
+      delete entry[field];
+    }
     const bytes = JSON.stringify(entry).length + 1;
     if (size + bytes > 23_000) break;
     compressed.push(entry);
@@ -332,6 +383,7 @@ function buildCompressedCandidates(
 function rerankEvidence(
   contact: HydratedMatch,
   match: SemanticMatchResult,
+  scope: Scope,
 ): ReasonEvidence | null {
   const value = match.verified_value;
   const has = (list: unknown, key: string) =>
@@ -342,6 +394,12 @@ function rerankEvidence(
         item[key].toLowerCase().includes(value.toLowerCase()),
     );
   switch (match.verified_field) {
+    case "passage": {
+      const passage = match.passage_id
+        ? currentPassage(scope, contact.id, match.passage_id, value)
+        : null;
+      return passage ? { field: passage.field, value } : null;
+    }
     case "name":
       return null;
     case "interests":
@@ -484,7 +542,7 @@ async function answerFromPlan(
   ];
   const verified = await rerankCandidates(
     query,
-    buildCompressedCandidates(pool),
+    buildCompressedCandidates(pool, scope, query, retrieval.queryVector),
     plan,
     signal,
   );
@@ -503,7 +561,16 @@ async function answerFromPlan(
       matches: verified.flatMap((match) => {
         const contact = fresh.get(match.contact_id);
         if (!contact) return [];
-        const cited = rerankEvidence(contact, match);
+        const passage = match.passage_id
+          ? currentPassage(
+              scope,
+              contact.id,
+              match.passage_id,
+              match.verified_value,
+            )
+          : null;
+        const cited = rerankEvidence(contact, match, scope);
+        if (match.verified_field === "passage" && !cited) return [];
         const filtered = evidenceOf(contact).filter(
           (item) => item.field !== cited?.field,
         );
@@ -511,6 +578,20 @@ async function answerFromPlan(
           {
             ...contact,
             verified: true,
+            ...(passage
+              ? {
+                  aiEvidence: {
+                    contactId: contact.id,
+                    passageId: passage.id,
+                    field: passage.field,
+                    sourceId: passage.sourceId,
+                    sourceHash: passage.sourceHash,
+                    startOffset: passage.startOffset,
+                    endOffset: passage.endOffset,
+                    quote: match.verified_value,
+                  },
+                }
+              : {}),
             aiReason: buildReason(
               contact,
               cited ? [cited, ...filtered] : filtered,
@@ -682,8 +763,33 @@ async function runSearch(
         listLength,
       ).values(),
     ];
+    const relevant = reorder
+      ? selectPassages(
+          scope,
+          text,
+          fused.map((contact) => contact.id),
+          local.queryVector
+            ? findPassageNeighbors(
+                scope,
+                local.queryVector,
+                new Set(fused.map((contact) => contact.id)),
+              )
+            : [],
+        )
+      : new Map();
     const ordered = reorder
-      ? await rerankLocal(text, fused, rerankBudgetMs(), reorder)
+      ? await rerankLocal(text, fused, rerankBudgetMs(), {
+          ...reorder,
+          documents: fused.map((contact) => {
+            const passage = relevant.get(contact.id)?.[0];
+            return passage
+              ? `${passage.context} | ${passage.text} | ${profileText(contact)}`.slice(
+                  0,
+                  600,
+                )
+              : profileText(contact);
+          }),
+        })
       : fused;
     if (reorder && searchRevision(scope) !== listRevision) {
       // Scoring yields after hydration. An edit can remove a contact or

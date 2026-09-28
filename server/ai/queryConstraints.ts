@@ -327,8 +327,9 @@ export function compileQueryPlan(query: string, raw: QueryPlan): QueryPlan {
       intentQuery = intentQuery.replace(phrase, " ".repeat(phrase.length));
   }
   intentQuery = maskEmployerClauses(intentQuery);
+  // Activities describe expertise. They do not prove a current role or industry.
   const industryQuery = intentQuery.replace(
-    /\b(?:interested in|interests? in|love|loves|enjoy|enjoys|invest in|invests in|investing in)\s+[^,?]+?(?=\s+(?:and|but)\s+(?:work|works|working|serve|serves|are|is|lead|leads)\b|[?,]|$)/gi,
+    /\b(?:interested in|interests? in|love|loves|enjoy|enjoys|invest in|invests in|investing in|builds?|building|designs?|designing|repairs?|repairing|studies|studied|researches|researching|knows? about|has experience)\s+[^,?]+?(?=\s+(?:and|but)\s+(?:work|works|working|serve|serves|are|is|lead|leads)\b|[?,]|$)/gi,
     (phrase) => " ".repeat(phrase.length),
   );
   const role = combinedMatchers(
