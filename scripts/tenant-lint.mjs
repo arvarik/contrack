@@ -42,10 +42,14 @@ export const OWNED_TABLES = [
   "connector_links",
   "upcoming_events",
   "map_views",
+  "search_passages",
+  "search_passage_state",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
 export const VIRTUAL_TABLES = [
+  "search_passages_fts",
+  "search_passage_vectors",
   "contacts_fts",
   "interactions_fts",
   "search_embeddings",

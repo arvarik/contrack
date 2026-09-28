@@ -252,6 +252,8 @@ router.post(
         industry?: string;
         location?: string;
       }[];
+    // TODO(v2.1): Build richer summaries from server-validated passage references tied to each contact.
+    // Check each claim against that contact and source revision before streaming it.
     const contacts = readContacts();
     // A contact id the caller does not own is missing as far as this owner is
     // concerned, so it takes the same 409 a deleted id has always taken. The

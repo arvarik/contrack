@@ -21,6 +21,8 @@ export type ReasonField =
   | "headline"
   | "about"
   | "preferences"
+  | "experience"
+  | "education"
   | "lastContact";
 
 export interface ReasonEvidence {
@@ -158,6 +160,14 @@ export function buildReason(
       case "about":
       case "preferences":
         if (value) parts.push(templated("profile mentions", `“${value}”`));
+        break;
+      case "experience":
+        if (value)
+          parts.push(templated("employment record mentions", `“${value}”`));
+        break;
+      case "education":
+        if (value)
+          parts.push(templated("education record mentions", `“${value}”`));
         break;
       case "lastContact":
         parts.push(lastContactPart(contact.lastContactedAt, now));

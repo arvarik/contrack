@@ -288,6 +288,7 @@ export interface CompressedContact {
   industry?: string;
   preferences?: string;
   interests?: string;
+  passages?: { id: string; field: string; context: string; text: string }[];
 }
 
 /** A candidate field the reranker may cite as proof of a match. */
@@ -300,7 +301,8 @@ export type EvidenceField =
   | "about"
   | "industry"
   | "preferences"
-  | "interests";
+  | "interests"
+  | "passage";
 
 /**
  * A match the reranker verified: the field it cited and a literal substring
@@ -311,6 +313,7 @@ export interface SemanticMatchResult {
   contact_id: string;
   verified_field: EvidenceField;
   verified_value: string;
+  passage_id?: string;
 }
 
 /** A grounded place. Fields within a constraint use AND. Separate constraints use OR. */

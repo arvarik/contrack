@@ -1,3 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { PASSAGE_VERSION, passageVectorDdl } from "./passageIndex.ts";
+import {
+  passageSnapshot,
+  type PassageSnapshot,
+  type SearchPassage,
+} from "./passages.ts";
 // =============================================================================
 // Local Embedding Service — Zero-Latency Semantic Search Embeddings
 // =============================================================================
@@ -261,25 +268,33 @@ export function isSearchEmbeddingReady(): boolean {
  * rebuild; every contact is then re-embedded by backfillSearchEmbeddings().
  */
 export function rebuildSearchEmbeddingTable(dimension: number): void {
-  sqlite.exec(`DROP TABLE IF EXISTS search_embeddings`);
-  // The DDL comes from db.ts so a model change cannot silently recreate the
-  // table without its partition key, which would make every scoped KNN in
-  // Phase 2 return nothing. A unit test pins the two call sites equal.
-  sqlite.exec(
-    vecTableDdl(
-      "search_embeddings",
-      dimension,
-      vecElementFor("search_embeddings"),
-    ),
-  );
-  // A new model has its own range of components, so the first write after
-  // this sets a new scale.
-  deleteSetting(VECTOR_SCALE_KEY);
-  try {
-    sqlite.exec("DELETE FROM search_index_queue");
-  } catch {
-    /* table may not exist yet */
-  }
+  sqlite.transaction(() => {
+    // Both tables are derived data for every owner when the model changes.
+    sqlite.exec(
+      // tenant-lint: allow instance sweep
+      `DELETE FROM search_passages; DELETE FROM search_passage_state; DROP TABLE IF EXISTS search_passage_vectors`,
+    );
+    sqlite.exec(passageVectorDdl(dimension));
+    sqlite.exec(`DROP TABLE IF EXISTS search_embeddings`);
+    // The DDL comes from db.ts so a model change cannot silently recreate the
+    // table without its partition key, which would make every scoped KNN in
+    // Phase 2 return nothing. A unit test pins the two call sites equal.
+    sqlite.exec(
+      vecTableDdl(
+        "search_embeddings",
+        dimension,
+        vecElementFor("search_embeddings"),
+      ),
+    );
+    // A new model has its own range of components, so the first write after
+    // this sets a new scale.
+    deleteSetting(VECTOR_SCALE_KEY);
+    try {
+      sqlite.exec("DELETE FROM search_index_queue");
+    } catch {
+      /* table may not exist yet */
+    }
+  })();
   log.info(
     "LocalEmbeddings",
     `Rebuilt search_embeddings at ${dimension} dimensions (re-embed required)`,
@@ -464,6 +479,121 @@ export function getSearchEmbeddingCount(scope: Scope): number {
   return row.c;
 }
 
+/** Read passage vectors in the same space as contact vectors and the query. */
+export function findPassageNeighbors(
+  scope: Scope,
+  query: Float32Array,
+  ids?: Set<string> | null,
+  facets?: CompiledFacets | null,
+): (SearchPassage & { distance: number })[] {
+  if (ids?.size === 0) return [];
+  const filter =
+    ids || facets
+      ? `AND passageId IN (
+    SELECT p.id FROM search_passages p JOIN contacts c ON c.id = p.contactId
+    WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
+      ${ids ? "AND c.id IN (SELECT value FROM json_each(?))" : ""}
+      ${facets ? `AND (${facets.sql})` : ""})`
+      : "";
+  return sqlite
+    .prepare(
+      `
+    SELECT p.*, n.distance FROM (
+      SELECT passageId, distance FROM search_passage_vectors
+      WHERE embedding MATCH vec_int8(?) AND ownerId = ? AND ${VEC_ACTIVE_MATCH}
+        ${filter} AND k = 300 ORDER BY distance
+    ) n JOIN search_passages p ON p.id = n.passageId
+    WHERE p.ownerId = ? ORDER BY n.distance, p.id
+  `,
+    )
+    .all(
+      quantize(query, searchVectorScale() ?? UNIT_SCALE),
+      scope.ownerId,
+      ...(ids || facets ? [scope.ownerId] : []),
+      ...(ids ? [JSON.stringify([...ids])] : []),
+      ...(facets?.params ?? []),
+      scope.ownerId,
+    ) as (SearchPassage & { distance: number })[];
+}
+
+/** Bounded batches prevent one long profile from occupying a worker request. */
+async function embedPassageSnapshots(
+  snapshots: (PassageSnapshot | null)[],
+): Promise<Float32Array[][]> {
+  const passages = snapshots.flatMap((snapshot) => snapshot?.passages ?? []);
+  const vectors: Float32Array[] = [];
+  for (let i = 0; i < passages.length; i += BACKFILL_BATCH_SIZE) {
+    const texts = passages
+      .slice(i, i + BACKFILL_BATCH_SIZE)
+      .map((passage) => `${passage.context.slice(0, 200)} | ${passage.text}`);
+    const batch = await embedBatch(texts);
+    if (
+      batch.length !== texts.length ||
+      batch.some((vector) => !vector || !vector.every(Number.isFinite))
+    ) {
+      throw new AppError(
+        "Embedding backend returned incomplete passage vectors",
+      );
+    }
+    vectors.push(...(batch as Float32Array[]));
+  }
+  let offset = 0;
+  return snapshots.map((snapshot) => {
+    const count = snapshot?.passages.length ?? 0;
+    const result = vectors.slice(offset, offset + count);
+    offset += count;
+    return result;
+  });
+}
+
+/** The caller writes contact and passage vectors in the same transaction. */
+function writePassages(
+  contactId: string,
+  snapshot: PassageSnapshot,
+  vectors: Float32Array[],
+  signature: string,
+  scale: number,
+): void {
+  sqlite
+    .prepare("DELETE FROM search_passages WHERE contactId = ? AND ownerId = ?")
+    .run(contactId, snapshot.ownerId);
+  const insert = sqlite.prepare(`INSERT INTO search_passages
+    (id, contactId, ownerId, field, sourceId, sourceHash, context, startOffset, endOffset, text)
+    VALUES (@id, @contactId, @ownerId, @field, @sourceId, @sourceHash, @context, @startOffset, @endOffset, @text)`);
+  const insertVector =
+    sqlite.prepare(`INSERT INTO search_passage_vectors (passageId, ownerId, isGhost, isArchived, active, embedding)
+    SELECT ?, c.ownerId, ${VEC_METADATA_SQL}, vec_int8(?) FROM contacts c WHERE c.id = ? AND c.ownerId = ?`);
+  snapshot.passages.forEach((passage, index) => {
+    insert.run(passage);
+    insertVector.run(
+      passage.id,
+      quantize(vectors[index], scale),
+      contactId,
+      snapshot.ownerId,
+    );
+  });
+  sqlite
+    .prepare(
+      `INSERT INTO search_passage_state (contactId, ownerId, representationVersion, fingerprint, signature)
+    VALUES (?, ?, ?, ?, ?) ON CONFLICT(contactId) DO UPDATE SET ownerId = excluded.ownerId,
+      representationVersion = excluded.representationVersion, fingerprint = excluded.fingerprint,
+      signature = excluded.signature, indexedAt = CURRENT_TIMESTAMP`,
+    )
+    .run(
+      contactId,
+      snapshot.ownerId,
+      PASSAGE_VERSION,
+      snapshot.fingerprint,
+      signature,
+    );
+  sqlite
+    .prepare(
+      `INSERT INTO search_revision (ownerId, revision) VALUES (?, 1)
+    ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1`,
+    )
+    .run(snapshot.ownerId);
+}
+
 // =============================================================================
 // Embedding-store migration
 // =============================================================================
@@ -492,23 +622,32 @@ export async function ensureEmbeddingStore(): Promise<number> {
       return 0;
     }
   }
-  if (dimension === null) return 0;
+  if (
+    dimension === null ||
+    resolveEmbeddings().signature !== resolved.signature
+  )
+    return 0;
 
   const state = getEmbeddingsState();
   const changed =
     !state ||
     state.signature !== resolved.signature ||
-    state.dimension !== dimension;
-  if (!changed) return 0;
+    state.dimension !== dimension ||
+    state.representationVersion !== PASSAGE_VERSION;
+  if (!changed) return backfillSearchEmbeddings();
 
-  if (state || dimension !== BUILTIN_DIMENSION) {
-    log.info(
-      "LocalEmbeddings",
-      `Embeddings changed (${state?.signature ?? "unversioned"} → ${resolved.signature}); rebuilding vector store`,
-    );
-    rebuildSearchEmbeddingTable(dimension);
-  }
-  setEmbeddingsState({ signature: resolved.signature, dimension });
+  log.info(
+    "LocalEmbeddings",
+    `Embeddings changed (${state?.signature ?? "unversioned"} → ${resolved.signature}); rebuilding vector store`,
+  );
+  // Missing metadata cannot prove the physical vector width or model identity.
+  rebuildSearchEmbeddingTable(dimension);
+  setEmbeddingsState({
+    signature: resolved.signature,
+    dimension,
+    representationVersion: PASSAGE_VERSION,
+    generation: randomUUID(),
+  });
   return backfillSearchEmbeddings();
 }
 
@@ -525,6 +664,9 @@ export async function ensureEmbeddingStore(): Promise<number> {
  * every account results in about the same time.
  */
 const OWNER_ROUND_SIZE = 200;
+
+// TODO(v2.1): Compare newer embedding models on held-out precision, recall and CPU latency before changing the default.
+// The representation version and model signature let the index rebuild without replacing contact data.
 
 /** Every account that owns at least one contact. */
 function ownersWithContacts(): string[] {
@@ -547,9 +689,11 @@ function backfillStatements() {
     SELECT c.id, c.name, c.company, c.role, c.location, c.industry,
            c.headline, c.about, c.preferences, c.searchExpansion
     FROM contacts c
-    WHERE c.ownerId = ?
+    WHERE c.ownerId = ? AND c.id > ?
       AND ${ACTIVE_CONTACT_SQL}
-      AND c.id NOT IN (SELECT contactId FROM search_embeddings)
+      AND (c.id NOT IN (SELECT contactId FROM search_embeddings)
+        OR c.id NOT IN (SELECT contactId FROM search_passage_state WHERE representationVersion = ${PASSAGE_VERSION}))
+    ORDER BY c.id LIMIT ?
   `,
     ),
     tags: sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?"),
@@ -600,8 +744,14 @@ async function embedSearchRound(
     });
 
     const signature = resolveEmbeddings().signature;
+    const generation = getEmbeddingsState()?.generation;
+    const snapshots = batch.map((row) => passageSnapshot(row.id));
     const vectors = await embedBatch(texts);
-    if (signature !== resolveEmbeddings().signature) {
+    const passageVectors = await embedPassageSnapshots(snapshots);
+    if (
+      signature !== resolveEmbeddings().signature ||
+      generation !== getEmbeddingsState()?.generation
+    ) {
       return { embedded, aborted: true };
     }
 
@@ -612,18 +762,32 @@ async function embedSearchRound(
       );
     }
 
-    const scale = writeScale(
-      vectors.filter((vec): vec is Float32Array => !!vec),
-    );
+    const scale = writeScale([
+      ...vectors.filter((vec): vec is Float32Array => !!vec),
+      ...passageVectors.flat(),
+    ]);
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
         if (!vec || currentSearchText(batch[j].id) !== texts[j]) continue;
+        const snapshot = snapshots[j];
+        if (
+          !snapshot ||
+          passageSnapshot(batch[j].id)?.fingerprint !== snapshot.fingerprint
+        )
+          continue;
         const buf = quantize(vec, scale);
         stmts.remove.run(batch[j].id);
         // One bind for the vector and one for the contact the owner and the
         // status columns are read from.
         stmts.insert.run(buf, batch[j].id);
+        writePassages(
+          batch[j].id,
+          snapshot,
+          passageVectors[j],
+          signature,
+          scale,
+        );
         stmts.queueRemove.run(batch[j].id);
         embedded++;
       }
@@ -642,9 +806,29 @@ async function embedSearchRound(
  * context is what keeps a future provider-backed model from charging the
  * primary admin for everybody's corpus.
  *
- * ~2s for 960 contacts on Apple Silicon.
  */
-export async function backfillSearchEmbeddings(): Promise<number> {
+let backfillTail: Promise<number> = Promise.resolve(0);
+let backfillRunning = false;
+export function isSearchBackfillRunning(): boolean {
+  return backfillRunning;
+}
+
+/** Serialize rebuilds so two startup or settings requests cannot index the same batch. */
+export function backfillSearchEmbeddings(): Promise<number> {
+  backfillTail = backfillTail
+    .catch(() => 0)
+    .then(async () => {
+      backfillRunning = true;
+      try {
+        return await runBackfill();
+      } finally {
+        backfillRunning = false;
+      }
+    });
+  return backfillTail;
+}
+
+async function runBackfill(): Promise<number> {
   if (!isSearchEmbeddingReady()) {
     log.warn("LocalEmbeddings", "Cannot backfill: no embedding backend ready");
     return 0;
@@ -653,27 +837,35 @@ export async function backfillSearchEmbeddings(): Promise<number> {
   const t0 = Date.now();
   const stmts = backfillStatements();
 
-  // One scoped query per account, up front. The whole set is the same size the
-  // instance-wide query returned, and knowing each account's queue is what
-  // makes the round-robin below possible.
-  const queues: { ownerId: string; rows: SearchTextRow[] }[] = [];
-  for (const ownerId of ownersWithContacts()) {
-    const rows = stmts.missing.all(ownerId) as SearchTextRow[];
-    if (rows.length > 0) queues.push({ ownerId, rows });
-  }
-
-  if (queues.length === 0) {
-    log.debug("LocalEmbeddings", "All contacts already have search embeddings");
-    return 0;
-  }
+  // Read bounded pages so a rebuild never retains every owner's full biographies.
+  const queues = ownersWithContacts().map((ownerId) => ({
+    ownerId,
+    cursor: "",
+    done: false,
+  }));
+  const enqueue = sqlite.prepare(
+    `INSERT OR IGNORE INTO search_index_queue (contactId, ownerId) VALUES (?, ?)`,
+  );
 
   let embedded = 0;
   let remaining = true;
   while (remaining) {
     remaining = false;
     for (const queue of queues) {
-      if (queue.rows.length === 0) continue;
-      const round = queue.rows.splice(0, OWNER_ROUND_SIZE);
+      if (queue.done) continue;
+      const round = stmts.missing.all(
+        queue.ownerId,
+        queue.cursor,
+        OWNER_ROUND_SIZE,
+      ) as SearchTextRow[];
+      if (!round.length) {
+        queue.done = true;
+        continue;
+      }
+      queue.cursor = round[round.length - 1].id;
+      sqlite.transaction(() => {
+        for (const row of round) enqueue.run(row.id, queue.ownerId);
+      })();
       const result = await runWithContext(
         {
           requestId: `job-search-backfill-${queue.ownerId.slice(0, 8)}`,
@@ -684,7 +876,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
       );
       embedded += result.embedded;
       if (result.aborted) return embedded;
-      if (queue.rows.length > 0) remaining = true;
+      remaining = true;
     }
   }
 
@@ -738,22 +930,36 @@ export async function embedContact(
 
   const text = contactToSearchText(row, tags, interests);
   const signature = resolveEmbeddings().signature;
+  const generation = getEmbeddingsState()?.generation;
+  const snapshot = passageSnapshot(contactId);
+  if (!snapshot) return { status: "skipped", reason: "inactive_or_deleted" };
   const vec = await embedText(text);
+  const [passageVectors] = await embedPassageSnapshots([snapshot]);
   if (!vec) {
     throw new Error(
       `Failed to generate embedding vector for contact ${contactId}`,
     );
   }
 
-  if (signature !== resolveEmbeddings().signature) {
+  if (
+    signature !== resolveEmbeddings().signature ||
+    generation !== getEmbeddingsState()?.generation
+  ) {
     return { status: "outdated", reason: "signature_changed" };
   }
 
-  if (text !== currentSearchText(contactId)) {
+  if (
+    text !== currentSearchText(contactId) ||
+    passageSnapshot(contactId)?.fingerprint !== snapshot.fingerprint
+  ) {
     return { status: "outdated", reason: "contact_edited" };
   }
 
-  upsertSearchEmbedding(contactId, vec);
+  sqlite.transaction(() => {
+    const scale = writeScale([vec, ...passageVectors]);
+    _upsertTxn(contactId, quantize(vec, scale));
+    writePassages(contactId, snapshot, passageVectors, signature, scale);
+  })();
   return { status: "indexed" };
 }
 
@@ -777,7 +983,8 @@ interface SearchTextRow {
 
 /**
  * Convert a contact row into a text string optimized for search embedding.
- * Includes all searchable fields plus Doc2Query expansion terms.
+ * This compact vector complements the full source passages.
+ * Expansion terms help retrieval but never count as verified evidence.
  */
 function contactToSearchText(
   row: SearchTextRow,

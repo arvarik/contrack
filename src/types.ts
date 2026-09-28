@@ -488,6 +488,17 @@ export interface DedupeScanProgress {
  * `aiReason` is null when the FTS5 fallback path fires instead of the AI provider.
  */
 export interface SemanticMatch extends Contact {
+  /** Exact evidence for a passage match. The server checks the contact and source revision. */
+  aiEvidence?: {
+    contactId: string;
+    passageId: string;
+    field: string;
+    sourceId: string;
+    sourceHash: string;
+    startOffset: number;
+    endOffset: number;
+    quote: string;
+  };
   aiReason: string | null;
   /** True when an exact answer, the model or a filter proved it. Older servers omit it. */
   verified?: boolean;

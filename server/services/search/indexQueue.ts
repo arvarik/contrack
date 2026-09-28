@@ -1,6 +1,8 @@
+import { PASSAGE_VERSION } from "./passageIndex.ts";
+import { getEmbeddingsState } from "../../ai/embeddings.ts";
 import { sqlite } from "../../db.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
-import { embedContact } from "./localEmbeddings.ts";
+import { embedContact, isSearchBackfillRunning } from "./localEmbeddings.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -113,7 +115,8 @@ export async function drainIndexQueue(
     clearTimeout(timer);
     timer = undefined;
   }
-  if (running) {
+  if (running || isSearchBackfillRunning()) {
+    if (isSearchBackfillRunning()) triggerIndexDrain();
     return {
       processed: 0,
       succeeded: 0,
@@ -356,6 +359,12 @@ export function enqueueMissingContactsForOwner(
 
   if (forceAll) {
     sqlite
+      .prepare("DELETE FROM search_passages WHERE ownerId = ?")
+      .run(ownerId);
+    sqlite
+      .prepare("DELETE FROM search_passage_state WHERE ownerId = ?")
+      .run(ownerId);
+    sqlite
       .prepare("DELETE FROM search_embeddings WHERE ownerId = ?")
       .run(ownerId);
     sqlite
@@ -381,6 +390,7 @@ export function enqueueMissingContactsForOwner(
        FROM contacts c
        WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
          AND (c.id NOT IN (SELECT contactId FROM search_embeddings)
+              OR c.id NOT IN (SELECT contactId FROM search_passage_state WHERE representationVersion = ${PASSAGE_VERSION})
               OR c.id IN (SELECT contactId FROM search_index_queue WHERE ownerId = ? AND status = 'failed'))
        ON CONFLICT(contactId) DO UPDATE SET
          status = 'pending',
@@ -404,6 +414,9 @@ export interface FailedIndexItem {
 }
 
 export interface SearchCoverage {
+  representationVersion: number;
+  embeddingSignature: string | null;
+  evidenceIndexed: number;
   total: number;
   indexed: number;
   missing: number;
@@ -441,7 +454,8 @@ export function getSearchCoverage(scope: Scope): SearchCoverage {
         `SELECT COUNT(*) AS indexed
          FROM contacts c
          JOIN search_embeddings e ON e.contactId = c.id
-         WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}`,
+         JOIN search_passage_state p ON p.contactId = c.id AND p.ownerId = c.ownerId
+         WHERE c.ownerId = ? AND p.representationVersion = ${PASSAGE_VERSION} AND ${ACTIVE_CONTACT_SQL}`,
       )
       .get(scope.ownerId) as { indexed: number }
   ).indexed;
@@ -476,14 +490,27 @@ export function getSearchCoverage(scope: Scope): SearchCoverage {
   const coverage = total > 0 ? Math.round((indexed / total) * 100) : 100;
   const resolved = resolveEmbeddings();
 
+  const evidenceIndexed = (
+    sqlite
+      .prepare(
+        `SELECT COUNT(*) AS n FROM search_passage_state p
+    JOIN contacts c ON c.id = p.contactId WHERE c.ownerId = ? AND p.ownerId = ?
+    AND p.representationVersion = ? AND ${ACTIVE_CONTACT_SQL}`,
+      )
+      .get(scope.ownerId, scope.ownerId, PASSAGE_VERSION) as { n: number }
+  ).n;
+
   return {
+    representationVersion: PASSAGE_VERSION,
+    embeddingSignature: getEmbeddingsState()?.signature ?? null,
+    evidenceIndexed,
     total,
     indexed,
     missing,
     pending: queueStats.pending + queueStats.processing,
     failed: queueStats.failed,
     coverage,
-    isIndexing: running,
+    isIndexing: running || isSearchBackfillRunning(),
     provider: {
       kind: resolved.kind,
       providerId: resolved.providerId ?? null,

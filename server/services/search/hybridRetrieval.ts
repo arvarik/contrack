@@ -1,3 +1,4 @@
+import { findPassages } from "./passages.ts";
 import { matchesQueryLocations } from "../../ai/searchLocations.ts";
 // Hybrid retrieval applies a bounded AI query plan, then combines local
 // keyword and vector rankings. `localRetrieval` is the part with no plan:
@@ -13,6 +14,7 @@ import {
   isSearchEmbeddingReady,
   embedText,
   findSearchNeighbors,
+  findPassageNeighbors,
   getSearchEmbeddingCount,
 } from "./localEmbeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -31,7 +33,7 @@ import type { CompiledFacets } from "./facetSql.ts";
 // =============================================================================
 
 /** The ranked lists reciprocal rank fusion combines. */
-export type FusionChannel = "lexical" | "dense" | "trait";
+export type FusionChannel = "lexical" | "dense" | "trait" | "passage";
 
 export interface RetrievalCandidate {
   contactId: string;
@@ -53,6 +55,7 @@ export interface RetrievalResult {
    * candidates against the user's structured intent.
    */
   plan: QueryPlan | null;
+  queryVector?: Float32Array | null;
   /**
    * The contacts the plan's hard filter allowed, name and last contact
    * included, or null when no filter applied. When the filter holds every
@@ -413,7 +416,7 @@ async function vectorRetrieval(
         : queryVector;
     if (!vector) return { items: [], vector: null };
 
-    const neighbors = findSearchNeighbors(
+    const contactNeighbors = findSearchNeighbors(
       scope,
       vector,
       VECTOR_LIMIT,
@@ -421,6 +424,16 @@ async function vectorRetrieval(
       facets,
     );
 
+    const neighbors = [
+      ...contactNeighbors,
+      ...findPassageNeighbors(scope, vector, preFilterIds, facets),
+    ]
+      .sort((a, b) => a.distance - b.distance)
+      .filter(
+        (item, index, rows) =>
+          rows.findIndex((row) => row.contactId === item.contactId) === index,
+      )
+      .slice(0, VECTOR_LIMIT);
     return {
       items: neighbors.map((n, i) => ({ contactId: n.contactId, rank: i + 1 })),
       vector,
@@ -637,6 +650,7 @@ export interface LocalRetrievalResult {
   candidates: RetrievalCandidate[];
   /** The keyword channel: FTS in broad mode, in four tiers. */
   lexical: RankedItem[];
+  passage: RankedItem[];
   /** The vector channel. Empty when no embedding model is ready. */
   dense: RankedItem[];
   /** The vector the dense channel used, for reuse by a later stage. */
@@ -685,13 +699,30 @@ export async function localRetrieval(
     options.aiAllowed,
     options.facets,
   );
-  const candidates = reciprocalRankFusion(
-    channelLists(intent, lexical, dense.items),
-    options.rrfK,
-  );
+  const channels = channelLists(intent, lexical, dense.items);
+  let passage: RankedItem[] = [];
+  if (intent.kind === "conceptual") {
+    const ids = [
+      ...new Set(
+        findPassages(scope, query, allowedIds, options.facets).map(
+          (row) => row.contactId,
+        ),
+      ),
+    ];
+    passage = ids.map((contactId, index) => ({ contactId, rank: index + 1 }));
+    if (ids.length)
+      channels.push({
+        channel: "passage",
+        weight: intent.weights.lexical,
+        items: passage,
+      });
+  }
+  // TODO(v2.1): Expand the candidate budget only when held-out recall improves enough to justify added verification latency.
+  const candidates = reciprocalRankFusion(channels, options.rrfK);
   return {
     candidates: options.limit ? candidates.slice(0, options.limit) : candidates,
     lexical,
+    passage,
     dense: dense.items,
     queryVector: dense.vector,
     intent,
@@ -799,6 +830,15 @@ export async function hybridRetrieval(
     ? reciprocalRankFusion(
         [
           ...channelLists(local.intent, local.lexical, local.dense),
+          ...(local.passage.length
+            ? [
+                {
+                  channel: "passage" as const,
+                  weight: local.intent.weights.lexical,
+                  items: local.passage,
+                },
+              ]
+            : []),
           ...traitBoosts,
         ],
         options.rrfK,
@@ -828,6 +868,7 @@ export async function hybridRetrieval(
     highConfidence,
     preFilterSummary: hardFilterSummary,
     plan,
+    queryVector: local.queryVector,
     allowed,
     evidence,
   };

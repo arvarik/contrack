@@ -45,6 +45,7 @@ const EVIDENCE_FIELDS: [EvidenceField, ...EvidenceField[]] = [
   "industry",
   "preferences",
   "interests",
+  "passage",
 ];
 
 /**
@@ -123,15 +124,16 @@ OUTPUT SHAPE (per match, nothing else):
   {
     "contact_id": "<id from candidate>",
     "verified_field": "<exact field name like 'location' or 'company'>",
-    "verified_value": "<EXACT substring from that field that proves the match>"
+    "verified_value": "<EXACT substring from that field that proves the match>",
+    "passage_id": "<passage id when verified_field is passage, otherwise an empty string>"
   }
 
-When the query asks for an interest, a trait or a topic as well as a place, company or role, cite the field that proves the interest, trait or topic (often interests or about). The database checks the hard constraints below as well. Keep verified_value short: the words that prove the match, not the whole field.
+When the query asks for an interest, a trait or a topic as well as a place, company or role, cite the field that proves the interest, trait or topic (often interests or about). The database checks the hard constraints below as well. For a passage, set verified_field to "passage" and passage_id to its id. Quote only its text, and respect the employment status in its context. Never combine different contacts or different jobs as one fact. Keep verified_value short: the words that prove the match, not the whole field.
 
 A name in the query may be misspelled or a nickname ("Jon" for Jonathan). When a candidate is that person, cite the name as the candidate's name field spells it, never as the query spells it.
 
 CRITICAL RULES (in priority order):
-1. EVIDENCE OR EXCLUDE: \`verified_value\` MUST be a literal substring of the named field. If the candidate has no such substring, OMIT them entirely. Do not approximate, do not infer, do not paraphrase.
+1. EVIDENCE OR EXCLUDE: \`verified_value\` MUST be a literal substring of the named field. If the candidate has no such substring, OMIT them entirely. The question may paraphrase a source fact. Match equivalent meanings, but copy verified_value exactly and never infer unstated credentials, dates, employers or expertise.
 2. ${hasHardConstraints ? "EVERY HARD CONSTRAINT must be satisfied — see below. A contact failing ANY constraint must be excluded." : "Match the query intent — common sense applies."}
 3. NO TENSE-DETECTION: prior employment ("ex-Stripe") is NOT a current-company match unless the query asks about ex-employees.
 4. EMPTY FIELDS NEVER QUALIFY: if a candidate has no \`location\`, they cannot match a location query. Exclude them.
@@ -154,6 +156,14 @@ A contact that fails any hard constraint MUST be excluded, regardless of how wel
   const listed = candidates.map((candidate, index) => ({
     ...candidate,
     id: `c${index + 1}`,
+    ...(candidate.passages?.length
+      ? {
+          passages: candidate.passages.map((passage, i) => ({
+            ...passage,
+            id: `p${i + 1}`,
+          })),
+        }
+      : {}),
   }));
   const byListedId = new Map(
     listed.map((candidate, index) => [candidate.id, candidates[index]]),
@@ -174,7 +184,9 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     signal,
     lane: "search",
     timeoutMs: 8_000,
-    maxOutputTokens: 1_200,
+    maxOutputTokens: candidates.some((candidate) => candidate.passages?.length)
+      ? 1_800
+      : 1_200,
     jsonSchema: {
       type: "array",
       items: {
@@ -183,8 +195,16 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
           contact_id: { type: "string" },
           verified_field: { type: "string", enum: [...EVIDENCE_FIELDS] },
           verified_value: { type: "string" },
+          passage_id: { type: "string" },
         },
-        required: ["contact_id", "verified_field", "verified_value"],
+        required: [
+          "contact_id",
+          "verified_field",
+          "verified_value",
+          ...(candidates.some((candidate) => candidate.passages?.length)
+            ? ["passage_id"]
+            : []),
+        ],
       },
     },
   });
@@ -196,6 +216,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
         contact_id: z.string().min(1).max(100),
         verified_field: z.enum(EVIDENCE_FIELDS),
         verified_value: z.string().trim().min(1).max(600),
+        passage_id: z.string().max(100).optional(),
       }),
     )
     .max(30)
@@ -243,10 +264,18 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     const field = (m.verified_field ?? "").toLowerCase();
     const value = (m.verified_value ?? "").trim();
     const candAsRecord = cand as unknown as Record<string, unknown>;
+    const passage =
+      field === "passage"
+        ? cand.passages?.find(
+            (item, index) =>
+              m.passage_id === item.id || m.passage_id === `p${index + 1}`,
+          )
+        : undefined;
     const fieldVal =
-      typeof candAsRecord[field] === "string"
+      passage?.text ??
+      (typeof candAsRecord[field] === "string"
         ? (candAsRecord[field] as string)
-        : "";
+        : "");
 
     if (
       !value ||
@@ -331,6 +360,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       contact_id: cand.id,
       verified_field: m.verified_field,
       verified_value: sanitizedValue,
+      ...(passage ? { passage_id: passage.id } : {}),
     });
   }
   // The retrieval order, not the order the model wrote.
