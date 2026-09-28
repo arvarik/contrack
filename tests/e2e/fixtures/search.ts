@@ -60,6 +60,78 @@ export async function answerPeopleSearch(
   });
 }
 
+export interface StreamedAnswer {
+  /** The local list the server streams at once, before AI has checked it. */
+  instant: Match[];
+  /** AI's answer, sent when the test calls {@link releasePeopleSearch}. */
+  complete: Match[];
+  /** AI did not check the final answer either. */
+  fallback?: boolean;
+}
+
+/**
+ * Answer every People search in two chunks, as the server streams them: the
+ * local list at once, unverified, and the final answer only when the test
+ * calls {@link releasePeopleSearch}. `page.route` sends a body whole, so
+ * this replaces `fetch` in the page for the one path, before the app loads.
+ */
+export async function streamPeopleSearch(
+  page: Page,
+  { instant, complete, fallback = false }: StreamedAnswer,
+): Promise<void> {
+  await page.addInitScript(
+    ({ instant, complete, fallback }) => {
+      const realFetch = window.fetch.bind(window);
+      const held = window as unknown as { __releasePeopleSearch?: () => void };
+      window.fetch = (input, init) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        if (!url.includes("/api/search/semantic")) {
+          return realFetch(input, init);
+        }
+        const encoder = new TextEncoder();
+        const line = (value: unknown) =>
+          encoder.encode(JSON.stringify(value) + "\n");
+        const released = new Promise<void>((resolve) => {
+          held.__releasePeopleSearch = resolve;
+        });
+        const body = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            controller.enqueue(
+              line({ phase: "instant", matches: instant, fallback: true }),
+            );
+            await released;
+            controller.enqueue(
+              line({ phase: "complete", matches: complete, fallback }),
+            );
+            controller.close();
+          },
+        });
+        return Promise.resolve(
+          new Response(body, {
+            status: 200,
+            headers: { "Content-Type": "application/x-ndjson" },
+          }),
+        );
+      };
+    },
+    { instant, complete, fallback },
+  );
+}
+
+/** Send the final answer of the People search {@link streamPeopleSearch} holds. */
+export async function releasePeopleSearch(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    (
+      window as unknown as { __releasePeopleSearch?: () => void }
+    ).__releasePeopleSearch?.(),
+  );
+}
+
 /** Fail every People search the way the server reports a failure. */
 export async function failPeopleSearch(
   page: Page,

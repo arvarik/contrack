@@ -38,7 +38,9 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { SidePanel } from "../components/layout/SidePanel";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { NAMES } from "../lib/names";
-import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
+import { ResultCard } from "./search/SearchResultCards";
+import { SearchingStage, useCorvidSearchFlight } from "./search/SearchingStage";
+import { InfoTip } from "../components/ui/InfoTip";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { AskSearchBox } from "./search/AskSearchBox";
@@ -310,14 +312,20 @@ export const SearchView = () => {
   /** Names the list of suggested questions after its heading. */
   const suggestionsId = useId();
 
-  const results = semanticSearch.data?.matches ?? [];
+  /**
+   * A question is being answered. With AI at work the local list that
+   * streams first is not shown: the page waits for the answer AI verified,
+   * and the corvid hunts for it meanwhile (`SearchingStage`). Without AI the
+   * one answer arrives at once and never shows the stage.
+   */
+  const isLoading = isPending;
+  const results = isLoading ? [] : (semanticSearch.data?.matches ?? []);
   const isFallback = semanticSearch.data?.fallback ?? false;
   /** The question the results on screen answer. Never the input. */
   const answeredQuery = semanticSearch.data?.query ?? "";
-  const isLoading = isPending && results.length === 0;
-  const isEnriching = semanticSearch.phase === "enriching";
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
+  const flight = useCorvidSearchFlight(isLoading && mode === "people");
 
   /**
    * The one sentence a screen reader hears about this search. The thinking
@@ -327,7 +335,6 @@ export const SearchView = () => {
    */
   const status = peopleSearchStatus({
     isLoading,
-    isEnriching,
     isError: semanticSearch.isError,
     hasSearched,
     count: results.length,
@@ -422,11 +429,18 @@ export const SearchView = () => {
                   onSubmit={() => handleSearch()}
                   onClear={handleClear}
                   canClear={query.length > 0}
-                  canSubmit={query.trim().length >= 3 && !isLoading}
+                  canSubmit={
+                    query.trim().length >= 3 &&
+                    !(isLoading && query.trim() === submittedQuery)
+                  }
                   icon={Sparkles}
+                  // The bird the search flight leaves and lands on. It stays
+                  // while the bird is out, so it has somewhere to come home.
                   busyMark={
-                    isLoading ? (
-                      <CorvidThinking decorative size={20} />
+                    flight.perched ? (
+                      <span ref={flight.perchRef} className="flex">
+                        <CorvidThinking decorative size={20} />
+                      </span>
                     ) : undefined
                   }
                   placeholder="Ask about your network…"
@@ -477,16 +491,14 @@ export const SearchView = () => {
                 before the new one paints, so there is nothing to overlap.
               */}
               {isLoading ? (
-                <div key="shimmer" className="fade-enter space-y-3">
-                  <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
-                    {/* Decorative: the word beside it says the same thing. */}
-                    <CorvidThinking decorative size={16} />
-                    Searching…
-                  </div>
-                  <ShimmerCard delay={0} />
-                  <ShimmerCard delay={0.08} />
-                  <ShimmerCard delay={0.16} />
-                </div>
+                flight.staged ? (
+                  <SearchingStage
+                    key="searching"
+                    ref={flight.areaRef}
+                    still={flight.still}
+                    aiAllowed={aiAllowed}
+                  />
+                ) : null
               ) : results.length > 0 ? (
                 <div key="results" className="fade-enter space-y-3">
                   {/* Results header — wraps rather than crushes on narrow screens */}
@@ -494,32 +506,31 @@ export const SearchView = () => {
                     <div className="flex items-center gap-2">
                       {/* A label in the muted ink, like "Try asking": blue
                           would read as a link. */}
-                      <span className={SECTION_HEADING}>
-                        {isFallback
-                          ? isEnriching
-                            ? "Unverified candidates"
-                            : "Unverified results"
-                          : "Search results"}
-                      </span>
+                      <span className={SECTION_HEADING}>Search results</span>
                       <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
                         {results.length} match
                         {results.length !== 1 ? "es" : ""}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {isEnriching && (
-                        <div className="flex items-center gap-1.5 text-xs text-primary">
-                          {/* Decorative: the words beside it say it. */}
-                          <CorvidThinking decorative size={16} />
-                          <span>Enriching with AI…</span>
-                        </div>
-                      )}
-                      {isFallback && !isEnriching && (
-                        <div className="flex items-center gap-1.5 text-xs text-warning">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>
-                            AI unavailable — showing unverified matches
-                          </span>
+                      {/*
+                        AI did not check this list. Said once in words for
+                        the whole list, with the question mark every
+                        unverified card carries, which explains it on a
+                        tap, a click, a focus or a hover.
+                      */}
+                      {isFallback && (
+                        <div className="flex items-center gap-0.5 text-xs font-medium text-warning">
+                          <span>Not verified by AI</span>
+                          <InfoTip
+                            label="Why these results are not verified by AI"
+                            tone="warning"
+                            align="end"
+                          >
+                            {aiAllowed
+                              ? "AI could not check these people this time, so some may not fit. They match your words or their meaning. Refresh to ask AI again"
+                              : "AI is off for your account, so AI did not check these people. They match your words or their meaning. Turn on AI in Settings, Privacy"}
+                          </InfoTip>
                         </div>
                       )}
                       {/*

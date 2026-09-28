@@ -10,18 +10,27 @@
 // - Zero rate-limit risk
 // - ~2s backfill for 960 contacts (vs 30s+ with Gemini)
 //
-// The model produces 384-dimensional L2-normalized vectors, stored in a
-// separate `search_embeddings` vec0 table. The dedupe engine continues
-// using Gemini's 768-dim embeddings for higher-accuracy similarity.
+// The model produces 384-dimensional L2-normalized vectors, stored as int8 in
+// a separate `search_embeddings` vec0 table (`vectorScale.ts`). The dedupe
+// engine continues using Gemini's 768-dim embeddings for higher-accuracy
+// similarity.
 // =============================================================================
 
 import path from "path";
 import {
   sqlite,
+  vecElementFor,
   vecTableDdl,
   VEC_ACTIVE_MATCH,
   VEC_METADATA_SQL,
 } from "../../db.ts";
+import {
+  UNIT_SCALE,
+  VECTOR_SCALE_KEY,
+  quantize,
+  scaleFor,
+} from "./vectorScale.ts";
+import { deleteSetting, getSetting, setSetting } from "../settingsService.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
@@ -132,8 +141,11 @@ export function isLocalEmbeddingReady(): boolean {
  * Returns null if the model isn't ready.
  * Typical latency: ~3-5ms on CPU.
  */
-export async function embedText(text: string): Promise<Float32Array | null> {
-  const [vector] = await embedTexts([text]);
+export async function embedText(
+  text: string,
+  signal?: AbortSignal,
+): Promise<Float32Array | null> {
+  const [vector] = await embedTexts([text], signal);
   return vector ?? null;
 }
 
@@ -144,7 +156,11 @@ export async function embedText(text: string): Promise<Float32Array | null> {
  * configured, otherwise to the bundled local model. Returns an empty array
  * when no backend is available (search degrades to FTS-only).
  */
-async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+async function embedTexts(
+  texts: string[],
+  signal?: AbortSignal,
+): Promise<Float32Array[]> {
+  signal?.throwIfAborted();
   if (texts.length === 0) return [];
   const resolved = resolveEmbeddings();
 
@@ -180,6 +196,8 @@ async function embedTexts(texts: string[]): Promise<Float32Array[]> {
       // caller keeps these vectors past the life of the message.
       return unflatten(result).map((v) => new Float32Array(v));
     },
+    undefined,
+    signal,
   );
 
   for (const vec of vectors) {
@@ -247,7 +265,16 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
   // The DDL comes from db.ts so a model change cannot silently recreate the
   // table without its partition key, which would make every scoped KNN in
   // Phase 2 return nothing. A unit test pins the two call sites equal.
-  sqlite.exec(vecTableDdl("search_embeddings", dimension));
+  sqlite.exec(
+    vecTableDdl(
+      "search_embeddings",
+      dimension,
+      vecElementFor("search_embeddings"),
+    ),
+  );
+  // A new model has its own range of components, so the first write after
+  // this sets a new scale.
+  deleteSetting(VECTOR_SCALE_KEY);
   try {
     sqlite.exec("DELETE FROM search_index_queue");
   } catch {
@@ -262,6 +289,39 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
 // =============================================================================
 // Storage: search_embeddings Table Operations
 // =============================================================================
+
+/** The table's int8 scale, or null before the first vector is written. */
+export function searchVectorScale(): number | null {
+  const scale = getSetting<number>(VECTOR_SCALE_KEY);
+  return typeof scale === "number" && Number.isFinite(scale) && scale > 0
+    ? scale
+    : null;
+}
+
+/** True when the table holds at least one vector, for any owner. */
+function hasSearchVectors(): boolean {
+  // The scale is one per table, so this looks across owners on purpose.
+  // tenant-lint: allow instance sweep
+  return !!sqlite.prepare("SELECT 1 FROM search_embeddings LIMIT 1").get();
+}
+
+/**
+ * The scale to write `vectors` at.
+ *
+ * The table's own scale once it has one. The first write to an empty table
+ * sets it from the vectors that write carries: the first backfill batch, or
+ * every vector of an evaluation corpus. An emptied table starts over.
+ */
+function writeScale(vectors: Float32Array[]): number {
+  const stored = searchVectorScale();
+  if (stored !== null && hasSearchVectors()) return stored;
+  const scale = scaleFor(vectors);
+  // Only zero vectors: nothing to learn a scale from, and zero is zero at
+  // any scale.
+  if (scale === null) return stored ?? UNIT_SCALE;
+  setSetting(VECTOR_SCALE_KEY, scale);
+  return scale;
+}
 
 /**
  * Upsert a search embedding for a contact.
@@ -288,7 +348,7 @@ const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
   sqlite
     .prepare(
       `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
-       SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ?
+       SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, vec_int8(?)
          FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
     )
     .run(buf, contactId);
@@ -298,10 +358,27 @@ export function upsertSearchEmbedding(
   contactId: string,
   embedding: Float32Array,
 ): void {
-  // Defensive copy — Buffer.from(arrayBuffer) is zero-copy, which risks
-  // corruption if Transformers.js reclaims the underlying ArrayBuffer.
-  const buf = Buffer.from(new Float32Array(embedding).buffer);
-  _upsertTxn(contactId, buf);
+  upsertSearchEmbeddings([{ contactId, embedding }]);
+}
+
+/**
+ * Upsert several contacts' vectors in one transaction, at one scale.
+ *
+ * Into an empty table, the scale comes from all of them together. The
+ * evaluation gates write their whole corpus this way, so its scale is the
+ * one the boot migration would compute from the same vectors.
+ */
+export function upsertSearchEmbeddings(
+  rows: { contactId: string; embedding: Float32Array }[],
+): void {
+  if (!rows.length) return;
+  const scale = writeScale(rows.map((row) => row.embedding));
+  // `quantize` writes a new buffer, so nothing here borrows the memory
+  // Transformers.js handed back.
+  sqlite.transaction(() => {
+    for (const row of rows)
+      _upsertTxn(row.contactId, quantize(row.embedding, scale));
+  })();
 }
 
 /**
@@ -335,14 +412,21 @@ export function findSearchNeighbors(
   facets?: CompiledFacets | null,
 ): { contactId: string; distance: number }[] {
   if (preFilterIds?.size === 0 || !Number.isFinite(k) || k < 1) return [];
-  const buf = Buffer.from(new Float32Array(queryVec).buffer);
-  const hardFilter = preFilterIds
-    ? "AND contactId IN (SELECT value FROM json_each(?))"
-    : "";
+  // The query goes through the table's scale, so its distances compare with
+  // the stored vectors'. Without one, every stored vector is zero.
+  const buf = quantize(queryVec, searchVectorScale() ?? UNIT_SCALE);
+  const selectors: string[] = [];
+  if (preFilterIds) selectors.push("SELECT value FROM json_each(?)");
   // The facets run inside the KNN, before `k`, so a contact the facets keep
   // is never lost to closer neighbours they drop.
-  const facetFilter = facets
-    ? `AND contactId IN (SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql}))`
+  if (facets)
+    selectors.push(
+      `SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql})`,
+    );
+  // vec0 accepts one rowid IN constraint. Intersect both sets inside it,
+  // or a query with a planner filter and a facet loses its vector channel.
+  const candidateFilter = selectors.length
+    ? `AND contactId IN (${selectors.join(" INTERSECT ")})`
     : "";
   const params = [
     buf,
@@ -355,11 +439,10 @@ export function findSearchNeighbors(
     .prepare(
       `
     SELECT contactId, distance FROM search_embeddings
-    WHERE embedding MATCH ?
+    WHERE embedding MATCH vec_int8(?)
       AND ownerId = ?
       AND ${VEC_ACTIVE_MATCH}
-      ${hardFilter}
-      ${facetFilter}
+      ${candidateFilter}
       AND k = ? ORDER BY distance
   `,
     )
@@ -483,7 +566,7 @@ function backfillStatements() {
     ),
     insert: sqlite.prepare(
       `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
-     SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ? FROM contacts c WHERE c.id = ?`,
+     SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, vec_int8(?) FROM contacts c WHERE c.id = ?`,
     ),
   };
 }
@@ -529,11 +612,14 @@ async function embedSearchRound(
       );
     }
 
+    const scale = writeScale(
+      vectors.filter((vec): vec is Float32Array => !!vec),
+    );
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
         if (!vec || currentSearchText(batch[j].id) !== texts[j]) continue;
-        const buf = Buffer.from(vec.buffer.slice(0));
+        const buf = quantize(vec, scale);
         stmts.remove.run(batch[j].id);
         // One bind for the vector and one for the contact the owner and the
         // status columns are read from.
@@ -713,8 +799,12 @@ function contactToSearchText(
   return parts.join(" | ");
 }
 
-/** Read current source text after an asynchronous embedding call. */
-function currentSearchText(contactId: string): string | null {
+/**
+ * The text a contact's search vector embeds, as the contact reads now.
+ *
+ * Also read by the evaluation recorders, which embed the same text.
+ */
+export function currentSearchText(contactId: string): string | null {
   const row = sqlite
     .prepare(
       // tenant-lint: allow owner-checked by caller

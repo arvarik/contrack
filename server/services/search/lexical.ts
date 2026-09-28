@@ -41,9 +41,16 @@ export function searchTokens(query: string): string[] {
  * down MATCH, rowid and rank alone, and everything else is a post-filter over
  * rows the caller may not read. The architecture document, section 6.2, has
  * the measurements.
+ *
+ * The strategy never reads the owner token column. The token is "o" and the
+ * owner's id in hex, and the query's words are prefix clauses, so for an
+ * owner whose id starts with f the word "of" matched `ofd…` in every row
+ * the owner has: one account in sixteen. Every contact then matched "of",
+ * and every BM25 score moved. `- {ownerTok} :` keeps the words to the
+ * searched columns. The notes index has the same column and shares this.
  */
 export function scopedMatch(scope: Scope, strategy: string): string {
-  return `ownerTok:${ownerToken(scope)} AND (${strategy})`;
+  return `ownerTok:${ownerToken(scope)} AND (- {ownerTok} : (${strategy}))`;
 }
 
 /**

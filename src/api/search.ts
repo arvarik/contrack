@@ -84,10 +84,15 @@ export const useSemanticSearch = (externalState?: {
 
   useEffect(
     () => () => {
-      abortRef.current?.abort();
+      const pending = abortRef.current;
+      pending?.abort();
       abortRef.current = null;
+      if (pending) {
+        setData(null);
+        setPhase("idle");
+      }
     },
-    [],
+    [setData, setPhase],
   );
   /**
    * Ask a question. `filters` are the palette's facet pills. The server also
@@ -144,11 +149,15 @@ export const useSemanticSearch = (externalState?: {
         if (current()) {
           setError(cause instanceof Error ? cause : new Error("Search failed"));
           setIsSuccess(false);
+          // A partial answer is not a completed result. Discard it from
+          // the shared session too, so leaving and returning cannot show it.
+          setData(null);
         }
       } finally {
         if (current()) {
           setIsPending(false);
           setPhase("done");
+          abortRef.current = null;
         }
       }
     },

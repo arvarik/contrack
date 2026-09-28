@@ -108,9 +108,11 @@ const clampTo = (box: FlightBox, [x, y]: Point): Point => [
 /**
  * `loop` is the perch's click: a lap of the window. `swoop` is the
  * celebration: a pass along the top, with a flourish. `sortie` is the bird
- * stretching its wings by itself: short, near the perch, and home.
+ * stretching its wings by itself: short, near the perch, and home. `search`
+ * is the bird hunting for an answer: a long, calmer wander over the `area`
+ * the page gives it, until it is called home.
  */
-export type FlightKind = "loop" | "swoop" | "sortie";
+export type FlightKind = "loop" | "swoop" | "sortie" | "search";
 
 export interface FlightPerch {
   /** The perch's mark: its top left corner and its size, in px. */
@@ -131,6 +133,11 @@ export interface FlightRequest {
    * out of the frame it was drawing, so nothing about the bird jumps.
    */
   airborne?: { x: number; y: number; facing: 1 | -1; from?: FlightFrame };
+  /**
+   * A `search` flight's hunting ground, in px: the empty space where the
+   * answer will appear. It is kept inside the room. Other kinds ignore it.
+   */
+  area?: FlightBox;
 }
 
 /** One moment of a flight. */
@@ -233,7 +240,9 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
   ];
 
   let middle: Point[];
-  if (kind === "sortie") {
+  if (kind === "search") {
+    middle = huntingRoute(req, box, launch, approach);
+  } else if (kind === "sortie") {
     // A short outing near home: one small loop in the corner of the room
     // by the ring, out along the top, round, and back underneath.
     const reachX = Math.min(width * 0.42, 520);
@@ -287,6 +296,153 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
     }
   }
   return relax([start, launch, ...middle, approach, start]);
+}
+
+/**
+ * How long a search flight hunts before it lands by itself, in ms. Twice
+ * the server's 12 second budget for a model answer, so the bird is still
+ * out when the slowest answer arrives.
+ */
+export const SEARCH_HUNT_MS = 26_000;
+/** A hunting bird's speed, against a lap's: slower, looking about. */
+const SEARCH_PACE = 0.62;
+/**
+ * The most a hunting bird turns from one waypoint to the next, in degrees.
+ * With waypoints {@link huntingRoute} spaces 40 to 75 px apart, its
+ * tightest circle is about one and a half spacings across.
+ */
+const HUNT_TURN = 40;
+/**
+ * A hunting bird's average speed, against its cruise. It is always turning,
+ * and `timeRoute` slows it through each turn. Measured over three hundred
+ * seeds on a laptop, a small window and a phone.
+ */
+const HUNT_SLOWING = 0.42;
+
+/**
+ * A search flight's middle: a wander over the area the page gives it.
+ *
+ * 1. The ground is the area, kept inside the room, and grown to room for a
+ *    full turn when it is smaller than that.
+ * 2. The bird enters it at a random spot, then flies on in short steps. Its
+ *    turn drifts from step to step, so it curves one way for a while, then
+ *    the other, and now and then closes a circle, the way a bird hunts.
+ * 3. When the ground's edge is close ahead, it turns for the middle as hard
+ *    as it may, and so never meets the edge.
+ * 4. It stops once the route is about {@link SEARCH_HUNT_MS} long at the
+ *    hunting speed. An answer calls it home long before that.
+ * 5. It comes round for home by the same turns, never on the spot.
+ *
+ * No step turns more than {@link HUNT_TURN}, well under `relax`'s limit, so
+ * `relax` leaves the route alone and the spline never cusps.
+ */
+function huntingRoute(
+  req: FlightRequest,
+  box: FlightBox,
+  start: Point,
+  end: Point,
+): Point[] {
+  const { rng, viewport } = req;
+  const area = req.area ?? box;
+  let left = Math.min(Math.max(area.left, box.left), box.right);
+  let right = Math.max(Math.min(area.right, box.right), left);
+  let top = Math.min(Math.max(area.top, box.top), box.bottom);
+  let bottom = Math.max(Math.min(area.bottom, box.bottom), top);
+  const maxTurn = (HUNT_TURN * Math.PI) / 180;
+  const reach = Math.min(
+    Math.hypot(right - left, bottom - top),
+    2 * Math.min(right - left, bottom - top),
+  );
+  // The step, and the circle the tightest turns draw.
+  const spacing = Math.min(Math.max(reach * 0.07, 40), 75);
+  const radius = spacing / (2 * Math.sin(maxTurn / 2));
+  // Keep the body's middle in from the edges of the ground.
+  const inset = 20;
+  // A ground too small to turn round in grows about its middle.
+  const room = 2.4 * radius + 2 * inset;
+  if (right - left < room) {
+    const mid = (left + right) / 2;
+    left = Math.max(box.left, mid - room / 2);
+    right = Math.min(box.right, mid + room / 2);
+  }
+  if (bottom - top < room) {
+    const mid = (top + bottom) / 2;
+    top = Math.max(box.top, mid - room / 2);
+    bottom = Math.min(box.bottom, mid + room / 2);
+  }
+  const width = right - left;
+  const height = bottom - top;
+  const middle: Point = [left + width / 2, top + height / 2];
+  const edge = Math.min(inset, width / 4, height / 4);
+  const onGround = ([x, y]: Point) =>
+    x >= left + edge &&
+    x <= right - edge &&
+    y >= top + edge &&
+    y <= bottom - edge;
+  const toGround = ([x, y]: Point): Point => [
+    Math.min(Math.max(x, left + edge), right - edge),
+    Math.min(Math.max(y, top + edge), bottom - edge),
+  ];
+  const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+  // The route's length: the hunt's time at a hunting bird's usual speed.
+  const speed =
+    (690 *
+      SEARCH_PACE *
+      HUNT_SLOWING *
+      Math.min(Math.max(viewport.width / 1440, 0.72), 1.1)) /
+    1000;
+  const length = SEARCH_HUNT_MS * speed;
+  // How far ahead the bird looks for the edge: room for a half circle.
+  const ahead = 1.4 * radius + spacing;
+
+  let at: Point = [
+    left + width * between(rng, 0.25, 0.75),
+    top + height * between(rng, 0.25, 0.75),
+  ];
+  let heading = Math.atan2(at[1] - start[1], at[0] - start[0]);
+  let turn = 0;
+  const points: Point[] = [at];
+  let flown = 0;
+  const stepTo = (): void => {
+    heading = wrap(heading + turn);
+    at = toGround([
+      at[0] + Math.cos(heading) * spacing,
+      at[1] + Math.sin(heading) * spacing,
+    ]);
+    points.push(at);
+  };
+  while (flown < length && points.length < 600) {
+    const look: Point = [
+      at[0] + Math.cos(heading) * ahead,
+      at[1] + Math.sin(heading) * ahead,
+    ];
+    if (onGround(look)) {
+      turn = Math.min(
+        Math.max(turn * 0.7 + between(rng, -0.6, 0.6) * maxTurn, -maxTurn),
+        maxTurn,
+      );
+    } else {
+      const toMiddle = wrap(
+        Math.atan2(middle[1] - at[1], middle[0] - at[0]) - heading,
+      );
+      turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
+    }
+    stepTo();
+    flown += spacing;
+  }
+  // Round for home, a step at a time, on the side the middle is: a bird
+  // by the edge that turned the other way would be pressed against it.
+  const toMiddle = wrap(
+    Math.atan2(middle[1] - at[1], middle[0] - at[0]) - heading,
+  );
+  turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
+  for (let i = 0; i < 9; i++) {
+    const home = wrap(Math.atan2(end[1] - at[1], end[0] - at[0]) - heading);
+    if (Math.abs(home) <= maxTurn) break;
+    stepTo();
+  }
+  return points;
 }
 
 /** The sharpest turn a flight takes at a waypoint, in degrees. */
@@ -732,7 +888,8 @@ export function planFlight(req: FlightRequest): FlightPlan {
 
   const cruise =
     between(rng, 600, 780) *
-    Math.min(Math.max(viewport.width / 1440, 0.72), 1.1);
+    Math.min(Math.max(viewport.width / 1440, 0.72), 1.1) *
+    (req.kind === "search" ? SEARCH_PACE : 1);
   const track = timeRoute(points, cruise, lands, airborne === null);
   const routeMs = track.time[track.time.length - 1]!;
 
@@ -763,7 +920,13 @@ export function planFlight(req: FlightRequest): FlightPlan {
 
   // A barrel roll, somewhere in the middle.
   const rollChance =
-    req.kind === "swoop" ? 0.45 : req.kind === "loop" && !airborne ? 0.18 : 0;
+    req.kind === "swoop"
+      ? 0.45
+      : req.kind === "search"
+        ? 0.3
+        : req.kind === "loop" && !airborne
+          ? 0.18
+          : 0;
   let rollAt = -Infinity;
   if (chance(rng, rollChance) && cruiseTo - cruiseFrom > ROLL_MS * 3) {
     rollAt = between(

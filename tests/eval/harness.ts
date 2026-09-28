@@ -22,6 +22,8 @@ import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { hybridRetrieval } from "../../server/services/search/hybridRetrieval.ts";
+import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import type { PairScorer } from "../../server/services/search/crossEncoder.ts";
 import type { Scope } from "../../server/tenancy/scope.ts";
 import type {
   EvalContact,
@@ -31,10 +33,16 @@ import type {
 
 export type { EvalContact, EvalQuery, QueryKind };
 
-/** The four rankings this eval scores. */
-export type Channel = "sidebar" | "lexical" | "fused" | "hybrid";
+/** The five rankings this eval scores. */
+export type Channel = "sidebar" | "lexical" | "fused" | "hybrid" | "reranked";
 
-export const CHANNELS: Channel[] = ["sidebar", "lexical", "fused", "hybrid"];
+export const CHANNELS: Channel[] = [
+  "sidebar",
+  "lexical",
+  "fused",
+  "hybrid",
+  "reranked",
+];
 
 /** 384, the width of the built-in model. Asserted against the fixture. */
 export const EVAL_DIMENSION = 384;
@@ -42,6 +50,7 @@ export const EVAL_DIMENSION = 384;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const FIXTURE_DIR = path.resolve(HERE, "../fixtures/search-eval");
 export const BASELINE_PATH = path.resolve(HERE, "search.baseline.json");
+export const RERANK_SCORES_PATH = path.join(FIXTURE_DIR, "rerank-scores.json");
 
 // ---------------------------------------------------------------------------
 // The fixture on disk
@@ -236,6 +245,91 @@ export async function seedCorpus(
   return { idByKey, keyById };
 }
 
+/**
+ * Write the corpus vectors the way the product writes a batch.
+ *
+ * One call, so the int8 scale comes from every vector of the corpus, the
+ * scale the boot migration would compute from the same vectors. The gate and
+ * the recorder both seed through here, so both search the same bytes.
+ */
+export function seedVectors(
+  contacts: EvalContact[],
+  vectors: Float32Array[],
+  idByKey: Map<string, string>,
+): void {
+  upsertSearchEmbeddings(
+    contacts.map((contact, i) => ({
+      contactId: idByKey.get(contact.key)!,
+      embedding: vectors[i],
+    })),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recorded cross-encoder scores
+// ---------------------------------------------------------------------------
+
+/** The scores the recorder saw, by question and by profile text hash. */
+export interface RerankScores {
+  model: string;
+  recordedAt: string;
+  pairs: number;
+  scores: Record<string, Record<string, number>>;
+}
+
+/** A profile text as a short key. The text itself is long and repeats. */
+export function docKey(doc: string): string {
+  return crypto.createHash("sha256").update(doc).digest("hex").slice(0, 16);
+}
+
+export function loadRerankScores(): RerankScores {
+  return JSON.parse(
+    fs.readFileSync(RERANK_SCORES_PATH, "utf8"),
+  ) as RerankScores;
+}
+
+/**
+ * A scorer that answers from the recorded scores.
+ *
+ * A pair the recorder never saw is a failure, collected in `missing`: the
+ * profile text or the candidates changed, and the fixture must be recorded
+ * again. It still answers, with nothing reordered, so the rest of the gate
+ * runs and the failure names every missing pair at once.
+ */
+export function replayScorer(
+  recorded: RerankScores,
+  missing: string[],
+): PairScorer {
+  return async ({ model, query, docs }) => {
+    if (model !== recorded.model) {
+      missing.push(`model ${model}, recorded ${recorded.model}`);
+      throw new Error("re-record the cross-encoder scores");
+    }
+    const byDoc = recorded.scores[query] ?? {};
+    const scores = docs.map((doc) => byDoc[docKey(doc)]);
+    if (scores.some((score) => score === undefined)) {
+      missing.push(
+        `"${query}": ${scores.filter((x) => x === undefined).length} pair(s)`,
+      );
+      throw new Error("re-record the cross-encoder scores");
+    }
+    return scores as number[];
+  };
+}
+
+/** A scorer that records what `score` returns, for the recorder. */
+export function recordingScorer(
+  score: PairScorer,
+  into: Record<string, Record<string, number>>,
+): PairScorer {
+  return async (request, signal) => {
+    const scores = await score(request, signal);
+    const byDoc = (into[request.query] ??= {});
+    request.docs.forEach((doc, i) => (byDoc[docKey(doc)] = scores[i]));
+    return scores;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Metrics
 // ---------------------------------------------------------------------------
@@ -279,6 +373,20 @@ function firstHit(ranked: string[], expected: Set<string>): number {
   return 0;
 }
 
+/** recall@10 and MRR of rankings, each against its expected contacts. */
+export function scoreRankings(
+  rows: { ranked: string[]; expected: Set<string> }[],
+): ChannelScore {
+  return aggregate(
+    rows.map(({ ranked, expected }, i) => ({
+      id: String(i),
+      kind: "company-role",
+      firstHitRank: firstHit(ranked, expected),
+      recallAt10: score(ranked, expected),
+    })),
+  );
+}
+
 function aggregate(results: QueryResult[]): ChannelScore {
   if (results.length === 0) {
     // An empty result set averages to zero, not to one. This is the trap an
@@ -305,7 +413,7 @@ export interface MeasureOptions {
 }
 
 /**
- * Run every query through all four rankings and score them.
+ * Run every query through all five rankings and score them.
  *
  * `sidebar` is `searchService.searchFts`, the quick search box. It joins its
  * tokens with AND and has no fallback, which is why it scores nothing at all
@@ -329,7 +437,11 @@ export interface MeasureOptions {
  * a phone number from strict keyword search, a question that names a known
  * place, company or industry inside those facets, and everything else as
  * the fused list. It is what a person sees before the model answers, and
- * what they keep when it fails.
+ * what they keep when it fails. It leaves the cross-encoder out.
+ *
+ * `reranked` is `hybrid` with the cross-encoder on, which reorders the top of
+ * the fused list. The gate replays recorded scores for it, so it needs no
+ * model. When no cross-encoder is ready, it equals `hybrid`.
  */
 export async function measure(
   scope: Scope,
@@ -342,6 +454,7 @@ export async function measure(
     lexical: [],
     fused: [],
     hybrid: [],
+    reranked: [],
   };
 
   for (const query of queries) {
@@ -368,6 +481,13 @@ export async function measure(
       query.q,
       `eval-${query.id}`,
       undefined,
+      { aiAllowed: false, rrfK: options.rrfK, crossEncoder: false },
+    );
+    const reranked = await searchService.semanticSearch(
+      scope,
+      query.q,
+      `eval-${query.id}`,
+      undefined,
       { aiAllowed: false, rrfK: options.rrfK },
     );
     const ranked: Record<Channel, string[]> = {
@@ -379,6 +499,7 @@ export async function measure(
       ),
       fused: retrieval.candidates.map((c) => c.contactId),
       hybrid: answer.matches.map((match) => match.id),
+      reranked: reranked.matches.map((match) => match.id),
     };
 
     for (const channel of CHANNELS) {

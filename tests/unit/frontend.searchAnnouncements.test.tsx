@@ -22,7 +22,6 @@ afterEach(cleanup);
 
 const people = (overrides: Partial<PeopleSearchState>): PeopleSearchState => ({
   isLoading: false,
-  isEnriching: false,
   isError: false,
   hasSearched: false,
   count: 0,
@@ -61,21 +60,14 @@ describe("peopleSearchStatus", () => {
     );
   });
 
-  it("says unverified candidates arrived while AI is still working", () => {
+  it("says only that it is searching while AI works", () => {
+    // The page keeps back the list AI has not checked yet, so a reader hears
+    // no count until the answer is final.
     expect(
       peopleSearchStatus(
-        people({ isEnriching: true, count: 4, fallback: true }),
+        people({ isLoading: true, hasSearched: true, count: 0 }),
       ),
-    ).toBe(
-      "4 unverified candidates for “who likes espresso”. Enriching with AI…",
-    );
-    expect(
-      peopleSearchStatus(
-        people({ isEnriching: true, count: 1, fallback: true }),
-      ),
-    ).toBe(
-      "1 unverified candidate for “who likes espresso”. Enriching with AI…",
-    );
+    ).toBe("Searching your network for “who likes espresso”…");
   });
 
   it("counts the matches when the answer is complete", () => {
@@ -93,17 +85,17 @@ describe("peopleSearchStatus", () => {
     );
   });
 
-  it("says that AI was unavailable and the matches are unverified", () => {
+  it("says that AI did not verify the matches", () => {
     expect(
       peopleSearchStatus(
         people({ hasSearched: true, count: 2, fallback: true }),
       ),
-    ).toBe("AI unavailable. 2 unverified matches for “who likes espresso”.");
+    ).toBe("2 matches for “who likes espresso”. Not verified by AI.");
     expect(
       peopleSearchStatus(
         people({ hasSearched: true, count: 1, fallback: true }),
       ),
-    ).toBe("AI unavailable. 1 unverified match for “who likes espresso”.");
+    ).toBe("1 match for “who likes espresso”. Not verified by AI.");
   });
 
   it("says nothing on an error, which the visible alert announces", () => {

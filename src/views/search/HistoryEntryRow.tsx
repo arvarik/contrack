@@ -44,8 +44,9 @@ export const HistoryEntryRow = React.memo(
       const parts: string[] = [];
       if (entry.fallback) {
         // The model did not check this answer: AI was off, failed or ran
-        // out of time, and the local list answered.
-        parts.push("unverified");
+        // out of time, and the local list answered. The same words as the
+        // results' question mark.
+        parts.push("not verified by AI");
       } else if (entry.resultCount === 0) {
         parts.push("no matches");
       } else if (

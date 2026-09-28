@@ -22,6 +22,7 @@ import {
   FLIGHT_MD,
   FLIGHT_PHONE_BOTTOM,
   FLIGHT_TOP,
+  SEARCH_HUNT_MS,
   flightBox,
   flightSize,
   planFlight,
@@ -110,7 +111,7 @@ const CASES: [string, FlightViewport, FlightPerch][] = [
   ["a phone", PHONE, FOOTER],
 ];
 
-for (const kind of ["loop", "sortie", "swoop"] as FlightKind[]) {
+for (const kind of ["loop", "sortie", "swoop", "search"] as FlightKind[]) {
   describe(`a ${kind}`, () => {
     for (const [name, viewport, perch] of CASES) {
       it(`leaves as the logo and lands as the logo, on ${name}`, () => {
@@ -288,7 +289,7 @@ describe("turning round", () => {
 });
 
 describe("smoothness", () => {
-  const KINDS: FlightKind[] = ["loop", "sortie", "swoop"];
+  const KINDS: FlightKind[] = ["loop", "sortie", "swoop", "search"];
 
   it("never pitches more than 18 degrees in one frame, turns included", () => {
     for (const kind of KINDS) {
@@ -587,6 +588,139 @@ describe("the way home", () => {
       expectHome(plan.frame(plan.duration), SIDEBAR);
       expect(plan.duration).toBeLessThan(3_500);
     }
+  });
+});
+
+describe("a search", () => {
+  /** The Ask page's search box bird, and the ground below it on a laptop. */
+  const BOX_BIRD: FlightPerch = { left: 316, top: 196, size: 20 };
+  const GROUND = { left: 296, top: 330, right: 1144, bottom: 900 };
+  /** The same on a phone: the whole width, down past the tab bar. */
+  const PHONE_BIRD: FlightPerch = { left: 32, top: 140, size: 20 };
+  const PHONE_GROUND = { left: 16, top: 250, right: 374, bottom: 844 };
+
+  const CASES = [
+    ["a laptop", LAPTOP, BOX_BIRD, GROUND],
+    ["a phone", PHONE, PHONE_BIRD, PHONE_GROUND],
+  ] as const;
+
+  for (const [name, viewport, perch, ground] of CASES) {
+    it(`hunts over the ground it is given, and all of it, on ${name}`, () => {
+      const box = flightBox(viewport);
+      // The ground inside the room: the phone's tab bar is not in it.
+      const bottom = Math.min(ground.bottom, box.bottom);
+      const width = ground.right - ground.left;
+      const height = bottom - ground.top;
+      const spread: number[] = [];
+      for (const seed of SEEDS) {
+        const plan = planFlight({
+          kind: "search",
+          viewport,
+          perch,
+          rng: createRng(seed),
+          area: ground,
+        });
+        const frames = fly(plan).slice(90, -90);
+        const over = frames.filter(
+          (f) =>
+            f.x >= ground.left - 40 &&
+            f.x <= ground.right + 40 &&
+            f.y >= ground.top - 40 &&
+            f.y <= bottom + 40,
+        );
+        // Out of the search box and back, and the rest over the ground.
+        expect(over.length / frames.length, `${seed}`).toBeGreaterThan(0.9);
+        // It wanders the ground rather than circling its middle. The bird
+        // turns before an edge, so it keeps about a turn's width off each.
+        const xs = frames.map((f) => f.x);
+        const ys = frames.map((f) => f.y);
+        spread.push((Math.max(...xs) - Math.min(...xs)) / width);
+        expect(Math.max(...ys) - Math.min(...ys), `${seed}`).toBeGreaterThan(
+          height * 0.5,
+        );
+      }
+      expect(Math.min(...spread)).toBeGreaterThan(0.4);
+      expect(spread.reduce((a, b) => a + b) / spread.length).toBeGreaterThan(
+        0.6,
+      );
+    });
+
+    it(`hunts for about ${SEARCH_HUNT_MS / 1000} seconds, then lands by itself, on ${name}`, () => {
+      for (const seed of SEEDS) {
+        const plan = planFlight({
+          kind: "search",
+          viewport,
+          perch,
+          rng: createRng(seed),
+          area: ground,
+        });
+        expect(plan.lands).toBe(true);
+        // Longer than the server's 12 second budget for a model answer.
+        expect(plan.duration, `${seed}`).toBeGreaterThan(18_000);
+        expect(plan.duration, `${seed}`).toBeLessThan(40_000);
+        expectHome(plan.frame(plan.duration), perch);
+      }
+    });
+  }
+
+  it("flies slower than a lap: it is looking, not racing", () => {
+    const speed = (plan: FlightPlan) => {
+      const frames = fly(plan).slice(60, -60);
+      let path = 0;
+      for (let i = 1; i < frames.length; i++)
+        path += Math.hypot(
+          frames[i]!.x - frames[i - 1]!.x,
+          frames[i]!.y - frames[i - 1]!.y,
+        );
+      return path / frames.length;
+    };
+    for (const seed of SEEDS) {
+      const hunt = planFlight({
+        kind: "search",
+        viewport: LAPTOP,
+        perch: BOX_BIRD,
+        rng: createRng(seed),
+        area: GROUND,
+      });
+      const lap = planFlight({
+        kind: "loop",
+        viewport: LAPTOP,
+        perch: BOX_BIRD,
+        rng: createRng(seed),
+      });
+      expect(speed(hunt), `${seed}`).toBeLessThan(speed(lap));
+    }
+  });
+
+  it("keeps a ground that runs off the room inside it", () => {
+    const box = flightBox(LAPTOP);
+    const plan = planFlight({
+      kind: "search",
+      viewport: LAPTOP,
+      perch: BOX_BIRD,
+      rng: createRng(7),
+      area: { left: -400, top: 330, right: 2400, bottom: 2000 },
+    });
+    for (const f of fly(plan).slice(60)) {
+      expect(f.x).toBeGreaterThanOrEqual(box.left - 3);
+      expect(f.x).toBeLessThanOrEqual(box.right + 3);
+      expect(f.y).toBeLessThanOrEqual(box.bottom + 3);
+    }
+  });
+
+  it("can be called home from anywhere in the hunt", () => {
+    const plan = planFlight({
+      kind: "search",
+      viewport: LAPTOP,
+      perch: BOX_BIRD,
+      rng: createRng(11),
+      area: GROUND,
+    });
+    // Out of the ring within half a second, and it stays that way until
+    // it comes in to land.
+    expect(plan.interruptible(600)).toBe(true);
+    for (let t = 600; t < plan.duration - 2_000; t += 500)
+      expect(plan.interruptible(t), `${t}`).toBe(true);
   });
 });
 

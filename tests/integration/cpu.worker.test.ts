@@ -22,7 +22,7 @@ import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 
 const {
   __maxInFlight,
@@ -88,7 +88,7 @@ describe("the worker thread", () => {
     const payload = await result;
 
     expect(payload.kind).toBe("embed");
-    expect(payload.count).toBe(0);
+    expect(payload.kind === "embed" && payload.count).toBe(0);
     expect(hasSpawnedWorker()).toBe(true);
   });
 
@@ -107,6 +107,21 @@ describe("the worker thread", () => {
     // load and leave a worker that can never be replaced, in exchange for no
     // vectors at all.
     expect(payload.kind === "embed" && payload.modelLoaded).toBe(false);
+    expect(isModelSpent()).toBe(false);
+  });
+
+  it("does not load a cross-encoder for a rerank job with no documents", async () => {
+    // The same rule for the second job kind: an empty rerank job must not
+    // spend the process's one onnxruntime load either.
+    const payload = await startJob({
+      kind: "rerank",
+      model: "Xenova/ms-marco-TinyBERT-L-2-v2",
+      query: "who knows about beekeeping",
+      docs: [],
+      maxLength: 128,
+    }).result;
+
+    expect(payload).toEqual({ kind: "rerank", scores: [], modelLoaded: false });
     expect(isModelSpent()).toBe(false);
   });
 
@@ -185,6 +200,25 @@ describe("the worker thread", () => {
 // ---------------------------------------------------------------------------
 
 describe("cancelling", () => {
+  it("cancels an embedding queued through runOnWorker without starting a fallback", async () => {
+    const controller = new AbortController();
+    const fallback = vi.fn(async () => "fallback");
+    const value = runOnWorker(
+      { kind: "embed", texts: ["must never load a model"], batchSize: 8 },
+      fallback,
+      () => "worker",
+      undefined,
+      controller.signal,
+    );
+    controller.abort(new Error("Query deadline"));
+    await expect(value).rejects.toThrow("Query deadline");
+    expect(fallback).not.toHaveBeenCalled();
+    expect(isModelSpent()).toBe(false);
+    await expect(
+      startJob({ kind: "embed", texts: [], batchSize: 8 }).result,
+    ).resolves.toMatchObject({ kind: "embed" });
+  });
+
   it("drops a job that is still queued, without sending it", async () => {
     // Submitting chains through microtasks and `cancelJob` is synchronous, so
     // the second job is certainly still in the queue here. That is what makes

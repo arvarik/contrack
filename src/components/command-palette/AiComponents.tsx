@@ -1,7 +1,7 @@
 import React from "react";
 import { Command } from "cmdk";
 import { motion } from "motion/react";
-import { Briefcase, Building, Sparkles } from "lucide-react";
+import { Briefcase, Building, HelpCircle, Sparkles } from "lucide-react";
 import type { SemanticMatch } from "../../types";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { DURATION, EASE } from "../../lib/motion";
@@ -83,15 +83,11 @@ export const AIResultCard = ({
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm truncate">{match.name}</span>
           <ScoreDot contact={match} />
-          {match.approximate ? (
+          {match.approximate && (
             <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
               Approximate
             </span>
-          ) : isUnverified(match, isFallback) ? (
-            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>
-              Unverified
-            </span>
-          ) : null}
+          )}
         </div>
 
         {/* Role + Company */}
@@ -142,6 +138,24 @@ export const AIResultCard = ({
           </motion.span>
         )}
       </div>
+
+      {/*
+        The question mark of a match AI did not verify, in the top right
+        corner as on the Ask page. A row is an option, and an option holds
+        no second control, so this mark is a picture with a name, not a
+        button: the name joins the option's name, the pointer shows the
+        title, and the group heading above says it for every row.
+      */}
+      {!match.approximate && isUnverified(match, isFallback) && (
+        <span
+          role="img"
+          aria-label="Not verified by AI"
+          title="Not verified by AI"
+          className="shrink-0 mt-0.5 text-warning"
+        >
+          <HelpCircle className="w-[18px] h-[18px]" aria-hidden="true" />
+        </span>
+      )}
     </motion.div>
   </Command.Item>
 );

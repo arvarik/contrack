@@ -36,6 +36,7 @@ import {
   ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
+import { initCrossEncoder } from "./server/services/search/crossEncoder.ts";
 import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
@@ -297,6 +298,11 @@ async function startServer() {
   // Non-blocking — the server is fully usable while this runs.
   initLocalEmbeddings()
     .then(() => {
+      // The search cross-encoder loads on the same worker, once, so no
+      // person's first question pays for it. Its job takes its turn beside
+      // the backfill's, and a failure only logs: search keeps its fused
+      // order without it.
+      void initCrossEncoder();
       log.info(
         "Server",
         "Local embedding model ready — starting search embedding backfill...",

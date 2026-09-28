@@ -158,6 +158,15 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
 /** Per-tier storage. Each tier is an isolated Map<cacheKey, CacheEntry>. */
 const stores = new Map<string, Map<string, CacheEntry>>();
 
+/**
+ * Caches outside the tiers that must empty with them.
+ *
+ * The semantic cache (`services/search/semanticCache.ts`) finds Ask answers
+ * by question vector, so it cannot be a keyed tier here. A flush of every
+ * tier must still reach it.
+ */
+const flushAllListeners = new Set<() => void>();
+
 /** Per-tier hit/miss/eviction counters. */
 const stats = new Map<string, TierStats>();
 
@@ -404,6 +413,11 @@ export const aiCache = {
     aiCache.invalidate(operation, `${ownerId}::`);
   },
 
+  /** Run `listener` whenever every tier is flushed, after the tiers empty. */
+  onInvalidateAll(listener: () => void): void {
+    flushAllListeners.add(listener);
+  },
+
   /**
    * Nuclear option: flush ALL tiers. Used by contactService.invalidateAllCaches().
    * In batch mode, the flush is deferred until exitBatchMode().
@@ -425,6 +439,7 @@ export const aiCache = {
       const tierStats = stats.get(op)!;
       tierStats.entries = 0;
     }
+    for (const listener of flushAllListeners) listener();
     if (totalFlushed > 0) {
       log.info(
         "AICache",

@@ -162,7 +162,7 @@ describe("capability assignment", () => {
       const row = sqlite
         .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
         .get(table) as { sql?: string } | undefined;
-      return row?.sql?.match(/FLOAT\[(\d+)\]/)?.[1];
+      return row?.sql?.match(/(?:FLOAT|INT8)\[(\d+)\]/)?.[1];
     };
 
     const res = await request(app)

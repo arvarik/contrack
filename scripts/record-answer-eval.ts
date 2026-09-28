@@ -59,12 +59,6 @@ function encodeVectors(rows: Float32Array[], dimension: number): Buffer {
   return buf;
 }
 
-function toFloat32(buf: Buffer): Float32Array {
-  return new Float32Array(
-    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-  );
-}
-
 async function main(): Promise<void> {
   const isRecord = process.argv.includes("--record");
   const reportIndex = process.argv.indexOf("--report");
@@ -144,19 +138,29 @@ async function main(): Promise<void> {
   if (!localEmbeddings.isLocalEmbeddingReady()) {
     throw new Error("Local embedding model failed to initialize.");
   }
-  const embeddedCount = await localEmbeddings.backfillSearchEmbeddings();
-  console.log(`Backfilled ${embeddedCount} contact search embeddings.`);
-
-  const readVector = sqlite.prepare(
-    "SELECT embedding FROM search_embeddings WHERE contactId = ?",
+  // The model's floats for the text the backfill embeds, written through the
+  // product's int8 path in one batch, as the gate writes them. The store
+  // keeps int8 bytes, which are not the model's output, so the fixture takes
+  // the floats.
+  const texts = contacts.map((c) => {
+    const text = localEmbeddings.currentSearchText(idByKey.get(c.key)!);
+    if (!text) throw new Error(`Missing search text for contact "${c.key}"`);
+    return text;
+  });
+  const contactVectors = (await localEmbeddings.embedBatch(texts)).map(
+    (vector, i) => {
+      if (!vector)
+        throw new Error(`Missing embedding for "${contacts[i].key}"`);
+      return vector;
+    },
   );
-  const contactVectors: Float32Array[] = [];
-  for (const c of contacts) {
-    const id = idByKey.get(c.key)!;
-    const row = readVector.get(id) as { embedding: Buffer } | undefined;
-    if (!row) throw new Error(`Missing embedding for contact "${c.key}"`);
-    contactVectors.push(toFloat32(row.embedding));
-  }
+  localEmbeddings.upsertSearchEmbeddings(
+    contacts.map((c, i) => ({
+      contactId: idByKey.get(c.key)!,
+      embedding: contactVectors[i],
+    })),
+  );
+  console.log(`Embedded ${contactVectors.length} contact search embeddings.`);
 
   const queryVectors: Float32Array[] = [];
   for (const q of queries) {

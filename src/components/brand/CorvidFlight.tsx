@@ -23,7 +23,10 @@
  * 5. The bird lands back in its ring as the logo, the overlay goes, and the
  *    perch's own bird is shown again.
  *
- * A second press while it is out asks it home by a short way. Escape and a
+ * A second press while it is out asks it home by a short way, and so does
+ * `recallCorvid()`: the Ask page's search flight hunts over the empty results
+ * until the answer arrives, then comes home. A recall that arrives while the
+ * bird is still leaving its ring waits until it is in the air. Escape and a
  * route change land it at once. Nothing here announces: the bird is
  * decoration, and a screen reader that said "Contrack" every time somebody
  * pressed the logo would be worse than saying nothing.
@@ -48,6 +51,7 @@ import {
   CORVID_AWAY_EVENT,
   CORVID_FLY_EVENT,
   CORVID_HOME_EVENT,
+  CORVID_RECALL_EVENT,
   CORVID_STIR_EVENT,
   corvidReact,
   type CorvidFlyDetail,
@@ -127,6 +131,10 @@ interface Flight {
   /** How far the ring has moved since, if its page scrolled. */
   shift: { x: number; y: number };
   frames: number;
+  /** Asked home while it could not turn yet: it turns as soon as it can. */
+  recall: boolean;
+  /** Started as a search flight, the only kind a recall may end. */
+  searching: boolean;
 }
 
 /** How long before touchdown the landing starts following a ring that moved. */
@@ -198,10 +206,47 @@ export const CorvidFlight = () => {
     last.current = frame;
   }, []);
 
+  /**
+   * Turn the bird for home from where it is, by the short way: the second
+   * press, and a recall. Returns false when it cannot turn yet.
+   */
+  const turnHome = useCallback((current: Flight): boolean => {
+    const at = last.current;
+    const t = performance.now() - current.start;
+    if (!at || !current.plan.interruptible(t)) return false;
+    const back = perchBox(current.perch) ?? current.home;
+    if (!back) return false;
+    current.plan = planFlight({
+      kind: "loop",
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      perch: back,
+      rng: Math.random,
+      airborne: {
+        x: at.x,
+        y: at.y,
+        facing: at.pose.headFacing >= 0 ? 1 : -1,
+        from: at,
+      },
+    });
+    current.start = performance.now();
+    current.home = back;
+    current.shift = { x: 0, y: 0 };
+    current.recall = false;
+    return true;
+  }, []);
+
   const step = useCallback(() => {
     raf.current = 0;
     const current = flight.current;
     if (!current) return;
+    // A mode switch can remove a search perch without changing the path.
+    // Stop immediately instead of flying over the newly opened view.
+    if (current.perch && !current.perch.isConnected) {
+      land();
+      return;
+    }
+    // A recall that came in while the bird was still leaving its ring.
+    if (current.recall) turnHome(current);
     const t = performance.now() - current.start;
     let frame = current.plan.frame(t);
     // A ring on a page that scrolled has moved. Measure it now and then, and
@@ -234,7 +279,7 @@ export const CorvidFlight = () => {
       return;
     }
     raf.current = requestAnimationFrame(step);
-  }, [land, place]);
+  }, [land, place, turnHome]);
 
   useEffect(() => {
     const onFly = (event: Event) => {
@@ -277,28 +322,7 @@ export const CorvidFlight = () => {
       // round while it is still leaving or already coming in.
       const current = flight.current;
       if (current) {
-        const at = last.current;
-        const t = performance.now() - current.start;
-        if (detail.kind !== "loop" || !at || !current.plan.interruptible(t)) {
-          return;
-        }
-        const back = perchBox(current.perch) ?? current.home;
-        if (!back) return;
-        current.plan = planFlight({
-          kind: "loop",
-          viewport,
-          perch: back,
-          rng: Math.random,
-          airborne: {
-            x: at.x,
-            y: at.y,
-            facing: at.pose.headFacing >= 0 ? 1 : -1,
-            from: at,
-          },
-        });
-        current.start = performance.now();
-        current.home = back;
-        current.shift = { x: 0, y: 0 };
+        if (detail.kind === "loop") turnHome(current);
         return;
       }
 
@@ -307,6 +331,7 @@ export const CorvidFlight = () => {
         viewport,
         perch: home,
         rng: Math.random,
+        area: detail.area,
       });
       const leaving = detail.from ? null : perch;
       const hidden = leaving?.querySelector<SVGGElement>("[data-bird]") ?? null;
@@ -318,6 +343,8 @@ export const CorvidFlight = () => {
         home: leaving ? home : null,
         shift: { x: 0, y: 0 },
         frames: 0,
+        recall: false,
+        searching: detail.kind === "search",
       };
       if (leaving) {
         window.dispatchEvent(
@@ -330,9 +357,23 @@ export const CorvidFlight = () => {
       setFlying(flightId.current);
     };
 
+    // Home now: at once if the bird can turn, or as soon as it is airborne.
+    // Only a search flight: a lap somebody asked for by pressing the logo
+    // is theirs to finish.
+    const onRecall = () => {
+      const current = flight.current;
+      if (!current?.searching) return;
+      current.searching = false;
+      if (!turnHome(current)) current.recall = true;
+    };
+
     window.addEventListener(CORVID_FLY_EVENT, onFly);
-    return () => window.removeEventListener(CORVID_FLY_EVENT, onFly);
-  }, [level]);
+    window.addEventListener(CORVID_RECALL_EVENT, onRecall);
+    return () => {
+      window.removeEventListener(CORVID_FLY_EVENT, onFly);
+      window.removeEventListener(CORVID_RECALL_EVENT, onRecall);
+    };
+  }, [level, turnHome]);
 
   // The overlay is in the DOM now: hide the perch's bird and paint the first
   // frame before the browser paints, so nothing blinks.

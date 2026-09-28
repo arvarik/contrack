@@ -380,9 +380,14 @@ describe("every scoped read is an index seek on the owner", () => {
     // The MATCH string comes from production. Building it here would leave
     // `scopedMatch` free to drop the token, because FTS5 reports the same
     // index for any MATCH string and the plan below could not tell.
+    // The query's words stay off the owner token column, `- {ownerTok} :`,
+    // or a word such as "of" matches the token of an owner whose id starts
+    // with f. The owner phrase itself stays first and unfiltered.
     const scope = scopeForOwnerId(ownerA);
     const match = scopedMatch(scope, '"plana"*');
-    expect(match).toBe(`ownerTok:${ownerToken(scope)} AND ("plana"*)`);
+    expect(match).toBe(
+      `ownerTok:${ownerToken(scope)} AND (- {ownerTok} : ("plana"*))`,
+    );
 
     const plan = planOf(
       `

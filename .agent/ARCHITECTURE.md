@@ -67,10 +67,11 @@ strong vector similarity on irrelevant signals.
 1. **L1 cache** (`getCachedSearch`, the `rerank` tier of `aiCache`). The key
    holds the owner, `search_revision`, a 5-minute bucket, the quick
    capability's provider and model, the facets (`facetKey`, in a fixed
-   order), the benchmark's `rrfK` when it is set, and the normalized query.
-   With AI off or no provider, `local` takes the place of the provider and
-   model. An AI-off request therefore never reads an entry that a model
-   verified.
+   order), the benchmark's `rrfK` when it is set, the cross-encoder's model
+   and candidate count once it has loaded (`fused` before), and the
+   normalized query. With AI off or no provider, `local` takes the place of
+   the provider and model. An AI-off request therefore never reads an entry
+   that a model verified.
 2. **Facets.** `parseFacetQuery` (`shared/facetQuery.ts`) takes the typed
    facets out of the question. They join the request's `filters`
    (`SemanticSearchOptions.filters`), and a facet sent both ways counts
@@ -113,8 +114,14 @@ strong vector similarity on irrelevant signals.
    mode, vector KNN, and weighted RRF with k = 15, with no planner, in about
    10 ms. Broad mode ranks four tiers: every token, approximate names from
    0.85, partial matches, and approximate names from 0.75. The top 30 are
-   hydrated and stream as the instant chunk, `fallback: true`, every match
-   `verified: false`. The p95 at 5,000 contacts is 13.0 to 13.1 ms.
+   hydrated. For a `conceptual` question, `rerankLocal`
+   (`server/services/search/crossEncoder.ts`) reorders them by
+   cross-encoder score on the CPU worker, inside `SEARCH_RERANK_BUDGET_MS`
+   (25 ms). Scores that come later are dropped, and the list keeps its fused
+   order. A `mixed` query is usually a misspelled name or a prefix, and a
+   cross-encoder is not typo-tolerant, so it keeps the fused order too. The
+   list streams as the instant chunk, `fallback: true`, every match
+   `verified: false`.
 8. **AI off or no provider.** The route reads the caller's `aiAssist` with
    `aiAllowedFor(req)` (`server/middleware/aiAllowed.ts`) and passes
    `aiAllowed` to the service. With AI off, or with `isMockMode()`, the local
@@ -122,30 +129,46 @@ strong vector similarity on irrelevant signals.
    complete chunk, because no model stage follows. With AI off, a provider
    embedding model does not embed the query. The built-in local model still
    embeds it.
-9. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start before
-   step 7 builds the local list, so the planner's request is on the network
-   while the list is built. `hybridRetrieval` runs the planner
-   (`parseSearchQuery`) in the search lane, then the hard filter, then
-   `localRetrieval` inside the filter, with the query vector step 7 made.
-   It passes the kind of step 4 and the facets to every stage: the hard
-   filter, the keyword and vector lists, and the trait lists. The
-   coalescing key holds the facets too. `answerFromPlan` then picks the
-   final answer with `databaseProof(plan)`, and the facets add their
-   evidence to the plan's:
-   - `"filters"`: confidence "high", no `should.traits`, and hard filters
-     that hold every constraint. The answer is the filtered contacts in
-     retrieval order, then the other filtered contacts by name, top 30,
-     `verified: true`. No reranker runs.
-   - `"temporal"`: only `must.temporal`, and confidence not "low". The
-     answer is the filtered contacts by last contact, never contacted first.
-     No reranker runs.
-   - `null`, or no hard filter applied: the compact reranker checks the
-     top 30 candidates. They travel to the model with short ids, `c1` to
-     `c30`, which the server maps back. With 30 UUIDs the answer overran its
-     1,200-token limit.
-10. **Failure.** An error, a timeout or a `search_revision` change during
-    the model stages ends with a fresh local list, `fallback: true`. L1 does
-    not keep it. The keyword-only list (`searchFts`, recall@10 0.52) is
+9. **L2, the semantic cache** (`server/services/search/semanticCache.ts`).
+   With a model to run and the built-in embedding model, the question's
+   vector is computed first (`embedQuery`, about 1 ms). `getSemanticAnswer`
+   looks for a verified answer of the last 5 minutes, at most 100 per owner,
+   with the same revision, facets, provider and model, the same entity key
+   (the capitalized words, numbers, quoted phrases and emails) and a cosine
+   of 0.97 or more. Ordered constraint words and comparison operators must
+   also match after proven facets and leading request words are removed.
+   The lookup rechecks the revision after embedding. Local embedding waits
+   stop after 100 ms and fall back to keywords without retrying the vector.
+   A hit is the answer, with no model call, and it goes into
+   L1 for the exact words. Every verified answer that L1 keeps goes into L2
+   too, with its vector. `aiCache.invalidateAll()` empties L2 through
+   `onInvalidateAll`.
+10. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start before
+    step 7 builds the local list, so the planner's request is on the network
+    while the list is built. `hybridRetrieval` runs the planner
+    (`parseSearchQuery`) in the search lane, then the hard filter, then
+    `localRetrieval` inside the filter, with the question's vector.
+    It passes the kind of step 4 and the facets to every stage: the hard
+    filter, the keyword and vector lists, and the trait lists. The
+    coalescing key holds the facets too. `answerFromPlan` then picks the
+    final answer with `databaseProof(plan)`, and the facets add their
+    evidence to the plan's:
+
+- `"filters"`: confidence "high", no `should.traits`, and hard filters
+  that hold every constraint. The answer is the filtered contacts in
+  retrieval order, then the other filtered contacts by name, top 30,
+  `verified: true`. No reranker runs.
+- `"temporal"`: only `must.temporal`, and confidence not "low". The
+  answer is the filtered contacts by last contact, never contacted first.
+  No reranker runs.
+- `null`, or no hard filter applied: the compact reranker checks the
+  top 30 candidates. They travel to the model with short ids, `c1` to
+  `c30`, which the server maps back. With 30 UUIDs the answer overran its
+  1,200-token limit.
+
+11. **Failure.** An error, a timeout or a `search_revision` change during
+    the model stages ends with a fresh local list, `fallback: true`. L1 and
+    L2 do not keep it. The keyword-only list (`searchFts`, recall@10 0.52) is
     never the Ask answer now.
 
 `hybridRetrieval` keeps its signature and runs `localRetrieval` inside the
@@ -184,7 +207,7 @@ The legacy v4 description follows for historical context (now superseded):
 8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally. The brief streams through `streamFor` in the search lane. `safeDeltas` removes control characters from each piece before `onDelta` gets it. The pieces stop when the text so far matches an injection pattern or passes 2,000 characters. The function returns the whole brief after `sanitizeAiOutputValue`. A cache hit sends no pieces.
 9. **Two-Phase NDJSON Streaming**: Phase 1 is the `localRetrieval` list, hydrated, top 30, every match `verified: false`. Its p95 at 5,000 contacts is 13.0 to 13.1 ms. Phase 2 is the final answer, and it replaces Phase 1. A local kind, a facet answer, an AI-off request and an L1 hit send only the complete chunk. See the PR for the live numbers of the model stages.
 
-**Caching**: `parseSearchQuery`, `expandQueryForEmbedding` and `synthesizeSearchResults` cache by content-hashed query under their own `aiCache` tiers. The whole search answer is the L1 entry (`getCachedSearch`, the owner-keyed `rerank` tier), with the key from step 1 of the request flow. A fallback after a model failure is not cached. Repeat queries pay zero AI cost.
+**Caching**: `parseSearchQuery`, `expandQueryForEmbedding` and `synthesizeSearchResults` cache by content-hashed query under their own `aiCache` tiers. The whole search answer is the L1 entry (`getCachedSearch`, the owner-keyed `rerank` tier), with the key from step 1 of the request flow. A verified answer is also an L2 entry (`semanticCache.ts`), found by the question's vector for a question asked in other words (step 9). A fallback after a model failure is cached in neither. Repeat queries pay zero AI cost.
 
 ### AI Adapter Pipeline
 
@@ -289,11 +312,11 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 
 ### Virtual Tables (NOT managed by Drizzle — defined in `server/db.ts`)
 
-| Table                | Engine | Dimensions | Purpose                                                                                                                                                            |
-| -------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `contacts_fts`       | FTS5   | N/A        | Full-text search index with weighted columns, FTS version 5. Rebuilt when `FTS_SCHEMA_VERSION` changes. Maintained by 12+ SQL triggers on contacts + child tables. |
-| `search_embeddings`  | `vec0` | 384-dim    | Local embeddings via `Xenova/all-MiniLM-L6-v2` (Transformers.js). Powers KNN search in Spotlight.                                                                  |
-| `contact_embeddings` | `vec0` | 768-dim    | Gemini API embeddings exclusively for deduplication NLP.                                                                                                           |
+| Table                | Engine | Dimensions   | Purpose                                                                                                                                                                                                                                |
+| -------------------- | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contacts_fts`       | FTS5   | N/A          | Full-text search index with weighted columns, FTS version 5. Rebuilt when `FTS_SCHEMA_VERSION` changes. Maintained by 12+ SQL triggers on contacts + child tables.                                                                     |
+| `search_embeddings`  | `vec0` | 384-dim int8 | Local embeddings via `Xenova/all-MiniLM-L6-v2` (Transformers.js), one byte per component at one scale for the table (`search.vectorScale` in `app_settings`, `server/services/search/vectorScale.ts`). Powers KNN search in Spotlight. |
+| `contact_embeddings` | `vec0` | 768-dim      | Gemini API embeddings exclusively for deduplication NLP.                                                                                                                                                                               |
 
 ### Critical Rules (Virtual Tables)
 
@@ -344,7 +367,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/services/` — Heavy business logic:
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
-  - `server/services/search/` — `hybridRetrieval.ts` (weighted RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, `hybridRetrieval` runs it inside the plan's hard filter, and `queryIntent` reads the kind from the strict keyword matches), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `lexical.ts` (`lexicalSearch`: strict mode, and broad mode in four tiers), `approximateName.ts` (name candidates by prefix, nickname and phonetic code), `ftsIndex.ts` (the `contacts_fts` columns, triggers and version gate), `facetSql.ts` (`compileFacets` and `facetKey`: facets as one SQL predicate, with the `facet_contains`, `facet_time` and `haversine_km` functions), `implicitFacets.ts` (`findImplicitFacets` and `hasContentWords`: company, place and industry facets read from the words of a question), `reasons.ts` (`buildReason`: the reason line from the proven fields), `localEmbeddings.ts` (Transformers.js)
+  - `server/services/search/` — `hybridRetrieval.ts` (weighted RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, `hybridRetrieval` runs it inside the plan's hard filter, and `queryIntent` reads the kind from the strict keyword matches), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `lexical.ts` (`lexicalSearch`: strict mode, and broad mode in four tiers), `approximateName.ts` (name candidates by prefix, nickname and phonetic code), `ftsIndex.ts` (the `contacts_fts` columns, triggers and version gate), `facetSql.ts` (`compileFacets` and `facetKey`: facets as one SQL predicate, with the `facet_contains`, `facet_time` and `haversine_km` functions), `implicitFacets.ts` (`findImplicitFacets` and `hasContentWords`: company, place and industry facets read from the words of a question), `reasons.ts` (`buildReason`: the reason line from the proven fields), `crossEncoder.ts` (`rerankLocal`: the local cross-encoder on the CPU worker, inside its budget, and `initCrossEncoder`, its boot load), `semanticCache.ts` (L2: verified answers by question vector, revision, facets and entity key), `vectorScale.ts` (the int8 scale, `quantize` and `scaleFor`, also used by the boot migration in `server/db.ts`), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
 - `server/mcp/` — Model Context Protocol (MCP) server subsystem:

@@ -33,7 +33,7 @@ import {
   Calendar,
   Mail,
   Sparkles,
-  AlertTriangle,
+  HelpCircle,
   ArrowUpRight,
   ChevronsRight,
 } from "lucide-react";
@@ -884,69 +884,74 @@ export const CommandPalette = () => {
                     </Command.Empty>
                   )}
 
-                  {/* Loading shimmer */}
-                  {aiQuery.length >= 3 &&
-                    isAiLoading &&
-                    aiResults.length === 0 && (
-                      <div className="px-1 py-2 space-y-1">
-                        <div
-                          className={cn(
-                            SMALL_CAPS,
-                            "px-3 py-2 text-primary flex items-center gap-1.5",
-                          )}
-                        >
-                          <Sparkles className="w-3 h-3 animate-pulse" /> Asking
-                          AI…
-                        </div>
-                        <AIShimmerRow delay={0} />
-                        <AIShimmerRow delay={0.08} />
-                        <AIShimmerRow delay={0.16} />
+                  {/*
+                    Loading shimmer, for the whole wait. The first list the
+                    server streams is a guess AI has not checked yet, so the
+                    palette keeps it back and shows AI's answer only.
+                  */}
+                  {aiQuery.length >= 3 && isAiLoading && (
+                    <div className="px-1 py-2 space-y-1">
+                      <div
+                        className={cn(
+                          SMALL_CAPS,
+                          "px-3 py-2 text-primary flex items-center gap-1.5",
+                        )}
+                      >
+                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking
+                        AI…
                       </div>
-                    )}
+                      <AIShimmerRow delay={0} />
+                      <AIShimmerRow delay={0.08} />
+                      <AIShimmerRow delay={0.16} />
+                    </div>
+                  )}
 
                   {/* AI results */}
-                  {aiQuery.length >= 3 && aiResults.length > 0 && (
-                    <Command.Group
-                      heading={
-                        isAiLoading
-                          ? "Unverified candidates · checking with AI"
-                          : aiFallback
-                            ? "Unverified results"
-                            : "AI query results"
-                      }
-                      className={GROUP_HEADING_PRIMARY}
-                    >
-                      {aiFallback && !isAiLoading && (
-                        <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-warning">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>
-                            AI unavailable — showing unverified matches
-                          </span>
-                        </div>
-                      )}
-                      {aiResults.map((match, i) => (
-                        <AIResultCard
-                          key={match.id}
-                          match={match}
-                          index={i}
-                          isFallback={aiFallback}
-                          onSelect={() => {
-                            recordVisit(match.id);
-                            navigate(`/contact/${match.id}`);
-                            handleClose();
-                          }}
-                          hasGroundingCapacity={
-                            groundingCapacity?.hasCapacity ?? false
-                          }
-                          isEnriching={enrichContact.isPending}
-                          enrichingContactId={enrichingContactId}
-                          onRefresh={
-                            aiAllowed ? handleRefreshContact : undefined
-                          }
-                        />
-                      ))}
-                    </Command.Group>
-                  )}
+                  {aiQuery.length >= 3 &&
+                    !isAiLoading &&
+                    aiResults.length > 0 && (
+                      <Command.Group
+                        heading={
+                          aiFallback ? "Not verified by AI" : "AI query results"
+                        }
+                        className={GROUP_HEADING_PRIMARY}
+                      >
+                        {aiFallback && (
+                          <div className="flex items-start gap-1.5 px-3 pb-1 text-xs text-warning">
+                            <HelpCircle
+                              className="w-3.5 h-3.5 mt-px shrink-0"
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {aiAllowed
+                                ? "AI could not check these people this time. They match your words or their meaning"
+                                : "AI is off for your account. These people match your words or their meaning"}
+                            </span>
+                          </div>
+                        )}
+                        {aiResults.map((match, i) => (
+                          <AIResultCard
+                            key={match.id}
+                            match={match}
+                            index={i}
+                            isFallback={aiFallback}
+                            onSelect={() => {
+                              recordVisit(match.id);
+                              navigate(`/contact/${match.id}`);
+                              handleClose();
+                            }}
+                            hasGroundingCapacity={
+                              groundingCapacity?.hasCapacity ?? false
+                            }
+                            isEnriching={enrichContact.isPending}
+                            enrichingContactId={enrichingContactId}
+                            onRefresh={
+                              aiAllowed ? handleRefreshContact : undefined
+                            }
+                          />
+                        ))}
+                      </Command.Group>
+                    )}
 
                   {/* Synthesis executive brief (Feature 6) */}
                   {aiAllowed &&

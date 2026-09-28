@@ -17,16 +17,19 @@
 // it, because nothing in the product cancels a running job and an untested
 // path is worse than an absent one.
 //
-// One job kind. A second one for the dedupe passes was measured and then
-// removed: after the quadratic self-joins came out of the deterministic pass
-// and the futile KNN came out of the funnel, a scan of 50,000 contacts spends
-// about 500 ms in those passes, and shipping the corpus across the thread
-// boundary and back costs about 180 ms in structured clone on the main thread.
-// The work was better removed than moved.
+// Two job kinds: `embed` turns text into vectors, and `rerank` scores
+// (query, profile) pairs with a cross-encoder. Both hold an onnxruntime
+// session, so both run here and not on the main thread. A third kind for the
+// dedupe passes was measured and then removed: after the quadratic self-joins
+// came out of the deterministic pass and the futile KNN came out of the
+// funnel, a scan of 50,000 contacts spends about 500 ms in those passes, and
+// shipping the corpus across the thread boundary and back costs about 180 ms
+// in structured clone on the main thread. The work was better removed than
+// moved.
 // =============================================================================
 
 /** What a job asks the worker to do. */
-export type WorkerJob = EmbedJob;
+export type WorkerJob = EmbedJob | RerankJob;
 
 /**
  * Turn text into vectors.
@@ -41,6 +44,25 @@ export interface EmbedJob {
   texts: string[];
   /** Texts per forward pass. Progress is reported once per batch. */
   batchSize: number;
+}
+
+/**
+ * Score each document against one query with a cross-encoder.
+ *
+ * The query and one document go through the model together, so the score
+ * reads both at once. That is what makes a cross-encoder more exact than two
+ * vectors compared afterwards, and also why it is too slow for more than the
+ * top of a list. `server/services/search/crossEncoder.ts` sends these.
+ */
+export interface RerankJob {
+  kind: "rerank";
+  /** The Transformers.js model id, for example `Xenova/ms-marco-TinyBERT-L-2-v2`. */
+  model: string;
+  query: string;
+  /** One profile text per candidate, in the order of the list. */
+  docs: string[];
+  /** Tokens per pair, the query and the document together. The rest is cut. */
+  maxLength: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +83,7 @@ export type WorkerMessage =
   /** Sent once, when the worker is up and its imports have resolved. */
   | { type: "ready" };
 
-export type JobResult = EmbedResult;
+export type JobResult = EmbedResult | RerankResult;
 
 /**
  * Vectors as one flat array, not an array of arrays.
@@ -82,6 +104,15 @@ export interface EmbedResult {
    * "did that job load it" is the difference between a worker that can be
    * replaced and one that cannot. See the note in `cpuWorker.ts`.
    */
+  modelLoaded: boolean;
+}
+
+/** One relevance score per document, in the order the job sent them. */
+export interface RerankResult {
+  kind: "rerank";
+  /** Higher is more relevant. The scale is the model's own logit. */
+  scores: number[];
+  /** Whether this job needed the model. See `EmbedResult.modelLoaded`. */
   modelLoaded: boolean;
 }
 

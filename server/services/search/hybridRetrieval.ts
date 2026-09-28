@@ -19,6 +19,7 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
 import { roleVariants } from "../../ai/queryConstraints.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
+import { withTimeout } from "../../ai/resilience.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { classifyQuery, nameSignals, type QueryIntent } from "./intent.ts";
@@ -351,6 +352,40 @@ function ftsRetrieval(
 // Phase 1b: Local Vector KNN Retrieval (HyDE-expanded query)
 // =============================================================================
 
+/**
+ * The vector of a question, or null when nothing here can embed it.
+ *
+ * The vector channel's own gates: an embedding backend is ready, the owner
+ * has vectors to search, and with AI off only the built-in model may embed.
+ * Ask computes it once, and the semantic cache, the local list and the model
+ * stage all read the same vector. A failure is logged and counts as none.
+ */
+export async function embedQuery(
+  scope: Scope,
+  text: string,
+  aiAllowed = true,
+  signal?: AbortSignal,
+): Promise<Float32Array | null> {
+  if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0)
+    return null;
+  if (!aiAllowed && resolveEmbeddings().kind === "provider") return null;
+  try {
+    // A backfill can hold the worker queue. A query must not wait behind
+    // it before the planner's own budget even starts. Cancel queued local
+    // work after 100 ms and keep the keyword channel available.
+    return resolveEmbeddings().kind === "builtin"
+      ? await withTimeout((budget) => embedText(text, budget), 100, signal)
+      : await embedText(text, signal);
+  } catch (err: unknown) {
+    signal?.throwIfAborted();
+    log.warn(
+      "HybridRetrieval",
+      `Query embedding failed: ${getErrorMessage(err)}`,
+    );
+    return null;
+  }
+}
+
 async function vectorRetrieval(
   scope: Scope,
   embedInputText: string,
@@ -370,7 +405,12 @@ async function vectorRetrieval(
     return { items: [], vector: null };
 
   try {
-    const vector = queryVector ?? (await embedText(embedInputText));
+    // null means the shared attempt failed. Only undefined asks this
+    // stage to embed, so an outage does not trigger a second model call.
+    const vector =
+      queryVector === undefined
+        ? await embedQuery(scope, embedInputText, aiAllowed)
+        : queryVector;
     if (!vector) return { items: [], vector: null };
 
     const neighbors = findSearchNeighbors(

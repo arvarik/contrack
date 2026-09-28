@@ -34,6 +34,9 @@ const {
 } = await import("../../server/db.ts");
 const { findSearchNeighbors, getSearchEmbeddingCount } =
   await import("../../server/services/search/localEmbeddings.ts");
+const { VECTOR_SCALE_KEY, quantize } =
+  await import("../../server/services/search/vectorScale.ts");
+const { setSetting } = await import("../../server/services/settingsService.ts");
 const { createActor, resetAccounts } = await import("./tenancy/helpers.ts");
 
 makeTestApp();
@@ -48,6 +51,18 @@ function vectorAt(angle: number): Buffer {
   values[0] = Math.cos(angle);
   values[1] = Math.sin(angle);
   return Buffer.from(values.buffer);
+}
+
+/**
+ * The scale the product sets for these vectors. Every component of a unit
+ * vector is at most 1, so the first write to an empty table sets 90
+ * (`MAX_BYTE` in `vectorScale.ts`).
+ */
+const SCALE = 90;
+
+/** The same vector as `search_embeddings` stores it: int8 bytes at SCALE. */
+function int8At(angle: number): Buffer {
+  return quantize(new Float32Array(vectorAt(angle).buffer), SCALE);
 }
 
 /** The direction every query in this file points. */
@@ -90,10 +105,10 @@ function addContact(
     .prepare(
       `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
        SELECT c.id, c.ownerId, c.isGhost, COALESCE(c.isArchived, 0),
-              (c.deletedAt IS NULL AND c.canonicalId IS NULL), ?
+              (c.deletedAt IS NULL AND c.canonicalId IS NULL), vec_int8(?)
          FROM contacts c WHERE c.id = ?`,
     )
-    .run(vectorAt(angle), id);
+    .run(int8At(angle), id);
 }
 
 /** What the vector store thinks this contact's status is. */
@@ -109,6 +124,7 @@ function storedStatus(id: string) {
 function clearContacts(): void {
   sqlite.prepare("DELETE FROM search_embeddings").run();
   sqlite.prepare("DELETE FROM contacts").run();
+  setSetting(VECTOR_SCALE_KEY, SCALE);
 }
 
 beforeAll(async () => {
@@ -170,9 +186,9 @@ describe("the vec0 tables", () => {
     expect(() =>
       sqlite
         .prepare(
-          "INSERT INTO search_embeddings (contactId, ownerId, embedding) VALUES (?, ?, ?)",
+          "INSERT INTO search_embeddings (contactId, ownerId, embedding) VALUES (?, ?, vec_int8(?))",
         )
-        .run("bare", owner, vectorAt(0)),
+        .run("bare", owner, int8At(0)),
     ).toThrow(/Expected integer for INTEGER metadata column/);
   });
 });
@@ -402,10 +418,10 @@ describe("the query plan", () => {
       .prepare(
         `EXPLAIN QUERY PLAN
          SELECT contactId, distance FROM search_embeddings
-         WHERE embedding MATCH ? AND ownerId = ? AND ${VEC_ACTIVE_MATCH}
+         WHERE embedding MATCH vec_int8(?) AND ownerId = ? AND ${VEC_ACTIVE_MATCH}
            AND k = ? ORDER BY distance`,
       )
-      .all(Buffer.from(QUERY.buffer), owner, 10) as { detail: string }[];
+      .all(quantize(QUERY, SCALE), owner, 10) as { detail: string }[];
     const detail = plan.map((row) => row.detail).join("\n");
 
     // A `SCAN c` line here means SQLite is reading the contacts table once per

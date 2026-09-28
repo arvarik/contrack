@@ -6,12 +6,13 @@
 //
 //   npm run eval:record
 //
-// It writes four files and every one of them is committed:
+// It writes five files and every one of them is committed:
 //
-//   tests/fixtures/search-eval/contacts.json   the 300 contact corpus
-//   tests/fixtures/search-eval/queries.json    the 50 golden queries
-//   tests/fixtures/search-eval/vectors.bin     one recorded vector per row
-//   tests/eval/search.baseline.json            recall@10 and MRR per channel
+//   tests/fixtures/search-eval/contacts.json        the 300 contact corpus
+//   tests/fixtures/search-eval/queries.json         the 70 golden queries
+//   tests/fixtures/search-eval/vectors.bin          one recorded vector per row
+//   tests/fixtures/search-eval/rerank-scores.json   the cross-encoder's scores
+//   tests/eval/search.baseline.json                 recall@10 and MRR per channel
 //
 // The baseline diff is the evidence that goes in the pull request. A change
 // that improves ranking shows as numbers going up; a change that was supposed
@@ -19,9 +20,12 @@
 // point of the gate: `tests/eval/search.eval.test.ts` fails in both
 // directions, so nobody can improve or damage ranking without saying so.
 //
-// The vectors are recorded, not computed at test time, so the gate needs no
-// model, no download and no network. They come out of the real backfill, so
-// they are exactly what this instance would have stored.
+// The vectors and scores are recorded, not computed at test time, so the gate
+// needs no model, no download and no network. The vectors are the model's
+// own floats for the text the backfill embeds. The gate and this script both
+// write them through the product's int8 write path, in one batch, so both
+// search the same bytes. The scores are every (question, profile) pair the
+// cross-encoder reads while the baseline is measured.
 // =============================================================================
 
 import fs from "fs";
@@ -55,12 +59,21 @@ process.env.TRANSFORMERS_CACHE =
 
 async function main(): Promise<void> {
   const { buildCorpus } = await import("./search-eval/corpus.ts");
-  const { ensureLocalOwner, sqlite } = await import("../server/db.ts");
+  const { ensureLocalOwner } = await import("../server/db.ts");
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
   const localEmbeddings =
     await import("../server/services/search/localEmbeddings.ts");
-  const { seedCorpus, measure, CHANNELS, EVAL_DIMENSION } =
-    await import("../tests/eval/harness.ts");
+  const crossEncoder =
+    await import("../server/services/search/crossEncoder.ts");
+  const {
+    seedCorpus,
+    seedVectors,
+    measure,
+    recordingScorer,
+    CHANNELS,
+    EVAL_DIMENSION,
+    RERANK_SCORES_PATH,
+  } = await import("../tests/eval/harness.ts");
 
   const { contacts, queries } = buildCorpus();
   fs.mkdirSync(FIXTURE_DIR, { recursive: true });
@@ -78,23 +91,24 @@ async function main(): Promise<void> {
       "The local embedding model did not load. The fixture cannot be recorded without it.",
     );
   }
-  const embedded = await localEmbeddings.backfillSearchEmbeddings();
-  console.log(`embedded ${embedded} contacts`);
 
-  // One vector per contact, read back out of the store the backfill wrote, in
-  // corpus order. Reading them back rather than keeping what was sent means
-  // the fixture is what the database holds, including anything vec0 does to a
-  // vector on the way in.
-  const readVector = sqlite.prepare(
-    "SELECT embedding FROM search_embeddings WHERE contactId = ?",
+  // One vector per contact, in corpus order: the model's floats for the text
+  // the backfill embeds. The store keeps int8 bytes, which are not the
+  // model's output, so the fixture takes the floats and the gate quantizes
+  // them the way the product does.
+  const texts = contacts.map((contact) => {
+    const text = localEmbeddings.currentSearchText(idByKey.get(contact.key)!);
+    if (!text) throw new Error(`No search text for ${contact.key}`);
+    return text;
+  });
+  const rows: Float32Array[] = (await localEmbeddings.embedBatch(texts)).map(
+    (vector, i) => {
+      if (!vector) throw new Error(`No vector for ${contacts[i].key}`);
+      return vector;
+    },
   );
-  const rows: Float32Array[] = [];
-  for (const contact of contacts) {
-    const id = idByKey.get(contact.key)!;
-    const row = readVector.get(id) as { embedding: Buffer } | undefined;
-    if (!row) throw new Error(`No vector was stored for ${contact.key}`);
-    rows.push(toFloat32(row.embedding));
-  }
+  seedVectors(contacts, rows, idByKey);
+  console.log(`embedded ${rows.length} contacts`);
 
   for (const query of queries) {
     const vector = await localEmbeddings.embedText(query.q);
@@ -119,10 +133,36 @@ async function main(): Promise<void> {
   });
   console.log(`vectors: ${rows.length} rows at ${dimension} dimensions`);
 
-  // Measured with the model loaded, which is the same arithmetic the gate
-  // runs with the recorded vectors: the gate's `embedText` returns the rows
-  // written above, so both sides see identical inputs.
+  // The cross-encoder runs on the worker, and every pair it scores while the
+  // baseline is measured is recorded. The budget is lifted: the recording
+  // must hold every pair, whatever this machine's speed.
+  if (!(await crossEncoder.initCrossEncoder())) {
+    throw new Error(
+      `The cross-encoder ${crossEncoder.rerankModel()} did not load. The fixture cannot be recorded without it.`,
+    );
+  }
+  process.env.SEARCH_RERANK_BUDGET_MS = "60000";
+  const scores: Record<string, Record<string, number>> = {};
+  crossEncoder.setPairScorer(
+    recordingScorer(crossEncoder.scoreOnWorker, scores),
+  );
+
+  // Measured with the models loaded, which is the same arithmetic the gate
+  // runs with the recordings: the gate's `embedText` returns the rows
+  // written above and its scorer the scores written below, so both sides see
+  // identical inputs.
   const measurement = await measure(scope, queries, idByKey);
+  const pairs = Object.values(scores).reduce(
+    (sum, byDoc) => sum + Object.keys(byDoc).length,
+    0,
+  );
+  write(RERANK_SCORES_PATH, {
+    model: crossEncoder.rerankModel(),
+    recordedAt: new Date().toISOString(),
+    pairs,
+    scores,
+  });
+  console.log(`cross-encoder: ${pairs} pairs recorded`);
   write(BASELINE, {
     recordedAt: new Date().toISOString(),
     model: "Xenova/all-MiniLM-L6-v2",
@@ -168,12 +208,6 @@ function writeVectors(
     );
   });
   fs.writeFileSync(file, buf);
-}
-
-function toFloat32(buf: Buffer): Float32Array {
-  return new Float32Array(
-    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-  );
 }
 
 main()
