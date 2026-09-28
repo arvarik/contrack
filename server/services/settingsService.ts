@@ -76,6 +76,8 @@ export const SETTING_KEYS = {
   aiSearxng: "ai.searxng",
   /** { model, dimension } — the embedding model the vec0 tables were built with */
   embeddingsState: "ai.embeddingsState",
+  /** boolean — an admin turned AI off for every account (server/ai/instanceSwitch.ts) */
+  aiInstanceOff: "ai.instanceOff",
   /** boolean — whether anybody may create an account without an invitation */
   registrationOpen: "auth.registrationOpen",
   /** boolean — whether sign-in by emailed magic link is enabled */

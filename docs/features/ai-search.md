@@ -539,7 +539,10 @@ Every contact gets a 384-dimension vector embedding generated locally using Tran
 
 - Are generated on first boot and when contacts are created/updated
 - Power the vector KNN arm of the search pipeline
-- Run entirely locally — no API calls, no network dependency
+- Run entirely on this machine, with no API call. The model files come with
+  the Docker image, or from `npm run models:fetch` on a native install. Without
+  them, the first start downloads them once from Hugging Face (see
+  [Model files and offline installs](../configuration.md#model-files-and-offline-installs))
 - Are stored in a `vec0` virtual table (`search_embeddings`), one byte per component
 
 **int8 storage.** `search_embeddings` is `INT8[384]`: 384 bytes per vector,

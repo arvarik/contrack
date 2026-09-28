@@ -10,9 +10,14 @@ import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { cn, safeHref } from "../lib/utils";
 import { CARD_INTERACTIVE, LABEL, LABEL_PRIMARY } from "../lib/styles";
 import { apiJson } from "../api/client";
+import { isLocalUploadUrl } from "../lib/localImage";
 
 const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
   const { url, title, description, image, loading } = node.attrs;
+  // Only the server's own copy is drawn. A note saved before the server kept
+  // copies can hold the linked site's image URL, and that one shows the
+  // placeholder instead of loading a third-party image.
+  const localImage = isLocalUploadUrl(image) ? image : null;
 
   useEffect(() => {
     if (loading && url) {
@@ -55,10 +60,10 @@ const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
           "p-0 overflow-hidden flex flex-col sm:flex-row",
         )}
       >
-        {image ? (
+        {localImage ? (
           <div className="sm:w-48 h-32 sm:h-auto shrink-0 overflow-hidden relative">
             <img
-              src={image}
+              src={localImage}
               alt={title || "Link preview"}
               className="w-full h-full object-cover"
             />
@@ -135,7 +140,8 @@ export const LinkPreviewExtension = Node.create({
             class:
               "sm:w-48 h-32 sm:h-auto shrink-0 overflow-hidden relative bg-surface-container flex items-center justify-center",
           },
-          HTMLAttributes.image
+          // The same rule as the node view: only a same-origin upload path.
+          isLocalUploadUrl(HTMLAttributes.image)
             ? [
                 "img",
                 {

@@ -20,6 +20,7 @@
 
 import { getProvider } from "./providerRegistry.ts";
 import { getCapabilityAssignment, parseEnvOverride } from "./capabilities.ts";
+import { isAiOffForInstance } from "./instanceSwitch.ts";
 import {
   getSetting,
   setSetting,
@@ -60,8 +61,26 @@ function readDimensionCache(): DimensionCache {
   return getSetting<DimensionCache>(DIMENSION_CACHE_KEY) ?? {};
 }
 
-/** Resolve the configured embeddings backend. */
+/** The bundled local model: no key, no network, no cost. */
+const BUILTIN: ResolvedEmbeddings = {
+  kind: "builtin",
+  model: BUILTIN_MODEL_ID,
+  dimension: BUILTIN_DIMENSION,
+  signature: `builtin/${BUILTIN_MODEL_ID}`,
+};
+
+/**
+ * Resolve the configured embeddings backend.
+ *
+ * While AI is off for the instance this is the built-in model, whatever is
+ * pinned: a provider model would send every contact's text to the provider.
+ * The signature changes with it, so the vector stores are rebuilt at the
+ * local model's width (ensureEmbeddingStore), and again at the provider's
+ * when AI comes back on.
+ */
 export function resolveEmbeddings(): ResolvedEmbeddings {
+  if (isAiOffForInstance()) return { ...BUILTIN };
+
   const assignment = getCapabilityAssignment("embeddings");
 
   // 1. Explicit pin from Settings.
@@ -83,12 +102,7 @@ export function resolveEmbeddings(): ResolvedEmbeddings {
   }
 
   // 3. Auto — the built-in local model. No key, no network, no cost.
-  return {
-    kind: "builtin",
-    model: BUILTIN_MODEL_ID,
-    dimension: BUILTIN_DIMENSION,
-    signature: `builtin/${BUILTIN_MODEL_ID}`,
-  };
+  return { ...BUILTIN };
 }
 
 /** Shape a provider-backed embeddings resolution, with its cached dimension. */
@@ -115,6 +129,11 @@ export async function embedWithProvider(
   model: string,
   texts: string[],
 ): Promise<number[][]> {
+  if (isAiOffForInstance()) {
+    throw new AppError("An admin turned AI off for this instance", 503, {
+      code: "AI_OFF_FOR_INSTANCE",
+    });
+  }
   const provider = getProvider(providerId);
   if (!provider) {
     throw new AppError(`Provider "${providerId}" is not configured`, 503, {

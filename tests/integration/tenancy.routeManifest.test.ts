@@ -145,10 +145,10 @@ describe("route manifest", () => {
   it("counts the admin surface", () => {
     // A cheap tripwire: the admin surface grew from fourteen classified rows
     // to twenty-nine guarded ones in Phase 3, and to thirty with the health
-    // route in quality story S9. A route added without a decision moves this
-    // number.
+    // route in quality story S9, and to thirty-eight with the instance AI
+    // switch. A route added without a decision moves this number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(37);
+    expect(admin).toHaveLength(38);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
     ).toHaveLength(23);

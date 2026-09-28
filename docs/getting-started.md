@@ -36,7 +36,7 @@ Navigate to **http://localhost:3210**. You're ready.
 When the server starts for the first time, several background processes kick off automatically:
 
 1. **Database initialization** — SQLite tables, FTS5 indexes, and `vec0` virtual tables are created
-2. **Local embedding model** — Transformers.js downloads and caches `all-MiniLM-L6-v2` (384-dim) for Ask Contrack search
+2. **Local search models** — Transformers.js loads `all-MiniLM-L6-v2` (384-dim) and the `ms-marco-TinyBERT-L-2-v2` cross-encoder for Ask Contrack search. The Docker image ships both. A native install downloads them from Hugging Face on this first start, unless `npm run models:fetch` put them on disk already (see [Model files and offline installs](configuration.md#model-files-and-offline-installs))
 3. **Search embedding backfill** — Existing contacts get local vector embeddings for semantic search
 4. **Dedupe embedding backfill** — Contacts get vector embeddings for duplicate detection, using the same model as search (the local one by default, so no API key is needed)
 5. **Relationship scoring** — Scores for whatever changed since the last pass (hourly), and every contact once a day, because recency decays with the clock. The first boot after an upgrade marks every contact, so that one is a full pass

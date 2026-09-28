@@ -1150,7 +1150,8 @@ far matches an injection pattern or passes 2,000 characters. The stream ends
 with `error` when the contacts changed while the model wrote the brief, or
 when the sanitizer rejects the text. A cached brief sends `start` and
 `complete` with no pieces. An account with AI off gets
-`403 AI_OFF_FOR_ACCOUNT`.
+`403 AI_OFF_FOR_ACCOUNT`, and an instance with AI off gets
+`403 AI_OFF_FOR_INSTANCE`.
 
 ---
 
@@ -1831,11 +1832,15 @@ curl http://localhost:3210/api/settings/ai
     },
     "embeddings": { "assignment": { "mode": "auto" }, "resolved": null }
   },
-  "searxngUrl": null
+  "searxngUrl": null,
+  "instance": { "aiOff": false, "lockedByEnv": false }
 }
 ```
 
-A raw API key is never returned — only `keyPreview`.
+A raw API key is never returned — only `keyPreview`. `instance` is the
+instance-wide AI switch (see `PUT /api/settings/ai/instance`). While AI is off
+for the instance, the providers still list, every capability resolves to
+nothing, and `unavailableReason` reads "AI is off for this instance."
 
 ---
 
@@ -1969,6 +1974,41 @@ curl -X PUT http://localhost:3210/api/settings/ai/searxng \
   -d '{"url":"http://searxng.local:8080"}'
 ```
 
+### `PUT /api/settings/ai/instance`
+
+Admin only. Turn AI off, or back on, for every account on the instance. While
+it is off, no request reaches any AI provider: generation, provider
+embeddings, model discovery, the daily model-list refresh, auto-enrichment and
+connector email summaries all stop. Stored keys and endpoints stay, so turning
+AI back on needs nothing entered again. Search keeps working on the built-in
+local model.
+
+```bash
+curl -X PUT http://localhost:3210/api/settings/ai/instance \
+  -H "Content-Type: application/json" \
+  -d '{"aiOff": true}'
+# → 200 { "success": true, "instance": { "aiOff": true, "lockedByEnv": false } }
+```
+
+Writes a `settings.changed` audit row. Answers `409 AI_LOCKED_BY_ENV` when
+`AI_DISABLED` is set in the environment and the body asks to turn AI on. When
+the switch changes which model the embeddings capability resolves to, both
+vector indexes rebuild in the background, as after a change of the embeddings
+model. While AI is off, a key or endpoint can still be saved, but model
+discovery and a model test answer `409 AI_OFF_FOR_INSTANCE`, and the AI routes
+answer `403 AI_OFF_FOR_INSTANCE` ("An admin turned AI off for this instance").
+Ask Contrack still answers from local data.
+
+### `GET /api/ai/instance`
+
+Any signed-in caller. Whether AI is off for the instance, so a settings page
+can say why the account's own AI switch cannot be turned on.
+
+```bash
+curl http://localhost:3210/api/ai/instance
+# → 200 { "aiOff": false, "lockedByEnv": false }
+```
+
 ---
 
 ## AI Diagnostics
@@ -2031,23 +2071,26 @@ curl "http://localhost:3210/api/ai/stats/feed?limit=20&offset=0"
 
 ### `GET /api/link-preview/unfurl?url=`
 
-Extract OpenGraph metadata (title, image, description) from a URL using Cheerio HTML parsing. No headless browser required.
+Extract OpenGraph metadata (title, image, description) from a URL using Cheerio HTML parsing. No headless browser required. The page is fetched through the SSRF guard (`safeFetch`: public addresses only, checked again at connect time and on each of at most 3 redirects).
 
 ```bash
 curl "http://localhost:3210/api/link-preview/unfurl?url=https://example.com"
+# → { "title": "...", "description": "...", "image": "/uploads/u/<owner>/previews/<digest>.jpg", "url": "https://example.com" }
 ```
+
+`image` is never a remote URL. The server downloads the page's `og:image` once, checks that it is a JPEG, PNG, GIF, WebP or AVIF image of at most 5 MB, re-encodes it as a JPEG at most 800 px wide, and stores it in the caller's uploads. `image` is that local path, or `""` when the page names no image or the download fails. The browser therefore never asks the linked site for the picture.
 
 ---
 
 ### `GET /api/logos/:domain`
 
-Fetch a company logo by domain. Proxies through Google S2 Favicons and caches locally for offline access.
+Fetch a company logo by domain. The server asks Google's S2 favicon service once per domain, re-encodes the answer as a PNG of at most 128 px, and keeps it in `uploads/logos/`. The browser never contacts Google.
 
 ```bash
 curl http://localhost:3210/api/logos/stripe.com
 ```
 
-Returns the image binary with appropriate content-type headers.
+Returns the PNG. A domain with no logo answers `404`, and the server remembers that on disk and asks again after 30 days. A failure that may pass (the network, a 5xx) answers `503` with `Cache-Control: no-store`, and the server waits 10 minutes before it asks again. Concurrent requests for one domain share one download.
 
 ---
 
@@ -2344,9 +2387,11 @@ curl http://localhost:3210/api/auth/status
 account. `localOwnerPresent` is true while the instance has never been
 secured. `legacyTokenConfigured` is true while the deprecated environment
 `API_TOKEN` is set. `existingContacts` is the old name for `deviceContacts`
-and is removed in 3.0. `mailConfigured` indicates whether outgoing SMTP mail is
-available. `magicLinkSignIn` is true only when passwordless magic-link sign-in is
-both enabled in instance settings and outgoing mail is configured.
+and is removed in 3.0. `mailConfigured` indicates whether mail can carry a
+reset or sign-in link: outgoing SMTP mail is configured and `PUBLIC_URL` is
+set. A link's address comes from `PUBLIC_URL` only, never from the request.
+`magicLinkSignIn` is true only when passwordless magic-link sign-in is enabled
+in instance settings and `mailConfigured` is true.
 
 `map` names the basemap style the map loads in each palette, from
 `MAP_STYLE_LIGHT` and `MAP_STYLE_DARK`. It rides on this endpoint because the
@@ -2709,7 +2754,7 @@ curl -X POST http://localhost:3210/api/admin/users/usr_12345/reset-link
 # → 200 { "sentTo": "user@example.com", "expiresAt": "2026-09-19T18:00:00.000Z" }
 ```
 
-Answers `409 MAIL_NOT_CONFIGURED` if outgoing mail is not configured. When mail is available, creates a 24-hour reset token, emails the link to the user, and logs the `user.password.reset` audit event (`details.via: "email"`).
+Answers `409 MAIL_NOT_CONFIGURED` if outgoing mail is not configured, and `409 PUBLIC_URL_REQUIRED` if `PUBLIC_URL` is not set: the link goes to another person's inbox, so its address cannot come from the request. When both are available, creates a 24-hour reset token, emails a link on `PUBLIC_URL` to the user, and logs the `user.password.reset` audit event (`details.via: "email"`).
 
 ### `POST /api/admin/invitations`
 
@@ -2725,7 +2770,7 @@ curl -X POST http://localhost:3210/api/admin/invitations \
   - `email` (string, optional): Email hint for the recipient
   - `role` (`"member"` | `"admin"`, default `"member"`)
   - `expiresInDays` (number, default 7)
-  - `send` (boolean, optional, default `false`): When `true` and outgoing mail is configured, dispatches an email containing the invitation link to `email`.
+  - `send` (boolean, optional, default `false`): When `true`, outgoing mail is configured and `PUBLIC_URL` is set, dispatches an email containing the invitation link to `email`. The mailed link is on `PUBLIC_URL`.
 - Response:
   ```json
   {
@@ -2735,7 +2780,7 @@ curl -X POST http://localhost:3210/api/admin/invitations \
     "sent": true
   }
   ```
-  `sent` indicates whether the email was successfully sent. If mail was unconfigured or delivery failed, `sent` is `false` and the admin can copy the link manually.
+  `sent` indicates whether the email was successfully sent. If mail was unconfigured, `PUBLIC_URL` was not set, or delivery failed, `sent` is `false` and the admin can copy the link manually. The `link` in the response is built from `PUBLIC_URL` when it is set, and otherwise from the request's host (`X-Forwarded-Host` counts only from a proxy that `TRUST_PROXY_HOPS` trusts).
 
 ### `GET /api/admin/mail`
 
@@ -2754,11 +2799,12 @@ curl http://localhost:3210/api/admin/mail
   "user": "smtp-user",
   "from": "noreply@example.com",
   "replyTo": "support@example.com",
-  "hasPassword": true
+  "hasPassword": true,
+  "publicUrl": "https://crm.example.com"
 }
 ```
 
-`source` is `"env"` (configured via `SMTP_URL`), `"settings"` (configured in database), or `"none"`. Passwords are never returned in this response.
+`source` is `"env"` (configured via `SMTP_URL`), `"settings"` (configured in database), or `"none"`. Passwords are never returned in this response. `publicUrl` is the origin that mailed links point at, or `null` when `PUBLIC_URL` is not set, in which case mail carries no sign-in, reset or invitation link. `PUT` and `DELETE` answer with the same shape.
 
 ### `PUT /api/admin/mail`
 

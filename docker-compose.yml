@@ -3,7 +3,11 @@ services:
     build: .
     container_name: contrack
     ports:
-      - "3210:3210"
+      # Published on this machine only. Auth is off by default, so a plain
+      # "3210:3210" handed every contact to anybody on the same network. To
+      # reach it from other devices, set AUTH_REQUIRED=true first, then change
+      # this to "3210:3210" or put a reverse proxy in front.
+      - "127.0.0.1:3210:3210"
     volumes:
       - ./data:/app/data
     environment:
@@ -11,6 +15,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # true turns AI off for the whole instance: no request reaches any AI
+      # provider, whatever keys are stored. Local search keeps working.
+      - AI_DISABLED=${AI_DISABLED:-}
       # The basemap style per palette. Unset means OpenFreeMap's public
       # styles, which need no key. Point these at your own style to
       # self-host the basemap.
@@ -26,8 +33,13 @@ services:
       # tokens replaces it, and it is removed in 3.0.
       - API_TOKEN=${API_TOKEN:-}
       # The address people open, when a reverse proxy sits in front. Passkeys,
-      # invitation links and the Google connector need it.
+      # invitation links and the Google connector need it, and mail sends no
+      # sign-in, reset or invitation link without it.
       - PUBLIC_URL=${PUBLIC_URL:-}
+      # How many reverse proxies sit in front. 0 believes no X-Forwarded-*
+      # header. Set 1 behind one proxy, so rate limits and the audit log see
+      # the real client address and the session cookie is marked Secure.
+      - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-}
       # Encrypts the credentials the database stores. Unset means a key
       # generated in ./data/secret.key, so back that file up with the data.
       - CONTRACK_SECRET_KEY=${CONTRACK_SECRET_KEY:-}
@@ -50,6 +62,11 @@ services:
       - AI_RESEARCH_MODEL=${AI_RESEARCH_MODEL:-}
       - AI_EMBEDDINGS_MODEL=${AI_EMBEDDINGS_MODEL:-}
       - SEARCH_RERANK_MODEL=${SEARCH_RERANK_MODEL:-}
+      # The image ships the search models in /app/models and downloads
+      # nothing. Set MODEL_DOWNLOADS=true only to load a model it does not
+      # ship, such as a different SEARCH_RERANK_MODEL.
+      - MODEL_DIR=${MODEL_DIR:-/app/models}
+      - MODEL_DOWNLOADS=${MODEL_DOWNLOADS:-false}
       - SEARCH_RERANK_BUDGET_MS=${SEARCH_RERANK_BUDGET_MS:-}
       - CONNECTOR_SYNC_CONCURRENCY=${CONNECTOR_SYNC_CONCURRENCY:-}
       - CONNECTORS_ALLOW_PRIVATE_HOSTS=${CONNECTORS_ALLOW_PRIVATE_HOSTS:-}

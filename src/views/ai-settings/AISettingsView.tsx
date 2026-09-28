@@ -15,8 +15,11 @@ import {
   useRefreshModels,
   useSaveEndpoint,
   useDeleteEndpoint,
+  useSetInstanceAi,
 } from "../../api/aiSettings";
 import { Modal } from "../../components/ui/Modal";
+import { Switch } from "../../components/ui/Switch";
+import { SettingRow } from "../settings/SettingRow";
 import { CapabilitiesCard } from "./CapabilitiesCard";
 import { SearchCoverageBar } from "../search";
 import { ICON_BTN, LABEL } from "../../lib/styles";
@@ -38,9 +41,10 @@ const ADD_ROW =
 // ---------------------------------------------------------------------------
 // AISettingsView — capability-based AI configuration
 // ---------------------------------------------------------------------------
-// Two cards, in the order the work happens: connect credentials, then decide
-// what each kind of AI work runs on. The second card is its own component —
-// see CapabilitiesCard.
+// First the switch for the whole instance: whether Contrack may call any AI
+// provider at all. Then two cards, in the order the work happens: connect
+// credentials, then decide what each kind of AI work runs on. The last card
+// is its own component — see CapabilitiesCard.
 //
 // Every capability defaults to Automatic, so someone who pastes one key and
 // never opens this page gets sensible behavior with zero configuration.
@@ -53,6 +57,7 @@ export const AISettingsView = () => {
   const refreshModels = useRefreshModels();
   const saveEndpoint = useSaveEndpoint();
   const deleteEndpoint = useDeleteEndpoint();
+  const setInstanceAi = useSetInstanceAi();
 
   const [keyModalProvider, setKeyModalProvider] = useState<{
     id: string;
@@ -105,6 +110,18 @@ export const AISettingsView = () => {
     }
   };
 
+  /** `on` is the switch's new position: true lets AI run on the instance. */
+  const handleInstanceAi = (on: boolean) => {
+    setInstanceAi.mutate(!on, {
+      onSuccess: () =>
+        toast.success(
+          on ? "AI is on for this instance" : "AI is off for this instance",
+        ),
+      onError: (err) =>
+        toast.error(err instanceof Error ? err.message : String(err)),
+    });
+  };
+
   const handleSaveEndpoint = async () => {
     try {
       const result = await saveEndpoint.mutateAsync({
@@ -128,6 +145,37 @@ export const AISettingsView = () => {
     // card starts under the page title and not to its right.
     // A heading over each card, as on every settings page.
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
+      {/* ── The instance switch ───────────────────────────────────────── */}
+      {/* Above the keys, because it overrules them: while it is off, no key
+        below is used, for any account. AI_DISABLED on the server holds it
+        off, so the switch cannot turn AI on and says why. */}
+      <div className={SETTINGS_CARD}>
+        <SettingRow
+          id="ai-instance"
+          title="Use AI on this instance"
+          description={
+            <>
+              When it is off, Contrack sends nothing to any AI provider, for
+              every account. Local search still works
+              {settings.instance.lockedByEnv && (
+                <span className="block mt-1 font-medium text-on-surface">
+                  Set by <code className="font-mono">AI_DISABLED</code> on the
+                  server
+                </span>
+              )}
+            </>
+          }
+          inline
+        >
+          <Switch
+            label="Use AI on this instance"
+            checked={!settings.instance.aiOff}
+            disabled={settings.instance.lockedByEnv || setInstanceAi.isPending}
+            onChange={handleInstanceAi}
+          />
+        </SettingRow>
+      </div>
+
       {/* ── Providers ─────────────────────────────────────────────────── */}
       <section>
         <h2 className={SETTINGS_SECTION_HEADING}>Providers</h2>

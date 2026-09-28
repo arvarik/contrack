@@ -90,7 +90,7 @@ Always use an **app-specific password** rather than your primary account passwor
 - **Folders**: List of folders to monitor (default: `INBOX`, `Sent`). Contrack tracks message UIDs per folder to sync only new arrivals.
 - **My Aliases**: List your personal email addresses and aliases. Any message matching these will be recognized as outgoing from you.
 - **Roll up emails per contact per day**: Enabled by default. Groups multiple emails exchanged with the same contact on the same date into a single timeline interaction with a bulleted digest. This prevents high-frequency email threads from drowning your timeline.
-- **Generate AI summaries**: Disabled by default. When enabled, Contrack reads message bodies and invokes the quick AI model (`connectorSummary` task) to generate a concise 1–2 sentence summary of the thread. Summaries are capped at 50 per sync run to manage AI token budgets and rate limits. All untrusted email body content is strictly shielded before AI evaluation.
+- **Generate AI summaries**: Disabled by default. When enabled, Contrack reads message bodies and invokes the quick AI model (`connectorSummary` task) to generate a concise 1–2 sentence summary of the thread. It also needs AI to be on for the connector owner's account and for the instance. When either switch is off, the sync downloads no message body and sends nothing to a provider. Summaries are capped at 50 per sync run to manage AI token budgets and rate limits. All untrusted email body content is strictly shielded before AI evaluation.
 
 ---
 

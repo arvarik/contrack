@@ -46,8 +46,11 @@ describe("security headers", () => {
     );
   });
 
-  it("omits the CSP outside production — Vite dev needs inline script", async () => {
+  it("sends the CSP outside production too, relaxed only for Vite's inline script and reload socket", async () => {
     const res = await request(app).get("/api/auth/status");
-    expect(res.headers["content-security-policy"]).toBeUndefined();
+    const csp = String(res.headers["content-security-policy"]);
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain("unsafe-eval");
   });
 });

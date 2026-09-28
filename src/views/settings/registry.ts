@@ -981,6 +981,20 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "capabilities",
       "admin",
     ],
+    rows: [
+      {
+        id: "ai-instance",
+        label: "Use AI on this instance",
+        keywords: [
+          "turn off ai",
+          "disable ai",
+          "ai off",
+          "privacy",
+          "everyone",
+          "instance",
+        ],
+      },
+    ],
     load: () => import("./admin/AiProvidersView"),
   },
   {

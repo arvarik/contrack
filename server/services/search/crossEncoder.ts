@@ -29,6 +29,7 @@
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { cancelJob, isWorkerActive, startJob } from "../../workers/cpuHost.ts";
+import { describeModelLoadError } from "./modelFiles.ts";
 
 /**
  * The model when `SEARCH_RERANK_MODEL` is unset.
@@ -176,7 +177,7 @@ export async function initCrossEncoder(
   } catch (err: unknown) {
     log.warn(
       "CrossEncoder",
-      `The cross-encoder ${model} did not load, so search keeps its fused order: ${getErrorMessage(err)}`,
+      `The cross-encoder ${model} did not load, so search keeps its fused order: ${describeModelLoadError(getErrorMessage(err), model)}`,
     );
     return false;
   }

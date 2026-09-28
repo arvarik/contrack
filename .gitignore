@@ -19,6 +19,16 @@ coverage/
 # uploads, and the embedding-model cache. All machine-local secrets/state.
 data/
 
+# The key that seals stored credentials. Outside Docker DATA_DIR is the
+# project root, so the server writes it here, beside the code. Anyone who has
+# it can read every stored API key, password and OAuth token.
+secret.key
+
+# Local model files from `npm run models:fetch` (MODEL_DIR defaults to
+# DATA_DIR/models), and the model cache when DATA_DIR is the project root.
+/models/
+/.cache/
+
 # Database snapshots. These are full copies of the contact database. Today
 # they are all *.db and would be caught above, but that is incidental — a
 # compressed or manifest file would not be, so ignore the directory itself.

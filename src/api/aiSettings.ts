@@ -2,7 +2,8 @@
  * AI Settings API Hooks — capability-based AI configuration.
  *
  * Backs Settings → AI: provider credentials, custom OpenAI-compatible
- * endpoints, per-capability model assignment, and model discovery.
+ * endpoints, per-capability model assignment, and model discovery. Also the
+ * instance switch: whether an admin turned AI off for every account.
  *
  * @module api/aiSettings
  */
@@ -42,6 +43,14 @@ export interface CustomEndpoint {
   keyPreview?: string;
 }
 
+/** The instance switch, as `GET /ai/instance` and the settings view give it. */
+export interface InstanceAi {
+  /** True when no AI provider call may leave this instance. */
+  aiOff: boolean;
+  /** True when AI_DISABLED on the server holds it off. */
+  lockedByEnv: boolean;
+}
+
 export interface AISettings {
   providers: ProviderStatus[];
   availableProviders: { id: string; label: string }[];
@@ -68,6 +77,7 @@ export interface AISettings {
     }
   >;
   searxngUrl?: string;
+  instance: InstanceAi;
 }
 
 export interface ModelOption {
@@ -86,6 +96,7 @@ export interface ModelGroup {
 }
 
 const KEY = ["ai-settings"] as const;
+const INSTANCE_KEY = ["ai-instance"] as const;
 
 export const useAISettings = () =>
   useQuery({
@@ -96,6 +107,44 @@ export const useAISettings = () =>
     },
     staleTime: 30_000,
   });
+
+/**
+ * Whether an admin turned AI off for the instance. Any signed-in account may
+ * read it: the Privacy page says why the account's own switch cannot turn AI
+ * on.
+ */
+export const useInstanceAi = () =>
+  useQuery({
+    queryKey: INSTANCE_KEY,
+    queryFn: async ({ signal }): Promise<InstanceAi> => {
+      const res = await apiFetch("/ai/instance", { signal });
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+/** Turn AI off (`aiOff: true`) or back on for every account. Admin only. */
+export const useSetInstanceAi = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      aiOff: boolean,
+    ): Promise<{ success: true; instance: InstanceAi }> => {
+      const res = await apiFetch("/settings/ai/instance", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiOff }),
+      });
+      return res.json();
+    },
+    // What every capability resolves to changes with the switch, so the
+    // whole view is read again, not only the switch.
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: INSTANCE_KEY });
+    },
+  });
+};
 
 /** Capability-eligible models grouped by provider (populated by discovery). */
 export const useCapabilityModels = (capability: AICapability) =>

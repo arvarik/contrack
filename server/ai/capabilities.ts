@@ -39,6 +39,7 @@ import {
 } from "./providerRegistry.ts";
 import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
+import { isAiOffForInstance } from "./instanceSwitch.ts";
 
 /** User-facing AI capabilities. */
 export type AICapability = "quick" | "deep" | "research" | "embeddings";
@@ -175,12 +176,18 @@ function autoModelFor(config: ProviderConfig): string | undefined {
 
 /**
  * Resolve a generation capability to a concrete provider + model.
- * Returns null when nothing is configured (callers fall back to mock mode)
- * or when the capability is explicitly disabled.
+ * Returns null when nothing is configured (callers fall back to mock mode),
+ * when the capability is explicitly disabled, or while AI is off for the
+ * instance.
  */
 export function resolveCapability(
   capability: Exclude<AICapability, "embeddings">,
 ): ResolvedCapability | null {
+  // getProvider would answer null for every candidate anyway. Stopping here
+  // keeps a pinned capability from logging "pinned to unavailable provider"
+  // on every call while an admin has AI off.
+  if (isAiOffForInstance()) return null;
+
   const modelClass = CAPABILITY_CLASS[capability];
   const assignment = getCapabilityAssignment(capability);
 

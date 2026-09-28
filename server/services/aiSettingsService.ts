@@ -21,8 +21,14 @@ import {
   readStoredKey,
   type CustomEndpointConfig,
   type ProviderConfig,
+  type ProviderKind,
 } from "../ai/providerRegistry.ts";
 import { resolveEmbeddings } from "../ai/embeddings.ts";
+import {
+  instanceAiState,
+  isAiOffForInstance,
+  type InstanceAiState,
+} from "../ai/instanceSwitch.ts";
 import {
   classForCapability,
   getCapabilityAssignments,
@@ -190,6 +196,26 @@ export function sealStoredAiKeys(): number {
 }
 
 // ---------------------------------------------------------------------------
+// The instance switch
+// ---------------------------------------------------------------------------
+
+/**
+ * Refuse work that has to reach a provider while AI is off for the instance.
+ *
+ * getProvider answers null while it is off, so without this a model refresh
+ * or a model test would report "not configured" about a provider that is
+ * configured, and send the admin looking for a key problem.
+ */
+export function assertAiOnForInstance(): void {
+  if (!isAiOffForInstance()) return;
+  throw new AppError(
+    "AI is off for this instance, so Contrack sent nothing to the provider. Turn AI on to do this.",
+    409,
+    { code: "AI_OFF_FOR_INSTANCE" },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Capability assignments
 // ---------------------------------------------------------------------------
 
@@ -240,6 +266,7 @@ export async function probeGeneration(
   providerId: string,
   model?: string,
 ): Promise<void> {
+  assertAiOnForInstance();
   const config = getProviderConfig(providerId);
   if (!config || config.kind === "openai-compatible") return;
   const provider = getProvider(providerId);
@@ -285,6 +312,7 @@ function writeModelCache(cache: Record<string, CachedModelList>): void {
 export async function refreshModels(
   providerId: string,
 ): Promise<CachedModelList> {
+  assertAiOnForInstance();
   const provider = getProvider(providerId);
   if (!provider) {
     throw new AppError(`Provider "${providerId}" is not configured`, 400, {
@@ -329,8 +357,14 @@ export async function refreshModels(
   }
 }
 
-/** Refresh any provider whose cache is missing or older than the TTL. */
+/**
+ * Refresh any provider whose cache is missing or older than the TTL.
+ *
+ * The server runs this at boot and once a day. While AI is off for the
+ * instance it does nothing: a model list request is a provider call too.
+ */
 export async function refreshStaleModelCaches(): Promise<void> {
+  if (isAiOffForInstance()) return;
   const cache = readModelCache();
   const now = Date.now();
   for (const config of getProviderConfigs()) {
@@ -405,6 +439,8 @@ export interface AISettingsView {
     }
   >;
   searxngUrl?: string;
+  /** The instance switch: whether any provider call may leave this server. */
+  instance: InstanceAiState;
 }
 
 const BUILT_IN_LABELS: Record<string, string> = {
@@ -493,6 +529,7 @@ function reasonFor(
   capability: AICapability,
   configs: ProviderConfig[],
 ): string {
+  if (isAiOffForInstance()) return "AI is off for this instance.";
   if (configs.length === 0) {
     return "No providers connected. Add an API key above, or a custom endpoint.";
   }
@@ -521,6 +558,23 @@ function reasonFor(
   return "No connected provider can serve this capability.";
 }
 
+/**
+ * What each adapter kind can do, for the view while AI is off for the
+ * instance. getProvider answers null then, so there is no adapter to ask,
+ * and a provider row that lost its "web search" mark or its refresh button
+ * would look like a different provider. Every adapter lists its models, and
+ * only an OpenAI-compatible endpoint cannot search the web.
+ */
+const KIND_FEATURES: Record<
+  ProviderKind,
+  { discovery: boolean; grounding: boolean }
+> = {
+  gemini: { discovery: true, grounding: true },
+  openai: { discovery: true, grounding: true },
+  anthropic: { discovery: true, grounding: true },
+  "openai-compatible": { discovery: true, grounding: false },
+};
+
 export function getSettingsView(): AISettingsView {
   const configs = getProviderConfigs();
   const cache = readModelCache();
@@ -537,8 +591,12 @@ export function getSettingsView(): AISettingsView {
       modelCount: entry ? entry.models.length : null,
       modelsFetchedAt: entry?.fetchedAt,
       modelsError: entry?.error,
-      supportsDiscovery: !!provider?.listModels,
-      supportsGrounding: provider?.supportsSearchGrounding !== false,
+      supportsDiscovery: provider
+        ? !!provider.listModels
+        : KIND_FEATURES[config.kind].discovery,
+      supportsGrounding: provider
+        ? provider.supportsSearchGrounding !== false
+        : KIND_FEATURES[config.kind].grounding,
       freeTier: provider?.getQuotaSnapshot?.().freeTier || undefined,
     };
   });
@@ -567,6 +625,7 @@ export function getSettingsView(): AISettingsView {
     })),
     capabilities,
     searxngUrl: getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url,
+    instance: instanceAiState(),
   };
 }
 

@@ -23,7 +23,6 @@ import {
 // similarity.
 // =============================================================================
 
-import path from "path";
 import {
   sqlite,
   vecElementFor,
@@ -57,6 +56,11 @@ import {
 // Type-only import — fully erased at compile time, so the runtime module
 // graph still loads @huggingface/transformers lazily via dynamic import.
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
+import {
+  EMBEDDING_MODEL_ID,
+  configureModelLibrary,
+  describeModelLoadError,
+} from "./modelFiles.ts";
 import type { CompiledFacets } from "./facetSql.ts";
 
 // =============================================================================
@@ -73,7 +77,7 @@ let fallbackExtractor: FeatureExtractionPipeline | null = null;
 let modelReady = false;
 let initPromise: Promise<void> | null = null;
 
-const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+const MODEL_ID = EMBEDDING_MODEL_ID;
 const BACKFILL_BATCH_SIZE = 64;
 
 // =============================================================================
@@ -111,7 +115,7 @@ export async function initLocalEmbeddings(): Promise<void> {
     } catch (err: unknown) {
       log.warn(
         "LocalEmbeddings",
-        `Failed to load local embedding model: ${getErrorMessage(err)}`,
+        `Failed to load local embedding model: ${describeModelLoadError(getErrorMessage(err), MODEL_ID)}`,
       );
       modelReady = false;
     }
@@ -122,16 +126,6 @@ export async function initLocalEmbeddings(): Promise<void> {
   } finally {
     initPromise = null;
   }
-}
-
-/** Where the model files live. DATA_DIR by default, so Docker keeps them. */
-function modelCacheDir(): string | undefined {
-  return (
-    process.env.TRANSFORMERS_CACHE ??
-    (process.env.DATA_DIR
-      ? path.join(process.env.DATA_DIR, ".cache")
-      : undefined)
-  );
 }
 
 /** Check if the local embedding model is ready. */
@@ -228,8 +222,7 @@ async function embedTexts(
 async function embedTextsInProcess(texts: string[]): Promise<Float32Array[]> {
   if (!fallbackExtractor) {
     const { pipeline, env: hfEnv } = await import("@huggingface/transformers");
-    const cacheDir = modelCacheDir();
-    if (cacheDir) hfEnv.cacheDir = cacheDir;
+    configureModelLibrary(hfEnv);
     fallbackExtractor = await pipeline("feature-extraction", MODEL_ID, {
       dtype: "q8",
       session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },

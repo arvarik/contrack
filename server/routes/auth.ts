@@ -100,7 +100,7 @@ import {
   processProfilePhoto,
   AVATAR_MIME_EXTENSIONS,
 } from "../utils/avatarProcessor.ts";
-import { publicOrigin } from "../utils/publicOrigin.ts";
+import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 import {
   renderPasswordResetEmail,
   renderMagicLinkEmail,
@@ -233,8 +233,10 @@ router.get("/status", (req, res) => {
     existingContacts: deviceContacts,
     // Whether the sign-in screen should offer to create an account.
     registrationOpen: isRegistrationOpen(),
-    mailConfigured: mailService.isConfigured(),
-    magicLinkSignIn: isMagicLinkSignIn() && mailService.isConfigured(),
+    // Whether mail can carry a reset or sign-in link, which also needs
+    // PUBLIC_URL. The sign-in screen offers those only when it can.
+    mailConfigured: mailService.canSendLinks(),
+    magicLinkSignIn: isMagicLinkSignIn() && mailService.canSendLinks(),
     // True while this instance has never been secured, so its data belongs to
     // an account nobody can sign in to.
     localOwnerPresent: hasLocalOwner(),
@@ -472,15 +474,24 @@ router.post(
  * Request a password reset link by email.
  *
  * Always returns 202 whether the email is known or not, preventing enumeration.
- * When mail is configured and the account exists, creates a 1-hour reset token
- * (subject to the hourly cap of 3 per account) and sends an email.
+ * When mail can carry links (mail configured and PUBLIC_URL set) and the
+ * account exists, creates a 1-hour reset token (subject to the hourly cap of 3
+ * per account) and sends an email. The link's origin is PUBLIC_URL and never
+ * the request's host, which the requester controls.
  */
 router.post(
   "/password-reset/request",
   linkLimiter,
   asyncHandler(async (req, res) => {
     const email = bodyString(req, "email").trim().toLowerCase();
-    if (email && mailService.isConfigured()) {
+    const origin = mailLinkOrigin();
+    if (email && mailService.isConfigured() && !origin) {
+      log.warn(
+        "Auth",
+        "A password reset was requested, and no link was sent: set PUBLIC_URL so mail can carry links",
+      );
+    }
+    if (email && origin && mailService.isConfigured()) {
       const user = findUserByEmail(email);
       if (user && user.status !== "disabled") {
         const link = createAuthLink(
@@ -491,7 +502,6 @@ router.post(
           ipOf(req),
         );
         if (link) {
-          const origin = publicOrigin(req);
           const resetUrl = `${origin}/reset-password?token=${link.token}`;
           const template = renderPasswordResetEmail({
             instanceName: getInstanceName(),
@@ -563,14 +573,16 @@ router.post(
 /**
  * Request a magic link sign-in email.
  *
- * 404 MAGIC_LINK_OFF when the instance switch is off or mail is not configured.
- * Always returns 202 when enabled, preventing email enumeration.
+ * 404 MAGIC_LINK_OFF when the instance switch is off, or when mail cannot
+ * carry links (mail not configured, or PUBLIC_URL not set). Always returns 202
+ * when enabled, preventing email enumeration.
  */
 router.post(
   "/magic-link/request",
   linkLimiter,
   asyncHandler(async (req, res) => {
-    if (!isMagicLinkSignIn() || !mailService.isConfigured()) {
+    const origin = mailLinkOrigin();
+    if (!isMagicLinkSignIn() || !origin || !mailService.isConfigured()) {
       throw new AppError("Magic link sign-in is disabled", 404, {
         code: "MAGIC_LINK_OFF",
       });
@@ -587,7 +599,6 @@ router.post(
           ipOf(req),
         );
         if (link) {
-          const origin = publicOrigin(req);
           const magicUrl = `${origin}/signin-link?token=${link.token}`;
           const template = renderMagicLinkEmail({
             instanceName: getInstanceName(),

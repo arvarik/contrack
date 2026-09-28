@@ -695,6 +695,11 @@ export interface MailConfig {
   from: string;
   replyTo: string;
   hasPassword: boolean;
+  /**
+   * The PUBLIC_URL that mailed links point at, or null when it is not set. The
+   * server sends no sign-in, reset or invitation link by mail while it is null.
+   */
+  publicUrl?: string | null;
 }
 
 export interface UpdateMailInput {

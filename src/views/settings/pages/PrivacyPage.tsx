@@ -20,6 +20,7 @@ import {
   useClearHistory,
 } from "../../../api/searchHistory";
 import { AiCapabilitiesList } from "../AiCapabilitiesCard";
+import { useInstanceAi } from "../../../api/aiSettings";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -54,6 +55,11 @@ export const PrivacyPage = () => {
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const { data } = useSearchHistoryList();
   const clearMutation = useClearHistory();
+  // An admin can turn AI off for every account. The account's own switch
+  // cannot turn it back on then, so it shows off, cannot be pressed, and
+  // says why.
+  const { data: instanceAi } = useInstanceAi();
+  const instanceOff = instanceAi?.aiOff === true;
 
   const count = data?.pages[0]?.total ?? 0;
   const questions = `${count} ${count === 1 ? "question" : "questions"}`;
@@ -82,12 +88,24 @@ export const PrivacyPage = () => {
           id="ai-assist"
           title="Use AI for this account"
           prefKey="aiAssist"
-          description="Lets Contrack use the AI providers set up here for summaries, enrichment, briefings, and insights. When it is off, Contrack sends nothing to an AI provider for you"
+          description={
+            <>
+              Lets Contrack use the AI providers set up here for summaries,
+              enrichment, briefings, and insights. When it is off, Contrack
+              sends nothing to an AI provider for you
+              {instanceOff && (
+                <span className="block mt-1 font-medium text-on-surface">
+                  An admin turned AI off for everyone on this instance
+                </span>
+              )}
+            </>
+          }
           inline
         >
           <Switch
             label="Use AI for this account"
-            checked={preferences.aiAssist}
+            checked={preferences.aiAssist && !instanceOff}
+            disabled={instanceOff}
             onChange={(next) => setPreference("aiAssist", next)}
           />
         </SettingRow>

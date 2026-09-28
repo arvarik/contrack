@@ -123,10 +123,28 @@ export function buildFullExport(scope: Scope): FullExport {
   };
 }
 
-/** RFC-4180 CSV escaping: quote when needed, double embedded quotes. */
-function csvCell(value: unknown): string {
+/**
+ * A cell a spreadsheet runs as a formula: it starts with `=`, `+`, `-` or
+ * `@`, or with a tab or carriage return that hides one of those.
+ */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/**
+ * One CSV cell: RFC-4180 escaping, quoted when needed, embedded quotes
+ * doubled.
+ *
+ * Text that would start a formula gets a leading `'`, which Excel, Numbers
+ * and Google Sheets read as "this cell is text". Contact fields are not only
+ * what the owner typed: a Google sync, an imported vCard or AI research can
+ * put `=HYPERLINK(...)` in a company name, and the owner's own export would
+ * run it the moment they opened the file. A phone number such as `+1 555`
+ * gets the mark too, which also stops a spreadsheet from reading it as a sum.
+ * Numbers are left as they are.
+ */
+export function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  let text = String(value);
+  if (typeof value === "string" && FORMULA_START.test(text)) text = `'${text}`;
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

@@ -3,9 +3,10 @@
 // =============================================================================
 // What each kind of AI work runs on right now, and what this process has sent
 // to Gemini: per-model usage, grounded requests today, and the models a
-// circuit breaker has paused.
+// circuit breaker has paused. Also whether an admin turned AI off for the
+// whole instance, which every account may read.
 //
-// Usage: GET /api/ai/diagnostics
+// Usage: GET /api/ai/diagnostics, GET /api/ai/instance
 // =============================================================================
 
 import { Router } from "express";
@@ -17,10 +18,11 @@ import { getSearxngUrl } from "../services/aiSearch/strategies/searxng.ts";
 import { researchRunsLastDay } from "../services/aiStatsService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { requireAdmin } from "../middleware/auth.ts";
+import { instanceAiState } from "../ai/instanceSwitch.ts";
 
 const router = Router();
 
-// Both routes report the instance's shared routing state: usage and circuit
+// The first two routes report the instance's shared routing state: usage and circuit
 // breakers that every account draws on. They describe the operator's provider
 // account, not the caller's data, which is why the manifest classes them
 // `admin` and Phase 3 guards them.
@@ -94,6 +96,21 @@ router.get(
       );
     }
     res.json({ hasCapacity, provider: research.providerId, researchRuns24h });
+  }),
+);
+
+/**
+ * GET /api/ai/instance
+ *
+ * `{ aiOff, lockedByEnv }`: whether an admin turned AI off for every account,
+ * and whether AI_DISABLED holds it off. Any signed-in caller may read it,
+ * because the Privacy page has to say why the account's own switch cannot
+ * turn AI on. It names no provider, key or model.
+ */
+router.get(
+  "/instance",
+  asyncHandler(async (_req, res) => {
+    res.json(instanceAiState());
   }),
 );
 

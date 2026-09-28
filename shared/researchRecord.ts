@@ -28,13 +28,52 @@ export const MAX_RESEARCH_SOURCES = 60;
 /** Entries research added, kept per contact across runs, newest last. */
 export const MAX_ADDED_ENTRIES = 150;
 
+/**
+ * True for an absolute http or https address.
+ *
+ * The dossier renders every cited address as a link. The addresses come from
+ * a provider's grounding metadata and from redirects it resolved, so nothing
+ * but this check stands between a `javascript:` or `data:` address and an
+ * anchor on the page.
+ */
+export function isWebUrl(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return false;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+const webUrl = z
+  .string()
+  .max(2000)
+  .refine(isWebUrl, "Expected an absolute http or https address");
+
 /** One page a run cited. */
 export const researchSourceSchema = z.object({
-  url: z.string().max(2000),
+  url: webUrl,
   title: z.string().max(300),
   /** When a run first cited it. */
   firstSeenAt: z.string().max(40),
 });
+
+/**
+ * The record's sources, without any that do not parse.
+ *
+ * One page with a bad address must not cost the whole record: the dossier
+ * would lose every run, and the next enrichment would start a fresh record
+ * as if none had happened. A source is only an address and its title, so a
+ * bad one is dropped and the rest stay.
+ */
+const researchSourcesSchema = z.preprocess(
+  (value) =>
+    Array.isArray(value)
+      ? value.filter((entry) => researchSourceSchema.safeParse(entry).success)
+      : value,
+  z.array(researchSourceSchema).max(MAX_RESEARCH_SOURCES),
+);
 
 /**
  * One fact the search pass reported, as it wrote it:
@@ -45,8 +84,11 @@ export const researchFindingSchema = z.object({
   text: z.string().max(600),
   /** The site the search pass named for the fact, when it named one. */
   site: z.string().max(200).optional(),
-  /** The page the provider says backs the fact, when it says one. */
-  url: z.string().max(2000).optional(),
+  /**
+   * The page the provider says backs the fact, when it says one. A bad
+   * address reads as none: the fact itself is still worth showing.
+   */
+  url: webUrl.optional().catch(undefined),
 });
 
 /** How many entries one run added to one field: education, 2. */
@@ -103,7 +145,7 @@ export const researchAddedEntrySchema = z.object({
 export const researchRecordSchema = z.object({
   version: z.literal(1),
   runs: z.array(researchRunSchema).max(MAX_RESEARCH_RUNS),
-  sources: z.array(researchSourceSchema).max(MAX_RESEARCH_SOURCES),
+  sources: researchSourcesSchema,
   /**
    * Every entry research added, newest last. One that the contact no longer
    * has, the person removed, and research does not add it back. Absent on
@@ -130,6 +172,11 @@ export type ResearchOutcome = ResearchRun["outcome"];
  * The column is JSON text, and a value that does not parse or match is read
  * as no record rather than thrown on: the dossier still renders, and the next
  * enrichment writes a fresh record.
+ *
+ * A bad address is not a reason to lose the record. A source whose address
+ * is not http or https is dropped, and a finding's bad address reads as
+ * none. The enrichment merge writes through the same schema, so a bad
+ * address from a new run is dropped the same way before it is stored.
  */
 export function parseResearchRecord(value: unknown): ResearchRecord | null {
   if (value == null || value === "") return null;

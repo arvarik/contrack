@@ -350,10 +350,25 @@ describe("api.mail", () => {
       }),
     );
 
-    const status2 = await request(app).get("/api/auth/status");
-    expect(status2.body.mailConfigured).toBe(true);
-
     const settings2 = await as(admin)(request(app).get("/api/admin/settings"));
     expect(settings2.body.mailConfigured).toBe(true);
+
+    // The sign-in screen asks whether mail can carry a reset or sign-in
+    // link, and a link needs PUBLIC_URL as well (see mailLinkOrigin). The
+    // mail page says which address links point at, or that none is set.
+    const status2 = await request(app).get("/api/auth/status");
+    expect(status2.body.mailConfigured).toBe(false);
+    const mail2 = await as(admin)(request(app).get("/api/admin/mail"));
+    expect(mail2.body.publicUrl).toBeNull();
+
+    process.env.PUBLIC_URL = "https://crm.example.com";
+    try {
+      const status3 = await request(app).get("/api/auth/status");
+      expect(status3.body.mailConfigured).toBe(true);
+      const mail3 = await as(admin)(request(app).get("/api/admin/mail"));
+      expect(mail3.body.publicUrl).toBe("https://crm.example.com");
+    } finally {
+      delete process.env.PUBLIC_URL;
+    }
   });
 });

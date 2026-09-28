@@ -4,8 +4,9 @@
 // Tests guardUploads in isolation:
 // - Instance-visible profile pictures: /u/<uuid>/profile/<file> allowed for
 //   any authenticated principal, rejected with NotFoundError without one.
-// - Owner-only isolation: /u/<uuid>/avatars/ and /u/<uuid>/files/ allowed only
-//   to the owning account, NotFoundError to anyone else.
+// - Owner-only isolation: /u/<uuid>/avatars/, /u/<uuid>/files/ and
+//   /u/<uuid>/previews/ allowed only to the owning account, NotFoundError to
+//   anyone else.
 // - Shared logos: allowed without ownership restrictions.
 // - Path traversal: rejected with NotFoundError.
 // =============================================================================
@@ -119,6 +120,33 @@ describe("guardUploads unit tests", () => {
 
     it("returns NotFoundError for avatars/ when no principal is present", () => {
       const err = runGuard(`/u/${OWNER_ID}/avatars/avatar-123.jpg`);
+      expect(err).toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe("link-preview images (/u/<uuid>/previews/*)", () => {
+    // A preview image shows which links an owner saved in their notes, so it
+    // is as private as the note, unlike a profile photo.
+    it("allows the owner to read their own preview image", () => {
+      const err = runGuard(
+        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
+        mockPrincipal(OWNER_ID),
+      );
+      expect(err).toBeUndefined();
+    });
+
+    it("returns NotFoundError when another authenticated user reads previews/", () => {
+      const err = runGuard(
+        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
+        mockPrincipal(OTHER_ID),
+      );
+      expect(err).toBeInstanceOf(NotFoundError);
+    });
+
+    it("returns NotFoundError for previews/ when no principal is present", () => {
+      const err = runGuard(
+        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
+      );
       expect(err).toBeInstanceOf(NotFoundError);
     });
   });

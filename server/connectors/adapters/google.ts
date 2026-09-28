@@ -23,7 +23,11 @@ import {
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import { normalizeEmail } from "../email/normalize.ts";
-import { summarizeEmail, MAX_SUMMARIES_PER_RUN } from "../summaries.ts";
+import {
+  summarizeEmail,
+  summariesAllowed,
+  MAX_SUMMARIES_PER_RUN,
+} from "../summaries.ts";
 import { getGoogleOAuthCredentials } from "../../services/integrationSettings.ts";
 import type {
   ConnectorAdapter,
@@ -488,10 +492,13 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
           let summaryContent: string | undefined;
 
+          // summariesAllowed before the body is fetched: with AI off for
+          // the instance or for the owner, the body is not needed at all.
           if (
             config.summaries &&
             matchesContact &&
-            summaryCount < MAX_SUMMARIES_PER_RUN
+            summaryCount < MAX_SUMMARIES_PER_RUN &&
+            summariesAllowed(ctx.accountId)
           ) {
             try {
               const full = await gmail.users.messages.get({
