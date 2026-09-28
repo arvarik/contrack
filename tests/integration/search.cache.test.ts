@@ -39,6 +39,20 @@ vi.mock("../../server/ai/services/shared.ts", async (importOriginal) => ({
   isMockMode: () => false,
 }));
 
+// A contact edit and a merge start a dedupe embedding in the background.
+// The dedupe store is not what this file tests. One that finished after
+// the last test logged while Vitest closed the worker ("Closing rpc while
+// onUserConsoleLog was pending"), and that error fails the whole run.
+vi.mock(
+  "../../server/services/dedupe/embeddings.ts",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("../../server/services/dedupe/embeddings.ts")
+    >()),
+    generateAndStoreEmbedding: async () => false,
+  }),
+);
+
 const questions = vi.hoisted(() => new Map<string, Float32Array>());
 vi.mock(
   "../../server/services/search/localEmbeddings.ts",
