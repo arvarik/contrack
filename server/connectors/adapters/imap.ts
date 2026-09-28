@@ -16,7 +16,11 @@ import { z } from "zod";
 import { isPrivateAddress } from "../../utils/urlSafety.ts";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import { normalizeEmail } from "../email/normalize.ts";
-import { summarizeEmail, MAX_SUMMARIES_PER_RUN } from "../summaries.ts";
+import {
+  summarizeEmail,
+  summariesAllowed,
+  MAX_SUMMARIES_PER_RUN,
+} from "../summaries.ts";
 import type { ConnectorAdapter, SyncContext, SyncEvent } from "../types.ts";
 
 export const imapConfigSchema = z.object({
@@ -378,11 +382,13 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
 
             let summaryContent: string | undefined;
 
-            // Fetch body and summarize only if summaries enabled, matched contact, and under cap
+            // Fetch body and summarize only if summaries enabled, matched
+            // contact, under cap, and AI on for the instance and the owner
             if (
               config.summaries &&
               matchesContact &&
-              summaryCount < MAX_SUMMARIES_PER_RUN
+              summaryCount < MAX_SUMMARIES_PER_RUN &&
+              summariesAllowed(ctx.accountId)
             ) {
               try {
                 const downloadResult = await client.download(

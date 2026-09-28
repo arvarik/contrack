@@ -21,6 +21,7 @@ import { OpenAICompatibleAdapter } from "./adapters/openaiCompatible.ts";
 import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
 import { open } from "../utils/secretBox.ts";
+import { isAiOffForInstance } from "./instanceSwitch.ts";
 
 export type ProviderKind =
   "gemini" | "openai" | "anthropic" | "openai-compatible";
@@ -215,9 +216,18 @@ function instantiate(config: ProviderConfig): AIProvider {
 
 /**
  * Resolve (and cache) a provider instance by id.
- * Returns null when the provider isn't configured.
+ * Returns null when the provider isn't configured, and for every provider
+ * while AI is off for the instance.
+ *
+ * This is the one place every outbound AI call gets its provider: each
+ * generation (through resolveCapability), each provider embedding
+ * (embedWithProvider), model discovery and the model test before a pin. So
+ * the instance switch is checked here, and nothing else has to remember it.
+ * `getProviderConfigs` does not check it, so Settings → AI still lists the
+ * stored keys and endpoints while AI is off.
  */
 export function getProvider(id: string): AIProvider | null {
+  if (isAiOffForInstance()) return null;
   const config = getProviderConfig(id);
   if (!config) return null;
 

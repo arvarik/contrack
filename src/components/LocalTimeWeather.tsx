@@ -18,7 +18,8 @@
  *
  * The weather is a request to Open-Meteo with the contact's coordinates. It
  * is a third party, so the weather renders only when `showWeather` allows it,
- * and when it does not, the part that owns the request never mounts.
+ * and when it does not, the part that owns the request never mounts. The
+ * coordinates it gets are rounded to about a kilometre (`weatherUrl`).
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -267,6 +268,26 @@ export function timeZoneAt(lat: number | null, lng: number | null) {
   }
 }
 
+/**
+ * A coordinate rounded to two decimals: about 1.1 km of latitude.
+ *
+ * The weather in a town is the same a street away, and a contact's pin can
+ * sit on their front door. Open-Meteo is a third party, so it gets the town.
+ */
+export function roundCoordinate(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** The Open-Meteo request for the current weather near a point, rounded. */
+export function weatherUrl(lat: number, lng: number): string {
+  const params = new URLSearchParams({
+    latitude: String(roundCoordinate(lat)),
+    longitude: String(roundCoordinate(lng)),
+    current_weather: "true",
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
+
 /** A clock that moves on once a minute. */
 function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -298,12 +319,12 @@ const Weather = ({
   const { preferences } = usePreferences();
   const tempUnit = preferences.tempUnit;
 
+  // Keyed by the rounded point, the one the request sends, so two contacts
+  // in the same town share one answer.
   const { data: weather } = useQuery({
-    queryKey: ["weather", lat, lng],
+    queryKey: ["weather", roundCoordinate(lat), roundCoordinate(lng)],
     queryFn: async () => {
-      const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`,
-      );
+      const res = await fetch(weatherUrl(lat, lng));
       if (!res.ok) throw new Error("Weather fetch failed");
       const data = await res.json();
       return data.current_weather ?? null;

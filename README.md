@@ -155,7 +155,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ## 🚀 Quick Start
 
-**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → AI** after first boot, or run with no AI at all — contact management and semantic search work offline on the built-in local embedding model.
+**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → AI** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
 
 ### Option 1: Docker, prebuilt image (fastest)
 
@@ -163,15 +163,15 @@ CI publishes a multi-arch image (amd64 + arm64) on every release:
 
 ```bash
 docker run -d --name contrack \
-  -p 3210:3210 \
+  -p 127.0.0.1:3210:3210 \
   -v "$PWD/contrack-data":/app/data \
   -e GEMINI_API_KEY=your-key \
   ghcr.io/arvarik/contrack:latest
 ```
 
-Open **http://localhost:3210**. Everything that must survive a restart — database, uploads, backups, the embedding-model cache — lives in `/app/data`, so that one volume is the whole persistence story. The container reports its own health (`docker ps` shows `healthy` once the app answers), and `docker stop` shuts down cleanly.
+Open **http://localhost:3210**. Everything that must survive a restart — database, uploads, backups — lives in `/app/data`, so that one volume is the whole persistence story. The search models are inside the image, so the container never downloads them. The container reports its own health (`docker ps` shows `healthy` once the app answers), and `docker stop` shuts down cleanly.
 
-Authentication is off by default, on the assumption that the container is reached from this machine only — set `-e AUTH_REQUIRED=true` if the port is reachable by anything else, and the first visit will walk you through creating an account.
+Authentication is off by default, on the assumption that the container is reached from this machine only, which is why the port is published on `127.0.0.1`. To reach it from other devices, set `-e AUTH_REQUIRED=true` first, and the first visit will walk you through creating an account. Then publish the port as `-p 3210:3210`, or put a reverse proxy in front and set `TRUST_PROXY_HOPS=1` and `PUBLIC_URL`.
 
 ### Option 2: Docker Compose (build from source)
 
@@ -197,6 +197,8 @@ npm run dev
 ```
 
 Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 26.10 or later.
+
+The first start downloads the two search models (28 MB) from Hugging Face. To keep the server off the network, run `npm run models:fetch` once, then set `MODEL_DOWNLOADS=false` in `.env`. See [Model files and offline installs](docs/configuration.md#model-files-and-offline-installs).
 
 > **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
 

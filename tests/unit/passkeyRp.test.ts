@@ -2,20 +2,29 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Request } from "express";
 import {
   publicOrigin,
+  mailLinkOrigin,
   validatePublicUrl,
   getPasskeyRp,
 } from "../../server/utils/publicOrigin.ts";
 import { AppError } from "../../server/utils/AppError.ts";
 
+/**
+ * A request as Express presents it. `host` is `req.host`, which Express takes
+ * from X-Forwarded-Host only when TRUST_PROXY_HOPS trusts the hop, and from
+ * Host otherwise. `trusted` stands in for that decision.
+ */
 function mockRequest({
   protocol = "http",
   headers = {},
+  trusted = false,
 }: {
   protocol?: string;
   headers?: Record<string, string>;
+  trusted?: boolean;
 } = {}): Request {
   return {
     protocol,
+    host: (trusted && headers["x-forwarded-host"]) || headers.host,
     get(name: string) {
       const lower = name.toLowerCase();
       return headers[lower] ?? headers[name];
@@ -53,6 +62,7 @@ describe("publicOrigin and passkey RP derivation", () => {
   it("derives origin and rpID for a proxied https host", () => {
     const req = mockRequest({
       protocol: "https",
+      trusted: true,
       headers: {
         "x-forwarded-proto": "https",
         "x-forwarded-host": "crm.example.com",
@@ -64,6 +74,23 @@ describe("publicOrigin and passkey RP derivation", () => {
     const { rpID, origin } = getPasskeyRp(req);
     expect(origin).toBe("https://crm.example.com");
     expect(rpID).toBe("crm.example.com");
+  });
+
+  it("ignores X-Forwarded-Host from a hop it does not trust", () => {
+    const req = mockRequest({
+      protocol: "http",
+      headers: {
+        "x-forwarded-host": "evil.example.net",
+        host: "localhost:3210",
+      },
+    });
+    expect(publicOrigin(req)).toBe("http://localhost:3210");
+  });
+
+  it("builds mailed links from PUBLIC_URL only", () => {
+    expect(mailLinkOrigin()).toBeNull();
+    process.env.PUBLIC_URL = "https://public.example.org/";
+    expect(mailLinkOrigin()).toBe("https://public.example.org");
   });
 
   it("uses the PUBLIC_URL override when set", () => {

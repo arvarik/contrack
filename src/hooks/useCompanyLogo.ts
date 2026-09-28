@@ -72,9 +72,9 @@ export function useCompanyLogo(
 
     if (!domain) return null;
 
-    // We removed the frontend localStorage failure cache here because:
-    // 1. Google S2 rarely 404s (it returns a default globe instead).
-    // 2. It was permanently blocking your UI from retrying after the Clearbit outage!
+    // No failure cache here. The server keeps one on disk (a domain with no
+    // logo is asked again after 30 days), and it asks Google's favicon
+    // service at most once per domain, so the browser never contacts Google.
 
     return {
       url: `/api/logos/${domain}`,

@@ -5,12 +5,16 @@
 // answers 403 AI_OFF_FOR_ACCOUNT for that account, but remains accessible for
 // other accounts and for non-AI routes. Ask Contrack is the exception: its
 // search is local, so it answers with the local results and runs no model.
+//
+// When an admin turns AI off for the instance, the same endpoints answer 403
+// AI_OFF_FOR_INSTANCE for every account, and Ask still answers locally.
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { asUser, createActor, type Actor } from "./tenancy/helpers.ts";
+import { setAiOffForInstance } from "../../server/ai/instanceSwitch.ts";
 
 let app: ReturnType<typeof makeTestApp>;
 let userOff: Actor;
@@ -137,5 +141,99 @@ describe("requireAiAllowed middleware", () => {
     const res = await asUser(userOff)(request(app).get("/api/contacts"));
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+
+describe("with AI off for the instance", () => {
+  const aiCostPaths: { method: "get" | "post"; path: string; body?: object }[] =
+    [
+      { method: "get", path: "/api/dashboard/insight" },
+      {
+        method: "post",
+        path: "/api/search/synthesize",
+        body: { query: "test" },
+      },
+      {
+        method: "post",
+        path: "/api/parse-contact",
+        body: { text: "John Doe" },
+      },
+      { method: "post", path: "/api/contacts/some-id/enrich" },
+      { method: "post", path: "/api/contacts/some-id/briefing" },
+      { method: "post", path: "/api/ai-search" },
+      { method: "post", path: "/api/dedupe/backfill-embeddings" },
+      { method: "post", path: "/api/dedupe/scan" },
+    ];
+
+  // Both accounts here are members, so the switch is set through the
+  // service. The route and its admin guard are tested in
+  // api.aiSettings.test.ts and api.admin.test.ts.
+  beforeAll(() => {
+    setAiOffForInstance(true);
+  });
+
+  afterAll(() => {
+    setAiOffForInstance(false);
+  });
+
+  for (const { method, path, body } of aiCostPaths) {
+    it(`refuses ${method.toUpperCase()} ${path} with 403 AI_OFF_FOR_INSTANCE for an account with AI on`, async () => {
+      const req =
+        method === "get"
+          ? request(app).get(path)
+          : request(app)
+              .post(path)
+              .send(body ?? {});
+
+      const res = await asUser(userOn)(req);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("AI_OFF_FOR_INSTANCE");
+      expect(res.body.error.message).toMatch(
+        /An admin turned AI off for this instance/,
+      );
+    });
+  }
+
+  it("names the instance, not the account, when both are off", async () => {
+    const res = await asUser(userOff)(request(app).post("/api/ai-search"));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("AI_OFF_FOR_INSTANCE");
+  });
+
+  it("still answers POST /api/search/semantic from local data", async () => {
+    const created = await asUser(userOn)(
+      request(app)
+        .post("/api/contacts")
+        .send({ name: "Quentin Local", role: "Surveyor" }),
+    );
+    expect(created.status).toBe(201);
+
+    const res = await asUser(userOn)(
+      request(app).post("/api/search/semantic").send({ query: "surveyor" }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.fallback).toBe(true);
+    expect(res.body.matches).toEqual([
+      expect.objectContaining({ name: "Quentin Local", verified: false }),
+    ]);
+  });
+
+  it("tells any signed-in account that AI is off, and why not", async () => {
+    const res = await asUser(userOn)(request(app).get("/api/ai/instance"));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ aiOff: true, lockedByEnv: false });
+  });
+
+  it("does not let a member turn AI back on", async () => {
+    const res = await asUser(userOn)(
+      request(app).put("/api/settings/ai/instance").send({ aiOff: false }),
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("ADMIN_REQUIRED");
+  });
+
+  it("does not block non-AI endpoints", async () => {
+    const res = await asUser(userOn)(request(app).get("/api/contacts"));
+    expect(res.status).toBe(200);
   });
 });

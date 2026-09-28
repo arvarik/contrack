@@ -179,6 +179,23 @@ export const MailView = () => {
             )}
           </div>
 
+          {isConfigured && data?.publicUrl === null && (
+            <p
+              role="note"
+              className="flex items-start gap-2 text-sm text-on-surface-variant text-pretty"
+            >
+              <AlertCircle
+                aria-hidden="true"
+                className="w-4 h-4 mt-0.5 shrink-0 text-error"
+              />
+              <span>
+                Mail sends no sign-in, reset or invitation links until
+                PUBLIC_URL is set on the server. A link built from a
+                request&apos;s address could point anywhere
+              </span>
+            </p>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field
               id="mail-host"

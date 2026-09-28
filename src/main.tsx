@@ -1,10 +1,12 @@
-import { MotionConfig } from "motion/react";
 /**
  * main.tsx — React DOM entry point.
  *
  * Bootstraps the application by mounting the React tree into #root with
  * StrictMode, an ErrorBoundary, and the TanStack React Query provider.
  */
+// First, before any module builds a zod schema. See zodConfig.ts.
+import "./lib/zodConfig";
+import { MotionConfig } from "motion/react";
 import { StrictMode } from "react";
 import { AuthGate } from "./components/auth/AuthGate";
 import { createRoot } from "react-dom/client";

@@ -1,13 +1,17 @@
 /**
- * requireAiAllowed — refuse AI requests when the caller has switched AI off.
+ * requireAiAllowed — refuse AI requests when AI is off for the instance or for
+ * the caller.
  *
- * Checks `isAiCostPath(req.path)`. When true, checks the caller's `aiAssist`
- * preference. If false, answers 403 `AI_OFF_FOR_ACCOUNT`.
+ * Checks `isAiCostPath(req.path)`. When true:
+ *   1. An admin turned AI off for the instance (`isAiOffForInstance`): answers
+ *      403 `AI_OFF_FOR_INSTANCE`, for every account.
+ *   2. The caller switched AI off (`aiAssist` preference): answers 403
+ *      `AI_OFF_FOR_ACCOUNT`.
  *
  * Ask Contrack (`POST /api/search/semantic`) is the exception: its keyword
- * and vector search are local, so it answers with AI off. The route reads the
- * switch with `aiAllowedFor` and the service skips every model stage. The AI
- * rate limiters still count the path.
+ * and vector search are local, so it answers with AI off. The route reads
+ * both switches with `aiAllowedFor` and the service skips every model stage.
+ * The AI rate limiters still count the path.
  *
  * Mounted after `attachPrincipal` in `server/app.ts`.
  *
@@ -15,16 +19,20 @@
  */
 import type { Request, Response, NextFunction } from "express";
 import { isAiCostPath } from "./rateLimit.ts";
-import { getPreferences } from "../services/userPreferencesService.ts";
+import { aiAllowedForUser, isAiOffForInstance } from "../ai/instanceSwitch.ts";
 import { AppError } from "../utils/AppError.ts";
 
 /** AI paths that still answer, from local data, when AI is off. */
 const LOCAL_FIRST_PATTERNS: RegExp[] = [/^\/api\/search\/semantic\/?$/];
 
-/** False when the signed-in caller has switched AI off. */
+/**
+ * False when AI is off for the instance, or the signed-in caller has
+ * switched it off. A request with no account (sign-in not required) follows
+ * the instance switch alone.
+ */
 export function aiAllowedFor(req: Request): boolean {
   const userId = req.principal?.user.id;
-  return userId ? getPreferences(userId).aiAssist !== false : true;
+  return userId ? aiAllowedForUser(userId) : !isAiOffForInstance();
 }
 
 export function requireAiAllowed(
@@ -39,6 +47,16 @@ export function requireAiAllowed(
     LOCAL_FIRST_PATTERNS.some((pattern) => pattern.test(path))
   ) {
     return next();
+  }
+
+  // The instance first: the account switch cannot turn AI back on, so its
+  // message would send the person to a setting that changes nothing.
+  if (isAiOffForInstance()) {
+    return next(
+      new AppError("An admin turned AI off for this instance", 403, {
+        code: "AI_OFF_FOR_INSTANCE",
+      }),
+    );
   }
 
   if (!aiAllowedFor(req)) {

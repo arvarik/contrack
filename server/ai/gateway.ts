@@ -15,6 +15,7 @@ export type { AIGenerateResult } from "./types.ts";
 import type { AICapability } from "./capabilities.ts";
 import { resolveCapability, type ResolvedCapability } from "./capabilities.ts";
 import { getProviderConfigs } from "./providerRegistry.ts";
+import { isAiOffForInstance } from "./instanceSwitch.ts";
 import { AppError } from "../utils/AppError.ts";
 import {
   GenerationQueue,
@@ -40,9 +41,21 @@ export type GatewayOptions = Omit<AIGenerateOptions, "routing"> & {
   lane?: QueueLane;
 };
 
-/** True when at least one provider has usable credentials. */
+/**
+ * True when at least one provider has usable credentials and AI is on for
+ * the instance. Every AI service reads "mock mode" from this, so while an
+ * admin has AI off they answer as they do with no key at all.
+ */
 export function isAnyProviderConfigured(): boolean {
+  if (isAiOffForInstance()) return false;
   return getProviderConfigs().length > 0;
+}
+
+/** The refusal for a generation asked for while AI is off for the instance. */
+function aiOffError(): AppError {
+  return new AppError("An admin turned AI off for this instance", 503, {
+    code: "AI_OFF_FOR_INSTANCE",
+  });
 }
 
 /**
@@ -96,6 +109,7 @@ function runQueued(
   ) => Promise<AIGenerateResult>,
 ): Promise<AIGenerateResult> {
   options.signal?.throwIfAborted();
+  if (isAiOffForInstance()) throw aiOffError();
   const resolved = resolveCapability(capability);
   if (!resolved) {
     throw new AppError(
@@ -121,15 +135,20 @@ function runQueued(
   return withTimeout(
     (signal) =>
       generations.run(
-        () =>
-          call(resolved, {
+        () => {
+          // Asked again when the slot comes up. A job can wait in the queue
+          // for a while, and an admin who turns AI off in that time expects
+          // the waiting jobs to stop as well.
+          if (isAiOffForInstance()) throw aiOffError();
+          return call(resolved, {
             ...options,
             signal,
             timeoutMs,
             maxOutputTokens: options.maxOutputTokens ?? 4_096,
             model: options.model ?? resolved.model,
             routing: { prefer: resolved.modelClass },
-          }),
+          });
+        },
         {
           signal,
           accountId: options.accountId,

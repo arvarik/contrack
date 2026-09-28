@@ -45,8 +45,15 @@ export function validatePublicUrl(raw?: string | null): string | null {
 /**
  * Return the public origin for the current request.
  *
- * If `PUBLIC_URL` is set, its origin is returned.
- * Otherwise, the origin is derived from `X-Forwarded-Host` or `Host` and `req.protocol`.
+ * If `PUBLIC_URL` is set, its origin is returned. Otherwise the origin is
+ * derived from `req.host` and `req.protocol`, which read X-Forwarded-Host and
+ * X-Forwarded-Proto only from a hop that TRUST_PROXY_HOPS trusts. This used to
+ * read X-Forwarded-Host itself, from anybody, so a client could name the host
+ * of a link the server built.
+ *
+ * Fine for an answer that goes back to the same caller (a passkey ceremony, an
+ * invitation link shown to the admin who asked for it). A link that goes out
+ * by mail uses `mailLinkOrigin` instead.
  */
 export function publicOrigin(req: Request): string {
   if (process.env.PUBLIC_URL) {
@@ -54,10 +61,22 @@ export function publicOrigin(req: Request): string {
     if (validated) return validated;
   }
 
-  const forwarded = req.get("x-forwarded-host")?.split(",")[0].trim();
-  const candidates = [forwarded, req.get("host")];
-  const host = candidates.find((v) => v && HOST_SHAPE.test(v)) ?? "localhost";
-  return `${req.protocol}://${host}`;
+  const host = req.host;
+  return `${req.protocol}://${host && HOST_SHAPE.test(host) ? host : "localhost"}`;
+}
+
+/**
+ * The origin of a link the server sends by mail, or null when `PUBLIC_URL` is
+ * not set.
+ *
+ * A mailed link reaches somebody other than the caller, so it must never be
+ * built from the request. A password-reset request with a forged Host header
+ * would otherwise mail the real account holder a genuine reset token inside a
+ * link to the attacker's server, and one click would hand the token over.
+ * With no `PUBLIC_URL`, the server sends no link at all.
+ */
+export function mailLinkOrigin(): string | null {
+  return validatePublicUrl(process.env.PUBLIC_URL);
 }
 
 /**

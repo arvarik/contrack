@@ -54,8 +54,12 @@ async function freshAdmin(email = "admin@example.com"): Promise<Handle> {
   };
 }
 
+/** The address mailed links point at. Mail carries no link without it. */
+const PUBLIC_URL = "https://crm.example.com";
+
 describe("API: Password reset and magic links", () => {
   beforeEach(() => {
+    process.env.PUBLIC_URL = PUBLIC_URL;
     resetAccounts();
     sqlite.exec(
       `DELETE FROM audit_log; DELETE FROM sessions; DELETE FROM auth_links; DELETE FROM users WHERE credentialState != 'none';`,
@@ -68,8 +72,88 @@ describe("API: Password reset and magic links", () => {
   });
 
   afterEach(() => {
+    delete process.env.PUBLIC_URL;
     mailService.__useJsonTransport(false);
     mailService.__clearSentMessages();
+  });
+
+  // A mailed link goes to somebody other than the caller, so its address
+  // comes from PUBLIC_URL and never from the request. A forged Host header on
+  // a reset request would otherwise mail the account holder a real token
+  // inside a link to the attacker's server.
+  describe("links in mail come from PUBLIC_URL", () => {
+    it("points a reset link at PUBLIC_URL whatever host the request claims", async () => {
+      mailService.__useJsonTransport(true);
+      const admin = await freshAdmin("victim@example.com");
+
+      const res = await request(app)
+        .post("/api/auth/password-reset/request")
+        .set("Host", "evil.example.net")
+        .set("X-Forwarded-Host", "evil.example.net")
+        .set("X-Forwarded-Proto", "https")
+        .send({ email: admin.email });
+      expect(res.status).toBe(202);
+
+      const [message] = mailService.__getSentMessages();
+      expect(message.text).toContain(`${PUBLIC_URL}/reset-password?token=`);
+      expect(message.text).not.toContain("evil.example.net");
+      expect(String(message.html)).not.toContain("evil.example.net");
+    });
+
+    it("sends no reset link and creates no token without PUBLIC_URL", async () => {
+      delete process.env.PUBLIC_URL;
+      mailService.__useJsonTransport(true);
+      const admin = await freshAdmin("nourl@example.com");
+
+      const res = await request(app)
+        .post("/api/auth/password-reset/request")
+        .send({ email: admin.email });
+      // The same answer as for an unknown address, so nothing is learned.
+      expect(res.status).toBe(202);
+      expect(mailService.__getSentMessages()).toHaveLength(0);
+      expect(
+        sqlite
+          .prepare("SELECT * FROM auth_links WHERE userId = ?")
+          .get(admin.id),
+      ).toBeUndefined();
+    });
+
+    it("turns magic links off without PUBLIC_URL", async () => {
+      mailService.__useJsonTransport(true);
+      authService.setMagicLinkSignIn(true);
+      const admin = await freshAdmin("magic-nourl@example.com");
+      delete process.env.PUBLIC_URL;
+
+      const res = await request(app)
+        .post("/api/auth/magic-link/request")
+        .send({ email: admin.email });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("MAGIC_LINK_OFF");
+      expect(mailService.__getSentMessages()).toHaveLength(0);
+
+      // The sign-in screen offers neither the reset nor the magic link.
+      const status = await request(app).get("/api/auth/status");
+      expect(status.body.mailConfigured).toBe(false);
+      expect(status.body.magicLinkSignIn).toBe(false);
+    });
+
+    it("refuses an admin reset link with 409 PUBLIC_URL_REQUIRED without PUBLIC_URL", async () => {
+      mailService.__useJsonTransport(true);
+      const admin = await freshAdmin("admin-nourl@example.com");
+      delete process.env.PUBLIC_URL;
+
+      const res = await as(admin)(
+        request(app).post(`/api/admin/users/${admin.id}/reset-link`),
+      );
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("PUBLIC_URL_REQUIRED");
+      expect(mailService.__getSentMessages()).toHaveLength(0);
+      expect(
+        sqlite
+          .prepare("SELECT * FROM auth_links WHERE userId = ?")
+          .get(admin.id),
+      ).toBeUndefined();
+    });
   });
 
   describe("POST /api/auth/password-reset/request", () => {

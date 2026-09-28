@@ -537,6 +537,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         selfAddresses: { emails: ["me@example.com"], phones: [] },
         signal: new AbortController().signal,
         log: () => {},
+        // The sync service always names the connector's owner
+        // (scope.ownerId). A summary is checked against that owner's AI
+        // switch, and is refused when no owner is named.
+        accountId: "google-summary-owner",
         isContactParticipant,
       };
 

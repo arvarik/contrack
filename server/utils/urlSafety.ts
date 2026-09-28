@@ -76,6 +76,15 @@ function extractEmbeddedIPv4(lowerIPv6: string): string | null {
 }
 
 /**
+ * The message assertPublicHttpUrl gives when the name does not resolve.
+ *
+ * Exported so a caller can tell "the network is down" from "this URL is not
+ * allowed". Both are ValidationErrors, but only the first one is worth trying
+ * again later (server/utils/remoteImage.ts marks it transient).
+ */
+export const UNRESOLVABLE_HOST_MESSAGE = "Could not resolve URL host";
+
+/**
  * Validate an unfurl target: http(s) only, and the hostname must not resolve
  * to a private/loopback address. Throws ValidationError on anything else.
  */
@@ -106,7 +115,7 @@ export async function assertPublicHttpUrl(targetUrl: string): Promise<URL> {
     }
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new ValidationError("Could not resolve URL host");
+    throw new ValidationError(UNRESOLVABLE_HOST_MESSAGE);
   }
   return url;
 }
@@ -146,6 +155,63 @@ export async function readBodyCapped(
       }
     },
     8_000,
+    signal,
+  );
+}
+
+/**
+ * Read a binary body, and refuse it once it passes `maxBytes`.
+ *
+ * readBodyCapped truncates, which suits HTML: the <head> is at the top, and
+ * the rest of the page can go. A truncated image is a corrupt image, so this
+ * reader throws instead of returning the part that fit. It stops reading at
+ * the first chunk over the cap, so a hostile server cannot make it buffer
+ * more than `maxBytes` plus one chunk.
+ *
+ * The read has its own time budget, like readBodyCapped. A server that sends
+ * headers quickly and then trickles the body would otherwise hold the request
+ * open for as long as it likes.
+ */
+export async function readBytesCapped(
+  res: globalThis.Response,
+  maxBytes: number,
+  signal?: AbortSignal,
+  timeoutMs = 8_000,
+): Promise<Buffer> {
+  return withTimeout(
+    async (budget) => {
+      const reader = res.body?.getReader();
+      if (!reader) return Buffer.alloc(0);
+      const onAbort = () => {
+        void reader.cancel().catch(() => undefined);
+      };
+      budget.addEventListener("abort", onAbort, { once: true });
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      try {
+        for (;;) {
+          budget.throwIfAborted();
+          const { done, value } = await reader.read();
+          budget.throwIfAborted();
+          if (done) break;
+          received += value.byteLength;
+          if (received > maxBytes) {
+            throw new AppError(
+              `Response body is larger than ${maxBytes} bytes`,
+              502,
+              { code: "RESPONSE_TOO_LARGE" },
+            );
+          }
+          chunks.push(value);
+        }
+        return Buffer.concat(chunks, received);
+      } finally {
+        budget.removeEventListener("abort", onAbort);
+        void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+    },
+    timeoutMs,
     signal,
   );
 }

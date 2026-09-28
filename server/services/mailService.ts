@@ -16,6 +16,7 @@ import { getSetting, setSetting, deleteSetting } from "./settingsService.ts";
 import { seal, open, SecretUnavailableError } from "../utils/secretBox.ts";
 import { formatSender } from "../mail/templates.ts";
 import { getInstanceName } from "./authService.ts";
+import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 
 export type MailSource = "env" | "settings" | "none";
 
@@ -215,6 +216,16 @@ export function isConfigured(): boolean {
 }
 
 /**
+ * True when mail can carry a sign-in, reset or invitation link: mail is
+ * configured AND `PUBLIC_URL` names the address the link points at. Without
+ * `PUBLIC_URL` the only source for that address is the request, and a request
+ * can lie about its host (see `mailLinkOrigin`).
+ */
+export function canSendLinks(): boolean {
+  return isConfigured() && mailLinkOrigin() !== null;
+}
+
+/**
  * Update mail settings from the admin Outgoing mail page.
  */
 export function updateMailSettings(input: {
@@ -405,6 +416,7 @@ export const mailService = {
   resolveConfig,
   resolveInternalConfig,
   isConfigured,
+  canSendLinks,
   updateMailSettings,
   deleteMailSettings,
   send,

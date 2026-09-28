@@ -37,17 +37,39 @@ import {
 } from "./server/services/search/localEmbeddings.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { initCrossEncoder } from "./server/services/search/crossEncoder.ts";
-import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
+import {
+  mailLinkOrigin,
+  validatePublicUrl,
+} from "./server/utils/publicOrigin.ts";
+import { trustProxyHops } from "./server/utils/trustProxy.ts";
+import { makeDataPrivate } from "./server/utils/privateFiles.ts";
+import { DATA_DIR } from "./server/utils/paths.ts";
+import { mailService } from "./server/services/mailService.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
 import {
   startConnectorScheduler,
   stopConnectorScheduler,
 } from "./server/connectors/scheduler.ts";
+import { startStoredPhotoSweep } from "./server/connectors/photoSweep.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
+// A typo stops the boot here, rather than trusting no proxy or every one.
+trustProxyHops();
 warnRetiredEnv();
+
+// Owner-only modes for the database, backups, uploads and key, and for every
+// file written from here on. See privateFiles.ts.
+{
+  const notPrivate = makeDataPrivate(DATA_DIR);
+  if (notPrivate.length > 0) {
+    log.warn(
+      "Server",
+      `Could not limit these to this user, so other accounts on this machine may read them: ${notPrivate.join(", ")}`,
+    );
+  }
+}
 
 if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
   log.warn(
@@ -134,6 +156,16 @@ async function startServer() {
     );
   }
 
+  // A mailed link must not take its address from a request (see
+  // mailLinkOrigin), so without PUBLIC_URL mail carries no link at all. Say
+  // so at boot rather than at the first reset somebody asks for.
+  if (mailService.isConfigured() && !mailLinkOrigin()) {
+    log.warn(
+      "Mail",
+      "Outgoing mail is set up and PUBLIC_URL is not, so mail sends no sign-in, reset or invitation link. Set PUBLIC_URL to the address people open",
+    );
+  }
+
   const app = createApp({ enableRequestLogging: true });
 
   // 404 catch-all for unknown /api/* paths — runs immediately after the
@@ -195,6 +227,7 @@ async function startServer() {
 
   startRetroactiveGeocoding();
   startConnectorScheduler();
+  startStoredPhotoSweep();
 
   // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
   startBackupSchedule();

@@ -18,6 +18,20 @@ export const AVATARS_DIR = path.join(UPLOADS_DIR, "avatars");
 export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
 
 /**
+ * The folders inside one owner's uploads directory.
+ *
+ * - `avatars`: contact photos, uploaded or copied from a connector.
+ * - `files`: interaction attachments.
+ * - `profile`: the account's own photo.
+ * - `previews`: link-preview images, downloaded once by the server so the
+ *   browser never loads them from the linked site.
+ *
+ * Account deletion removes the whole `u/<ownerId>/` folder, so a new kind
+ * needs no extra cleanup there.
+ */
+export type OwnerUploadKind = "avatars" | "files" | "profile" | "previews";
+
+/**
  * Where one owner's uploads live: `UPLOADS_DIR/u/<ownerId>/<kind>/`.
  *
  * `logos/` stays shared, because a company logo is not personal data and the
@@ -27,17 +41,14 @@ export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
  * it becomes a path segment. An id of `..` would otherwise walk out of the
  * uploads root before resolveUploadPath ever sees the result.
  */
-export function ownerUploadDir(
-  ownerId: string,
-  kind: "avatars" | "files" | "profile",
-): string {
+export function ownerUploadDir(ownerId: string, kind: OwnerUploadKind): string {
   return path.join(UPLOADS_DIR, "u", assertOwnerId(ownerId), kind);
 }
 
 /** The public URL for a file in an owner's directory. */
 export function ownerUploadUrl(
   ownerId: string,
-  kind: "avatars" | "files" | "profile",
+  kind: OwnerUploadKind,
   filename: string,
 ): string {
   return `/uploads/u/${assertOwnerId(ownerId)}/${kind}/${path.basename(filename)}`;

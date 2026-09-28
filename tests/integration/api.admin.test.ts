@@ -19,7 +19,15 @@
 //     assertion about a member being refused would pass for the wrong reason.
 // =============================================================================
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  onTestFinished,
+} from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -226,9 +234,10 @@ describe("every admin route", () => {
   it("covers the whole admin class, so the loops below miss nothing", () => {
     // Twenty-nine in Phase 3, thirty with the instance health route in
     // quality story S9, thirty-four with outgoing mail routes in Prompt 2,
-    // thirty-five with user reset link in Prompt 3, and thirty-seven with
-    // integrations routes in Prompt 4.
-    expect(ADMIN_ROUTES).toHaveLength(37);
+    // thirty-five with user reset link in Prompt 3, thirty-seven with
+    // integrations routes in Prompt 4, and thirty-eight with the instance
+    // AI switch.
+    expect(ADMIN_ROUTES).toHaveLength(38);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -746,27 +755,47 @@ describe("invitations", () => {
       /^http:\/\/127\.0\.0\.1:\d+\/join\?token=/,
     );
 
-    // A reverse proxy that rewrites Host would otherwise put its own internal
-    // name in the link. Only the one hop `trust proxy` names can set these.
-    const proxied = await as(admin)(
+    // TRUST_PROXY_HOPS is 0 by default: with no proxy in front, a forwarded
+    // header is whatever the client wrote, so it names nothing.
+    const forged = await as(admin)(
       request(app)
         .post("/api/admin/invitations")
         .set("X-Forwarded-Host", "contrack.example.com")
         .set("X-Forwarded-Proto", "https")
         .send({}),
     );
-    expect(proxied.body.link).toMatch(
-      /^https:\/\/contrack\.example\.com\/join\?token=/,
+    expect(forged.body.link).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+\/join\?token=/,
     );
 
-    // A header with a path in it is not a host, and does not become one.
-    const hostile = await as(admin)(
-      request(app)
-        .post("/api/admin/invitations")
-        .set("X-Forwarded-Host", "evil.example.com/steal")
-        .send({}),
-    );
-    expect(hostile.body.link).not.toContain("evil.example.com");
+    // Behind one trusted proxy, the proxy's headers name the host, so a
+    // proxy that rewrites Host does not put its internal name in the link.
+    process.env.TRUST_PROXY_HOPS = "1";
+    const behindProxy = makeTestApp();
+    try {
+      const proxied = await as(admin)(
+        request(behindProxy)
+          .post("/api/admin/invitations")
+          .set("X-Forwarded-Host", "contrack.example.com")
+          .set("X-Forwarded-Proto", "https")
+          .send({}),
+      );
+      expect(proxied.body.link).toMatch(
+        /^https:\/\/contrack\.example\.com\/join\?token=/,
+      );
+
+      // A header with a path in it is not a host, and does not become one.
+      const hostile = await as(admin)(
+        request(behindProxy)
+          .post("/api/admin/invitations")
+          .set("X-Forwarded-Host", "evil.example.com/steal")
+          .send({}),
+      );
+      expect(hostile.body.link).not.toContain("evil.example.com");
+    } finally {
+      delete process.env.TRUST_PROXY_HOPS;
+      behindProxy.close();
+    }
   });
 
   it("creates an account with the role the invitation carries", async () => {
@@ -865,7 +894,7 @@ describe("invitations", () => {
     expect(res.body.error.code).toBe("INVITATION_REVOKED");
   });
 
-  it("sends invitation email when send is true and returns sent: true", async () => {
+  it("mails no invitation without PUBLIC_URL, and still returns the link", async () => {
     mailService.__useJsonTransport(true);
     mailService.__clearSentMessages();
 
@@ -873,7 +902,27 @@ describe("invitations", () => {
       email: "colleague@example.com",
       send: true,
     });
+    expect(created.sent).toBe(false);
+    expect(created.link).toMatch(/\/join\?token=/);
+    expect(mailService.__getSentMessages()).toHaveLength(0);
+
+    mailService.__useJsonTransport(false);
+  });
+
+  it("sends invitation email when send is true and returns sent: true", async () => {
+    mailService.__useJsonTransport(true);
+    mailService.__clearSentMessages();
+    process.env.PUBLIC_URL = "https://crm.example.com";
+    onTestFinished(() => {
+      delete process.env.PUBLIC_URL;
+    });
+
+    const created = await invite({
+      email: "colleague@example.com",
+      send: true,
+    });
     expect(created.sent).toBe(true);
+    expect(created.link).toMatch(/^https:\/\/crm\.example\.com\/join\?token=/);
 
     const messages = mailService.__getSentMessages();
     expect(messages).toHaveLength(1);

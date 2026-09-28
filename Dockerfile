@@ -19,6 +19,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci
 
+# Download the two local search models here, at build time, so a container
+# never reaches huggingface.co. The script checks each file's SHA-256 against
+# the pinned list in modelFiles.ts. Only these two files are copied first, so
+# a code change elsewhere reuses this layer instead of downloading again.
+COPY scripts/fetch-models.ts ./scripts/
+COPY server/services/search/modelFiles.ts ./server/services/search/
+RUN node scripts/fetch-models.ts /app/models
+
 # Copy source and build
 COPY . .
 RUN npm run build
@@ -39,6 +47,9 @@ RUN npm pkg delete scripts.prepare \
 
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
+# The search models. MODEL_DIR below points the server at them, and
+# MODEL_DOWNLOADS=false keeps it from downloading anything else.
+COPY --from=builder /app/models ./models
 
 # Copy backend and database configurations. The server imports shared/ at
 # runtime (the MCP tools, connectors, dates, geo), so it ships too; without it
@@ -70,7 +81,9 @@ ENV NODE_ENV=production \
     DATA_DIR=/app/data \
     PORT=3210 \
     HOST=0.0.0.0 \
-    AUTH_REQUIRED=false
+    AUTH_REQUIRED=false \
+    MODEL_DIR=/app/models \
+    MODEL_DOWNLOADS=false
 
 # Create the data directory and drop root privileges
 RUN mkdir -p /app/data && chown -R node:node /app/data

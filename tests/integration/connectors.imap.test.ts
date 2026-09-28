@@ -29,6 +29,7 @@ import { createConnector, runNow } from "../../server/connectors/service.ts";
 import { sqlite } from "../../server/db.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
 import * as gateway from "../../server/ai/gateway.ts";
+import * as instanceSwitch from "../../server/ai/instanceSwitch.ts";
 import type { SyncEvent } from "../../server/connectors/types.ts";
 
 describe("IMAP Adapter Integration", () => {
@@ -36,6 +37,8 @@ describe("IMAP Adapter Integration", () => {
   let serverPort: number;
   let authFail = false;
   let folderUidValidity = 12345;
+  /** Message bodies the fake server sent: only a summary needs one. */
+  let bodyFetches = 0;
 
   const rawMessageRfc822 = [
     'From: "Alice Wonderland" <alice@example.com>',
@@ -105,6 +108,7 @@ describe("IMAP Adapter Integration", () => {
               }
             } else if (subCmd === "FETCH") {
               if (line.includes("BODY.PEEK") || line.includes("BODY[]")) {
+                bodyFetches++;
                 const len = Buffer.byteLength(rawMessageRfc822);
                 socket.write(
                   `* 1 FETCH (UID 101 RFC822.SIZE ${len} BODY[]<0> {${len}}\r\n${rawMessageRfc822})\r\n${tag} OK FETCH completed\r\n`,
@@ -229,6 +233,7 @@ describe("IMAP Adapter Integration", () => {
 
     const isContactParticipant = (p: { email?: string }) =>
       p.email === "alice@example.com";
+    bodyFetches = 0;
 
     const ctx = {
       config: {
@@ -250,6 +255,7 @@ describe("IMAP Adapter Integration", () => {
       selfAddresses: { emails: ["me@example.com"], phones: [] },
       signal: new AbortController().signal,
       log: console.log,
+      accountId: ownerId,
       isContactParticipant,
     };
 
@@ -276,6 +282,67 @@ describe("IMAP Adapter Integration", () => {
     expect(int.content).toBe(
       "Alice sent the latest project update for review.",
     );
+    // The summary needed the body, so the adapter downloaded it once.
+    expect(bodyFetches).toBe(1);
+  });
+
+  it("downloads no body and asks no model when AI is off for the owner", async () => {
+    vi.spyOn(gateway, "isAnyProviderConfigured").mockReturnValue(true);
+    const generateSpy = vi.spyOn(gateway, "generateFor");
+    generateSpy.mockClear();
+    // Off for the owner's account or for the whole instance: aiAllowedForUser
+    // answers the same for both.
+    const allowedSpy = vi
+      .spyOn(instanceSwitch, "aiAllowedForUser")
+      .mockReturnValue(false);
+    bodyFetches = 0;
+
+    try {
+      const gen = imapAdapter.sync({
+        config: {
+          host: "127.0.0.1",
+          port: serverPort,
+          secure: false,
+          username: "me@example.com",
+          folders: ["INBOX"],
+          summaries: true,
+          lookbackDays: 90,
+          rollup: true,
+          ghostThreshold: 3,
+          maxMessagesPerFolder: 100,
+          aliases: [],
+        },
+        secret: { password: "password" },
+        cursor: null,
+        since: "2026-01-01T00:00:00.000Z",
+        selfAddresses: { emails: ["me@example.com"], phones: [] },
+        signal: new AbortController().signal,
+        log: () => {},
+        accountId: ownerId,
+        isContactParticipant: (p: { email?: string }) =>
+          p.email === "alice@example.com",
+      });
+      const events: SyncEvent[] = [];
+      let step = await gen.next();
+      while (!step.done) {
+        events.push(step.value);
+        step = await gen.next();
+      }
+
+      const interactions = events.filter((e) => e.kind === "interaction");
+      expect(interactions).toHaveLength(1);
+      const int = interactions[0] as Extract<
+        SyncEvent,
+        { kind: "interaction" }
+      >;
+      expect(int.title).toBe("Important Project Discussion");
+      expect(int.content).toBeUndefined();
+      expect(allowedSpy).toHaveBeenCalledWith(ownerId);
+      expect(bodyFetches).toBe(0);
+      expect(generateSpy).not.toHaveBeenCalled();
+    } finally {
+      allowedSpy.mockRestore();
+    }
   });
 
   it("integrates end-to-end with createConnector and runNow", async () => {

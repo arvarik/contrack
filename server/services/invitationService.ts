@@ -90,12 +90,16 @@ function statusOf(row: {
 import { mailService } from "./mailService.ts";
 import { renderInvitationEmail } from "../mail/templates.ts";
 import { getInstanceName } from "./authService.ts";
+import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 
 /**
  * Create an invitation and return its one-time link.
  *
- * `origin` comes from the request, so the link works behind a reverse proxy
- * without the operator configuring a public URL anywhere.
+ * `origin` comes from the request (`publicOrigin`), and the link in the
+ * answer goes back to the admin who asked for it. A link sent by mail uses
+ * PUBLIC_URL instead, and with no PUBLIC_URL the invitation is not mailed:
+ * a mailed link built from the request would carry whatever host the request
+ * claimed.
  */
 export async function createInvitation(
   ctx: { actor: User; ip: string | null },
@@ -132,10 +136,11 @@ export async function createInvitation(
   let sent = false;
 
   if (input.send && email) {
-    if (mailService.isConfigured()) {
+    const mailOrigin = mailLinkOrigin();
+    if (mailService.isConfigured() && mailOrigin) {
       const template = renderInvitationEmail({
         instanceName: getInstanceName(),
-        link,
+        link: `${mailOrigin}/join?token=${secret}`,
         role: input.role,
         expiresAt,
       });
@@ -151,7 +156,7 @@ export async function createInvitation(
     } else {
       log.warn(
         "Admin",
-        `Cannot send invitation email to ${email}: mail is not configured`,
+        `Cannot send invitation email to ${email}: ${mailOrigin ? "mail is not configured" : "PUBLIC_URL is not set"}`,
       );
     }
   }

@@ -17,6 +17,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import {
   LocalTimeWeather,
   describeLocalTime,
+  roundCoordinate,
+  weatherUrl,
   zoneName,
 } from "../../src/components/LocalTimeWeather";
 
@@ -156,5 +158,28 @@ describe("LocalTimeWeather", () => {
       <LocalTimeWeather lat={null} lng={null} showWeather={false} />,
     );
     expect(container.textContent).toBe("");
+  });
+});
+
+// Open-Meteo is a third party. It gets the town, not the contact's front door:
+// both coordinates rounded to two decimals, about 1.1 km.
+describe("weatherUrl", () => {
+  it("rounds both coordinates to two decimals", () => {
+    expect(roundCoordinate(-33.868819)).toBe(-33.87);
+    expect(roundCoordinate(151.209295)).toBe(151.21);
+    expect(roundCoordinate(40.7)).toBe(40.7);
+    expect(roundCoordinate(0.004)).toBe(0);
+  });
+
+  it("asks Open-Meteo for the current weather at the rounded point", () => {
+    const url = new URL(weatherUrl(-33.868819, 151.209295));
+    expect(url.origin).toBe("https://api.open-meteo.com");
+    expect(url.pathname).toBe("/v1/forecast");
+    expect(url.searchParams.get("latitude")).toBe("-33.87");
+    expect(url.searchParams.get("longitude")).toBe("151.21");
+    expect(url.searchParams.get("current_weather")).toBe("true");
+    // Nothing finer than the rounded point is in the address.
+    expect(url.href).not.toContain("868819");
+    expect(url.href).not.toContain("209295");
   });
 });

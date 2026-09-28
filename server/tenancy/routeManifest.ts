@@ -259,6 +259,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   {
     method: "GET",
+    path: "/api/ai/instance",
+    class: "instance-read",
+    isolated: false,
+  },
+  {
+    method: "GET",
     path: "/api/ai/stats/feed",
     class: "scoped",
     isolated: true,
@@ -860,10 +866,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    // Scoped since the preview image is saved in the caller's own uploads
+    // (uploads/u/<owner>/previews), where only the caller can read it.
     method: "GET",
     path: "/api/link-preview/unfurl",
-    class: "instance-read",
-    isolated: false,
+    class: "scoped",
+    isolated: true,
   },
   { method: "GET", path: "/api/lists", class: "scoped", isolated: true },
   { method: "POST", path: "/api/lists", class: "scoped", isolated: true },
@@ -1040,6 +1048,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   {
     method: "PUT",
     path: "/api/settings/ai/endpoints",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "PUT",
+    path: "/api/settings/ai/instance",
     class: "admin",
     isolated: false,
   },

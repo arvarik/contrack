@@ -35,6 +35,7 @@ import { dedupeService } from "./dedupe/index.ts";
 import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
+import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
 import { relationshipService } from "./relationshipService.ts";
 import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
@@ -482,9 +483,11 @@ export const contactService = {
 
     // Auto-enrich person-created contact (never imports). Whether research
     // can run at all is validateEnrichmentStrategy's question, asked below.
+    // aiAllowedForUser reads both switches: the account's `aiAssist` and the
+    // admin's switch for the whole instance.
     if (
       prefs.autoEnrich &&
-      prefs.aiAssist &&
+      aiAllowedForUser(scope.ownerId) &&
       !body.isGhost &&
       !body.isArchived
     ) {

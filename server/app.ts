@@ -12,7 +12,13 @@ import crypto from "crypto";
 import morgan from "morgan";
 import { log } from "./utils/logger.ts";
 import { styleOrigins } from "./utils/mapConfig.ts";
+import {
+  PERMISSIONS_POLICY,
+  STRICT_TRANSPORT_SECURITY,
+  buildContentSecurityPolicy,
+} from "./utils/securityHeaders.ts";
 import { validatePublicUrl } from "./utils/publicOrigin.ts";
+import { trustProxyHops } from "./utils/trustProxy.ts";
 import path from "path";
 
 import { linkPreviewRouter } from "./routes/linkPreview.ts";
@@ -100,46 +106,11 @@ export interface CreateAppOptions {
  */
 const LARGE_JSON_PATHS = new Set(["/api/contacts/bulk"]);
 
-/**
- * Response headers served on everything.
- *
- * The CSP is production-only: Vite's dev client injects inline script for
- * HMR, so enforcing in dev would break the dev loop while protecting nobody.
- * The built index.html contains no inline script, which is what makes the
- * strict `script-src 'self'` possible. img-src stays open to https: because
- * imported contacts carry avatar URLs pointing at arbitrary hosts.
- *
- * connect-src names the external hosts the client fetches from: Open-Meteo
- * for the weather, and the origin of each basemap style. MapLibre loads a
- * style, its tiles, its glyphs and its sprite through `fetch`, and the
- * origins come from `mapConfig.ts`, the same module that tells the client
- * which style to load. MapLibre runs its tile work in a web worker: the
- * bundled worker file is same-origin, and `blob:` covers the worker MapLibre
- * builds from a blob when a worker URL is cross-origin. `child-src blob:` is
- * the fallback older browsers read in place of worker-src.
- */
+/** The production policy. Kept as its own name for the map tests. */
 export function buildProductionCsp(
   origins: readonly string[] = styleOrigins(),
 ): string {
-  return [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'", // MapLibre and React set style attributes
-    "img-src 'self' data: blob: https:",
-    "font-src 'self'",
-    "worker-src 'self' blob:",
-    "child-src blob:",
-    [
-      "connect-src 'self' https://api.open-meteo.com",
-      // A Set, because both palettes usually share one host and a directive
-      // that names it twice says nothing the first mention did not.
-      ...new Set(origins),
-    ].join(" "),
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join("; ");
+  return buildContentSecurityPolicy({ origins });
 }
 
 // Morgan's `:url` token is `req.originalUrl`, query string included, and both
@@ -155,20 +126,35 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   validatePublicUrl(process.env.PUBLIC_URL);
   const app = express();
   app.disable("x-powered-by");
+
+  // Express believes X-Forwarded-For, -Proto and -Host only from the hops it
+  // is told to trust, and TRUST_PROXY_HOPS says how many proxies sit in front
+  // (0 by default, see trustProxy.ts). Behind a proxy it is what makes rate
+  // limits and the audit log see the real client, and what marks the session
+  // cookie Secure when the original request was HTTPS. Set first, because
+  // everything below may read req.ip or req.secure.
+  const hops = trustProxyHops();
+  app.set("trust proxy", hops > 0 ? hops : false);
+
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    dev: process.env.NODE_ENV !== "production",
+  });
   app.use((req, res, next) => {
     req.requestId = crypto.randomUUID().slice(0, 8);
     res.setHeader("X-Request-Id", req.requestId);
     next();
   });
 
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
     // nosniff was previously set on /uploads alone; every response deserves
     // it. DENY matches the CSP's frame-ancestors for older browsers.
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    if (process.env.NODE_ENV === "production") {
-      res.setHeader("Content-Security-Policy", buildProductionCsp());
+    res.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
+    res.setHeader("Content-Security-Policy", contentSecurityPolicy);
+    if (req.secure) {
+      res.setHeader("Strict-Transport-Security", STRICT_TRANSPORT_SECURITY);
     }
     next();
   });
@@ -191,16 +177,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     );
   }
 
-  // Express only believes X-Forwarded-* when told to. Needed for two things
-  // behind a reverse proxy: rate limiting by the real client IP rather than
-  // the proxy's, and setting `Secure` on the session cookie when the original
-  // request was HTTPS. Limited to one hop — trusting the whole chain would let
-  // a client forge its own address by sending the header itself.
-  app.set("trust proxy", 1);
-
   // CORS is off by default: the SPA is same-origin (Vite runs as middleware
-  // in this process), and this server has no auth. Set CORS_ORIGIN to opt in
-  // for a browser-based external tool.
+  // in this process). Set CORS_ORIGIN to opt in for a browser-based external
+  // tool.
   if (process.env.CORS_ORIGIN) {
     app.use(cors({ origin: process.env.CORS_ORIGIN }));
   }

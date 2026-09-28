@@ -64,7 +64,7 @@ import {
   revokeInvitation,
 } from "../services/invitationService.ts";
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
-import { publicOrigin } from "../utils/publicOrigin.ts";
+import { mailLinkOrigin, publicOrigin } from "../utils/publicOrigin.ts";
 import { mailService } from "../services/mailService.ts";
 import {
   renderPasswordResetEmail,
@@ -182,6 +182,16 @@ router.post(
         code: "MAIL_NOT_CONFIGURED",
       });
     }
+    // The link goes to somebody else's inbox, so its address must not come
+    // from this request's Host header. See mailLinkOrigin.
+    const origin = mailLinkOrigin();
+    if (!origin) {
+      throw new AppError(
+        "Set PUBLIC_URL on the server to send links by mail",
+        409,
+        { code: "PUBLIC_URL_REQUIRED" },
+      );
+    }
     const ctx = adminContext(req);
     const { user: target } = getUser(ctx, String(req.params.id));
     if (!target.email) {
@@ -197,7 +207,6 @@ router.post(
     if (!link) {
       throw new AppError("Failed to create reset link", 500);
     }
-    const origin = publicOrigin(req);
     const resetUrl = `${origin}/reset-password?token=${link.token}`;
     const template = renderPasswordResetEmail({
       instanceName: getInstanceName(),
@@ -529,11 +538,19 @@ export function __resetAdminRateLimits(): void {
   mailTestLimiter.reset();
 }
 
+/**
+ * The mail settings, and the PUBLIC_URL links point at. Mail carries no
+ * sign-in, reset or invitation link while that is null, and the page says so.
+ */
+function mailView(config: ReturnType<typeof mailService.resolveConfig>) {
+  return { ...config, publicUrl: mailLinkOrigin() };
+}
+
 router.get(
   "/mail",
   requireAdmin,
   asyncHandler(async (_req, res) => {
-    res.json(mailService.resolveConfig());
+    res.json(mailView(mailService.resolveConfig()));
   }),
 );
 
@@ -552,7 +569,7 @@ router.put(
       targetId: "smtp",
       ip: ctx.ip,
     });
-    res.json(config);
+    res.json(mailView(config));
   }),
 );
 
@@ -570,7 +587,7 @@ router.delete(
       details: { deleted: true },
       ip: ctx.ip,
     });
-    res.json(config);
+    res.json(mailView(config));
   }),
 );
 

@@ -51,6 +51,7 @@
     "format:check": "prettier --check .",
     "seed": "node scripts/seed.ts",
     "reset-password": "node scripts/reset-password.ts",
+    "models:fetch": "node scripts/fetch-models.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "node scripts/seedMock.ts",

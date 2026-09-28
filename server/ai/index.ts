@@ -36,6 +36,7 @@ export { ParallelQueue } from "./routing/ParallelQueue.ts";
 
 import { sharedProvider } from "./singleton.ts";
 import { isAnyProviderConfigured } from "./gateway.ts";
+import { AppError } from "../utils/AppError.ts";
 import type {
   DiagnosticsSnapshot,
   AIGenerateOptions,
@@ -78,8 +79,21 @@ export const ai = {
   /** @deprecated Use `providerIdFor(capability)`. */
   providerName: activeProviderName,
 
-  /** Raw generation against the default provider (legacy path). */
+  /**
+   * Raw generation against the default provider (legacy path).
+   *
+   * Refused when no provider is available, which includes AI switched off
+   * for the instance: the default provider then falls back to a Gemini
+   * adapter with a placeholder key, and the request would still go to Google.
+   */
   generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
+    if (!isAnyProviderConfigured()) {
+      return Promise.reject(
+        new AppError("No AI provider is available", 503, {
+          code: "AI_CAPABILITY_UNAVAILABLE",
+        }),
+      );
+    }
     return sharedProvider.generate(options);
   },
 
@@ -136,3 +150,15 @@ export type {
   ProviderConfig,
   CustomEndpointConfig,
 } from "./providerRegistry.ts";
+
+// ---------------------------------------------------------------------------
+// The instance switch (AI off for every account)
+// ---------------------------------------------------------------------------
+
+export {
+  isAiOffForInstance,
+  aiOffLockedByEnv,
+  aiAllowedForUser,
+  instanceAiState,
+} from "./instanceSwitch.ts";
+export type { InstanceAiState } from "./instanceSwitch.ts";

@@ -27,6 +27,8 @@ node_modules
 backups
 uploads
 data
+models
+.cache
 secret.key
 *.key
 
@@ -40,8 +42,10 @@ playwright-report
 docs
 tests
 scripts
-# The one script the image runs: the documented password recovery.
+# The documented password recovery, which the image runs, and the model
+# download, which the build stage runs.
 !scripts/reset-password.ts
+!scripts/fetch-models.ts
 Dockerfile
 docker-compose.yml
 .dockerignore

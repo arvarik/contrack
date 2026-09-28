@@ -38,13 +38,16 @@
 // =============================================================================
 
 import { parentPort } from "worker_threads";
-import path from "path";
 import {
   type EmbedJob,
   type HostMessage,
   type RerankJob,
   type WorkerMessage,
 } from "./protocol.ts";
+import {
+  EMBEDDING_MODEL_ID,
+  configureModelLibrary,
+} from "../services/search/modelFiles.ts";
 import type {
   FeatureExtractionPipeline,
   PreTrainedModel,
@@ -67,15 +70,13 @@ function send(message: WorkerMessage, transfer?: Transferable[]): void {
 let extractor: FeatureExtractionPipeline | null = null;
 let loading: Promise<void> | null = null;
 
-/** The library, with its model cache set the way the server reads it. */
+/**
+ * The library, reading the model folder and the cache the way the server
+ * does, and downloading only when `MODEL_DOWNLOADS` allows it.
+ */
 async function transformers() {
   const library = await import("@huggingface/transformers");
-  const cacheDir =
-    process.env.TRANSFORMERS_CACHE ??
-    (process.env.DATA_DIR
-      ? path.join(process.env.DATA_DIR, ".cache")
-      : undefined);
-  if (cacheDir) library.env.cacheDir = cacheDir;
+  configureModelLibrary(library.env);
   return library;
 }
 
@@ -94,11 +95,10 @@ async function ensureModel(): Promise<FeatureExtractionPipeline> {
   if (!loading) {
     loading = (async () => {
       const { pipeline } = await transformers();
-      extractor = await pipeline(
-        "feature-extraction",
-        "Xenova/all-MiniLM-L6-v2",
-        { dtype: "q8", session_options: SESSION_OPTIONS },
-      );
+      extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID, {
+        dtype: "q8",
+        session_options: SESSION_OPTIONS,
+      });
     })();
   }
   await loading;

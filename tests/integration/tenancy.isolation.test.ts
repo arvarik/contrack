@@ -40,6 +40,30 @@ vi.mock("../../server/ai/aiService.ts", async (importActual) => {
     }),
   };
 });
+// The link preview's page and image downloads go through safeFetch, which
+// refuses the loopback address a local server would need. One test below
+// answers them itself, and every other caller gets the real function.
+const { safeFetchStub } = vi.hoisted(() => ({
+  safeFetchStub: {
+    impl: null as
+      | null
+      | ((url: string) => Promise<{ response: Response; finalUrl: string }>),
+  },
+}));
+vi.mock("../../server/utils/urlSafety.ts", async (importActual) => {
+  const actual =
+    await importActual<typeof import("../../server/utils/urlSafety.ts")>();
+  return {
+    ...actual,
+    safeFetch: (
+      url: string,
+      options?: Parameters<typeof actual.safeFetch>[1],
+    ) =>
+      safeFetchStub.impl
+        ? safeFetchStub.impl(url)
+        : actual.safeFetch(url, options),
+  };
+});
 vi.mock("../../server/connectors/adapters/ics.ts", async (importActual) => {
   const actual =
     await importActual<
@@ -62,6 +86,7 @@ vi.mock("../../server/connectors/adapters/ics.ts", async (importActual) => {
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
@@ -154,6 +179,7 @@ const COVERED = [
   "GET /api/imports/:id/rows",
   "GET /api/industries",
   "GET /api/interactions/search",
+  "GET /api/link-preview/unfurl",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
   "GET /api/map/views",
@@ -864,6 +890,57 @@ describe("the /uploads guard", () => {
   it("still needs a credential at all", async () => {
     const res = await request(app).get(avatarUrlA);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("GET /api/link-preview/unfurl", () => {
+  const PAGE = "https://news.example.com/story";
+
+  afterAll(() => {
+    safeFetchStub.impl = null;
+  });
+
+  it("saves the preview image in the caller's own uploads, out of the other owner's reach", async () => {
+    const image = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: "#224488" },
+    })
+      .png()
+      .toBuffer();
+    safeFetchStub.impl = async (url) =>
+      url === PAGE
+        ? {
+            response: new Response(
+              '<html><head><meta property="og:title" content="A story"><meta property="og:image" content="/cover.png"></head></html>',
+              { headers: { "content-type": "text/html" } },
+            ),
+            finalUrl: PAGE,
+          }
+        : { response: new Response(new Uint8Array(image)), finalUrl: url };
+
+    const unfurl = (actor: Actor) =>
+      asUser(actor)(
+        request(app).get(
+          `/api/link-preview/unfurl?url=${encodeURIComponent(PAGE)}`,
+        ),
+      );
+    const forA = await unfurl(A);
+    const forB = await unfurl(B);
+    expect(forA.status, JSON.stringify(forA.body)).toBe(200);
+    expect(forA.body.image).toMatch(
+      new RegExp(`^/uploads/u/${A.user.id}/previews/[0-9a-f]{24}\\.jpg$`),
+    );
+    expect(forB.body.image).toMatch(
+      new RegExp(`^/uploads/u/${B.user.id}/previews/[0-9a-f]{24}\\.jpg$`),
+    );
+
+    // Each account reads its own copy, and the other gets the same 404 as
+    // for a file that does not exist.
+    expect((await asUser(A)(request(app).get(forA.body.image))).status).toBe(
+      200,
+    );
+    expect((await asUser(B)(request(app).get(forA.body.image))).status).toBe(
+      404,
+    );
   });
 });
 
@@ -3727,8 +3804,10 @@ describe("all scoped routes are isolated", () => {
       .filter((r) => r.method === "GET" && !r.path.includes("/:"))
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
-    // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(42);
+    // collection route shows up in the diff of this file. 43 since the link
+    // preview became scoped: it lists nothing, and its test above proves the
+    // image it saves lands in the caller's own folder.
+    expect(collections).toHaveLength(43);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

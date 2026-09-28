@@ -32,7 +32,7 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 
 import type { Contact } from "../../../types";
-import { cn } from "../../../lib/utils";
+import { cn, safeHref } from "../../../lib/utils";
 import { CARD, FIELD_LABEL, SECTION_HEADING_SPACED } from "../../../lib/styles";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { EnrichMenu, useCanEnrich } from "./EnrichMenu";
@@ -87,12 +87,18 @@ function SiteIcon({ site }: { site: string }) {
   );
 }
 
-/** One cited page: its icon, its title or address, and where it lives. */
+/**
+ * One cited page: its icon, its title or address, and where it lives.
+ *
+ * The record only keeps http and https addresses (shared/researchRecord.ts),
+ * and `safeHref` checks again here, like every other external link in the
+ * app: the address came from a provider, not from the person.
+ */
 function SourceLink({ source }: { source: ResearchSource }) {
   const { title, site, trail } = sourceDisplay(source);
   return (
     <a
-      href={source.url}
+      href={safeHref(source.url)}
       target="_blank"
       rel="noopener noreferrer"
       className="hit-area state-layer -mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors"
@@ -404,7 +410,7 @@ export function ResearchCard({
                         <>
                           {" "}
                           <a
-                            href={source.url}
+                            href={safeHref(source.url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs font-medium text-primary underline-offset-2 hover:underline"

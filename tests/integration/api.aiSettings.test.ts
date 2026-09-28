@@ -15,6 +15,7 @@ const app = makeTestApp();
 
 /** Settings persist in app_settings; reset between tests for isolation. */
 afterEach(async () => {
+  delete process.env.AI_DISABLED;
   sqlite.prepare("DELETE FROM app_settings").run();
   const { clearSettingsCache } =
     await import("../../server/services/settingsService.ts");
@@ -420,5 +421,140 @@ describe("SearXNG configuration", () => {
       .put("/api/settings/ai/searxng")
       .send({ url: "" });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("the instance switch", () => {
+  const UNREACHABLE = "http://127.0.0.1:59999/v1";
+
+  /** Switch AI off (true) or on for every account, as the admin. */
+  const setAiOff = (aiOff: unknown) =>
+    request(app).put("/api/settings/ai/instance").send({ aiOff });
+
+  it("reports AI on, and not locked, by default", async () => {
+    const res = await request(app).get("/api/settings/ai");
+    expect(res.body.instance).toEqual({ aiOff: false, lockedByEnv: false });
+
+    const instance = await request(app).get("/api/ai/instance");
+    expect(instance.status).toBe(200);
+    expect(instance.body).toEqual({ aiOff: false, lockedByEnv: false });
+  });
+
+  it("turns AI off for the instance, and back on", async () => {
+    const off = await setAiOff(true);
+    expect(off.status).toBe(200);
+    expect(off.body).toEqual({
+      success: true,
+      instance: { aiOff: true, lockedByEnv: false },
+    });
+
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.instance).toEqual({ aiOff: true, lockedByEnv: false });
+    // Every generation capability says why it resolves to nothing, and
+    // embeddings stay on the built-in model.
+    expect(view.body.capabilities.quick.unavailableReason).toBe(
+      "AI is off for this instance.",
+    );
+    expect(view.body.capabilities.embeddings.resolved.providerId).toBe(
+      "builtin",
+    );
+    expect((await request(app).get("/api/ai/instance")).body.aiOff).toBe(true);
+
+    const on = await setAiOff(false);
+    expect(on.status).toBe(200);
+    expect(on.body.instance).toEqual({ aiOff: false, lockedByEnv: false });
+  });
+
+  it("writes an audit row naming the setting and the direction", async () => {
+    await setAiOff(true);
+    const row = sqlite
+      .prepare(
+        `SELECT action, details FROM audit_log
+          WHERE targetId = 'ai.instanceOff' ORDER BY createdAt DESC LIMIT 1`,
+      )
+      .get() as { action: string; details: string } | undefined;
+    expect(row?.action).toBe("settings.changed");
+    expect(JSON.parse(row?.details ?? "{}")).toEqual({ aiOff: true });
+  });
+
+  it("rejects a body that is not a boolean", async () => {
+    for (const body of [{}, { aiOff: "yes" }, { aiOff: 1 }]) {
+      const res = await request(app)
+        .put("/api/settings/ai/instance")
+        .send(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
+  it("refuses to turn AI on while AI_DISABLED holds it off", async () => {
+    process.env.AI_DISABLED = "true";
+
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.instance).toEqual({ aiOff: true, lockedByEnv: true });
+
+    const on = await setAiOff(false);
+    expect(on.status).toBe(409);
+    expect(on.body.error.code).toBe("AI_LOCKED_BY_ENV");
+
+    // Off is already true, and saying so again is harmless.
+    const off = await setAiOff(true);
+    expect(off.status).toBe(200);
+    expect(off.body.instance).toEqual({ aiOff: true, lockedByEnv: true });
+  });
+
+  it("names the switch when a model refresh or a model test is asked for", async () => {
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "local",
+      label: "Local",
+      baseUrl: UNREACHABLE,
+    });
+    await setAiOff(true);
+
+    const refresh = await request(app).post(
+      "/api/settings/ai/providers/custom:local/refresh-models",
+    );
+    expect(refresh.status).toBe(409);
+    expect(refresh.body.error.code).toBe("AI_OFF_FOR_INSTANCE");
+
+    for (const capability of ["deep", "embeddings"]) {
+      const pin = await request(app)
+        .put(`/api/settings/ai/capabilities/${capability}`)
+        .send({ mode: "pinned", providerId: "custom:local", model: "m" });
+      expect(pin.status, capability).toBe(409);
+      expect(pin.body.error.code, capability).toBe("AI_OFF_FOR_INSTANCE");
+    }
+
+    // Auto and Disabled need no provider, so they can still be chosen.
+    const disabled = await request(app)
+      .put("/api/settings/ai/capabilities/research")
+      .send({ mode: "disabled" });
+    expect(disabled.status).toBe(200);
+  });
+
+  it("keeps a new endpoint, and says its models were not checked", async () => {
+    await setAiOff(true);
+    const res = await request(app).put("/api/settings/ai/endpoints").send({
+      id: "later",
+      label: "Later",
+      baseUrl: UNREACHABLE,
+      apiKey: "sk-later-4321",
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("AI_OFF_FOR_INSTANCE");
+
+    const view = await request(app).get("/api/settings/ai");
+    const endpoint = view.body.customEndpoints.find(
+      (e: { id: string }) => e.id === "later",
+    );
+    expect(endpoint.keyPreview).toBe("••••4321");
+    // The row keeps what the endpoint can do, though no adapter is made
+    // while AI is off.
+    const row = view.body.providers.find(
+      (p: { id: string }) => p.id === "custom:later",
+    );
+    expect(row).toMatchObject({
+      supportsDiscovery: true,
+      supportsGrounding: false,
+    });
   });
 });
