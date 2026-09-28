@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 // =============================================================================
-// Ask results: the Unverified badge, and the brief that streams
+// Ask results: the "Not verified by AI" mark, and the brief that streams
 // =============================================================================
-// A match the model has not checked wears "Unverified", on the Ask page and
-// in the palette. A server that sends no `verified` leaves the badge to the
-// chunk's `fallback`, as before. "Approximate" wins over both.
+// A match the model has not checked wears an orange question mark named
+// "Not verified by AI", on the Ask page and in the palette. A server that
+// sends no `verified` leaves the mark to the chunk's `fallback`, as before.
+// "Approximate" wins over both. On the Ask page the mark is a toggletip, a
+// button beside the card that explains itself on a press, a focus or a
+// hover. In the palette a row is an option, so the mark is a named picture.
 //
 // The brief streams a start, deltas that grow the text, and one terminal
 // chunk. The final text replaces the streamed text in the same box. Only the
@@ -48,9 +51,18 @@ const match = (overrides: Partial<SemanticMatch> = {}) =>
     ...overrides,
   }) as SemanticMatch;
 
-/** The match badges on screen. */
-const badges = () =>
-  ["Approximate", "Unverified"].filter((word) => screen.queryByText(word));
+/**
+ * The match marks on screen: the "Approximate" badge, and the question mark
+ * whose name says "not verified by AI" (a button on the Ask page, a picture
+ * in the palette).
+ */
+const badges = () => [
+  ...(screen.queryByText("Approximate") ? ["Approximate"] : []),
+  ...(screen.queryByRole("button", { name: /not verified by AI/i }) ||
+  screen.queryByRole("img", { name: /not verified by AI/i })
+    ? ["Not verified by AI"]
+    : []),
+];
 
 const CARDS: [string, (m: SemanticMatch, isFallback: boolean) => void][] = [
   [
@@ -85,9 +97,11 @@ const CARDS: [string, (m: SemanticMatch, isFallback: boolean) => void][] = [
 ];
 
 describe.each(CARDS)("%s", (_, renderCard) => {
-  it("marks a match the model has not checked as Unverified", () => {
+  it("marks a match the model has not checked as not verified by AI", () => {
     renderCard(match({ verified: false }), false);
-    expect(badges()).toEqual(["Unverified"]);
+    expect(badges()).toEqual(["Not verified by AI"]);
+    // The word badge is gone: the question mark replaced it.
+    expect(screen.queryByText("Unverified")).toBeNull();
   });
 
   it("leaves a verified match unmarked, even in an unverified list", () => {
@@ -97,15 +111,174 @@ describe.each(CARDS)("%s", (_, renderCard) => {
 
   it("reads the list's fallback when the server sends no verified", () => {
     renderCard(match(), true);
-    expect(badges()).toEqual(["Unverified"]);
+    expect(badges()).toEqual(["Not verified by AI"]);
     cleanup();
     renderCard(match(), false);
     expect(badges()).toEqual([]);
   });
 
-  it("shows Approximate rather than Unverified", () => {
+  it("shows Approximate rather than the question mark", () => {
     renderCard(match({ approximate: true, verified: false }), true);
     expect(badges()).toEqual(["Approximate"]);
+  });
+});
+
+describe("the Ask page's question mark", () => {
+  const renderAsk = (onClick = vi.fn()) => {
+    render(
+      <ResultCard
+        match={match({ verified: false })}
+        index={0}
+        isFallback
+        onClick={onClick}
+      />,
+    );
+    return {
+      onClick,
+      mark: screen.getByRole("button", {
+        name: "Ada Lovelace: not verified by AI",
+      }),
+      card: screen.getByRole("button", { name: /^Ada Lovelace$/ }),
+    };
+  };
+
+  it("sits beside the card, never inside its button", () => {
+    const { mark, card } = renderAsk();
+    expect(card.contains(mark)).toBe(false);
+    // The corner of the card: the wrapper is the positioned parent.
+    expect(mark.closest(".absolute")?.className).toMatch(/top-3 right-3/);
+    // The card leaves room for it, so a long name never runs under it.
+    expect(card.className).toMatch(/\bpr-12\b/);
+  });
+
+  it("explains itself on a press, and the card does not open", () => {
+    const { mark, onClick } = renderAsk();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.click(mark);
+    expect(screen.getByRole("tooltip").textContent).toBe(
+      "Not verified by AI" +
+        "Ada Lovelace matches your words or their meaning, but AI did not check the match",
+    );
+    expect(mark.getAttribute("aria-expanded")).toBe("true");
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("closes on a second press, on Escape, and on a press elsewhere", () => {
+    const { mark } = renderAsk();
+    fireEvent.click(mark);
+    fireEvent.click(mark);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    fireEvent.click(mark);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    // Escape moves nothing, so it cannot open the panel again on a focus.
+    expect(document.activeElement).not.toBe(mark);
+
+    fireEvent.click(mark);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("opens while a mouse rests on it, and a press keeps it open", () => {
+    const { mark } = renderAsk();
+    const tip = mark.parentElement!;
+    fireEvent.pointerEnter(tip, { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeNull();
+    fireEvent.pointerLeave(tip, { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    // A mouse press starts with a hover. The press must not close it.
+    fireEvent.pointerEnter(tip, { pointerType: "mouse" });
+    fireEvent.click(mark);
+    fireEvent.pointerLeave(tip, { pointerType: "mouse" });
+    expect(screen.queryByRole("tooltip")).not.toBeNull();
+  });
+
+  it("opens on a tap once, not open and shut in one gesture", () => {
+    const { mark } = renderAsk();
+    const tip = mark.parentElement!;
+    // A tap fires pointer events with a touch pointer, a focus with no
+    // focus ring (jsdom never matches `:focus-visible`, like a tap), then a
+    // click. Only the click opens the panel, so the click cannot close it.
+    fireEvent.pointerEnter(tip, { pointerType: "touch" });
+    fireEvent.pointerDown(mark, { pointerType: "touch" });
+    act(() => mark.focus());
+    fireEvent.click(mark);
+    fireEvent.pointerLeave(tip, { pointerType: "touch" });
+    expect(screen.queryByRole("tooltip")).not.toBeNull();
+  });
+
+  it("opens on a keyboard focus, and closes when the focus leaves", () => {
+    const { mark } = renderAsk();
+    const matches = HTMLElement.prototype.matches;
+    const spy = vi
+      .spyOn(HTMLElement.prototype, "matches")
+      .mockImplementation(function (this: HTMLElement, selector: string) {
+        return selector === ":focus-visible" || matches.call(this, selector);
+      });
+    try {
+      act(() => mark.focus());
+      expect(screen.queryByRole("tooltip")).not.toBeNull();
+      act(() => mark.blur());
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("describes the mark to a screen reader, open or closed", () => {
+    const { mark } = renderAsk();
+    const described = document.getElementById(
+      mark.getAttribute("aria-describedby")!,
+    );
+    expect(described?.textContent).toMatch(/AI did not check the match/);
+  });
+
+  it("wears the warning ink, and the card still opens on its own press", () => {
+    const { mark, card, onClick } = renderAsk();
+    expect(mark.className).toMatch(/\btext-warning\b/);
+    fireEvent.click(card);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("is not there for a verified match, and the card keeps its padding", () => {
+    render(
+      <ResultCard
+        match={match({ verified: true })}
+        index={0}
+        isFallback={false}
+        onClick={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /not verified/i })).toBeNull();
+    expect(screen.getByRole("button").className).not.toMatch(/\bpr-12\b/);
+  });
+});
+
+describe("the palette's question mark", () => {
+  it("is a named picture with a title, so the option holds one control", () => {
+    render(
+      <Command label="Search">
+        <AIResultCard
+          match={match({ verified: false })}
+          index={0}
+          onSelect={() => {}}
+          isFallback
+          hasGroundingCapacity={false}
+          isEnriching={false}
+          enrichingContactId={null}
+        />
+      </Command>,
+    );
+    const mark = screen.getByRole("img", { name: "Not verified by AI" });
+    expect(mark.getAttribute("title")).toBe("Not verified by AI");
+    expect(mark.className).toMatch(/\btext-warning\b/);
+    // The option's own name carries it, so a reader hears it on the row.
+    expect(
+      screen.getByRole("option", { name: /Ada Lovelace.*Not verified by AI/ }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });
 

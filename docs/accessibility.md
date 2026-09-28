@@ -72,9 +72,10 @@ has to reach a screen reader without moving focus.
   skipped by others. The value it mounts with is not spoken, so the results
   restored on Back to the page are read from the page, not announced twice.
 - **The wording is in `src/lib/searchAnnouncements.ts`** and tested as
-  sentences. A People search speaks at most three times: that it started,
-  that unverified candidates arrived while AI is still working, and what it
-  found. A Notes search speaks twice. Nothing speaks on a keystroke.
+  sentences. A People search speaks twice: that it started, and what it
+  found. The page keeps back the list AI has not checked yet, so nothing is
+  said about that list. A list AI did not check ends "Not verified by AI."
+  A Notes search speaks twice. Nothing speaks on a keystroke.
 - **Errors take `role="alert"`** on the visible error itself, which is the
   pattern the auth screens and inline field errors already use. The status
   region says nothing for an error, so a failure is heard once.
@@ -127,6 +128,15 @@ not an empty container.
   Search" in the next.
 - **A control is named by `aria-label` or its text, not by `title`.** A
   `title` gives a pointer a tooltip and a touch screen nothing.
+- **An explanation is a toggletip, not a `title`.** `InfoTip` in
+  `src/components/ui/` is a button with a 44 px target. A mouse resting on
+  it, a keyboard focus, a click and a tap open it. Escape and a press
+  elsewhere close it, and Escape moves no focus. Only a mouse hovers and
+  only a keyboard focus opens it: a tap also fires a focus, and a panel that
+  opened on that focus was closed by the click after it. The panel stays in
+  the page while it is closed, and the button's `aria-describedby` points
+  at it, so a screen reader hears the explanation on focus. The orange
+  question mark on an Ask result that AI did not check is one.
 
 ### Focus
 

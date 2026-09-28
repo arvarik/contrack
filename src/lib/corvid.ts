@@ -7,6 +7,8 @@
  *
  * - `flyCorvid()` asks for a flight. `CorvidFlight`, mounted once in `App`,
  *   is the only listener, so two birds are never in the air at once.
+ *   `recallCorvid()` calls a bird that is out home by the short way: the
+ *   Ask page's search flight ends that way when the answer arrives.
  * - `corvidReact()` asks the perched bird for one small act: a nod when a
  *   follow-up is done, a hop for a new contact. The bird on the sidebar
  *   perch, the one that is always there, is the listener.
@@ -43,6 +45,8 @@ export const CORVID_STIR_EVENT = "contrack:corvid-stir";
 export const CORVID_AWAY_EVENT = "contrack:corvid-away";
 /** The bird is back on this perch. */
 export const CORVID_HOME_EVENT = "contrack:corvid-home";
+/** Whatever the bird is doing out there, come home now. */
+export const CORVID_RECALL_EVENT = "contrack:corvid-recall";
 
 export type CorvidFlightKind = FlightKind;
 
@@ -60,6 +64,8 @@ export interface CorvidFlyDetail {
    * hide: a flypast of something that is not a perch.
    */
   from?: DOMRect;
+  /** A `search` flight's hunting ground, in viewport px. */
+  area?: { left: number; top: number; right: number; bottom: number };
 }
 
 /** The payload {@link CORVID_REACT_EVENT} carries. */
@@ -88,7 +94,15 @@ export const flyCorvid = (detail: Partial<CorvidFlyDetail> = {}): void =>
     kind: detail.kind ?? "loop",
     perch: detail.perch,
     from: detail.from,
+    area: detail.area,
   });
+
+/**
+ * Call the bird that is out home, by the short way. A bird still leaving
+ * its ring turns for home as soon as it is in the air, and one already
+ * landing just lands. Silent when no bird is out.
+ */
+export const recallCorvid = (): void => emit(CORVID_RECALL_EVENT);
 
 /**
  * The shortest time between two of the same reaction, in ms. Ten follow-ups

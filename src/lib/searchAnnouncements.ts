@@ -1,18 +1,18 @@
 /**
  * searchAnnouncements.ts — the sentences a search says to a screen reader.
  *
- * The search page shows its state in three places at once: a spinner in the
- * input, a "Searching…" line over the shimmer, and a count pill over the
+ * The search page shows its state in three places at once: a bird in the
+ * input, a "Searching your network…" stage, and a count pill over the
  * results. None of those is announced, because none of them is a status
- * message: they mount with their text, they are icons, or they are the
+ * message: they mount with their text, they are pictures, or they are the
  * fiftieth element on the page. These builders turn the same state into one
  * sentence for the page's {@link LiveStatus} region.
  *
  * Pure functions, so the wording is tested without a DOM. The rule for each:
  * say what the reader would otherwise have to find, and no more. A search
- * speaks at most three times — that it started, that unverified candidates
- * arrived while AI is still working, and what it found — and never on every
- * keystroke.
+ * speaks twice, that it started and what it found, and never on every
+ * keystroke. The page keeps back the list AI has not checked yet, so there
+ * is no third sentence for it.
  *
  * @module lib/searchAnnouncements
  */
@@ -27,8 +27,6 @@ const quoted = (query: string) => `“${query.trim()}”`;
 export interface PeopleSearchState {
   /** A question is being answered and nothing is on screen yet. */
   isLoading: boolean;
-  /** Unverified candidates are on screen while AI still refines them. */
-  isEnriching: boolean;
   /** The search failed. The visible error is an alert, so this says nothing. */
   isError: boolean;
   /** A question has been answered, or asked, since the page was cleared. */
@@ -37,7 +35,7 @@ export interface PeopleSearchState {
   count: number;
   /** The question these people answer, or the one being asked. */
   query: string;
-  /** AI was unavailable and the results are unverified matches. */
+  /** AI did not check the results: it is off, or it did not answer. */
   fallback: boolean;
 }
 
@@ -50,12 +48,10 @@ export function peopleSearchStatus(state: PeopleSearchState): string {
   if (!q) return "";
   if (state.isError) return "";
   if (state.isLoading) return `Searching your network for ${quoted(q)}…`;
-  if (state.isEnriching)
-    return `${plural(state.count, "unverified candidate", "unverified candidates")} for ${quoted(q)}. Enriching with AI…`;
   if (!state.hasSearched) return "";
   if (state.count === 0) return `No matches for ${quoted(q)}.`;
   return state.fallback
-    ? `AI unavailable. ${plural(state.count, "unverified match", "unverified matches")} for ${quoted(q)}.`
+    ? `${plural(state.count, "match", "matches")} for ${quoted(q)}. Not verified by AI.`
     : `${plural(state.count, "match", "matches")} for ${quoted(q)}.`;
 }
 

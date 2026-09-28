@@ -325,7 +325,7 @@ describe("asking the same question again", () => {
 
     ask(QUESTION);
     await waitFor(() => expect(semantic(sent)).toHaveLength(1));
-    expect(screen.getByText("Searching…")).toBeTruthy();
+    expect(await screen.findByText("Searching your network…")).toBeTruthy();
 
     // Enter again, twice, while the first answer is still streaming.
     fireEvent.keyDown(input(), { key: "Enter" });
@@ -694,6 +694,57 @@ describe("the history", () => {
     expect(
       await screen.findByRole("dialog", { name: "Search history" }),
     ).toBeTruthy();
+  });
+});
+
+describe("the wait for AI", () => {
+  it("keeps back the list AI has not checked, and shows AI's answer", async () => {
+    const pending = stream();
+    stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic")) return pending.response;
+    });
+    renderView();
+
+    ask(QUESTION);
+    await act(async () => {
+      // The local list first, unverified, as the server streams it.
+      pending.push(
+        line({ phase: "instant", matches: OTHER_MATCHES, fallback: true }),
+      );
+    });
+    expect(await screen.findByTestId("searching-stage")).toBeTruthy();
+    expect(screen.queryByText("Linus Torvalds")).toBeNull();
+    expect(screen.queryByText("Enriching with AI…")).toBeNull();
+
+    await act(async () => {
+      pending.push(complete());
+      pending.end();
+    });
+    await screen.findByText("Ada Lovelace");
+    expect(screen.queryByText("Linus Torvalds")).toBeNull();
+    expect(screen.queryByTestId("searching-stage")).toBeNull();
+    expect(screen.queryByText("Not verified by AI")).toBeNull();
+  });
+
+  it("says once, over the list, when AI did not verify the answer", async () => {
+    stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic"))
+        return new Response(
+          line({ phase: "complete", matches: MATCHES, fallback: true }),
+        );
+    });
+    renderView();
+
+    ask(QUESTION);
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByText("Not verified by AI")).toBeTruthy();
+    const why = screen.getByRole("button", {
+      name: "Why these results are not verified by AI",
+    });
+    fireEvent.click(why);
+    expect(screen.getByRole("tooltip").textContent).toMatch(
+      /They match your words or their meaning/,
+    );
   });
 });
 

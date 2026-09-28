@@ -76,10 +76,7 @@ test.describe("people", () => {
     ).toHaveCount(0);
   });
 
-  test("says that AI was unavailable and the matches are unverified", async ({
-    page,
-    seed,
-  }) => {
+  test("says that AI did not verify the matches", async ({ page, seed }) => {
     await answerPeopleSearch(
       page,
       [personMatch(seed.byName("Linus Torvalds"))],
@@ -95,10 +92,12 @@ test.describe("people", () => {
     await input.press("Enter");
 
     await expect(status(page)).toHaveText(
-      "AI unavailable. 1 unverified match for “Linus”.",
+      "1 match for “Linus”. Not verified by AI.",
     );
     await expect(
-      page.getByText("AI unavailable — showing unverified matches"),
+      page.getByRole("button", {
+        name: "Why these results are not verified by AI",
+      }),
     ).toBeVisible();
   });
 

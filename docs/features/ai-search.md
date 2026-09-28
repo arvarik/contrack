@@ -127,13 +127,18 @@ Results stream to the UI as NDJSON chunks, in two phases:
 
 A local answer, a facet answer, an AI-off answer and a cached answer send the complete chunk only. A chunk's `fallback` means that the model did not verify its list. See the PR for the live numbers of the model stages.
 
-On screen, a match that nobody verified wears the **Unverified** badge, on the Ask page's cards and in the palette. It replaces the Keyword and Fallback badges. **Approximate** still wins over it. An older server sends no `verified`, and then the chunk's `fallback` decides the badge.
+On screen, the Ask page and the palette show the final answer only. The instant chunk still streams, and the page keeps it back.
 
-- **Ask page headings:** "Unverified candidates" while AI works, and "Unverified results" when AI was unavailable.
-- **Palette headings:** "Unverified candidates · checking with AI" and "Unverified results".
-- **Warning line:** under the heading, it says that AI is unavailable and that the matches are unverified.
-- **Screen reader:** "4 unverified candidates for “q”. Enriching with AI…" while AI works, and "AI unavailable. 2 unverified matches for “q”." for an unverified final list.
-- **History pane:** a question whose last answer was unverified says "unverified" in its row.
+- **While AI works:** after 150 ms, a stage under the search box says "Searching your network…" and "AI is checking who fits your question". After 200 ms more, the corvid in the search box flies out at its flying size and hunts at random over the stage and the page below it. The answer calls it home by the short way (`recallCorvid()`), and it lands back in the search box as the results fade in. A hunt nobody calls lands by itself after about 26 seconds, twice the model's 12 second budget. At the "subtle" and "off" motion levels, and under reduced motion, nothing flies, and the stage holds a 64 px thinking bird. An answer that comes within 150 ms shows no stage. The palette shows "Asking AI…" for the whole wait.
+- **A list AI did not check:** a final chunk with `fallback: true`, because AI is off for the account or AI did not answer. The Ask page says "Not verified by AI" once, over the list, with a question mark that says why. Each card carries an orange question mark in its top right corner, named "Ada Lovelace: not verified by AI". The mark is a toggletip: a button beside the card, never inside it, with a 44 px target. A hover, a click, a tap or a keyboard focus opens it, and Escape or a press elsewhere closes it. The words say it, so the colour is never the only signal.
+- **Palette:** the group heading reads "Not verified by AI", and one line under it says why. Each row carries the same orange question mark as a named picture with a title, because an option holds no second control.
+- **Approximate** still wins over the mark. An older server sends no `verified`, and then the chunk's `fallback` decides.
+- **Screen reader:** "Searching your network for “q”…" while AI works. Then "2 matches for “q”.", or "2 matches for “q”. Not verified by AI." for a list AI did not check.
+- **History pane:** a question whose last answer AI did not check says "not verified by AI" in its row.
+
+![The Ask page while AI works: the corvid hunts over the empty results, then flies home with the answer](../screenshots/ask-waiting/ask-waiting-flight.gif)
+
+![A list AI did not check, with a card's question mark open](../screenshots/ask-waiting/ask-unverified-desktop-light.png)
 
 <!-- Screenshot: ai-search-results.png -->
 

@@ -13,6 +13,8 @@
  * 4. It lands on its own: the flight ends, the overlay goes and the perch
  *    is the logo again.
  * 5. Escape, a route change and an unmount end it at once.
+ * 6. A search flight hunts over the ground it is given until `recallCorvid`
+ *    calls it home by the short way. A recall ends nothing else.
  *
  * Fake timers drive `requestAnimationFrame` and `performance.now` together,
  * so a whole flight can be flown in a test.
@@ -28,9 +30,11 @@ import {
 } from "../../src/components/brand/CorvidFlight";
 import { CorvidMark } from "../../src/components/brand/CorvidMark";
 import {
+  CORVID_AWAY_EVENT,
   CORVID_HOME_EVENT,
   CORVID_REACT_EVENT,
   flyCorvid,
+  recallCorvid,
 } from "../../src/lib/corvid";
 import { createRng } from "../../src/lib/corvidMotion";
 import type { MascotMotion, MotionPreference } from "../../src/api/preferences";
@@ -425,5 +429,138 @@ describe("CorvidFlight", () => {
     advance(12_000);
     expect(overlay()).toBeNull();
     expect(previewBird.style.visibility).toBe("");
+  });
+});
+
+describe("a search flight", () => {
+  /** The Ask page's search box bird: no perch attribute, named by the caller. */
+  const SearchBox = () => (
+    <span data-testid="search-perch" className="flex">
+      <CorvidMark size={20} alive />
+    </span>
+  );
+  /** The empty results under the search box, down to the window's bottom. */
+  const GROUND = { left: 296, top: 330, right: 1144, bottom: 900 };
+
+  const mountSearch = () => {
+    render(
+      <MemoryRouter>
+        <Perch />
+        <SearchBox />
+        <CorvidFlight />
+      </MemoryRouter>,
+    );
+    screen.getByTestId("perch").getBoundingClientRect = () => box(16, 12, 40);
+    const perch = screen.getByTestId("search-perch");
+    perch.getBoundingClientRect = () => box(316, 196, 20);
+    return perch;
+  };
+  const search = (perch: HTMLElement) =>
+    act(() => {
+      flyCorvid({ kind: "search", perch, area: GROUND });
+    });
+  const recall = () =>
+    act(() => {
+      recallCorvid();
+    });
+  const birdIn = (perch: HTMLElement) =>
+    perch.querySelector<SVGGElement>("[data-bird]")!;
+
+  it("leaves the search box and hunts over the ground below it", () => {
+    const perch = mountSearch();
+    search(perch);
+    expect(birdIn(perch).style.visibility).toBe("hidden");
+    // The sidebar's bird stays where it is.
+    expect(perchBird().style.visibility).toBe("");
+    advance(1_500);
+    let over = 0;
+    for (let i = 0; i < 40; i++) {
+      advance(250);
+      const [x, y] = birdAt();
+      if (
+        x! >= GROUND.left - 40 &&
+        x! <= GROUND.right + 40 &&
+        y! >= GROUND.top - 40 &&
+        y! <= GROUND.bottom
+      )
+        over += 1;
+    }
+    // Ten seconds in, still hunting, and nearly always over the ground.
+    expect(overlay()).not.toBeNull();
+    expect(over).toBeGreaterThanOrEqual(36);
+  });
+
+  it("comes home by the short way when recalled, and gives the box its bird", () => {
+    const perch = mountSearch();
+    search(perch);
+    advance(3_000);
+    recall();
+    advance(4_500);
+    expect(overlay()).toBeNull();
+    expect(birdIn(perch).style.visibility).toBe("");
+  });
+
+  it("turns for home as soon as it is in the air, when recalled still leaving", () => {
+    const perch = mountSearch();
+    search(perch);
+    // Still leaving the box: it cannot turn yet, so the recall waits.
+    advance(100);
+    recall();
+    expect(overlay()).not.toBeNull();
+    advance(5_500);
+    expect(overlay()).toBeNull();
+    expect(birdIn(perch).style.visibility).toBe("");
+  });
+
+  it("hunts on when nobody calls, and lands by itself in the end", () => {
+    const perch = mountSearch();
+    search(perch);
+    advance(15_000);
+    expect(overlay()).not.toBeNull();
+    advance(40_000);
+    expect(overlay()).toBeNull();
+    expect(birdIn(perch).style.visibility).toBe("");
+  });
+
+  it("tells the search box when its bird leaves and when it is back", () => {
+    const perch = mountSearch();
+    const heard: string[] = [];
+    const away = (e: Event) =>
+      (e as CustomEvent).detail?.perch === perch && heard.push("away");
+    const home = (e: Event) =>
+      (e as CustomEvent).detail?.perch === perch && heard.push("home");
+    window.addEventListener(CORVID_AWAY_EVENT, away);
+    window.addEventListener(CORVID_HOME_EVENT, home);
+    try {
+      search(perch);
+      advance(2_000);
+      recall();
+      advance(5_000);
+    } finally {
+      window.removeEventListener(CORVID_AWAY_EVENT, away);
+      window.removeEventListener(CORVID_HOME_EVENT, home);
+    }
+    expect(heard).toEqual(["away", "home"]);
+  });
+
+  it("lets a recall end nothing but a search: a lap somebody asked for goes on", () => {
+    mountSearch();
+    fly("loop");
+    advance(1_500);
+    recall();
+    // A way home would be over by now; the lap is not.
+    advance(3_000);
+    expect(overlay()).not.toBeNull();
+  });
+
+  it("does nothing when recalled with no bird out", () => {
+    const perch = mountSearch();
+    recall();
+    advance(1_000);
+    expect(overlay()).toBeNull();
+    expect(birdIn(perch).style.visibility).toBe("");
+    // The next search still flies.
+    search(perch);
+    expect(overlay()).not.toBeNull();
   });
 });
