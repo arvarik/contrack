@@ -141,8 +141,11 @@ export function isLocalEmbeddingReady(): boolean {
  * Returns null if the model isn't ready.
  * Typical latency: ~3-5ms on CPU.
  */
-export async function embedText(text: string): Promise<Float32Array | null> {
-  const [vector] = await embedTexts([text]);
+export async function embedText(
+  text: string,
+  signal?: AbortSignal,
+): Promise<Float32Array | null> {
+  const [vector] = await embedTexts([text], signal);
   return vector ?? null;
 }
 
@@ -153,7 +156,11 @@ export async function embedText(text: string): Promise<Float32Array | null> {
  * configured, otherwise to the bundled local model. Returns an empty array
  * when no backend is available (search degrades to FTS-only).
  */
-async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+async function embedTexts(
+  texts: string[],
+  signal?: AbortSignal,
+): Promise<Float32Array[]> {
+  signal?.throwIfAborted();
   if (texts.length === 0) return [];
   const resolved = resolveEmbeddings();
 
@@ -189,6 +196,8 @@ async function embedTexts(texts: string[]): Promise<Float32Array[]> {
       // caller keeps these vectors past the life of the message.
       return unflatten(result).map((v) => new Float32Array(v));
     },
+    undefined,
+    signal,
   );
 
   for (const vec of vectors) {
@@ -406,13 +415,18 @@ export function findSearchNeighbors(
   // The query goes through the table's scale, so its distances compare with
   // the stored vectors'. Without one, every stored vector is zero.
   const buf = quantize(queryVec, searchVectorScale() ?? UNIT_SCALE);
-  const hardFilter = preFilterIds
-    ? "AND contactId IN (SELECT value FROM json_each(?))"
-    : "";
+  const selectors: string[] = [];
+  if (preFilterIds) selectors.push("SELECT value FROM json_each(?)");
   // The facets run inside the KNN, before `k`, so a contact the facets keep
   // is never lost to closer neighbours they drop.
-  const facetFilter = facets
-    ? `AND contactId IN (SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql}))`
+  if (facets)
+    selectors.push(
+      `SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql})`,
+    );
+  // vec0 accepts one rowid IN constraint. Intersect both sets inside it,
+  // or a query with a planner filter and a facet loses its vector channel.
+  const candidateFilter = selectors.length
+    ? `AND contactId IN (${selectors.join(" INTERSECT ")})`
     : "";
   const params = [
     buf,
@@ -428,8 +442,7 @@ export function findSearchNeighbors(
     WHERE embedding MATCH vec_int8(?)
       AND ownerId = ?
       AND ${VEC_ACTIVE_MATCH}
-      ${hardFilter}
-      ${facetFilter}
+      ${candidateFilter}
       AND k = ? ORDER BY distance
   `,
     )

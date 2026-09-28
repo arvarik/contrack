@@ -116,6 +116,14 @@ describe("reordering inside the budget", () => {
 });
 
 describe("the budget", () => {
+  it("drops scores delivered before an overdue deadline timer", async () => {
+    const { signals } = scoresByName({ Ada: 1, Grace: 3 });
+    vi.spyOn(performance, "now").mockReturnValueOnce(0).mockReturnValue(30);
+    const list = await rerankLocal("q", people("Ada", "Grace"), 20);
+    expect(names(list)).toEqual(["Ada", "Grace"]);
+    expect(signals[0].aborted).toBe(true);
+  });
+
   it("keeps the fused order when the scores arrive late", async () => {
     const { signals } = scoresByName({ Ada: 1, Grace: 3 }, 200);
     const started = performance.now();

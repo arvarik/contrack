@@ -135,7 +135,11 @@ strong vector similarity on irrelevant signals.
    looks for a verified answer of the last 5 minutes, at most 100 per owner,
    with the same revision, facets, provider and model, the same entity key
    (the capitalized words, numbers, quoted phrases and emails) and a cosine
-   of 0.97 or more. A hit is the answer, with no model call, and it goes into
+   of 0.97 or more. Ordered constraint words and comparison operators must
+   also match after proven facets and leading request words are removed.
+   The lookup rechecks the revision after embedding. Local embedding waits
+   stop after 100 ms and fall back to keywords without retrying the vector.
+   A hit is the answer, with no model call, and it goes into
    L1 for the exact words. Every verified answer that L1 keeps goes into L2
    too, with its vector. `aiCache.invalidateAll()` empties L2 through
    `onInvalidateAll`.

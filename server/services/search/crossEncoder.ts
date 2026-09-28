@@ -218,10 +218,7 @@ function words(rows: unknown, field: "tag" | "interest"): string[] {
 
 /**
  * What the model reads for one contact: name, role, company, location,
- * headline, tags and interests.
- *
- * Not the about text. It is long, the model reads only 128 tokens, and the
- * fields above are the ones a question names.
+ * industry, headline, the first 200 about characters, tags and interests.
  */
 export function profileText(contact: ProfileFields): string {
   const tags = words(contact.tags, "tag");
@@ -298,7 +295,9 @@ export async function rerankLocal<T extends ProfileFields>(
     clearTimeout(timer);
   }
 
-  if (!scores) {
+  // A busy event loop can deliver a worker message before an overdue
+  // timer. Check elapsed time too, so late scores never change the order.
+  if (!scores || performance.now() - t0 >= budgetMs) {
     late.abort();
     log.debug(
       "CrossEncoder",

@@ -807,7 +807,9 @@ function printVectorAb(result: Awaited<ReturnType<typeof vectorAb>>) {
 /**
  * The live mode's semantic cache check: a question, then the same question
  * in other words. MiniLM puts each pair at cosine 0.97 or more, and each
- * pair has the same facets and the same entity key.
+ * pair has the same facets and the same entity key. The first also keeps
+ * the ordered constraint text and can hit. The plural change in the second
+ * now needs a fresh answer, because similarity alone is not sufficient.
  */
 const REWORDED: [string, string][] = [
   ["who in Lisbon goes rock climbing", "who goes rock climbing in Lisbon"],
@@ -1089,7 +1091,7 @@ async function liveBenchmark(seeded: Seeded) {
   await Promise.all(holds);
 
   // The semantic cache: a question answered cold, then the same question in
-  // other words with the caches warm. The second needs no model call.
+  // other words with the caches warm. Report both safe hits and misses.
   const reworded = [];
   for (const [first, second] of REWORDED) {
     const cold = await ask(first);

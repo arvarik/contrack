@@ -44,8 +44,15 @@ vi.mock("../../src/contexts/PreferencesContext", () => ({
 }));
 
 /** The page's use of the hook, cut down to the two places it touches. */
-const Page = ({ searching }: { searching: boolean }) => {
+const Page = ({
+  searching,
+  visible = true,
+}: {
+  searching: boolean;
+  visible?: boolean;
+}) => {
   const flight = useCorvidSearchFlight(searching);
+  if (!visible) return null;
   return (
     <>
       <span data-testid="box-glyph">
@@ -128,6 +135,16 @@ afterEach(() => {
 });
 
 describe("the wait for AI", () => {
+  it("describes a local search accurately when AI is off", () => {
+    render(<SearchingStage still aiAllowed={false} />);
+    expect(
+      screen.getByText("Finding people who fit your question"),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("AI is checking who fits your question"),
+    ).toBeNull();
+  });
+
   it("shows nothing for an answer that comes quickly", () => {
     const { rerender } = mount(true);
     advance(STAGE_DELAY_MS - 10);
@@ -184,6 +201,19 @@ describe("the wait for AI", () => {
     rerender(<Page searching={false} />);
     expect(recalls).toBe(0);
     expect(screen.queryByTestId("perch")).toBeNull();
+  });
+
+  it("clears the departed state when Notes removes the search box before landing", () => {
+    const { rerender } = mount(true);
+    advance(STAGE_DELAY_MS + TAKEOFF_DELAY_MS);
+    const perch = screen.getByTestId("perch");
+    tell(CORVID_AWAY_EVENT, perch);
+    rerender(<Page searching={false} visible={false} />);
+    expect(recalls).toBe(1);
+    tell(CORVID_HOME_EVENT, perch);
+    rerender(<Page searching={false} />);
+    expect(screen.queryByTestId("perch")).toBeNull();
+    expect(screen.getByTestId("box-glyph").textContent).toBe("sparkles");
   });
 
   it("ignores another perch's comings and goings", () => {

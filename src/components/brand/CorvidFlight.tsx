@@ -239,6 +239,12 @@ export const CorvidFlight = () => {
     raf.current = 0;
     const current = flight.current;
     if (!current) return;
+    // A mode switch can remove a search perch without changing the path.
+    // Stop immediately instead of flying over the newly opened view.
+    if (current.perch && !current.perch.isConnected) {
+      land();
+      return;
+    }
     // A recall that came in while the bird was still leaving its ring.
     if (current.recall) turnHome(current);
     const t = performance.now() - current.start;

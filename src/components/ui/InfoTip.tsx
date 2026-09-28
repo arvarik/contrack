@@ -23,7 +23,20 @@
  *
  * @module components/ui/InfoTip
  */
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  shift,
+} from "@floating-ui/dom";
 import { HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -66,11 +79,35 @@ export const InfoTip = ({
 }) => {
   const [openedBy, setOpenedBy] = useState<OpenedBy>(null);
   const open = openedBy !== null;
-  /** Above or below, chosen from the space actually available. */
-  const [above, setAbove] = useState(false);
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
+
+  // A heading can wrap on a phone and move an end-aligned trigger close to
+  // the left edge. Keep the whole explanation inside the visible area,
+  // using its actual height, and follow scrolling or resized content.
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    const panel = panelRef.current;
+    if (!open || !trigger || !panel) return;
+    let active = true;
+    const stop = autoUpdate(trigger, panel, () => {
+      void computePosition(trigger, panel, {
+        placement: `bottom-${align}`,
+        middleware: [offset(8), flip(), shift({ padding: 16 })],
+      }).then(({ x, y, placement }) => {
+        if (!active) return;
+        panel.style.left = `${x}px`;
+        panel.style.top = `${y}px`;
+        panel.dataset.side = placement.startsWith("top") ? "top" : "bottom";
+      });
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [open, align]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,8 +129,6 @@ export const InfoTip = ({
   }, [open]);
 
   const reveal = (by: Exclude<OpenedBy, null>) => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setAbove(window.innerHeight - rect.bottom < 140);
     setOpenedBy(by);
   };
 
@@ -145,13 +180,18 @@ export const InfoTip = ({
 
       {/* Hidden, not removed, while closed: the description reads it. */}
       <span
+        ref={panelRef}
         id={panelId}
         role="tooltip"
         hidden={!open}
+        data-side="bottom"
         className={cn(
-          "absolute z-50 w-56 max-w-[calc(100vw-2rem)]",
-          align === "end" ? "right-0" : "left-0",
-          above ? "bottom-full mb-2" : "top-full mt-2",
+          // Placement must not animate. The reduced-motion rule sets a
+          // short transition duration on every element, including top/left.
+          "absolute left-0 top-full z-50 w-56 max-w-[calc(100vw-2rem)] transition-none",
+          // Join the panel to its trigger across the 8 px visual gap. The
+          // button's hit area alone leaves a gap on a diagonal pointer move.
+          "before:absolute before:inset-x-0 before:h-2 before:content-[''] data-[side=bottom]:before:bottom-full data-[side=top]:before:top-full",
           "bg-surface-container-highest text-on-surface",
           "rounded-xl shadow-xl ring-1 ring-black/5 px-3 py-2",
           "text-[11px] leading-relaxed font-medium normal-case tracking-normal text-left text-pretty",

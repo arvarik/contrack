@@ -18,6 +18,9 @@ An older request cannot repopulate the current search cache after a contact chan
 The semantic cache (L2) keeps verified answers by question vector, with the same revision in each entry.
 An edit or a merge bumps the revision, so no older entry matches a later question.
 Each entry also carries the facets, the provider and model, and the question's entity key, and one account never reads another's.
+The constraint key preserves word order and comparison operators after proven facets and leading request words are removed.
+This rejects similar vectors for different questions, including opposite career transitions and changed logical operators.
+The cache lookup rechecks the revision after embedding to reject stale answers after an edit during that wait.
 
 Automatic contact refreshes use local embeddings of saved fields.
 Contact edits no longer request AI keyword expansion. The migration clears older inferred expansion terms.

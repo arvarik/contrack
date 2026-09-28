@@ -13,6 +13,8 @@
 // - the same facets and the same answer source (provider and model);
 // - the same entity key: the set of capitalized words, numbers, quoted
 //   phrases and email addresses in the question;
+// - the same ordered constraint text and comparison operators after proven
+//   facets and leading request words are removed;
 // - a cosine similarity of 0.97 or more between the two query vectors.
 //
 // Measured on the built-in MiniLM model: word-order paraphrases score 0.96 to
@@ -41,11 +43,13 @@ export interface SemanticKey {
   answeredBy: string;
   /** `entityKey` of the question. */
   entities: string;
+  /** Ordered constraint text after deterministic facets and request wording. */
+  constraints: string;
   /** The question's vector, from the local stage. */
   vector: Float32Array;
 }
 
-/** A cosine this high between two questions makes them the same question. */
+/** Minimum similarity after the constraint, entity and scope checks pass. */
 export const SEMANTIC_THRESHOLD = 0.97;
 
 /** How long an answer stays reusable. */
@@ -160,6 +164,27 @@ export function entityKey(question: string): string {
   return [...entities].sort().join("|");
 }
 
+/**
+ * Keep the order and operators of the remaining question.
+ *
+ * MiniLM scores "AI and machine learning" against "AI or machine learning"
+ * above 0.97. It also confuses opposite career transitions. Similar vectors
+ * therefore cannot authorize a different constraint. Only leading request
+ * wording is ignored. The caller removes proven facets first, so a place
+ * can move within a question without changing this key.
+ */
+export function constraintKey(question: string, remainder = question): string {
+  let text = fold(remainder).replace(/\s+/g, " ").trim();
+  text = text
+    .replace(/^please /, "")
+    .replace(/^(?:find|show|list|give)(?: me)? /, "")
+    .replace(/^(?:who|which people|people who|contacts who)(?: are| is)? /, "");
+  // The facet parser tokenizes words, so preserve operators from the
+  // original question too. Otherwise "> 10" and "< 10" become identical.
+  const operators = question.match(/[^\p{L}\p{M}\p{N}\s.,?？'’"-]/gu) ?? [];
+  return JSON.stringify([text.replace(/[?？]+$/, "").trim(), operators]);
+}
+
 function norm(vector: Float32Array): number {
   let sum = 0;
   for (let i = 0; i < vector.length; i++) sum += vector[i] * vector[i];
@@ -204,6 +229,7 @@ export function getSemanticAnswer<T>(scope: Scope, key: SemanticKey): T | null {
       entry.facets !== key.facets ||
       entry.answeredBy !== key.answeredBy ||
       entry.entities !== key.entities ||
+      entry.constraints !== key.constraints ||
       entry.vector.length !== key.vector.length
     )
       continue;

@@ -61,7 +61,7 @@ vi.mock(
       typeof import("../../server/services/search/localEmbeddings.ts")
     >()),
     isSearchEmbeddingReady: () => true,
-    embedText: async (text: string) => questions.get(text) ?? null,
+    embedText: vi.fn(async (text: string) => questions.get(text) ?? null),
   }),
 );
 
@@ -71,13 +71,18 @@ import { resolveEmbeddings } from "../../server/ai/embeddings.ts";
 import { sqlite } from "../../server/db.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
 import { searchService } from "../../server/services/searchService.ts";
-import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import {
+  embedText,
+  upsertSearchEmbeddings,
+} from "../../server/services/search/localEmbeddings.ts";
 import {
   SEMANTIC_THRESHOLD,
   entityKey,
+  constraintKey,
   semanticEntryCount,
 } from "../../server/services/search/semanticCache.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
+import { setPairScorer } from "../../server/services/search/crossEncoder.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, localOwnerId, resetAccounts } from "./tenancy/helpers.ts";
 
@@ -107,7 +112,7 @@ const cosine = (a: Float32Array, b: Float32Array) => {
 // Munich apart from Berlin.
 const ASKED = "Berlin startup founders";
 /** The same question in other words, at cosine 0.995. */
-const REWORDED = "founders of Berlin startups";
+const REWORDED = "Who are Berlin startup founders?";
 /** Another city at the same cosine. Only the entity key tells them apart. */
 const OTHER_CITY = "Munich startup founders";
 questions.set(ASKED, vector({ 0: 1 }));
@@ -128,9 +133,14 @@ const modelCalls = () => vi.mocked(generateFor).mock.calls.length;
  * The planner answers with a plan the database proves: founders in the city
  * the question names.
  */
-function scriptPlanner(): void {
+function scriptPlanner(verifyEmpty = false): void {
   vi.mocked(generateFor).mockImplementation(
     async (_capability, options: GatewayOptions) => {
+      if (
+        verifyEmpty &&
+        options.systemPrompt?.includes("precise CRM data analyst")
+      )
+        return { text: "[]", model: "fixture", latencyMs: 1 };
       if (!options.systemPrompt?.includes("query planner"))
         throw new Error("Only the planner is scripted");
       const plan: QueryPlan = {
@@ -178,10 +188,14 @@ beforeEach(() => {
   aiCache.invalidateAll();
   vi.mocked(generateFor).mockReset();
   scriptPlanner();
+  vi.mocked(embedText)
+    .mockReset()
+    .mockImplementation(async (text: string) => questions.get(text) ?? null);
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  setPairScorer(null);
 });
 
 describe("the setup", () => {
@@ -242,6 +256,38 @@ describe("L1 and L2 answer a repeated question", () => {
 });
 
 describe("a contact edit", () => {
+  it("refreshes the AI-off list after a deletion during local scoring", async () => {
+    const ids = await seedLocal();
+    let started!: () => void;
+    let release!: () => void;
+    const scoring = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    setPairScorer(async ({ docs }) => {
+      started();
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return docs.map((_, index) => -index);
+    });
+    const pending = searchService.semanticSearch(
+      scope(),
+      "who are the startup founders in Berlin",
+      "edited-list",
+      undefined,
+      { aiAllowed: false },
+    );
+    await scoring;
+    sqlite
+      .prepare("DELETE FROM contacts WHERE id = ?")
+      .run(ids.get("Ada Okafor"));
+    release();
+    const result = await pending;
+    expect(result.fallback).toBe(true);
+    expect(names(result)).not.toContain("Ada Okafor");
+    expect(names(result)).toContain("Bea Okafor");
+  });
+
   it("makes L1 miss", async () => {
     const ids = await seedLocal();
     await ask(ASKED);
@@ -312,6 +358,107 @@ describe("a merge", () => {
 });
 
 describe("the entity guard", () => {
+  it.each([
+    [
+      "people interested in ai and machine learning",
+      "people interested in ai or machine learning",
+    ],
+    ["engineers who became founders", "founders who became engineers"],
+    ["berlin startup founders", "munich startup founders"],
+    ["people who like climbing", "people who do not like climbing"],
+    [
+      "founders with > 10 years of experience",
+      "founders with < 10 years of experience",
+    ],
+  ])(
+    "does not reuse an answer when constraints change: %s",
+    async (firstQuery, nextQuery) => {
+      await seedLocal();
+      scriptPlanner(true);
+      questions.set(firstQuery, vector({ 0: 1 }));
+      questions.set(nextQuery, vector({ 0: 1, 1: 0.1 }));
+      expect((await ask(firstQuery)).fallback).toBe(false);
+      expect(semanticEntryCount(localOwnerId())).toBe(1);
+      const calls = modelCalls();
+      expect((await ask(nextQuery)).cached).toBeFalsy();
+      expect(modelCalls()).toBeGreaterThan(calls);
+    },
+  );
+
+  it("keeps constraint order and logical operators in the cache key", () => {
+    expect(constraintKey("Please show me Berlin startup founders?")).toBe(
+      constraintKey("Who are Berlin startup founders"),
+    );
+    expect(constraintKey("engineers who became founders")).not.toBe(
+      constraintKey("founders who became engineers"),
+    );
+    expect(constraintKey("ai and machine learning")).not.toBe(
+      constraintKey("ai or machine learning"),
+    );
+  });
+
+  it("reuses a safe rewording when a proven place facet moves", async () => {
+    await seedLocal();
+    const first = "who in Berlin are startup founders";
+    const second = "who are startup founders in Berlin";
+    questions.set(first, vector({ 0: 1 }));
+    questions.set(second, vector({ 0: 1, 1: 0.1 }));
+    await ask(first);
+    const calls = modelCalls();
+    expect((await ask(second)).cached).toBe(true);
+    expect(modelCalls()).toBe(calls);
+  });
+
+  it("does not serve a cached contact deleted while the query vector waits", async () => {
+    const ids = await seedLocal();
+    await ask(ASKED);
+    let release!: (vector: Float32Array) => void;
+    vi.mocked(embedText).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = ask(REWORDED);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    sqlite
+      .prepare("DELETE FROM contacts WHERE id = ?")
+      .run(ids.get("Ada Okafor"));
+    release(questions.get(REWORDED)!);
+    const result = await pending;
+    expect(result.cached).toBeFalsy();
+    expect(names(result)).not.toContain("Ada Okafor");
+  });
+
+  it("continues with keyword search when the local embedding worker stalls", async () => {
+    await seedLocal();
+    vi.mocked(embedText).mockImplementation(() => new Promise(() => {}));
+    const result = await ask(ASKED);
+    expect(result.fallback).toBe(false);
+    expect(names(result)).toEqual(["Ada Okafor", "Bea Okafor"]);
+    // The shared failure must not start another embedding from retrieval.
+    expect(embedText).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(embedText).mock.calls[0][1]?.aborted).toBe(true);
+  });
+
+  it("stops a cancelled search while the local embedding worker stalls", async () => {
+    await seedLocal();
+    const controller = new AbortController();
+    vi.mocked(embedText).mockImplementation(() => new Promise(() => {}));
+    const pending = searchService.semanticSearch(
+      scope(),
+      ASKED,
+      "cancel",
+      controller.signal,
+    );
+    const rejected = expect(pending).rejects.toThrow("Stopped by caller");
+    await vi.waitFor(() => expect(embedText).toHaveBeenCalledOnce());
+    controller.abort(new Error("Stopped by caller"));
+    await rejected;
+    expect(modelCalls()).toBe(0);
+    expect(semanticEntryCount(localOwnerId())).toBe(0);
+  });
+
   it("does not answer a question about Munich from one about Berlin", async () => {
     await seedLocal();
     await ask(ASKED);

@@ -351,6 +351,10 @@ describe("asking the same question again", () => {
 
     ask(QUESTION);
     await screen.findByText("Search failed");
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Refresh results" }),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await screen.findByText("Ada Lovelace");

@@ -289,13 +289,24 @@ export async function runOnWorker<T>(
   fallback: () => Promise<T>,
   translate: (result: JobResult) => T,
   onProgress?: ProgressFn,
+  signal?: AbortSignal,
 ): Promise<T> {
+  signal?.throwIfAborted();
   if (disabled || forceFallback) return fallback();
 
   try {
-    const { result } = submit(job, onProgress);
-    return translate(await result);
+    const { id, result } = submit(job, onProgress);
+    const cancel = () => cancelJob(id);
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      const payload = await result;
+      signal?.throwIfAborted();
+      return translate(payload);
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+    }
   } catch (err: unknown) {
+    signal?.throwIfAborted();
     if (getErrorMessage(err) === CANCELLED) throw err;
 
     // The model is already loaded somewhere in this process, so running in

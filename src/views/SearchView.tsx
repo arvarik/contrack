@@ -496,6 +496,7 @@ export const SearchView = () => {
                     key="searching"
                     ref={flight.areaRef}
                     still={flight.still}
+                    aiAllowed={aiAllowed}
                   />
                 ) : null
               ) : results.length > 0 ? (

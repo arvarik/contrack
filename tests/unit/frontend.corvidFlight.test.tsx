@@ -218,6 +218,30 @@ describe("CorvidFlight", () => {
     expect(perchBird().style.visibility).toBe("");
   });
 
+  it("lands when a mode switch removes its perch on the same route", () => {
+    const { rerender } = mount();
+    fly();
+    const departed = screen.getByTestId("perch");
+    const homes: Element[] = [];
+    const onHome = (event: Event) =>
+      homes.push((event as CustomEvent).detail.perch);
+    window.addEventListener(CORVID_HOME_EVENT, onHome);
+    try {
+      rerender(
+        <MemoryRouter>
+          {null}
+          <CorvidFlight />
+          <GoElsewhere />
+        </MemoryRouter>,
+      );
+      advance(20);
+      expect(overlay()).toBeNull();
+      expect(homes).toEqual([departed]);
+    } finally {
+      window.removeEventListener(CORVID_HOME_EVENT, onHome);
+    }
+  });
+
   it("comes home by a short way when asked again while out", () => {
     mount();
     fly();

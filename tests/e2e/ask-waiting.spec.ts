@@ -101,6 +101,63 @@ async function expectInCorner(page: Page, name: string) {
 }
 
 test.describe("the wait for AI", () => {
+  test("discards an incomplete answer and retries the same question", async ({
+    page,
+    seed,
+  }) => {
+    await page.route("**/api/search/semantic", (route) =>
+      route.fulfill({
+        contentType: "application/x-ndjson",
+        body:
+          JSON.stringify({
+            phase: "instant",
+            matches: [personMatch(seed.byName("Linus Torvalds"))],
+            fallback: true,
+          }) + "\n",
+      }),
+    );
+    await ask(page);
+    await expect(page.getByRole("alert")).toContainText("Search failed");
+    await expect(card(page, "Linus Torvalds")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Refresh results" }),
+    ).toHaveCount(0);
+    await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))]);
+    await page.getByRole("button", { name: "Retry" }).click();
+    await expect(card(page, "Ada Lovelace")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(status(page)).toHaveText(`1 match for “${QUESTION}”.`);
+  });
+
+  test("describes local search without claiming AI use when AI is off", async ({
+    page,
+    seed,
+  }) => {
+    await page.route("**/api/auth/preferences", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...body,
+          preferences: { ...body.preferences, aiAssist: false },
+        },
+      });
+    });
+    await streamPeopleSearch(page, {
+      instant: [],
+      complete: [personMatch(seed.byName("Ada Lovelace"))],
+      fallback: true,
+    });
+    await ask(page);
+    await expect(stage(page)).toContainText(
+      "Finding people who fit your question",
+    );
+    await expect(stage(page)).not.toContainText("AI is checking");
+    await releasePeopleSearch(page);
+    await expect(card(page, "Ada Lovelace")).toBeVisible();
+  });
+
   test("keeps back the list AI has not checked, and shows AI's answer", async ({
     page,
     seed,
@@ -167,6 +224,27 @@ test.describe("the wait for AI", () => {
 test.describe("the bird while AI works", () => {
   test.use({ reducedMotion: "no-preference" });
 
+  test("stops the flight when Notes replaces the search box", async ({
+    page,
+    seed,
+  }) => {
+    await streamPeopleSearch(page, {
+      instant: [],
+      complete: [personMatch(seed.byName("Ada Lovelace"))],
+    });
+    await ask(page);
+    await expect(overlay(page)).toHaveCount(1);
+    const modes = page.getByRole("radiogroup", { name: "What to search" });
+    await modes.getByRole("radio", { name: "Notes", exact: true }).click();
+    await expect(overlay(page)).toHaveCount(0);
+    await releasePeopleSearch(page);
+    await modes.getByRole("radio", { name: "People", exact: true }).click();
+    await expect(card(page, "Ada Lovelace")).toBeVisible();
+    await expect(page.locator('form[role="search"] [data-bird]')).toHaveCount(
+      0,
+    );
+  });
+
   test("leaves the search box, hunts over the empty results, and comes home with the answer", async ({
     page,
     seed,
@@ -204,6 +282,70 @@ test.describe("the bird while AI works", () => {
 });
 
 test.describe("a list AI did not check", () => {
+  test("keeps a hovered explanation open while the pointer enters it", async ({
+    page,
+    seed,
+  }) => {
+    await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))], {
+      fallback: true,
+    });
+    await ask(page);
+    const trigger = mark(page, "Ada Lovelace");
+    const tip = tipOf(page, "Ada Lovelace");
+    for (const height of [900, 360]) {
+      await page.setViewportSize({ width: 1280, height });
+      await trigger.hover();
+      await expect(tip).toBeVisible();
+      // Floating UI places the panel asynchronously. Measure only after the
+      // first placement, and read both boxes together before moving.
+      const side = height === 900 ? "bottom" : "top";
+      await expect
+        .poll(() =>
+          trigger.evaluate((button, side) => {
+            const panel = document.getElementById(
+              button.getAttribute("aria-describedby")!,
+            )!;
+            const triggerBox = button.getBoundingClientRect();
+            const tipBox = panel.getBoundingClientRect();
+            const gap =
+              side === "bottom"
+                ? tipBox.top - triggerBox.bottom
+                : triggerBox.top - tipBox.bottom;
+            return (
+              Math.abs(gap - 8) < 1 &&
+              Math.abs(tipBox.right - triggerBox.right) < 1
+            );
+          }, side),
+        )
+        .toBe(true);
+      const { triggerBox, tipBox } = await trigger.evaluate((button) => {
+        const panel = document.getElementById(
+          button.getAttribute("aria-describedby")!,
+        )!;
+        return {
+          triggerBox: button.getBoundingClientRect().toJSON(),
+          tipBox: panel.getBoundingClientRect().toJSON(),
+        };
+      });
+      // Cross the gap slowly. A person must be able to move onto a tooltip
+      // to read it with a magnifier or to select its text.
+      const gapY =
+        side === "bottom"
+          ? (triggerBox.bottom + tipBox.top) / 2
+          : (triggerBox.top + tipBox.bottom) / 2;
+      await page.mouse.move(triggerBox.x + triggerBox.width / 2, gapY);
+      await expect(tip).toBeVisible();
+      await page.mouse.move(
+        tipBox.x + tipBox.width / 2,
+        side === "bottom" ? tipBox.top + 10 : tipBox.bottom - 10,
+        { steps: 12 },
+      );
+      await expect(tip).toBeVisible();
+      await page.mouse.move(8, 8);
+      await expect(tip).toBeHidden();
+    }
+  });
+
   test("says so over the list, and each card's question mark explains itself", async ({
     page,
     seed,
@@ -295,6 +437,24 @@ test.describe("a list AI did not check", () => {
 
 test.describe("on a phone", () => {
   test.use({ ...PHONE, viewport: { width: 390, height: 844 } });
+
+  test("keeps the list explanation inside the phone viewport", async ({
+    page,
+    seed,
+  }) => {
+    await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))], {
+      fallback: true,
+    });
+    await ask(page);
+    await page
+      .getByRole("button", { name: "Why these results are not verified by AI" })
+      .tap();
+    const tip = page.getByRole("tooltip").filter({
+      hasText: "AI could not check these people this time",
+    });
+    await expect(tip).toBeVisible();
+    await expectInWindow(page, tip);
+  });
 
   test("a tap opens the question mark once, and a tap elsewhere closes it", async ({
     page,

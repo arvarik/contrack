@@ -22,7 +22,7 @@ import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 
 const {
   __maxInFlight,
@@ -200,6 +200,25 @@ describe("the worker thread", () => {
 // ---------------------------------------------------------------------------
 
 describe("cancelling", () => {
+  it("cancels an embedding queued through runOnWorker without starting a fallback", async () => {
+    const controller = new AbortController();
+    const fallback = vi.fn(async () => "fallback");
+    const value = runOnWorker(
+      { kind: "embed", texts: ["must never load a model"], batchSize: 8 },
+      fallback,
+      () => "worker",
+      undefined,
+      controller.signal,
+    );
+    controller.abort(new Error("Query deadline"));
+    await expect(value).rejects.toThrow("Query deadline");
+    expect(fallback).not.toHaveBeenCalled();
+    expect(isModelSpent()).toBe(false);
+    await expect(
+      startJob({ kind: "embed", texts: [], batchSize: 8 }).result,
+    ).resolves.toMatchObject({ kind: "embed" });
+  });
+
   it("drops a job that is still queued, without sending it", async () => {
     // Submitting chains through microtasks and `cancelJob` is synchronous, so
     // the second job is certainly still in the queue here. That is what makes

@@ -283,6 +283,25 @@ describe("the neighbours of real vectors", () => {
 });
 
 describe("the scale", () => {
+  it("intersects planner candidates and facets inside one KNN constraint", () => {
+    contact("kept");
+    contact("planner-only");
+    contact("facet-only");
+    contact("other-owner", otherOwner);
+    const ids = ["kept", "planner-only", "facet-only", "other-owner"];
+    upsertSearchEmbeddings(
+      ids.map((contactId, i) => ({ contactId, embedding: spread(i + 1) })),
+    );
+    const found = findSearchNeighbors(
+      scopeForOwnerId(owner),
+      spread(1),
+      10,
+      new Set(["kept", "planner-only", "other-owner"]),
+      { sql: "c.id != ?", params: ["planner-only"] },
+    );
+    expect(found.map((row) => row.contactId)).toEqual(["kept"]);
+  });
+
   it("comes from every vector of the first write to an empty table", () => {
     contact("a");
     contact("b");

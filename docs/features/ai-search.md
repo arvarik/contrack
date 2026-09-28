@@ -458,7 +458,7 @@ research calls and answered with nothing.
 
 L1 answers a question typed the same way twice. L2
 (`server/services/search/semanticCache.ts`) answers the same question asked
-in other words, such as "founders of Berlin startups" after "Berlin startup
+in other words, such as "who are Berlin startup founders" after "Berlin startup
 founders", with no model call. It keeps the verified answers of the last 5
 minutes, at most 100 per account, with the question's vector. A new
 question reuses one when all of these hold:
@@ -469,6 +469,8 @@ question reuses one when all of these hold:
 - the same entity key: the capitalized words, numbers, quoted phrases and
   email addresses of the question, with case and accents folded, and without
   the words that only ask ("Who", "Find", "I");
+- the same ordered constraint text after leading request words and proven
+  facets are removed, with comparison operators preserved;
 - a cosine similarity of 0.97 or more between the two question vectors.
 
 The entity key keeps "founders in Munich" from the answer to "founders in
@@ -477,13 +479,23 @@ city swaps score 0.79 to 0.85 and word-order paraphrases 0.96 to 0.99. The
 threshold holds for the built-in model only, so a provider's embedding
 model leaves L2 off. The question is embedded once, in about 1 ms, before
 the planner starts, and the local list and the planner stage read the same
-vector.
+vector. A local embedding wait stops after 100 ms when the CPU worker is
+busy. Search then uses keywords. It does not retry the failed embedding.
+
+Similarity alone does not prove that two questions mean the same thing.
+The built-in model scores opposite career transitions above 0.97. It also
+confuses "AI and machine learning" with "AI or machine learning".
+The constraint key rejects these hits and lower-case entity changes.
+Moving a proven place facet remains safe. Other word-order changes require
+a fresh answer, even when a person considers them equivalent.
 
 An answer is kept only when a model or the database verified it. A hit goes
 into L1 for its exact words, but not into L2 again, so a chain of near
 questions cannot drift away from the one that was answered. An edit or a
 merge bumps the revision, and every older entry stops matching. A change of
 AI settings empties both tiers.
+The lookup checks the revision again after embedding, so an edit during
+that wait cannot return an older cached contact.
 
 ### Query Examples
 

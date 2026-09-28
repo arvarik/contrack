@@ -59,6 +59,7 @@ export interface CorvidSearchFlight {
 export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
   const level = useCorvidLevel();
   const perchRef = useRef<HTMLSpanElement | null>(null);
+  const departedPerchRef = useRef<Element | null>(null);
   const areaRef = useRef<HTMLDivElement | null>(null);
   const [staged, setStaged] = useState(false);
   const [out, setOut] = useState(false);
@@ -78,11 +79,19 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
   useEffect(() => {
     const onAway = (event: Event) => {
       const perch = (event as CustomEvent<CorvidPerchDetail>).detail?.perch;
-      if (perch && perch === perchRef.current) setOut(true);
+      if (perch && perch === perchRef.current) {
+        departedPerchRef.current = perch;
+        setOut(true);
+      }
     };
     const onHome = (event: Event) => {
       const perch = (event as CustomEvent<CorvidPerchDetail>).detail?.perch;
-      if (perch && perch === perchRef.current) setOut(false);
+      // Switching to Notes removes the search box before the bird lands.
+      // Match the departure, not the current ref, which can now be null.
+      if (perch && perch === departedPerchRef.current) {
+        departedPerchRef.current = null;
+        setOut(false);
+      }
     };
     window.addEventListener(CORVID_AWAY_EVENT, onAway);
     window.addEventListener(CORVID_HOME_EVENT, onHome);
@@ -134,6 +143,8 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
 export interface SearchingStageProps {
   /** No flight: show a larger bird in the middle of the stage. */
   still: boolean;
+  /** False when the account uses local search without an AI provider. */
+  aiAllowed?: boolean;
 }
 
 /**
@@ -141,7 +152,7 @@ export interface SearchingStageProps {
  * page's status region says the same, so the words here are not announced.
  */
 export const SearchingStage = forwardRef<HTMLDivElement, SearchingStageProps>(
-  function SearchingStage({ still }, ref) {
+  function SearchingStage({ still, aiAllowed = true }, ref) {
     return (
       <div
         ref={ref}
@@ -155,7 +166,9 @@ export const SearchingStage = forwardRef<HTMLDivElement, SearchingStageProps>(
           Searching your network…
         </p>
         <p className="text-xs text-on-surface-variant">
-          AI is checking who fits your question
+          {aiAllowed
+            ? "AI is checking who fits your question"
+            : "Finding people who fit your question"}
         </p>
       </div>
     );

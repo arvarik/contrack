@@ -26,6 +26,7 @@ import {
 } from "./search/hybridRetrieval.ts";
 import {
   entityKey,
+  constraintKey,
   getSemanticAnswer,
   setSemanticAnswer,
   type SemanticKey,
@@ -665,6 +666,7 @@ async function runSearch(
     ? Math.max(PHASE1_LIMIT, reorder.count)
     : PHASE1_LIMIT;
   const localList = async (queryVector?: Float32Array | null) => {
+    const listRevision = searchRevision(scope);
     const local = await localRetrieval(scope, text, {
       intent,
       limit: listLength,
@@ -683,6 +685,29 @@ async function runSearch(
     const ordered = reorder
       ? await rerankLocal(text, fused, rerankBudgetMs(), reorder)
       : fused;
+    if (reorder && searchRevision(scope) !== listRevision) {
+      // Scoring yields after hydration. An edit can remove a contact or
+      // change its fields during that wait. Rebuild from current keywords,
+      // without another asynchronous model stage before returning the rows.
+      const fresh = await localRetrieval(scope, text, {
+        intent,
+        limit: PHASE1_LIMIT,
+        queryVector: null,
+        aiAllowed,
+        facets,
+        rrfK: options.rrfK,
+      });
+      return {
+        local: fresh,
+        matches: unverified([
+          ...hydrateCandidates(
+            scope,
+            fresh.candidates.map((c) => c.contactId),
+            PHASE1_LIMIT,
+          ).values(),
+        ]),
+      };
+    }
     return { local, matches: unverified(ordered.slice(0, PHASE1_LIMIT)) };
   };
   if (!models) {
@@ -695,7 +720,7 @@ async function runSearch(
 
   // The question is embedded once. The local list and the model stage read
   // the same vector, and so does L2, the semantic cache.
-  const queryVector = embedQuery(scope, text, aiAllowed);
+  const queryVector = embedQuery(scope, text, aiAllowed, signal);
 
   // L2 answers a question asked in other words, with no model call. Its
   // 0.97 threshold was measured on the built-in model, so a provider's
@@ -703,12 +728,16 @@ async function runSearch(
   // The built-in model takes about a millisecond.
   if (resolveEmbeddings().kind === "builtin") {
     const vector = await queryVector;
-    if (vector) {
+    signal?.throwIfAborted();
+    // Embedding yields to other requests. An edit during that wait makes
+    // every answer under the starting revision stale, including an L2 hit.
+    if (vector && searchRevision(scope) === revision) {
       semanticKey = {
         revision,
         facets: facetKey(allFilters),
         answeredBy,
         entities: entityKey(text),
+        constraints: constraintKey(text, implicit.remainder),
         vector,
       };
       const hit = getSemanticAnswer<SearchResult>(scope, semanticKey);

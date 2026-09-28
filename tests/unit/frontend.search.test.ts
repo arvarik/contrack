@@ -53,6 +53,7 @@ describe("search streaming", () => {
     expect(hook.current.isError).toBe(true);
     expect(hook.current.isPending).toBe(false);
     expect(hook.current.phase).toBe("done");
+    expect(hook.current.data).toBeNull();
   });
   it("reports malformed chunks instead of silently dropping them", async () => {
     vi.stubGlobal(
@@ -69,6 +70,30 @@ describe("search streaming", () => {
     });
     expect(hook.current.isError).toBe(true);
     expect(hook.current.isSuccess).toBe(false);
+  });
+
+  it("discards a partial session answer when navigation cancels the search", async () => {
+    const pending = stream();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pending.response));
+    const setData = vi.fn();
+    const setPhase = vi.fn();
+    const { result: hook, unmount } = renderHook(() =>
+      useSemanticSearch({ data: null, setData, phase: "idle", setPhase }),
+    );
+    let work!: Promise<void>;
+    act(() => {
+      work = hook.current.mutate("Alice");
+    });
+    await act(async () => {
+      pending.push(result("Alice", "instant") + "\n");
+    });
+    expect(setData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ matches: [{ id: "Alice", name: "Alice" }] }),
+    );
+    unmount();
+    await work;
+    expect(setData).toHaveBeenLastCalledWith(null);
+    expect(setPhase).toHaveBeenLastCalledWith("idle");
   });
   it("ignores late responses from a replaced search", async () => {
     const first = stream();
