@@ -1,0 +1,103 @@
+// =============================================================================
+// SSRF guard — the connect-time lookup that closes the rebinding hole
+// =============================================================================
+// assertPublicHttpUrl resolves a hostname, checks it, and then fetch resolves
+// the SAME name again to dial the socket. Two queries, two answers: a hostile
+// DNS server passes the check with a public address and serves the connect a
+// private one. guardedLookup runs INSIDE the dialing resolver, so the address
+// it validates is the address the socket uses.
+// =============================================================================
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("dns", () => ({ lookup: lookupMock, default: { lookup: lookupMock } }));
+
+const { guardedLookup } = await import("../../../../server/utils/urlSafety.ts");
+
+/** Drive guardedLookup and capture what it reports to the socket layer. */
+function resolve(
+  hostname: string,
+): Promise<{ err: NodeJS.ErrnoException | null; address: unknown }> {
+  return new Promise((res) => {
+    guardedLookup(hostname, {}, (err, address) => res({ err, address }));
+  });
+}
+
+beforeEach(() => {
+  lookupMock.mockReset();
+});
+
+describe("guardedLookup", () => {
+  it.each([
+    // The rebinding scenario: the check earlier saw a public address, and by
+    // connect time the attacker's DNS answers with loopback.
+    "127.0.0.1",
+    "10.0.0.8",
+    "192.168.1.20",
+    "169.254.169.254",
+    "::1",
+    // IPv6 forms that EMBED a private IPv4 — the guard must see through the
+    // wrapping. The metadata address in ::ffff: form walked past the old
+    // three-prefix check; found by the independent v1.5.4 review.
+    "::ffff:169.254.169.254",
+    "::ffff:172.16.0.9",
+    "::ffff:100.64.0.1",
+    "::ffff:a9fe:a9fe", // 169.254.169.254 in hex-group form
+    "64:ff9b::a9fe:a9fe", // NAT64 well-known prefix wrapping the same
+  ])("blocks %s", async (address) => {
+    lookupMock.mockImplementation((_h, _o, cb) =>
+      cb(null, address, address.includes(":") ? 6 : 4),
+    );
+    const { err } = await resolve("internal.example");
+    expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
+  });
+
+  it.each(["93.184.216.34", "2606:4700:4700::1111", "::ffff:8.8.8.8"])(
+    "passes public %s through untouched",
+    async (address) => {
+      lookupMock.mockImplementation((_h, _o, cb) =>
+        cb(null, address, address.includes(":") ? 6 : 4),
+      );
+      const { err, address: passed } = await resolve("public.example");
+      expect(err).toBeNull();
+      expect(passed).toBe(address);
+    },
+  );
+
+  it("propagates resolver failures", async () => {
+    const boom: NodeJS.ErrnoException = new Error("ENOTFOUND");
+    boom.code = "ENOTFOUND";
+    lookupMock.mockImplementation((_h, _o, cb) => cb(boom, ""));
+    const { err } = await resolve("nxdomain.example");
+    expect(err?.code).toBe("ENOTFOUND");
+  });
+
+  it("validates every address of an all:true answer, not just the first", async () => {
+    // net asks with all:true and dials its own pick from the set. One clean
+    // address in front of a private one must not pass — the socket may
+    // choose the private one.
+    lookupMock.mockImplementation((_h, _o, cb) =>
+      cb(null, [
+        { address: "93.184.216.34", family: 4 },
+        { address: "10.0.0.8", family: 4 },
+      ]),
+    );
+    const { err } = await resolve("mixed.example");
+    expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
+  });
+
+  it("passes a clean all:true answer through in array form", async () => {
+    // net reads addresses[0].address — collapsing the array to a string
+    // breaks the socket layer (ERR_INVALID_IP_ADDRESS), which is how the
+    // first version of this guard failed against a real host.
+    const answer = [
+      { address: "93.184.216.34", family: 4 },
+      { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+    ];
+    lookupMock.mockImplementation((_h, _o, cb) => cb(null, answer));
+    const { err, address } = await resolve("example.com");
+    expect(err).toBeNull();
+    expect(address).toEqual(answer);
+  });
+});
