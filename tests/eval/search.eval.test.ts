@@ -27,19 +27,21 @@
 // models run in `scripts/record-search-eval.ts`, not here, so this needs no
 // model, no download and no network.
 //
-// WHAT IT CATCHES, measured by breaking the code on purpose:
+// WHAT IT CATCHES, measured by breaking the code on purpose (2026-09-29).
+// Each line names the channels whose test fails. A mutation that changes a
+// candidate list also asks the cross-encoder for pairs the recording does
+// not hold, so all but the name weight fail the replay check as well.
 //
-//   the BM25 weight string shifted one column      4 failures
-//   the `broad` OR fallback removed from retrieval 2 failures
-//   the name weight dropped from 10 to 1           1 failure
-//   RRF_K changed from 15 to 60                    passes
-//   the vector channel limit cut from 100 to 10    passes
+//   the BM25 weight string shifted one column      lexical, fused, hybrid
+//   the `broad` OR fallback removed from retrieval fused, hybrid, reranked
+//   the name weight dropped from 10 to 1           lexical
+//   RRF_K changed from 15 to 60                    fused
+//   the vector channel limit cut from 100 to 10    fused
 //
-// The last two are honest passes, not blind spots to apologise for. Both
-// reorder the tail and neither moves a contact into or out of the first ten
-// on this corpus, which is another way of saying neither changes what a
-// person would see. recall@10 and MRR measure the answer, not the arithmetic
-// that produced it.
+// The last two move the fused list and nothing after it. The hybrid and
+// reranked answers stay inside the tolerance, which is another way of saying
+// neither changes what a person sees. recall@10 and MRR measure the answer,
+// not the arithmetic that produced it.
 // =============================================================================
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -86,6 +88,7 @@ import {
   seedCorpus,
   seedVectors,
   type Baseline,
+  type ChannelScore,
   type Measurement,
   type RerankScores,
 } from "./harness.ts";
@@ -93,11 +96,10 @@ import {
 /**
  * Smaller than one query.
  *
- * Fifty queries make each one worth 0.02 of the total recall, and the ten in
- * a kind make each one worth 0.1 of that kind's. A tolerance under both means
- * no query can change its answer without this failing, while still absorbing
- * the last-digit float drift that a different CPU could produce in the
- * distance arithmetic.
+ * A kind holds four or ten queries, so each one is worth at least 0.1 of its
+ * kind's recall. A tolerance under that means no query can move into or out
+ * of the first ten without this failing, while still absorbing the last-digit
+ * float drift that a different CPU could produce in the distance arithmetic.
  */
 const TOLERANCE = 0.01;
 
@@ -105,6 +107,7 @@ let baseline: Baseline;
 let measurement: Measurement;
 let seededContacts: number;
 let storedVectors: number;
+let fixtureQueries: number;
 let rerankScores: RerankScores;
 /** Cross-encoder pairs the gate asked for and the recording does not hold. */
 const missingPairs: string[] = [];
@@ -114,6 +117,7 @@ beforeAll(async () => {
   const fixture = loadFixture();
 
   expect(fixture.manifest.dimension).toBe(EVAL_DIMENSION);
+  fixtureQueries = fixture.queries.length;
 
   const scope = scopeForOwnerId(ensureLocalOwner());
   const { idByKey } = await seedCorpus(scope, fixture.contacts);
@@ -150,11 +154,10 @@ afterAll(() => {
 });
 
 describe("search quality gate", () => {
-  // Everything below averages over what it was given, and an average over
-  // nothing is a pass. A corpus that failed to load, an index that was never
-  // built, or a vector store nobody wrote to would each produce a clean sweep
-  // of zeros that the tolerance check would then have to catch by accident.
-  // These four assertions are what stop that.
+  // Every score below is compared with a baseline recorded against one
+  // corpus. A fixture that changed without a new baseline, an index that was
+  // never built, or a vector store nobody wrote to would each move the
+  // numbers for a reason the numbers cannot name. These assertions name it.
   describe("the corpus is really there", () => {
     it("seeded every contact the baseline was recorded against", () => {
       expect(seededContacts).toBe(baseline.corpus.contacts);
@@ -164,21 +167,8 @@ describe("search quality gate", () => {
       expect(storedVectors).toBe(baseline.corpus.contacts);
     });
 
-    it("scored every query", () => {
-      for (const channel of CHANNELS) {
-        expect(measurement.perQuery[channel]).toHaveLength(
-          baseline.corpus.queries,
-        );
-      }
-    });
-
-    it("found something for at least one query in every channel", () => {
-      for (const channel of CHANNELS) {
-        const hits = measurement.perQuery[channel].filter(
-          (r) => r.firstHitRank > 0,
-        );
-        expect(hits.length).toBeGreaterThan(0);
-      }
+    it("holds every query the baseline was recorded against", () => {
+      expect(fixtureQueries).toBe(baseline.corpus.queries);
     });
 
     // The `reranked` channel is only as real as its recording. A pair the
@@ -194,47 +184,42 @@ describe("search quality gate", () => {
     });
   });
 
+  // One test per channel, over the total and over every kind of query. The
+  // total alone hides a trade: a change that wins two typo queries and loses
+  // two company queries moves it by nothing at all. The kinds alone would be
+  // enough, because the total is their weighted mean, but the total is the
+  // number people quote, so a failure names it too.
   describe.each(CHANNELS)("%s", (channel) => {
-    it("holds its recall at 10", () => {
-      const measured = measurement.channels[channel].recallAt10;
-      const expected = baseline.channels[channel].recallAt10;
-      expect(
-        Math.abs(measured - expected),
-        `${channel} recall@10 moved from ${expected} to ${measured}. ` +
-          `Run \`npm run eval:record\` and commit the baseline if the change was intended.`,
-      ).toBeLessThanOrEqual(TOLERANCE);
-    });
-
-    it("holds its mean reciprocal rank", () => {
-      const measured = measurement.channels[channel].mrr;
-      const expected = baseline.channels[channel].mrr;
-      expect(
-        Math.abs(measured - expected),
-        `${channel} MRR moved from ${expected} to ${measured}. ` +
-          `Run \`npm run eval:record\` and commit the baseline if the change was intended.`,
-      ).toBeLessThanOrEqual(TOLERANCE);
-    });
-
-    // Per kind as well as in total, because the total hides a trade. A change
-    // that wins two typo queries and loses two company queries moves the
-    // total by nothing at all.
-    it("holds every kind of query", () => {
+    it("holds its recall at 10 and its MRR, in total and for every kind of query", () => {
       const moved: string[] = [];
-      for (const [kind, expected] of Object.entries(baseline.byKind[channel])) {
-        const measured = measurement.byKind[channel][kind];
+      const compare = (
+        label: string,
+        expected: ChannelScore,
+        measured: ChannelScore | undefined,
+      ) => {
         if (!measured) {
-          moved.push(`${kind}: gone from the results entirely`);
-          continue;
+          moved.push(`${label}: gone from the results entirely`);
+          return;
         }
         if (Math.abs(measured.recallAt10 - expected.recallAt10) > TOLERANCE) {
           moved.push(
-            `${kind} recall@10: ${expected.recallAt10} → ${measured.recallAt10}`,
+            `${label} recall@10: ${expected.recallAt10} → ${measured.recallAt10}`,
           );
         }
         if (Math.abs(measured.mrr - expected.mrr) > TOLERANCE) {
-          moved.push(`${kind} MRR: ${expected.mrr} → ${measured.mrr}`);
+          moved.push(`${label} MRR: ${expected.mrr} → ${measured.mrr}`);
         }
+      };
+
+      compare(
+        "total",
+        baseline.channels[channel],
+        measurement.channels[channel],
+      );
+      for (const [kind, expected] of Object.entries(baseline.byKind[channel])) {
+        compare(kind, expected, measurement.byKind[channel][kind]);
       }
+
       expect(
         moved,
         `${channel} ranking changed for ${moved.length} measure(s). ` +

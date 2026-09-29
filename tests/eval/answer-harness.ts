@@ -13,12 +13,10 @@
 //   5. Grounded synthesis summaries & unsupported claim / hallucination detection
 // =============================================================================
 
-import crypto from "crypto";
 import { validateAnswerFixture } from "../../scripts/answer-eval/fixtureValidation.ts";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import {
   parseSearchQuery,
@@ -34,6 +32,7 @@ import type {
   AnswerQueryCategory,
   ExpectedFilterCriteria,
 } from "../../scripts/answer-eval/corpus.ts";
+import { seedWithStableIds, splitVectors, type SeededIds } from "./seeding.ts";
 
 export type {
   AnswerCorpus,
@@ -162,59 +161,27 @@ export interface AnswerFixture {
 // Seeding Helper
 // ---------------------------------------------------------------------------
 
-function deterministicId(index: number): string {
-  const h = crypto
-    .createHash("sha256")
-    .update(`contrack-answer-eval:${index}`)
-    .digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
-}
-
-export async function seedAnswerCorpus(
+/**
+ * Write the corpus into a real database under one owner, with the ids the
+ * baseline was recorded against. See `seedWithStableIds`.
+ */
+export function seedAnswerCorpus(
   scope: Scope,
   contacts: AnswerEvalContact[],
-): Promise<{ idByKey: Map<string, string>; keyById: Map<string, string> }> {
-  const realRandomUUID = crypto.randomUUID;
-  let issued = 0;
-  (crypto as { randomUUID: () => string }).randomUUID = () =>
-    deterministicId(issued++);
-
-  let createdIds: string[];
-  try {
-    ({ createdIds } = await contactService.bulkCreateContacts(
-      scope,
-      contacts.map((c) => ({
-        name: c.name,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        company: c.company,
-        role: c.role,
-        location: c.location,
-        industry: c.industry,
-        headline: c.headline,
-        about: c.about,
-        tags: c.tags,
-        interests: c.interests,
-      })),
-    ));
-  } finally {
-    (crypto as { randomUUID: typeof realRandomUUID }).randomUUID =
-      realRandomUUID;
-  }
-
-  if (createdIds.length !== contacts.length) {
-    throw new Error(
-      `Seeded ${createdIds.length} of ${contacts.length} contacts. Partial seeding invalidates the eval.`,
-    );
-  }
-
-  const idByKey = new Map<string, string>();
-  const keyById = new Map<string, string>();
-  contacts.forEach((c, i) => {
-    idByKey.set(c.key, createdIds[i]);
-    keyById.set(createdIds[i], c.key);
-  });
-  return { idByKey, keyById };
+): Promise<SeededIds> {
+  return seedWithStableIds(scope, "contrack-answer-eval", contacts, (c) => ({
+    name: c.name,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    company: c.company,
+    role: c.role,
+    location: c.location,
+    industry: c.industry,
+    headline: c.headline,
+    about: c.about,
+    tags: c.tags,
+    interests: c.interests,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -948,25 +915,6 @@ export async function measureAnswerPipeline(
 
 export function loadAnswerBaseline(): AnswerBaseline {
   return JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8")) as AnswerBaseline;
-}
-
-function splitVectors(
-  buf: Buffer,
-  count: number,
-  dimension: number,
-  from: number,
-): Float32Array[] {
-  const out: Float32Array[] = [];
-  for (let i = 0; i < count; i++) {
-    const start = (from + i) * dimension * 4;
-    const end = start + dimension * 4;
-    const bytes = buf.buffer.slice(
-      buf.byteOffset + start,
-      buf.byteOffset + end,
-    );
-    out.push(new Float32Array(bytes));
-  }
-  return out;
 }
 
 export function loadAnswerFixture(): AnswerFixture {

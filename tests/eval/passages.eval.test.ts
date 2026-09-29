@@ -1,7 +1,7 @@
 // Replay real MiniLM vectors and Gemini responses through the real passage index.
 // Refresh with: node scripts/benchmark-passages.ts --contacts 100 --record
 import { readFileSync } from "node:fs";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   passageCases,
   passageNegatives,
@@ -9,6 +9,7 @@ import {
 import { seedPassageCorpus } from "../fixtures/passage-eval/seed.ts";
 import { identifyAnswerCall } from "../../scripts/answer-eval/recording.ts";
 import type { RecordedResponses } from "./answer-harness.ts";
+import { splitVectors } from "./seeding.ts";
 
 const replay = vi.hoisted(() => ({
   vectors: new Map<string, number[]>(),
@@ -90,14 +91,8 @@ beforeAll(async () => {
   expect(manifest.dimension).toBe(384);
   expect(manifest.model).toBe("builtin/Xenova/all-MiniLM-L6-v2");
   expect(bytes.length).toBe(manifest.inputs.length * 384 * 4);
-  const floats = new Float32Array(
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-  );
-  manifest.inputs.forEach((text, i) =>
-    replay.vectors.set(
-      text,
-      Array.from(floats.subarray(i * 384, (i + 1) * 384)),
-    ),
+  splitVectors(bytes, manifest.inputs.length, 384).forEach((vector, i) =>
+    replay.vectors.set(manifest.inputs[i], Array.from(vector)),
   );
   replay.responses = JSON.parse(
     readFileSync(
@@ -112,10 +107,14 @@ beforeAll(async () => {
   expect(await backfillSearchEmbeddings()).toBe(100);
 });
 
+// Each question must reach the pipeline, not an answer cached from the last.
+beforeEach(() => {
+  aiCache.invalidateAll();
+  invalidateSearchCache();
+});
+
 describe("passage answer quality gate", () => {
   it.each(passageCases)("finds the late $field fact for $id", async (item) => {
-    aiCache.invalidateAll();
-    invalidateSearchCache();
     const result = await searchService.semanticSearch(
       scope,
       item.query,
@@ -137,8 +136,6 @@ describe("passage answer quality gate", () => {
   it.each(passageNegatives)(
     "returns no unsupported answer for %s",
     async (query) => {
-      aiCache.invalidateAll();
-      invalidateSearchCache();
       const result = await searchService.semanticSearch(
         scope,
         query,

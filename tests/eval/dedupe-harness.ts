@@ -14,11 +14,9 @@
 // measuring something else if either turns up configured.
 // =============================================================================
 
-import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import { ai } from "../../server/ai/index.ts";
-import { contactService } from "../../server/services/contactService.ts";
 import { buildPassContext } from "../../server/services/dedupe/context.ts";
 import {
   runDeterministicPass,
@@ -47,6 +45,7 @@ import {
   type Corpus,
   type EvalContact,
 } from "../../scripts/dedupe-eval/corpus.ts";
+import { seedWithStableIds, type SeededIds } from "./seeding.ts";
 
 export { buildCorpus, pairId };
 export type { Corpus, EvalContact };
@@ -71,19 +70,17 @@ export const THRESHOLDS = {
   auto: THRESHOLD_AUTO,
   /** Below this a pair is dropped rather than verified. */
   ai: THRESHOLD_AI,
-  /** Above this a pair is merged with nobody asked. */
+  /**
+   * Above this a pair is merged with nobody asked, and the cut the "at
+   * auto-merge" half of every score uses.
+   *
+   * Precision over every produced pair says how much of somebody's review
+   * queue is noise. Precision over the pairs at or above this says how often
+   * the engine merges two people who are not the same person, with nobody
+   * asked. The second is the one that loses data.
+   */
   autoMerge: DEFAULT_AUTO_MERGE_THRESHOLD,
 } as const;
-
-/**
- * The cut the "at auto-merge" half of every score uses.
- *
- * Precision over every produced pair says how much of somebody's review queue
- * is noise. Precision over the pairs at or above this says how often the
- * engine merges two people who are not the same person, with nobody asked.
- * The second is the one that loses data.
- */
-export const AUTO_MERGE_THRESHOLD = THRESHOLDS.autoMerge;
 
 /** The four routes a pair can be produced by. */
 export type PassName = "deterministic" | "funnel" | "combined" | "incremental";
@@ -127,85 +124,40 @@ export function assertDeterministicEnvironment(): void {
 // Seeding
 // ---------------------------------------------------------------------------
 
-/**
- * A contact id that is the same on every run.
- *
- * Several matchers break ties on the contact id, and the deterministic pass
- * emits `idA < idB` from a SQL self-join, so a random UUID changes which of
- * two records is the left side of a pair. That does not move precision, but
- * it does move which id a failure message names, and a gate whose failure
- * text changes between runs is a gate nobody trusts.
- */
-function deterministicId(index: number): string {
-  const h = crypto
-    .createHash("sha256")
-    .update(`contrack-dedupe-eval:${index}`)
-    .digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
-}
-
-export interface SeededCorpus {
+export interface SeededCorpus extends SeededIds {
   corpus: Corpus;
-  idByKey: Map<string, string>;
-  keyById: Map<string, string>;
 }
 
 /**
- * Write the corpus into a real database under one owner.
- *
- * Through `bulkCreateContacts`, not through INSERT: the child rows, the
- * source platform and the phonetic hash all come from the create path, and a
- * hand-written row would normalize differently from a row the product wrote.
+ * Write the corpus into a real database under one owner, with the ids the
+ * baseline was recorded against. See `seedWithStableIds`.
  */
 export async function seedCorpus(
   scope: Scope,
   corpus: Corpus,
 ): Promise<SeededCorpus> {
-  const realRandomUUID = crypto.randomUUID;
-  let issued = 0;
-  (crypto as { randomUUID: () => string }).randomUUID = () =>
-    deterministicId(issued++);
-
-  let createdIds: string[];
-  try {
-    ({ createdIds } = await contactService.bulkCreateContacts(
-      scope,
-      corpus.contacts.map((c) => ({
-        name: c.name,
-        company: c.company,
-        role: c.role,
-        location: c.location,
-        emails: c.emails,
-        phones: c.phones,
-        // Both, and they are not the same thing. `sources` writes the
-        // `contact_sources` rows the cross-source matcher reads;
-        // `_sourcePlatform` stamps provenance onto each email and phone row.
-        // Passing only the second seeded a corpus with no sources at all, so
-        // the cross-source category scored against nothing and the
-        // `isCrossSource` signal was dead for every pair.
-        sources: c.sources,
-        _sourcePlatform: c.sources[0] ?? "manual",
-      })),
-    ));
-  } finally {
-    (crypto as { randomUUID: typeof realRandomUUID }).randomUUID =
-      realRandomUUID;
-  }
-
-  if (createdIds.length !== corpus.contacts.length) {
-    throw new Error(
-      `Seeded ${createdIds.length} of ${corpus.contacts.length} contacts. ` +
-        `The eval cannot score a partial corpus.`,
-    );
-  }
-
-  const idByKey = new Map<string, string>();
-  const keyById = new Map<string, string>();
-  corpus.contacts.forEach((c, i) => {
-    idByKey.set(c.key, createdIds[i]);
-    keyById.set(createdIds[i], c.key);
-  });
-  return { corpus, idByKey, keyById };
+  const ids = await seedWithStableIds(
+    scope,
+    "contrack-dedupe-eval",
+    corpus.contacts,
+    (c) => ({
+      name: c.name,
+      company: c.company,
+      role: c.role,
+      location: c.location,
+      emails: c.emails,
+      phones: c.phones,
+      // Both, and they are not the same thing. `sources` writes the
+      // `contact_sources` rows the cross-source matcher reads;
+      // `_sourcePlatform` stamps provenance onto each email and phone row.
+      // Passing only the second seeded a corpus with no sources at all, so
+      // the cross-source category scored against nothing and the
+      // `isCrossSource` signal was dead for every pair.
+      sources: c.sources,
+      _sourcePlatform: c.sources[0] ?? "manual",
+    }),
+  );
+  return { corpus, ...ids };
 }
 
 // ---------------------------------------------------------------------------
@@ -408,7 +360,7 @@ export function scorePass(
   }
 
   for (const [id, confidence] of produced) {
-    const isAuto = confidence >= AUTO_MERGE_THRESHOLD;
+    const isAuto = confidence >= THRESHOLDS.autoMerge;
     if (truth.has(id)) {
       truePositives++;
       if (isAuto) autoTruePositives++;

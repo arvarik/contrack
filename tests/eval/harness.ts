@@ -18,13 +18,13 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { hybridRetrieval } from "../../server/services/search/hybridRetrieval.ts";
 import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
 import type { PairScorer } from "../../server/services/search/crossEncoder.ts";
 import type { Scope } from "../../server/tenancy/scope.ts";
+import { seedWithStableIds, splitVectors, type SeededIds } from "./seeding.ts";
 import type {
   EvalContact,
   EvalQuery,
@@ -76,34 +76,6 @@ export interface Fixture {
 
 function readJson<T>(file: string): T {
   return JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8")) as T;
-}
-
-/**
- * Split the flat vector file into one array per row.
- *
- * The copy through `slice` is not waste. `readFileSync` hands back a Buffer
- * that borrows a shared pool, and its `byteOffset` is whatever the pool
- * happened to be at, so a Float32Array view over it throws on any offset that
- * is not a multiple of four. The copy also detaches the vectors from the
- * pool, which is what lets the Buffer be collected.
- */
-function splitVectors(
-  buf: Buffer,
-  count: number,
-  dimension: number,
-  from: number,
-): Float32Array[] {
-  const out: Float32Array[] = [];
-  for (let i = 0; i < count; i++) {
-    const start = (from + i) * dimension * 4;
-    const end = start + dimension * 4;
-    const bytes = buf.buffer.slice(
-      buf.byteOffset + start,
-      buf.byteOffset + end,
-    );
-    out.push(new Float32Array(bytes));
-  }
-  return out;
 }
 
 /** Read the committed corpus, queries and vectors. */
@@ -163,86 +135,28 @@ export function loadFixture(): Fixture {
 // ---------------------------------------------------------------------------
 
 /**
- * A contact id that is the same on every run.
- *
- * `lexicalSearch` orders by `bm25(...), c.id`, so the contact id is the tie
- * break, and with a random UUID two contacts on the same BM25 score swap
- * places between runs. At the tenth position that moves a contact in and out
- * of recall@10, which would make this gate fail at random and teach everybody
- * to re-run it until it passed.
- *
- * The shape is a valid v4 UUID because that is what the column holds
- * everywhere else. The bytes are a hash of the index, so the corpus is
- * reproducible without being predictable enough to be mistaken for a real id.
+ * Write the corpus into a real database under one owner, with the ids the
+ * baseline was recorded against. See `seedWithStableIds`.
  */
-function deterministicId(index: number): string {
-  const h = crypto
-    .createHash("sha256")
-    .update(`contrack-search-eval:${index}`)
-    .digest("hex");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
-}
-
-/**
- * Write the corpus into a real database under one owner.
- *
- * Through `bulkCreateContacts`, not through INSERT: the FTS rows come from
- * the triggers on `contacts`, and a hand written row would index differently
- * from a row the product writes. Returns the fixture key of every contact by
- * its generated id, which is what turns a ranked list of ids back into
- * something the queries can be scored against.
- *
- * The id generator is replaced for the duration of the insert, and put back
- * afterwards. The service picks its own ids and there is no argument for one,
- * which is correct for the product and inconvenient exactly here.
- */
-export async function seedCorpus(
+export function seedCorpus(
   scope: Scope,
   contacts: EvalContact[],
-): Promise<{ idByKey: Map<string, string>; keyById: Map<string, string> }> {
-  const realRandomUUID = crypto.randomUUID;
-  let issued = 0;
-  (crypto as { randomUUID: () => string }).randomUUID = () =>
-    deterministicId(issued++);
-
-  let createdIds: string[];
-  try {
-    ({ createdIds } = await contactService.bulkCreateContacts(
-      scope,
-      contacts.map((c) => ({
-        name: c.name,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        company: c.company,
-        role: c.role,
-        location: c.location,
-        industry: c.industry,
-        headline: c.headline,
-        about: c.about,
-        tags: c.tags,
-        interests: c.interests,
-        emails: c.emails ?? [],
-        phones: c.phones ?? [],
-      })),
-    ));
-  } finally {
-    (crypto as { randomUUID: typeof realRandomUUID }).randomUUID =
-      realRandomUUID;
-  }
-
-  if (createdIds.length !== contacts.length) {
-    throw new Error(
-      `Seeded ${createdIds.length} of ${contacts.length} contacts. The eval cannot score a partial corpus.`,
-    );
-  }
-
-  const idByKey = new Map<string, string>();
-  const keyById = new Map<string, string>();
-  contacts.forEach((c, i) => {
-    idByKey.set(c.key, createdIds[i]);
-    keyById.set(createdIds[i], c.key);
-  });
-  return { idByKey, keyById };
+): Promise<SeededIds> {
+  return seedWithStableIds(scope, "contrack-search-eval", contacts, (c) => ({
+    name: c.name,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    company: c.company,
+    role: c.role,
+    location: c.location,
+    industry: c.industry,
+    headline: c.headline,
+    about: c.about,
+    tags: c.tags,
+    interests: c.interests,
+    emails: c.emails ?? [],
+    phones: c.phones ?? [],
+  }));
 }
 
 /**

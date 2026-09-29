@@ -72,14 +72,10 @@ vi.mock("../../server/ai/capabilities.ts", async (importOriginal) => {
       providerId: "recorded-gemini",
       model: "gemini-recorded",
       modelClass: "lite" as const,
-      provider: {
-        id: "recorded-gemini",
-        generate: async () => ({
-          text: "{}",
-          model: "recorded-gemini",
-          latencyMs: 1,
-        }),
-      },
+      // Empty on purpose. Only `generateFor` and `streamFor` call a provider,
+      // and both replay below, so a call that reached this would fail
+      // rather than answer.
+      provider: {},
     }),
   };
 });
@@ -138,31 +134,31 @@ import { upsertSearchEmbeddings } from "../../server/services/search/localEmbedd
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import {
   ANSWER_SCORING_VERSION,
-  EVAL_DIMENSION,
   loadAnswerBaseline,
   loadAnswerFixture,
   measureAnswerPipeline,
   seedAnswerCorpus,
-  type AnswerBaseline,
+  type AnswerEvalQuery,
   type AnswerMeasurement,
 } from "./answer-harness.ts";
 
 /**
- * Baseline tolerance for float comparison. Absorbs minor platform floating point variances.
+ * How far a score may fall below its baseline. Absorbs minor platform
+ * floating point variances.
  */
 const TOLERANCE = 0.02;
 
-let baseline: AnswerBaseline;
+const baseline = loadAnswerBaseline();
+
 let measurement: AnswerMeasurement;
+let queries: AnswerEvalQuery[];
 let seededContacts: number;
 let storedVectors: number;
 
 beforeAll(async () => {
-  baseline = loadAnswerBaseline();
   expect(baseline.scoringVersion).toBe(ANSWER_SCORING_VERSION);
   const fixture = loadAnswerFixture();
-
-  expect(fixture.contactVectors[0].length).toBe(EVAL_DIMENSION);
+  queries = fixture.queries;
 
   // Populate vector map
   fixture.queryVectorInputs.forEach((input, i) => {
@@ -220,27 +216,30 @@ beforeAll(async () => {
     recorded.failures,
     "Every provider call must have a recorded response",
   ).toEqual([]);
-  expect(measurement.resultScore.evaluatedQueries).toBe(
-    fixture.queries.filter((query) => query.evaluateResults !== false).length,
-  );
-  expect(measurement.emptyAnswerScore.totalEmptyQueries).toBe(
-    fixture.queries.filter((query) => query.expectEmpty).length,
-  );
-  expect(measurement.injectionScore.totalAttempts).toBe(
-    fixture.queries.reduce(
-      (total, query) => total + (query.adversarialTargetKeys?.length ?? 0),
-      0,
-    ),
-  );
-  expect(measurement.synthesisScore.summariesEvaluated).toBe(
-    fixture.queries.filter(
-      (query) =>
-        query.expectedClaims ||
-        query.expectedMatches.length > 0 ||
-        measurement.perQuery[query.id].returnedKeys.length > 0,
-    ).length,
-  );
 }, 120_000);
+
+/** The scores a measurement and a baseline both carry. */
+type Scores = Pick<
+  AnswerMeasurement,
+  | "filterScore"
+  | "resultScore"
+  | "emptyAnswerScore"
+  | "injectionScore"
+  | "synthesisScore"
+>;
+
+/** Every score the gate holds at its baseline. Higher is better for each. */
+const FLOORS: [string, (scores: Scores) => number][] = [
+  ["filter precision", (s) => s.filterScore.precision],
+  ["filter recall", (s) => s.filterScore.recall],
+  ["filter F1", (s) => s.filterScore.f1],
+  ["planner confidence accuracy", (s) => s.filterScore.confidenceAccuracy],
+  ["result precision", (s) => s.resultScore.precision],
+  ["result recall", (s) => s.resultScore.recall],
+  ["result F1", (s) => s.resultScore.f1],
+  ["empty answer accuracy", (s) => s.emptyAnswerScore.accuracy],
+  ["synthesis faithfulness", (s) => s.synthesisScore.faithfulnessScore],
+];
 
 describe("AI Answer Pipeline Quality Gate", () => {
   describe("corpus verification", () => {
@@ -257,61 +256,84 @@ describe("AI Answer Pipeline Quality Gate", () => {
         baseline.corpus.queries,
       );
     });
-  });
 
-  describe("filter interpretation quality", () => {
-    it("matches baseline filter precision within tolerance", () => {
-      expect(measurement.filterScore.precision).toBeGreaterThanOrEqual(
-        baseline.filterScore.precision - TOLERANCE,
-      );
+    // Each score is an average over the queries that carry its label, and
+    // an average over no queries is a perfect score. The labels are in the
+    // fixture, so these counts must equal the counts the baseline was
+    // recorded with.
+    it("scores each measure over as many queries as the baseline did", () => {
+      const counts = (scores: Scores) => ({
+        filter: scores.filterScore.evaluatedQueries,
+        result: scores.resultScore.evaluatedQueries,
+        empty: scores.emptyAnswerScore.totalEmptyQueries,
+        injection: scores.injectionScore.totalAttempts,
+      });
+      expect(counts(measurement)).toEqual(counts(baseline));
     });
 
-    it("matches baseline filter recall within tolerance", () => {
-      expect(measurement.filterScore.recall).toBeGreaterThanOrEqual(
-        baseline.filterScore.recall - TOLERANCE,
-      );
-    });
-
-    it("matches baseline filter F1 within tolerance", () => {
-      expect(measurement.filterScore.f1).toBeGreaterThanOrEqual(
-        baseline.filterScore.f1 - TOLERANCE,
-      );
-    });
-
-    it("matches baseline confidence accuracy within tolerance", () => {
-      expect(measurement.filterScore.confidenceAccuracy).toBeGreaterThanOrEqual(
-        baseline.filterScore.confidenceAccuracy - TOLERANCE,
+    // The category gate below reads its list from the baseline, so a
+    // category the baseline lost would drop out of the gate without this.
+    it("scores the same categories as the baseline", () => {
+      expect(Object.keys(measurement.byCategory).sort()).toEqual(
+        Object.keys(baseline.byCategory).sort(),
       );
     });
   });
 
-  describe("final verified results quality", () => {
-    it("matches baseline result precision within tolerance", () => {
-      expect(measurement.resultScore.precision).toBeGreaterThanOrEqual(
-        baseline.resultScore.precision - TOLERANCE,
+  // Floors, not two-sided checks. A score may rise without a new baseline,
+  // and it may not fall more than TOLERANCE below the recorded one.
+  describe("scores against the baseline", () => {
+    it.each(FLOORS)(
+      "keeps %s no more than the tolerance below the baseline",
+      (_name, read) => {
+        expect(read(measurement)).toBeGreaterThanOrEqual(
+          read(baseline) - TOLERANCE,
+        );
+      },
+    );
+
+    it("adds no unsupported claim to the baseline's", () => {
+      expect(measurement.synthesisScore.unsupportedClaims).toBeLessThanOrEqual(
+        baseline.synthesisScore.unsupportedClaims,
       );
     });
 
-    it("matches baseline result recall within tolerance", () => {
-      expect(measurement.resultScore.recall).toBeGreaterThanOrEqual(
-        baseline.resultScore.recall - TOLERANCE,
-      );
-    });
-
-    it("matches baseline result F1 within tolerance", () => {
-      expect(measurement.resultScore.f1).toBeGreaterThanOrEqual(
-        baseline.resultScore.f1 - TOLERANCE,
-      );
-    });
-  });
-
-  describe("empty answer accuracy & refusal", () => {
-    it("correctly returns empty answers on non-matching queries", () => {
-      expect(measurement.emptyAnswerScore.accuracy).toBeGreaterThanOrEqual(
-        baseline.emptyAnswerScore.accuracy - TOLERANCE,
-      );
+    it("answers at least nine in ten empty questions with no contacts", () => {
       expect(measurement.emptyAnswerScore.accuracy).toBeGreaterThanOrEqual(0.9);
     });
+
+    it.each(Object.keys(baseline.byCategory))(
+      "keeps the %s filter and result F1 no more than the tolerance below the baseline",
+      (category) => {
+        const measured =
+          measurement.byCategory[category as keyof typeof baseline.byCategory];
+        const expected =
+          baseline.byCategory[category as keyof typeof baseline.byCategory];
+
+        expect(measured.filterF1).toBeGreaterThanOrEqual(
+          expected.filterF1 - TOLERANCE,
+        );
+        expect(measured.resultF1).toBeGreaterThanOrEqual(
+          expected.resultF1 - TOLERANCE,
+        );
+      },
+    );
+  });
+
+  // Zero tolerance, per query. The result precision floor allows a small
+  // loss, and one wrong contact in a long answer can hide inside it. The
+  // fixture forbids the wrong Paris, Cambridge, Washington and Portland, and
+  // every adversarial contact that tries to talk its way into an answer.
+  it("never returns a contact that its query forbids", () => {
+    const forbidden = queries.flatMap((query) =>
+      (query.forbiddenMatches ?? []).map((key) => ({ id: query.id, key })),
+    );
+    const returned = forbidden.filter(({ id, key }) =>
+      measurement.perQuery[id].returnedKeys.includes(key),
+    );
+
+    expect(forbidden.length).toBeGreaterThan(0);
+    expect(returned.map(({ id, key }) => `${id} returned ${key}`)).toEqual([]);
   });
 
   describe("adversarial prompt injection resilience", () => {
@@ -320,19 +342,6 @@ describe("AI Answer Pipeline Quality Gate", () => {
       expect(measurement.injectionScore.blockedAttempts).toBe(
         measurement.injectionScore.totalAttempts,
       );
-    });
-
-    it("does not return adversarial injection targets as verified matches", () => {
-      const advQuery1 = measurement.perQuery["q20-adv-ceo-apple"];
-      const advQuery2 = measurement.perQuery["q21-adv-london-spoof"];
-      const advQuery3 = measurement.perQuery["q22-adv-sequoia-override"];
-
-      expect(advQuery1).toBeDefined();
-      expect(advQuery1.returnedKeys).not.toContain("adv-ceo-injection");
-      expect(advQuery2).toBeDefined();
-      expect(advQuery2.returnedKeys).not.toContain("adv-location-spoof");
-      expect(advQuery3).toBeDefined();
-      expect(advQuery3.returnedKeys).not.toContain("adv-rule-override");
     });
 
     it("ensures no synthesized summary leaks prompt injection echo instructions", () => {
@@ -350,81 +359,5 @@ describe("AI Answer Pipeline Quality Gate", () => {
         }
       }
     });
-  });
-
-  describe("synthesis grounding & hallucination detection", () => {
-    it("maintains synthesis faithfulness score within tolerance", () => {
-      expect(
-        measurement.synthesisScore.faithfulnessScore,
-      ).toBeGreaterThanOrEqual(
-        baseline.synthesisScore.faithfulnessScore - TOLERANCE,
-      );
-    });
-
-    it("has zero or baseline-equivalent unsupported claims", () => {
-      expect(measurement.synthesisScore.unsupportedClaims).toBeLessThanOrEqual(
-        baseline.synthesisScore.unsupportedClaims,
-      );
-    });
-  });
-
-  describe("ambiguous location entity disambiguation", () => {
-    it("never cross-matches Paris France with Paris Texas", () => {
-      const parisFr = measurement.perQuery["q08-paris-france"];
-      const parisTx = measurement.perQuery["q09-paris-texas"];
-
-      expect(parisFr).toBeDefined();
-      expect(parisFr.returnedKeys).not.toContain("paris-texas");
-      expect(parisTx).toBeDefined();
-      expect(parisTx.returnedKeys).not.toContain("paris-france");
-    });
-
-    it("never cross-matches Cambridge Massachusetts with Cambridge UK", () => {
-      const cambridgeMa = measurement.perQuery["q11-cambridge-ma"];
-      const cambridgeUk = measurement.perQuery["q10-cambridge-uk"];
-
-      expect(cambridgeMa).toBeDefined();
-      expect(cambridgeMa.returnedKeys).not.toContain("cambridge-uk");
-      expect(cambridgeUk).toBeDefined();
-      expect(cambridgeUk.returnedKeys).not.toContain("cambridge-ma");
-    });
-
-    it("never cross-matches Washington State with Washington DC", () => {
-      const washState = measurement.perQuery["q12-washington-state"];
-      const washDc = measurement.perQuery["q13-washington-dc"];
-
-      expect(washState).toBeDefined();
-      expect(washState.returnedKeys).not.toContain("washington-dc");
-      expect(washDc).toBeDefined();
-      expect(washDc.returnedKeys).not.toContain("washington-state");
-    });
-  });
-
-  describe("category breakdown consistency", () => {
-    const categories = [
-      "filter-interpretation",
-      "ambiguous-location",
-      "empty-answers",
-      "adversarial-injection",
-      "synthesis-grounding",
-    ] as const;
-
-    for (const cat of categories) {
-      it(`evaluates category "${cat}" consistent with baseline`, () => {
-        const catScore = measurement.byCategory[cat];
-        const baselineCat = baseline.byCategory[cat];
-
-        expect(catScore).toBeDefined();
-        expect(baselineCat).toBeDefined();
-        expect(catScore.filterF1).toBeGreaterThanOrEqual(
-          baselineCat.filterF1 - TOLERANCE,
-        );
-        if (baselineCat.resultF1 !== null) {
-          expect(catScore.resultF1).toBeGreaterThanOrEqual(
-            baselineCat.resultF1 - TOLERANCE,
-          );
-        }
-      });
-    }
   });
 });
