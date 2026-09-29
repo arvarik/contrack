@@ -161,25 +161,29 @@ describe("Google contact photos", () => {
     expect(avatarOf("people/c2")).toBe(first);
   });
 
-  it("stores no remote URL when the download fails", async () => {
-    safeFetchMock.mockImplementation(async () => served("gone", 404));
-
-    await sync([contactEvent("people/c3", "Spud Builder", PHOTO_URL)]);
-
-    const avatar = avatarOf("people/c3");
-    expect(avatar ?? "").not.toMatch(/^https?:/);
-    expect(avatar ?? "").not.toContain("googleusercontent");
-  });
-
-  it("stores no remote URL when the network is down", async () => {
-    safeFetchMock.mockRejectedValue(new TypeError("fetch failed"));
+  it.each([
+    [
+      "the download fails",
+      () => safeFetchMock.mockImplementation(async () => served("gone", 404)),
+    ],
+    [
+      "the network is down",
+      () => safeFetchMock.mockRejectedValue(new TypeError("fetch failed")),
+    ],
+  ])("stores no remote URL when %s", async (_failure, fail) => {
+    fail();
 
     const result = await sync([
-      contactEvent("people/c4", "Dizzy Builder", PHOTO_URL),
+      contactEvent("people/c3", "Spud Builder", PHOTO_URL),
     ]);
 
+    // The contact and its link exist. Without them `avatarOf` is undefined,
+    // and the checks below would pass with nothing stored at all.
     expect(result.stats.contacts).toBe(1);
-    expect(avatarOf("people/c4") ?? "").not.toContain("googleusercontent");
+    const avatar = avatarOf("people/c3");
+    expect(avatar).not.toBeUndefined();
+    expect(avatar ?? "").not.toMatch(/^https?:/);
+    expect(avatar ?? "").not.toContain("googleusercontent");
   });
 
   it("replaces a remote URL an older sync stored, on the next sync", async () => {
@@ -204,34 +208,6 @@ describe("Google contact photos", () => {
     );
   });
 
-  it("downloads several photos at once and still stores every contact", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    safeFetchMock.mockImplementation(async () => {
-      await gate;
-      return served(photo);
-    });
-
-    const names = ["Lofty Builder", "Scoop Builder", "Pilchard Builder"];
-    const running = sync(
-      names.map((name, i) =>
-        contactEvent(`people/p${i}`, name, `${PHOTO_URL}&n=${i}`),
-      ),
-    );
-    // All three downloads start before any of them finishes.
-    await vi.waitFor(() => expect(safeFetchMock).toHaveBeenCalledTimes(3));
-    release();
-    const result = await running;
-
-    expect(result.stats.contacts).toBe(3);
-    const avatars = names.map((_, i) => avatarOf(`people/p${i}`));
-    for (const avatar of avatars) {
-      expect(avatar).toMatch(/^\/uploads\/u\/.+\/avatars\/remote-/);
-    }
-    // One file per photo URL.
-    expect(new Set(avatars).size).toBe(3);
-  });
-
   it("never runs more than six photo downloads at once", async () => {
     let inFlight = 0;
     let peak = 0;
@@ -251,6 +227,12 @@ describe("Google contact photos", () => {
     expect(result.stats.contacts).toBe(14);
     expect(safeFetchMock).toHaveBeenCalledTimes(14);
     expect(peak).toBe(6);
+    // Every contact is stored with a local file of its own photo.
+    const avatars = events.map((_, i) => avatarOf(`people/q${i}`));
+    for (const avatar of avatars) {
+      expect(avatar).toMatch(/^\/uploads\/u\/.+\/avatars\/remote-/);
+    }
+    expect(new Set(avatars).size).toBe(14);
   });
 
   it("stops the sync when it is aborted during a photo download", async () => {

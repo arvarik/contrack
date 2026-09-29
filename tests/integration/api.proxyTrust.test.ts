@@ -1,5 +1,5 @@
 // =============================================================================
-// Integration: forwarded headers, and the headers every response carries
+// Integration: forwarded headers
 // =============================================================================
 // The server used to trust one proxy hop always. With no proxy in front, that
 // hop is the client, so a client's own X-Forwarded-For chose the address the
@@ -87,26 +87,5 @@ describe("TRUST_PROXY_HOPS", () => {
   it("refuses a value that is not a whole number of hops", () => {
     process.env.TRUST_PROXY_HOPS = "yes";
     expect(() => makeTestApp()).toThrow(/TRUST_PROXY_HOPS/);
-  });
-});
-
-describe("headers on every response", () => {
-  it("sends a CSP outside production too, and a Permissions-Policy", async () => {
-    const app = makeTestApp();
-    try {
-      const res = await request(app).get("/api/auth/status");
-      const csp = String(res.headers["content-security-policy"]);
-      // NODE_ENV is "test" here, so this is the dev policy: Vite's inline
-      // preamble and its reload socket are allowed, and nothing else changes.
-      expect(csp).toContain("script-src 'self' 'unsafe-inline'");
-      expect(csp).toContain("frame-ancestors 'none'");
-      expect(csp).toContain("object-src 'none'");
-      expect(csp).toMatch(/connect-src [^;]*\bws:/);
-      expect(res.headers["permissions-policy"]).toContain("camera=()");
-      expect(res.headers["permissions-policy"]).toContain("geolocation=()");
-      expect(res.headers["x-frame-options"]).toBe("DENY");
-    } finally {
-      app.close();
-    }
   });
 });

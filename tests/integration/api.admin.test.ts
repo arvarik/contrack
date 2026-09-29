@@ -34,7 +34,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
-import { resetAccounts, rowsOwnedBy } from "./tenancy/helpers.ts";
+import {
+  asUser,
+  createActor,
+  resetAccounts,
+  rowsOwnedBy,
+} from "./tenancy/helpers.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
@@ -229,15 +234,6 @@ describe("every admin route", () => {
   beforeAll(async () => {
     admin = await freshInstance("guardadmin");
     member = await createAndActivate(admin, "guardmember");
-  });
-
-  it("covers the whole admin class, so the loops below miss nothing", () => {
-    // Twenty-nine in Phase 3, thirty with the instance health route in
-    // quality story S9, thirty-four with outgoing mail routes in Prompt 2,
-    // thirty-five with user reset link in Prompt 3, thirty-seven with
-    // integrations routes in Prompt 4, and thirty-eight with the instance
-    // AI switch.
-    expect(ADMIN_ROUTES).toHaveLength(38);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -542,10 +538,6 @@ describe("an account whose password an admin chose", () => {
       "forcedadmin",
       asAdminToo.body.temporaryPassword as string,
     );
-  });
-
-  it("signs in with the temporary password", () => {
-    expect(cookie.length).toBeGreaterThan(0);
   });
 
   it.each([
@@ -1001,7 +993,7 @@ describe("invitations", () => {
     expect(res.body.error.code).toBe("INVITATION_USED");
   });
 
-  it("takes every invitation an admin issued with them, accepted ones too", async () => {
+  it("takes every invitation an admin issued with them, accepted or pending", async () => {
     // `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so an
     // accepted invitation cannot keep its row with the inviter set to NULL
     // the way an audit row does: the schema cascades it. The `user.invitation.accepted`
@@ -1010,6 +1002,12 @@ describe("invitations", () => {
     const created = await as(inviter)(
       request(app).post("/api/admin/invitations").send({}),
     );
+    const pending = await as(inviter)(
+      request(app)
+        .post("/api/admin/invitations")
+        .send({ email: "cascade@example.com" }),
+    );
+    expect(pending.status).toBe(201);
     const joined = await request(app)
       .post("/api/auth/accept-invitation")
       .send({
@@ -1027,11 +1025,11 @@ describe("invitations", () => {
     );
     expect(gone.status, JSON.stringify(gone.body)).toBe(200);
 
-    expect(
-      sqlite
-        .prepare("SELECT id FROM invitations WHERE id = ?")
-        .get(created.body.id),
-    ).toBeUndefined();
+    for (const id of [created.body.id, pending.body.id]) {
+      expect(
+        sqlite.prepare("SELECT id FROM invitations WHERE id = ?").get(id),
+      ).toBeUndefined();
+    }
     // The account it produced is untouched, and the audit row still names it.
     expect(
       sqlite
@@ -1046,28 +1044,6 @@ describe("invitations", () => {
         )
         .get(joined.body.user.id),
     ).toEqual({ n: 1 });
-  });
-
-  it("takes an admin's pending invitations with them when they go", async () => {
-    const inviter = await createAndActivate(admin, "theinviter", "admin");
-    const created = await as(inviter)(
-      request(app)
-        .post("/api/admin/invitations")
-        .send({ email: "cascade@example.com" }),
-    );
-    expect(created.status).toBe(201);
-
-    const gone = await as(admin)(
-      request(app)
-        .delete(`/api/admin/users/${inviter.id}`)
-        .send({ decision: "purge" }),
-    );
-    expect(gone.status, JSON.stringify(gone.body)).toBe(200);
-    expect(
-      sqlite
-        .prepare("SELECT id FROM invitations WHERE id = ?")
-        .get(created.body.id),
-    ).toBeUndefined();
   });
 });
 
@@ -1293,13 +1269,6 @@ describe("an instance nobody has secured", () => {
     });
   });
 
-  it("has no password on it to reset", async () => {
-    const res = await request(app).post(
-      `/api/admin/users/${localId}/reset-password`,
-    );
-    expect(res.status).toBe(400);
-  });
-
   it("refuses to disable it", async () => {
     const res = await request(app).post(`/api/admin/users/${localId}/disable`);
     expect(res.status).toBe(409);
@@ -1312,6 +1281,24 @@ describe("an instance nobody has secured", () => {
       .send({ decision: "purge" });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("LOCAL_OWNER_PROTECTED");
+  });
+
+  it("has no password on it to reset", async () => {
+    // Asked by another admin. The local owner asking for itself is refused
+    // by the self check first, which would hide this one.
+    process.env.AUTH_REQUIRED = "true";
+    const other = await createActor(app, {
+      username: "resetter",
+      email: "resetter@example.com",
+    });
+    sqlite
+      .prepare("UPDATE users SET role = 'admin' WHERE id = ?")
+      .run(other.user.id);
+    const res = await asUser(other)(
+      request(app).post(`/api/admin/users/${localId}/reset-password`),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/no password to reset/);
   });
 });
 
@@ -1943,12 +1930,10 @@ describe("the audit log", () => {
 
 describe("instance lifecycle and integration settings (P4)", () => {
   let admin: Handle;
-  let member: Handle;
   const originalEnv = { ...process.env };
 
   beforeAll(async () => {
     admin = await freshInstance("lifecycleadmin");
-    member = await createAndActivate(admin, "lifecyclemember", "member");
   });
 
   beforeEach(() => {
@@ -2201,31 +2186,5 @@ describe("instance lifecycle and integration settings (P4)", () => {
       .prepare("SELECT 1 FROM app_settings WHERE key = 'geo.mapboxKey'")
       .get();
     expect(stray).toBeUndefined();
-  });
-
-  it("enforces authentication and admin role on integrations routes", async () => {
-    // Unauthenticated GET -> 401
-    const anonGet = await request(app).get("/api/admin/integrations");
-    expect(anonGet.status).toBe(401);
-
-    // Unauthenticated PUT -> 401
-    const anonPut = await request(app)
-      .put("/api/admin/integrations")
-      .send({ searxngUrl: "http://example.com" });
-    expect(anonPut.status).toBe(401);
-
-    // Member GET -> 403
-    const memberGet = await as(member)(
-      request(app).get("/api/admin/integrations"),
-    );
-    expect(memberGet.status).toBe(403);
-
-    // Member PUT -> 403
-    const memberPut = await as(member)(
-      request(app)
-        .put("/api/admin/integrations")
-        .send({ searxngUrl: "http://example.com" }),
-    );
-    expect(memberPut.status).toBe(403);
   });
 });

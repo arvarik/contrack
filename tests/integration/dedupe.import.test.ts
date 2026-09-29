@@ -119,44 +119,27 @@ function reset(): void {
 beforeEach(() => reset());
 
 describe("dedupeService.runImportScan, the cost", () => {
-  it("normalizes the corpus once for an import of one", async () => {
-    await seed([{ name: "Existing Person" }]);
-    const imported = await seed([{ name: "New Person" }]);
-    calls.normalizeContacts = 0;
+  it.each([1, 40])(
+    "normalizes the corpus once for an import of %i, and never builds a scan pass context",
+    async (size) => {
+      await seed(
+        Array.from({ length: 60 }, (_, i) => ({ name: `Existing ${i}` })),
+      );
+      const imported = await seed(
+        Array.from({ length: size }, (_, i) => ({ name: `Imported ${i}` })),
+      );
+      calls.normalizeContacts = 0;
+      calls.buildPassContext = 0;
 
-    await dedupeService.runImportScan(scope, imported, "test");
+      await dedupeService.runImportScan(scope, imported, "test");
 
-    expect(calls.normalizeContacts).toBe(1);
-  });
-
-  it("normalizes the corpus once for an import of forty", async () => {
-    await seed(
-      Array.from({ length: 60 }, (_, i) => ({ name: `Existing ${i}` })),
-    );
-    const imported = await seed(
-      Array.from({ length: 40 }, (_, i) => ({ name: `Imported ${i}` })),
-    );
-    calls.normalizeContacts = 0;
-
-    await dedupeService.runImportScan(scope, imported, "test");
-
-    // The number that matters. Forty before this change.
-    expect(calls.normalizeContacts).toBe(1);
-  });
-
-  it("never builds a scan pass context", async () => {
-    await seed([{ name: "Existing Person" }]);
-    const imported = await seed(
-      Array.from({ length: 10 }, (_, i) => ({ name: `Imported ${i}` })),
-    );
-    calls.buildPassContext = 0;
-
-    await dedupeService.runImportScan(scope, imported, "test");
-
-    // `buildPassContext` loads and normalizes the account twice over, and the
-    // per-contact check called it once per contact for one map out of it.
-    expect(calls.buildPassContext).toBe(0);
-  });
+      // The number that matters: one per contact before this change.
+      expect(calls.normalizeContacts).toBe(1);
+      // `buildPassContext` loads and normalizes the account twice over, and
+      // the per-contact check called it once per contact for one map out of it.
+      expect(calls.buildPassContext).toBe(0);
+    },
+  );
 
   it("does nothing at all for an empty import", async () => {
     await seed([{ name: "Existing Person" }]);

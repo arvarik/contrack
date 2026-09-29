@@ -161,7 +161,9 @@ describe("Connectors Scheduler", () => {
         futureIso,
       );
 
-    // 3. Paused connector (past nextRunAt, but status is paused)
+    // 3. Paused connector (past nextRunAt, but status is paused). It belongs
+    // to owner2, whose only other connector is not due: under owner1 the
+    // one-per-owner rule would skip it even without the status check.
     sqlite
       .prepare(
         `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
@@ -169,7 +171,7 @@ describe("Connectors Scheduler", () => {
       )
       .run(
         pausedId,
-        owner1,
+        owner2,
         mockKind,
         JSON.stringify({ connId: pausedId }),
         pastIso,

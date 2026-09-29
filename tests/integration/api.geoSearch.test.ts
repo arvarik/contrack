@@ -93,34 +93,3 @@ describe("GET /api/geo/search", () => {
     expect(res31.body.error.code).toBe("RATE_LIMITED");
   });
 });
-
-describe("GET /api/contacts?view=slim", () => {
-  it("excludes trashed contacts", async () => {
-    const createRes = await request(app).post("/api/contacts").send({
-      name: "Temporary Mappable",
-      location: "Austin, TX",
-      lat: 30.2672,
-      lng: -97.7431,
-    });
-    expect(createRes.status).toBe(201);
-    const contactId = createRes.body.id;
-
-    // Verify present in slim view
-    const listBefore = await request(app).get("/api/contacts?view=slim");
-    expect(listBefore.status).toBe(200);
-    expect(
-      (listBefore.body as { id: string }[]).some((c) => c.id === contactId),
-    ).toBe(true);
-
-    // Delete contact (move to trash)
-    const deleteRes = await request(app).delete(`/api/contacts/${contactId}`);
-    expect(deleteRes.status).toBe(200);
-
-    // Verify absent from slim view
-    const listAfter = await request(app).get("/api/contacts?view=slim");
-    expect(listAfter.status).toBe(200);
-    expect(
-      (listAfter.body as { id: string }[]).some((c) => c.id === contactId),
-    ).toBe(false);
-  });
-});

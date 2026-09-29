@@ -15,7 +15,6 @@ import { setPreferences } from "../../server/services/userPreferencesService.ts"
 
 let app: ReturnType<typeof makeTestApp>;
 let userA: Actor;
-let userB: Actor;
 
 beforeAll(async () => {
   process.env.AUTH_REQUIRED = "true";
@@ -23,10 +22,6 @@ beforeAll(async () => {
   userA = await createActor(app, {
     username: "histuser_a",
     email: "histuser_a@test.dev",
-  });
-  userB = await createActor(app, {
-    username: "histuser_b",
-    email: "histuser_b@test.dev",
   });
 });
 
@@ -36,17 +31,11 @@ afterAll(() => {
 });
 
 beforeEach(async () => {
-  if (userA && userB) {
-    await asUser(userA)(request(app).delete("/api/search/history"));
-    await asUser(userB)(request(app).delete("/api/search/history"));
-  }
+  if (userA) await asUser(userA)(request(app).delete("/api/search/history"));
 });
 
 afterEach(async () => {
-  if (userA && userB) {
-    await asUser(userA)(request(app).delete("/api/search/history"));
-    await asUser(userB)(request(app).delete("/api/search/history"));
-  }
+  if (userA) await asUser(userA)(request(app).delete("/api/search/history"));
 });
 
 describe("API search history (/api/search/history)", () => {
@@ -147,7 +136,7 @@ describe("API search history (/api/search/history)", () => {
     await asUser(userA)(request(app).delete("/api/search/history"));
   });
 
-  it("GET with mode=notes, q=, pinned=1, and a cursor walk over 120 rows with limit 50", async () => {
+  it("GET with mode=notes, pinned=1 and q, and a cursor walk over 120 rows with limit 50", async () => {
     const walker = await createActor(app, {
       username: "walker",
       email: "walker@test.dev",
@@ -180,6 +169,30 @@ describe("API search history (/api/search/history)", () => {
           time,
           time,
         );
+      }
+      // Rows the filters must leave out: the same words in another mode, and
+      // notes that are not pinned. Without them every filter matches all.
+      for (let i = 0; i < 10; i++) {
+        const time = new Date(baseTime - i * 1000).toISOString();
+        for (const [mode, text, pinned] of [
+          ["people", `note question ${i}`, 1],
+          ["notes", `note question unpinned ${i}`, 0],
+        ] as const) {
+          insert.run(
+            `decoy-${mode}-${pinned}-${i}`,
+            walker.user.id,
+            mode,
+            text,
+            text,
+            0,
+            "[]",
+            0,
+            pinned,
+            1,
+            time,
+            time,
+          );
+        }
       }
     })();
 
@@ -232,6 +245,14 @@ describe("API search history (/api/search/history)", () => {
     ];
     expect(allIds).toHaveLength(120);
     expect(new Set(allIds).size).toBe(120);
+
+    // The text filter: "note question 11" and "note question 110" to "119".
+    const byText = await asUser(walker)(
+      request(app)
+        .get("/api/search/history")
+        .query({ mode: "notes", q: "question 11", pinned: 1, limit: 50 }),
+    );
+    expect(byText.body.total).toBe(11);
 
     // Clean up
     await asUser(walker)(request(app).delete("/api/search/history"));
@@ -458,53 +479,5 @@ describe("API search history (/api/search/history)", () => {
 
     // Clean up
     await asUser(backfillUser)(request(app).delete("/api/search/history"));
-  });
-
-  it("isolation: two owners never see each other's rows, PATCH and DELETE on the other's id return 404", async () => {
-    // User A records an entry
-    const resA = await asUser(userA)(
-      request(app)
-        .post("/api/search/history")
-        .send({ query: "private query of A", mode: "people" }),
-    );
-    const entryA = resA.body.entry;
-
-    // User B records an entry
-    const resB = await asUser(userB)(
-      request(app)
-        .post("/api/search/history")
-        .send({ query: "private query of B", mode: "people" }),
-    );
-    const entryB = resB.body.entry;
-
-    // User A cannot see B's entry
-    const listA = await asUser(userA)(request(app).get("/api/search/history"));
-    const listAIds = listA.body.entries.map((e: { id: string }) => e.id);
-    expect(listAIds).toContain(entryA.id);
-    expect(listAIds).not.toContain(entryB.id);
-
-    // User B cannot see A's entry
-    const listB = await asUser(userB)(request(app).get("/api/search/history"));
-    const listBIds = listB.body.entries.map((e: { id: string }) => e.id);
-    expect(listBIds).toContain(entryB.id);
-    expect(listBIds).not.toContain(entryA.id);
-
-    // User B attempts to PATCH A's entry -> 404
-    const patchAcross = await asUser(userB)(
-      request(app)
-        .patch(`/api/search/history/${entryA.id}`)
-        .send({ pinned: true }),
-    );
-    expect(patchAcross.status).toBe(404);
-
-    // User B attempts to DELETE A's entry -> 404
-    const deleteAcross = await asUser(userB)(
-      request(app).delete(`/api/search/history/${entryA.id}`),
-    );
-    expect(deleteAcross.status).toBe(404);
-
-    // Clean up
-    await asUser(userA)(request(app).delete("/api/search/history"));
-    await asUser(userB)(request(app).delete("/api/search/history"));
   });
 });

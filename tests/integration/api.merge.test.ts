@@ -1,23 +1,19 @@
 // =============================================================================
-// Integration: dedupe merge/undo (the data-destructive core), dashboard, MCP
+// Integration: dedupe merge/undo (the data-destructive core)
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
-import { softMergeContacts } from "../../server/services/dedupe/merging.ts";
-import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 
-const app = makeTestApp();
-
 /**
- * Merging takes a scope since 2e. Auth is off in this file, so every row
- * belongs to the local owner account, which is the same owner the routes read
- * out of `scopeOf(req)`.
+ * Every merge runs through the route. Since #56 the manual and the automatic
+ * paths share one merge engine, so one set of merge and undo tests covers
+ * both. Auth is off in this file, so every row belongs to the local owner.
  */
-const scope = () => scopeForOwnerId(localOwnerId());
+const app = makeTestApp();
 
 interface SlimContact {
   id: string;
@@ -38,38 +34,6 @@ async function slimContacts(): Promise<SlimContact[]> {
 }
 
 describe("merge → audit log → undo", () => {
-  it("soft-merges a duplicate into a primary, migrating child records", async () => {
-    const primaryId = await createContact({
-      name: "Robert Merge",
-      emails: ["bob@primary.com"],
-    });
-    const duplicateId = await createContact({
-      name: "Bob Merge",
-      emails: ["bob@duplicate.com"],
-      phones: ["+1 555 0100"],
-    });
-
-    const merged = await request(app)
-      .post("/api/contacts/merge")
-      .send({ primaryId, duplicateId });
-    expect(merged.status).toBe(200);
-    expect(merged.body.success).toBe(true);
-
-    // Duplicate disappears from the active list (canonicalId tombstone)...
-    const slim = await slimContacts();
-    expect(slim.some((c) => c.id === duplicateId)).toBe(false);
-    expect(slim.some((c) => c.id === primaryId)).toBe(true);
-
-    // ...and its child records migrated onto the primary.
-    const primary = await request(app).get(`/api/contacts/${primaryId}`);
-    const emails = primary.body.emails.map((e: { email: string }) => e.email);
-    expect(emails).toContain("bob@primary.com");
-    expect(emails).toContain("bob@duplicate.com");
-    expect(
-      primary.body.phones.map((p: { phone: string }) => p.phone),
-    ).toContain("+1 555 0100");
-  });
-
   it("manual merges are logged and undoable, fully restoring duplicate and transferred child records", async () => {
     const primaryId = await createContact({
       name: "Manual Primary",
@@ -87,6 +51,7 @@ describe("merge → audit log → undo", () => {
       .post("/api/contacts/merge")
       .send({ primaryId, duplicateId });
     expect(mergeRes.status).toBe(200);
+    expect(mergeRes.body.success).toBe(true);
 
     const logRes = await request(app).get("/api/dedupe/merge-log");
     const entry = logRes.body.entries.find(
@@ -248,47 +213,6 @@ describe("merge → audit log → undo", () => {
     expect(undo.body.error.code).toBe("HARD_MERGE_IRREVERSIBLE");
   });
 
-  it("soft merges (auto-merge path) are logged and undoable end-to-end", async () => {
-    const primaryId = await createContact({ name: "Undo Primary" });
-    const duplicateId = await createContact({
-      name: "Undo Duplicate",
-      emails: ["undo@example.com"],
-    });
-
-    // The soft-merge path is what the scan auto-merger and bulk import use;
-    // drive the service directly against the same real database.
-    softMergeContacts(
-      scope(),
-      primaryId,
-      duplicateId,
-      0.95,
-      "test auto-merge",
-      "test",
-    );
-
-    // Tombstoned out of the active list...
-    let slim = await slimContacts();
-    expect(slim.some((c) => c.id === duplicateId)).toBe(false);
-
-    const logRes = await request(app).get("/api/dedupe/merge-log");
-    const entry = logRes.body.entries.find(
-      (e: { primaryId: string; duplicateId: string; mergeType: string }) =>
-        e.primaryId === primaryId && e.duplicateId === duplicateId,
-    );
-    expect(entry).toBeTruthy();
-    expect(entry.mergeType).toBe("soft");
-    expect(entry.undoneAt).toBeNull();
-
-    const undo = await request(app).post(
-      `/api/dedupe/merge-log/${entry.id}/undo`,
-    );
-    expect(undo.status).toBeLessThan(300);
-
-    // ...and restored to the active list after undo.
-    slim = await slimContacts();
-    expect(slim.some((c) => c.id === duplicateId)).toBe(true);
-  });
-
   it("rejects self-merge and missing ids", async () => {
     const id = await createContact({ name: "Self Merge" });
 
@@ -301,26 +225,6 @@ describe("merge → audit log → undo", () => {
       .post("/api/contacts/merge")
       .send({ primaryId: id });
     expect(missing.status).toBe(400);
-  });
-});
-
-describe("dashboard + zero state + MCP", () => {
-  it("serves the dashboard payload with metrics", async () => {
-    await createContact({ name: "Dashboard Contact" });
-    const res = await request(app).get("/api/dashboard");
-    expect(res.status).toBe(200);
-    expect(res.body.metrics.totalActive).toBeGreaterThanOrEqual(1);
-  });
-
-  it("serves the command-palette zero state", async () => {
-    const res = await request(app).get("/api/command-palette/zero-state");
-    expect(res.status).toBe(200);
-  });
-
-  it("serves MCP contact queries with a capped limit", async () => {
-    await createContact({ name: "MCP Contact" });
-    const res = await request(app).get("/api/query/contacts?limit=999999999");
-    expect(res.status).toBe(200);
   });
 });
 
@@ -489,7 +393,7 @@ async function completeTask(id: string): Promise<void> {
 }
 
 describe("a merge keeps the duplicate's follow-up tasks", () => {
-  it("moves a pending task onto the primary in a hard merge", async () => {
+  it("moves a pending task onto the primary", async () => {
     const primaryId = await createContact({ name: "Task Primary" });
     const duplicateId = await createContact({ name: "Task Duplicate" });
     const taskId = await createTask(
@@ -513,9 +417,12 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
     expect(tasks[0].contactId).toBe(primaryId);
     expect(tasks[0].completedAt).toBeNull();
 
-    // The survivor's cache followed the row, so the dashboard sees it.
+    // The survivor's cache followed the row, so the dashboard sees it. The
+    // tombstone keeps no pending tasks, so its cache says so: a stale date
+    // there would surface the moment the merge is undone.
     expect(nextFollowUpOf(primaryId)).toBe("2027-03-01T09:00:00.000Z");
     expect(merged.body.contact.nextFollowUpAt).toBe("2027-03-01T09:00:00.000Z");
+    expect(nextFollowUpOf(duplicateId)).toBeNull();
 
     // And the API agrees with the table.
     const listed = await request(app).get(
@@ -559,40 +466,6 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
     // MIN over the pending rows of both contacts, which is the duplicate's.
     expect(nextFollowUpOf(primaryId)).toBe("2027-04-01T09:00:00.000Z");
     expect(nextFollowUpOf(duplicateId)).toBeNull();
-  });
-
-  it("moves the tasks in a soft merge too, and clears the tombstone's cache", async () => {
-    const primaryId = await createContact({ name: "Soft Task Primary" });
-    const duplicateId = await createContact({ name: "Soft Task Duplicate" });
-    const taskId = await createTask(
-      duplicateId,
-      "Book the venue",
-      "2027-05-01T09:00:00.000Z",
-    );
-
-    softMergeContacts(
-      scope(),
-      primaryId,
-      duplicateId,
-      0.95,
-      "test auto-merge with a task",
-      "test",
-    );
-
-    const task = allTasks().find((t) => t.id === taskId);
-    expect(task?.contactId).toBe(primaryId);
-    expect(nextFollowUpOf(primaryId)).toBe("2027-05-01T09:00:00.000Z");
-    // The tombstone keeps no pending tasks, so its cache says so. A stale
-    // date here would surface the moment the merge is undone.
-    expect(nextFollowUpOf(duplicateId)).toBeNull();
-
-    // The pending list shows the task once, under the survivor.
-    const pending = await request(app).get("/api/action-items");
-    expect(pending.status).toBe(200);
-    const rows = pending.body.filter((t: TaskRow) => t.id === taskId);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].contactId).toBe(primaryId);
-    expect(rows[0].contactName).toBe("Soft Task Primary");
   });
 
   it("settles both caches when a task is re-parented by any path", async () => {

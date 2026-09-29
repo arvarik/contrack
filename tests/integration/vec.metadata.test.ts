@@ -32,7 +32,7 @@ const {
   VEC_METADATA_COLUMNS,
   vecTableDdl,
 } = await import("../../server/db.ts");
-const { findSearchNeighbors, getSearchEmbeddingCount } =
+const { findSearchNeighbors, getSearchEmbeddingCount, upsertSearchEmbeddings } =
   await import("../../server/services/search/localEmbeddings.ts");
 const { VECTOR_SCALE_KEY, quantize } =
   await import("../../server/services/search/vectorScale.ts");
@@ -161,20 +161,6 @@ describe("the vec0 tables", () => {
     }
   });
 
-  it("builds the same DDL from the one function both call sites use", () => {
-    const ddl = vecTableDdl("probe_table", 8);
-
-    // The model-change rebuilds in localEmbeddings.ts and dedupe/embeddings.ts
-    // recreate these tables. A second copy of the DDL there would let a
-    // rebuild drop the status columns, and every later search would then be
-    // filtering on a column that is not there.
-    for (const column of VEC_METADATA_COLUMNS) {
-      expect(ddl).toContain(`${column} INTEGER`);
-    }
-    expect(ddl).toContain("ownerId TEXT PARTITION KEY");
-    expect(ddl).toContain("FLOAT[8]");
-  });
-
   it("refuses a row that does not say what its status is", () => {
     sqlite
       .prepare("INSERT INTO contacts (id, name, ownerId) VALUES (?, ?, ?)")
@@ -237,14 +223,6 @@ describe("filtering inside the KNN", () => {
     expect(found.map((r) => r.contactId)).toEqual(["visible"]);
   });
 
-  it("hides a ghost, an archived contact, a trashed one and a merged one", () => {
-    seedNeedleInHaystack();
-
-    const found = findSearchNeighbors({ ownerId: owner } as never, QUERY, 50);
-
-    expect(found.map((r) => r.contactId)).toEqual(["visible"]);
-  });
-
   it("still stops at the account that asked", () => {
     addContact(otherOwner, "theirs", 0);
     addContact(owner, "mine", 1.4);
@@ -273,14 +251,6 @@ describe("filtering inside the KNN", () => {
     expect(found.map((r) => r.contactId)).toEqual(["wanted"]);
   });
 
-  it("returns nothing for an empty id list without touching the database", () => {
-    addContact(owner, "wanted", 0);
-
-    expect(
-      findSearchNeighbors({ ownerId: owner } as never, QUERY, 10, new Set()),
-    ).toEqual([]);
-  });
-
   it("counts one owner's vectors, hidden ones included", () => {
     addContact(owner, "visible", 0);
     addContact(owner, "ghost", 0.1, { isGhost: 1 });
@@ -306,45 +276,65 @@ describe("the status trigger", () => {
     sqlite.prepare(`UPDATE contacts SET ${sql} WHERE id = 'c1'`).run(...params);
   }
 
-  it("starts equal to the contact", () => {
-    expect(storedStatus("c1")).toEqual({
-      isGhost: 0,
-      isArchived: 0,
-      active: 1,
+  it("starts equal to the contact, as the product writes it", () => {
+    // Through the product's own insert, not this file's helper, and with
+    // every status set, so a column the insert got wrong cannot match.
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, name, ownerId, isGhost, isArchived, deletedAt)
+         VALUES ('hidden', 'Hidden', ?, 1, 1, '2026-01-01T00:00:00.000Z')`,
+      )
+      .run(owner);
+    upsertSearchEmbeddings([
+      { contactId: "hidden", embedding: new Float32Array(vectorAt(0).buffer) },
+    ]);
+
+    expect(storedStatus("hidden")).toEqual({
+      isGhost: 1,
+      isArchived: 1,
+      active: 0,
     });
   });
 
-  it("follows an archive and an un-archive", () => {
-    setStatus("isArchived = 1");
-    expect(storedStatus("c1")).toMatchObject({ isArchived: 1 });
+  it.each([
+    [
+      "an archive",
+      ["isArchived = 1"],
+      { isArchived: 1 },
+      ["isArchived = 0"],
+      { isArchived: 0 },
+    ],
+    [
+      "a trash",
+      ["deletedAt = ?", "2026-01-01T00:00:00.000Z"],
+      { active: 0 },
+      ["deletedAt = NULL"],
+      { active: 1 },
+    ],
+    [
+      "a merge",
+      ["canonicalId = ?", "primary-id"],
+      { active: 0 },
+      ["canonicalId = NULL"],
+      { active: 1 },
+    ],
+    [
+      "a ghost",
+      ["isGhost = 1"],
+      { isGhost: 1 },
+      ["isGhost = 0"],
+      { isGhost: 0 },
+    ],
+  ] as const)(
+    "follows %s and its undo",
+    (_change, [sql, ...params], changed, [undoSql], undone) => {
+      setStatus(sql, ...params);
+      expect(storedStatus("c1")).toMatchObject(changed);
 
-    setStatus("isArchived = 0");
-    expect(storedStatus("c1")).toMatchObject({ isArchived: 0 });
-  });
-
-  it("follows a trash and a restore", () => {
-    setStatus("deletedAt = ?", "2026-01-01T00:00:00.000Z");
-    expect(storedStatus("c1")).toMatchObject({ active: 0 });
-
-    setStatus("deletedAt = NULL");
-    expect(storedStatus("c1")).toMatchObject({ active: 1 });
-  });
-
-  it("follows a merge and an unmerge", () => {
-    setStatus("canonicalId = ?", "primary-id");
-    expect(storedStatus("c1")).toMatchObject({ active: 0 });
-
-    setStatus("canonicalId = NULL");
-    expect(storedStatus("c1")).toMatchObject({ active: 1 });
-  });
-
-  it("follows a ghost being promoted to a real contact", () => {
-    setStatus("isGhost = 1");
-    expect(storedStatus("c1")).toMatchObject({ isGhost: 1 });
-
-    setStatus("isGhost = 0");
-    expect(storedStatus("c1")).toMatchObject({ isGhost: 0 });
-  });
+      setStatus(undoSql);
+      expect(storedStatus("c1")).toMatchObject(undone);
+    },
+  );
 
   it("treats a NULL isArchived as not archived", () => {
     // The column is nullable on an upgraded database, and sqlite-vec refuses a

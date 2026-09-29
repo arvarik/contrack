@@ -245,5 +245,6 @@ describe("Ask Contrack final results", () => {
           .send({ query: "q", contacts: [{}] })
       ).status,
     ).toBe(400);
+    expect(streamFor).not.toHaveBeenCalled();
   });
 });

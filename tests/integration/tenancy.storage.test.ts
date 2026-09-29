@@ -27,7 +27,16 @@ import { localOwnerId } from "./tenancy/helpers.ts";
 
 describe("the sqlite-vec version gate", () => {
   it("accepts every release that has partition keys", () => {
-    for (const version of ["v0.1.6", "v0.1.9", "v0.1.10-alpha.4", "v1.0.0"]) {
+    // "v0.1.10" sorts before "v0.1.6" as a string and after it as a version,
+    // so a string comparison would refuse to boot on a newer sqlite-vec. The
+    // installed version is checked at every boot, in server/db.ts.
+    for (const version of [
+      "v0.1.6",
+      "v0.1.9",
+      "v0.1.10",
+      "v0.1.10-alpha.4",
+      "v1.0.0",
+    ]) {
       expect(() => assertVecVersion(version), version).not.toThrow();
     }
   });
@@ -39,20 +48,6 @@ describe("the sqlite-vec version gate", () => {
       );
     }
     expect(() => assertVecVersion("v0.1.5")).toThrow(/found v0\.1\.5/);
-  });
-
-  it("compares numbers, not strings", () => {
-    // "v0.1.10" sorts before "v0.1.6" as a string and after it as a version.
-    // Getting this wrong would refuse to boot on a newer sqlite-vec.
-    expect(["v0.1.6", "v0.1.10"].sort()).toEqual(["v0.1.10", "v0.1.6"]);
-    expect(() => assertVecVersion("v0.1.10")).not.toThrow();
-  });
-
-  it("passes for the version actually installed", () => {
-    const installed = (
-      sqlite.prepare("SELECT vec_version() AS v").get() as { v: string }
-    ).v;
-    expect(() => assertVecVersion(installed)).not.toThrow();
   });
 });
 

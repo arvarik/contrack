@@ -46,11 +46,15 @@ describe("security headers", () => {
     );
   });
 
-  it("sends the CSP outside production too, relaxed only for Vite's inline script and reload socket", async () => {
+  it("sends the CSP and a Permissions-Policy outside production too, relaxed only for Vite's inline script and reload socket", async () => {
     const res = await request(app).get("/api/auth/status");
     const csp = String(res.headers["content-security-policy"]);
+    // NODE_ENV is "test" here, so this is the dev policy. Each directive is
+    // checked in tests/unit/securityPolicies.test.ts; this proves they are sent.
     expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).toMatch(/connect-src [^;]*\bws:/);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toContain("unsafe-eval");
+    expect(res.headers["permissions-policy"]).toContain("camera=()");
   });
 });

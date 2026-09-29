@@ -63,15 +63,6 @@ describe("the write-ahead log", () => {
     expect(sqlite.pragma("journal_mode", { simple: true })).toBe("wal");
   });
 
-  it("grows when rows are written", async () => {
-    checkpoint("truncate");
-    const before = walBytes();
-
-    const after = await fillTheWal();
-
-    expect(after).toBeGreaterThan(before);
-  });
-
   it("shrinks when a passive checkpoint runs", async () => {
     await fillTheWal();
     const before = walBytes();
@@ -100,24 +91,16 @@ describe("the write-ahead log", () => {
 });
 
 describe("runWalMaintenance", () => {
-  it("runs a passive checkpoint and records it", async () => {
+  it("runs a passive checkpoint on a log under the threshold, and records it", async () => {
     await fillTheWal();
+    // Nowhere near 64 MB. A few hundred contacts is a few hundred kilobytes.
+    expect(walBytes()).toBeLessThan(WAL_TRUNCATE_BYTES);
 
     const result = runWalMaintenance();
 
     expect(result?.mode).toBe("passive");
     expect(writeHealth().lastCheckpoint?.mode).toBe("passive");
     expect(writeHealth().lastCheckpoint?.checkpointedPages).toBeGreaterThan(0);
-  });
-
-  it("does not truncate a log under the threshold", async () => {
-    await fillTheWal();
-    // Nowhere near 64 MB. A few hundred contacts is a few hundred kilobytes.
-    expect(walBytes()).toBeLessThan(WAL_TRUNCATE_BYTES);
-
-    runWalMaintenance();
-
-    expect(writeHealth().lastCheckpoint?.mode).toBe("passive");
   });
 
   it("truncates a log over the threshold", async () => {

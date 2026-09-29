@@ -14,10 +14,7 @@
 import { describe, it, expect } from "vitest";
 import { createApp } from "../../server/app.ts";
 import { listRoutes } from "./tenancy/listRoutes.ts";
-import {
-  ROUTE_MANIFEST,
-  type RouteEntry,
-} from "../../server/tenancy/routeManifest.ts";
+import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
 
 const registered = listRoutes(() => createApp({ disableRateLimit: true }));
 const key = (r: { method: string; path: string }) => `${r.method} ${r.path}`;
@@ -73,21 +70,6 @@ describe("route manifest", () => {
     // GET /api/debug/cache-stats moved into createApp() so it is visible here.
     if (!isProduction) {
       expect(registered.map(key)).toContain("GET /api/debug/cache-stats");
-    }
-  });
-
-  it("gives every row a known class and starts every route un-isolated", () => {
-    const classes = new Set([
-      "public",
-      "session-self",
-      "scoped",
-      "admin",
-      "instance-read",
-      "static",
-    ]);
-    for (const entry of ROUTE_MANIFEST as RouteEntry[]) {
-      expect(classes.has(entry.class)).toBe(true);
-      expect(entry.path.startsWith("/")).toBe(true);
     }
   });
 
@@ -160,13 +142,5 @@ describe("route manifest", () => {
     );
     expect(tokens).toHaveLength(3);
     for (const row of tokens) expect(row.class).toBe("session-self");
-  });
-
-  it("still classifies the route the mount-order fix made reachable", () => {
-    const entry = ROUTE_MANIFEST.find(
-      (r) => key(r) === "GET /api/contacts/action-items",
-    );
-    expect(entry?.class).toBe("scoped");
-    expect(registered.map(key)).toContain("GET /api/contacts/action-items");
   });
 });

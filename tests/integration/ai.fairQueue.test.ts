@@ -1,14 +1,15 @@
 // =============================================================================
 // Integration Tests — Multitenant Fair AI Queue
 // =============================================================================
-// Verifies that the AI gateway queue enforces multi-tenant fairness:
-// 1. Concurrency limit (2) and waiting capacity (16) are strictly preserved.
-// 2. Waiting work rotates fairly between accounts (Round-Robin).
-// 3. Interactive user requests take precedence over background jobs.
-// 4. Background work is guaranteed to progress (anti-starvation).
-// 5. A noisy neighbor cannot monopolize waiting capacity — quiet tenants are
-//    admitted via tail drop of the noisy tenant's excess waiting work.
-// 6. Admin health panel (/api/admin/health) reports AI queue status.
+// Verifies that real gateway calls reach the queue with the account and the
+// priority the queue's fairness depends on:
+// 1. Waiting work rotates between accounts read from the request context.
+// 2. Interactive user requests run ahead of background jobs, whether the
+//    caller names the priority or the request id marks a job.
+// 3. Admin health panel (/api/admin/health) reports AI queue status and the
+//    production limits (concurrency 2, waiting capacity 16).
+// The scheduling rules themselves (anti-starvation, tail drop) are pinned in
+// tests/unit/ai.workQueue.test.ts.
 // =============================================================================
 
 import {
@@ -34,7 +35,6 @@ vi.mock("../../server/ai/capabilities.ts", async (importOriginal) => {
 import { resolveCapability } from "../../server/ai/capabilities.ts";
 import {
   generateFor,
-  getAIQueueSnapshot,
   __getGenerationQueueForTests,
 } from "../../server/ai/gateway.ts";
 import type { AIProvider } from "../../server/ai/provider.ts";
@@ -209,152 +209,88 @@ describe("Multitenant Fair AI Queue Integration", () => {
     expect(executionOrder).toEqual(["A1", "B1", "C1", "A2", "A3"]);
   });
 
-  it("prioritizes interactive user requests over waiting background tasks", async () => {
-    const queue = __getGenerationQueueForTests();
-    const activeGate1 = deferred<void>();
-    const activeGate2 = deferred<void>();
-    const executionOrder: string[] = [];
+  // Each row gives the background jobs one of the two signals only. With both,
+  // a gateway that dropped `priority` still passed on the request id.
+  it.each([
+    ["the caller's priority", "req-bg", "background" as const],
+    ["a job's request id", "job-dedupe", undefined],
+  ])(
+    "prioritizes interactive user requests over background tasks marked by %s",
+    async (_signal, requestPrefix, priority) => {
+      const queue = __getGenerationQueueForTests();
+      const activeGate1 = deferred<void>();
+      const activeGate2 = deferred<void>();
+      const executionOrder: string[] = [];
 
-    vi.mocked(resolveCapability).mockImplementation(() => ({
-      capability: "quick",
-      providerId: "mock-gemini",
-      modelClass: "lite",
-      provider: {
-        id: "mock-gemini",
-        generate: vi.fn(async (opts) => {
-          const text = (opts.prompt as string) || "done";
-          executionOrder.push(text);
-          return {
-            text,
-            model: "mock-gemini",
-            latencyMs: 5,
-            tokenCount: 10,
-          };
-        }),
-      } as unknown as AIProvider,
-    }));
+      vi.mocked(resolveCapability).mockImplementation(() => ({
+        capability: "quick",
+        providerId: "mock-gemini",
+        modelClass: "lite",
+        provider: {
+          id: "mock-gemini",
+          generate: vi.fn(async (opts) => {
+            const text = (opts.prompt as string) || "done";
+            executionOrder.push(text);
+            return {
+              text,
+              model: "mock-gemini",
+              latencyMs: 5,
+              tokenCount: 10,
+            };
+          }),
+        } as unknown as AIProvider,
+      }));
 
-    // Hold both concurrency slots
-    const active1 = queue.run(() => activeGate1.promise, {
-      accountId: actorA.user.id,
-    });
-    const active2 = queue.run(() => activeGate2.promise, {
-      accountId: actorA.user.id,
-    });
+      // Hold both concurrency slots
+      const active1 = queue.run(() => activeGate1.promise, {
+        accountId: actorA.user.id,
+      });
+      const active2 = queue.run(() => activeGate2.promise, {
+        accountId: actorA.user.id,
+      });
 
-    // Tenant A enqueues background jobs (e.g. dedupe scan)
-    const bg1 = runWithContext(
-      {
-        requestId: "job-dedupe-1",
-        principal: null,
-        scope: actorA.scope,
-      },
-      () =>
-        generateFor("quick", {
-          prompt: "A-bg-1",
-          priority: "background",
-          responseFormat: "text",
-        }),
-    );
+      // Tenant A enqueues background jobs (e.g. dedupe scan)
+      const background = (n: number) =>
+        runWithContext(
+          {
+            requestId: `${requestPrefix}-${n}`,
+            principal: null,
+            scope: actorA.scope,
+          },
+          () =>
+            generateFor("quick", {
+              prompt: `A-bg-${n}`,
+              priority,
+              responseFormat: "text",
+            }),
+        );
+      const bg1 = background(1);
+      const bg2 = background(2);
 
-    const bg2 = runWithContext(
-      {
-        requestId: "job-dedupe-2",
-        principal: null,
-        scope: actorA.scope,
-      },
-      () =>
-        generateFor("quick", {
-          prompt: "A-bg-2",
-          priority: "background",
-          responseFormat: "text",
-        }),
-    );
-
-    // Tenant B submits an interactive request
-    const bInteractive = runWithContext(
-      {
-        requestId: "req-search-ask",
-        principal: { kind: "user", user: actorB.user } as never,
-        scope: actorB.scope,
-      },
-      () =>
-        generateFor("quick", {
-          prompt: "B-interactive",
-          responseFormat: "text",
-        }),
-    );
-
-    // Open active slots
-    activeGate1.resolve();
-    activeGate2.resolve();
-    await Promise.all([active1, active2, bg1, bg2, bInteractive]);
-
-    // B's interactive request ran ahead of A's waiting background work!
-    expect(executionOrder[0]).toBe("B-interactive");
-    expect(executionOrder.slice(1)).toEqual(["A-bg-1", "A-bg-2"]);
-  });
-
-  it("prevents noisy neighbor from locking out quiet tenants by evicting tail background work", async () => {
-    const queue = __getGenerationQueueForTests();
-    const activeGate1 = deferred<void>();
-    const activeGate2 = deferred<void>();
-
-    vi.mocked(resolveCapability).mockImplementation(() => ({
-      capability: "quick",
-      providerId: "mock-gemini",
-      modelClass: "lite",
-      provider: {
-        id: "mock-gemini",
-        generate: vi.fn(async (opts) => ({
-          text: `result-${opts.prompt}`,
-          model: "mock-gemini",
-          latencyMs: 5,
-          tokenCount: 10,
-        })),
-      } as unknown as AIProvider,
-    }));
-
-    // Hold 2 active slots
-    queue.run(() => activeGate1.promise, { accountId: actorA.user.id });
-    queue.run(() => activeGate2.promise, { accountId: actorA.user.id });
-
-    // Tenant A fills the entire waiting capacity (16 jobs) with background tasks
-    const aPromises: Promise<unknown>[] = [];
-    for (let i = 1; i <= 16; i++) {
-      aPromises.push(
-        queue.run(async () => `result-A-bg-${i}`, {
-          accountId: actorA.user.id,
-          priority: "background",
-        }),
+      // Tenant B submits an interactive request
+      const bInteractive = runWithContext(
+        {
+          requestId: "req-search-ask",
+          principal: { kind: "user", user: actorB.user } as never,
+          scope: actorB.scope,
+        },
+        () =>
+          generateFor("quick", {
+            prompt: "B-interactive",
+            responseFormat: "text",
+          }),
       );
-    }
 
-    expect(getAIQueueSnapshot().waiting).toBe(16);
+      // Open active slots
+      activeGate1.resolve();
+      activeGate2.resolve();
+      await Promise.all([active1, active2, bg1, bg2, bInteractive]);
 
-    // Tenant B (quiet tenant) submits an interactive request
-    const bPromise = queue.run(async () => "result-B-ask", {
-      accountId: actorB.user.id,
-      priority: "interactive",
-    });
-
-    // Tenant A's 16th background job was evicted with 429 AI_BUSY
-    await expect(aPromises[15]).rejects.toMatchObject({
-      statusCode: 429,
-      code: "AI_BUSY",
-    });
-
-    // Total waiting capacity remains capped at 16
-    expect(getAIQueueSnapshot().waiting).toBe(16);
-
-    // Release concurrency slots
-    activeGate1.resolve();
-    activeGate2.resolve();
-
-    // Tenant B's interactive request succeeds
-    const bRes = await bPromise;
-    expect(bRes).toBe("result-B-ask");
-  });
+      // B's interactive request ran ahead of A's waiting background work!
+      expect(executionOrder[0]).toBe("B-interactive");
+      expect(executionOrder.slice(1)).toEqual(["A-bg-1", "A-bg-2"]);
+    },
+  );
 
   it("reports queue status and per-account stats in GET /api/admin/health", async () => {
     const queue = __getGenerationQueueForTests();

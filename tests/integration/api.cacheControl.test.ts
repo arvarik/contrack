@@ -18,8 +18,6 @@ import path from "path";
 import request from "supertest";
 
 const { makeTestApp } = await import("./helpers.ts");
-const { NO_STORE_PREFIXES } =
-  await import("../../server/middleware/cacheControl.ts");
 const { sqlite } = await import("../../server/db.ts");
 const { ownerUploadDir, ownerUploadUrl } =
   await import("../../server/utils/paths.ts");
@@ -44,18 +42,6 @@ afterAll(() => {
 });
 
 describe("no-store", () => {
-  it("covers exactly the four prefixes the middleware names", () => {
-    // The list is a statement about what those responses contain. `/api` as a
-    // whole is not that statement, and a prefix added by accident is worse
-    // than one missing on purpose.
-    expect([...NO_STORE_PREFIXES]).toEqual([
-      "/api/auth",
-      "/api/admin",
-      "/api/ai/stats",
-      "/api/export",
-    ]);
-  });
-
   it("marks who is signed in as never storable", async () => {
     const res = await asUser(actor)(request(app).get("/api/auth/me"));
 

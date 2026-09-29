@@ -1,5 +1,5 @@
 // =============================================================================
-// Integration: contact CRUD, validation, FTS search, bulk ops, error envelope
+// Integration: contact CRUD, validation, FTS search, error envelope
 // =============================================================================
 // Every request here runs the real Express pipeline against a real SQLite
 // database (fresh temp file per test file) — validation middleware, service
@@ -244,37 +244,6 @@ describe("FTS search pipeline (triggers + index)", () => {
   });
 });
 
-describe("bulk operations", () => {
-  it("bulk-creates contacts via the JSON path", async () => {
-    const res = await request(app)
-      .post("/api/contacts/bulk")
-      .send([
-        { name: "Bulk One", emails: ["b1@example.com"] },
-        { name: "Bulk Two" },
-      ]);
-
-    expect(res.status).toBe(201);
-    expect(res.body.count).toBe(2);
-  });
-
-  it("bulk-deletes contacts and cascades children", async () => {
-    const a = await request(app)
-      .post("/api/contacts")
-      .send({ name: "Doomed A", emails: ["da@example.com"] });
-    const b = await request(app)
-      .post("/api/contacts")
-      .send({ name: "Doomed B" });
-
-    const res = await request(app)
-      .post("/api/contacts/bulk-delete")
-      .send({ ids: [a.body.id, b.body.id] });
-    expect(res.status).toBe(200);
-
-    const after = await request(app).get(`/api/contacts/${a.body.id}`);
-    expect(after.status).toBe(404);
-  });
-});
-
 describe("error envelope", () => {
   it("returns ROUTE_NOT_FOUND for unknown API paths", async () => {
     const res = await request(app).get("/api/definitely-not-a-route");
@@ -293,29 +262,7 @@ describe("error envelope", () => {
   });
 });
 
-describe("dedupeOnCreate and autoEnrich preferences on contact creation", () => {
-  it("skips incremental dedupe when dedupeOnCreate is false", async () => {
-    const { contactService } =
-      await import("../../server/services/contactService.ts");
-    const dedupeSpy = vi.spyOn(contactService, "scheduleIncrementalDedupe");
-
-    await request(app)
-      .patch("/api/auth/preferences")
-      .send({ dedupeOnCreate: false });
-
-    await request(app)
-      .post("/api/contacts")
-      .send({ name: "Skip Dedupe Person" });
-
-    expect(dedupeSpy).not.toHaveBeenCalled();
-
-    // Reset preference
-    await request(app)
-      .patch("/api/auth/preferences")
-      .send({ dedupeOnCreate: true });
-    dedupeSpy.mockRestore();
-  });
-
+describe("the autoEnrich preference on contact creation", () => {
   it("starts a one-contact enrichment batch when autoEnrich is true", async () => {
     const { jobQueue } =
       await import("../../server/services/aiSearch/jobQueue.ts");

@@ -50,9 +50,16 @@ let scope: ReturnType<typeof scopeForOwnerId>;
  */
 function addContact(
   name: string,
-  extra: Partial<{ company: string; isGhost: number; ownerId: string }> = {},
+  extra: Partial<{
+    id: string;
+    company: string;
+    isGhost: number;
+    ownerId: string;
+  }> = {},
 ): string {
-  const id = `c-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
+  const id =
+    extra.id ??
+    `c-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
   sqlite
     .prepare(
       `INSERT INTO contacts (id, name, company, isGhost, ownerId, phoneticHash)
@@ -297,10 +304,6 @@ describe("the tiebreakers", () => {
 // ---------------------------------------------------------------------------
 
 describe("the thresholds", () => {
-  it("keeps link above review", () => {
-    expect(MENTION_LINK_THRESHOLD).toBeGreaterThan(MENTION_REVIEW_THRESHOLD);
-  });
-
   it("links only at or above the link threshold", () => {
     addContact("Jonathan Smith");
 
@@ -325,17 +328,19 @@ describe("the thresholds", () => {
     }
   });
 
-  it("resolves the same way whichever order the corpus came back in", () => {
-    // Two contacts that score identically. Without the id tie-break the answer
-    // would depend on the order SQLite happened to return the rows in, which
-    // is the kind of test that passes for months and then does not.
-    addContact("Elena Marchetti", { company: "Jetty Marine" });
-    addContact("Elena Marchetti", { company: "Jetty Marine" });
+  it("names the lower id when two contacts score the same", () => {
+    // Two contacts that score identically, the higher id written first.
+    // Without the id tie-break the answer would follow the order SQLite
+    // returned the rows in, which is the kind of test that passes for months
+    // and then does not. Resolving twice against the same rows cannot show
+    // that, because the rows come back in the same order both times.
+    addContact("Elena Marchetti", { company: "Jetty Marine", id: "c-em-2" });
+    addContact("Elena Marchetti", { company: "Jetty Marine", id: "c-em-1" });
 
-    const first = resolve("Elena Marchetti");
-    const second = resolve("Elena Marchetti");
+    const result = resolve("Elena Marchetti");
 
-    expect(first).toEqual(second);
+    expect(result.kind).toBe("review");
+    expect(result.kind === "review" && result.match.contactId).toBe("c-em-1");
   });
 
   it("returns a ghost for a name with nothing in it", () => {

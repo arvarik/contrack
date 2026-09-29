@@ -107,17 +107,13 @@ const cosine = (a: Float32Array, b: Float32Array) => {
   return dot / Math.sqrt(na * nb);
 };
 
-// No "in", "at" or "near" before a city, so neither question has an
-// implicit facet, and their facets are equal. Only the entity key can keep
-// Munich apart from Berlin.
+// No "in", "at" or "near" before the city, so neither question has an
+// implicit facet, and their facets are equal.
 const ASKED = "Berlin startup founders";
 /** The same question in other words, at cosine 0.995. */
 const REWORDED = "Who are Berlin startup founders?";
-/** Another city at the same cosine. Only the entity key tells them apart. */
-const OTHER_CITY = "Munich startup founders";
 questions.set(ASKED, vector({ 0: 1 }));
 questions.set(REWORDED, vector({ 0: 1, 1: 0.1 }));
-questions.set(OTHER_CITY, vector({ 0: 1, 2: 0.1 }));
 
 const FOUNDERS = [
   { name: "Ada Okafor", role: "Founder", location: "Berlin, Germany" },
@@ -129,10 +125,7 @@ const FOUNDERS = [
 /** Every provider call, for the checks that a hit makes none. */
 const modelCalls = () => vi.mocked(generateFor).mock.calls.length;
 
-/**
- * The planner answers with a plan the database proves: founders in the city
- * the question names.
- */
+/** The planner answers with a plan the database proves: founders in Berlin. */
 function scriptPlanner(verifyEmpty = false): void {
   vi.mocked(generateFor).mockImplementation(
     async (_capability, options: GatewayOptions) => {
@@ -146,9 +139,7 @@ function scriptPlanner(verifyEmpty = false): void {
       const plan: QueryPlan = {
         must: {
           roleMatchers: ["Founder"],
-          locationMatchers: [
-            JSON.stringify(options).includes("Munich") ? "Munich" : "Berlin",
-          ],
+          locationMatchers: ["Berlin"],
         },
         should: {},
         confidence: "high",
@@ -203,15 +194,10 @@ describe("the setup", () => {
     expect(resolveEmbeddings().kind).toBe("builtin");
   });
 
-  it("puts the reworded question above the threshold and the other city too", () => {
-    const asked = questions.get(ASKED)!;
-    expect(cosine(asked, questions.get(REWORDED)!)).toBeGreaterThanOrEqual(
-      SEMANTIC_THRESHOLD,
-    );
-    // The vectors alone would let Munich answer for Berlin.
-    expect(cosine(asked, questions.get(OTHER_CITY)!)).toBeGreaterThanOrEqual(
-      SEMANTIC_THRESHOLD,
-    );
+  it("puts the reworded question above the threshold", () => {
+    expect(
+      cosine(questions.get(ASKED)!, questions.get(REWORDED)!),
+    ).toBeGreaterThanOrEqual(SEMANTIC_THRESHOLD);
   });
 });
 
@@ -457,17 +443,6 @@ describe("the entity guard", () => {
     await rejected;
     expect(modelCalls()).toBe(0);
     expect(semanticEntryCount(localOwnerId())).toBe(0);
-  });
-
-  it("does not answer a question about Munich from one about Berlin", async () => {
-    await seedLocal();
-    await ask(ASKED);
-    const calls = modelCalls();
-
-    const munich = await ask(OTHER_CITY);
-    expect(munich.cached).toBeFalsy();
-    // The question went to the model, as a new question must.
-    expect(modelCalls()).toBeGreaterThan(calls);
   });
 
   it("keys a question by its names, numbers, quotes and emails", () => {

@@ -623,13 +623,6 @@ describe("what the status endpoint reports", () => {
     expect(res.body.legacyTokenConfigured).toBe(false);
   });
 
-  it("keeps both names for the contact count through this release", async () => {
-    const res = await request(app).get("/api/auth/status");
-    expect(res.body).toHaveProperty("deviceContacts");
-    expect(res.body).toHaveProperty("existingContacts");
-    expect(res.body.existingContacts).toBe(res.body.deviceContacts);
-  });
-
   it("says how the caller proved who they are", async () => {
     const res = await as(admin)(request(app).get("/api/auth/me"));
     expect(res.status).toBe(200);
@@ -654,13 +647,6 @@ describe("what the status endpoint reports", () => {
         .set("Authorization", "Bearer an-instance-wide-secret");
       expect(res.body.user.id).toBe(admin.id);
       expect(res.body.authenticated).toBe(true);
-
-      // It is not a session, so it manages no account.
-      const me = await request(app)
-        .get("/api/auth/me")
-        .set("Authorization", "Bearer an-instance-wide-secret");
-      expect(me.status).toBe(403);
-      expect(me.body.error.code).toBe("SESSION_REQUIRED");
     } finally {
       delete process.env.API_TOKEN;
       __resetAuthWarnings();

@@ -135,6 +135,11 @@ describe("enrichment integrity", () => {
         tags: Array.from({ length: 51 }, () => ({ tag: "repeated" })),
       }),
     ).toThrow("schema validation");
+    // Neither rejected answer left anything on the contact.
+    const after = enrichmentContact(scope(), id);
+    expect(after.website).toBeNull();
+    expect(after.tags).toEqual([]);
+    expect(after.aiHydratedAt).toBeNull();
     expect(aiSearchOutputSchema.parse({ role: null, emails: null })).toEqual({
       role: undefined,
       emails: undefined,

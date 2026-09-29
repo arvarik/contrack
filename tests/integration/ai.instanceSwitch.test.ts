@@ -49,7 +49,6 @@ import { setPreferences } from "../../server/services/userPreferencesService.ts"
 import {
   aiAllowedForUser,
   aiOffLockedByEnv,
-  instanceAiState,
   isAiOffForInstance,
   setAiOffForInstance,
 } from "../../server/ai/instanceSwitch.ts";
@@ -90,23 +89,6 @@ describe("reading the switch", () => {
       expect(aiOffLockedByEnv(), value).toBe(false);
       expect(isAiOffForInstance(), value).toBe(false);
     }
-  });
-
-  it("turns off with the setting, and back on", () => {
-    expect(instanceAiState()).toEqual({ aiOff: false, lockedByEnv: false });
-
-    setAiOffForInstance(true);
-    expect(getSetting(SETTING_KEYS.aiInstanceOff)).toBe(true);
-    expect(instanceAiState()).toEqual({ aiOff: true, lockedByEnv: false });
-
-    setAiOffForInstance(false);
-    expect(isAiOffForInstance()).toBe(false);
-  });
-
-  it("stays off while AI_DISABLED is set, whatever the setting says", () => {
-    process.env.AI_DISABLED = "true";
-    setAiOffForInstance(false);
-    expect(instanceAiState()).toEqual({ aiOff: true, lockedByEnv: true });
   });
 });
 
@@ -210,7 +192,7 @@ describe("the rule for one account", () => {
 });
 
 describe("auto-enrichment", () => {
-  it("starts no research for a new contact while AI is off", async () => {
+  it("starts research for a new contact while AI is on, and none while it is off", async () => {
     const { jobQueue } =
       await import("../../server/services/aiSearch/jobQueue.ts");
     const strat =
@@ -225,15 +207,24 @@ describe("auto-enrichment", () => {
     await request(app)
       .patch("/api/auth/preferences")
       .send({ autoEnrich: true });
-    setAiOffForInstance(true);
     try {
-      const res = await request(app)
+      // With AI on the same setup starts a batch, so the silence below is
+      // the switch's and not a preference that never took.
+      const on = await request(app)
+        .post("/api/contacts")
+        .send({ name: "Switch On Person" });
+      expect(on.status).toBe(201);
+      expect(batchSpy).toHaveBeenCalledTimes(1);
+
+      setAiOffForInstance(true);
+      const off = await request(app)
         .post("/api/contacts")
         .send({ name: "Switch Off Person" });
-      expect(res.status).toBe(201);
-      expect(batchSpy).not.toHaveBeenCalled();
+      expect(off.status).toBe(201);
+      expect(batchSpy).toHaveBeenCalledTimes(1);
       expect(appendSpy).not.toHaveBeenCalled();
     } finally {
+      jobQueue.__resetForTests();
       await request(app)
         .patch("/api/auth/preferences")
         .send({ autoEnrich: false });

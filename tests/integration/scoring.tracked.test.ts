@@ -3,17 +3,16 @@
 // =============================================================================
 // The score is an opt-in. `contacts.isTracked` gates the two sweeps, the
 // single-contact readers, the inline scorer behind the tracking routes and
-// the weekly snapshot. An untracked contact's stored score is a placeholder
-// that nothing writes and nothing shows.
+// the weekly snapshot (its case is with the other snapshot rules, in
+// scoring.snapshots.test.ts). An untracked contact's stored score is a
+// placeholder that nothing writes and nothing shows.
 // =============================================================================
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { sqlite } from "../../server/db.ts";
 import {
   relationshipService,
-  snapshotScores,
   INLINE_SCORE_LIMIT,
 } from "../../server/services/relationshipService.ts";
-import { isoWeekStart } from "../../shared/dates.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, type Actor, resetAccounts } from "./tenancy/helpers.ts";
 
@@ -186,19 +185,5 @@ describe("scoreContacts", () => {
       )
       .get(A.user.id, SENTINEL) as { n: number };
     expect(left.n).toBe(0);
-  });
-});
-
-describe("snapshots", () => {
-  it("skip untracked rows", () => {
-    const tracked = addContact(A.user.id);
-    addContact(A.user.id, { tracked: 0 });
-    const week = isoWeekStart(new Date());
-
-    expect(snapshotScores(A.user.id, week)).toBe(1);
-    const rows = sqlite
-      .prepare(`SELECT contactId FROM score_snapshots WHERE ownerId = ?`)
-      .all(A.user.id) as { contactId: string }[];
-    expect(rows.map((r) => r.contactId)).toEqual([tracked]);
   });
 });

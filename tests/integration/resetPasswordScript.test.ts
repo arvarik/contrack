@@ -105,10 +105,11 @@ describe("scripts/reset-password.ts", () => {
       )
       .get() as { username: string } | undefined;
 
-    if (local) {
-      await expect(resetPasswordCli(local.username)).rejects.toThrow(
-        "This account has no password to reset",
-      );
-    }
+    // Every instance has a local owner, so a missing one is a failure here,
+    // not a reason to skip the check.
+    expect(local).toBeDefined();
+    await expect(resetPasswordCli(local!.username)).rejects.toThrow(
+      "This account has no password to reset",
+    );
   });
 });

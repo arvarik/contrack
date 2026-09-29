@@ -276,6 +276,41 @@ const CASES: PlanCase[] = [
     index: /USING (?:COVERING )?INDEX idx_action_items_owner_due/,
   },
   {
+    label: "completed action items",
+    source: "server/services/actionItemService.ts getRecentlyCompleted",
+    sql: `
+      SELECT ai.*,
+             c.name as contactName, c.company as contactCompany,
+             c.avatarUrl as contactAvatarUrl, c.themeColor as contactThemeColor
+      FROM action_items ai
+      JOIN contacts c ON ai.contactId = c.id
+      WHERE ai.ownerId = ?
+        AND ai.completedAt IS NOT NULL
+        AND (c.isArchived = 0 OR c.isArchived IS NULL)
+      ORDER BY ai.completedAt DESC
+      LIMIT 50`,
+    params: () => [ownerA],
+    index: /USING (?:COVERING )?INDEX idx_action_items_owner_done/,
+  },
+  {
+    label: "urgent action item count",
+    source: "server/services/actionItemService.ts getUrgentCount",
+    sql: `
+      SELECT COUNT(*) as count
+      FROM action_items ai
+      JOIN contacts c ON ai.contactId = c.id
+      WHERE ai.ownerId = ?
+        AND ai.completedAt IS NULL
+        AND date(ai.dueAt) <= date('now')
+        AND (c.isArchived = 0 OR c.isArchived IS NULL)`,
+    params: () => [ownerA],
+    index: /USING (?:COVERING )?INDEX idx_action_items_owner_(?:due|done)/,
+    note:
+      "`date(ai.dueAt)` wraps the column, so the second column of the " +
+      "partial `_owner_due` cannot answer the range. That leaves the two " +
+      "indexes even on the owner alone, and either is an owner seek.",
+  },
+  {
     label: "lists",
     source: "server/services/listService.ts getAllLists",
     sql: `
@@ -326,6 +361,33 @@ const CASES: PlanCase[] = [
       LIMIT ? OFFSET ?`,
     params: () => [ownerA, 50, 0],
     index: /USING (?:COVERING )?INDEX idx_ai_inv_owner_created/,
+  },
+  {
+    label: "AI stats feed with a filter",
+    source: "server/services/aiStatsService.ts getFeed",
+    sql: `
+      SELECT id, operation, model, tokenCount, latencyMs, cached, description, createdAt
+      FROM ai_invocations
+      WHERE ownerId = ? AND cached = ?
+      ORDER BY createdAt DESC
+      LIMIT ? OFFSET ?`,
+    params: () => [ownerA, 0, 50, 0],
+    index: /USING (?:COVERING )?INDEX idx_ai_inv_owner_created/,
+  },
+  {
+    label: "hard-filter corpus",
+    source: "server/services/search/hybridRetrieval.ts applyHardFilters",
+    sql: `
+      SELECT c.id, c.name, c.lastContactedAt, c.location, c.company, c.role,
+             c.headline, c.industry, '' AS tagsText, '' AS interestsText
+      FROM contacts c
+      WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}`,
+    params: () => [ownerA],
+    index: /USING (?:COVERING )?INDEX idx_contacts_owner_deleted/,
+    note:
+      "A copy of this plan on a small database without statistics took " +
+      "idx_contacts_owner_status. With statistics, `deletedAt IS NULL` is " +
+      "the sharper second column. Both lead with ownerId.",
   },
   {
     label: "global timeline (MCP)",
