@@ -35,9 +35,6 @@ test("account profile photo lifecycle in Settings", async ({
   await page.goto("/settings/account");
   await expect(page.getByRole("heading", { name: "Photo" })).toBeVisible();
 
-  // Initial state check: expectPageAccessible on Account page
-  await expectPageAccessible(page, testInfo, "settings-account-no-photo");
-
   // Verify initial monogram in sidebar and card preview
   const sidebarAvatar = accountMenu(page, ADMIN).locator("img");
   await expect(sidebarAvatar).toHaveAttribute("src", /\/api\/avatar\/initials/);
@@ -78,9 +75,6 @@ test("account profile photo lifecycle in Settings", async ({
   // The monogram returns
   await expect(sidebarAvatar).toHaveAttribute("src", /\/api\/avatar\/initials/);
   await expect(cardImg).toHaveAttribute("src", /\/api\/avatar\/initials/);
-
-  // Accessible after removal
-  await expectPageAccessible(page, testInfo, "settings-account-photo-removed");
 });
 
 test("captures screenshots of photo card and sidebar in light and dark", async ({

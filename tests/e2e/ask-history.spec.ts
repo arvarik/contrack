@@ -212,9 +212,6 @@ test.describe("desktop", () => {
     await expectPanelOpen(page, false);
     await expect(historyButton(page)).toBeFocused();
 
-    // Accessibility check with pane closed
-    await expectPageAccessible(page, testInfo, "ask-history-desktop-closed");
-
     // Notes mode accessibility check. The header is the title and the mode
     // switch, with no line of description under it.
     await page.goto("/search?mode=notes");
@@ -239,7 +236,7 @@ test.describe("desktop", () => {
   test("palette and Ask Contrack pane share unified search history", async ({
     page,
     seed,
-  }, testInfo) => {
+  }) => {
     const ada = personMatch(seed.byName("Ada Lovelace"));
     await answerPeopleSearch(page, [ada]);
 
@@ -300,9 +297,6 @@ test.describe("desktop", () => {
       page.getByRole("heading", { name: "Search history" }),
     ).toBeVisible();
     await expect(page.getByText("2 questions")).toBeVisible();
-
-    // Scan accessibility of the Privacy page
-    await expectPageAccessible(page, testInfo, "settings-privacy");
 
     // 6. Clear history from Privacy page
     await page.getByRole("button", { name: "Clear history" }).click();

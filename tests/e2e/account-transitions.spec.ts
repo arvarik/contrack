@@ -55,6 +55,13 @@ test("first run creates the admin, and the account can sign out and back in", as
   await expect(alert).toHaveText("Incorrect username or password.");
   await expect(page.getByLabel("Username or email")).toHaveValue(ADMIN.email);
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
+  // The corvid beside the alert is decoration, so the alert is the whole of
+  // what a screen reader hears.
+  await expect(page.getByTestId("auth-corvid").locator("svg")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+  await expectPageAccessible(page, testInfo, "sign-in-wrong-password");
 
   await submitSignIn(page, ADMIN.email, ADMIN.password);
   await expectSignedIn(page, ADMIN);

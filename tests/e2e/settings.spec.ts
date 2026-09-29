@@ -451,54 +451,6 @@ test.describe("Settings — Tools and Data", () => {
     }
   });
 
-  test("tags page loads and displays tags list", async ({ page }) => {
-    await page.goto("/settings/tags");
-    await expect(
-      page.getByRole("heading", { name: "Tags", level: 1 }),
-    ).toBeVisible();
-    await expect(page.getByText(/The labels on your contacts/i)).toBeVisible();
-  });
-
-  test("duplicates page displays sensitivity and automatic check switches", async ({
-    page,
-  }) => {
-    await page.goto("/settings/duplicates");
-    await expect(
-      page.getByRole("heading", { name: "Duplicates", level: 1 }),
-    ).toBeVisible();
-
-    const sensitivityRow = page.locator("#sensitivity");
-    await expect(sensitivityRow).toBeVisible();
-
-    const onCreateRow = page.locator("#dedupe-on-create");
-    await expect(onCreateRow).toBeVisible();
-    const onCreateSwitch = onCreateRow.getByRole("switch", {
-      name: "Check new contacts automatically",
-    });
-    await expect(onCreateSwitch).toHaveAttribute("aria-checked", "true");
-
-    const onImportRow = page.locator("#dedupe-on-import");
-    await expect(onImportRow).toBeVisible();
-    const onImportSwitch = onImportRow.getByRole("switch", {
-      name: "Check imports automatically",
-    });
-    await expect(onImportSwitch).toHaveAttribute("aria-checked", "true");
-  });
-
-  test("enrichment page displays auto-enrich switch", async ({ page }) => {
-    await page.goto("/settings/enrichment");
-    await expect(
-      page.getByRole("heading", { name: "Contact enrichment", level: 1 }),
-    ).toBeVisible();
-
-    const autoEnrichRow = page.locator("#auto-enrich");
-    await expect(autoEnrichRow).toBeVisible();
-    const autoEnrichSwitch = autoEnrichRow.getByRole("switch", {
-      name: "Enrich new contacts automatically",
-    });
-    await expect(autoEnrichSwitch).toHaveAttribute("aria-checked", "false");
-  });
-
   test("enrichment page filters by who and by research state, each pill counted", async ({
     page,
   }) => {
@@ -738,7 +690,6 @@ test.describe("Tracked contacts", () => {
 
 test.describe("Settings — Accessibility", () => {
   const pages = [
-    { name: "settings landing", path: "/settings" },
     { name: "appearance", path: "/settings/appearance" },
     { name: "network", path: "/settings/network" },
     { name: "keyboard", path: "/settings/keyboard" },

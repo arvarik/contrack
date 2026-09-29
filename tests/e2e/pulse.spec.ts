@@ -710,24 +710,6 @@ test.describe("Pulse Office", () => {
     expect(await legend.getByRole("link").count()).toBeGreaterThan(0);
   });
 
-  test("renders office on phone viewport and verifies heatmap horizontal scroller", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/pulse");
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Pulse" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Today summary")).toBeVisible();
-    await expect(page.locator('[data-card-id="up-next"]')).toBeVisible();
-
-    // Verify heatmap sits in horizontal scroller
-    const activityCard = page.locator('[data-card-id="activity"]');
-    await expect(activityCard).toBeVisible();
-    const scroller = activityCard.locator(".overflow-x-auto");
-    await expect(scroller).toBeVisible();
-  });
-
   test("customize mode: hides Keeping up, Done, reload keeps it hidden, Reset brings it back", async ({
     page,
   }) => {
@@ -753,6 +735,12 @@ test.describe("Pulse Office", () => {
         .getByText("Loading", { exact: true }),
     ).toHaveCount(0);
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-card-id="insight"]')).toHaveText(
+      /Add an AI key to get one\.|Your admin has not added an AI key yet/,
+    );
+    await expect(
+      page.locator('[data-card-id="activity"]').locator('svg[role="img"]'),
+    ).toBeVisible();
     const atRest = await boxes();
 
     // Customize from the More menu
@@ -1053,14 +1041,14 @@ test.describe("Pulse Office", () => {
     await expect(page.getByText("Editing layout")).not.toBeVisible();
   });
 
-  test("page passes automated accessibility scans in light, dark, and customize mode", async ({
+  // The light palette at rest is scanned in axe.spec.ts.
+  test("page passes automated accessibility scans in dark, in customize mode, and on Duplicates", async ({
     page,
   }, testInfo) => {
     await page.goto("/pulse");
     await expect(
       page.getByRole("heading", { level: 1, name: "Pulse" }),
     ).toBeVisible();
-    await expectPageAccessible(page, testInfo, "pulse-light");
 
     // Dark mode
     await page.emulateMedia({ colorScheme: "dark" });

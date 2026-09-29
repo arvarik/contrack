@@ -17,11 +17,9 @@
  * has quietly lost its label.
  */
 import { devices, type Page } from "@playwright/test";
-import { test, expect, gatedTest } from "./fixtures/test";
+import { test, expect } from "./fixtures/test";
 import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
-import { expectFloors } from "./fixtures/metrics";
 import { answerPeopleSearch, personMatch } from "./fixtures/search";
-import { ADMIN, completeSetup, signOutFromSidebar } from "./fixtures/accounts";
 
 const { defaultBrowserType: _webkit, ...PHONE } = devices["Pixel 7"];
 
@@ -96,9 +94,7 @@ test.describe("the bird while the AI works", () => {
 test.describe("the corvid's perch on a phone", () => {
   test.use({ ...PHONE, viewport: { width: 390, height: 844 } });
 
-  test("Settings ends with a mark that flies, and the page holds its floors", async ({
-    page,
-  }, testInfo) => {
+  test("Settings ends with a mark that flies", async ({ page }, testInfo) => {
     await page.goto("/settings");
     await expect(
       page.getByText("Everything here is stored on this machine"),
@@ -122,31 +118,7 @@ test.describe("the corvid's perch on a phone", () => {
     // Reduced motion is forced here, so no overlay is ever built.
     await expect(page.locator("[data-corvid-flight]")).toHaveCount(0);
 
-    await expectFloors(page, testInfo, "settings-phone-perch");
+    // The 44 px and 11 px floors on this page are metrics.spec.ts's.
     await expectPageAccessible(page, testInfo, "settings-phone-perch");
   });
 });
-
-gatedTest(
-  "the sign-in card stays accessible after a wrong password",
-  async ({ page }, testInfo) => {
-    await page.goto("/");
-    await completeSetup(page, ADMIN);
-    await signOutFromSidebar(page, ADMIN);
-
-    await page.getByLabel("Username or email").fill(ADMIN.email);
-    await page.getByLabel("Password", { exact: true }).fill("not-the-password");
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
-
-    // The sentence the bird answers, and the only thing announced.
-    await expect(page.getByRole("alert")).toHaveText(
-      "Incorrect username or password.",
-    );
-    // The mark beside it is decoration, so the alert is the whole of what a
-    // screen reader hears.
-    const mark = page.getByTestId("auth-corvid").locator("svg");
-    await expect(mark).toHaveAttribute("aria-hidden", "true");
-
-    await expectPageAccessible(page, testInfo, "sign-in-wrong-password");
-  },
-);

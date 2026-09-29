@@ -7,28 +7,20 @@ import { test, gatedTest, expect } from "./fixtures/test";
 import type { ContrackInstance } from "./fixtures/instance";
 import { ADMIN, completeSetup } from "./fixtures/accounts";
 
-test.describe("the shortcuts dialog shows the page's own keys", () => {
-  test("the map's keys on the map, and none of its own on a settings page", async ({
+// Which keys the dialog lists on each page is tested in
+// tests/unit/shortcuts.test.ts. What only a router shows is the link out.
+test.describe("the shortcuts dialog", () => {
+  test("its All shortcuts link opens Settings, Keyboard and closes the dialog", async ({
     page,
   }) => {
-    await page.goto("/map");
-    await expect(page.getByRole("button", { name: /insights/i })).toBeVisible();
-    await page.keyboard.press("?");
-    const list = page
-      .getByRole("dialog", { name: "Keyboard shortcuts" })
-      .getByRole("region", { name: "Shortcut list" });
-    await expect(list.getByText("Fit all in view")).toBeVisible();
-    await expect(list.getByText("Go to Network")).toBeVisible();
-    // Another page's keys are not on this one.
-    await expect(list.getByText("New contact")).toHaveCount(0);
-    await page.keyboard.press("Escape");
-
     await page.goto("/settings/appearance");
     await expect(
       page.getByRole("heading", { level: 1, name: "Appearance" }),
     ).toBeVisible();
     await page.keyboard.press("?");
-    await expect(list.getByText("No shortcuts of its own")).toBeVisible();
+    await expect(
+      page.getByRole("dialog", { name: "Keyboard shortcuts" }),
+    ).toBeVisible();
     await page.getByRole("link", { name: "All shortcuts" }).click();
     await expect(page).toHaveURL(/\/settings\/keyboard$/);
     await expect(page.getByRole("dialog")).toHaveCount(0);

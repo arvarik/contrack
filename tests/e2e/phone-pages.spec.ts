@@ -11,7 +11,7 @@
  *    - No coverage card, hero or explanation around it.
  * 3. /settings/import:
  *    - Drop zone appears before "How to export from..." disclosure.
- *    - Last chosen source is persisted in localStorage and restored on reload.
+ *    - The last chosen source is restored on reload.
  * 4. Screenshots in both light and dark modes on phone.
  */
 import { devices } from "@playwright/test";
@@ -275,15 +275,10 @@ test.describe("phone pages (390 px)", () => {
     expect(disclosureBox).not.toBeNull();
     expect(dropZoneBox!.y).toBeLessThan(disclosureBox!.y);
 
-    // Switch to LinkedIn and verify persistence in localStorage
+    // Switch to LinkedIn. The reload below proves the choice is kept.
     const linkedinTab = page.getByRole("tab", { name: "LinkedIn" });
     await linkedinTab.click();
     await expect(linkedinTab).toHaveAttribute("aria-selected", "true");
-
-    const savedSource = await page.evaluate(() =>
-      localStorage.getItem("contrack.import.lastSource"),
-    );
-    expect(savedSource).toBe("linkedin");
 
     // Reload page and verify that LinkedIn remains selected
     await page.reload();
