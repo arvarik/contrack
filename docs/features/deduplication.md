@@ -229,6 +229,18 @@ it, the way Google Contacts, HubSpot and Dex lay out their duplicates pages:
    opens on one card: the three scans as one radio group (**Quick scan**,
    **Smart scan**, **Full scan**, each with one line under it) and
    **Scan now**. The scan's progress and its results take the card's place.
+   The chosen tab shows at once with a 120 ms fade, and the other tab goes
+   at once. The tabs used to slide, and the new tab waited for the old one
+   to slide out: after Manual merge, Scan was chosen while the merge list
+   still showed, and the three scans faded in late. The scan chosen before
+   a trip to Manual merge stays chosen.
+
+   Manual merge's list draws only the rows near the screen
+   (`src/components/ui/VirtualRows.tsx`), past 200 contacts, in the page's
+   one scroller. It drew every contact, each with its avatar image: on
+   5,824 contacts the tab took 44 s to show its search box, and now 39 ms.
+   The search reads the whole list, and a short result is drawn whole.
+
 3. **Automatic merging**, a section under the tool: Auto-merge sensitivity,
    Check new contacts automatically, and Check imports automatically. While
    one is off its default, the page ends with **Reset to defaults**.

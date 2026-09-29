@@ -58,6 +58,8 @@ export const ContactMiniCard = ({
     <img
       src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
       alt={contact.name}
+      loading="lazy"
+      decoding="async"
       className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
     />
     <div className="min-w-0 flex-1">

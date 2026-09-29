@@ -276,8 +276,9 @@ export const DedupeView = () => {
 
   return (
     // The settings page scrolls, so the tool takes its own height and clips
-    // only sideways (for the tabs' slide). A clip on both axes would stop a
-    // sticky control inside it, Compare in the manual tab, from sticking.
+    // only sideways (for a swipe card's slide). A clip on both axes would
+    // stop a sticky control inside it, Compare in the manual tab, from
+    // sticking.
     <div className="flex flex-col overflow-x-clip">
       <Segmented
         label="Dedupe mode"
@@ -290,453 +291,451 @@ export const DedupeView = () => {
         className="w-full sm:w-auto sm:self-start"
       />
 
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        {activeTab === "auto" ? (
-          <motion.div
-            key="auto"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            className="flex flex-col"
-          >
-            {/* Results header (swipe view) */}
-            {hasResults && resultView === "swipe" && totalActive > 0 && (
-              <div className="shrink-0 pt-4">
-                {/* Stats bar */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-bold text-on-surface">
-                      {totalProcessed + currentIndex + 1} of {clusters.length}
-                    </span>
-                    {totalProcessed > 0 && (
-                      <div className="flex items-center gap-3 text-xs text-on-surface-variant">
-                        {mergedIds.size > 0 && (
-                          <span className="flex items-center gap-1 text-success">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            {mergedIds.size} merged
-                          </span>
-                        )}
-                        {dismissed.size > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Shield className="w-3.5 h-3.5" />
-                            {dismissed.size} skipped
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {dismissHistory.length > 0 && (
-                      <button
-                        onClick={handleUndoDismiss}
-                        className="hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg transition-colors"
-                        title="Undo last dismiss (⌘Z)"
-                      >
-                        <Undo2 className="w-3.5 h-3.5" />
-                        Undo
-                      </button>
-                    )}
-                    <button
-                      onClick={goPrev}
-                      disabled={currentIndex === 0}
-                      aria-label="Previous group"
-                      className={STEP_BUTTON}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={goNext}
-                      disabled={currentIndex >= totalActive - 1}
-                      aria-label="Next group"
-                      className={STEP_BUTTON}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Progress track */}
-                <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-primary rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${((totalProcessed + currentIndex + 1) / clusters.length) * 100}%`,
-                    }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Results view switcher */}
-            {hasResults && (
-              <div className="shrink-0 pt-3 flex items-center justify-between">
-                <div className={cn(TAB_CONTAINER, "w-fit")}>
-                  <button
-                    onClick={() => setResultView("swipe")}
-                    className={cn(
-                      tabItem(resultView === "swipe"),
-                      "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
-                    )}
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    Swipe
-                  </button>
-                  <button
-                    onClick={() => setResultView("list")}
-                    className={cn(
-                      tabItem(resultView === "list"),
-                      "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
-                    )}
-                  >
-                    <List className="w-3.5 h-3.5" />
-                    List
-                  </button>
+      {/* Tab content. The chosen tab shows at once, with a short fade, and
+          the other one goes at once. The two used to slide, and the new tab
+          waited for the old one to slide out (`AnimatePresence` in "wait"
+          mode): after Manual merge, the Scan tab was chosen while the merge
+          list still showed, and the three scans faded in late. */}
+      {activeTab === "auto" ? (
+        <motion.div
+          key="auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DURATION.fast, ease: EASE }}
+          className="flex flex-col"
+        >
+          {/* Results header (swipe view) */}
+          {hasResults && resultView === "swipe" && totalActive > 0 && (
+            <div className="shrink-0 pt-4">
+              {/* Stats bar */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-bold text-on-surface">
+                    {totalProcessed + currentIndex + 1} of {clusters.length}
+                  </span>
+                  {totalProcessed > 0 && (
+                    <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+                      {mergedIds.size > 0 && (
+                        <span className="flex items-center gap-1 text-success">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {mergedIds.size} merged
+                        </span>
+                      )}
+                      {dismissed.size > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5" />
+                          {dismissed.size} skipped
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {dismissHistory.length > 0 && (
+                    <button
+                      onClick={handleUndoDismiss}
+                      className="hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg transition-colors"
+                      title="Undo last dismiss (⌘Z)"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      Undo
+                    </button>
+                  )}
                   <button
-                    onClick={handleNewScan}
-                    className="btn-secondary btn-sm"
+                    onClick={goPrev}
+                    disabled={currentIndex === 0}
+                    aria-label="Previous group"
+                    className={STEP_BUTTON}
                   >
-                    <ScanSearch className="w-3.5 h-3.5" />
-                    New scan
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={goNext}
+                    disabled={currentIndex >= totalActive - 1}
+                    aria-label="Next group"
+                    className={STEP_BUTTON}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress track */}
+              <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{
+                    width: `${((totalProcessed + currentIndex + 1) / clusters.length) * 100}%`,
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Results view switcher */}
+          {hasResults && (
+            <div className="shrink-0 pt-3 flex items-center justify-between">
+              <div className={cn(TAB_CONTAINER, "w-fit")}>
+                <button
+                  onClick={() => setResultView("swipe")}
+                  className={cn(
+                    tabItem(resultView === "swipe"),
+                    "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
+                  )}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  Swipe
+                </button>
+                <button
+                  onClick={() => setResultView("list")}
+                  className={cn(
+                    tabItem(resultView === "list"),
+                    "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
+                  )}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  List
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleNewScan}
+                  className="btn-secondary btn-sm"
+                >
+                  <ScanSearch className="w-3.5 h-3.5" />
+                  New scan
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Body. The page scrolls it, and the shell keeps the room
+                for the phone's tab bar under the page. */}
+          <div className="pt-4">
+            {/* ═══ Phase 1: Pre-scan — the scan's picker ═══ */}
+            {preScan && (
+              <div className={cn(SETTINGS_CARD, "space-y-4")}>
+                <ChoiceGroup
+                  label="Scan"
+                  value={selectedMode}
+                  options={SCAN_MODES}
+                  onChange={setSelectedMode}
+                  className="sm:grid-cols-3"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleStartScan}
+                    disabled={isStarting}
+                    className="btn-primary max-sm:w-full"
+                  >
+                    {isStarting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ScanSearch className="w-4 h-4" />
+                    )}
+                    Scan now
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Body. The page scrolls it, and the shell keeps the room
-                for the phone's tab bar under the page. */}
-            <div className="pt-4">
-              {/* ═══ Phase 1: Pre-scan — the scan's picker ═══ */}
-              {preScan && (
-                <div className={cn(SETTINGS_CARD, "space-y-4")}>
-                  <ChoiceGroup
-                    label="Scan"
-                    value={selectedMode}
-                    options={SCAN_MODES}
-                    onChange={setSelectedMode}
-                    className="sm:grid-cols-3"
-                  />
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleStartScan}
-                      disabled={isStarting}
-                      className="btn-primary max-sm:w-full"
-                    >
-                      {isStarting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ScanSearch className="w-4 h-4" />
-                      )}
-                      Scan now
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ═══ Phase 1b: Queued behind another account ═══ */}
-              {/*
+            {/* ═══ Phase 1b: Queued behind another account ═══ */}
+            {/*
                 Deliberately not a progress card. The scan exists on the
                 server and has zero progress to report, and a progress bar
                 frozen at nothing reads as a hang. This says what is true:
                 somebody else is scanning, and this one starts by itself.
               */}
-              {isQueued && !scan && (
-                <div className="flex flex-col items-center">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full max-w-md"
-                  >
-                    <div className={cn(CARD, "text-center space-y-3")}>
-                      <span
-                        className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
-                          TONE_WASH.primary,
-                        )}
-                      >
-                        <Hourglass className="w-6 h-6" />
-                      </span>
-                      <h3 className="font-bold text-on-surface">
-                        Waiting for another scan to finish
-                      </h3>
-                      <p className="text-sm text-on-surface-variant text-pretty">
-                        Another user's scan is running. Yours is booked and will
-                        start automatically — you can leave this page
-                      </p>
-                      <p className="text-xs text-on-surface-variant">
-                        Only one scan runs at a time, because a scan reads every
-                        contact it owns and shares one AI budget
-                      </p>
-                    </div>
-                  </motion.div>
-                </div>
-              )}
+            {isQueued && !scan && (
+              <div className="flex flex-col items-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-md"
+                >
+                  <div className={cn(CARD, "text-center space-y-3")}>
+                    <span
+                      className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto",
+                        TONE_WASH.primary,
+                      )}
+                    >
+                      <Hourglass className="w-6 h-6" />
+                    </span>
+                    <h3 className="font-bold text-on-surface">
+                      Waiting for another scan to finish
+                    </h3>
+                    <p className="text-sm text-on-surface-variant text-pretty">
+                      Another user's scan is running. Yours is booked and will
+                      start automatically — you can leave this page
+                    </p>
+                    <p className="text-xs text-on-surface-variant">
+                      Only one scan runs at a time, because a scan reads every
+                      contact it owns and shares one AI budget
+                    </p>
+                  </div>
+                </motion.div>
+              </div>
+            )}
 
-              {/* ═══ Phase 2: Scanning — progress card ═══ */}
-              {isScanning && scan && (
-                <div className="flex flex-col items-center">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full max-w-md"
-                  >
-                    <div className={cn(CARD, "p-0 overflow-hidden")}>
-                      {/* Header */}
-                      <div className="px-5 py-4 bg-surface-container-low flex items-center gap-3">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "linear",
-                          }}
-                        >
-                          <Cpu className="w-5 h-5 text-primary" />
-                        </motion.div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold text-on-surface">
-                            Dedupe scan
-                          </div>
-                          <div className="text-[11px] text-on-surface-variant">
-                            {MODE_NAME[scan.mode] ?? scan.mode} mode
-                          </div>
+            {/* ═══ Phase 2: Scanning — progress card ═══ */}
+            {isScanning && scan && (
+              <div className="flex flex-col items-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-md"
+                >
+                  <div className={cn(CARD, "p-0 overflow-hidden")}>
+                    {/* Header */}
+                    <div className="px-5 py-4 bg-surface-container-low flex items-center gap-3">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                      >
+                        <Cpu className="w-5 h-5 text-primary" />
+                      </motion.div>
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-on-surface">
+                          Dedupe scan
                         </div>
-                        <span className="text-xs text-on-surface-variant tabular-nums">
-                          {scan.contactsScanned}/{scan.totalContacts || "…"}
+                        <div className="text-[11px] text-on-surface-variant">
+                          {MODE_NAME[scan.mode] ?? scan.mode} mode
+                        </div>
+                      </div>
+                      <span className="text-xs text-on-surface-variant tabular-nums">
+                        {scan.contactsScanned}/{scan.totalContacts || "…"}
+                      </span>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="h-1.5 bg-surface-container-high">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-primary-dim to-primary-container"
+                        animate={{
+                          width:
+                            scan.totalContacts > 0
+                              ? `${(scan.contactsScanned / scan.totalContacts) * 100}%`
+                              : "0%",
+                        }}
+                        transition={{ duration: DURATION.slow, ease: EASE }}
+                      />
+                    </div>
+
+                    {/* Phase details */}
+                    <div className="p-5 space-y-4">
+                      {/* Current phase */}
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+                        <span className="text-sm text-on-surface font-medium">
+                          {scan.phaseName}
                         </span>
                       </div>
 
-                      {/* Progress bar */}
-                      <div className="h-1.5 bg-surface-container-high">
-                        <motion.div
-                          className="h-full bg-gradient-to-r from-primary-dim to-primary-container"
-                          animate={{
-                            width:
-                              scan.totalContacts > 0
-                                ? `${(scan.contactsScanned / scan.totalContacts) * 100}%`
-                                : "0%",
-                          }}
-                          transition={{ duration: DURATION.slow, ease: EASE }}
-                        />
-                      </div>
-
-                      {/* Phase details */}
-                      <div className="p-5 space-y-4">
-                        {/* Current phase */}
-                        <div className="flex items-center gap-3">
-                          <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
-                          <span className="text-sm text-on-surface font-medium">
-                            {scan.phaseName}
-                          </span>
-                        </div>
-
-                        {/* Phase pipeline */}
-                        <div className="space-y-2">
-                          {/* Every mode runs the exact-match pass. The
+                      {/* Phase pipeline */}
+                      <div className="space-y-2">
+                        {/* Every mode runs the exact-match pass. The
                               rows used to test the old mode names only
                               (deterministic, ai, both), so the three modes
                               the picker offers showed neither row. */}
-                          <PhaseRow
-                            icon={<Shield className="w-3.5 h-3.5" />}
-                            label="Exact matches"
-                            status={stepStatus(
-                              scan.phase,
-                              "deterministic",
-                              "deterministic",
-                            )}
-                            detail={
-                              scan.deterministicFound > 0
-                                ? `${scan.deterministicFound} found`
-                                : undefined
-                            }
-                          />
-                          {runsAiPass(scan.mode) && (
-                            <PhaseRow
-                              icon={<Sparkles className="w-3.5 h-3.5" />}
-                              label="AI analysis"
-                              status={stepStatus(scan.phase, "blocking", "ai")}
-                              detail={
-                                scan.aiCandidatesFound > 0
-                                  ? `${scan.aiCandidatesFound} found`
-                                  : undefined
-                              }
-                            />
+                        <PhaseRow
+                          icon={<Shield className="w-3.5 h-3.5" />}
+                          label="Exact matches"
+                          status={stepStatus(
+                            scan.phase,
+                            "deterministic",
+                            "deterministic",
                           )}
+                          detail={
+                            scan.deterministicFound > 0
+                              ? `${scan.deterministicFound} found`
+                              : undefined
+                          }
+                        />
+                        {runsAiPass(scan.mode) && (
                           <PhaseRow
-                            icon={<GitMerge className="w-3.5 h-3.5" />}
-                            label="Cluster grouping"
-                            status={stepStatus(
-                              scan.phase,
-                              "clustering",
-                              "clustering",
-                            )}
+                            icon={<Sparkles className="w-3.5 h-3.5" />}
+                            label="AI analysis"
+                            status={stepStatus(scan.phase, "blocking", "ai")}
                             detail={
-                              scan.clustersFound > 0
-                                ? `${scan.clustersFound} cluster${scan.clustersFound !== 1 ? "s" : ""}`
+                              scan.aiCandidatesFound > 0
+                                ? `${scan.aiCandidatesFound} found`
                                 : undefined
                             }
                           />
-                        </div>
-
-                        {/* Findings so far */}
-                        {(scan.deterministicFound > 0 ||
-                          scan.aiCandidatesFound > 0) && (
-                          <div className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl px-3 py-2 flex items-center gap-2">
-                            <Database className="w-3.5 h-3.5 text-primary" />
-                            <span>
-                              <span className="font-bold text-on-surface">
-                                {scan.deterministicFound +
-                                  scan.aiCandidatesFound}
-                              </span>{" "}
-                              potential pair
-                              {scan.deterministicFound +
-                                scan.aiCandidatesFound !==
-                              1
-                                ? "s"
-                                : ""}{" "}
-                              found so far
-                            </span>
-                          </div>
                         )}
+                        <PhaseRow
+                          icon={<GitMerge className="w-3.5 h-3.5" />}
+                          label="Cluster grouping"
+                          status={stepStatus(
+                            scan.phase,
+                            "clustering",
+                            "clustering",
+                          )}
+                          detail={
+                            scan.clustersFound > 0
+                              ? `${scan.clustersFound} cluster${scan.clustersFound !== 1 ? "s" : ""}`
+                              : undefined
+                          }
+                        />
                       </div>
+
+                      {/* Findings so far */}
+                      {(scan.deterministicFound > 0 ||
+                        scan.aiCandidatesFound > 0) && (
+                        <div className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl px-3 py-2 flex items-center gap-2">
+                          <Database className="w-3.5 h-3.5 text-primary" />
+                          <span>
+                            <span className="font-bold text-on-surface">
+                              {scan.deterministicFound + scan.aiCandidatesFound}
+                            </span>{" "}
+                            potential pair
+                            {scan.deterministicFound +
+                              scan.aiCandidatesFound !==
+                            1
+                              ? "s"
+                              : ""}{" "}
+                            found so far
+                          </span>
+                        </div>
+                      )}
                     </div>
+                  </div>
 
-                    {/* Help text */}
-                    <p className="text-xs text-on-surface-variant text-center mt-4">
-                      You can navigate away — the scan will continue in the
-                      background
-                    </p>
-                  </motion.div>
-                </div>
-              )}
-
-              {/* ═══ Phase 3: Scan error ═══ */}
-              {scanError && scan && (
-                <div className="flex flex-col items-center">
-                  <AlertCircle className="w-12 h-12 text-error mb-4" />
-                  <p className="text-error font-bold">Scan failed</p>
-                  <p className="text-sm text-on-surface-variant mt-1">
-                    {scan.error}
+                  {/* Help text */}
+                  <p className="text-xs text-on-surface-variant text-center mt-4">
+                    You can navigate away — the scan will continue in the
+                    background
                   </p>
-                  <button
-                    onClick={handleNewScan}
-                    className="mt-4 btn-secondary"
-                  >
-                    Try again
-                  </button>
-                </div>
-              )}
-
-              {/* ═══ Phase 3: All clean (no results) ═══ */}
-              {scanComplete && clusters.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center"
-                >
-                  <EmptyState
-                    icon={CheckCircle2}
-                    title="No duplicates found"
-                    body="Run a scan after an import to check again"
-                    action={{
-                      label: "Scan again",
-                      icon: ScanSearch,
-                      onClick: handleNewScan,
-                    }}
-                  />
                 </motion.div>
-              )}
+              </div>
+            )}
 
-              {/* ═══ Phase 3: Results — Swipe view ═══ */}
-              {hasResults && resultView === "swipe" && (
-                <>
-                  {/* All processed in swipe view */}
-                  {totalActive === 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="flex flex-col items-center"
-                    >
-                      <EmptyState
-                        /*
+            {/* ═══ Phase 3: Scan error ═══ */}
+            {scanError && scan && (
+              <div className="flex flex-col items-center">
+                <AlertCircle className="w-12 h-12 text-error mb-4" />
+                <p className="text-error font-bold">Scan failed</p>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  {scan.error}
+                </p>
+                <button onClick={handleNewScan} className="mt-4 btn-secondary">
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {/* ═══ Phase 3: All clean (no results) ═══ */}
+            {scanComplete && clusters.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center"
+              >
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="No duplicates found"
+                  body="Run a scan after an import to check again"
+                  action={{
+                    label: "Scan again",
+                    icon: ScanSearch,
+                    onClick: handleNewScan,
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {/* ═══ Phase 3: Results — Swipe view ═══ */}
+            {hasResults && resultView === "swipe" && (
+              <>
+                {/* All processed in swipe view */}
+                {totalActive === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center"
+                  >
+                    <EmptyState
+                      /*
                           The one empty state in the app that is a reward
                           rather than a gap, so the bird stands in for the
                           check mark and hops once when it arrives.
                         */
-                        illustration={
-                          <CorvidMark
-                            size={96}
-                            hop
-                            alive
-                            temperament="calm"
-                            className="text-primary/60"
-                          />
-                        }
-                        title="All reviewed"
-                        body={
-                          <>
-                            {mergedIds.size > 0
-                              ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine`
-                              : "All clusters have been reviewed"}
-                            {dismissed.size > 0 && (
-                              <span className="block text-xs mt-1">
-                                ({dismissed.size} cluster
-                                {dismissed.size > 1 ? "s" : ""} kept separate)
-                              </span>
-                            )}
-                          </>
-                        }
-                        action={{
-                          label: "New scan",
-                          icon: ScanSearch,
-                          onClick: handleNewScan,
-                        }}
-                      />
-                    </motion.div>
-                  )}
+                      illustration={
+                        <CorvidMark
+                          size={96}
+                          hop
+                          alive
+                          temperament="calm"
+                          className="text-primary/60"
+                        />
+                      }
+                      title="All reviewed"
+                      body={
+                        <>
+                          {mergedIds.size > 0
+                            ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine`
+                            : "All clusters have been reviewed"}
+                          {dismissed.size > 0 && (
+                            <span className="block text-xs mt-1">
+                              ({dismissed.size} cluster
+                              {dismissed.size > 1 ? "s" : ""} kept separate)
+                            </span>
+                          )}
+                        </>
+                      }
+                      action={{
+                        label: "New scan",
+                        icon: ScanSearch,
+                        onClick: handleNewScan,
+                      }}
+                    />
+                  </motion.div>
+                )}
 
-                  {/* Active swipe card */}
-                  {currentCluster && (
-                    <AnimatePresence mode="wait">
-                      <ClusterSwipeCard
-                        key={currentCluster.id}
-                        cluster={currentCluster}
-                        onMerge={handleClusterMerge}
-                        onDismiss={handleDismiss}
-                        isMerging={mergeCluster.isPending}
-                        hasNext={currentIndex < totalActive - 1}
-                      />
-                    </AnimatePresence>
-                  )}
-                </>
-              )}
+                {/* Active swipe card */}
+                {currentCluster && (
+                  <AnimatePresence mode="wait">
+                    <ClusterSwipeCard
+                      key={currentCluster.id}
+                      cluster={currentCluster}
+                      onMerge={handleClusterMerge}
+                      onDismiss={handleDismiss}
+                      isMerging={mergeCluster.isPending}
+                      hasNext={currentIndex < totalActive - 1}
+                    />
+                  </AnimatePresence>
+                )}
+              </>
+            )}
 
-              {/* ═══ Phase 3: Results — List view ═══ */}
-              {hasResults && resultView === "list" && (
-                <ClusterList
-                  clusters={clusters}
-                  onRemoveCluster={removeCluster}
-                />
-              )}
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="manual"
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            className="pt-4"
-          >
-            <ManualMerge />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {/* ═══ Phase 3: Results — List view ═══ */}
+            {hasResults && resultView === "list" && (
+              <ClusterList
+                clusters={clusters}
+                onRemoveCluster={removeCluster}
+              />
+            )}
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="manual"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DURATION.fast, ease: EASE }}
+          className="pt-4"
+        >
+          <ManualMerge />
+        </motion.div>
+      )}
 
       {/* Merge activity slide-out panel */}
       <AnimatePresence>

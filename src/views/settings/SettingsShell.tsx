@@ -67,6 +67,7 @@ import { PAGE_TOP, PAGE_X } from "../../lib/styles";
 import { NAMES } from "../../lib/names";
 import { cn } from "../../lib/utils";
 import { SETTINGS_BOX, SETTINGS_PAGE } from "./layout";
+import { settingsPagePreload, useWarmSettingsPages } from "./warm";
 
 // Lazy admin user view for special route /admin/users/new
 const UsersView = React.lazy(() =>
@@ -102,34 +103,18 @@ const PageRoute = ({
 }: {
   ownsScrolling?: boolean;
   children: React.ReactNode;
-}) => {
-  const page = <Suspense fallback={<PageFallback />}>{children}</Suspense>;
-  return ownsScrolling ? (
-    <div className="h-full overflow-hidden">{page}</div>
+}) =>
+  ownsScrolling ? (
+    <div className="h-full overflow-hidden">{children}</div>
   ) : (
-    page
+    <>{children}</>
   );
-};
 
 const RedirectRoute = ({ to }: { to: RedirectTarget }) => {
   const { isAdmin } = useAuth();
   const target = typeof to === "function" ? to({ isAdmin }) : to;
   return <Navigate to={target} replace />;
 };
-
-const lazyComponentCache = new Map<
-  string,
-  React.LazyExoticComponent<React.ComponentType>
->();
-
-function getLazyComponent(page: SettingsPage) {
-  let comp = lazyComponentCache.get(page.id);
-  if (!comp) {
-    comp = React.lazy(page.load);
-    lazyComponentCache.set(page.id, comp);
-  }
-  return comp;
-}
 
 export const SettingsShell = () => {
   const location = useLocation();
@@ -141,8 +126,12 @@ export const SettingsShell = () => {
   const isSubpage = !!currentSubpage;
   const title = currentSubpage?.title ?? NAMES.settings.title;
   const ownsScrolling = currentSubpage?.ownsScrolling ?? false;
+  const { isAdmin, authRequired } = useAuth();
 
   usePageTitle(title);
+  // Every page this viewer can open loads in idle moments, its code and
+  // its first data, so the first click on a page does not wait for either.
+  useWarmSettingsPages({ isAdmin, authRequired });
 
   // The preferences the page's rows hold, for its Reset to defaults.
   const { scope: resetScope, entries: resetEntries } = useResetScope();
@@ -259,63 +248,77 @@ export const SettingsShell = () => {
               )}
             >
               {!ownsScrolling && header}
-              <Routes>
-                <Route path="/" element={<SettingsHome />} />
+              {/*
+                One Suspense boundary for every page, and it stays on screen
+                from page to page. A move to a page whose code is still on
+                its way then keeps the last page up until the code arrives
+                (React Router moves in a transition), where a boundary new to
+                the screen showed "Loading…" at once and React held the page
+                behind it for 300 ms. A page whose code has arrived does not
+                suspend at all (`settingsPagePreload`).
+              */}
+              <Suspense fallback={<PageFallback />}>
+                <Routes>
+                  <Route path="/" element={<SettingsHome />} />
 
-                {/* Special route for new user in Accounts */}
-                <Route
-                  path="admin/users/new"
-                  element={
-                    <RequireAdmin>
-                      <PageRoute>
-                        <UsersView createOpen />
+                  {/* Special route for new user in Accounts */}
+                  <Route
+                    path="admin/users/new"
+                    element={
+                      <RequireAdmin>
+                        <PageRoute>
+                          <UsersView createOpen />
+                        </PageRoute>
+                      </RequireAdmin>
+                    }
+                  />
+
+                  {/* Registry driven pages */}
+                  {SETTINGS_PAGES.map((page: SettingsPage) => {
+                    const Component = settingsPagePreload(page).Component;
+                    const relativePath = page.path.replace(
+                      /^\/settings\/?/,
+                      "",
+                    );
+                    const element = (
+                      <PageRoute ownsScrolling={page.ownsScrolling}>
+                        <Component />
                       </PageRoute>
-                    </RequireAdmin>
-                  }
-                />
+                    );
+                    return (
+                      <Route
+                        key={page.id}
+                        path={relativePath}
+                        element={
+                          page.admin ? (
+                            <RequireAdmin>{element}</RequireAdmin>
+                          ) : (
+                            element
+                          )
+                        }
+                      />
+                    );
+                  })}
 
-                {/* Registry driven pages */}
-                {SETTINGS_PAGES.map((page: SettingsPage) => {
-                  const Component = getLazyComponent(page);
-                  const relativePath = page.path.replace(/^\/settings\/?/, "");
-                  const element = (
-                    <PageRoute ownsScrolling={page.ownsScrolling}>
-                      <Component />
-                    </PageRoute>
-                  );
-                  return (
-                    <Route
-                      key={page.id}
-                      path={relativePath}
-                      element={
-                        page.admin ? (
-                          <RequireAdmin>{element}</RequireAdmin>
-                        ) : (
-                          element
-                        )
-                      }
-                    />
-                  );
-                })}
+                  {/* Registry driven redirects */}
+                  {Object.entries(REDIRECTS).map(([from, to]) => {
+                    const relativeFrom = from.replace(/^\/settings\/?/, "");
+                    return (
+                      <Route
+                        key={from}
+                        path={relativeFrom}
+                        element={<RedirectRoute to={to} />}
+                      />
+                    );
+                  })}
 
-                {/* Registry driven redirects */}
-                {Object.entries(REDIRECTS).map(([from, to]) => {
-                  const relativeFrom = from.replace(/^\/settings\/?/, "");
-                  return (
-                    <Route
-                      key={from}
-                      path={relativeFrom}
-                      element={<RedirectRoute to={to} />}
-                    />
-                  );
-                })}
-
-                {/* Wildcard fallback to /settings */}
-                <Route
-                  path="*"
-                  element={<Navigate to={SETTINGS_LIST_PATH} replace />}
-                />
-              </Routes>
+                  {/* Wildcard fallback to /settings */}
+                  <Route
+                    path="*"
+                    element={<Navigate to={SETTINGS_LIST_PATH} replace />}
+                  />
+                </Routes>
+              </Suspense>
               {/* The page's end, in its box: Reset to defaults when a value
                 on the page is changed, and the room for the phone's tab
                 bar. A page that owns its scrolling has its own end. */}

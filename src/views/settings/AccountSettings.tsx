@@ -17,7 +17,13 @@
  */
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Eye,
@@ -61,7 +67,8 @@ import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { describeDevice } from "../../../shared/devices";
-import { PasskeysCard } from "./account/PasskeysCard";
+import { PasskeysCard, passkeysQuery } from "./account/PasskeysCard";
+import { passkeysSupported } from "../../api/passkeys";
 import { useHashTarget } from "./SettingRow";
 import {
   SETTINGS_CARD,
@@ -78,6 +85,33 @@ const ROW_ICON = cn(
 );
 
 const MIN_PASSWORD_LENGTH = 8;
+
+/** Where this account is signed in. */
+const sessionsQuery = queryOptions({
+  queryKey: ["auth", "sessions"],
+  queryFn: fetchSessions,
+  staleTime: 30_000,
+});
+
+/** The account's API tokens. */
+const tokensQuery = queryOptions({
+  queryKey: ["auth", "tokens"],
+  queryFn: fetchApiTokens,
+  staleTime: 30_000,
+});
+
+/**
+ * Starts loading the three lists the page reads from the server: devices,
+ * tokens and passkeys. The settings rail calls it when a person points at,
+ * focuses or presses the Account link, so the page opens with its lists and
+ * not with "Loading devices…" that then pushes the cards down. A list read
+ * in the last 30 s is not read again.
+ */
+export function prefetchAccount(queryClient: QueryClient): void {
+  void queryClient.prefetchQuery(sessionsQuery);
+  void queryClient.prefetchQuery(tokensQuery);
+  if (passkeysSupported()) void queryClient.prefetchQuery(passkeysQuery);
+}
 
 // ---------------------------------------------------------------------------
 // Building blocks
@@ -515,11 +549,7 @@ const SessionRow = ({ session }: { session: SessionSummary }) => (
 
 const SessionsCard = () => {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["auth", "sessions"],
-    queryFn: fetchSessions,
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useQuery(sessionsQuery);
 
   const revoke = useMutation({
     mutationFn: revokeOtherSessions,
@@ -782,11 +812,7 @@ const ApiTokensCard = () => {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<ApiTokenSummary | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["auth", "tokens"],
-    queryFn: fetchApiTokens,
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useQuery(tokensQuery);
 
   const revoke = useMutation({
     mutationFn: (id: string) => revokeApiToken(id),
