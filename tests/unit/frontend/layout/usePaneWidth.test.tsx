@@ -8,7 +8,7 @@
  * nonsense, or throws. A narrow window holds the pane in so the content
  * beside it keeps its room, and a wider window gives the stored width back.
  * The default width on an empty store is tested through ResizeHandle, the
- * hook's one caller, in frontend.resizeHandle.test.tsx.
+ * hook's one caller, in resizeHandle.test.tsx.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";

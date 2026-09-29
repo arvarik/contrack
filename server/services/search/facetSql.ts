@@ -10,8 +10,9 @@
 // The server and the palette must agree on every row, so the SQL calls the
 // same JavaScript the palette runs: `facet_contains` is the lower-casing and
 // substring test of `matchesFacet`, `facet_time` is its date reading, and
-// `haversine_km` is `shared/geo.ts`. `tests/unit/search.facetSql.test.ts`
-// compares the two on the same rows, facet by facet.
+// `haversine_km` is `shared/geo.ts`.
+// `tests/unit/server/search/facetSql.test.ts` compares the two on the same
+// rows, facet by facet.
 // =============================================================================
 
 import type Database from "better-sqlite3";

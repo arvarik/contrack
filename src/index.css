@@ -44,8 +44,8 @@
      the real number is 4.21:1 on a primary/15 wash over a sectional
      background and 3.92:1 on primary/20, both short of 4.5. The claim was
      written before anything measured it. `--color-on-primary-wash` below is
-     what carries text on a wash now, and tests/unit/theme.contrast.test.ts
-     measures both. */
+     what carries text on a wash now, and
+     tests/unit/frontend/style/themeContrast.test.ts measures both. */
   --color-primary: #006a91;
   --color-primary-dim: #00628a;
   /* Light end of the branding gradient and pale fills only — never text. */
@@ -231,9 +231,9 @@
  *
  * DO NOT EDIT THESE VALUES ALONE. They are duplicated in `src/lib/theme.ts`,
  * which is where the accent derivation reads the surfaces it has to be
- * readable on, and `tests/unit/theme.contrast.test.ts` asserts that the two
- * files agree token for token and that every text colour here clears WCAG AA
- * on every surface it lands on.
+ * readable on, and `tests/unit/frontend/style/themeContrast.test.ts` asserts
+ * that the two files agree token for token and that every text colour here
+ * clears WCAG AA on every surface it lands on.
  *
  * Not an inversion of the light palette. Inverting it puts a card below the
  * page it sits on, and every shadow in this app says the card is above it —

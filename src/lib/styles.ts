@@ -23,8 +23,8 @@ import { cn } from "./utils";
 
 /*
  * The type floor is 11 px. Nothing a person reads is smaller, and
- * tests/unit/styles.floor.test.ts fails on `text-[11px]` and `text-[11px]`
- * anywhere in src/. Uppercase labels keep their tracking at 0.08em, a
+ * tests/unit/frontend/style/stylesFloor.test.ts fails on `text-[11px]` and
+ * `text-[11px]` anywhere in src/. Uppercase labels keep their tracking at 0.08em, a
  * little tighter than Tailwind's widest, so the larger size does not widen
  * every chip. Every uppercase label in the app uses this one tracking.
  */
@@ -235,7 +235,8 @@ export const TONE_DOT: Record<Tone, string> = {
 
 /**
  * A chip or an icon tile: the tone's 10 percent wash with the tone's own ink.
- * Each pair clears AA; `tests/unit/theme.contrast.test.ts` measures them.
+ * Each pair clears AA; `tests/unit/frontend/style/themeContrast.test.ts`
+ * measures them.
  */
 export const TONE_WASH: Record<Tone, string> = {
   error: "bg-error/10 text-error",

@@ -5,8 +5,8 @@
  * and out of it, sitting, working its wings, and in the air. Every cell is
  * `drawCorvid` on a pose, so the sheet is not a picture of the bird but the
  * bird, and it cannot drift from what the app draws: `npm run brand:icons`
- * writes it with the icons, and `tests/unit/brand.icons.test.ts` compares
- * the committed SVG with a fresh render.
+ * writes it with the icons, and `tests/unit/frontend/brand/icons.test.ts`
+ * compares the committed SVG with a fresh render.
  *
  * Every cell draws the bird at one scale, so a flying bird is exactly as big
  * as a sitting one: the reach of a wing is visible as reach, not shrunk to

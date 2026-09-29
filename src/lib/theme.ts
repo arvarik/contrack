@@ -5,8 +5,9 @@
  * `src/index.css` is what the browser paints from. This file holds the same
  * values because the accent derivation has to know what is behind the text it
  * is choosing a colour for, and because the contrast gate has to check them
- * without a browser. `tests/unit/theme.contrast.test.ts` asserts the two agree
- * token for token, in both palettes, so they cannot drift.
+ * without a browser. `tests/unit/frontend/style/themeContrast.test.ts`
+ * asserts the two agree token for token, in both palettes, so they cannot
+ * drift.
  *
  * ── The contrast contract ──────────────────────────────────────────────────
  * Every colour used as text or as an icon clears WCAG AA (4.5:1) against every
@@ -432,7 +433,8 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
  *
  * Deriving them instead means the vibe answers the same contrast contract the
  * accent picker does, in both palettes, and the sweep in
- * `tests/unit/theme.contrast.test.ts` already covers the arithmetic.
+ * `tests/unit/frontend/style/themeContrast.test.ts` already covers the
+ * arithmetic.
  *
  * Violet and indigo are gone. A vibe replaces the primary on its contact's
  * page, and violet sat on the AI colour's own hue (293 in OKLCH, the same

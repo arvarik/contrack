@@ -155,8 +155,8 @@ function resolveSocialProfile(
 // The reading is done by `shared/vcard.ts`, which the server also uses to
 // WRITE the export. That is deliberate and it is what makes the round trip a
 // promise rather than a hope: a file this app produces is parsed back by the
-// same code that produced it, and `tests/unit/vcard.test.ts` walks a contact
-// out and back in and compares the fields.
+// same code that produced it, and `tests/unit/shared/vcard.test.ts` walks a
+// contact out and back in and compares the fields.
 //
 // This layer is the mapping from vCard properties onto Contrack's shape, and
 // it is where the Apple-specific conventions live: `item1.`-grouped properties

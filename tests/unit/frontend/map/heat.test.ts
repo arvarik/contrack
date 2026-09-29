@@ -1,7 +1,7 @@
 /**
  * The heat layer's numbers: who weighs what, the scale a network sets, and
  * the ramp in both palettes. Where the heat sits among the basemap's layers
- * is tested through its hook, in map.heatHooks.test.tsx.
+ * is tested through its hook, in heatHooks.test.tsx.
  */
 import { describe, expect, it, vi } from "vitest";
 

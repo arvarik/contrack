@@ -144,7 +144,7 @@ One `:focus-visible` rule in `src/index.css` draws the ring for every
 control: 2 px in the primary colour, outside a control so it survives a
 filled button, and inset on a text field, where it reads as the field's
 border. No component draws a ring of its own, and
-`tests/unit/styles.floor.test.ts` fails on a `focus:ring-*` class. A
+`tests/unit/frontend/style/stylesFloor.test.ts` fails on a `focus:ring-*` class. A
 composite field, such as the Ask search box with its icon and buttons, draws
 the same ring on its box with `.focus-frame`, while a button inside the box
 keeps its own. The suite asserts an indicator is present after a real Tab
@@ -202,7 +202,7 @@ Every control has a hit box of at least 44 by 44 pixels, and no text is under
 11 pixels. A control that looks smaller carries the `hit-area` utility, which
 grows its tap box without changing how it looks. `metrics.spec.ts` measures
 both floors on six screens, the map among them, and its pins and clusters are
-48 pixels across. `tests/unit/styles.floor.test.ts` fails on
+48 pixels across. `tests/unit/frontend/style/stylesFloor.test.ts` fails on
 `text-[9px]` and `text-[10px]` anywhere in `src/`. See `.agent/STYLE.md` for
 the rules.
 

@@ -8,7 +8,8 @@ import type { ContrackInstance } from "./fixtures/instance";
 import { ADMIN, completeSetup } from "./fixtures/accounts";
 
 // Which keys the dialog lists on each page is tested in
-// tests/unit/shortcuts.test.ts. What only a router shows is the link out.
+// tests/unit/frontend/lib/shortcuts.test.ts. What only a router shows is the
+// link out.
 test.describe("the shortcuts dialog", () => {
   test("its All shortcuts link opens Settings, Keyboard and closes the dialog", async ({
     page,
