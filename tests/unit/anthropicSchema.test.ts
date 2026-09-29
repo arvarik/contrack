@@ -89,6 +89,24 @@ describe("output_config shape", () => {
     expect(schema.additionalProperties).toBe(false);
   });
 
+  it("sends a nullable field as a type union", async () => {
+    responder = () => ok('{"company":null}');
+    await adapter.generate({
+      ...jsonRequest,
+      jsonSchema: {
+        type: "object",
+        properties: { company: { type: "string", nullable: true } },
+      },
+    });
+
+    // Nullability is expressed as a JSON Schema type union, not OpenAPI's
+    // `nullable` keyword (which the Anthropic API does not accept).
+    const schema = formatOf(calls[0])!.schema as {
+      properties: { company: { type?: unknown } };
+    };
+    expect(schema.properties.company.type).toEqual(["string", "null"]);
+  });
+
   it("sends no format for a text response", async () => {
     responder = () => ok("a prose summary");
     await adapter.generate({
@@ -300,5 +318,20 @@ describe("web research", () => {
       { type: "web_search_20250305", name: "web_search", max_uses: 5 },
     ]);
     expect(calls[0].max_tokens).toBe(8192);
+  });
+});
+
+describe("model class mapping", () => {
+  // With no discovered models. API model IDs use dashes, not dots: dotted
+  // IDs 404 on the live API.
+  it.each([
+    ["lite", "claude-haiku-4-5", { prefer: "lite" }],
+    ["flash", "claude-sonnet-5", { prefer: "flash" }],
+    ["pro", "claude-opus-5", { prefer: "pro" }],
+    ["no preference", "claude-haiku-4-5", undefined],
+  ] as const)("maps %s to %s", async (_label, model, routing) => {
+    responder = () => ok("summary");
+    await adapter.generate({ prompt: "x", responseFormat: "text", routing });
+    expect(calls[0].model).toBe(model);
   });
 });

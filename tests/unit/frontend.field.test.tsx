@@ -363,6 +363,9 @@ describe("DetailsCard", () => {
     fireEvent.change(input, { target: { value: "Tea, Jazz" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onUpdate).toHaveBeenCalledWith("preferences", "Coffee, Tea, Jazz");
+    expect(
+      within(group).getByRole("button", { name: "Remove preference Coffee" }),
+    ).toBeTruthy();
   });
 
   it("removes a preference with an undo toast", () => {

@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  fieldLabel,
   listInWords,
   missingAnchors,
   modelName,
@@ -40,7 +39,7 @@ const run = (fields: Partial<ResearchRun>): ResearchRun => ({
 });
 
 describe("runSummary", () => {
-  it("counts what a run added, field by field", () => {
+  it("counts what a run added, field by field, in the dossier's names", () => {
     expect(
       runSummary(
         run({
@@ -49,10 +48,16 @@ describe("runSummary", () => {
             { field: "experience", count: 4 },
             { field: "education", count: 2 },
             { field: "location", count: 1 },
+            { field: "socialLinks", count: 2 },
+            { field: "attributes", count: 1 },
+            // A field the dossier has no name for keeps its own.
+            { field: "unknown", count: 1 },
           ],
         }),
       ),
-    ).toBe("Added 7 from 9 pages: Roles ×4, Education ×2, Location");
+    ).toBe(
+      "Added 11 from 9 pages: Roles ×4, Education ×2, Location, Profiles ×2, Facts, unknown",
+    );
   });
 
   it("says when a run found nothing new, or nobody", () => {
@@ -68,12 +73,6 @@ describe("runSummary", () => {
     expect(runSummary(run({ models: [] }))).toBe(
       "Enriched before details were recorded",
     );
-  });
-
-  it("names fields as the dossier does", () => {
-    expect(fieldLabel("socialLinks")).toBe("Profiles");
-    expect(fieldLabel("attributes")).toBe("Facts");
-    expect(fieldLabel("unknown")).toBe("unknown");
   });
 });
 

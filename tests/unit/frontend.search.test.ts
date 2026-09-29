@@ -96,13 +96,17 @@ describe("search streaming", () => {
     expect(setPhase).toHaveBeenLastCalledWith("idle");
   });
   it("ignores late responses from a replaced search", async () => {
-    const first = stream();
+    let answerOld!: (response: Response) => void;
     const second = stream();
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
-        .mockResolvedValueOnce(first.response)
+        .mockReturnValueOnce(
+          new Promise<Response>((resolve) => {
+            answerOld = resolve;
+          }),
+        )
         .mockResolvedValueOnce(second.response),
     );
     const { result: hook } = renderHook(() => useSemanticSearch());
@@ -120,10 +124,15 @@ describe("search streaming", () => {
       second.push(result("New"));
       second.end();
       await two;
+    });
+    // The replaced search answers, complete, after the new one has settled.
+    await act(async () => {
+      answerOld(new Response(result("Old") + "\n"));
       await one;
     });
     expect(hook.current.data?.matches[0].name).toBe("New");
     expect(hook.current.isSuccess).toBe(true);
+    expect(hook.current.isError).toBe(false);
   });
   it("cancels the reader when the component unmounts", async () => {
     const pending = stream();

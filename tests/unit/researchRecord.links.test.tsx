@@ -26,11 +26,7 @@ vi.mock("../../src/hooks/useAiAllowed", () => ({
   useAiAllowed: () => false,
 }));
 
-import {
-  isWebUrl,
-  parseResearchRecord,
-  researchRecordSchema,
-} from "../../shared/researchRecord";
+import { parseResearchRecord } from "../../shared/researchRecord";
 import { ResearchCard } from "../../src/views/contact-detail/components/ResearchCard";
 import type { Contact } from "../../src/types";
 
@@ -66,10 +62,15 @@ const GOOD = {
   firstSeenAt: AT,
 };
 
-describe("isWebUrl", () => {
-  it("accepts absolute http and https addresses only", () => {
-    expect(isWebUrl("https://example.org/a")).toBe(true);
-    expect(isWebUrl("HTTP://example.org")).toBe(true);
+describe("reading a stored record", () => {
+  it("keeps a source at an absolute http or https address only", () => {
+    /** The addresses a stored record keeps of one source at `url`. */
+    const kept = (url: string) =>
+      parseResearchRecord(
+        record([], [{ url, title: "Page", firstSeenAt: AT }]),
+      )!.sources.map((source) => source.url);
+    expect(kept("https://example.org/a")).toEqual(["https://example.org/a"]);
+    expect(kept("HTTP://example.org")).toEqual(["HTTP://example.org"]);
     for (const bad of [
       "javascript:alert(1)",
       "JavaScript:alert(1)",
@@ -82,12 +83,10 @@ describe("isWebUrl", () => {
       "https://",
       "",
     ]) {
-      expect(isWebUrl(bad), bad).toBe(false);
+      expect(kept(bad), bad).toEqual([]);
     }
   });
-});
 
-describe("reading a stored record", () => {
   it("drops a source with a bad address, and keeps the record and the rest", () => {
     const parsed = parseResearchRecord(
       JSON.stringify(
@@ -135,26 +134,6 @@ describe("reading a stored record", () => {
   it("still reads no record when the record itself is broken", () => {
     expect(parseResearchRecord({ version: 1, runs: "nope" })).toBeNull();
     expect(parseResearchRecord("{not json")).toBeNull();
-  });
-});
-
-describe("writing a record", () => {
-  it("validates a run that cited a bad address, and stores it without that page", () => {
-    // What the enrichment merge checks before it saves: the history plus the
-    // new run's citations, one of them not a web page.
-    const checked = researchRecordSchema.safeParse(
-      record(
-        [{ topic: "Role", text: "Associate", url: "javascript:void(0)" }],
-        [GOOD, { url: "javascript:void(0)", title: "x", firstSeenAt: AT }],
-      ),
-    );
-    expect(checked.success).toBe(true);
-    const stored = JSON.parse(JSON.stringify(checked.data));
-    expect(stored.sources).toEqual([GOOD]);
-    expect(stored.runs[0].findings[0]).toEqual({
-      topic: "Role",
-      text: "Associate",
-    });
   });
 });
 

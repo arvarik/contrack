@@ -13,7 +13,6 @@ import { createElement } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { NAMES } from "../../src/lib/names";
-import { NAV_SHORTCUTS } from "../../src/hooks/useGlobalNavShortcuts";
 import { NAV_ITEMS } from "../../src/components/command-palette/ZeroStateView";
 import { Sidebar } from "../../src/components/layout/Sidebar";
 
@@ -82,10 +81,6 @@ describe("NAMES", () => {
 });
 
 describe("every surface uses the same name", () => {
-  it.each(DESTINATIONS)("the shortcut for %s says %s", (path, label) => {
-    expect(NAV_SHORTCUTS[path]?.label).toBe(label);
-  });
-
   it.each(DESTINATIONS)("the palette item for %s says %s", (path, label) => {
     expect(NAV_ITEMS.find((item) => item.path === path)?.label).toBe(label);
   });

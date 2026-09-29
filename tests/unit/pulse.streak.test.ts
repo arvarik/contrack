@@ -5,6 +5,11 @@ describe("pulse.streak computeStreak", () => {
   const now = new Date(2026, 8, 17, 14, 30); // 2026-09-17 14:30 local time
   // today = 2026-09-17, yesterday = 2026-09-16
 
+  // computeStreak counts local days, so each timestamp is a local hour. A
+  // fixed UTC hour falls on another day in Honolulu or Kiritimati.
+  const local = (month: number, day: number, hour: number) =>
+    new Date(2026, month - 1, day, hour).toISOString();
+
   it("returns 0 and null for empty interactions", () => {
     const res = computeStreak([], now);
     expect(res).toEqual({ current: 0, best: 0, lastDay: null });
@@ -12,9 +17,9 @@ describe("pulse.streak computeStreak", () => {
 
   it("counts consecutive days ending today as current", () => {
     const interactions = [
-      { date: "2026-09-15T10:00:00Z", type: "note" },
-      { date: "2026-09-16T12:00:00Z", type: "call" },
-      { date: "2026-09-17T09:00:00Z", type: "meeting" },
+      { date: local(9, 15, 10), type: "note" },
+      { date: local(9, 16, 12), type: "call" },
+      { date: local(9, 17, 9), type: "meeting" },
     ];
     const res = computeStreak(interactions, now);
     expect(res).toEqual({ current: 3, best: 3, lastDay: "2026-09-17" });
@@ -22,9 +27,9 @@ describe("pulse.streak computeStreak", () => {
 
   it("treats consecutive days ending yesterday as still current", () => {
     const interactions = [
-      { date: "2026-09-14T10:00:00Z", type: "note" },
-      { date: "2026-09-15T10:00:00Z", type: "note" },
-      { date: "2026-09-16T12:00:00Z", type: "call" },
+      { date: local(9, 14, 10), type: "note" },
+      { date: local(9, 15, 10), type: "note" },
+      { date: local(9, 16, 12), type: "call" },
     ];
     const res = computeStreak(interactions, now);
     expect(res).toEqual({ current: 3, best: 3, lastDay: "2026-09-16" });
@@ -32,9 +37,9 @@ describe("pulse.streak computeStreak", () => {
 
   it("resets current streak when there is a gap before yesterday", () => {
     const interactions = [
-      { date: "2026-09-13T10:00:00Z", type: "note" },
-      { date: "2026-09-14T10:00:00Z", type: "note" },
-      { date: "2026-09-15T12:00:00Z", type: "call" },
+      { date: local(9, 13, 10), type: "note" },
+      { date: local(9, 14, 10), type: "note" },
+      { date: local(9, 15, 12), type: "call" },
       // 2026-09-16 (yesterday) is missing
       // 2026-09-17 (today) is missing
     ];
@@ -45,15 +50,15 @@ describe("pulse.streak computeStreak", () => {
   it("keeps the best streak across history even if current streak is shorter or 0", () => {
     const interactions = [
       // Past 5-day streak
-      { date: "2026-08-01T10:00:00Z", type: "note" },
-      { date: "2026-08-02T10:00:00Z", type: "note" },
-      { date: "2026-08-03T10:00:00Z", type: "note" },
-      { date: "2026-08-04T10:00:00Z", type: "note" },
-      { date: "2026-08-05T10:00:00Z", type: "note" },
+      { date: local(8, 1, 10), type: "note" },
+      { date: local(8, 2, 10), type: "note" },
+      { date: local(8, 3, 10), type: "note" },
+      { date: local(8, 4, 10), type: "note" },
+      { date: local(8, 5, 10), type: "note" },
       // Gap
       // Current 2-day streak ending today
-      { date: "2026-09-16T10:00:00Z", type: "note" },
-      { date: "2026-09-17T10:00:00Z", type: "note" },
+      { date: local(9, 16, 10), type: "note" },
+      { date: local(9, 17, 10), type: "note" },
     ];
     const res = computeStreak(interactions, now);
     expect(res).toEqual({ current: 2, best: 5, lastDay: "2026-09-17" });
@@ -61,8 +66,8 @@ describe("pulse.streak computeStreak", () => {
 
   it("excludes days with only import rows", () => {
     const interactions = [
-      { date: "2026-09-16T10:00:00Z", type: "import" },
-      { date: "2026-09-17T10:00:00Z", type: "note" },
+      { date: local(9, 16, 10), type: "import" },
+      { date: local(9, 17, 10), type: "note" },
     ];
     const res = computeStreak(interactions, now);
     // 2026-09-16 only had import, so only 2026-09-17 counts (streak = 1)
@@ -71,8 +76,8 @@ describe("pulse.streak computeStreak", () => {
 
   it("excludes days where source is non-null", () => {
     const interactions = [
-      { date: "2026-09-16T10:00:00Z", type: "note", source: "google_calendar" },
-      { date: "2026-09-17T10:00:00Z", type: "note", source: null },
+      { date: local(9, 16, 10), type: "note", source: "google_calendar" },
+      { date: local(9, 17, 10), type: "note", source: null },
     ];
     const res = computeStreak(interactions, now);
     // 2026-09-16 had source set, so only 2026-09-17 counts (streak = 1)
@@ -81,10 +86,10 @@ describe("pulse.streak computeStreak", () => {
 
   it("counts a day if it has at least one valid manual row among import/source rows", () => {
     const interactions = [
-      { date: "2026-09-16T08:00:00Z", type: "import" },
-      { date: "2026-09-16T09:00:00Z", type: "note", source: "imap" },
-      { date: "2026-09-16T10:00:00Z", type: "note", source: null }, // valid!
-      { date: "2026-09-17T10:00:00Z", type: "call" }, // valid!
+      { date: local(9, 16, 8), type: "import" },
+      { date: local(9, 16, 9), type: "note", source: "imap" },
+      { date: local(9, 16, 10), type: "note", source: null }, // valid!
+      { date: local(9, 17, 10), type: "call" }, // valid!
     ];
     const res = computeStreak(interactions, now);
     expect(res).toEqual({ current: 2, best: 2, lastDay: "2026-09-17" });

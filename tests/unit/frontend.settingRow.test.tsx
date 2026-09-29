@@ -86,6 +86,7 @@ describe("SettingRow", () => {
 
     const flashRow = container.querySelector("#flash-row");
     expect(flashRow?.classList.contains("flash")).toBe(true);
+    expect(document.activeElement).toBe(flashRow);
 
     act(() => {
       vi.advanceTimersByTime(1200);

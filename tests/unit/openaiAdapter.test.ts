@@ -1,7 +1,7 @@
 // =============================================================================
 // OpenAI adapter — the request shapes the live API taught us
 // =============================================================================
-// Every case below is a failure seen against the real API on 2026-09-26:
+// Most cases below are failures seen against the real API on 2026-09-26:
 //   - GPT-6 and GPT-5.6 reason at "medium" when told nothing, so quick work
 //     paid for hidden reasoning and query planning ran past its 4 s budget.
 //   - Some models refuse some efforts (Astra refuses "none", GPT-5 nano wants
@@ -11,6 +11,9 @@
 //   - An array at the schema's root is a 400.
 //   - Grounded research sent the Chat Completions format to the Responses
 //     API, and every run answered 400.
+// The others pin the model each class gets when discovery has not run, and
+// the schema dialect: no `strict`, which optional fields turn into a 400,
+// and nullable fields as `anyOf`.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -189,6 +192,72 @@ describe("structured output", () => {
     });
     expect(result.text).toBe('{"name":"Jane"}');
   });
+
+  it("sends the schema in a json_schema format, without strict", async () => {
+    chatResponder = () => answer('{"name":"Jane"}');
+    await adapter.generate({
+      prompt: "x",
+      responseFormat: "json",
+      model: "gpt-6-luna",
+      jsonSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          age: { type: "integer" },
+        },
+        required: ["name"],
+      },
+    });
+
+    // `strict: true` must NOT be sent. Strict mode requires `required` to
+    // list every key in `properties`, and this schema — like every real one
+    // in Contrack — has optional fields. Asserting strict here is what let
+    // the 400 ship: the unit test was green while every OpenAI JSON call
+    // failed against the real API.
+    const format = chatCalls[0].response_format as {
+      json_schema: Record<string, unknown>;
+    };
+    expect(format).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "response",
+        schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            age: { type: "integer" },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
+      },
+    });
+    expect("strict" in format.json_schema).toBe(false);
+  });
+
+  it("sends a nullable field as anyOf", async () => {
+    chatResponder = () => answer('{"company":null}');
+    await adapter.generate({
+      prompt: "x",
+      responseFormat: "json",
+      model: "gpt-6-luna",
+      jsonSchema: {
+        type: "object",
+        properties: { company: { type: "string", nullable: true } },
+      },
+    });
+
+    const format = chatCalls[0].response_format as {
+      json_schema: {
+        schema: { properties: { company: { anyOf?: unknown[] } } };
+      };
+    };
+    const company = format.json_schema.schema.properties.company;
+    // OpenAI doesn't support nullable — must use anyOf pattern
+    expect(company).toHaveProperty("anyOf");
+    expect(company.anyOf).toContainEqual({ type: "string" });
+    expect(company.anyOf).toContainEqual({ type: "null" });
+  });
 });
 
 describe("web research", () => {
@@ -248,5 +317,19 @@ describe("web research", () => {
       enableSearchGrounding: true,
     });
     expect(responsesCalls[0].reasoning).toEqual({ effort: "low" });
+  });
+});
+
+describe("model class mapping", () => {
+  // With no discovered models. GPT-6 renamed the tiers: Astra is the
+  // flagship, Sol the middle and Luna the cheap one.
+  it.each([
+    ["lite", "gpt-6-luna", { prefer: "lite" }],
+    ["flash", "gpt-6-sol", { prefer: "flash" }],
+    ["pro", "gpt-6-astra", { prefer: "pro" }],
+    ["no preference", "gpt-6-luna", undefined],
+  ] as const)("maps %s to %s", async (_label, model, routing) => {
+    await adapter.generate({ prompt: "x", responseFormat: "text", routing });
+    expect(chatCalls[0].model).toBe(model);
   });
 });

@@ -136,7 +136,7 @@ describe("structured-output negotiation", () => {
 });
 
 describe("reasoning models", () => {
-  it("reports budget exhaustion instead of returning an empty answer", async () => {
+  it("reports budget exhaustion and the token limit instead of an empty answer", async () => {
     responder = () => ({
       choices: [
         {
@@ -151,25 +151,11 @@ describe("reasoning models", () => {
         model: "gemma-4",
         responseFormat: "text",
       }),
-    ).rejects.toThrow(/reasoning/i);
-  });
-
-  it("mentions the token limit when the model was truncated", async () => {
-    responder = () => ({
-      choices: [
-        {
-          finish_reason: "length",
-          message: { content: "", reasoning_content: "thinking…" },
-        },
-      ],
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: "AI_NO_ANSWER",
+      message: expect.stringMatching(/reasoning.*finish_reason=length/),
     });
-    await expect(
-      adapter.generate({
-        prompt: "Reply OK",
-        model: "gemma-4",
-        responseFormat: "text",
-      }),
-    ).rejects.toThrow(/finish_reason=length/);
   });
 
   it("accepts a reasoning model that does produce an answer", async () => {

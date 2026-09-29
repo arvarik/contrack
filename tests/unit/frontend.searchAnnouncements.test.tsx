@@ -12,7 +12,6 @@ import React from "react";
 import {
   noteSearchStatus,
   peopleSearchStatus,
-  plural,
   type NoteSearchState,
   type PeopleSearchState,
 } from "../../src/lib/searchAnnouncements";
@@ -38,14 +37,6 @@ const notes = (overrides: Partial<NoteSearchState>): NoteSearchState => ({
   total: 0,
   query: "hiring",
   ...overrides,
-});
-
-describe("plural", () => {
-  it("picks the form by count", () => {
-    expect(plural(1, "match", "matches")).toBe("1 match");
-    expect(plural(0, "match", "matches")).toBe("0 matches");
-    expect(plural(12, "note", "notes")).toBe("12 notes");
-  });
 });
 
 describe("peopleSearchStatus", () => {

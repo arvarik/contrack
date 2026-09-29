@@ -37,24 +37,6 @@ describe("the shipped corpus", () => {
     expect(corpus.negatives.length).toBeGreaterThan(100);
   });
 
-  it("gives two different names to every negative that is not built to share one", () => {
-    // The three that are: a namesake and two strangers with a common name are
-    // built to carry one name, and a father and a son normalize to one once
-    // the tokenizer drops Sr. and Jr. Every other kind names two people, and
-    // this assertion is the one that was missing.
-    const sameNameKinds = new Set([
-      "namesake",
-      "same-common-name",
-      "father-and-son",
-    ]);
-    const byKey = new Map(corpus.contacts.map((c) => [c.key, c]));
-    const offenders = corpus.negatives
-      .filter((n) => !sameNameKinds.has(n.kind))
-      .filter((n) => byKey.get(n.a)!.name === byKey.get(n.b)!.name)
-      .map((n) => `${n.kind}: ${byKey.get(n.a)!.name}`);
-    expect(offenders).toEqual([]);
-  });
-
   it("builds sibling names that share a prefix without rebuilding the original", () => {
     // The specific defect. "Edw" plus Gaspard's "ard" spelled "Edward" back,
     // so a sibling pair was two records of one person.

@@ -2,13 +2,14 @@
 // =============================================================================
 // The browser's half of preferences
 // =============================================================================
-// Two things are tested here and neither is the round trip, which the
-// integration file covers.
+// None of these tests is the round trip, which the integration file covers.
 //
 // The first is that the browser's defaults are the server's defaults. The app
 // renders before the first response arrives, so it has to carry a copy — and a
 // copy that drifts means a list that silently re-packs itself a moment after
-// it paints, for one release, until somebody notices.
+// it paints, for one release, until somebody notices. The server builds its
+// copy fresh on every call, so one account's history never lands in another
+// account's default.
 //
 // The second is the one-time move out of localStorage. It runs once per
 // browser, reads values written by older versions of this app, and then
@@ -32,10 +33,12 @@ describe("the browser's defaults", () => {
   it("are the server's defaults", () => {
     expect(DEFAULT_PREFERENCES).toEqual(defaultPreferences());
   });
+});
 
-  it("do not share an array with anything else", () => {
-    // A shared `searchHistory` array would let one component's push land in
-    // every other reader's default.
+describe("the server's defaults", () => {
+  it("are fresh objects on every call", () => {
+    // A shared `searchHistory` array would let one account's push land in
+    // every other account's default.
     const a = defaultPreferences();
     const b = defaultPreferences();
     a.searchHistory.push({ query: "x", mode: "normal", timestamp: 1 });

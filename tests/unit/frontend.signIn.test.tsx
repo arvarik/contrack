@@ -3,6 +3,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SignIn, LAST_IDENTIFIER_KEY } from "../../src/components/auth/SignIn";
+import { passkeysSupported } from "../../src/api/passkeys";
 
 vi.mock("../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({
@@ -17,44 +18,27 @@ vi.mock("../../src/api/auth", () => ({
   signIn: vi.fn(),
 }));
 
-const mockPasskeysSupported = true;
-
 vi.mock("../../src/api/passkeys", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../../src/api/passkeys")>();
   return {
     ...actual,
-    passkeysSupported: () => {
-      if (typeof window === "undefined" || !("PublicKeyCredential" in window)) {
-        return false;
-      }
-      return mockPasskeysSupported;
-    },
+    passkeysSupported: vi.fn(),
     signInWithPasskey: vi.fn(),
     passkeyAutofillSupported: vi.fn().mockResolvedValue(false),
   };
 });
 
 describe("SignIn front door", () => {
-  const originalPublicKeyCredential = window.PublicKeyCredential;
-
   beforeEach(() => {
     localStorage.clear();
-    // Default to no PublicKeyCredential unless explicitly configured in test
-    // @ts-expect-error test cleanup
-    delete window.PublicKeyCredential;
+    vi.mocked(passkeysSupported).mockReturnValue(false);
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
     localStorage.clear();
-    if (originalPublicKeyCredential !== undefined) {
-      window.PublicKeyCredential = originalPublicKeyCredential;
-    } else {
-      // @ts-expect-error test cleanup
-      delete window.PublicKeyCredential;
-    }
   });
 
   it("the toggle changes type and aria-pressed", () => {
@@ -120,23 +104,22 @@ describe("SignIn front door", () => {
     expect(screen.queryByRole("button", { name: /not you\?/i })).toBeNull();
   });
 
-  it("the passkey button is absent without PublicKeyCredential", () => {
-    // @ts-expect-error explicitly remove PublicKeyCredential
-    delete window.PublicKeyCredential;
+  it.each<[boolean, number]>([
+    [false, 0],
+    [true, 1],
+  ])(
+    "shows the passkey button only when passkeys are supported (%s)",
+    (supported, shown) => {
+      vi.mocked(passkeysSupported).mockReturnValue(supported);
 
-    render(<SignIn onSignedIn={vi.fn()} />);
+      render(<SignIn onSignedIn={vi.fn()} />);
 
-    expect(screen.queryByRole("button", { name: /passkey/i })).toBeNull();
-  });
-
-  it("the passkey button is present when PublicKeyCredential is supported", () => {
-    // @ts-expect-error mock PublicKeyCredential existence
-    window.PublicKeyCredential = class {};
-
-    render(<SignIn onSignedIn={vi.fn()} />);
-
-    expect(
-      screen.getByRole("button", { name: "Sign in with a passkey" }),
-    ).toBeTruthy();
-  });
+      expect(
+        screen.queryAllByRole("button", { name: /passkey/i }),
+      ).toHaveLength(shown);
+      expect(
+        screen.queryAllByRole("button", { name: "Sign in with a passkey" }),
+      ).toHaveLength(shown);
+    },
+  );
 });

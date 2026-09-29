@@ -41,19 +41,16 @@ describe("styleFor", () => {
   });
 
   it("falls back to OpenFreeMap when the status has not answered", async () => {
-    const { styleFor, DEFAULT_MAP_STYLES, OPENFREEMAP_STYLES } =
-      await loadModule();
-    expect(styleFor("light", null)).toBe(OPENFREEMAP_STYLES.positron);
-    expect(styleFor("dark", undefined)).toBe(OPENFREEMAP_STYLES.dark);
-    expect(styleFor("dark", {})).toBe(DEFAULT_MAP_STYLES.dark);
-  });
-
-  it("defaults to positron for light and dark for dark", async () => {
-    const { DEFAULT_MAP_STYLES } = await loadModule();
-    expect(DEFAULT_MAP_STYLES).toEqual({
-      light: "https://tiles.openfreemap.org/styles/positron",
-      dark: "https://tiles.openfreemap.org/styles/dark",
-    });
+    const { styleFor } = await loadModule();
+    expect(styleFor("light", null)).toBe(
+      "https://tiles.openfreemap.org/styles/positron",
+    );
+    expect(styleFor("dark", undefined)).toBe(
+      "https://tiles.openfreemap.org/styles/dark",
+    );
+    expect(styleFor("dark", {})).toBe(
+      "https://tiles.openfreemap.org/styles/dark",
+    );
   });
 });
 

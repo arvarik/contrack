@@ -91,38 +91,12 @@ describe("scoreContactMatch", () => {
     expect(scoreContactMatch(contact, "analytical")).toBe(20);
   });
 
-  it("produces identical ranking order to the list scoring", () => {
-    const contacts: MatchableContact[] = [
-      {
-        id: "c1",
-        name: "Bob Martin",
-        company: "Clean Code",
-      } as MatchableContact,
-      { id: "c2", name: "Alice", company: "Alice Corp" } as MatchableContact,
-      {
-        id: "c3",
-        name: "Alice Wonderland",
-        company: "Other",
-      } as MatchableContact,
-      { id: "c4", name: "Carol", company: "Alice Corp" } as MatchableContact,
-      { id: "c5", name: "Malice Cooper", company: "Other" } as MatchableContact,
-    ];
-
-    const q = "alice";
-    const scored = contacts
-      .map((c) => ({ c, score: scoreContactMatch(c, q) }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    // c2: exact name (100) + company (10) = 110
-    // c3: prefix name (50) = 50
-    // c5: substring name (30) = 30
-    // c4: company (10) = 10
-    expect(scored.map((item) => item.c.name)).toEqual([
-      "Alice",
-      "Alice Wonderland",
-      "Malice Cooper",
-      "Carol",
-    ]);
+  // A phone field left empty normalizes to no digits at all, and "no
+  // digits" is inside every number. Without the guard, one blank phone
+  // made the contact match every numeric query.
+  it("never matches an empty phone against a number", () => {
+    expect(
+      scoreContactMatch({ name: "Alice", phones: [{ phone: "" }] }, "555"),
+    ).toBe(0);
   });
 });

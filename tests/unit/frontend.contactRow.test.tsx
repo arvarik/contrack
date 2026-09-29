@@ -9,13 +9,20 @@
 // decorative, so the score is said once, and its tooltip stays for a pointer.
 // =============================================================================
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ContactListItem } from "../../src/views/contact-list/ContactListItem";
-import { BulkActionToolbar } from "../../src/views/contact-list/BulkActionToolbar";
 import { formatDay } from "../../src/lib/datetime";
 import type { Contact } from "../../src/types";
 
@@ -294,50 +301,16 @@ describe("the follow-up glyph", () => {
   });
 });
 
-describe("the bulk bar", () => {
-  // Select mode kept "Network" as the page's title. The count moved to the
-  // start of the bar, and is read out as it changes.
-  const noop = () => {};
-  const bar = (selectedCount?: number) =>
-    render(
-      <BulkActionToolbar
-        selectedCount={selectedCount}
-        isPending={false}
-        onTrack={noop}
-        selectionTracked="none"
-        onArchive={noop}
-        onAddToList={noop}
-        onEditField={noop}
-        onColorChange={noop}
-        onExportCSV={noop}
-        onDelete={noop}
-      />,
-    );
-
-  it("leads with the count, in a polite live region", () => {
-    bar(3);
-    const toolbar = screen.getByRole("toolbar", { name: "Bulk actions" });
-    const count = within(toolbar).getByText(
-      (_, el) => el?.textContent === "3 selected" && el.tagName === "SPAN",
-    );
-    expect(count.getAttribute("aria-live")).toBe("polite");
-    // Atomic, so NVDA says "3 selected" and not the changed "3" alone.
-    expect(count.getAttribute("role")).toBe("status");
-    expect(count.getAttribute("aria-atomic")).toBe("true");
-    expect(toolbar.firstElementChild).toBe(count);
-    // Track is still the first button.
-    expect(within(toolbar).getAllByRole("button")[0]).toBe(
-      within(toolbar).getByRole("button", { name: "Track" }),
-    );
-  });
-
-  it("says no count where the page gives none, as the map does", () => {
-    bar();
-    expect(screen.queryByText(/selected/)).toBeNull();
-  });
-});
-
 describe("the last contacted date", () => {
+  // In UTC a stamp read as local time falls on the same day, so the check
+  // could not fail in CI. In Los Angeles 05:33 UTC is the evening before.
+  beforeAll(() => {
+    vi.stubEnv("TZ", "America/Los_Angeles");
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("reads a SQLite timestamp as UTC and prints the medium date", () => {
     const row = mount(makeContact({ lastContactedAt: "2026-09-10 05:33:50" }));
     const stamp = row.querySelector('[title^="Last contacted"]')!;

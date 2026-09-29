@@ -7,10 +7,11 @@
 //   - code is a stable machine-readable identifier
 //   - details carries structured context (e.g. Zod issues)
 //   - cause preserves the original error for forensics
-//   - isOperational distinguishes expected errors from bugs
 //
 // Service-layer and middleware code branches on these properties. Breaking
 // any of them is a contract violation that this file catches at CI time.
+// The shapes a client sees for NotFoundError, ValidationError and
+// RateLimitedError are checked after translation, in errorHandler.test.ts.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
@@ -44,18 +45,6 @@ describe("AppError (base class)", () => {
     expect(new AppError("x", 418).code).toBe("ERROR");
   });
 
-  it("honors an explicit `code` option", () => {
-    const e = new AppError("x", 500, { code: "DOMAIN_SPECIFIC" });
-    expect(e.code).toBe("DOMAIN_SPECIFIC");
-  });
-
-  it("carries arbitrary structured `details`", () => {
-    const e = new AppError("x", 400, {
-      details: { field: "email", issue: "invalid" },
-    });
-    expect(e.details).toEqual({ field: "email", issue: "invalid" });
-  });
-
   it("preserves the original error as `cause` without leaking it into `details`", () => {
     const original = new Error("network drop");
     const e = new AppError("wrapper", 503, { cause: original });
@@ -63,57 +52,23 @@ describe("AppError (base class)", () => {
     expect(e.details).toBeUndefined();
   });
 
-  it("marks errors as operational by default", () => {
-    expect(new AppError("x").isOperational).toBe(true);
-    expect(new AppError("x", 500, { isOperational: false }).isOperational).toBe(
-      false,
-    );
-  });
-
   it("sets `name` to the concrete subclass name (not 'Error')", () => {
     expect(new AppError("x").name).toBe("AppError");
     expect(new NotFoundError("Contact").name).toBe("NotFoundError");
     expect(new ValidationError("invalid").name).toBe("ValidationError");
   });
-
-  it("captures a usable stack trace", () => {
-    const e = new AppError("x");
-    expect(e.stack).toBeTypeOf("string");
-    expect(e.stack).toContain("AppError");
-  });
 });
 
 describe("Named subclasses", () => {
-  it("NotFoundError → 404 + entity name in message", () => {
-    const e = new NotFoundError("Contact", "c_123");
-    expect(e.statusCode).toBe(404);
-    expect(e.code).toBe("NOT_FOUND");
-    expect(e.message).toBe("Contact c_123 not found");
-    expect(e.details).toEqual({ entity: "Contact", id: "c_123" });
-  });
-
   it("NotFoundError without id omits the id from the message", () => {
     const e = new NotFoundError("Suggestion");
     expect(e.message).toBe("Suggestion not found");
     expect(e.details).toEqual({ entity: "Suggestion", id: undefined });
   });
 
-  it("ValidationError → 400 + carries arbitrary details (e.g. ZodError.issues)", () => {
-    const issues = [{ path: ["email"], message: "Invalid email" }];
-    const e = new ValidationError("Invalid request body", issues);
-    expect(e.statusCode).toBe(400);
-    expect(e.code).toBe("VALIDATION_ERROR");
-    expect(e.details).toBe(issues);
-  });
-
   it("ConflictError → 409", () => {
     expect(new ConflictError("Already merged").statusCode).toBe(409);
     expect(new ConflictError("Already merged").code).toBe("CONFLICT");
-  });
-
-  it("RateLimitedError → 429", () => {
-    expect(new RateLimitedError("Too many").statusCode).toBe(429);
-    expect(new RateLimitedError("Too many").code).toBe("RATE_LIMITED");
   });
 
   it("ServiceUnavailableError → 503", () => {

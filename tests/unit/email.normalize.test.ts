@@ -4,7 +4,6 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  determineDirection,
   normalizeEmail,
   normalizeEmailAddress,
   parseAddressList,
@@ -83,25 +82,6 @@ describe("parseAddressList", () => {
     expect(parseAddressList(null)).toEqual([]);
     expect(parseAddressList(undefined)).toEqual([]);
     expect(parseAddressList("")).toEqual([]);
-  });
-});
-
-describe("determineDirection", () => {
-  const selfSet = new Set(["me@example.com", "alias@example.com"]);
-
-  it("marks as out if From contains a self address", () => {
-    expect(determineDirection([{ email: "me@example.com" }], selfSet)).toBe(
-      "out",
-    );
-    expect(determineDirection([{ email: "alias@example.com" }], selfSet)).toBe(
-      "out",
-    );
-  });
-
-  it("marks as in if From does not contain any self address", () => {
-    expect(determineDirection([{ email: "other@example.com" }], selfSet)).toBe(
-      "in",
-    );
   });
 });
 

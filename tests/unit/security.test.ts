@@ -6,7 +6,10 @@ import { describe, it, expect } from "vitest";
 import path from "path";
 import type { Request, Response } from "express";
 import { UPLOADS_DIR, resolveUploadPath } from "../../server/utils/paths.ts";
-import { _internal } from "../../server/services/linkPreviewService.ts";
+import {
+  assertPublicHttpUrl,
+  isPrivateAddress,
+} from "../../server/utils/urlSafety.ts";
 import {
   createRateLimiter,
   isAiCostPath,
@@ -51,12 +54,10 @@ describe("resolveUploadPath", () => {
 });
 
 // =============================================================================
-// Link preview — private address detection (SSRF guard)
+// URL safety — private address detection (SSRF guard)
 // =============================================================================
 
 describe("isPrivateAddress", () => {
-  const { isPrivateAddress } = _internal;
-
   it("flags loopback and private IPv4 ranges", () => {
     for (const ip of [
       "127.0.0.1",
@@ -90,8 +91,6 @@ describe("isPrivateAddress", () => {
 });
 
 describe("assertPublicHttpUrl", () => {
-  const { assertPublicHttpUrl } = _internal;
-
   it("rejects non-http(s) schemes", async () => {
     for (const url of [
       "file:///etc/passwd",
@@ -140,40 +139,17 @@ describe("assertPublicHttpUrl", () => {
 // =============================================================================
 
 /**
- * The limiter writes a `Retry-After` header on the request it refuses, so the
- * fake response has to hold headers rather than be an empty object.
+ * The limiter reads the caller's address and hands a refusal to `next`. The
+ * error handler writes `Retry-After`, so the response here needs nothing.
  */
-function fakeReqRes(
-  ip = "10.0.0.1",
-  principal?: { user: { id: string } },
-): {
-  req: Request;
-  res: Response;
-  headers: Record<string, string>;
-} {
-  const headers: Record<string, string> = {};
+function fakeReqRes(ip = "10.0.0.1"): { req: Request; res: Response } {
   return {
-    req: { ip, principal } as unknown as Request,
-    res: {
-      setHeader: (name: string, value: string) => {
-        headers[name] = String(value);
-      },
-      getHeader: (name: string) => headers[name],
-    } as unknown as Response,
-    headers,
+    req: { ip } as unknown as Request,
+    res: {} as Response,
   };
 }
 
 describe("createRateLimiter", () => {
-  it("allows requests under the limit", () => {
-    const limiter = createRateLimiter({ windowMs: 60_000, max: 3, name: "t" });
-    const { req, res } = fakeReqRes();
-    const errors: unknown[] = [];
-    for (let i = 0; i < 3; i++)
-      limiter(req, res, (e?: unknown) => errors.push(e));
-    expect(errors).toEqual([undefined, undefined, undefined]);
-  });
-
   it("rejects requests over the limit with RateLimitedError", () => {
     const limiter = createRateLimiter({ windowMs: 60_000, max: 2, name: "t" });
     const { req, res } = fakeReqRes();
@@ -197,79 +173,11 @@ describe("createRateLimiter", () => {
   });
 });
 
-describe("createRateLimiter — per-account keys and Retry-After", () => {
-  it("tells the caller how long to wait", () => {
-    // The number, not the header. The error handler is the one place that
-    // turns it into `Retry-After`, for every 429 in the app rather than for
-    // the two the limiters raise.
-    const limiter = createRateLimiter({ windowMs: 60_000, max: 1, name: "t" });
-    const { req, res } = fakeReqRes();
-    limiter(req, res, () => {});
-    let refused: unknown;
-    limiter(req, res, (e?: unknown) => {
-      refused = e;
-    });
-    expect(refused).toBeInstanceOf(RateLimitedError);
-    const seconds = (
-      (refused as RateLimitedError).details as { retryAfterSeconds: number }
-    ).retryAfterSeconds;
-    // A client that sleeps for this and retries must find the window open.
-    expect(seconds).toBeGreaterThan(0);
-    expect(seconds).toBeLessThanOrEqual(60);
-  });
-
-  it("gives each account its own window on one address", () => {
-    const limiter = createRateLimiter({
-      windowMs: 60_000,
-      max: 1,
-      name: "t",
-      keyBy: (req) => req.principal?.user.id ?? null,
-    });
-    const a = fakeReqRes("10.0.0.1", { user: { id: "user-a" } });
-    const b = fakeReqRes("10.0.0.1", { user: { id: "user-b" } });
-
-    const errors: unknown[] = [];
-    limiter(a.req, a.res, (e?: unknown) => errors.push(e));
-    limiter(a.req, a.res, (e?: unknown) => errors.push(e));
-    limiter(b.req, b.res, (e?: unknown) => errors.push(e));
-
-    expect(errors[0]).toBeUndefined();
-    expect(errors[1]).toBeInstanceOf(RateLimitedError);
-    // Same address, different account, still allowed.
-    expect(errors[2]).toBeUndefined();
-  });
-
-  it("skips a request whose key is null rather than pooling them", () => {
-    // A caller nobody has identified has no account to charge. Lumping every
-    // such request into one window would let the first anonymous caller of a
-    // minute exhaust it for the rest.
-    const limiter = createRateLimiter({
-      windowMs: 60_000,
-      max: 1,
-      name: "t",
-      keyBy: (req) => req.principal?.user.id ?? null,
-    });
-    const errors: unknown[] = [];
-    for (let i = 0; i < 5; i++) {
-      const { req, res } = fakeReqRes();
-      limiter(req, res, (e?: unknown) => errors.push(e));
-    }
-    expect(errors).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
-  });
-});
+// The per-account window, the wait a refused caller is told, the requests
+// nobody has identified, and the two paths risks question Q16 added go
+// through both real limiters in tests/integration/api.rateLimit.test.ts.
 
 describe("isAiCostPath", () => {
-  it("covers the two paths risks question Q16 added", () => {
-    expect(isAiCostPath("/api/dashboard/insight")).toBe(true);
-    expect(isAiCostPath("/api/dedupe/scan")).toBe(true);
-  });
-
   it("still covers the paths that were already listed", () => {
     for (const path of [
       "/api/search/semantic",

@@ -6,10 +6,15 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DuplicatesPage } from "../../src/views/settings/pages/DuplicatesPage";
 import * as api from "../../src/api";
+import * as dedupeContext from "../../src/contexts/DedupeContext";
 import * as prefContext from "../../src/contexts/PreferencesContext";
 
 vi.mock("../../src/api", () => ({
   useDedupeCount: vi.fn(),
+}));
+
+vi.mock("../../src/contexts/DedupeContext", () => ({
+  useDedupeOptional: vi.fn(),
 }));
 
 vi.mock("../../src/views/dedupe", () => ({
@@ -140,20 +145,17 @@ describe("DuplicatesPage, the order of the page", () => {
   });
 
   it("opens Merge activity from one button, at every width", () => {
+    const setShowActivity = vi.fn();
+    vi.mocked(dedupeContext.useDedupeOptional).mockReturnValue({
+      setShowActivity,
+    } as unknown as ReturnType<typeof dedupeContext.useDedupeOptional>);
     renderPage();
     expect(
       screen.queryByRole("button", { name: "Duplicates actions" }),
     ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Merge activity" }).className,
-    ).toContain("btn-icon");
-  });
-
-  it("writes its lines without a closing period", () => {
-    renderPage();
-    expect(
-      screen.getByText(/^Merges a pair by itself at 93% confidence or more/)
-        .textContent,
-    ).not.toMatch(/\.$/);
+    const button = screen.getByRole("button", { name: "Merge activity" });
+    expect(button.className).toContain("btn-icon");
+    fireEvent.click(button);
+    expect(setShowActivity).toHaveBeenCalledWith(true);
   });
 });

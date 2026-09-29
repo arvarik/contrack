@@ -8,14 +8,14 @@
 //   - parseAIJson          → tolerant JSON parsing for model output
 //
 // These tests use vitest fake timers heavily because the production code
-// schedules real backoffs (500ms, 1000ms, 2000ms). We never sleep in real time.
+// schedules a real backoff (500ms plus jitter before the one retry). We never
+// sleep in real time.
 // All async paths must therefore co-operate with `vi.advanceTimersByTimeAsync`.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
-  AI_DEFAULTS,
   isRetryableError,
   parseAIJson,
   withRetry,
@@ -118,9 +118,11 @@ describe("withTimeout", () => {
     expect(op).toHaveBeenCalledTimes(1);
   });
 
-  it("throws UpstreamTimeoutError when the op exceeds the deadline", async () => {
+  it("throws UpstreamTimeoutError and aborts the op's signal when the op exceeds the deadline", async () => {
+    let opSignal!: AbortSignal;
     const op = (signal: AbortSignal) =>
       new Promise<string>((_resolve, reject) => {
+        opSignal = signal;
         signal.addEventListener("abort", () => reject(new Error("Aborted")));
       });
 
@@ -130,16 +132,9 @@ describe("withTimeout", () => {
     const err = await captured;
     expect(err).toBeInstanceOf(UpstreamTimeoutError);
     expect(err).toMatchObject({ statusCode: 504, code: "UPSTREAM_TIMEOUT" });
-  });
-
-  it("passes its own signal to the op so abort can short-circuit it", async () => {
-    let receivedSignal: AbortSignal | null = null;
-    const op = async (signal: AbortSignal) => {
-      receivedSignal = signal;
-      return "fast";
-    };
-    await withTimeout(op, 1_000);
-    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    // The op's own signal aborts too, so the SDK call closes its socket.
+    expect(opSignal.aborted).toBe(true);
+    expect(opSignal.reason).toBeInstanceOf(UpstreamTimeoutError);
   });
 
   it("propagates parent-signal aborts and never throws as timeout", async () => {
@@ -191,15 +186,14 @@ describe("withRetry", () => {
     const op = vi
       .fn()
       .mockRejectedValueOnce({ status: 503, message: "Service Unavailable" })
-      .mockRejectedValueOnce({ status: 503, message: "Service Unavailable" })
-      .mockResolvedValueOnce("third-try");
+      .mockResolvedValueOnce("second-try");
 
-    const promise = withRetry(op, { maxAttempts: 3 });
-    // Advance past all backoff windows (500ms + 1000ms ≈ 1500ms + jitter).
+    const promise = withRetry(op);
+    // Advance past the backoff window (500ms + jitter).
     await vi.advanceTimersByTimeAsync(5_000);
 
-    await expect(promise).resolves.toBe("third-try");
-    expect(op).toHaveBeenCalledTimes(3);
+    await expect(promise).resolves.toBe("second-try");
+    expect(op).toHaveBeenCalledTimes(2);
   });
 
   it("does NOT retry a non-retryable error", async () => {
@@ -210,22 +204,43 @@ describe("withRetry", () => {
     expect(op).toHaveBeenCalledTimes(1);
   });
 
+  it("never retries malformed output or authentication failures", async () => {
+    const invalid = vi
+      .fn()
+      .mockRejectedValue(
+        new AppError("invalid JSON", 502, { code: "AI_INVALID_JSON" }),
+      );
+    const unauthorized = vi.fn().mockRejectedValue({
+      status: 401,
+      message: "quota unavailable for this key",
+    });
+    const refusedJson = expect(withRetry(invalid)).rejects.toThrow(
+      "invalid JSON",
+    );
+    const refusedKey = expect(withRetry(unauthorized)).rejects.toThrow();
+    // Past every backoff window, so a retry would have run by now.
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await refusedJson;
+    await refusedKey;
+    expect(invalid).toHaveBeenCalledTimes(1);
+    expect(unauthorized).toHaveBeenCalledTimes(1);
+  });
+
   it("invokes onRetry exactly once per retryable failure (not on the final attempt)", async () => {
     const onRetry = vi.fn();
     const op = vi
       .fn()
       .mockRejectedValueOnce({ status: 503 })
-      .mockRejectedValueOnce({ status: 503 })
-      .mockResolvedValueOnce("done");
+      .mockRejectedValueOnce({ status: 503 });
 
-    const promise = withRetry(op, { onRetry, maxAttempts: 3 });
+    const captured = withRetry(op, { onRetry }).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
-    await promise;
+    await captured;
 
-    // Two failures → two onRetry invocations. The successful attempt doesn't fire it.
-    expect(onRetry).toHaveBeenCalledTimes(2);
+    // Two failures, and the second is the final attempt → one onRetry invocation.
+    expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onRetry).toHaveBeenNthCalledWith(1, 1, expect.any(Object));
-    expect(onRetry).toHaveBeenNthCalledWith(2, 2, expect.any(Object));
   });
 
   it("converts an exhausted-retry 429 into a RateLimitedError", async () => {
@@ -233,7 +248,7 @@ describe("withRetry", () => {
       .fn()
       .mockRejectedValue({ status: 429, message: "rate limited" });
     // Catch once and assert on the captured value so vitest only ever sees a single rejection.
-    const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
+    const captured = withRetry(op).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = await captured;
     expect(err).toBeInstanceOf(RateLimitedError);
@@ -244,20 +259,13 @@ describe("withRetry", () => {
     const op = vi
       .fn()
       .mockRejectedValue({ status: 502, message: "Bad Gateway" });
-    const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
+    const captured = withRetry(op).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = await captured;
     expect(err).toBeInstanceOf(ServiceUnavailableError);
     expect(err).toMatchObject({ statusCode: 503, code: "SERVICE_UNAVAILABLE" });
-  });
-
-  it("respects an explicit maxAttempts override", async () => {
-    const op = vi.fn().mockRejectedValue({ status: 503 });
-    const captured = withRetry(op, { maxAttempts: 5 }).catch((e) => e);
-    await vi.advanceTimersByTimeAsync(60_000);
-    const err = await captured;
-    expect(err).toBeDefined();
-    expect(op).toHaveBeenCalledTimes(5);
+    // At most one application retry (docs/ai-hardening.md): two calls in all.
+    expect(op).toHaveBeenCalledTimes(2);
   });
 
   it("never retries when the caller's signal aborts first", async () => {
@@ -276,7 +284,7 @@ describe("withRetry", () => {
     const op = vi
       .fn()
       .mockRejectedValue(new RateLimitedError("custom message"));
-    const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
+    const captured = withRetry(op).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = await captured;
     expect(err).toBeInstanceOf(RateLimitedError);
@@ -362,19 +370,6 @@ describe("parseAIJson", () => {
   it("does not crash on non-string input", () => {
     expect(() => parseAIJson(null as unknown as string)).toThrow(AppError);
     expect(() => parseAIJson(123 as unknown as string)).toThrow(AppError);
-  });
-});
-
-// =============================================================================
-// Defaults sanity check
-// =============================================================================
-
-describe("AI_DEFAULTS", () => {
-  it("exposes the published timeout, retry, and backoff numbers", () => {
-    expect(AI_DEFAULTS.perAttemptTimeoutMs).toBe(60_000);
-    expect(AI_DEFAULTS.maxAttempts).toBe(2);
-    expect(AI_DEFAULTS.baseBackoffMs).toBe(500);
-    expect(AI_DEFAULTS.jitterMs).toBe(250);
   });
 });
 

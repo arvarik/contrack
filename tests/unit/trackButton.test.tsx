@@ -61,11 +61,7 @@ vi.mock("../../src/contexts/PreferencesContext", () => ({
   usePreferences: () => ({ preferences: prefs }),
 }));
 
-import {
-  TRACK_LABEL,
-  TrackButton,
-  trackingLabel,
-} from "../../src/views/contact-detail/components/TrackButton";
+import { TrackButton } from "../../src/views/contact-detail/components/TrackButton";
 import { useTrackShortcut } from "../../src/views/contact-detail/components/useTrackShortcut";
 import type { Contact } from "../../src/types";
 
@@ -149,8 +145,9 @@ afterEach(() => {
 describe("TrackButton", () => {
   it("is one menu button that says Track, and is named for what it does", () => {
     mount(<TrackButton contact={ADA} />);
-    const button = screen.getByRole("button", { name: TRACK_LABEL });
-    expect(TRACK_LABEL).toBe("Track, choose how often");
+    const button = screen.getByRole("button", {
+      name: "Track, choose how often",
+    });
     // One control, no divider and no second half.
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(button.getAttribute("aria-haspopup")).toBe("menu");
@@ -180,9 +177,8 @@ describe("TrackButton", () => {
     // A cadence off the list, saved before 2.0, in its short form.
     mount(<TrackButton contact={{ ...TRACKED, cadenceDays: 60 }} />);
     const off = screen.getByRole("button", {
-      name: trackingLabel(60),
+      name: "Tracking every 2 months, change or stop",
     });
-    expect(trackingLabel(60)).toBe("Tracking every 2 months, change or stop");
     expect(visibleWord(off)).toBe("2 months");
   });
 
@@ -232,7 +228,7 @@ describe("TrackButton", () => {
 describe("the menu before the contact is tracked", () => {
   it("lists the four cadences under Keep up, none checked, and marks the default", () => {
     mount(<TrackButton contact={ADA} />);
-    const menu = openMenu(TRACK_LABEL);
+    const menu = openMenu("Track, choose how often");
     expect(within(menu).getByText("Keep up")).toBeTruthy();
     // Plain items, not checkboxes: there is no cadence yet to be checked.
     expect(within(menu).queryAllByRole("menuitemcheckbox")).toHaveLength(0);
@@ -256,7 +252,9 @@ describe("the menu before the contact is tracked", () => {
   it("adds the account's default as a row when it is off the list", () => {
     prefs.defaultCadenceDays = 180;
     mount(<TrackButton contact={ADA} />);
-    const items = within(openMenu(TRACK_LABEL)).getAllByRole("menuitem");
+    const items = within(openMenu("Track, choose how often")).getAllByRole(
+      "menuitem",
+    );
     expect(items.map((item) => item.textContent)).toEqual([
       "Weekly",
       "Monthly",
@@ -269,7 +267,9 @@ describe("the menu before the contact is tracked", () => {
   it("tracks at the chosen cadence in one press, with the toast and an Undo", async () => {
     mount(<TrackButton contact={ADA} />);
     fireEvent.click(
-      within(openMenu(TRACK_LABEL)).getByRole("menuitem", { name: "Weekly" }),
+      within(openMenu("Track, choose how often")).getByRole("menuitem", {
+        name: "Weekly",
+      }),
     );
 
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1));
@@ -394,7 +394,7 @@ describe("a change on its way", () => {
     api.hold = true;
     mount(<TrackButton contact={ADA} />);
     fireEvent.click(
-      within(openMenu(TRACK_LABEL)).getByRole("menuitem", {
+      within(openMenu("Track, choose how often")).getByRole("menuitem", {
         name: /^Quarterly/,
       }),
     );
@@ -413,7 +413,9 @@ describe("a change on its way", () => {
     expect(toastMock.success).not.toHaveBeenCalled();
 
     // The rows wait, so a second press cannot race the first.
-    const rows = within(openMenu(TRACK_LABEL)).getAllByRole("menuitem");
+    const rows = within(openMenu("Track, choose how often")).getAllByRole(
+      "menuitem",
+    );
     expect(
       rows.every((row) => row.getAttribute("aria-disabled") === "true"),
     ).toBe(true);
@@ -429,7 +431,9 @@ describe("a change on its way", () => {
     });
     mount(<TrackButton contact={ADA} />);
     fireEvent.click(
-      within(openMenu(TRACK_LABEL)).getByRole("menuitem", { name: "Yearly" }),
+      within(openMenu("Track, choose how often")).getByRole("menuitem", {
+        name: "Yearly",
+      }),
     );
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1));

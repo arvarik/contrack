@@ -6,7 +6,7 @@
  * either path.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IDLE_TIMEOUT_MS, savesData, whenIdle } from "../../src/lib/idle";
+import { whenIdle } from "../../src/lib/idle";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -24,7 +24,7 @@ describe("whenIdle", () => {
     const cancel = whenIdle(task);
 
     expect(requestIdleCallback).toHaveBeenCalledWith(task, {
-      timeout: IDLE_TIMEOUT_MS,
+      timeout: 10_000,
     });
     cancel();
     expect(cancelIdleCallback).toHaveBeenCalledWith(7);
@@ -57,7 +57,6 @@ describe("whenIdle", () => {
     vi.stubGlobal("navigator", { connection: { saveData: true } });
     const task = vi.fn();
 
-    expect(savesData()).toBe(true);
     whenIdle(task)();
     expect(requestIdleCallback).not.toHaveBeenCalled();
     expect(task).not.toHaveBeenCalled();

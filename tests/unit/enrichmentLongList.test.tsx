@@ -5,6 +5,8 @@
 // The list drew every contact: 5,824 rows took 44 s to open the page and
 // 5 s to leave it. It now draws the rows in view of its own box, while the
 // count, the filters, Select all and the batch still cover every contact.
+// tests/e2e/long-lists.spec.ts draws the rows with the real virtualizer and
+// presses Select all. This file checks that a filter reads every contact.
 // jsdom has no layout, so the virtualizer asks for the first ten rows, and
 // the list's scroller is its box.
 // =============================================================================
@@ -87,23 +89,6 @@ afterEach(() => {
 });
 
 describe("the Enrichment list, long", () => {
-  it("draws only the rows in view, and still counts and selects every contact", () => {
-    contacts.list = people(450);
-    render(
-      <MemoryRouter>
-        <AISearchView />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText(/^450 contacts$/)).toBeTruthy();
-    const rows = screen.getAllByRole("link", { name: /^Open Person/ });
-    expect(rows).toHaveLength(10);
-
-    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
-    expect(
-      screen.getByRole("button", { name: "Start enrichment (450 selected)" }),
-    ).toBeTruthy();
-  });
-
   it("filters the whole list, not only the rows drawn", () => {
     contacts.list = people(450);
     render(

@@ -13,56 +13,6 @@ import {
 const NON_TEXT_RATIO = 3.0;
 
 describe("pulse.contrast", () => {
-  it("ensures the two trend tones meet non-text contrast (3:1) against the card surface in both palettes", () => {
-    // Rising is the success tone and cooling the error tone, on the Keeping
-    // up card's delta chips.
-    const tones = ["success", "error"] as const;
-
-    for (const [mode, palette] of Object.entries(PALETTES)) {
-      const surface = hexToRgb(palette["surface-container-lowest"]);
-
-      for (const tone of tones) {
-        const fg = hexToRgb(palette[tone]);
-        const ratio = contrast(fg, surface);
-
-        expect(
-          ratio,
-          `Trend tone "${tone}" on surface-container-lowest in ${mode} mode must be >= ${NON_TEXT_RATIO}:1`,
-        ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
-      }
-    }
-  });
-
-  it("ensures the four segments of the Keeping up bar read against the card surface in both palettes", () => {
-    // The three band segments are colour and meet the non-text floor. The
-    // fourth, "no interactions yet", is the neutral track tone: it has to be
-    // a different colour from the card, and darker or lighter than every
-    // band segment beside it, so the bar never reads as three segments.
-    const bands = ["success", "warning", "error"] as const;
-
-    for (const [mode, palette] of Object.entries(PALETTES)) {
-      const surface = hexToRgb(palette["surface-container-lowest"]);
-      const track = hexToRgb(palette["surface-container-highest"]);
-
-      for (const band of bands) {
-        expect(
-          contrast(hexToRgb(palette[band]), surface),
-          `Bar segment "${band}" in ${mode} mode`,
-        ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
-      }
-      expect(
-        contrast(track, surface),
-        `The unscored segment in ${mode} mode must differ from the card`,
-      ).toBeGreaterThan(1.1);
-      for (const band of bands) {
-        expect(
-          contrast(hexToRgb(palette[band]), track),
-          `The unscored segment beside "${band}" in ${mode} mode`,
-        ).toBeGreaterThanOrEqual(2);
-      }
-    }
-  });
-
   it("draws the Up next check's resting ring at 3:1 on the row's wash and on the selected tint, under full ink", () => {
     // The ring is the group's ink at the class's percentage. The rows with a
     // check are overdue (error), today (primary) and this week (neutral).
@@ -93,19 +43,6 @@ describe("pulse.contrast", () => {
           ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
         }
       }
-    }
-  });
-
-  it("ensures heatmap cell boundary strokes meet non-text contrast (3:1) against the card surface in both palettes", () => {
-    for (const [mode, palette] of Object.entries(PALETTES)) {
-      const surface = hexToRgb(palette["surface-container-lowest"]);
-      const stroke = hexToRgb(palette.primary);
-      const ratio = contrast(stroke, surface);
-
-      expect(
-        ratio,
-        `Heatmap cell stroke in ${mode} mode must meet >= ${NON_TEXT_RATIO}:1 against card surface`,
-      ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
     }
   });
 

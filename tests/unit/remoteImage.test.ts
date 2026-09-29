@@ -25,7 +25,6 @@ import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import {
   RemoteImageError,
-  assertRasterImage,
   ensureLocalImage,
   fetchRemoteImage,
   imageHost,
@@ -135,6 +134,7 @@ describe("fetchRemoteImage", () => {
     const err = await failure();
     expect(err).toBeInstanceOf(RemoteImageError);
     expect((err as RemoteImageError).transient).toBe(false);
+    expect((err as Error).message).toContain("not an image");
   });
 
   it("refuses a declared length over the cap without reading the body", async () => {
@@ -232,14 +232,6 @@ describe("fetchRemoteImage", () => {
     const err = await failure({ signal: controller.signal });
     expect((err as Error).message).toBe("already gone");
     expect(safeFetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("assertRasterImage", () => {
-  it("refuses bytes that are no image at all", async () => {
-    await expect(assertRasterImage(Buffer.from("hello"))).rejects.toThrow(
-      "not an image",
-    );
   });
 });
 

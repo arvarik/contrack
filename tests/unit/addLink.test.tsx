@@ -19,9 +19,7 @@ import {
   screen,
 } from "@testing-library/react";
 import {
-  ALREADY_LINKED,
   AddLink,
-  NOT_A_LINK,
   linkKey,
   normaliseLink,
 } from "../../src/views/contact-detail/components/AddLink";
@@ -180,7 +178,7 @@ describe("AddLink", () => {
     fireEvent.change(field, { target: { value: "ada" } });
     fireEvent.keyDown(field, { key: "Enter" });
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toBe(NOT_A_LINK);
+    expect(alert.textContent).toBe("That is not a web address");
     expect(field.getAttribute("aria-invalid")).toBe("true");
     expect(field.getAttribute("aria-describedby")).toBe(alert.id);
     expect((field as HTMLInputElement).value).toBe("ada");
@@ -195,7 +193,9 @@ describe("AddLink", () => {
     const field = open();
     fireEvent.change(field, { target: { value: "linkedin.com/in/ada/" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    expect(screen.getByRole("alert").textContent).toBe(ALREADY_LINKED);
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This contact already has that link",
+    );
     // Leaving does not throw the text away either.
     act(() => screen.getByRole("button", { name: "Elsewhere" }).focus());
     expect(screen.getByRole("textbox", { name: "New link" })).toBeTruthy();

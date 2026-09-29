@@ -3,7 +3,6 @@ import {
   buildUpNextQueue,
   computeNextHighlightIndex,
   describeDueChip,
-  GROUP_LABELS,
 } from "../../src/views/pulse/lib/upNext";
 import type { ActionItem } from "../../src/types";
 import type { UpcomingBirthday } from "../../src/views/pulse/lib/birthdays";
@@ -107,6 +106,14 @@ describe("pulse.upNext", () => {
       "thisWeek",
       "birthdays",
       "catch-up",
+    ]);
+    // Each group's heading, in sentence case.
+    expect(res.groups.map((g) => g.label)).toEqual([
+      "Overdue",
+      "Today",
+      "This week",
+      "Birthdays",
+      "Catch up",
     ]);
   });
 
@@ -348,16 +355,6 @@ describe("pulse.upNext", () => {
         expect(text).not.toMatch(/[A-Z]{2,}/);
       }
     });
-  });
-
-  it("names the groups in sentence case", () => {
-    expect(Object.values(GROUP_LABELS)).toEqual([
-      "Overdue",
-      "Today",
-      "This week",
-      "Birthdays",
-      "Catch up",
-    ]);
   });
 
   it("keeps a birthday in Up next through the seventh day and not the eighth", () => {

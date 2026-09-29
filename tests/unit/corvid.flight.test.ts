@@ -100,8 +100,9 @@ describe("flightBox", () => {
   });
 
   it("flies the bird larger than it sits, smaller on a phone", () => {
-    expect(flightSize(LAPTOP)).toBe(64);
-    expect(flightSize(PHONE)).toBe(52);
+    expect(flightSize(LAPTOP)).toBeGreaterThan(SIDEBAR.size);
+    expect(flightSize(PHONE)).toBeGreaterThan(FOOTER.size);
+    expect(flightSize(PHONE)).toBeLessThan(flightSize(LAPTOP));
   });
 });
 

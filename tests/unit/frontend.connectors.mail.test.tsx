@@ -30,14 +30,6 @@ vi.mock("../../src/api/connectors", () => ({
   useConnectorRuns: vi.fn(),
   useCorrespondents: vi.fn(),
   useIgnoreCorrespondent: vi.fn(),
-  connectorKeys: {
-    all: ["connectors"],
-    kinds: ["connectors", "kinds"],
-    lists: () => ["connectors", "list"],
-    detail: (id: string) => ["connectors", "detail", id],
-    runs: (id: string) => ["connectors", "runs", id],
-    correspondents: (limit?: number) => ["connectors", "correspondents", limit],
-  },
 }));
 
 vi.mock("../../src/api/contacts", () => ({
@@ -140,17 +132,6 @@ describe("Frontend Mail & Google Connectors Components", () => {
   // 1. ImapFormModal
   // =========================================================================
   describe("ImapFormModal", () => {
-    it("renders create form with default port 993", () => {
-      renderWithClient(<ImapFormModal isOpen={true} onClose={vi.fn()} />);
-
-      expect(
-        screen.getByRole("heading", { name: /Connect Mailbox \(IMAP\)/i }),
-      ).toBeTruthy();
-      expect(screen.getByPlaceholderText("imap.fastmail.com")).toBeTruthy();
-      const portInput = screen.getByDisplayValue("993");
-      expect(portInput).toBeTruthy();
-    });
-
     it("validates missing host, username, and password", async () => {
       renderWithClient(<ImapFormModal isOpen={true} onClose={vi.fn()} />);
 
@@ -159,6 +140,26 @@ describe("Frontend Mail & Google Connectors Components", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Enter the IMAP server's host")).toBeTruthy();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("imap.fastmail.com"), {
+        target: { value: "imap.fastmail.com" },
+      });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Enter your IMAP username or email"),
+        ).toBeTruthy();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("you@example.com"), {
+        target: { value: "you@example.com" },
+      });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText("Enter your app password")).toBeTruthy();
       });
     });
 
@@ -310,7 +311,8 @@ describe("Frontend Mail & Google Connectors Components", () => {
       ).toBeTruthy();
     });
 
-    it("renders correspondents list with Add as contact and Ignore actions", async () => {
+    /** Renders the one correspondent, and returns its two mutations. */
+    const renderCorrespondents = () => {
       vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
         data: mockCorrespondents,
         isLoading: false,
@@ -331,6 +333,11 @@ describe("Frontend Mail & Google Connectors Components", () => {
       } as unknown as ReturnType<typeof connectorsApi.useIgnoreCorrespondent>);
 
       renderWithClient(<CorrespondentsView />);
+      return { createContactMock, ignoreMock };
+    };
+
+    it("renders correspondents list, and Add as contact creates the contact and marks the correspondent", async () => {
+      const { createContactMock, ignoreMock } = renderCorrespondents();
 
       expect(screen.getByText("Alice Partner")).toBeTruthy();
       expect(screen.getByText("alice@partner.org")).toBeTruthy();
@@ -347,6 +354,19 @@ describe("Frontend Mail & Google Connectors Components", () => {
         );
       });
 
+      // Adding also marks the correspondent, so the row leaves the list.
+      await waitFor(() => {
+        expect(ignoreMock).toHaveBeenCalledWith({
+          connectorId: "conn-1",
+          externalId: "alice@partner.org",
+        });
+      });
+      expect(ignoreMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("Ignore marks the correspondent without creating a contact", async () => {
+      const { createContactMock, ignoreMock } = renderCorrespondents();
+
       const ignoreBtn = screen.getByRole("button", { name: /Ignore/i });
       fireEvent.click(ignoreBtn);
 
@@ -356,6 +376,8 @@ describe("Frontend Mail & Google Connectors Components", () => {
           externalId: "alice@partner.org",
         });
       });
+      expect(ignoreMock).toHaveBeenCalledTimes(1);
+      expect(createContactMock).not.toHaveBeenCalled();
     });
   });
 });

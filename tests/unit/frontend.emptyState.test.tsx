@@ -4,13 +4,16 @@
  *
  * Every screen with nothing to show renders this primitive, so its promises
  * are the ones every such screen makes: a heading at the right level, one
- * sentence, and at most one action, drawn as the app's primary button.
+ * sentence, and at most one action, drawn as the app's primary button. It
+ * takes a tone for its icon tile, so a page that failed to load is not drawn
+ * as an empty one.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Users, Upload } from "lucide-react";
 import { EmptyState } from "../../src/components/ui/EmptyState";
+import { TONE_WASH } from "../../src/lib/styles";
 
 afterEach(() => {
   cleanup();
@@ -91,5 +94,28 @@ describe("EmptyState", () => {
     );
     expect(screen.queryByTestId("empty-state-icon")).toBeNull();
     expect(screen.getByTestId("corvid")).toBeTruthy();
+  });
+});
+
+describe("EmptyState tone", () => {
+  it("draws the icon tile in the primary tone by default", () => {
+    render(<EmptyState icon={Users} title="Nobody yet" body="Add someone." />);
+    expect(screen.getByTestId("empty-state-icon").className).toContain(
+      TONE_WASH.primary,
+    );
+  });
+
+  it("draws a failed load in the error tone", () => {
+    render(
+      <EmptyState
+        icon={Users}
+        tone="error"
+        title="System disconnected"
+        body="Failed to load."
+      />,
+    );
+    expect(screen.getByTestId("empty-state-icon").className).toContain(
+      TONE_WASH.error,
+    );
   });
 });

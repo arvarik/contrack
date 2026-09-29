@@ -7,7 +7,7 @@
  * `now` built on the local calendar, so the test holds in any time zone.
  */
 import { describe, expect, it } from "vitest";
-import { BANNER_DAYS, describeFollowUp } from "../../src/lib/followUp";
+import { describeFollowUp } from "../../src/lib/followUp";
 import { getPresetDate } from "../../src/views/map/FollowUpModal";
 
 /** Tuesday, September 22, 2026, at noon on the local calendar. */
@@ -30,6 +30,7 @@ describe("describeFollowUp", () => {
     // Late in the evening it is still tomorrow's, not late: read as UTC
     // midnight it was already past anywhere west of Greenwich.
     expect(describeFollowUp(tomorrow, LATE)?.days).toBe(1);
+    expect(getPresetDate("3days", NOON)).toBe("2026-09-25");
     const nextWeek = getPresetDate("nextweek", NOON);
     expect(describeFollowUp(nextWeek, NOON)?.days).toBe(7);
   });
@@ -77,16 +78,6 @@ describe("describeFollowUp", () => {
       "Follow-up due in 8 days",
     );
     expect(describeFollowUp("2026-11-06", NOON)?.days).toBe(45);
-  });
-
-  it("shows the banner for the whole week Pulse's This week holds", () => {
-    expect(BANNER_DAYS).toBe(7);
-    expect(describeFollowUp("2026-09-29", NOON)!.days).toBeLessThanOrEqual(
-      BANNER_DAYS,
-    );
-    expect(describeFollowUp("2026-09-30", NOON)!.days).toBeGreaterThan(
-      BANNER_DAYS,
-    );
   });
 
   it("says nothing for a missing or unreadable value", () => {

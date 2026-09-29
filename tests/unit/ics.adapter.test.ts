@@ -5,7 +5,7 @@
  * large attendee cap skipping, and externalId stability across multiple runs.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { icsAdapter } from "../../server/connectors/adapters/ics.ts";
 import type { SyncContext, SyncEvent } from "../../server/connectors/types.ts";
 
@@ -66,7 +66,17 @@ END:VEVENT
 END:VCALENDAR`;
 
 describe("icsAdapter", () => {
+  // The adapter sets its window from the clock, and the fixture's events are
+  // in January and February 2026. A fixed date keeps them in the window.
+  beforeEach(() => {
+    vi.useFakeTimers({
+      now: new Date("2026-03-01T00:00:00Z"),
+      toFake: ["Date"],
+    });
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;
   });
@@ -95,7 +105,9 @@ describe("icsAdapter", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.detail).toMatch(/Connected successfully/);
+    // Four VEVENT blocks, but node-ical folds the cancelled override into its
+    // series, so the feed holds three events.
+    expect(result.detail).toBe("Connected successfully (3 events found)");
   });
 
   it("expands recurrences, respects cancellations, and skips events exceeding attendee cap", async () => {
@@ -149,13 +161,18 @@ describe("icsAdapter", () => {
     );
     expect(cancelledInstance).toBeUndefined();
 
-    // 3. Check that non-cancelled recurring instances were produced
-    const baseInstance = interactionEvents.find((e) =>
-      "externalId" in e && typeof e.externalId === "string"
-        ? e.externalId.includes("weekly-sync@example.com")
-        : false,
+    // 3. Check that each recurring instance that was not cancelled was produced
+    const weekly = interactionEvents.flatMap((e) =>
+      "externalId" in e && e.externalId.startsWith("weekly-sync@example.com")
+        ? [e.externalId]
+        : [],
     );
-    expect(baseInstance).toBeDefined();
+    expect(weekly).toEqual([
+      "weekly-sync@example.com_2026-01-05T10:00:00.000Z",
+      "weekly-sync@example.com_2026-01-19T10:00:00.000Z",
+      "weekly-sync@example.com_2026-01-26T10:00:00.000Z",
+      "weekly-sync@example.com_2026-02-02T10:00:00.000Z",
+    ]);
 
     // 4. Check all-day event
     const allDay = interactionEvents.find((e) =>

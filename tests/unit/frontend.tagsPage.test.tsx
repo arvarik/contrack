@@ -74,6 +74,12 @@ describe("TagsPage", () => {
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getByText("work")).toBeTruthy();
     expect(screen.getByText("12")).toBeTruthy();
+    // The server sent work first.
+    expect(
+      screen
+        .getAllByRole("link", { name: /contacts?$/ })
+        .map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["family, 4 contacts", "work, 12 contacts"]);
   });
 
   it("links each tag to the Network list filtered to it", () => {

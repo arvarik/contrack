@@ -32,24 +32,15 @@ describe("parseFilterValue", () => {
     });
   });
 
-  it("parses list facet values directly", () => {
-    const filter = parseFilterValue("list", "investors");
-    expect(filter).toEqual({
-      field: "list",
-      value: "investors",
-    });
-  });
-
-  it("parses hyphenated list names for lists with spaces", () => {
-    // Note: Free-text tokenizer uses whitespace boundary for pills,
-    // so multi-word list names use the hyphen form (e.g. list:advisors-board)
-    // or are selected via autocomplete.
-    const filter = parseFilterValue("list", "advisors-board");
-    expect(filter).toEqual({
-      field: "list",
-      value: "advisors-board",
-    });
-  });
+  // Note: Free-text tokenizer uses whitespace boundary for pills,
+  // so multi-word list names use the hyphen form (e.g. list:advisors-board)
+  // or are selected via autocomplete.
+  it.each(["investors", "advisors-board"])(
+    "parses list facet values directly: %s",
+    (value) => {
+      expect(parseFilterValue("list", value)).toEqual({ field: "list", value });
+    },
+  );
 });
 
 describe("parseFilterValue for contacted:", () => {

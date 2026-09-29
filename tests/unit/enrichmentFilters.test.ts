@@ -8,7 +8,6 @@ import {
   matchesContactFilter,
   matchesResearchFilter,
   paramsWithFilters,
-  STALE_AFTER_MS,
   type FilteredContact,
 } from "../../src/lib/enrichmentFilters";
 
@@ -50,8 +49,14 @@ describe("the Research row", () => {
       aiHydratedAt: new Date(NOW - 30 * 864e5).toISOString(),
       researchOutcome: "added",
     });
+    // Six months is 183 days: research 184 days old is due again, and
+    // research 182 days old is not.
     const old = contact({
-      aiHydratedAt: new Date(NOW - STALE_AFTER_MS - 864e5).toISOString(),
+      aiHydratedAt: new Date(NOW - 184 * 864e5).toISOString(),
+      researchOutcome: "added",
+    });
+    const nearlyOld = contact({
+      aiHydratedAt: new Date(NOW - 182 * 864e5).toISOString(),
       researchOutcome: "added",
     });
     const nothing = contact({
@@ -61,6 +66,7 @@ describe("the Research row", () => {
     expect(matchesResearchFilter(never, "not_yet", NOW)).toBe(true);
     expect(matchesResearchFilter(recent, "not_yet", NOW)).toBe(false);
     expect(matchesResearchFilter(old, "stale", NOW)).toBe(true);
+    expect(matchesResearchFilter(nearlyOld, "stale", NOW)).toBe(false);
     expect(matchesResearchFilter(recent, "stale", NOW)).toBe(false);
     // Never researched is not old research.
     expect(matchesResearchFilter(never, "stale", NOW)).toBe(false);

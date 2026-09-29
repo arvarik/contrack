@@ -84,12 +84,11 @@ afterEach(() => {
 
 describe("the Track row", () => {
   it("sits after Add to list, on T, and reads Untrack for a tracked contact", () => {
-    const { unmount } = { unmount: mount().onClose };
+    mount();
     const rows = screen.getAllByRole("button").map((b) => b.textContent);
     const list = rows.findIndex((text) => text?.includes("Add to list"));
-    expect(rows[list + 1]).toContain("Track");
-    expect(rows[list + 1]).toContain("T");
-    void unmount;
+    // The label, then the key hint.
+    expect(rows[list + 1]).toBe("TrackT");
     cleanup();
 
     mount({ ...ADA, isTracked: true });

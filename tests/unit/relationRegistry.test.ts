@@ -1,13 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { getTableName } from "drizzle-orm";
 import { RELATION_REGISTRY } from "../../server/repositories/contactRepository.ts";
 
 describe("Central Child Relation Registry (OCP)", () => {
   it("defines mapping configuration for all expected child tables", () => {
-    const keys = Object.keys(RELATION_REGISTRY) as Array<
-      keyof typeof RELATION_REGISTRY
-    >;
-
-    // Core child properties we expect to be registered
+    // Core child properties we expect to be registered. A PUT updates only
+    // the relations in the registry, so one left out is silently dropped.
     const expectedKeys = [
       "emails",
       "phones",
@@ -20,14 +18,12 @@ describe("Central Child Relation Registry (OCP)", () => {
       "experience",
       "sources",
     ];
+    expect(Object.keys(RELATION_REGISTRY).sort()).toEqual(expectedKeys.sort());
 
-    for (const key of expectedKeys) {
-      expect(keys).toContain(key);
-      const config = RELATION_REGISTRY[key as keyof typeof RELATION_REGISTRY];
-      expect(config).toBeDefined();
-      expect(config.dbName).toBeTypeOf("string");
-      expect(config.dbName.length).toBeGreaterThan(0);
-      expect(config.table).toBeDefined();
+    // A PUT deletes a relation's rows by `dbName` in raw SQL, so the name
+    // must be the table's own.
+    for (const [key, config] of Object.entries(RELATION_REGISTRY)) {
+      expect(config.dbName, key).toBe(getTableName(config.table));
     }
   });
 

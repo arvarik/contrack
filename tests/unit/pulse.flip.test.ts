@@ -13,7 +13,7 @@ import {
   createFlip,
   prefersReducedMotion,
 } from "../../src/views/pulse/lib/flip";
-import { DURATION, EASE } from "../../src/lib/motion";
+import { DURATION } from "../../src/lib/motion";
 
 /** A root with one element per id, each with a box that the test moves. */
 function grid(ids: string[]) {
@@ -110,9 +110,5 @@ describe("prefersReducedMotion", () => {
       media: query,
     }));
     expect(prefersReducedMotion()).toBe(true);
-  });
-
-  it("spells the app's curve for CSS", () => {
-    expect(EASE_CSS).toBe(`cubic-bezier(${EASE.join(", ")})`);
   });
 });

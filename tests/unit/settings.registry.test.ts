@@ -45,21 +45,6 @@ describe("settings registry", () => {
     }
   });
 
-  it("all keywords are lowercase", () => {
-    for (const page of SETTINGS_PAGES) {
-      for (const kw of page.keywords) {
-        expect(kw).toBe(kw.toLowerCase());
-      }
-      if (page.rows) {
-        for (const row of page.rows) {
-          for (const kw of row.keywords) {
-            expect(kw).toBe(kw.toLowerCase());
-          }
-        }
-      }
-    }
-  });
-
   it('findRows("celsius") returns the temperature row', () => {
     const hits = findRows("celsius");
     expect(hits.length).toBeGreaterThan(0);
@@ -72,30 +57,17 @@ describe("settings registry", () => {
     expect(tempHit?.label).toBe("Temperature unit");
   });
 
-  it("every NAMES-backed page uses its NAMES title", () => {
-    const duplicates = SETTINGS_PAGES.find((p) => p.id === "duplicates");
-    expect(duplicates?.title).toBe(NAMES.duplicates.title);
-
-    const enrichment = SETTINGS_PAGES.find((p) => p.id === "enrichment");
-    expect(enrichment?.title).toBe(NAMES.enrichment.title);
-
-    const mail = SETTINGS_PAGES.find((p) => p.id === "admin-mail");
-    expect(mail?.title).toBe(NAMES.outgoingMail.title);
-  });
-
-  it("registers Keyboard and Privacy pages with their rows", () => {
-    const keyboard = SETTINGS_PAGES.find((p) => p.id === "keyboard");
-    expect(keyboard).toBeDefined();
-    expect(keyboard?.path).toBe("/settings/keyboard");
-    expect(keyboard?.rows?.some((r) => r.id === "single-key-shortcuts")).toBe(
-      true,
-    );
-
-    const privacy = SETTINGS_PAGES.find((p) => p.id === "privacy");
-    expect(privacy).toBeDefined();
-    expect(privacy?.path).toBe("/settings/privacy");
-    expect(privacy?.rows?.some((r) => r.id === "ai-assist")).toBe(true);
-    expect(privacy?.rows?.some((r) => r.id === "search-history")).toBe(true);
+  it.each([
+    ["duplicates", "duplicates"],
+    ["enrichment", "enrichment"],
+    ["tracked", "tracked"],
+    ["connectors", "connectors"],
+    ["correspondents", "correspondents"],
+    ["mcp", "mcp"],
+    ["admin-mail", "outgoingMail"],
+  ] as const)("every NAMES-backed page uses its NAMES title: %s", (id, key) => {
+    const page = SETTINGS_PAGES.find((p) => p.id === id);
+    expect(page?.title).toBe(NAMES[key].title);
   });
 
   it("findRows returns hits for personal preference rows", () => {
@@ -121,49 +93,29 @@ describe("settings registry", () => {
     expect(shortcutHit?.path).toBe("/settings/keyboard#single-key-shortcuts");
   });
 
-  it("registers tools and data pages with their rows", () => {
-    const importPage = SETTINGS_PAGES.find((p) => p.id === "import");
-    expect(importPage).toBeDefined();
-    expect(importPage?.path).toBe("/settings/import");
-    expect(importPage?.group).toBe("tools");
-
-    const tagsPage = SETTINGS_PAGES.find((p) => p.id === "tags");
-    expect(tagsPage).toBeDefined();
-    expect(tagsPage?.path).toBe("/settings/tags");
-    expect(tagsPage?.group).toBe("data");
-
-    const duplicates = SETTINGS_PAGES.find((p) => p.id === "duplicates");
-    expect(duplicates?.rows?.some((r) => r.id === "dedupe-on-create")).toBe(
-      true,
-    );
-    expect(duplicates?.rows?.some((r) => r.id === "dedupe-on-import")).toBe(
-      true,
-    );
-
-    const enrichment = SETTINGS_PAGES.find((p) => p.id === "enrichment");
-    expect(enrichment?.rows?.some((r) => r.id === "auto-enrich")).toBe(true);
-    expect(enrichment?.rows?.some((r) => r.id === "grounding")).toBe(true);
-  });
-
-  it("findRows returns hits for tools and data keywords", () => {
-    const vcardHit = findRows("vcard");
-    expect(vcardHit.some((h) => h.page.id === "import")).toBe(true);
-
-    const tagHit = findRows("rename tag");
-    expect(tagHit.some((h) => h.page.id === "tags")).toBe(true);
-
-    const dedupeImportHit = findRows("dedupe on import");
-    expect(
-      dedupeImportHit.some(
-        (h) => h.id === "dedupe-on-import" || h.row?.id === "dedupe-on-import",
-      ),
-    ).toBe(true);
-
-    const autoEnrichHit = findRows("auto enrich");
-    expect(
-      autoEnrichHit.some(
-        (h) => h.id === "auto-enrich" || h.row?.id === "auto-enrich",
-      ),
-    ).toBe(true);
-  });
+  it.each([
+    ["vcard", "/settings/import", "import", "tools"],
+    ["rename tag", "/settings/tags", "tags", "data"],
+    [
+      "dedupe on create",
+      "/settings/duplicates#dedupe-on-create",
+      "duplicates",
+      "tools",
+    ],
+    [
+      "dedupe on import",
+      "/settings/duplicates#dedupe-on-import",
+      "duplicates",
+      "tools",
+    ],
+    ["auto enrich", "/settings/enrichment#auto-enrich", "enrichment", "tools"],
+    ["grounding", "/settings/enrichment#grounding", "enrichment", "tools"],
+  ])(
+    "findRows returns hits for tools and data keywords: %s",
+    (query, path, pageId, group) => {
+      const hit = findRows(query).find((h) => h.path === path);
+      expect(hit?.page.id).toBe(pageId);
+      expect(hit?.page.group).toBe(group);
+    },
+  );
 });

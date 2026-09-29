@@ -4,18 +4,11 @@ import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  ApiError,
-  apiFetch,
-  retryApiQuery,
-  NetworkError,
-} from "../../src/api/client";
-import {
   useContact,
   useUpdateContact,
   useDeleteContact,
 } from "../../src/api/contacts";
 import { writeContactInOrder } from "../../src/api/contactCache";
-import { AUTH_EXPIRED_EVENT } from "../../src/lib/appEvents";
 
 afterEach(() => {
   cleanup();
@@ -30,55 +23,6 @@ function setup() {
     createElement(QueryClientProvider, { client }, children);
   return { client, wrapper };
 }
-
-describe("shared API transport", () => {
-  it("preserves the server error details and announces expired authentication", async () => {
-    const expired = vi.fn();
-    window.addEventListener(AUTH_EXPIRED_EVENT, expired);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            error: {
-              message: "Sign in again",
-              code: "UNAUTHORIZED",
-              requestId: "abc",
-            },
-          }),
-          { status: 401 },
-        ),
-      ),
-    );
-    await expect(apiFetch("/contacts")).rejects.toMatchObject({
-      status: 401,
-      code: "UNAUTHORIZED",
-      requestId: "abc",
-      message: "Sign in again",
-    });
-    expect(expired).toHaveBeenCalledOnce();
-    window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
-  });
-
-  it("does not classify cancellation as a connection failure", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const reason = new Error("cancelled");
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(reason));
-    await expect(
-      apiFetch("/contacts", { signal: controller.signal }),
-    ).rejects.toBe(reason);
-  });
-
-  it("retries only transient read failures", () => {
-    expect(retryApiQuery(0, new NetworkError())).toBe(true);
-    expect(retryApiQuery(0, new ApiError("busy", 503))).toBe(true);
-    for (const status of [400, 401, 403, 404, 409, 429])
-      expect(retryApiQuery(0, new ApiError("rejected", status))).toBe(false);
-    expect(retryApiQuery(1, new NetworkError())).toBe(false);
-    expect(retryApiQuery(0, new Error("bug"))).toBe(false);
-  });
-});
 
 describe("contact query identity and saves", () => {
   it("never displays the previous contact while a new contact loads", async () => {

@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import { DossierTab } from "../../src/views/contact-detail/components/DossierTab";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import {
+  DossierTab,
+  type BriefingMutation,
+} from "../../src/views/contact-detail/components/DossierTab";
 import { MemoryRouter } from "react-router-dom";
 import { THINKING_CLASS } from "../../src/components/brand/CorvidThinking";
 import type { Contact } from "../../src/types";
@@ -181,6 +190,8 @@ describe("the Research card", () => {
         }
       />,
     );
+    // The notes did render: the link's words are there, without its address.
+    expect(screen.getByText("Unsafe")).toBeTruthy();
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
@@ -188,35 +199,73 @@ describe("the Research card", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The briefing card while it is being written
+// The briefing card
 // ---------------------------------------------------------------------------
+// The briefing moved from a modal behind the sparkle to a card at the top of
+// the Dossier tab, with a labelled button, a status line and an error line.
 
 /** A contact with nothing in it, so the card offers to write a briefing. */
 const BLANK = { id: "test", name: "Test" } as Contact;
 
 /** The card links to the contact's other tabs, so it needs a router. */
-const renderCard = (isPending: boolean) =>
+const renderTab = (contact: Contact, generateBriefing: BriefingMutation) =>
   render(
     <MemoryRouter>
-      <DossierTab
-        contact={BLANK}
-        generateBriefing={{ mutate: () => {}, isPending }}
-      />
+      <DossierTab contact={contact} generateBriefing={generateBriefing} />
     </MemoryRouter>,
   );
 
-describe("the briefing card while it writes", () => {
-  it("says what it is doing, and shows the bird beside the sentence", () => {
+const renderCard = (isPending: boolean) =>
+  renderTab(BLANK, { mutate: () => {}, isPending });
+
+describe("the briefing card", () => {
+  const briefing = (
+    overrides: Partial<BriefingMutation> = {},
+  ): BriefingMutation => ({
+    mutate: vi.fn(),
+    isPending: false,
+    ...overrides,
+  });
+
+  it("offers to generate a briefing when there is none", () => {
+    const generate = briefing();
+    renderTab(BLANK, generate);
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Briefing" }),
+    ).toBeTruthy();
+    const button = screen.getByRole("button", { name: "Generate briefing" });
+    fireEvent.click(button);
+    expect(generate.mutate).toHaveBeenCalledWith("test", expect.any(Object));
+  });
+
+  it("shows an error line when the briefing cannot be written", () => {
+    const generate = briefing();
+    renderTab(BLANK, generate);
+    fireEvent.click(screen.getByRole("button", { name: "Generate briefing" }));
+    const [, options] = (generate.mutate as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    act(() => options.onError(new Error("Failed to generate briefing")));
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Could not write the briefing. Check that AI is set up in Settings, then try again",
+    );
+  });
+
+  it("says it is writing while the request is out, with the bird beside the sentence", () => {
     const { container } = renderCard(true);
 
     const status = screen.getByRole("status");
     expect(status.textContent).toBe("Writing the briefing…");
+    const button = screen.getByRole("button", { name: "Generate briefing" });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(button.getAttribute("aria-busy")).toBe("true");
     // The bird is beside the live region, never inside it: a named image in
     // a `role="status"` would be read out with every announcement.
     expect(status.querySelector("svg")).toBeNull();
     const bird = container.querySelector(`svg.${THINKING_CLASS}`);
     expect(bird).toBeTruthy();
     expect(bird!.getAttribute("aria-hidden")).toBe("true");
+    // The gap is back while it is writing.
+    expect(status.parentElement!.className).toContain("mt-3");
   });
 
   it("leaves no gap under the card when nothing is pending", () => {
@@ -229,9 +278,36 @@ describe("the briefing card while it writes", () => {
     expect(container.querySelector("svg." + THINKING_CLASS)).toBeNull();
   });
 
-  it("puts the gap back while it is writing", () => {
-    const { container } = renderCard(true);
-    const row = container.querySelector('[role="status"]')!.parentElement!;
-    expect(row.className).toContain("mt-3");
+  it("shows a recent briefing's points with a Regenerate button", () => {
+    renderTab(
+      {
+        ...BLANK,
+        aiBriefing: JSON.stringify(["Point one", "Point two", "Point three"]),
+        aiBriefingAt: new Date().toISOString(),
+      },
+      briefing(),
+    );
+    expect(screen.getByText("Point one")).toBeTruthy();
+    expect(screen.getByText(/^Generated/)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Regenerate briefing" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
+  it("treats a briefing older than three days as none", () => {
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    renderTab(
+      {
+        ...BLANK,
+        aiBriefing: JSON.stringify(["Old point"]),
+        aiBriefingAt: fourDaysAgo.toISOString(),
+      },
+      briefing(),
+    );
+    expect(screen.queryByText("Old point")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Generate briefing" }),
+    ).toBeTruthy();
   });
 });

@@ -5,7 +5,6 @@ import {
   trashRetentionDays,
   backupIntervalHours,
   backupKeep,
-  getLifecycleSettings,
   setTrashRetentionDays,
   setBackupIntervalHours,
   setBackupKeep,
@@ -28,91 +27,85 @@ describe("lifecycleSettings", () => {
     process.env = { ...originalEnv };
   });
 
-  describe("trashRetentionDays", () => {
-    it("returns default 30 days when neither setting nor env is set", () => {
-      const res = trashRetentionDays();
-      expect(res).toEqual({ value: 30, source: "default" });
-    });
+  // Each setting resolves the same way: setting, then env, then default. The
+  // three together, through GET /api/admin/settings, are tested in
+  // tests/integration/api.admin.test.ts.
 
-    it("returns env value when TRASH_RETENTION_DAYS is set and no setting exists", () => {
-      process.env.TRASH_RETENTION_DAYS = "45";
-      const res = trashRetentionDays();
-      expect(res).toEqual({ value: 45, source: "env" });
-    });
+  it.each([
+    ["trashRetentionDays", 30, trashRetentionDays],
+    ["backupIntervalHours", 24, backupIntervalHours],
+    ["backupKeep", 7, backupKeep],
+  ] as const)(
+    "%s returns its default %i when neither setting nor env is set",
+    (_name, value, resolve) => {
+      expect(resolve()).toEqual({ value, source: "default" });
+    },
+  );
 
-    it("prioritizes setting over env over default", () => {
-      process.env.TRASH_RETENTION_DAYS = "45";
-      setTrashRetentionDays(60);
-      const res = trashRetentionDays();
-      expect(res).toEqual({ value: 60, source: "setting" });
-    });
-  });
+  it.each([
+    [
+      "trashRetentionDays",
+      "TRASH_RETENTION_DAYS",
+      "45",
+      45,
+      trashRetentionDays,
+    ],
+    [
+      "backupIntervalHours",
+      "BACKUP_INTERVAL_HOURS",
+      "12",
+      12,
+      backupIntervalHours,
+    ],
+    // 0 disables scheduled backups, from either source.
+    [
+      "backupIntervalHours",
+      "BACKUP_INTERVAL_HOURS",
+      "0",
+      0,
+      backupIntervalHours,
+    ],
+    ["backupKeep", "BACKUP_KEEP", "14", 14, backupKeep],
+  ] as const)(
+    "%s takes %s=%s when no setting exists",
+    (_name, envVar, raw, value, resolve) => {
+      process.env[envVar] = raw;
+      expect(resolve()).toEqual({ value, source: "env" });
+    },
+  );
 
-  describe("backupIntervalHours", () => {
-    it("returns default 24 hours when neither setting nor env is set", () => {
-      const res = backupIntervalHours();
-      expect(res).toEqual({ value: 24, source: "default" });
-    });
-
-    it("returns env value when BACKUP_INTERVAL_HOURS is set and no setting exists", () => {
-      process.env.BACKUP_INTERVAL_HOURS = "12";
-      const res = backupIntervalHours();
-      expect(res).toEqual({ value: 12, source: "env" });
-    });
-
-    it("supports 0 to disable via env", () => {
-      process.env.BACKUP_INTERVAL_HOURS = "0";
-      const res = backupIntervalHours();
-      expect(res).toEqual({ value: 0, source: "env" });
-    });
-
-    it("prioritizes setting over env over default", () => {
-      process.env.BACKUP_INTERVAL_HOURS = "12";
-      setBackupIntervalHours(6);
-      const res = backupIntervalHours();
-      expect(res).toEqual({ value: 6, source: "setting" });
-    });
-
-    it("supports 0 to disable via setting", () => {
-      process.env.BACKUP_INTERVAL_HOURS = "12";
-      setBackupIntervalHours(0);
-      const res = backupIntervalHours();
-      expect(res).toEqual({ value: 0, source: "setting" });
-    });
-  });
-
-  describe("backupKeep", () => {
-    it("returns default 7 snapshots when neither setting nor env is set", () => {
-      const res = backupKeep();
-      expect(res).toEqual({ value: 7, source: "default" });
-    });
-
-    it("returns env value when BACKUP_KEEP is set and no setting exists", () => {
-      process.env.BACKUP_KEEP = "14";
-      const res = backupKeep();
-      expect(res).toEqual({ value: 14, source: "env" });
-    });
-
-    it("prioritizes setting over env over default", () => {
-      process.env.BACKUP_KEEP = "14";
-      setBackupKeep(30);
-      const res = backupKeep();
-      expect(res).toEqual({ value: 30, source: "setting" });
-    });
-  });
-
-  describe("getLifecycleSettings", () => {
-    it("returns all three resolved settings", () => {
-      setTrashRetentionDays(90);
-      process.env.BACKUP_INTERVAL_HOURS = "48";
-      // backupKeep left at default
-
-      const all = getLifecycleSettings();
-      expect(all).toEqual({
-        trashRetentionDays: { value: 90, source: "setting" },
-        backupIntervalHours: { value: 48, source: "env" },
-        backupKeep: { value: 7, source: "default" },
-      });
-    });
-  });
+  it.each([
+    [
+      "trashRetentionDays",
+      60,
+      "TRASH_RETENTION_DAYS",
+      "45",
+      setTrashRetentionDays,
+      trashRetentionDays,
+    ],
+    [
+      "backupIntervalHours",
+      6,
+      "BACKUP_INTERVAL_HOURS",
+      "12",
+      setBackupIntervalHours,
+      backupIntervalHours,
+    ],
+    [
+      "backupIntervalHours",
+      0,
+      "BACKUP_INTERVAL_HOURS",
+      "12",
+      setBackupIntervalHours,
+      backupIntervalHours,
+    ],
+    ["backupKeep", 30, "BACKUP_KEEP", "14", setBackupKeep, backupKeep],
+  ] as const)(
+    "%s prefers the setting %i over %s=%s",
+    (_name, value, envVar, raw, set, resolve) => {
+      process.env[envVar] = raw;
+      set(value);
+      expect(resolve()).toEqual({ value, source: "setting" });
+    },
+  );
 });

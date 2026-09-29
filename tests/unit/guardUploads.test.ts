@@ -85,83 +85,36 @@ describe("guardUploads unit tests", () => {
     });
   });
 
-  describe("owner-only uploads (/u/<uuid>/avatars/* and /u/<uuid>/files/*)", () => {
-    it("allows the owner to read their own contact avatar", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/avatars/avatar-123.jpg`,
-        mockPrincipal(OWNER_ID),
-      );
-      expect(err).toBeUndefined();
-    });
+  describe("owner-only uploads (/u/<uuid>/avatars/*, files/*, previews/*) and shared logos", () => {
+    // The three owner-only folders take one owner check, so one table holds
+    // every folder and reader. A preview image shows which links an owner saved
+    // in their notes, so it is as private as the note, unlike a profile photo.
+    const AVATAR = `/u/${OWNER_ID}/avatars/avatar-123.jpg`;
+    const FILE = `/u/${OWNER_ID}/files/note.pdf`;
+    const PREVIEW = `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`;
+    const LOGO = "/logos/acme.png";
 
-    it("allows the owner to read their own interaction file", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/files/note.pdf`,
-        mockPrincipal(OWNER_ID),
-      );
-      expect(err).toBeUndefined();
-    });
-
-    it("returns NotFoundError when another authenticated user attempts to read avatars/", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/avatars/avatar-123.jpg`,
-        mockPrincipal(OTHER_ID),
-      );
-      expect(err).toBeInstanceOf(NotFoundError);
-    });
-
-    it("returns NotFoundError when another authenticated user attempts to read files/", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/files/note.pdf`,
-        mockPrincipal(OTHER_ID),
-      );
-      expect(err).toBeInstanceOf(NotFoundError);
-    });
-
-    it("returns NotFoundError for avatars/ when no principal is present", () => {
-      const err = runGuard(`/u/${OWNER_ID}/avatars/avatar-123.jpg`);
-      expect(err).toBeInstanceOf(NotFoundError);
+    it.each([
+      ["avatars/", "by the owner", "allowed", AVATAR, OWNER_ID],
+      ["avatars/", "by another user", "NotFoundError", AVATAR, OTHER_ID],
+      ["avatars/", "with no principal", "NotFoundError", AVATAR, undefined],
+      ["files/", "by the owner", "allowed", FILE, OWNER_ID],
+      ["files/", "by another user", "NotFoundError", FILE, OTHER_ID],
+      ["files/", "with no principal", "NotFoundError", FILE, undefined],
+      ["previews/", "by the owner", "allowed", PREVIEW, OWNER_ID],
+      ["previews/", "by another user", "NotFoundError", PREVIEW, OTHER_ID],
+      ["previews/", "with no principal", "NotFoundError", PREVIEW, undefined],
+      ["logos/", "by another user", "allowed", LOGO, OTHER_ID],
+      // Production never sends this one: requireAuth answers 401 first.
+      ["logos/", "with no principal", "allowed", LOGO, undefined],
+    ] as const)("%s read %s: %s", (_folder, _reader, outcome, path, userId) => {
+      const err = runGuard(path, userId ? mockPrincipal(userId) : undefined);
+      if (outcome === "allowed") expect(err).toBeUndefined();
+      else expect(err).toBeInstanceOf(NotFoundError);
     });
   });
 
-  describe("link-preview images (/u/<uuid>/previews/*)", () => {
-    // A preview image shows which links an owner saved in their notes, so it
-    // is as private as the note, unlike a profile photo.
-    it("allows the owner to read their own preview image", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
-        mockPrincipal(OWNER_ID),
-      );
-      expect(err).toBeUndefined();
-    });
-
-    it("returns NotFoundError when another authenticated user reads previews/", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
-        mockPrincipal(OTHER_ID),
-      );
-      expect(err).toBeInstanceOf(NotFoundError);
-    });
-
-    it("returns NotFoundError for previews/ when no principal is present", () => {
-      const err = runGuard(
-        `/u/${OWNER_ID}/previews/0123456789abcdef01234567.jpg`,
-      );
-      expect(err).toBeInstanceOf(NotFoundError);
-    });
-  });
-
-  describe("shared assets and safety checks", () => {
-    it("allows reading company logos without authentication", () => {
-      const err = runGuard("/logos/acme.png");
-      expect(err).toBeUndefined();
-    });
-
-    it("allows reading company logos with authentication", () => {
-      const err = runGuard("/logos/acme.png", mockPrincipal(OTHER_ID));
-      expect(err).toBeUndefined();
-    });
-
+  describe("safety checks", () => {
     it("returns NotFoundError on path traversal attempts", () => {
       const err = runGuard(
         `/u/${OTHER_ID}/profile/../../${OWNER_ID}/avatars/secret.jpg`,

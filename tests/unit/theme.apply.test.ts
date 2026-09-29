@@ -25,7 +25,6 @@ import {
   applyTheme,
   DEFAULT_ACCENT,
   deriveAccent,
-  LIGHT,
   resolveMode,
   THEME_CACHE_KEY,
   type ThemeCache,
@@ -37,13 +36,10 @@ const bootScript = fs.readFileSync(
   "utf8",
 );
 
-const ACCENT_VARS = [
-  "--color-primary",
-  "--color-primary-dim",
-  "--color-primary-container",
-  "--color-on-primary",
-  "--color-on-primary-container",
-];
+/** Every custom property a chosen accent writes: one per derived token. */
+const ACCENT_VARS = Object.keys(deriveAccent("#b45309", "light")).map(
+  (token) => `--color-${token}`,
+);
 
 /** Pretend the operating system asks for dark, or does not. */
 function systemPrefersDark(dark: boolean) {
@@ -119,7 +115,7 @@ describe("applyTheme", () => {
     expect(readCache().vars).toEqual({});
   });
 
-  it("writes five custom properties for a chosen accent", () => {
+  it("writes six custom properties for a chosen accent", () => {
     applyTheme("light", "#b45309");
     const derived = deriveAccent("#b45309", "light");
     expect(root().style.getPropertyValue("--color-primary")).toBe(
@@ -211,7 +207,7 @@ describe("the cache the boot script reads", () => {
 
     systemPrefersDark(false);
     runBoot();
-    // A dark-palette accent painted over a light page would be the wrong five
+    // A dark-palette accent painted over a light page would be the wrong six
     // colours, so none are applied and the app derives them a moment later.
     expect(root().style.getPropertyValue("--color-primary")).toBe("");
   });
@@ -232,12 +228,14 @@ describe("the cache the boot script reads", () => {
       JSON.stringify({
         theme: "dark",
         mode: "dark",
-        vars: { "--color-primary": "#123456", content: "evil" },
+        vars: { "--color-primary": "#123456", "--evil": "1", color: "red" },
       }),
     );
     runBoot();
     expect(root().style.getPropertyValue("--color-primary")).toBe("#123456");
-    expect(root().style.getPropertyValue("content")).toBe("");
+    // Values the DOM would keep, so an empty read is the script refusing them.
+    expect(root().style.getPropertyValue("--evil")).toBe("");
+    expect(root().style.getPropertyValue("color")).toBe("");
   });
 
   it("caches what was chosen as well as what it resolved to", () => {
@@ -247,11 +245,5 @@ describe("the cache the boot script reads", () => {
 
     applyTheme("light", DEFAULT_ACCENT);
     expect(readCache()).toMatchObject({ theme: "light", mode: "light" });
-  });
-});
-
-describe("the palettes themselves", () => {
-  it("names the default accent as the light palette's primary", () => {
-    expect(DEFAULT_ACCENT).toBe(LIGHT.primary);
   });
 });

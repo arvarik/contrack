@@ -1,125 +1,54 @@
 import { describe, it, expect } from "vitest";
-import { safeHref, escapeHtml, cleanLinkedInSlug } from "../../src/lib/utils";
+import { safeHref, cleanLinkedInSlug } from "../../src/lib/utils";
 
 describe("safeHref", () => {
-  it("allows http URLs", () => {
-    expect(safeHref("http://example.com")).toBe("http://example.com");
+  it.each([
+    "http://example.com",
+    "https://example.com/path?q=1",
+    "mailto:jane@example.com",
+    "tel:+15551234567",
+    // A relative path starting with /
+    "/uploads/file.pdf",
+  ])("allows %j", (url) => {
+    expect(safeHref(url)).toBe(url);
   });
 
-  it("allows https URLs", () => {
-    expect(safeHref("https://example.com/path?q=1")).toBe(
-      "https://example.com/path?q=1",
-    );
-  });
-
-  it("allows mailto URLs", () => {
-    expect(safeHref("mailto:jane@example.com")).toBe("mailto:jane@example.com");
-  });
-
-  it("allows tel URLs", () => {
-    expect(safeHref("tel:+15551234567")).toBe("tel:+15551234567");
-  });
-
-  it("allows relative paths starting with /", () => {
-    expect(safeHref("/uploads/file.pdf")).toBe("/uploads/file.pdf");
-  });
-
-  it("rejects javascript: URLs", () => {
-    expect(safeHref("javascript:alert(1)")).toBeUndefined();
-  });
-
-  it("rejects javascript: URLs with mixed case and whitespace", () => {
-    expect(safeHref("  JaVaScRiPt:alert(1)")).toBeUndefined();
-  });
-
-  it("rejects data: URLs", () => {
-    expect(
-      safeHref("data:text/html,<script>alert(1)</script>"),
-    ).toBeUndefined();
-  });
-
-  it("rejects vbscript: URLs", () => {
-    expect(safeHref("vbscript:msgbox(1)")).toBeUndefined();
-  });
-
-  it("rejects bare strings that are not URLs or rooted paths", () => {
-    expect(safeHref("example.com")).toBeUndefined();
-    expect(safeHref("not a url")).toBeUndefined();
-  });
-
-  it("returns undefined for null, undefined, and empty input", () => {
-    expect(safeHref(null)).toBeUndefined();
-    expect(safeHref(undefined)).toBeUndefined();
-    expect(safeHref("")).toBeUndefined();
-    expect(safeHref("   ")).toBeUndefined();
-  });
-});
-
-describe("escapeHtml", () => {
-  it("escapes ampersands", () => {
-    expect(escapeHtml("a & b")).toBe("a &amp; b");
-  });
-
-  it("escapes angle brackets", () => {
-    expect(escapeHtml("<script>alert(1)</script>")).toBe(
-      "&lt;script&gt;alert(1)&lt;/script&gt;",
-    );
-  });
-
-  it("escapes double and single quotes", () => {
-    expect(escapeHtml(`He said "hi" and 'bye'`)).toBe(
-      "He said &quot;hi&quot; and &#39;bye&#39;",
-    );
-  });
-
-  it("escapes an attribute-breaking payload", () => {
-    expect(escapeHtml(`" onerror="alert(1)`)).toBe(
-      "&quot; onerror=&quot;alert(1)",
-    );
-  });
-
-  it("escapes & before other entities (no double escaping artifacts)", () => {
-    expect(escapeHtml("&lt;")).toBe("&amp;lt;");
-  });
-
-  it("leaves plain text untouched", () => {
-    expect(escapeHtml("https://example.com/avatar.png")).toBe(
-      "https://example.com/avatar.png",
-    );
+  it.each([
+    "javascript:alert(1)",
+    // Mixed case and whitespace
+    "  JaVaScRiPt:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    // Bare strings that are not URLs or rooted paths
+    "example.com",
+    "not a url",
+    null,
+    undefined,
+    "",
+    "   ",
+  ])("rejects %j", (url) => {
+    expect(safeHref(url)).toBeUndefined();
   });
 });
 
 describe("cleanLinkedInSlug", () => {
-  // The six documented examples from the original heuristic.
-  it("strips a numeric auto-generated suffix", () => {
-    expect(cleanLinkedInSlug("alex-sadler-07993773")).toBe("alex-sadler");
-  });
-
-  it("strips a hex auto-generated suffix", () => {
-    expect(cleanLinkedInSlug("alexander-glavin-17b821a8")).toBe(
-      "alexander-glavin",
-    );
-  });
-
-  it("strips the suffix while keeping short name initials", () => {
-    expect(cleanLinkedInSlug("yuxuan-jonathan-c-027b18156")).toBe(
-      "yuxuan-jonathan-c",
-    );
-  });
-
-  it("strips a mixed alphanumeric suffix", () => {
-    expect(cleanLinkedInSlug("young-lee-78ab07111")).toBe("young-lee");
-  });
-
-  it("leaves custom usernames without hyphens untouched", () => {
-    expect(cleanLinkedInSlug("aayush1196")).toBe("aayush1196");
-  });
-
-  it("leaves digit-containing usernames without hyphens untouched", () => {
-    expect(cleanLinkedInSlug("wangxi05104")).toBe("wangxi05104");
-  });
-
-  it("does not strip short name segments without digits", () => {
-    expect(cleanLinkedInSlug("jane-doe")).toBe("jane-doe");
+  // The six documented examples from the original heuristic, then a name
+  // with no suffix.
+  it.each([
+    // A numeric auto-generated suffix
+    ["alex-sadler-07993773", "alex-sadler"],
+    // A hex auto-generated suffix
+    ["alexander-glavin-17b821a8", "alexander-glavin"],
+    // The suffix goes, the short name initial stays
+    ["yuxuan-jonathan-c-027b18156", "yuxuan-jonathan-c"],
+    // A mixed alphanumeric suffix
+    ["young-lee-78ab07111", "young-lee"],
+    // Custom usernames without hyphens stay, digits and all
+    ["aayush1196", "aayush1196"],
+    ["wangxi05104", "wangxi05104"],
+    // A short name segment without digits stays
+    ["jane-doe", "jane-doe"],
+  ])("shows %j as %j", (slug, display) => {
+    expect(cleanLinkedInSlug(slug)).toBe(display);
   });
 });

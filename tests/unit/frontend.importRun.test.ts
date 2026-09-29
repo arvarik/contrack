@@ -12,7 +12,6 @@ import {
   IMPORT_KEY_PREFIX,
   forgetImport,
   importKey,
-  isSettled,
   readImportStream,
   recallImport,
   rememberImport,
@@ -210,14 +209,5 @@ describe("the remembered import", () => {
     expect(() => rememberImport("acct-1", entry)).not.toThrow();
     expect(recallImport("acct-1")).toBeNull();
     expect(() => forgetImport("acct-1")).not.toThrow();
-  });
-});
-
-describe("isSettled", () => {
-  it("is true only for the two end states", () => {
-    expect(isSettled("complete")).toBe(true);
-    expect(isSettled("failed")).toBe(true);
-    expect(isSettled("running")).toBe(false);
-    expect(isSettled("imported")).toBe(false);
   });
 });

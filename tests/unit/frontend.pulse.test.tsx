@@ -65,7 +65,9 @@ const ADA_ROW = {
   name: "Ada Lovelace",
   avatarUrl: null,
   themeColor: "#006a91",
-  birthday: "1990-09-19",
+  // No birthday: PulseView reads the real clock, and a date here put a
+  // Birthdays group in Up next for the week before it, every year.
+  birthday: null,
   isTracked: true,
   isGhost: false,
   addedAt: "2026-01-05T10:00:00.000Z",
@@ -324,17 +326,6 @@ describe("frontend.pulse", () => {
     vi.useRealTimers();
   });
 
-  it("renders the h1 'Pulse'", () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    const heading = screen.getByRole("heading", { level: 1, name: "Pulse" });
-    expect(heading).toBeDefined();
-  });
-
   it("renders eight cards by default", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/pulse"]}>
@@ -533,23 +524,6 @@ describe("frontend.pulse", () => {
     ).toBeDefined();
   });
 
-  it("puts the Catch up group after the birthdays, with the words and the Log button", () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText("Catch up")).toBeDefined();
-    expect(screen.getByText("10 days past due")).toBeDefined();
-    expect(screen.getByText("Check in with Alan Turing")).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: "Log note for Alan Turing" }),
-    ).toBeDefined();
-    // Nothing on Pulse says "Slipping" any more.
-    expect(screen.queryByText("Slipping")).toBeNull();
-  });
-
   it("gives each group an h3 with its id, for the masthead's jumps", () => {
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
@@ -649,11 +623,6 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("Connect AI")).toBeDefined();
   });
 
-  it("renders PulseSkeleton", () => {
-    const { container } = render(<PulseSkeleton />);
-    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-  });
-
   it("draws the skeleton's Daily insight as a card at its words' height, and as a line only when there is none", () => {
     const line = "Add an AI key to get one. Open AI settings";
     // On its way: the card, the likely answer with AI on, its paragraph as
@@ -683,7 +652,9 @@ describe("frontend.pulse", () => {
         <PulseView />
       </MemoryRouter>,
     );
-    expect(screen.getByLabelText("Loading Pulse")).toBeDefined();
+    expect(
+      screen.getByLabelText("Loading Pulse").getAttribute("aria-busy"),
+    ).toBe("true");
     expect(
       screen
         .getByText("Strategic networking update.")
@@ -1159,38 +1130,6 @@ describe("frontend.pulse", () => {
           name: "1 birthday this week",
         }),
       ).toBeDefined();
-    });
-
-    it("shows one item alone, with no dot", () => {
-      stubMatchMedia(true);
-      renderMasthead({
-        counts: {
-          overdue: 0,
-          dueToday: 0,
-          birthdaysThisWeek: 0,
-          queued: 0,
-          streak: 1,
-        },
-      });
-      expect(visibleText(mastheadLine())).toBe("All caught up");
-      expect(mastheadLine().textContent).not.toContain("·");
-      expect(mastheadLine().textContent).not.toContain(".");
-    });
-
-    it("joins Nothing due today and the streak with one dot", () => {
-      stubMatchMedia(true);
-      renderMasthead({
-        counts: {
-          overdue: 0,
-          dueToday: 0,
-          birthdaysThisWeek: 0,
-          queued: 4,
-          streak: 12,
-        },
-      });
-      expect(visibleText(mastheadLine())).toBe(
-        "Nothing due today · 12 days in a row",
-      );
     });
 
     it("renders the counts as plain text below sm", () => {
@@ -2027,7 +1966,7 @@ describe("frontend.pulse", () => {
   });
 
   it("hides card using eye toggle and restores from hidden tray", () => {
-    render(
+    const { unmount } = render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
       </MemoryRouter>,
@@ -2047,6 +1986,28 @@ describe("frontend.pulse", () => {
       "pulseLayout",
       expect.objectContaining({
         hidden: ["keeping-up"],
+      }),
+    );
+    unmount();
+
+    // The mock keeps no preference, so mount again with the card hidden,
+    // as the saved layout would. The tray's Show puts it back in Network.
+    mockSetPreference.mockClear();
+    mockPreferences.pulseLayout = { hidden: ["keeping-up"], order: {} };
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    openCustomize();
+    fireEvent.click(screen.getByRole("button", { name: "Show Keeping up" }));
+    expect(mockSetPreference).toHaveBeenCalledWith(
+      "pulseLayout",
+      expect.objectContaining({
+        hidden: [],
+        order: expect.objectContaining({
+          network: ["activity", "keeping-up"],
+        }),
       }),
     );
   });

@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  MapHoverCard,
-  formatCardLocalTime,
-} from "../../src/views/map/MapHoverCard";
+import { MapHoverCard } from "../../src/views/map/MapHoverCard";
 import type { MapContact } from "../../shared/geo";
 
 vi.mock("@vis.gl/react-maplibre", () => ({
@@ -114,10 +111,10 @@ describe("MapHoverCard", () => {
     const addToListBtn = screen.getByRole("button", { name: /add to list/i });
     const followUpBtn = screen.getByRole("button", { name: /add follow-up/i });
 
-    expect(openBtn).toBeDefined();
-    expect(logNoteBtn).toBeDefined();
-    expect(addToListBtn).toBeDefined();
-    expect(followUpBtn).toBeDefined();
+    // Exactly four in the action row
+    expect(within(openBtn.parentElement!).getAllByRole("button")).toHaveLength(
+      4,
+    );
 
     // Verify button clicks
     fireEvent.click(openBtn);
@@ -135,13 +132,10 @@ describe("MapHoverCard", () => {
 
   it("renders local time for known coordinates", () => {
     // London: 51.5074, -0.1278
-    const timeStr = formatCardLocalTime(51.5074, -0.1278);
-    expect(timeStr).not.toBeNull();
-    // e.g. "14:05 · GMT+1" or "14:05 · GMT"
-    expect(timeStr).toMatch(/\d{2}:\d{2} · GMT/);
+    renderCard({ pinned: false });
 
-    // Null coordinates return null
-    expect(formatCardLocalTime(null, null)).toBeNull();
+    // e.g. "14:05 · GMT+1" or "14:05 · GMT"
+    expect(screen.getByText(/^\d{2}:\d{2} · GMT/)).toBeDefined();
   });
 
   it("closes on Escape key press in pinned mode", () => {

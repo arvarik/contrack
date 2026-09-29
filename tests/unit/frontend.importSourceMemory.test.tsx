@@ -4,12 +4,10 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  ImportPanel,
-  IMPORT_LAST_SOURCE_KEY,
-  readInitialSource,
-  persistSource,
-} from "../../src/components/ImportPanel";
+import { ImportPanel } from "../../src/components/ImportPanel";
+
+/** Where the panel keeps the last source. A literal, so a rename fails here. */
+const SOURCE_KEY = "contrack.import.lastSource";
 
 vi.mock("../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({ user: { id: "acct-test" } }),
@@ -58,55 +56,6 @@ describe("Import source memory", () => {
     vi.restoreAllMocks();
   });
 
-  describe("readInitialSource", () => {
-    it("defaults to apple when localStorage is empty", () => {
-      expect(readInitialSource()).toBe("apple");
-    });
-
-    it("returns saved source when valid", () => {
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "google");
-      expect(readInitialSource()).toBe("google");
-
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "linkedin");
-      expect(readInitialSource()).toBe("linkedin");
-
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "facebook");
-      expect(readInitialSource()).toBe("facebook");
-
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "apple");
-      expect(readInitialSource()).toBe("apple");
-    });
-
-    it("defaults to apple when saved value is unknown or corrupt", () => {
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "unknown-format");
-      expect(readInitialSource()).toBe("apple");
-
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "");
-      expect(readInitialSource()).toBe("apple");
-    });
-
-    it("handles localStorage.getItem throwing gracefully", () => {
-      vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-        throw new DOMException("QuotaExceededError");
-      });
-      expect(readInitialSource()).toBe("apple");
-    });
-  });
-
-  describe("persistSource", () => {
-    it("persists source into localStorage key", () => {
-      persistSource("linkedin");
-      expect(localStorage.getItem(IMPORT_LAST_SOURCE_KEY)).toBe("linkedin");
-    });
-
-    it("handles localStorage.setItem throwing without uncaught exceptions", () => {
-      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-        throw new DOMException("SecurityError");
-      });
-      expect(() => persistSource("google")).not.toThrow();
-    });
-  });
-
   describe("ImportPanel integration", () => {
     const renderPanel = () =>
       render(
@@ -117,15 +66,35 @@ describe("Import source memory", () => {
         </QueryClientProvider>,
       );
 
-    it("initializes active tab from saved source", () => {
-      localStorage.setItem(IMPORT_LAST_SOURCE_KEY, "google");
+    const saved = (value: string) => () =>
+      localStorage.setItem(SOURCE_KEY, value);
+
+    it.each<[string, string, () => void]>([
+      ["Apple", "nothing is saved", () => {}],
+      ["Google", "google is saved", saved("google")],
+      ["LinkedIn", "linkedin is saved", saved("linkedin")],
+      ["Facebook", "facebook is saved", saved("facebook")],
+      ["Apple", "apple is saved", saved("apple")],
+      ["Apple", "an unknown source is saved", saved("unknown-format")],
+      ["Apple", "an empty value is saved", saved("")],
+      [
+        "Apple",
+        "localStorage throws on a read",
+        () => {
+          vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+            throw new DOMException("QuotaExceededError");
+          });
+        },
+      ],
+    ])("opens on %s when %s", (tab, _when, arrange) => {
+      arrange();
       renderPanel();
 
-      const googleTab = screen.getByRole("tab", { name: "Google" });
-      expect(googleTab.getAttribute("aria-selected")).toBe("true");
-
-      const appleTab = screen.getByRole("tab", { name: "Apple" });
-      expect(appleTab.getAttribute("aria-selected")).toBe("false");
+      expect(
+        screen
+          .getAllByRole("tab", { selected: true })
+          .map((selected) => selected.textContent),
+      ).toEqual([tab]);
     });
 
     it("persists tab switch to localStorage", () => {
@@ -134,7 +103,7 @@ describe("Import source memory", () => {
       const linkedinTab = screen.getByRole("tab", { name: "LinkedIn" });
       fireEvent.click(linkedinTab);
 
-      expect(localStorage.getItem(IMPORT_LAST_SOURCE_KEY)).toBe("linkedin");
+      expect(localStorage.getItem(SOURCE_KEY)).toBe("linkedin");
       expect(linkedinTab.getAttribute("aria-selected")).toBe("true");
     });
 
@@ -146,7 +115,9 @@ describe("Import source memory", () => {
       });
 
       const facebookTab = screen.getByRole("tab", { name: "Facebook" });
-      expect(() => fireEvent.click(facebookTab)).not.toThrow();
+      // A throw in the click handler reaches the window as an uncaught
+      // error, and Vitest fails the run on it.
+      fireEvent.click(facebookTab);
       expect(facebookTab.getAttribute("aria-selected")).toBe("true");
     });
   });

@@ -87,6 +87,8 @@ describe("AI search evidence", () => {
           verified_value: "medieval clocks",
         },
       ]);
+      // The contact's own passage holds the quote too, so the passage id
+      // lookup is the only check that can reject it.
       expect(
         await rerankCandidates("clock restorers", [
           {
@@ -96,7 +98,7 @@ describe("AI search evidence", () => {
                 id: "first",
                 field: "about",
                 context: "about",
-                text: "Builds boats.",
+                text: "Restores medieval clocks.",
               },
             ],
           },

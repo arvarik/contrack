@@ -10,6 +10,8 @@
 //
 // The page fetch goes through safeFetch too (it closes the DNS rebinding gap
 // the old fetch loop left), so one stub serves both the page and the image.
+// The route, with real sign-in and two accounts, is tested in
+// tests/integration/tenancy.isolation.test.ts.
 // =============================================================================
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,11 +23,7 @@ vi.mock("../../server/utils/urlSafety.ts", async (importOriginal) => ({
 }));
 
 import fs from "node:fs";
-import express from "express";
-import request from "supertest";
 import sharp from "sharp";
-import type { Principal } from "../../server/middleware/auth.ts";
-import { linkPreviewRouter } from "../../server/routes/linkPreview.ts";
 import { linkPreviewService } from "../../server/services/linkPreviewService.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { AppError, ValidationError } from "../../server/utils/AppError.ts";
@@ -194,27 +192,5 @@ describe("linkPreviewService.unfurlUrl", () => {
     await expect(linkPreviewService.unfurlUrl(scope, "")).rejects.toThrow(
       "Missing link URL",
     );
-  });
-});
-
-describe("GET /api/link-preview/unfurl", () => {
-  it("stores the image under the caller's own uploads", async () => {
-    const app = express();
-    app.use((req, _res, next) => {
-      req.principal = { user: { id: OWNER_ID } } as unknown as Principal;
-      next();
-    });
-    app.use("/api/link-preview", linkPreviewRouter);
-    serve(page("/route/og.png"), pngReply);
-
-    const res = await request(app)
-      .get("/api/link-preview/unfurl")
-      .query({ url: PAGE_URL });
-
-    expect(res.status).toBe(200);
-    expect(res.body.image).toMatch(
-      new RegExp(`^/uploads/u/${OWNER_ID}/previews/`),
-    );
-    expect(res.text).not.toContain("news.example.com/route");
   });
 });

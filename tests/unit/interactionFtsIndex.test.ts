@@ -1,18 +1,19 @@
 // =============================================================================
 // Unit Tests — the note index triggers, and the index on a real connection
 // =============================================================================
-// Same three properties as the contact index, pinned the same way: every
-// delete is by rowid, every insert carries the owner token, and an owner
-// change re-indexes the row. Then the whole thing on an in-memory database
-// with the two tables it needs, because "the trigger compiles" and "the
-// trigger indexes the right text" are different claims.
+// Two of the contact index's properties, pinned the same way: every delete
+// is by rowid, and every insert carries the owner token. Then two things
+// only a connection shows: an install fills in the rows the index is
+// missing, and a rolled back edit leaves the index as it was.
+// tests/integration/search.interactions.test.ts pins the rest on the real
+// schema: the indexed text, the stemming, the owner fill, and the edit,
+// delete and cascade paths.
 // =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import {
   INTERACTION_FTS_COLUMNS,
-  INTERACTION_SEARCH_COLUMNS,
   INTERACTION_WEIGHTS,
   NOTE_TEXT_FUNCTION,
   installInteractionSearchIndex,
@@ -59,13 +60,6 @@ describe("interaction FTS trigger SQL", () => {
     );
   });
 
-  it("re-indexes a note when its owner is filled in", () => {
-    expect(INTERACTION_SEARCH_COLUMNS).toContain("ownerId");
-    expect(sql).toContain(
-      `AFTER UPDATE OF ${INTERACTION_SEARCH_COLUMNS} ON interactions`,
-    );
-  });
-
   it("declares one bm25 weight per column, none for the id or the owner", () => {
     const columns = INTERACTION_FTS_COLUMNS.split(",").map((c) => c.trim());
     const weights = INTERACTION_WEIGHTS.split(",").map((w) => Number(w.trim()));
@@ -86,23 +80,14 @@ describe("the note index on a connection", () => {
   beforeEach(() => {
     db = new Database(":memory:");
     db.exec(`
-      CREATE TABLE contacts (id TEXT PRIMARY KEY, ownerId TEXT);
       CREATE TABLE interactions (
         id TEXT PRIMARY KEY,
-        contactId TEXT REFERENCES contacts(id) ON DELETE CASCADE,
+        contactId TEXT,
         title TEXT NOT NULL,
         content TEXT,
         ownerId TEXT
       );
-      CREATE TRIGGER interactions_owner_fill AFTER INSERT ON interactions
-      WHEN NEW.ownerId IS NULL
-      BEGIN
-        UPDATE interactions SET ownerId = (SELECT ownerId FROM contacts WHERE id = NEW.contactId)
-         WHERE id = NEW.id;
-      END;
-      INSERT INTO contacts VALUES ('c1', '${owner}');
     `);
-    db.pragma("foreign_keys = ON");
   });
   afterEach(() => db.close());
 
@@ -129,70 +114,6 @@ describe("the note index on a connection", () => {
       }[]
     ).map((r) => r.interactionId);
 
-  it("indexes the readable text of a note as it is written", () => {
-    installInteractionSearchIndex(db, true);
-    db.prepare(
-      "INSERT INTO interactions VALUES ('i1', 'c1', 'Coffee', '<p>Discussed <strong>hiring</strong> with <span data-id=\"abc-123\">@Sam</span></p>', ?)",
-    ).run(owner);
-    expect(rows()).toEqual([
-      {
-        rowid: 1,
-        interactionId: "i1",
-        title: "Coffee",
-        content: "Discussed hiring with @Sam",
-        ownerTok: token,
-      },
-    ]);
-    expect(find('"strong"')).toEqual([]);
-    expect(find('"abc"*')).toEqual([]);
-    expect(find('"sam"')).toEqual(["i1"]);
-  });
-
-  it("stems and folds diacritics on both sides of a match", () => {
-    installInteractionSearchIndex(db, true);
-    db.prepare(
-      "INSERT INTO interactions VALUES ('i1', 'c1', 'Hiring freeze', 'Two engineers. Café budget approved.', ?)",
-    ).run(owner);
-    expect(find('"hire"')).toEqual(["i1"]);
-    expect(find('"engineer"*')).toEqual(["i1"]);
-    expect(find('"cafe"')).toEqual(["i1"]);
-  });
-
-  it("waits for the owner fill and then indexes the row once", () => {
-    installInteractionSearchIndex(db, true);
-    db.prepare(
-      "INSERT INTO interactions (id, contactId, title, content) VALUES ('i1', 'c1', 'No owner yet', 'text')",
-    ).run();
-    expect(rows()).toEqual([
-      {
-        rowid: 1,
-        interactionId: "i1",
-        title: "No owner yet",
-        content: "text",
-        ownerTok: token,
-      },
-    ]);
-  });
-
-  it("follows an edit, a delete and a cascade", () => {
-    installInteractionSearchIndex(db, true);
-    db.prepare(
-      "INSERT INTO interactions VALUES ('i1', 'c1', 'A', 'sailing', ?)",
-    ).run(owner);
-    db.prepare(
-      "INSERT INTO interactions VALUES ('i2', 'c1', 'B', 'boats', ?)",
-    ).run(owner);
-    db.prepare(
-      "UPDATE interactions SET content = '<p>hiring</p>' WHERE id = 'i1'",
-    ).run();
-    expect(find('"sailing"')).toEqual([]);
-    expect(find('"hiring"')).toEqual(["i1"]);
-    db.prepare("DELETE FROM interactions WHERE id = 'i2'").run();
-    expect(rows().map((r) => r.interactionId)).toEqual(["i1"]);
-    db.prepare("DELETE FROM contacts WHERE id = 'c1'").run();
-    expect(rows()).toEqual([]);
-  });
-
   it("backfills rows the index is missing, and only those, on a later install", () => {
     db.prepare(
       "INSERT INTO interactions VALUES ('i1', 'c1', 'Before', 'the index existed', ?)",
@@ -200,7 +121,6 @@ describe("the note index on a connection", () => {
     db.prepare(
       "INSERT INTO interactions (id, contactId, title, content) VALUES ('i0', 'c1', 'Unowned', 'row')",
     ).run();
-    db.prepare("UPDATE interactions SET ownerId = NULL WHERE id = 'i0'").run();
     expect(installInteractionSearchIndex(db, false)).toBe(1);
     expect(rows().map((r) => r.interactionId)).toEqual(["i1"]);
     // Installing again writes nothing and keeps what is there.

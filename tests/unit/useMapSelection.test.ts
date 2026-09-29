@@ -138,6 +138,16 @@ describe("useMapSelection", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(result.current.selectedCount).toBe(0);
+
+    // Select again, then call clear(), as the Clear selection button does
+    act(() => {
+      result.current.addMany(["c3"]);
+    });
+    expect(result.current.selectedCount).toBe(1);
+    act(() => {
+      result.current.clear();
+    });
+    expect(result.current.selectedCount).toBe(0);
   });
 
   it("tracks visible and hidden selection count when filtered", () => {

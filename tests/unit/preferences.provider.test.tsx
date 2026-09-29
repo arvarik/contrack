@@ -248,17 +248,6 @@ describe("writing", () => {
     );
   });
 
-  it("sends only the preference that changed", async () => {
-    const { result } = renderHook(() => usePreferences(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(result.current.isLoaded).toBe(true));
-
-    act(() => result.current.setPreference("recentLimit", 6));
-    await waitFor(() => expect(patches()).toHaveLength(1));
-    expect(patches()[0]).toEqual({ recentLimit: 6 });
-  });
-
   it("puts the old value back when the server refuses", async () => {
     stored = { listDensity: "comfortable" };
     const { result } = renderHook(() => usePreferences(), {
@@ -411,15 +400,6 @@ describe("the one-time migration", () => {
 });
 
 describe("resetting a preference", () => {
-  it("exposes stored preference keys", async () => {
-    stored = { listDensity: "compact" };
-    const { result } = renderHook(() => usePreferences(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(result.current.isLoaded).toBe(true));
-    expect(result.current.stored).toEqual(["listDensity"]);
-  });
-
   it("resets an account preference back to default and deletes it on the server", async () => {
     stored = { listDensity: "compact" };
     const { result } = renderHook(() => usePreferences(), {
@@ -427,7 +407,7 @@ describe("resetting a preference", () => {
     });
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(result.current.preferences.listDensity).toBe("compact");
-    expect(result.current.stored).toContain("listDensity");
+    expect(result.current.stored).toEqual(["listDensity"]);
 
     act(() => result.current.resetPreference("listDensity"));
 

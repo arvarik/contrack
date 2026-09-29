@@ -37,6 +37,7 @@ afterEach(() => {
   window.removeEventListener(CORVID_FLY_EVENT, listen);
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("CorvidPreview", () => {
@@ -75,6 +76,9 @@ describe("CorvidPreview", () => {
   });
 
   it("lives faster than the sidebar's bird, so the row shows what it does", () => {
+    // Every wait at the late end of its range: the first blink comes at
+    // about 4.3 s at the sidebar's pace, and at about 1.4 s at the preview's.
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
     render(<CorvidPreview />);
     const eye = () =>
       Number(document.querySelector('[data-part="eye"]')!.getAttribute("ry"));

@@ -80,14 +80,6 @@ describe("CorvidThinking", () => {
     expect(rhythms[0]).not.toEqual(rhythms[1]);
   });
 
-  it("moves its head only: the ring is its own path, outside the bird", () => {
-    const { container } = render(<CorvidThinking />);
-    const svg = svgOf(container);
-    const ring = svg.querySelector('[data-part="ring"]')!;
-    expect(svg.querySelector("[data-bird]")!.contains(ring)).toBe(false);
-    expect(svg.querySelector('[data-bird] [data-part="head"]')).toBeTruthy();
-  });
-
   it("says nothing where the surface already says it in text", () => {
     const { container } = render(<CorvidThinking decorative />);
     expect(screen.queryByRole("img")).toBeNull();

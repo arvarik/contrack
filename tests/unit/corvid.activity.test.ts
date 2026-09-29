@@ -118,9 +118,15 @@ describe("the counts", () => {
   });
 
   it("keeps the two apart: AI answers do not hurry the request count", () => {
+    // Seventy AI answers first. The request count comes due at 70 at the
+    // earliest, so a count the two shared would cross in the next 69.
     const counter = createActivityCounter(createRng(1));
-    for (let i = 0; i < 60; i++) expect(counter.note("api")).toBeNull();
-    for (let i = 0; i < 5; i++) expect(counter.note("ai")).toBeNull();
+    for (let i = 0; i < 70; i++) counter.note("ai");
+    for (let i = 0; i < 69; i++) expect(counter.note("api")).toBeNull();
+    // Nor do requests hurry the AI count.
+    const other = createActivityCounter(createRng(1));
+    for (let i = 0; i < 60; i++) expect(other.note("api")).toBeNull();
+    for (let i = 0; i < 5; i++) expect(other.note("ai")).toBeNull();
   });
 });
 

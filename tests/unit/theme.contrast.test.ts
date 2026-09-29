@@ -210,12 +210,22 @@ describe("index.css and theme.ts hold the same palettes", () => {
   });
 
   it("gives the frosted panel a dark value", () => {
-    // The one literal that no token describes. It appears for the light
-    // palette, once for a dark machine and once for a chosen dark theme. The
-    // swipe overlays were literals too, and are the status tokens now.
-    const occurrences = css.split(".glass-panel").length - 1;
-    expect(occurrences).toBeGreaterThanOrEqual(3);
-    expect(css).not.toContain(".swipe-approve-overlay");
+    // The one literal that no token describes. The components layer sets the
+    // light one, and the dark one is set twice outside it: once for a dark
+    // machine and once for a chosen dark theme.
+    const backgrounds = (text: string) =>
+      [
+        ...text.matchAll(
+          /\.glass-panel\s*\{[^}]*?background-color:\s*([^;]+);/g,
+        ),
+      ].map((match) => match[1].trim());
+    const layer = blockAfter("@layer components {");
+    const light = backgrounds(layer);
+    const dark = backgrounds(css.replace(layer, ""));
+    expect(light).toHaveLength(1);
+    expect(dark).toHaveLength(2);
+    expect(dark[1]).toBe(dark[0]);
+    expect(dark[0]).not.toBe(light[0]);
   });
 });
 
@@ -300,10 +310,6 @@ describe("deriveAccent", () => {
       }
     }
   }
-
-  it("sweeps six thousand colours", () => {
-    expect(sweep).toHaveLength(6000);
-  });
 
   it("never produces a primary that fails AA, in either palette", () => {
     const failures = sweep
@@ -537,7 +543,7 @@ describe("the heavier primary washes", () => {
   });
 
   it("still treats the default accent as the hand-tuned palette", () => {
-    // `applyTheme` skips the derivation entirely for this value, so the five
+    // `applyTheme` skips the derivation entirely for this value, so the six
     // audited tokens are what the app paints.
     expect(DEFAULT_ACCENT).toBe(LIGHT.primary);
   });

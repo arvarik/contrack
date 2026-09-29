@@ -21,7 +21,6 @@ vi.mock("@google/genai", () => ({
 }));
 import {
   GeminiAdapter,
-  isFreeTierError,
   pauseForError,
 } from "../../server/ai/adapters/gemini.ts";
 beforeEach(() => {
@@ -180,13 +179,6 @@ describe("Gemini 429s", () => {
     expect(pauseForError(quotaError("2.5s"))).toBe(5_000);
     expect(pauseForError(quotaError("86400s"))).toBe(15 * 60_000);
     expect(pauseForError(new Error("503 overloaded"))).toBe(30_000);
-  });
-
-  it("tells a free-tier quota from a paid one", () => {
-    expect(
-      isFreeTierError(quotaError("1s", "generate_content_free_tier_requests")),
-    ).toBe(true);
-    expect(isFreeTierError(quotaError("1s"))).toBe(false);
   });
 });
 

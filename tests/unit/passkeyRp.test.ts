@@ -2,33 +2,27 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Request } from "express";
 import {
   publicOrigin,
-  mailLinkOrigin,
   validatePublicUrl,
   getPasskeyRp,
 } from "../../server/utils/publicOrigin.ts";
 import { AppError } from "../../server/utils/AppError.ts";
 
 /**
- * A request as Express presents it. `host` is `req.host`, which Express takes
- * from X-Forwarded-Host only when TRUST_PROXY_HOPS trusts the hop, and from
- * Host otherwise. `trusted` stands in for that decision.
+ * A request as Express presents it with no trusted proxy hop: `host` is
+ * `req.host`, which Express then takes from Host. The forwarded-host cases,
+ * with Express's real trust-proxy setting, are tested in
+ * tests/integration/api.admin.test.ts.
  */
 function mockRequest({
   protocol = "http",
   headers = {},
-  trusted = false,
 }: {
   protocol?: string;
   headers?: Record<string, string>;
-  trusted?: boolean;
 } = {}): Request {
   return {
     protocol,
-    host: (trusted && headers["x-forwarded-host"]) || headers.host,
-    get(name: string) {
-      const lower = name.toLowerCase();
-      return headers[lower] ?? headers[name];
-    },
+    host: headers.host,
   } as unknown as Request;
 }
 
@@ -47,52 +41,6 @@ describe("publicOrigin and passkey RP derivation", () => {
     }
   });
 
-  it("derives origin and rpID for localhost:3210", () => {
-    const req = mockRequest({
-      protocol: "http",
-      headers: { host: "localhost:3210" },
-    });
-
-    expect(publicOrigin(req)).toBe("http://localhost:3210");
-    const { rpID, origin } = getPasskeyRp(req);
-    expect(origin).toBe("http://localhost:3210");
-    expect(rpID).toBe("localhost");
-  });
-
-  it("derives origin and rpID for a proxied https host", () => {
-    const req = mockRequest({
-      protocol: "https",
-      trusted: true,
-      headers: {
-        "x-forwarded-proto": "https",
-        "x-forwarded-host": "crm.example.com",
-        host: "backend-internal:3210",
-      },
-    });
-
-    expect(publicOrigin(req)).toBe("https://crm.example.com");
-    const { rpID, origin } = getPasskeyRp(req);
-    expect(origin).toBe("https://crm.example.com");
-    expect(rpID).toBe("crm.example.com");
-  });
-
-  it("ignores X-Forwarded-Host from a hop it does not trust", () => {
-    const req = mockRequest({
-      protocol: "http",
-      headers: {
-        "x-forwarded-host": "evil.example.net",
-        host: "localhost:3210",
-      },
-    });
-    expect(publicOrigin(req)).toBe("http://localhost:3210");
-  });
-
-  it("builds mailed links from PUBLIC_URL only", () => {
-    expect(mailLinkOrigin()).toBeNull();
-    process.env.PUBLIC_URL = "https://public.example.org/";
-    expect(mailLinkOrigin()).toBe("https://public.example.org");
-  });
-
   it("uses the PUBLIC_URL override when set", () => {
     process.env.PUBLIC_URL = "https://public.example.org";
     const req = mockRequest({
@@ -106,43 +54,25 @@ describe("publicOrigin and passkey RP derivation", () => {
     expect(rpID).toBe("public.example.org");
   });
 
-  it("throws PASSKEY_UNSUPPORTED_ORIGIN for an IP host", () => {
-    const ipv4Req = mockRequest({
-      protocol: "http",
-      headers: { host: "127.0.0.1:3210" },
-    });
-    expect(publicOrigin(ipv4Req)).toBe("http://127.0.0.1:3210");
-    expect(() => getPasskeyRp(ipv4Req)).toThrowError(AppError);
-    try {
-      getPasskeyRp(ipv4Req);
-    } catch (err) {
-      expect(err).toBeInstanceOf(AppError);
-      expect((err as AppError).statusCode).toBe(400);
-      expect((err as AppError).code).toBe("PASSKEY_UNSUPPORTED_ORIGIN");
-    }
-
-    const lanReq = mockRequest({
-      protocol: "http",
-      headers: { host: "192.168.1.100:3210" },
-    });
-    expect(() => getPasskeyRp(lanReq)).toThrowError(AppError);
-    try {
-      getPasskeyRp(lanReq);
-    } catch (err) {
-      expect((err as AppError).code).toBe("PASSKEY_UNSUPPORTED_ORIGIN");
-    }
-
-    const ipv6Req = mockRequest({
-      protocol: "http",
-      headers: { host: "[::1]:3210" },
-    });
-    expect(() => getPasskeyRp(ipv6Req)).toThrowError(AppError);
-    try {
-      getPasskeyRp(ipv6Req);
-    } catch (err) {
-      expect((err as AppError).code).toBe("PASSKEY_UNSUPPORTED_ORIGIN");
-    }
-  });
+  it.each(["127.0.0.1:3210", "192.168.1.100:3210", "[::1]:3210"])(
+    "throws PASSKEY_UNSUPPORTED_ORIGIN for the IP host %s",
+    (host) => {
+      const req = mockRequest({ protocol: "http", headers: { host } });
+      // The origin is still built. Only the passkey rpID refuses an IP.
+      expect(publicOrigin(req)).toBe(`http://${host}`);
+      let thrown: unknown;
+      try {
+        getPasskeyRp(req);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(AppError);
+      expect(thrown).toMatchObject({
+        statusCode: 400,
+        code: "PASSKEY_UNSUPPORTED_ORIGIN",
+      });
+    },
+  );
 
   describe("validatePublicUrl", () => {
     it("accepts http and https URLs without paths", () => {

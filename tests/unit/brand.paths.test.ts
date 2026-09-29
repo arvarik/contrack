@@ -5,24 +5,23 @@
  * fail: every string parses as the two commands the parser accepts, every
  * optical size is a subset of the mark's parts and gets heavier as it gets
  * smaller, the ink keeps its padding inside the box, every master lands
- * inside the tile with its inset clear, the ring is the one part that is
- * not the bird, and the thinking head still turns about the rig's neck.
+ * inside the tile with its inset clear, and the thinking head still turns
+ * about the rig's neck.
  *
  * The brand's colours are literals, because a favicon cannot read a token.
- * So the last checks hold each literal to the token it copies, and measure
- * the contrast every ground and ink pair needs.
+ * So the last checks hold each literal to the token it copies, which leaves
+ * the palette's own pairs to `theme.contrast.test.ts`, and measure the pairs
+ * only the brand has: the tile, GitHub's dark page and the name at 7:1.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  BIRD_PART_ORDER,
   BRAND,
   CORVID_BOX,
   CORVID_EYE,
   CORVID_OPTICAL,
   CORVID_PART_ORDER,
   CORVID_PATHS,
-  CORVID_RING,
   MARK_STROKE,
   TILE,
   fitMark,
@@ -72,13 +71,6 @@ describe("the corvid's paths", () => {
     );
     expect(new Set(CORVID_PART_ORDER).size).toBe(CORVID_PART_ORDER.length);
     expect(CORVID_PART_ORDER[CORVID_PART_ORDER.length - 1]).toBe("head");
-  });
-
-  it("has one part that is not the bird: the ring, drawn first", () => {
-    expect(CORVID_RING).toBe("ring");
-    expect(CORVID_PART_ORDER[0]).toBe(CORVID_RING);
-    expect(BIRD_PART_ORDER).toEqual(CORVID_PART_ORDER.slice(1));
-    expect(BIRD_PART_ORDER).not.toContain(CORVID_RING);
   });
 
   it("keeps every optical size a subset of the mark, in drawing order", () => {
@@ -247,21 +239,12 @@ describe("the brand's colours", () => {
     expect(ratio(TILE.ink, BRAND.primaryContainer)).toBeLessThan(3);
   });
 
-  it("keeps every version of the mark and the name readable on its ground", () => {
-    expect(ratio(BRAND.mark, BRAND.surface)).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(BRAND.markDark, BRAND.surfaceDark)).toBeGreaterThanOrEqual(
-      4.5,
-    );
+  it("keeps the dark mark readable on GitHub's page and the name at 7:1", () => {
     // GitHub's dark page, where the README shows the dark lockup.
     expect(ratio(BRAND.markDark, "#0d1117")).toBeGreaterThanOrEqual(4.5);
     expect(ratio(BRAND.onSurface, BRAND.surface)).toBeGreaterThanOrEqual(7);
     expect(
       ratio(BRAND.onSurfaceDark, BRAND.surfaceDark),
     ).toBeGreaterThanOrEqual(7);
-    expect(ratio(BRAND.onSurfaceVariant, BRAND.surface)).toBeGreaterThanOrEqual(
-      4.5,
-    );
-    // The reversed mark, white on the primary.
-    expect(ratio("#ffffff", BRAND.mark)).toBeGreaterThanOrEqual(4.5);
   });
 });

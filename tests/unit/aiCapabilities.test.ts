@@ -300,13 +300,10 @@ describe("capability resolution — OpenAI-compatible endpoints in auto mode", (
         capabilityConfidence: "guessed",
       },
     ]);
-    expect(resolveCapability("quick")?.model).toBe(
-      resolveCapability("quick")?.model,
-    );
+    // The first chat model in the endpoint's own listing order.
+    expect(resolveCapability("quick")?.model).toBe("llama3.2");
     // Quick and deep share the model: nothing in a compat catalog ranks them.
-    expect(resolveCapability("deep")?.model).toBe(
-      resolveCapability("quick")?.model,
-    );
+    expect(resolveCapability("deep")?.model).toBe("llama3.2");
   });
 
   it("reports the capability unavailable when no chat model was discovered", () => {

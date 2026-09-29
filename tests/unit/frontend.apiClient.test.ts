@@ -25,8 +25,9 @@ import {
   ApiError,
   apiFetch,
   apiJson,
-  handleResponse,
+  NetworkError,
   rateLimitFacts,
+  retryApiQuery,
 } from "../../src/api/client";
 import { rateLimitMessage } from "../../src/lib/rateLimitMessage";
 import { useDedupeStream } from "../../src/api/dedupe";
@@ -207,15 +208,28 @@ function listen(name: string) {
 }
 
 describe("refusals that change which screen the app is", () => {
-  it("announces a 401 as an expired credential", async () => {
+  it("announces a 401 as an expired credential, and keeps the server's details", async () => {
     const expired = listen(AUTH_EXPIRED_EVENT);
     respondWith(
-      { error: { message: "Sign in again", code: "UNAUTHORIZED" } },
+      {
+        error: {
+          message: "Sign in again",
+          code: "UNAUTHORIZED",
+          requestId: "abc",
+        },
+      },
       {
         status: 401,
       },
     );
-    await expect(apiFetch("/contacts")).rejects.toBeInstanceOf(ApiError);
+    const error = await apiFetch("/contacts").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+      requestId: "abc",
+      message: "Sign in again",
+    });
     expect(expired.spy).toHaveBeenCalledOnce();
     expect((expired.spy.mock.calls[0][0] as CustomEvent).detail).toEqual({
       reason: "expired",
@@ -333,6 +347,27 @@ describe("refusals that change which screen the app is", () => {
   });
 });
 
+describe("cancellation and retries", () => {
+  it("does not classify cancellation as a connection failure", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const reason = new Error("cancelled");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(reason));
+    await expect(
+      apiFetch("/contacts", { signal: controller.signal }),
+    ).rejects.toBe(reason);
+  });
+
+  it("retries only transient read failures", () => {
+    expect(retryApiQuery(0, new NetworkError())).toBe(true);
+    expect(retryApiQuery(0, new ApiError("busy", 503))).toBe(true);
+    for (const status of [400, 401, 403, 404, 409, 429])
+      expect(retryApiQuery(0, new ApiError("rejected", status))).toBe(false);
+    expect(retryApiQuery(1, new NetworkError())).toBe(false);
+    expect(retryApiQuery(0, new Error("bug"))).toBe(false);
+  });
+});
+
 describe("rate limits reach the UI intact", () => {
   it("carries the envelope details and the Retry-After header", async () => {
     respondWith(
@@ -445,40 +480,20 @@ describe("the sentence shown for a 429", () => {
   });
 });
 
-describe("handleResponse", () => {
-  it("parses a JSON body", async () => {
-    await expect(
-      handleResponse<{ ok: boolean }>(Response.json({ ok: true })),
-    ).resolves.toEqual({ ok: true });
-  });
-
-  it("resolves to undefined for a 204 and for an empty body", async () => {
-    // A delete endpoint that returns nothing should not have to pretend to
-    // return something, and `res.json()` on an empty body throws.
-    await expect(
-      handleResponse(new Response(null, { status: 204 })),
-    ).resolves.toBeUndefined();
-    await expect(
-      handleResponse(new Response("", { status: 200 })),
-    ).resolves.toBeUndefined();
-  });
-
-  it("throws the same ApiError apiFetch throws", async () => {
-    const res = new Response(
-      JSON.stringify({ error: { message: "Nope", code: "NOPE" } }),
-      { status: 400 },
-    );
-    await expect(handleResponse(res)).rejects.toMatchObject({
-      status: 400,
-      code: "NOPE",
-      message: "Nope",
-    });
-  });
-
-  it("reads the whole round trip through apiJson", async () => {
-    respondWith({ users: [] }, { status: 200 });
-    await expect(apiJson("/admin/users")).resolves.toEqual({ users: [] });
-  });
+describe("apiJson", () => {
+  // A delete endpoint that returns nothing should not have to pretend to
+  // return something, and `res.json()` on an empty body throws.
+  it.each([
+    ["a JSON body", () => Response.json({ users: [] }), { users: [] }],
+    ["a 204", () => new Response(null, { status: 204 }), undefined],
+    ["an empty body", () => new Response("", { status: 200 }), undefined],
+  ])(
+    "reads %s through the whole round trip",
+    async (_body, response, expected) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response()));
+      await expect(apiJson("/admin/users")).resolves.toEqual(expected);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

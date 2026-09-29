@@ -9,6 +9,9 @@
 //   - a transient failure is kept in memory for 10 minutes and never on disk;
 //   - concurrent requests for one domain make one outbound fetch.
 //
+// Which failures count as permanent or transient is tested in
+// remoteImage.test.ts. The route reads only that label.
+//
 // The network is stubbed at safeFetch. The route, the helper, sharp and the
 // file system are real. LOGOS_DIR sits in this file's temp DATA_DIR.
 // =============================================================================
@@ -45,12 +48,12 @@ let app: express.Express;
 let png: Buffer;
 
 /** What safeFetch resolves with. A fresh Response each call. */
-function served(body: Buffer | string, status = 200, type = "image/png") {
+function served(body: Buffer | string, status = 200) {
   const bytes = typeof body === "string" ? body : new Uint8Array(body);
   return {
     response: new Response(bytes, {
       status,
-      headers: { "content-type": type },
+      headers: { "content-type": "image/png" },
     }),
     finalUrl: "https://www.google.com/s2/favicons",
   };
@@ -127,16 +130,6 @@ describe("GET /api/logos/:domain", () => {
     expect(safeFetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("treats a body that is not an image as a permanent miss", async () => {
-    const domain = freshDomain();
-    safeFetchMock.mockImplementation(async () =>
-      served("<html>globe</html>", 200, "text/html"),
-    );
-    const res = await request(app).get(`/api/logos/${domain}`);
-    expect(res.status).toBe(404);
-    expect(fs.existsSync(missPath(domain))).toBe(true);
-  });
-
   it("asks again once the miss is 30 days old, and clears the marker on success", async () => {
     const domain = freshDomain();
     safeFetchMock.mockImplementationOnce(async () => served("nope", 404));
@@ -186,14 +179,6 @@ describe("GET /api/logos/:domain", () => {
     const later = await request(app).get(`/api/logos/${domain}`);
     expect(later.status).toBe(200);
     expect(safeFetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("treats a Google 5xx as transient", async () => {
-    const domain = freshDomain();
-    safeFetchMock.mockImplementationOnce(async () => served("busy", 502));
-    const res = await request(app).get(`/api/logos/${domain}`);
-    expect(res.status).toBe(503);
-    expect(fs.existsSync(missPath(domain))).toBe(false);
   });
 
   it("makes one outbound fetch for concurrent requests for one domain", async () => {

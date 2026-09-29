@@ -13,7 +13,7 @@ vi.mock("../../src/contexts/PreferencesContext", () => ({
 
 afterEach(() => cleanup());
 
-const renderBar = (selectedCount: number) =>
+const renderBar = (selectedCount?: number) =>
   render(
     <BulkActionToolbar
       selectedCount={selectedCount}
@@ -49,5 +49,29 @@ describe("BulkActionToolbar", () => {
       expect(button.hasAttribute("disabled")).toBe(false);
     }
     expect(screen.getByText("selected")).toBeTruthy();
+  });
+
+  // Select mode kept "Network" as the page's title. The count moved to the
+  // start of the bar, and is read out as it changes.
+  it("leads with the count, in a polite live region", () => {
+    renderBar(3);
+    const toolbar = screen.getByRole("toolbar", { name: "Bulk actions" });
+    const count = within(toolbar).getByText(
+      (_, el) => el?.textContent === "3 selected" && el.tagName === "SPAN",
+    );
+    expect(count.getAttribute("aria-live")).toBe("polite");
+    // Atomic, so NVDA says "3 selected" and not the changed "3" alone.
+    expect(count.getAttribute("role")).toBe("status");
+    expect(count.getAttribute("aria-atomic")).toBe("true");
+    expect(toolbar.firstElementChild).toBe(count);
+    // Track is still the first button.
+    expect(within(toolbar).getAllByRole("button")[0]).toBe(
+      within(toolbar).getByRole("button", { name: "Track" }),
+    );
+  });
+
+  it("says no count where the page gives none, as the map does", () => {
+    renderBar();
+    expect(screen.queryByText(/selected/)).toBeNull();
   });
 });

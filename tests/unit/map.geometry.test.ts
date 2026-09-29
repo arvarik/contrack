@@ -20,9 +20,7 @@ import {
 } from "../../src/views/map/useClusterFeatures";
 import {
   FALLBACK_MIN_ZOOM,
-  LNG_EPSILON,
   MAX_MIN_ZOOM,
-  MERCATOR_MAX_LAT,
   TILE_SIZE,
   WORLD_BOUNDS,
   minZoomFor,
@@ -76,14 +74,14 @@ describe("minZoomFor", () => {
 describe("WORLD_BOUNDS", () => {
   it("is the Mercator limit in latitude", () => {
     const [, south, , north] = WORLD_BOUNDS;
-    expect(north).toBe(MERCATOR_MAX_LAT);
-    expect(south).toBe(-MERCATOR_MAX_LAT);
+    expect(north).toBeCloseTo(85.0511, 4);
+    expect(south).toBeCloseTo(-85.0511, 4);
   });
 
   it("stops a hair inside the meridian, which MapLibre needs", () => {
     const [west, , east] = WORLD_BOUNDS;
-    expect(west).toBe(-180 + LNG_EPSILON);
-    expect(east).toBe(180 - LNG_EPSILON);
+    expect(west).toBeCloseTo(-180, 6);
+    expect(east).toBeCloseTo(180, 6);
     expect(west).toBeGreaterThan(-180);
     expect(east).toBeLessThan(180);
   });

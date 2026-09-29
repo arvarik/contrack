@@ -7,11 +7,12 @@ import type { Contact } from "../../src/types";
 let mockPreferences = {
   listSort: "name",
 };
+const mockSetPreference = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/contexts/PreferencesContext", () => ({
   usePreferences: () => ({
     preferences: mockPreferences,
-    setPreference: vi.fn(),
+    setPreference: mockSetPreference,
   }),
 }));
 
@@ -48,6 +49,7 @@ describe("useContactListFilters", () => {
     mockSearchParams.delete("list");
     mockSearchParams.delete("tag");
     mockSetSearchParams.mockClear();
+    mockSetPreference.mockClear();
   });
 
   // A tag on the Tags settings page links to `/?tag=<tag>`. It is one more
@@ -164,18 +166,28 @@ describe("useContactListFilters", () => {
     expect(names()).toEqual([]);
   });
 
-  it("initializes sortBy with 'name' when listSort preference is 'name'", () => {
+  // Words rank by how well each person matches, whatever the sort menu
+  // says: the whole name, then the start of a name, then a name that holds
+  // the word, then a company. Nobody who matches nothing is left in.
+  it("ranks a search by the match, not by the chosen sort", () => {
     mockPreferences = { listSort: "name" };
+    const people = [
+      { id: "c1", name: "Bob Martin", company: "Clean Code" },
+      { id: "c2", name: "Alice", company: "Alice Corp" },
+      { id: "c3", name: "Alice Wonderland", company: "Other" },
+      { id: "c4", name: "Carol", company: "Alice Corp" },
+      { id: "c5", name: "Malice Cooper", company: "Other" },
+    ];
     const { result } = renderHook(() =>
-      useContactListFilters(sampleContacts as Contact[]),
+      useContactListFilters(people as Contact[]),
     );
 
-    expect(result.current.sortBy).toBe("name");
-    expect(result.current.sortDir).toBe("asc");
+    act(() => result.current.setSearchQuery("alice"));
     expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
       "Alice",
-      "Bob",
-      "Charlie",
+      "Alice Wonderland",
+      "Malice Cooper",
+      "Carol",
     ]);
   });
 
@@ -197,21 +209,24 @@ describe("useContactListFilters", () => {
   // The menu sorts by name or by the day a contact was added, and nothing
   // else. A "score" left in storage by an older release is not one of them,
   // so the list falls back to the name order rather than to no order.
-  it("falls back to the name order for a listSort it no longer knows", () => {
-    mockPreferences = { listSort: "score" as unknown as "name" };
-    const { result } = renderHook(() =>
-      useContactListFilters(sampleContacts as Contact[]),
-    );
+  it.each(["name", "score"])(
+    "opens on the name order, A to Z, for a listSort of %s",
+    (listSort) => {
+      mockPreferences = { listSort };
+      const { result } = renderHook(() =>
+        useContactListFilters(sampleContacts as Contact[]),
+      );
 
-    expect(result.current.sortBy).toBe("name");
-    expect(result.current.sortDir).toBe("asc");
-    expect(result.current.currentSort.label).toBe("A to Z");
-    expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
-      "Alice",
-      "Bob",
-      "Charlie",
-    ]);
-  });
+      expect(result.current.sortBy).toBe("name");
+      expect(result.current.sortDir).toBe("asc");
+      expect(result.current.currentSort.label).toBe("A to Z");
+      expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
+        "Alice",
+        "Bob",
+        "Charlie",
+      ]);
+    },
+  );
 
   it("updates sort choice in memory without writing preference", () => {
     mockPreferences = { listSort: "name" };
@@ -265,6 +280,8 @@ describe("useContactListFilters", () => {
     expect(result.current.sortBy).toBe("name");
     expect(result.current.sortDir).toBe("asc");
     expect(result.current.currentSort.label).toBe("A to Z");
+    // The choice is the session's: the account's listSort is never written.
+    expect(mockSetPreference).not.toHaveBeenCalled();
   });
 
   it("persists sort choice across hook remounts within the same session", () => {

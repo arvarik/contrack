@@ -12,13 +12,11 @@ import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import {
-  avatarLook,
   classifyName,
   lookFromPronouns,
 } from "../../server/utils/smartAvatar.ts";
 import {
   foldName,
-  givenNameCount,
   lookupGivenName,
 } from "../../server/utils/nlp/givenNames.ts";
 
@@ -172,20 +170,6 @@ describe("classifyName: the shapes a name field arrives in", () => {
   });
 });
 
-describe("avatarLook", () => {
-  it("lets pronouns decide over the name", () => {
-    expect(avatarLook("Jordan Lee", "she/her")).toBe("female");
-    expect(avatarLook("James Smith", "they/them")).toBe("neutral");
-    expect(avatarLook("Mary Wilson", "he/him")).toBe("male");
-  });
-
-  it("falls back to the name when the pronoun field is empty", () => {
-    expect(avatarLook("Mary Wilson", "")).toBe("female");
-    expect(avatarLook("Mary Wilson", null)).toBe("female");
-    expect(avatarLook("Jordan Lee", "n/a")).toBe("neutral");
-  });
-});
-
 describe("the given-name table", () => {
   const text = gunzipSync(
     readFileSync(
@@ -194,22 +178,23 @@ describe("the given-name table", () => {
   ).toString("utf8");
   const lines = text.split("\n").filter(Boolean);
 
-  it("is the size the build script reports", () => {
-    expect(givenNameCount()).toBe(lines.length);
-    expect(lines.length).toBeGreaterThan(100_000);
-  });
-
   // One pass and one assertion per rule. An expect() per line, over
   // 161,856 lines, took more than the 5 s test limit on a CI runner.
-  it("is sorted and well formed, because the lookup is a binary search", () => {
+  it("is sorted and well formed, and the binary search finds every line", () => {
+    expect(lines.length).toBeGreaterThan(100_000);
     const malformed: number[] = [];
     const unsorted: number[] = [];
+    const missed: number[] = [];
     for (let i = 0; i < lines.length; i++) {
       if (!/^[^\t\n]+\t[FM]$/.test(lines[i])) malformed.push(i + 1);
       if (i > 0 && !(lines[i - 1] < lines[i])) unsorted.push(i + 1);
+      const [name, gender] = lines[i].split("\t");
+      const look = gender === "F" ? "female" : "male";
+      if (lookupGivenName(name) !== look) missed.push(i + 1);
     }
     expect(malformed.slice(0, 10), "malformed lines").toEqual([]);
     expect(unsorted.slice(0, 10), "lines out of order").toEqual([]);
+    expect(missed.slice(0, 10), "lines the lookup does not find").toEqual([]);
   });
 
   it("stores every name folded", () => {

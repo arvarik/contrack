@@ -4,8 +4,8 @@
  *
  * What every surface relies on: the mark is silent to a screen reader unless
  * asked to speak, it never takes focus, its eye wears the token rather than
- * the stroke, the glyph drops the chest and the tail, and two birds on one
- * page do not share an id.
+ * the stroke, the glyph is the small optical size (every part, heavier, with a
+ * larger eye), and two birds on one page do not share an id.
  *
  * The motion phase added two more: every part carries `data-part`, which is
  * what the shared keyframes select on, and `idle` starts the blink timer.
@@ -84,21 +84,25 @@ describe("CorvidMark", () => {
     expect(document.getElementById("corvid-eye")?.tagName).toBe("ellipse");
   });
 
-  it("keeps the ring outside the bird, so nothing that moves the bird moves it", () => {
-    const { container } = render(<CorvidMark />);
-    const svg = svgOf(container);
-    const ring = svg.querySelector('[data-part="ring"]')!;
-    const bird = svg.querySelector("[data-bird]")!;
-    expect(ring.parentElement).toBe(svg);
-    expect(bird.contains(ring)).toBe(false);
-    expect(ring.getAttribute("d")).toBe(CORVID_PATHS.ring);
-    for (const part of BIRD_PART_ORDER) {
-      expect(
-        bird.querySelector(`[data-part="${part}"]`)?.getAttribute("d"),
-      ).toBe(CORVID_PATHS[part]);
-    }
-    expect(bird.querySelector('[data-part="eye"]')).toBeTruthy();
-  });
+  // The glyph is the thinking bird: its head tilts and its ring holds still.
+  it.each(["mark", "glyph"] as const)(
+    "keeps the %s's ring outside the bird, so nothing that moves the bird moves it",
+    (variant) => {
+      const { container } = render(<CorvidMark variant={variant} />);
+      const svg = svgOf(container);
+      const ring = svg.querySelector('[data-part="ring"]')!;
+      const bird = svg.querySelector("[data-bird]")!;
+      expect(ring.parentElement).toBe(svg);
+      expect(bird.contains(ring)).toBe(false);
+      expect(ring.getAttribute("d")).toBe(CORVID_PATHS.ring);
+      for (const part of BIRD_PART_ORDER) {
+        expect(
+          bird.querySelector(`[data-part="${part}"]`)?.getAttribute("d"),
+        ).toBe(CORVID_PATHS[part]);
+      }
+      expect(bird.querySelector('[data-part="eye"]')).toBeTruthy();
+    },
+  );
 
   it("draws no nape while the bird sits in its ring", () => {
     const { container } = render(<CorvidMark />);
@@ -169,11 +173,6 @@ describe("CorvidMark, alive", () => {
 
   const eyeOf = (container: HTMLElement) =>
     svgOf(container).querySelector('[data-part="eye"]')!;
-
-  it("holds still by default", () => {
-    render(<CorvidMark size={32} />);
-    expect(vi.getTimerCount()).toBe(0);
-  });
 
   it("blinks when it lives, and only its bird moves", () => {
     const { container } = render(<CorvidMark size={40} alive />);

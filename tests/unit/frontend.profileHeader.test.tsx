@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // =============================================================================
-// The contact header and the briefing card
+// The contact header
 // =============================================================================
 // The header had a palette button, an archive button, a kebab and an unnamed
 // sparkle at the same rank as the name. It now has no primary button, only a
@@ -8,11 +8,8 @@
 // in the composer under the tabs. The avatar carries its own pencil, "Change
 // avatar", a button beside the score button and never inside it. Links on
 // the meta line say that they open a new tab, and "+ link" after them adds
-// one. The weather asks a third party for the contact's coordinates, so it
-// must not ask when it is not allowed to.
-//
-// The briefing moved from a modal behind the sparkle to a card at the top of
-// the Dossier tab, with a labelled button, a status line and an error line.
+// one. The weather asks a third party for the contact's coordinates, so the
+// narrow header, which has no room for it, must not ask.
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,22 +67,33 @@ vi.mock("../../src/hooks/useAiAllowed", () => ({
   useAiAllowed: () => ai.allowed,
 }));
 
+/**
+ * Whether the account shows the weather. It is off by default, so a test
+ * that checks the narrow header sends no request turns it on first.
+ */
+const weather = vi.hoisted(() => ({ shown: false }));
+vi.mock("../../src/contexts/PreferencesContext", async (original) => {
+  const real =
+    await original<typeof import("../../src/contexts/PreferencesContext")>();
+  return {
+    ...real,
+    usePreferences: () => {
+      const value = real.usePreferences();
+      return {
+        ...value,
+        preferences: { ...value.preferences, showWeather: weather.shown },
+      };
+    },
+  };
+});
+
 import { depthTime } from "../../src/lib/researchDepth";
 import {
   ContactIntro,
   ProfileHeader,
   type ProfileHeaderProps,
 } from "../../src/views/contact-detail/components/ProfileHeader";
-import {
-  basicDetailsText,
-  fullDetailsText,
-} from "../../src/views/contact-detail/components/ContactActionsMenu";
 import { CLIPBOARD_DENIED } from "../../src/lib/clipboard";
-import {
-  DossierTab,
-  type BriefingMutation,
-} from "../../src/views/contact-detail/components/DossierTab";
-import { LocalTimeWeather } from "../../src/components/LocalTimeWeather";
 import type { Contact } from "../../src/types";
 
 const SYDNEY = { lat: -33.87, lng: 151.21 };
@@ -204,6 +212,7 @@ afterEach(() => {
   aiSearch.isStarting = false;
   aiSearch.batch = null;
   ai.allowed = true;
+  weather.shown = false;
 });
 
 /** A clipboard that records what it was given, or refuses. */
@@ -276,24 +285,6 @@ describe("the contact header", () => {
     expect(tracked.textContent).toContain("Quarterly");
   });
 
-  it("shows Track as the glyph and the chevron in the narrow header, with the words in the name", () => {
-    mount(
-      <ProfileHeader
-        {...makeProps({
-          layout: "narrow",
-          contact: makeContact({ isTracked: true, cadenceDays: 90 }),
-        })}
-      />,
-    );
-    const track = screen.getByRole("button", {
-      name: "Tracking quarterly, change or stop",
-    });
-    expect(track.textContent).toBe("");
-    expect(track.getAttribute("title")).toBe(
-      "Tracking quarterly, change or stop",
-    );
-  });
-
   it("offers no Track to a ghost, which cannot be tracked", () => {
     mount(
       <ProfileHeader
@@ -336,17 +327,6 @@ describe("the contact header", () => {
     expect(
       within(menu).queryByRole("menuitem", { name: "Change avatar" }),
     ).toBeNull();
-  });
-
-  it("offers Unarchive for an archived contact", () => {
-    mount(
-      <ProfileHeader
-        {...makeProps({ contact: makeContact({ isArchived: true }) })}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
-    expect(screen.getByRole("menuitem", { name: "Unarchive" })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
   });
 
   it("opens the avatar picker from the pencil on the avatar", () => {
@@ -400,11 +380,16 @@ describe("the contact header", () => {
     );
     const pencil = screen.getByRole("button", { name: "Change avatar" });
     const chip = screen.getByText("Archived");
+    // The badge holds the tooltip that names it.
+    const badge =
+      screen.getByText("Ghost profile").parentElement!.parentElement!;
     // The pencil holds the lower right corner, the chip sits under the
     // avatar, and the ghost badge holds the upper right corner.
     expect(pencil.className).toContain("bottom-0");
     expect(pencil.className).toContain("right-0");
     expect(chip.className).toContain("top-full");
+    expect(badge.className).toContain("-top-3");
+    expect(badge.className).toContain("-right-3");
   });
 
   it("opens social links in a new tab, and says so", () => {
@@ -425,7 +410,7 @@ describe("the contact header", () => {
     expect(screen.getByText("Sydney")).toBeTruthy();
   });
 
-  it("removes a tag and adds one through the contact update", () => {
+  it("removes a tag, puts it back from the undo, and adds one, through the contact update", () => {
     const props = makeProps();
     mount(<ProfileHeader {...props} />);
     const update = props.updateContact.mutate as ReturnType<typeof vi.fn>;
@@ -436,6 +421,11 @@ describe("the contact header", () => {
     expect(update).toHaveBeenLastCalledWith({
       id: "c1",
       data: { tags: [] },
+    });
+    lastUndo()();
+    expect(update).toHaveBeenLastCalledWith({
+      id: "c1",
+      data: { tags: [{ tag: "tech-lead" }] },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Add tag" }));
@@ -516,29 +506,55 @@ describe("the contact actions", () => {
     const writeText = stubClipboard();
     mount(<ProfileHeader {...makeProps({ contact: withDetails() })} />);
     chooseAction("Copy full details");
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
-    expect(writeText).toHaveBeenCalledWith(fullDetailsText(withDetails()));
-    expect(fullDetailsText(withDetails()).split("\n")).toEqual([
-      "Name: Thomas Walker",
-      "Role: UX Researcher",
-      "Company: Umbrella Corp",
-      "Email: thomas@umbrella.com",
-      "Phone: 440-434-9585",
-      "Birthday: 1974-05-11",
-      "Location: Sydney, NSW, Australia",
-    ]);
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith("All details copied"),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Name: Thomas Walker",
+        "Role: UX Researcher",
+        "Company: Umbrella Corp",
+        "Email: thomas@umbrella.com",
+        "Phone: 440-434-9585",
+        "Birthday: 1974-05-11",
+        "Location: Sydney, NSW, Australia",
+      ].join("\n"),
+    );
+    cleanup();
+
     // Addresses win over the single location when there are any.
-    expect(
-      fullDetailsText(
-        makeContact({
-          addresses: [
-            { id: "a1", address: "1 Main St", label: "home", isPrimary: true },
-            { id: "a2", address: "2 Side St", label: "work", isPrimary: false },
-          ] as Contact["addresses"],
-        }),
-      ),
-    ).toContain("Location: 1 Main St | 2 Side St");
-    expect(basicDetailsText(makeContact())).toBe("Name: Thomas Walker");
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({
+            addresses: [
+              {
+                id: "a1",
+                address: "1 Main St",
+                label: "home",
+                isPrimary: true,
+              },
+              {
+                id: "a2",
+                address: "2 Side St",
+                label: "work",
+                isPrimary: false,
+              },
+            ] as Contact["addresses"],
+          }),
+        })}
+      />,
+    );
+    chooseAction("Copy full details");
+    expect(writeText).toHaveBeenLastCalledWith(
+      expect.stringContaining("Location: 1 Main St | 2 Side St"),
+    );
+    cleanup();
+
+    // With no email and no phone, the basic copy is the name alone.
+    mount(<ProfileHeader {...makeProps()} />);
+    chooseAction("Copy basic details");
+    expect(writeText).toHaveBeenLastCalledWith("Name: Thomas Walker");
   });
 
   it("says so when the clipboard refuses", async () => {
@@ -563,10 +579,12 @@ describe("the contact actions", () => {
     expect(toastMock.error).toHaveBeenCalledWith("Failed: offline");
   });
 
-  it("unarchives an archived contact", () => {
+  it("unarchives an archived contact, from Unarchive in place of Archive", () => {
     const props = makeProps({ contact: makeContact({ isArchived: true }) });
     mount(<ProfileHeader {...props} />);
-    chooseAction("Unarchive");
+    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unarchive" }));
     const mutate = props.unarchiveContact.mutate as ReturnType<typeof vi.fn>;
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
@@ -634,19 +652,6 @@ describe("the contact actions", () => {
     expect(update.mock.lastCall?.[0].data.socialLinks).toHaveLength(2);
   });
 
-  it("puts a removed tag back from the undo", () => {
-    const props = makeProps();
-    mount(<ProfileHeader {...props} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove tag tech-lead" }),
-    );
-    lastUndo()();
-    expect(props.updateContact.mutate).toHaveBeenLastCalledWith({
-      id: "c1",
-      data: { tags: [{ tag: "tech-lead" }] },
-    });
-  });
-
   it("links the website when it is not one of the social links", () => {
     mount(
       <ProfileHeader
@@ -669,26 +674,25 @@ describe("Enrich contact", () => {
     });
   }
 
-  it("starts a Standard run for this one contact, with any limit said in a toast", () => {
-    mount(<ProfileHeader {...makeProps()} />);
-    fireEvent.click(enrichItem()!);
-    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
-      limitAs: "toast",
-      depth: "standard",
-    });
-    // No confirmation for one contact: the run starts on the choice.
-    expect(screen.queryByRole("dialog")).toBeNull();
-  });
-
-  it("starts a Deep run from Enrich deeply", () => {
-    mount(<ProfileHeader {...makeProps()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Enrich deeply/ }));
-    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
-      limitAs: "toast",
-      depth: "deep",
-    });
-  });
+  it.each([
+    ["standard", "Enrich contact"],
+    ["deep", "Enrich deeply"],
+  ] as const)(
+    "starts a %s run for this one contact from %s, with any limit said in a toast",
+    (depth, label) => {
+      mount(<ProfileHeader {...makeProps()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: new RegExp(`^${label}`) }),
+      );
+      expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1"], {
+        limitAs: "toast",
+        depth,
+      });
+      // No confirmation for one contact: the run starts on the choice.
+      expect(screen.queryByRole("dialog")).toBeNull();
+    },
+  );
 
   it("is not offered when AI assistance is off, or for a ghost", () => {
     ai.allowed = false;
@@ -855,13 +859,6 @@ describe("+ link", () => {
     expect(props.updateContact.mutate).not.toHaveBeenCalled();
   });
 
-  it("is the plus alone in the narrow header, named and titled", () => {
-    mount(<ProfileHeader {...makeProps({ layout: "narrow" })} />);
-    const add = screen.getByRole("button", { name: "Add link" });
-    expect(add.textContent).toBe("");
-    expect(add.getAttribute("title")).toBe("Add link");
-  });
-
   it("shows for a contact with no place, time or links yet", () => {
     mount(
       <ProfileHeader
@@ -900,17 +897,13 @@ describe("the narrow header", () => {
   });
 
   it("keeps the name, the role, the meta line and the kebab, and nothing else", async () => {
-    mount(
-      <ProfileHeader
-        {...makeProps({
-          layout: "narrow",
-          contact: makeContact({
-            headline: "Researching how teams plan",
-            aiSummary: "Runs the research guild.",
-          }),
-        })}
-      />,
-    );
+    // The account shows the weather, so only the layout can leave it out.
+    weather.shown = true;
+    const contact = makeContact({
+      headline: "Researching how teams plan",
+      aiSummary: "Runs the research guild.",
+    });
+    mount(<ProfileHeader {...makeProps({ layout: "narrow", contact })} />);
     expect(screen.getByRole("heading", { level: 1 }).className).toContain(
       "text-2xl",
     );
@@ -927,6 +920,12 @@ describe("the narrow header", () => {
     // No weather in the narrow header, so no request for it.
     await act(async () => {});
     expect(weatherRequests()).toHaveLength(0);
+
+    // The wide header asks once in the same wait, so the check above can fail.
+    cleanup();
+    mount(<ProfileHeader {...makeProps({ contact })} />);
+    await act(async () => {});
+    expect(weatherRequests()).toHaveLength(1);
   });
 
   it("draws the avatar in a 56 px box, with no ring for an untracked contact", () => {
@@ -963,6 +962,11 @@ describe("the narrow header", () => {
     );
     const promote = screen.getByRole("button", { name: "Promote to contact" });
     expect(promote.className).toContain("mt-3");
+    // After the meta line, not in the name row above it.
+    expect(
+      screen.getByText("Sydney").compareDocumentPosition(promote) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 
@@ -994,44 +998,28 @@ describe("the follow-up banner", () => {
     return screen.queryByText(/^Follow-up /);
   }
 
-  it("counts the days a late follow-up is overdue, in the error tone", () => {
-    const text = banner(dueOn(19));
-    expect(text?.textContent).toBe("Follow-up 3 days overdue");
-    expect(text?.parentElement?.className).toContain("text-error");
-    cleanup();
-    expect(banner(dueOn(21))?.textContent).toBe("Follow-up 1 day overdue");
-  });
-
-  it("says due today all day, in the primary tone", () => {
+  // The words come from describeFollowUp, and followUp.test.ts owns them.
+  // The banner owns the text it prints, the tone's class and the week.
+  it.each([
+    ["Follow-up 3 days overdue", 19, "text-error"],
     // Due at 9 AM, and it is noon: still today, not overdue.
-    const text = banner(dueOn(22));
-    expect(text?.textContent).toBe("Follow-up due today");
-    expect(text?.parentElement?.className).toContain("text-on-primary-wash");
-  });
+    ["Follow-up due today", 22, "text-on-primary-wash"],
+    // A week out, the last day Pulse's This week holds. Pulse's This week
+    // takes day 7, and the banner stopped at day 6.
+    ["Follow-up due in 7 days", 29, "text-on-surface-variant"],
+  ])(
+    "says %s for a follow-up due on September %i, in %s",
+    (words, day, tone) => {
+      const text = banner(dueOn(day));
+      expect(text?.textContent).toBe(words);
+      expect(text?.parentElement?.className).toContain(tone);
+    },
+  );
 
-  it("names the day of a follow-up later this week, in the neutral tone", () => {
-    const text = banner(dueOn(23));
-    expect(text?.textContent).toBe("Follow-up due tomorrow");
-    expect(text?.parentElement?.className).toContain("text-on-surface-variant");
-    cleanup();
-    const friday = new Date(2026, 8, 25).toLocaleDateString(undefined, {
-      weekday: "long",
-    });
-    expect(banner(dueOn(25))?.textContent).toBe(`Follow-up due ${friday}`);
-  });
-
-  it("shows the banner a week out, the last day Pulse's This week holds", () => {
-    // Pulse's This week takes day 7, and the banner stopped at day 6.
-    const text = banner(dueOn(29));
-    expect(text?.textContent).toBe("Follow-up due in 7 days");
-    expect(text?.parentElement?.className).toContain("text-on-surface-variant");
-  });
-
-  it("shows no banner past the week, or with no follow-up, and never the old words", () => {
+  it("shows no banner past the week, or with no follow-up", () => {
     expect(banner(dueOn(30))).toBeNull();
     cleanup();
     expect(banner(null)).toBeNull();
-    expect(screen.queryByText("Pending follow-up alert")).toBeNull();
   });
 });
 
@@ -1058,107 +1046,5 @@ describe("the headline and the summary", () => {
       />,
     );
     expect(container.textContent).toBe("");
-  });
-});
-
-describe("the local time and the weather", () => {
-  it("never asks Open-Meteo when the weather is not allowed", async () => {
-    mount(<LocalTimeWeather {...SYDNEY} showWeather={false} />);
-    expect(screen.getByText(/local time/)).toBeTruthy();
-    // Give a query that should not exist the chance to start.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-    expect(weatherRequests()).toHaveLength(0);
-    expect(screen.queryByText(/°C/)).toBeNull();
-  });
-
-  it("asks Open-Meteo and shows the temperature when it is allowed", async () => {
-    mount(<LocalTimeWeather {...SYDNEY} showWeather />);
-    await waitFor(() => expect(screen.getByText("13°C")).toBeTruthy());
-    expect(weatherRequests()).toHaveLength(1);
-  });
-});
-
-describe("the briefing card", () => {
-  const briefing = (
-    overrides: Partial<BriefingMutation> = {},
-  ): BriefingMutation => ({
-    mutate: vi.fn(),
-    isPending: false,
-    ...overrides,
-  });
-
-  it("offers to generate a briefing when there is none", () => {
-    const generate = briefing();
-    mount(<DossierTab contact={makeContact()} generateBriefing={generate} />);
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Briefing" }),
-    ).toBeTruthy();
-    const button = screen.getByRole("button", { name: "Generate briefing" });
-    fireEvent.click(button);
-    expect(generate.mutate).toHaveBeenCalledWith("c1", expect.any(Object));
-  });
-
-  it("shows an error line when the briefing cannot be written", () => {
-    const generate = briefing();
-    mount(<DossierTab contact={makeContact()} generateBriefing={generate} />);
-    fireEvent.click(screen.getByRole("button", { name: "Generate briefing" }));
-    const [, options] = (generate.mutate as ReturnType<typeof vi.fn>).mock
-      .calls[0];
-    act(() => options.onError(new Error("Failed to generate briefing")));
-    expect(screen.getByRole("alert").textContent).toBe(
-      "Could not write the briefing. Check that AI is set up in Settings, then try again",
-    );
-  });
-
-  it("says it is writing while the request is out", () => {
-    mount(
-      <DossierTab
-        contact={makeContact()}
-        generateBriefing={briefing({ isPending: true })}
-      />,
-    );
-    expect(screen.getByRole("status").textContent).toBe(
-      "Writing the briefing…",
-    );
-    const button = screen.getByRole("button", { name: "Generate briefing" });
-    expect(button.hasAttribute("disabled")).toBe(true);
-    expect(button.getAttribute("aria-busy")).toBe("true");
-  });
-
-  it("shows a recent briefing's points with a Regenerate button", () => {
-    mount(
-      <DossierTab
-        contact={makeContact({
-          aiBriefing: JSON.stringify(["Point one", "Point two", "Point three"]),
-          aiBriefingAt: new Date().toISOString(),
-        })}
-        generateBriefing={briefing()}
-      />,
-    );
-    expect(screen.getByText("Point one")).toBeTruthy();
-    expect(screen.getByText(/^Generated/)).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Regenerate briefing" }),
-    ).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("");
-  });
-
-  it("treats a briefing older than three days as none", () => {
-    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
-    mount(
-      <DossierTab
-        contact={makeContact({
-          aiBriefing: JSON.stringify(["Old point"]),
-          aiBriefingAt: fourDaysAgo.toISOString(),
-        })}
-        generateBriefing={briefing()}
-      />,
-    );
-    expect(screen.queryByText("Old point")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Generate briefing" }),
-    ).toBeTruthy();
   });
 });

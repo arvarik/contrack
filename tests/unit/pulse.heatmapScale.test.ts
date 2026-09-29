@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   heatmapScale,
   getHeatmapAlpha,
-  HEATMAP_ALPHA_STEPS,
 } from "../../src/views/pulse/lib/heatmapScale";
 
 describe("pulse.heatmapScale", () => {
@@ -47,15 +46,5 @@ describe("pulse.heatmapScale", () => {
     expect(scale(1)).toBe(1);
     expect(scale(2)).toBe(3);
     expect(scale(3)).toBe(5);
-  });
-
-  it("returns correct alpha values from HEATMAP_ALPHA_STEPS", () => {
-    expect(HEATMAP_ALPHA_STEPS).toEqual([0, 0.12, 0.3, 0.55, 0.8, 1]);
-    expect(getHeatmapAlpha(0)).toBe(0);
-    expect(getHeatmapAlpha(1)).toBe(0.12);
-    expect(getHeatmapAlpha(2)).toBe(0.3);
-    expect(getHeatmapAlpha(3)).toBe(0.55);
-    expect(getHeatmapAlpha(4)).toBe(0.8);
-    expect(getHeatmapAlpha(5)).toBe(1);
   });
 });

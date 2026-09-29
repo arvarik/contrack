@@ -11,7 +11,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.unmock("../../server/db.ts");
-vi.unmock("../server/db.ts");
 
 import crypto from "node:crypto";
 import { sqlite } from "../../server/db.ts";
@@ -317,51 +316,51 @@ describe("connectors ingestStream", () => {
     ]);
   });
 
-  it("commits in transactions according to batchSize", async () => {
+  it("commits in transactions of 100 events, so a stream that fails keeps every full batch", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };
+    const stored = () =>
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) as count FROM interactions WHERE ownerId = ?",
+          )
+          .get(ownerId) as { count: number }
+      ).count;
 
-    const events: SyncEvent[] = Array.from({ length: 5 }, (_, i) => ({
-      kind: "interaction",
-      externalId: `batch-event-${i}`,
-      type: "meeting",
-      title: `Batch Meeting ${i}`,
-      date: `2026-02-0${i + 1}T10:00:00Z`,
-      participants: [
-        { email: "me@example.com", isSelf: true },
-        { email: "alice@example.com" },
-      ],
-    }));
-
-    async function* generateBatch() {
-      for (const ev of events) {
-        yield ev;
+    // 101 meetings, then the feed breaks. Just before the 100th event, the
+    // stream also reads what is stored: the first batch is still open then.
+    let storedBefore100th = -1;
+    async function* failingFeed(): AsyncGenerator<SyncEvent> {
+      for (let i = 0; i < 101; i++) {
+        if (i === 99) storedBefore100th = stored();
+        yield {
+          kind: "interaction",
+          externalId: `batch-event-${i}`,
+          type: "meeting",
+          title: `Batch Meeting ${i}`,
+          date: "2026-02-01T10:00:00Z",
+          participants: [
+            { email: "me@example.com" },
+            { email: "alice@example.com" },
+          ],
+        };
       }
+      throw new Error("feed closed");
     }
 
-    let progressCallbacks = 0;
-    const res = await ingestStream(
-      scope,
-      { id: connectorId, ownerId, kind: "ics", config: {} },
-      generateBatch(),
-      matcher,
-      selfAddresses,
-      {
-        batchSize: 2,
-        onProgress: () => {
-          progressCallbacks++;
-        },
-      },
-    );
+    await expect(
+      ingestStream(
+        scope,
+        { id: connectorId, ownerId, kind: "ics", config: {} },
+        failingFeed(),
+        matcher,
+        selfAddresses,
+      ),
+    ).rejects.toThrow("feed closed");
 
-    expect(res.stats.interactions).toBe(5);
-    // With 5 events and batchSize 2: batches at 2, 4, remaining 1 at end, plus final progress callback
-    expect(progressCallbacks).toBeGreaterThanOrEqual(3);
-
-    const savedCount = sqlite
-      .prepare("SELECT COUNT(*) as count FROM interactions WHERE ownerId = ?")
-      .get(ownerId) as { count: number };
-    expect(savedCount.count).toBe(5);
+    expect(storedBefore100th).toBe(0);
+    expect(stored()).toBe(100);
   });
 
   it("rolls up multiple emails for the same contact on the same day into one interaction", async () => {
@@ -444,7 +443,7 @@ describe("connectors ingestStream", () => {
     expect(rollupLink.localId).toBe(interactions[0].id);
   });
 
-  it("creates and updates contacts when receiving contact events", async () => {
+  it("creates a contact and its link from a contact event", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };
 

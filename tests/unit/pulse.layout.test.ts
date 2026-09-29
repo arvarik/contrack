@@ -1,11 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_PULSE_LAYOUT,
-  PULSE_COLUMNS,
-  PULSE_CARD_IDS,
   resolveLayout,
   pulseLayoutReducer,
-  MAX_CARDS_PER_COL,
   columnOf,
   moveCard,
   sameColumns,
@@ -19,9 +16,6 @@ import type {
 describe("pulse.layout", () => {
   it("provides sensible defaults for all 3 columns", () => {
     const layout = resolveLayout(DEFAULT_PULSE_LAYOUT);
-    expect(PULSE_COLUMNS).toEqual(["focus", "network", "intel"]);
-    expect(PULSE_CARD_IDS).toHaveLength(8);
-    expect(MAX_CARDS_PER_COL).toBe(20);
     expect(layout.visible.focus).toEqual(["up-next", "completed"]);
     // The Network column is the people you track and their habits.
     expect(layout.visible.network).toEqual(["keeping-up", "activity"]);
@@ -33,27 +27,26 @@ describe("pulse.layout", () => {
       "composition",
     ]);
     expect(layout.hidden).toEqual([]);
-    expect(PULSE_CARD_IDS).not.toContain("new-people");
-  });
-
-  it("handles null or undefined layout gracefully", () => {
-    const layout = resolveLayout(null);
-    expect(layout.visible.focus).toContain("up-next");
-    expect(layout.hidden).toEqual([]);
   });
 
   // The server's default preference is an empty order, not a missing one.
   // Every card is restored, and in the default order of its column.
-  it("restores an empty stored order to the default order, column by column", () => {
-    const layout = resolveLayout({ hidden: [], order: {} });
-    expect(layout).toEqual(resolveLayout(null));
-    expect(layout.visible.intel).toEqual([
-      "insight",
-      "inbox",
-      "coming-up",
-      "composition",
-    ]);
-    // A column with one card named keeps it first, then the rest in order.
+  it.each<[string, PulseLayout | null | undefined]>([
+    ["no layout", null],
+    ["an undefined layout", undefined],
+    ["an empty stored order", { hidden: [], order: {} }],
+  ])("restores %s to the default order, column by column", (_, raw) => {
+    expect(resolveLayout(raw)).toEqual({
+      visible: {
+        focus: ["up-next", "completed"],
+        network: ["keeping-up", "activity"],
+        intel: ["insight", "inbox", "coming-up", "composition"],
+      },
+      hidden: [],
+    });
+  });
+
+  it("keeps the one card a stored column names first, then the rest in order", () => {
     const partial = resolveLayout({
       hidden: [],
       order: { intel: ["coming-up"] },
@@ -169,6 +162,16 @@ describe("pulse.layout", () => {
       cardId: "alien-card",
     });
     expect(unmod).toEqual(state);
+    expect(
+      pulseLayoutReducer(state, { type: "show", cardId: "alien-card" }),
+    ).toBe(state);
+    expect(
+      pulseLayoutReducer(state, {
+        type: "move",
+        cardId: "alien-card",
+        targetColumn: "focus",
+      }),
+    ).toBe(state);
   });
 
   it("unhides a card when moved directly to a target column", () => {
@@ -251,7 +254,7 @@ describe("pulse.layout", () => {
 
   // A layout stored before the Momentum card became Keeping up. The old id
   // is unknown now and drops out. The new id is not named, so the card comes
-  // back in its default place: first in the Network column.
+  // back in its default column: last in the Network column.
   it("drops a stored momentum id and shows Keeping up in its default place", () => {
     const stored: PulseLayout = {
       hidden: ["momentum"],
@@ -292,23 +295,6 @@ describe("pulse.layout", () => {
       "composition",
     ]);
     expect(Object.values(resolved.visible).flat()).not.toContain("new-people");
-  });
-
-  it("shows Keeping up in the Network column when a stored order does not name it", () => {
-    const stored: PulseLayout = {
-      hidden: [],
-      order: {
-        focus: ["up-next", "completed"],
-        network: ["composition", "activity"],
-        intel: ["insight", "inbox", "coming-up"],
-      },
-    };
-    const resolved = resolveLayout(stored);
-    expect(resolved.visible.network).toEqual([
-      "composition",
-      "activity",
-      "keeping-up",
-    ]);
   });
 });
 

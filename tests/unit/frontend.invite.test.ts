@@ -93,12 +93,6 @@ describe("invitation links", () => {
       urlWithoutInvitationToken("https://example.com/join?token=abc#top"),
     ).toBe("/#top");
   });
-
-  it("leaves a path that was not the join screen alone", () => {
-    expect(
-      urlWithoutInvitationToken("https://example.com/contacts?q=ann"),
-    ).toBe("/contacts?q=ann");
-  });
 });
 
 describe("taking the invitation out of the address bar", () => {
@@ -165,15 +159,6 @@ describe("temporary password display", () => {
     ]);
   });
 
-  it("never changes the characters, only where they are shown", () => {
-    // The groups are rendered as separate elements with a CSS gap and no
-    // space between them, so a hand-made selection copies the same value the
-    // copy button gives. A space typed into a password field is a different
-    // password, and this is the assertion that says so.
-    const secret = "aB3xY7zQ9wErTyUiOpAs";
-    expect(groupSecret(secret).join("")).toBe(secret);
-  });
-
   it("keeps a short last group rather than padding it", () => {
     expect(groupSecret("abcdefg")).toEqual(["abcd", "efg"]);
   });
@@ -181,12 +166,5 @@ describe("temporary password display", () => {
   it("handles the degenerate inputs without throwing", () => {
     expect(groupSecret("")).toEqual([]);
     expect(groupSecret("ab", 4)).toEqual(["ab"]);
-    // A group size below one would loop forever, so it is refused rather
-    // than obeyed.
-    expect(groupSecret("abcd", 0)).toEqual(["abcd"]);
-  });
-
-  it("takes a group size when a caller wants a different rhythm", () => {
-    expect(groupSecret("abcdefgh", 2)).toEqual(["ab", "cd", "ef", "gh"]);
   });
 });

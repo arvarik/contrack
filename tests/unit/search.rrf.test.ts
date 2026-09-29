@@ -2,7 +2,7 @@
 // Weighted reciprocal rank fusion
 // =============================================================================
 // score(d) = sum over the lists that rank d of weight / (k + rank), with
-// 1-based ranks. Pure computation: no database, no model. The first seven
+// 1-based ranks. Pure computation: no database, no model. The first six
 // cases moved here from tests/unit/search.test.ts when the lists gained a
 // channel and a weight.
 // =============================================================================
@@ -14,7 +14,6 @@ import {
   type FusionList,
   type RankedItem,
 } from "../../server/services/search/hybridRetrieval.ts";
-import { classifyQuery } from "../../server/services/search/intent.ts";
 
 const ranked = (...ids: string[]): RankedItem[] =>
   ids.map((contactId, i) => ({ contactId, rank: i + 1 }));
@@ -92,14 +91,6 @@ describe("reciprocal rank fusion, unweighted", () => {
     expect(result[0].score).toBeCloseTo(2 / (RRF_K + 1), 8);
   });
 
-  it("provides sharper discrimination than k=60 for small datasets", () => {
-    // With k=15: rank 1 = 1/16 = 0.0625, rank 10 = 1/25 = 0.04 → 36% drop
-    // With k=60: rank 1 = 1/61 = 0.0164, rank 10 = 1/70 = 0.0143 → 13% drop
-    const drop = (k: number) => (1 / (k + 1) - 1 / (k + 10)) / (1 / (k + 1));
-    expect(drop(15)).toBeGreaterThan(0.3);
-    expect(drop(60)).toBeLessThan(0.15);
-  });
-
   it("returns every contact it was given", () => {
     const fifty = Array.from({ length: 50 }, (_, i) => `c${i}`);
     expect(reciprocalRankFusion([lexical(ranked(...fifty))])).toHaveLength(50);
@@ -171,20 +162,5 @@ describe("reciprocal rank fusion, weighted", () => {
     ]);
     expect(result[0].contactId).toBe("c");
     expect(result[0].channels).toEqual(["lexical", "dense", "trait"]);
-  });
-
-  it("reads its weights from the query's kind", () => {
-    expect(classifyQuery("ada@example.com").weights).toEqual({
-      lexical: 0.7,
-      dense: 0.3,
-    });
-    expect(classifyQuery("who in Lisbon goes rock climbing").weights).toEqual({
-      lexical: 0.3,
-      dense: 0.7,
-    });
-    expect(classifyQuery("rock climbing").weights).toEqual({
-      lexical: 0.5,
-      dense: 0.5,
-    });
   });
 });

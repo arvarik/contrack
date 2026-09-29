@@ -20,10 +20,7 @@ import {
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Highlighted,
-  InteractionSearchPanel,
-} from "../../src/views/search/InteractionSearchPanel";
+import { InteractionSearchPanel } from "../../src/views/search/InteractionSearchPanel";
 import type { InteractionSearchResult } from "../../src/types";
 
 afterEach(() => {
@@ -259,7 +256,7 @@ describe("InteractionSearchPanel", () => {
     expect(screen.queryByRole("button", { name: "Best match" })).toBeNull();
   });
 
-  it("starts with the box and the filters, and no suggested questions", () => {
+  it("shows no suggested questions", () => {
     stubFetch();
     mount();
     expect(screen.queryByRole("list", { name: "Try asking" })).toBeNull();
@@ -437,42 +434,41 @@ describe("InteractionSearchPanel", () => {
     expect(
       within(alert).getByRole("heading", { name: "Search failed" }),
     ).toBeTruthy();
+    expect(alert.textContent).toContain("Index unavailable");
   });
-});
 
-describe("Highlighted", () => {
-  it("marks the ranges and nothing else", () => {
-    const { container } = render(
-      <Highlighted
-        text="hire the hiring team"
-        ranges={[
-          [0, 4],
-          [9, 15],
-        ]}
-      />,
+  it("marks the ranges the server sent, and ignores one that runs backwards or off the end", async () => {
+    stubFetch(() =>
+      answer({
+        hits: [
+          {
+            ...HIT,
+            title: "short",
+            excerpt: "hire the hiring team",
+            highlights: {
+              title: [
+                [3, 2],
+                [4, 40],
+              ],
+              excerpt: [
+                [0, 4],
+                [9, 15],
+              ],
+            },
+          },
+        ],
+      }),
     );
-    const marks = [...container.querySelectorAll("mark")].map(
-      (m) => m.textContent,
-    );
-    expect(marks).toEqual(["hire", "hiring"]);
-    expect(container.textContent).toBe("hire the hiring team");
+    mount("/search?mode=notes&q=hiring");
+    const card = (await screen.findByText("Sam Rivera")).closest("button")!;
+    const marks = [...card.querySelectorAll("mark")];
+    expect(marks.map((m) => m.textContent)).toEqual(["hire", "hiring"]);
+    expect(marks[0].parentElement?.textContent).toBe("hire the hiring team");
     // A plain mark: the base layer paints the highlighter and the ink.
-    for (const mark of container.querySelectorAll("mark")) {
+    for (const mark of marks) {
       expect(mark.hasAttribute("class")).toBe(false);
     }
-  });
-
-  it("ignores a range that runs backwards or off the end", () => {
-    const { container } = render(
-      <Highlighted
-        text="short"
-        ranges={[
-          [3, 2],
-          [4, 40],
-        ]}
-      />,
-    );
-    expect(container.querySelectorAll("mark")).toHaveLength(0);
-    expect(container.textContent).toBe("short");
+    // The title's two ranges are the bad ones: no mark, and every letter.
+    expect(within(card).getByText("short").textContent).toBe("short");
   });
 });

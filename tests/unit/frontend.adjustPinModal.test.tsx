@@ -67,8 +67,6 @@ vi.mock("@vis.gl/react-maplibre", () => ({
 }));
 
 const { AdjustPinModal } = await import("../../src/views/map/AdjustPinModal");
-const { formatPin, nudgeFor, NUDGE_PX, NUDGE_SHIFT_PX } =
-  await import("../../src/views/map/AdjustPinModal");
 
 const ADA = {
   id: "c1",
@@ -138,20 +136,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-});
-
-describe("the helpers", () => {
-  it("writes a pin to five decimals, latitude first", () => {
-    expect(formatPin({ latitude: 51.5074, longitude: -0.1278 })).toBe(
-      "51.50740, -0.12780",
-    );
-  });
-
-  it("turns an arrow key into a step, and Shift into a longer one", () => {
-    expect(nudgeFor("ArrowUp", false)).toEqual({ dx: 0, dy: -NUDGE_PX });
-    expect(nudgeFor("ArrowRight", true)).toEqual({ dx: NUDGE_SHIFT_PX, dy: 0 });
-    expect(nudgeFor("Enter", false)).toBeNull();
-  });
 });
 
 describe("AdjustPinModal", () => {

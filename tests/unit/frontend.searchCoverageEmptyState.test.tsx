@@ -41,8 +41,6 @@ vi.mock("../../src/api", async () => {
       isError: false,
       error: null,
       phase: "idle",
-      run: vi.fn(),
-      rerun: vi.fn(),
       mutate: vi.fn(),
       reset: vi.fn(),
     }),
@@ -221,15 +219,12 @@ describe("SearchView - the coverage row", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
-    // No coverage card, no hero, no explanation and no description.
+    // No coverage card, no hero and no explanation.
     expect(
       screen.queryByRole("heading", { name: "Semantic search coverage" }),
     ).toBeNull();
     expect(screen.queryByText("Ask anything")).toBeNull();
     expect(screen.queryByText(/Indexing turns contacts/)).toBeNull();
-    expect(
-      screen.queryByText("Ask a question about your network in plain words"),
-    ).toBeNull();
   });
 
   it("offers Index missing when contacts wait and nothing runs, and queues them", async () => {

@@ -102,23 +102,44 @@ describe("useBulkActions", () => {
     );
   });
 
-  it("calls bulk archive mutation with isArchived: true", () => {
-    const onComplete = vi.fn();
+  it.each<
+    [
+      string,
+      (actions: ReturnType<typeof useBulkActions>) => void,
+      string[],
+      Record<string, unknown>,
+    ]
+  >([
+    [
+      "archive",
+      (actions) => actions.handleBulkArchive(),
+      ["c1"],
+      { isArchived: true },
+    ],
+    [
+      "color change",
+      (actions) => actions.handleBulkColorChange("coral"),
+      ["c1"],
+      { themeColor: "coral" },
+    ],
+    [
+      "edit apply",
+      (actions) => actions.handleBulkEditApply("role", "VP Engineering"),
+      ["c1", "c2"],
+      { role: "VP Engineering" },
+    ],
+  ])("calls bulk %s mutation", (_, call, ids, data) => {
     const { result } = renderHook(
-      () =>
-        useBulkActions({
-          selectedIds: new Set(["c1"]),
-          onComplete,
-        }),
+      () => useBulkActions({ selectedIds: new Set(ids) }),
       { wrapper },
     );
 
     act(() => {
-      result.current.handleBulkArchive();
+      call(result.current);
     });
 
     expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
-      { ids: ["c1"], data: { isArchived: true } },
+      { ids, data },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
@@ -156,48 +177,6 @@ describe("useBulkActions", () => {
 
     expect(result.current.isAddToListOpen).toBe(false);
     expect(onComplete).toHaveBeenCalled();
-  });
-
-  it("calls bulk color change mutation", () => {
-    const onComplete = vi.fn();
-    const { result } = renderHook(
-      () =>
-        useBulkActions({
-          selectedIds: new Set(["c1"]),
-          onComplete,
-        }),
-      { wrapper },
-    );
-
-    act(() => {
-      result.current.handleBulkColorChange("coral");
-    });
-
-    expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
-      { ids: ["c1"], data: { themeColor: "coral" } },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
-  });
-
-  it("calls bulk edit apply mutation", () => {
-    const onComplete = vi.fn();
-    const { result } = renderHook(
-      () =>
-        useBulkActions({
-          selectedIds: new Set(["c1", "c2"]),
-          onComplete,
-        }),
-      { wrapper },
-    );
-
-    act(() => {
-      result.current.handleBulkEditApply("role", "VP Engineering");
-    });
-
-    expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
-      { ids: ["c1", "c2"], data: { role: "VP Engineering" } },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
   });
 
   describe("tracking", () => {

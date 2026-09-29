@@ -7,14 +7,10 @@
 // be safe in a shared browser, and the ProseMirror arithmetic that decides
 // what a successful save removes.
 // =============================================================================
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import {
-  DRAFT_KEY_PREFIX,
-  MAX_DRAFT_AGE_MS,
-  MAX_DRAFT_BYTES,
-  clearDraft,
   draftKey,
   isEmptyDraft,
   readDraft,
@@ -30,11 +26,10 @@ afterEach(() => localStorage.clear());
 const draft = { html: "<p>hello</p>", followUpText: "", type: "note" as const };
 
 describe("draft keys", () => {
-  it("name the account and the contact, and never collide across either", () => {
-    const key = draftKey("user-a", "contact-1");
-    expect(key.startsWith(DRAFT_KEY_PREFIX)).toBe(true);
-    expect(key).not.toBe(draftKey("user-b", "contact-1"));
-    expect(key).not.toBe(draftKey("user-a", "contact-2"));
+  it("name the account and the contact in the stored form, so a saved draft survives an upgrade", () => {
+    expect(draftKey("user-a", "contact-1")).toBe(
+      "contrack:draft:user-a:contact-1",
+    );
   });
 
   it("fall back to one local account when nobody is signed in", () => {
@@ -52,7 +47,7 @@ describe("draft keys", () => {
 describe("reading and writing a draft", () => {
   it("round-trips, under the account that wrote it only", () => {
     const mine = draftKey("user-a", "contact-1");
-    expect(writeDraft(mine, draft)).toBe(true);
+    writeDraft(mine, draft);
     expect(readDraft(mine)).toMatchObject(draft);
     expect(readDraft(draftKey("user-b", "contact-1"))).toBeNull();
     expect(readDraft(draftKey("user-a", "contact-2"))).toBeNull();
@@ -61,7 +56,7 @@ describe("reading and writing a draft", () => {
   it("removes the key rather than writing an empty draft", () => {
     const key = draftKey("user-a", "contact-1");
     writeDraft(key, draft);
-    expect(writeDraft(key, { ...draft, html: "<p></p>" })).toBe(true);
+    writeDraft(key, { ...draft, html: "<p></p>" });
     expect(localStorage.getItem(key)).toBeNull();
   });
 
@@ -91,32 +86,39 @@ describe("reading and writing a draft", () => {
   it("refuses a draft over the size cap and leaves the old one alone", () => {
     const key = draftKey("user-a", "contact-1");
     writeDraft(key, draft);
-    const huge = { ...draft, html: `<p>${"x".repeat(MAX_DRAFT_BYTES)}</p>` };
-    expect(writeDraft(key, huge)).toBe(false);
+    // The cap is 64 KB, and this note is over it.
+    const huge = { ...draft, html: `<p>${"x".repeat(64 * 1024)}</p>` };
+    writeDraft(key, huge);
     expect(readDraft(key)).toMatchObject(draft);
   });
 
   it("discards a draft nobody touched for a month", () => {
     const key = draftKey("user-a", "contact-1");
     const written = 1_000_000_000_000;
+    const month = 30 * 24 * 60 * 60 * 1000;
     writeDraft(key, draft, written);
-    expect(readDraft(key, written + MAX_DRAFT_AGE_MS - 1)).toMatchObject(draft);
-    expect(readDraft(key, written + MAX_DRAFT_AGE_MS + 1)).toBeNull();
+    expect(readDraft(key, written + month - 1)).toMatchObject(draft);
+    expect(readDraft(key, written + month + 1)).toBeNull();
     expect(localStorage.getItem(key)).toBeNull();
   });
 
   it("survives storage that throws", () => {
     const key = draftKey("user-a", "contact-1");
-    const original = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => {
-      throw new DOMException("quota", "QuotaExceededError");
-    };
+    // A private window, a full quota or blocked site data: every call throws.
+    for (const name of ["getItem", "setItem", "removeItem"] as const) {
+      vi.spyOn(Storage.prototype, name).mockImplementation(() => {
+        throw new DOMException("blocked", "SecurityError");
+      });
+    }
     try {
-      expect(writeDraft(key, draft)).toBe(false);
-      expect(() => clearDraft(key)).not.toThrow();
       expect(readDraft(key)).toBeNull();
+      expect(() => writeDraft(key, draft)).not.toThrow();
+      // An empty draft removes the key, and the remove throws too.
+      expect(() =>
+        writeDraft(key, { ...draft, html: "<p></p>" }),
+      ).not.toThrow();
     } finally {
-      Storage.prototype.setItem = original;
+      vi.restoreAllMocks();
     }
   });
 });
@@ -126,22 +128,8 @@ describe("the submission mark", () => {
     return new Editor({ extensions: [StarterKit], content: html });
   }
 
-  it("clears everything when nothing was typed meanwhile", () => {
-    const editor = editorWith("<p>hello</p>");
-    const mark = markSubmission(editor);
-    removeSubmitted(editor, mark);
-    expect(editor.isEmpty).toBe(true);
-    editor.destroy();
-  });
-
-  it("keeps text typed into the same paragraph, without its leading space", () => {
-    const editor = editorWith("<p>hello</p>");
-    const mark = markSubmission(editor);
-    editor.commands.insertContentAt(mark.end(), " world");
-    removeSubmitted(editor, mark);
-    expect(editor.getHTML()).toBe("<p>world</p>");
-    editor.destroy();
-  });
+  // frontend.composer.test.tsx owns the plain saves through the composer:
+  // nothing typed meanwhile, and a sentence finished in the same paragraph.
 
   it("keeps a paragraph started after the submitted one", () => {
     const editor = editorWith("<p>hello</p><ul><li><p>item</p></li></ul>");

@@ -7,6 +7,8 @@
  * bounds, and falls back to the default when storage is empty, holds
  * nonsense, or throws. A narrow window holds the pane in so the content
  * beside it keeps its room, and a wider window gives the stored width back.
+ * The default width on an empty store is tested through ResizeHandle, the
+ * hook's one caller, in frontend.resizeHandle.test.tsx.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -43,13 +45,6 @@ function mount() {
 }
 
 describe("usePaneWidth", () => {
-  it("draws the default width on the pane before the first paint", () => {
-    const { hook, drawn } = mount();
-    expect(hook.result.current.width).toBe(350);
-    expect(hook.result.current.limit).toBe(480);
-    expect(drawn()).toBe("350px");
-  });
-
   it("reads this device's width and holds it inside 300 to 480", () => {
     for (const [stored, width] of [
       ["420", 420],

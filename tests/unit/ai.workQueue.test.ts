@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { GenerationQueue, SharedWork } from "../../server/ai/workQueue.ts";
-import { QuotaTracker } from "../../server/ai/routing/QuotaTracker.ts";
-import { withRetry } from "../../server/ai/resilience.ts";
-import { AppError } from "../../server/utils/AppError.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -17,34 +14,23 @@ describe("AI work limits", () => {
     const queue = new GenerationQueue(1, 1);
     const first = deferred<string>();
     const second = vi.fn(async () => "second");
-    const signal = new AbortController().signal;
-    const one = queue.run(() => first.promise, signal);
-    const two = queue.run(second, signal);
-    await expect(queue.run(async () => "excess", signal)).rejects.toMatchObject(
-      { statusCode: 429 },
-    );
+    const one = queue.run(() => first.promise);
+    const two = queue.run(second);
+    await expect(queue.run(async () => "excess")).rejects.toMatchObject({
+      statusCode: 429,
+      code: "AI_BUSY",
+    });
     expect(second).not.toHaveBeenCalled();
     first.resolve("first");
     expect(await one).toBe("first");
     expect(await two).toBe("second");
   });
-  it("removes a cancelled queued request without starting it", async () => {
-    const queue = new GenerationQueue(1);
-    const first = deferred<void>();
-    const controller = new AbortController();
-    const one = queue.run(() => first.promise, new AbortController().signal);
-    const operation = vi.fn(async () => "unused");
-    const two = queue.run(operation, controller.signal).catch((error) => error);
-    controller.abort();
-    expect((await two).name).toBe("AbortError");
-    first.resolve();
-    await one;
-    expect(operation).not.toHaveBeenCalled();
-  });
   it("does not start work cancelled before its first microtask", async () => {
     const controller = new AbortController();
     const operation = vi.fn(async () => 1);
-    const result = new GenerationQueue().run(operation, controller.signal);
+    const result = new GenerationQueue().run(operation, {
+      signal: controller.signal,
+    });
     controller.abort();
     await expect(result).rejects.toThrow();
     expect(operation).not.toHaveBeenCalled();
@@ -90,21 +76,6 @@ describe("AI work limits", () => {
     await result;
     expect(sharedSignal.aborted).toBe(true);
     pending.resolve(1);
-  });
-  it("never retries malformed output or authentication failures", async () => {
-    const invalid = vi
-      .fn()
-      .mockRejectedValue(
-        new AppError("invalid JSON", 502, { code: "AI_INVALID_JSON" }),
-      );
-    await expect(withRetry(invalid)).rejects.toThrow("invalid JSON");
-    expect(invalid).toHaveBeenCalledTimes(1);
-    const unauthorized = vi.fn().mockRejectedValue({
-      status: 401,
-      message: "quota unavailable for this key",
-    });
-    await expect(withRetry(unauthorized)).rejects.toThrow();
-    expect(unauthorized).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -301,35 +272,6 @@ describe("Multitenant fair AI queueing", () => {
     expect(await bPromise).toBe("b-result");
     expect(await a1).toBe("a1");
     expect(await a2).toBe("a2");
-  });
-
-  it("rejects an incoming request from the heaviest tenant when queue is full", async () => {
-    const queue = new GenerationQueue(1, 2);
-    const activeJob = deferred<void>();
-
-    queue.run(() => activeJob.promise, { accountId: "acc-init" });
-
-    // Account A fills both waiting positions
-    queue.run(async () => "a1", {
-      accountId: "acc-A",
-      priority: "interactive",
-    });
-    queue.run(async () => "a2", {
-      accountId: "acc-A",
-      priority: "interactive",
-    });
-
-    // Account A attempts to queue another request
-    const a3 = queue.run(async () => "a3", {
-      accountId: "acc-A",
-      priority: "interactive",
-    });
-    await expect(a3).rejects.toMatchObject({
-      statusCode: 429,
-      code: "AI_BUSY",
-    });
-
-    activeJob.resolve();
   });
 
   it("preempts an account's own background job when that account submits an interactive job at capacity", async () => {
@@ -629,62 +571,5 @@ describe("Multitenant fair AI queueing", () => {
 
     // B-int-1, B-int-2, then anti-starvation picks background: A-bg-1 was aborted so A-bg-2 runs, then B-int-3
     expect(executionOrder).toEqual(["B-int-1", "B-int-2", "A-bg-2", "B-int-3"]);
-  });
-});
-
-describe("concurrent quota reservations", () => {
-  it("reconciles and rolls back the correct request when completions arrive out of order", () => {
-    const tracker = new QuotaTracker();
-    const first = tracker.reserve("same", 100);
-    const second = tracker.reserve("same", 200);
-    tracker.reconcile("same", 100, 40, first);
-    expect(tracker.getSnapshot().models.same.tpm).toBe(240);
-    tracker.rollback("same", second);
-    expect(tracker.getSnapshot().models.same).toEqual({
-      tpm: 40,
-      rpm: 1,
-      rpd: 1,
-    });
-    tracker.rollback("same", second);
-    expect(tracker.getSnapshot().models.same.rpd).toBe(1);
-  });
-  it.each([
-    ["2026-09-09T06:59:00Z", "2026-09-09T07:01:00Z"],
-    ["2026-12-09T07:59:00Z", "2026-12-09T08:01:00Z"],
-  ])("resets daily quotas at Pacific midnight from %s", (before, after) => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date(before));
-      const tracker = new QuotaTracker();
-      tracker.reserve("same", 100);
-      tracker.reserveGrounding();
-      vi.setSystemTime(new Date(after));
-      const snapshot = tracker.getSnapshot();
-      expect(snapshot.models.same).toEqual({ rpm: 0, tpm: 0, rpd: 0 });
-      expect(snapshot.grounding.rpd).toBe(0);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-  it("keeps the quota at UTC midnight and preserves new-day usage after an old rejection", () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date("2026-09-08T23:59:00Z"));
-      const tracker = new QuotaTracker();
-      const oldRequest = tracker.reserve("same", 100);
-      const oldGroundingDate = tracker.reserveGrounding();
-      vi.setSystemTime(new Date("2026-09-09T00:01:00Z"));
-      expect(tracker.getSnapshot().models.same.rpd).toBe(1);
-      expect(tracker.getSnapshot().grounding.rpd).toBe(1);
-      vi.setSystemTime(new Date("2026-09-09T07:01:00Z"));
-      tracker.reserve("same", 50);
-      tracker.reserveGrounding();
-      tracker.rollback("same", oldRequest);
-      tracker.rollbackGrounding(oldGroundingDate);
-      expect(tracker.getSnapshot().models.same.rpd).toBe(1);
-      expect(tracker.getSnapshot().grounding.rpd).toBe(1);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

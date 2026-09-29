@@ -5,11 +5,9 @@
 // in the page's address. The address rules, each row's rule, and the edges
 // of "Past month" and "Past year" are pinned here.
 // =============================================================================
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_TRACKED_VIEW,
-  MONTH_DAYS,
-  YEAR_DAYS,
   lastSpokeAt,
   matchesSpokeFilter,
   matchesTrackingFilter,
@@ -90,28 +88,22 @@ describe("matchesTrackingFilter", () => {
 });
 
 describe("matchesSpokeFilter", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("puts the last 30 days in Past month, and day 31 out of it", () => {
     expect(matchesSpokeFilter(spokeDaysAgo(0), "month", NOW)).toBe(true);
-    expect(matchesSpokeFilter(spokeDaysAgo(MONTH_DAYS), "month", NOW)).toBe(
-      true,
-    );
-    expect(matchesSpokeFilter(spokeDaysAgo(MONTH_DAYS + 1), "month", NOW)).toBe(
-      false,
-    );
+    expect(matchesSpokeFilter(spokeDaysAgo(30), "month", NOW)).toBe(true);
+    expect(matchesSpokeFilter(spokeDaysAgo(31), "month", NOW)).toBe(false);
   });
 
   it("puts the last 365 days in Past year, and anything older in Over a year ago", () => {
     expect(matchesSpokeFilter(spokeDaysAgo(3), "year", NOW)).toBe(true);
-    expect(matchesSpokeFilter(spokeDaysAgo(YEAR_DAYS), "year", NOW)).toBe(true);
-    expect(matchesSpokeFilter(spokeDaysAgo(YEAR_DAYS), "older", NOW)).toBe(
-      false,
-    );
-    expect(matchesSpokeFilter(spokeDaysAgo(YEAR_DAYS + 1), "year", NOW)).toBe(
-      false,
-    );
-    expect(matchesSpokeFilter(spokeDaysAgo(YEAR_DAYS + 1), "older", NOW)).toBe(
-      true,
-    );
+    expect(matchesSpokeFilter(spokeDaysAgo(365), "year", NOW)).toBe(true);
+    expect(matchesSpokeFilter(spokeDaysAgo(365), "older", NOW)).toBe(false);
+    expect(matchesSpokeFilter(spokeDaysAgo(366), "year", NOW)).toBe(false);
+    expect(matchesSpokeFilter(spokeDaysAgo(366), "older", NOW)).toBe(true);
   });
 
   it("puts a contact with no interaction in Never, and in no time window", () => {
@@ -125,6 +117,9 @@ describe("matchesSpokeFilter", () => {
   });
 
   it("reads the server's space-separated UTC form too", () => {
+    // In UTC the form read as local time is the same instant, so the check
+    // could not fail in CI. Los Angeles is seven hours behind.
+    vi.stubEnv("TZ", "America/Los_Angeles");
     const contact = { lastContactedAt: "2026-09-20 08:00:00" };
     expect(lastSpokeAt(contact)).toBe(Date.parse("2026-09-20T08:00:00Z"));
     expect(

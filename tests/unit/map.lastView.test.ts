@@ -6,10 +6,9 @@
  * opening on a corrupt spot. A store that throws, which is what a locked
  * browser's `localStorage` does, is the same as no store.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   LAST_VIEW_KEY,
-  isMapViewState,
   readLastView,
   writeLastView,
   type ViewStore,
@@ -46,23 +45,23 @@ describe("lastView", () => {
     });
   });
 
-  it("reads nothing from an empty store, or from one that holds junk", () => {
-    expect(readLastView(memoryStore())).toBeNull();
-    expect(
-      readLastView(memoryStore({ [LAST_VIEW_KEY]: "not json" })),
-    ).toBeNull();
-    expect(
-      readLastView(
-        memoryStore({ [LAST_VIEW_KEY]: JSON.stringify({ zoom: 3 }) }),
-      ),
-    ).toBeNull();
-    expect(
-      readLastView(
-        memoryStore({
-          [LAST_VIEW_KEY]: JSON.stringify({ ...LONDON, latitude: 91 }),
-        }),
-      ),
-    ).toBeNull();
+  it.each([
+    ["nothing", null],
+    ["text that is not JSON", "not json"],
+    ["a zoom and no place", JSON.stringify({ zoom: 3 })],
+    ["a latitude past the pole", JSON.stringify({ ...LONDON, latitude: 91 })],
+    [
+      "a longitude past the antimeridian",
+      JSON.stringify({ ...LONDON, longitude: 181 }),
+    ],
+    ["a zoom written as text", JSON.stringify({ ...LONDON, zoom: "11" })],
+    ["null", JSON.stringify(null)],
+    ["a bare string", JSON.stringify("London")],
+  ])("reads nothing from a store that holds %s", (_label, stored) => {
+    const store = memoryStore(
+      stored === null ? {} : { [LAST_VIEW_KEY]: stored },
+    );
+    expect(readLastView(store)).toBeNull();
   });
 
   it("treats a store that throws as no store", () => {
@@ -85,23 +84,5 @@ describe("lastView", () => {
     writeLastView({ longitude: Number.NaN, latitude: 0, zoom: 1 }, store);
     writeLastView({ longitude: 0, latitude: 0, zoom: -1 }, store);
     expect(store.data).toEqual({});
-  });
-
-  it("knows a view when it sees one", () => {
-    expect(isMapViewState(LONDON)).toBe(true);
-    expect(isMapViewState({ ...LONDON, longitude: 181 })).toBe(false);
-    expect(isMapViewState({ ...LONDON, zoom: "11" })).toBe(false);
-    expect(isMapViewState(null)).toBe(false);
-    expect(isMapViewState("London")).toBe(false);
-  });
-
-  it("uses localStorage by default", () => {
-    const setItem = vi.fn();
-    const getItem = vi.fn(() => JSON.stringify(LONDON));
-    vi.stubGlobal("window", { localStorage: { getItem, setItem } });
-    writeLastView(LONDON);
-    expect(setItem).toHaveBeenCalledWith(LAST_VIEW_KEY, JSON.stringify(LONDON));
-    expect(readLastView()).toEqual(LONDON);
-    vi.unstubAllGlobals();
   });
 });

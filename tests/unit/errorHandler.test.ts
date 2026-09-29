@@ -3,15 +3,16 @@
 // =============================================================================
 // Verifies the contract every API client depends on:
 //   - canonical { error: { code, message, requestId, details?, stack? } } shape
-//   - status code mapping for AppError subclasses, ZodError, Express parse
-//     errors, and known SQLite codes
+//   - status code mapping for AppError subclasses, ZodError, and SQLite
+//     constraint errors
 //   - stack stripped in production, included in dev
-//   - 404 fallback for unknown /api/ paths
+//   - non-/api/ paths passed on to the SPA fallback
 //   - graceful no-op when headers were already sent (streaming routes)
 //
 // These tests use plain mock objects for req/res instead of supertest because
 // we want to assert the middleware behavior in isolation — no Express plumbing,
-// no real network.
+// no real network. The cases that need the real app live in tests/integration:
+// malformed JSON and the /api/ 404 in api.contacts, SQLITE_BUSY in wal.health.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -230,24 +231,10 @@ describe("errorHandler — ZodError translation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Express + SQLite parse errors
+// SQLite errors
 // ---------------------------------------------------------------------------
 
-describe("errorHandler — express/sqlite parse errors", () => {
-  it("maps Express entity.parse.failed to 400 INVALID_JSON", () => {
-    const req = mockRequest();
-    const res = mockResponse();
-    const parseErr = Object.assign(new Error("Unexpected token"), {
-      type: "entity.parse.failed",
-    });
-
-    errorHandler(parseErr, req, res, vi.fn() as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(body.error.code).toBe("INVALID_JSON");
-  });
-
+describe("errorHandler — sqlite errors", () => {
   it("maps SQLITE_CONSTRAINT to 400 DB_CONSTRAINT", () => {
     const req = mockRequest();
     const res = mockResponse();
@@ -266,20 +253,6 @@ describe("errorHandler — express/sqlite parse errors", () => {
     expect(body.error.details).toMatchObject({
       sqliteMessage: expect.stringContaining("UNIQUE"),
     });
-  });
-
-  it("maps SQLITE_BUSY to 503 DB_BUSY", () => {
-    const req = mockRequest();
-    const res = mockResponse();
-    const sqliteErr = Object.assign(new Error("database is locked"), {
-      code: "SQLITE_BUSY",
-    });
-
-    errorHandler(sqliteErr, req, res, vi.fn() as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(503);
-    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(body.error.code).toBe("DB_BUSY");
   });
 });
 
@@ -346,20 +319,6 @@ describe("errorHandler — already-sent headers", () => {
 // ---------------------------------------------------------------------------
 
 describe("notFoundHandler", () => {
-  it("forwards an AppError 404 for unknown /api/ paths", () => {
-    const req = mockRequest({ path: "/api/does-not-exist", method: "POST" });
-    const res = mockResponse();
-    const next = vi.fn();
-
-    notFoundHandler(req, res, next as NextFunction);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    const err = next.mock.calls[0][0];
-    expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(404);
-    expect((err as AppError).code).toBe("ROUTE_NOT_FOUND");
-  });
-
   it("passes through (no error) for non-/api/ paths", () => {
     const req = mockRequest({ path: "/dashboard", method: "GET" });
     const res = mockResponse();

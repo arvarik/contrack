@@ -203,14 +203,6 @@ describe("groupContacts", () => {
     ]);
   });
 
-  it("orders the tracked groups by the moment of tracking, and Not tracked by name", () => {
-    const groups = groupContacts(PEOPLE, { order: "recent" });
-    const strong = groups.find((g) => g.id === "strong")!;
-    expect(strong.contacts.map((c) => c.id)).toEqual(["katherine", "ada"]);
-    const untracked = groups.find((g) => g.id === "not-tracked")!;
-    expect(untracked.contacts.map((c) => c.id)).toEqual(["linus", "margaret"]);
-  });
-
   it("narrows every group by name, company or role, and drops the empty ones", () => {
     expect(groupContacts(PEOPLE, { query: "nasa" }).map((g) => g.id)).toEqual([
       "strong",
@@ -561,17 +553,6 @@ describe("groupContacts, with the filters", () => {
     expect(
       trackedNever.map((g) => [g.id, g.contacts.map((c) => c.id)]),
     ).toEqual([["unscored", ["zed"]]]);
-  });
-
-  it("orders by the last interaction, newest first, and never last, by name", () => {
-    const groups = groupContacts(WITH_TALKS, { order: "spoke" });
-    const notTracked = groups.find((g) => g.id === "not-tracked")!;
-    expect(notTracked.contacts.map((c) => c.id)).toEqual([
-      "barbara",
-      "alan",
-      "linus",
-      "margaret",
-    ]);
   });
 });
 

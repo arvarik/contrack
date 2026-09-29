@@ -15,7 +15,6 @@ import { SettingRow } from "../../src/views/settings/SettingRow";
 import {
   ResetScopeProvider,
   ResetToDefaults,
-  resetMessage,
   useResetScope,
 } from "../../src/views/settings/ResetToDefaults";
 
@@ -95,39 +94,41 @@ describe("Reset to defaults", () => {
     );
   });
 
-  it("resets every changed value on the page, says how many, and offers Undo", () => {
-    prefs.changed = ["listDensity", "theme"];
-    mount();
-    const button = screen.getByRole("button", { name: "Reset to defaults" });
-    // The look of Pulse's Log note: the primary button.
-    expect(button.className).toContain("btn-primary");
-    fireEvent.click(button);
-    expect(prefs.resetPreference.mock.calls.map(([key]) => key).sort()).toEqual(
-      ["listDensity", "theme"],
-    );
-    expect(toast.success).toHaveBeenCalledWith(
+  it.each([
+    ["1 setting is back to its default", ["theme"], { theme: "dark" }],
+    [
       "2 settings are back to their defaults",
-      expect.objectContaining({
-        action: expect.objectContaining({ label: "Undo" }),
-      }),
-    );
-    // Undo puts back the values the reset took, in one write.
-    toast.success.mock.calls[0][1].action.onClick();
-    expect(prefs.setPreferences).toHaveBeenCalledWith({
-      theme: "dark",
-      listDensity: "compact",
-    });
-  });
+      ["listDensity", "theme"],
+      { theme: "dark", listDensity: "compact" },
+    ],
+  ])(
+    "resets every changed value on the page, says how many, and offers Undo: %s",
+    (message, changed, previous) => {
+      prefs.changed = changed;
+      mount();
+      const button = screen.getByRole("button", { name: "Reset to defaults" });
+      // The look of Pulse's Log note: the primary button.
+      expect(button.className).toContain("btn-primary");
+      fireEvent.click(button);
+      expect(
+        prefs.resetPreference.mock.calls.map(([key]) => key).sort(),
+      ).toEqual(changed);
+      expect(toast.success).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Undo" }),
+        }),
+      );
+      // Undo puts back the values the reset took, in one write.
+      toast.success.mock.calls[0][1].action.onClick();
+      expect(prefs.setPreferences).toHaveBeenCalledWith(previous);
+    },
+  );
 
   it("hands the keyboard to the first row it reset, since the button goes", () => {
     prefs.changed = ["listDensity", "theme"];
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
     expect(document.activeElement?.id).toBe("theme");
-  });
-
-  it("counts in words", () => {
-    expect(resetMessage(1)).toBe("1 setting is back to its default");
-    expect(resetMessage(3)).toBe("3 settings are back to their defaults");
   });
 });

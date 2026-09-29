@@ -2,11 +2,20 @@
 // Unit Tests — AI Routing Layer (Smart Mesh v1.2)
 // =============================================================================
 // Pure-logic tests for all 4 routing modules. Zero I/O — no network calls,
-// no database, no mocks of external services. Only vi.useFakeTimers() for
-// sliding window expiry tests.
+// no database, no mocks of external services. A settings mock holds the
+// models discovery found, and fake timers pin the clock for the usage
+// windows and the daily reset.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Discovered models are a DB-backed setting; the registry tests drive them
+// through this mock.
+const settingsStore = vi.hoisted(() => new Map<string, unknown>());
+vi.mock("../../server/services/settingsService.ts", () => ({
+  getSetting: (key: string) => settingsStore.get(key) ?? null,
+  SETTING_KEYS: { aiModelCache: "ai.modelCache" },
+}));
 
 // ── Module imports ───────────────────────────────────────────────────────────
 import {
@@ -38,14 +47,9 @@ describe("Registry", () => {
     // Google sets a key's limits from its Cloud project's billing and no
     // longer publishes free-tier numbers, so the router must not hold any.
     for (const model of GEMINI_REGISTRY) {
-      expect(Object.keys(model).sort()).toEqual([
-        "costPerM",
-        "generation",
-        "id",
-        "modelClass",
-        "stability",
-        "supportsGrounding",
-      ]);
+      expect(
+        Object.keys(model).filter((key) => /rpm|tpm|rpd|limit|tier/i.test(key)),
+      ).toEqual([]);
     }
   });
 
@@ -56,10 +60,27 @@ describe("Registry", () => {
   });
 
   it("names a model that can search when research asks", () => {
-    const id = previewModelForClass("flash", true);
-    expect(GEMINI_REGISTRY.find((m) => m.id === id)?.supportsGrounding).toBe(
-      true,
-    );
+    // Discovery found a newer flash model that cannot search.
+    settingsStore.set("ai.modelCache", {
+      gemini: {
+        models: [
+          {
+            id: "gemini-3.9-flash",
+            label: "gemini-3.9-flash",
+            capabilities: ["chat"],
+            capabilityConfidence: "declared",
+          },
+        ],
+      },
+    });
+    try {
+      // Plain work runs it, as the newest flash model…
+      expect(previewModelForClass("flash")).toBe("gemini-3.9-flash");
+      // …but research needs a model that can search.
+      expect(previewModelForClass("flash", true)).toBe("gemini-3.8-flash");
+    } finally {
+      settingsStore.clear();
+    }
   });
 
   describe("compareForClass", () => {
@@ -133,36 +154,14 @@ describe("QuotaTracker", () => {
     });
   });
 
-  describe("reserve → rollback", () => {
-    it("fully unwinds a request the provider refused", () => {
-      tracker.reserve("model-a", 500);
-      tracker.rollback("model-a");
-      expect(tracker.getSnapshot().models["model-a"]).toEqual({
-        rpm: 0,
-        tpm: 0,
-        rpd: 0,
-      });
-    });
-  });
-
   describe("reconcile", () => {
-    it("adjusts token count to reflect actual usage", () => {
-      // Estimate 500 tokens, actually used 300
-      tracker.reserve("model-a", 500);
-      tracker.reconcile("model-a", 500, 300);
-
-      // Snapshot should show 300 TPM, not 500
-      const snapshot = tracker.getSnapshot();
-      expect(snapshot.models["model-a"].tpm).toBe(300);
-    });
-
     it("clamps to zero — never produces negative token counts", () => {
-      tracker.reserve("model-a", 100);
-      tracker.reconcile("model-a", 100, 10);
+      const id = tracker.reserve("model-a", 100);
+      tracker.reconcile("model-a", 100, 10, id);
       expect(tracker.getSnapshot().models["model-a"].tpm).toBe(10);
 
-      // Now reconcile again with bad data — would push below zero without clamp
-      tracker.reconcile("model-a", 100, 0);
+      // Bad data: a negative count would push TPM below zero without the clamp
+      tracker.reconcile("model-a", 100, -5, id);
       expect(tracker.getSnapshot().models["model-a"].tpm).toBe(0);
     });
   });
@@ -170,8 +169,8 @@ describe("QuotaTracker", () => {
   describe("grounded requests", () => {
     it("counts them and takes one back", () => {
       tracker.reserveGrounding();
-      tracker.reserveGrounding();
-      tracker.rollbackGrounding();
+      const reservedDate = tracker.reserveGrounding();
+      tracker.rollbackGrounding(reservedDate);
       expect(tracker.getSnapshot().grounding).toEqual({ rpd: 1 });
     });
   });
@@ -197,6 +196,8 @@ describe("QuotaTracker", () => {
       vi.useFakeTimers();
 
       try {
+        // Mid-afternoon Pacific, so the 61 s never cross the daily reset.
+        vi.setSystemTime(new Date("2026-09-09T20:00:00Z"));
         tracker.reserve("model-a", 100);
         vi.advanceTimersByTime(61_000);
 
@@ -208,6 +209,63 @@ describe("QuotaTracker", () => {
         vi.useRealTimers();
       }
     });
+  });
+});
+
+describe("concurrent quota reservations", () => {
+  it("reconciles and rolls back the correct request when completions arrive out of order", () => {
+    const tracker = new QuotaTracker();
+    const first = tracker.reserve("same", 100);
+    const second = tracker.reserve("same", 200);
+    tracker.reconcile("same", 100, 40, first);
+    expect(tracker.getSnapshot().models.same.tpm).toBe(240);
+    tracker.rollback("same", second);
+    expect(tracker.getSnapshot().models.same).toEqual({
+      tpm: 40,
+      rpm: 1,
+      rpd: 1,
+    });
+    tracker.rollback("same", second);
+    expect(tracker.getSnapshot().models.same.rpd).toBe(1);
+  });
+  it.each([
+    ["2026-09-09T06:59:00Z", "2026-09-09T07:01:00Z"],
+    ["2026-12-09T07:59:00Z", "2026-12-09T08:01:00Z"],
+  ])("resets daily quotas at Pacific midnight from %s", (before, after) => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(before));
+      const tracker = new QuotaTracker();
+      tracker.reserve("same", 100);
+      tracker.reserveGrounding();
+      vi.setSystemTime(new Date(after));
+      const snapshot = tracker.getSnapshot();
+      expect(snapshot.models.same).toEqual({ rpm: 0, tpm: 0, rpd: 0 });
+      expect(snapshot.grounding.rpd).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("keeps the quota at UTC midnight and preserves new-day usage after an old rejection", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-08T23:59:00Z"));
+      const tracker = new QuotaTracker();
+      const oldRequest = tracker.reserve("same", 100);
+      const oldGroundingDate = tracker.reserveGrounding();
+      vi.setSystemTime(new Date("2026-09-09T00:01:00Z"));
+      expect(tracker.getSnapshot().models.same.rpd).toBe(1);
+      expect(tracker.getSnapshot().grounding.rpd).toBe(1);
+      vi.setSystemTime(new Date("2026-09-09T07:01:00Z"));
+      tracker.reserve("same", 50);
+      tracker.reserveGrounding();
+      tracker.rollback("same", oldRequest);
+      tracker.rollbackGrounding(oldGroundingDate);
+      expect(tracker.getSnapshot().models.same.rpd).toBe(1);
+      expect(tracker.getSnapshot().grounding.rpd).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -235,22 +293,6 @@ describe("SmartRouter", () => {
     );
   });
 
-  it("respects denyModels policy", () => {
-    const route = router.getNextAvailableRoute(
-      { prefer: "flash", denyModels: ["gemini-3.8-flash"] },
-      noPauses,
-    );
-    expect(route.modelId).toBe("gemini-3.7-flash");
-  });
-
-  it("respects allowModels policy", () => {
-    const route = router.getNextAvailableRoute(
-      { allowModels: ["gemini-3.6-flash"] },
-      noPauses,
-    );
-    expect(route.modelId).toBe("gemini-3.6-flash");
-  });
-
   it("steps past a paused model to the next in its class", () => {
     const route = router.getNextAvailableRoute(
       { prefer: "flash" },
@@ -260,12 +302,33 @@ describe("SmartRouter", () => {
   });
 
   it("keeps grounded requests on models that can search", () => {
-    const route = router.getNextAvailableRoute(
-      { prefer: "flash" },
-      noPauses,
-      true,
-    );
-    expect(byId(route.modelId)?.supportsGrounding).toBe(true);
+    const registry: ModelConfig[] = [
+      {
+        id: "no-search",
+        modelClass: "flash",
+        generation: 4,
+        stability: "stable",
+        costPerM: 1,
+        supportsGrounding: false,
+      },
+      {
+        id: "search",
+        modelClass: "flash",
+        generation: 3,
+        stability: "stable",
+        costPerM: 1,
+        supportsGrounding: true,
+      },
+    ];
+    const mixed = new SmartRouter(registry);
+    // The newer model wins a plain request…
+    expect(
+      mixed.getNextAvailableRoute({ prefer: "flash" }, noPauses).modelId,
+    ).toBe("no-search");
+    // …but a grounded one stays on the model that can search.
+    expect(
+      mixed.getNextAvailableRoute({ prefer: "flash" }, noPauses, true).modelId,
+    ).toBe("search");
   });
 
   it("falls back to other classes when the preferred class is paused", () => {

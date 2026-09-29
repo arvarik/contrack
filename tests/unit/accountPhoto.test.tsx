@@ -27,21 +27,6 @@ describe("AccountAvatar", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the photo when avatarUrl is set", () => {
-    const user = {
-      username: "alice",
-      displayName: "Alice Smith",
-      avatarUrl: "/uploads/u/user-123/profile/profile-1789.jpg",
-    };
-
-    const { container } = render(<AccountAvatar user={user} size={48} />);
-    const img = container.querySelector("img");
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("src")).toBe(
-      "/uploads/u/user-123/profile/profile-1789.jpg",
-    );
-  });
-
   it("renders the monogram when avatarUrl is null", () => {
     const user = {
       username: "bob",
@@ -124,32 +109,6 @@ describe("AccountPhotoField", () => {
     vi.restoreAllMocks();
   });
 
-  it("rejects a 20 MB file with inline text and does not call onChange", async () => {
-    const onChange = vi.fn();
-    const { container } = render(
-      <AccountPhotoField
-        value={null}
-        fallbackUrl="/api/avatar/initials?seed=test"
-        onChange={onChange}
-      />,
-    );
-
-    const input = container.querySelector('input[type="file"]')!;
-    const largeBytes = new Uint8Array(20 * 1024 * 1024);
-    const largeFile = new File([largeBytes], "huge.png", { type: "image/png" });
-
-    // Simulate selecting the 20 MB file
-    fireEvent.change(input, {
-      target: { files: [largeFile] },
-    });
-
-    // Inline error text must be displayed
-    await waitFor(() => {
-      expect(screen.getByText("Image must be under 10 MB")).toBeTruthy();
-    });
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
   it("calls onChange when a valid file is chosen and clears error", async () => {
     const onChange = vi.fn();
     const { container } = render(
@@ -161,8 +120,18 @@ describe("AccountPhotoField", () => {
     );
 
     const input = container.querySelector('input[type="file"]')!;
+    const oversized = new File(["a".repeat(100)], "too-big.png", {
+      type: "image/png",
+    });
+    Object.defineProperty(oversized, "size", { value: 11 * 1024 * 1024 });
     const validFile = new File(["valid image content"], "photo.jpg", {
       type: "image/jpeg",
+    });
+
+    // An error first, so the valid file has one to clear.
+    fireEvent.change(input, { target: { files: [oversized] } });
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
     });
 
     fireEvent.change(input, {
@@ -171,8 +140,8 @@ describe("AccountPhotoField", () => {
 
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith(validFile);
+      expect(screen.queryByRole("alert")).toBeNull();
     });
-    expect(screen.queryByText("Image must be under 10 MB")).toBeNull();
   });
 
   it("creates and revokes object URLs properly", () => {
@@ -227,6 +196,7 @@ describe("AccountPhotoField", () => {
 
     // When value is null and currentUrl is set
     onChange.mockClear();
+    onRemove.mockClear();
     rerender(
       <AccountPhotoField
         value={null}
@@ -241,10 +211,10 @@ describe("AccountPhotoField", () => {
     expect(removeBtn2).toBeTruthy();
     fireEvent.click(removeBtn2);
     expect(onChange).toHaveBeenCalledWith(null);
-    expect(onRemove).toHaveBeenCalled();
+    expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
-  it("associates error text with aria-describedby on the dropzone and input", async () => {
+  it("rejects a file over 10 MB with inline text, linked by aria-describedby on the dropzone and the input", async () => {
     const onChange = vi.fn();
     const { container } = render(
       <AccountPhotoField
@@ -255,7 +225,11 @@ describe("AccountPhotoField", () => {
     );
 
     const fileInput = container.querySelector('input[type="file"]')!;
+    const dropzone = screen.getByRole("button", {
+      name: "Choose a profile photo",
+    });
     expect(fileInput.getAttribute("aria-describedby")).toBeNull();
+    expect(dropzone.getAttribute("aria-describedby")).toBeNull();
 
     const oversized = new File(["a".repeat(100)], "too-big.png", {
       type: "image/png",
@@ -266,12 +240,16 @@ describe("AccountPhotoField", () => {
 
     await waitFor(() => {
       const errorElem = screen.getByRole("alert");
-      expect(errorElem).toBeTruthy();
+      expect(errorElem.textContent).toBe("Image must be under 10 MB");
       expect(errorElem.id).toBe("account-photo-error");
       expect(fileInput.getAttribute("aria-describedby")).toBe(
         "account-photo-error",
       );
+      expect(dropzone.getAttribute("aria-describedby")).toBe(
+        "account-photo-error",
+      );
     });
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("restores focus to Choose photo button when Remove is clicked", async () => {
@@ -371,32 +349,18 @@ describe("AccountFields with photo", () => {
 
     render(<FormWrapper />);
 
-    expect(
-      screen.getByText("Optional. You can add or change it later in Settings"),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Choose a profile photo" }),
-    ).toBeTruthy();
-    expect(screen.getByLabelText("Your name")).toBeTruthy();
-  });
-
-  it("updates photo in form state when setPhoto is called", async () => {
-    let currentForm!: ReturnType<typeof useAccountForm>;
-    const FormWrapper = () => {
-      const form = useAccountForm();
-      currentForm = form;
-      return <AccountFields form={form} />;
-    };
-
-    const { container } = render(<FormWrapper />);
-    expect(currentForm.photo).toBeNull();
-
-    const photoFile = new File(["img"], "me.png", { type: "image/png" });
-    const fileInput = container.querySelector('input[type="file"]')!;
-    fireEvent.change(fileInput, { target: { files: [photoFile] } });
-
-    await waitFor(() => {
-      expect(currentForm.photo).toBe(photoFile);
+    const photo = screen.getByRole("button", {
+      name: "Choose a profile photo",
     });
+    const caption = screen.getByText(
+      "Optional. You can add or change it later in Settings",
+    );
+    const name = screen.getByLabelText("Your name");
+    expect(
+      photo.compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      caption.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

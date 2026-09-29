@@ -11,7 +11,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { AddConnectorSheet } from "../../src/views/settings/connectors/AddConnectorSheet";
+import { toast } from "sonner";
 import { CalendarFormModal } from "../../src/views/settings/connectors/CalendarFormModal";
 import { ConnectorCard } from "../../src/views/settings/connectors/ConnectorCard";
 import { ConnectorsView } from "../../src/views/settings/connectors/ConnectorsView";
@@ -35,15 +35,9 @@ vi.mock("../../src/api/connectors", () => ({
   useSyncConnector: vi.fn(),
   useConnectorRuns: vi.fn(),
   useCorrespondents: vi.fn(),
-  connectorKeys: {
-    all: ["connectors"],
-    kinds: ["connectors", "kinds"],
-    lists: () => ["connectors", "list"],
-    detail: (id: string) => ["connectors", "detail", id],
-    runs: (id: string) => ["connectors", "runs", id],
-    correspondents: (limit?: number) => ["connectors", "correspondents", limit],
-  },
 }));
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe("Frontend Connectors Components", () => {
   let queryClient: QueryClient;
@@ -162,96 +156,7 @@ describe("Frontend Connectors Components", () => {
     );
 
   // =========================================================================
-  // 1. AddConnectorSheet
-  // =========================================================================
-  describe("AddConnectorSheet", () => {
-    it("renders all supported connector kinds", () => {
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={vi.fn()}
-        />,
-      );
-
-      expect(screen.getByText("Calendar")).toBeTruthy();
-      expect(screen.getByText("Mailbox (IMAP)")).toBeTruthy();
-      expect(screen.getByText("Google Workspace")).toBeTruthy();
-    });
-
-    it("selecting Calendar calls onSelectKind('ics')", () => {
-      const onSelectKindMock = vi.fn();
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={onSelectKindMock}
-        />,
-      );
-
-      const calendarBtn = screen.getByRole("button", { name: /^Calendar\b/ });
-      fireEvent.click(calendarBtn);
-
-      expect(onSelectKindMock).toHaveBeenCalledWith("ics");
-    });
-
-    it("selecting Mailbox (IMAP) calls onSelectKind('imap')", () => {
-      const onSelectKindMock = vi.fn();
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={onSelectKindMock}
-        />,
-      );
-
-      const imapBtn = screen.getByRole("button", { name: /Mailbox \(IMAP\)/i });
-      fireEvent.click(imapBtn);
-
-      expect(onSelectKindMock).toHaveBeenCalledWith("imap");
-    });
-
-    it("selecting Google Workspace calls onSelectKind('google')", () => {
-      const onSelectKindMock = vi.fn();
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={onSelectKindMock}
-        />,
-      );
-
-      const googleBtn = screen.getByRole("button", {
-        name: /Google Workspace/i,
-      });
-      fireEvent.click(googleBtn);
-
-      expect(onSelectKindMock).toHaveBeenCalledWith("google");
-    });
-
-    it("cancel button calls onClose", () => {
-      const onCloseMock = vi.fn();
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={onCloseMock}
-          onSelectKind={vi.fn()}
-        />,
-      );
-
-      const cancelBtn = screen.getByRole("button", { name: "Cancel" });
-      fireEvent.click(cancelBtn);
-
-      expect(onCloseMock).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // =========================================================================
-  // 2. CalendarFormModal
+  // 1. CalendarFormModal
   // =========================================================================
   describe("CalendarFormModal", () => {
     it("provides feedback when testing connection succeeds", async () => {
@@ -426,18 +331,6 @@ describe("Frontend Connectors Components", () => {
       });
     });
 
-    it("clicking Cancel calls onClose", () => {
-      const onCloseMock = vi.fn();
-      renderWithClient(
-        <CalendarFormModal isOpen={true} onClose={onCloseMock} />,
-      );
-
-      const cancelBtn = screen.getByRole("button", { name: "Cancel" });
-      fireEvent.click(cancelBtn);
-
-      expect(onCloseMock).toHaveBeenCalled();
-    });
-
     it("displays error message if submitting fails", async () => {
       const createMutateAsync = vi
         .fn()
@@ -563,7 +456,7 @@ describe("Frontend Connectors Components", () => {
   });
 
   // =========================================================================
-  // 3. ConnectorCard
+  // 2. ConnectorCard
   // =========================================================================
   describe("ConnectorCard", () => {
     it("renders active, paused, error, needs_reauth status badges", () => {
@@ -652,123 +545,46 @@ describe("Frontend Connectors Components", () => {
       });
     });
 
-    it("action menu option 'Pause' calls useUpdateConnector", async () => {
-      const updateMutateAsync = vi.fn().mockResolvedValue({});
-      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-        mutateAsync: updateMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
+    it.each([
+      ["Pause", "active", "paused"],
+      ["Resume", "paused", "active"],
+    ] as const)(
+      "action menu option '%s' calls useUpdateConnector",
+      async (item, status, nextStatus) => {
+        const updateMutateAsync = vi.fn().mockResolvedValue({});
+        vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
+          mutateAsync: updateMutateAsync,
+          isPending: false,
+        } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
 
-      const connector = createMockConnector({
-        id: "conn-pause-1",
-        status: "active",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const pauseItem = screen.getByRole("menuitem", { name: "Pause" });
-      fireEvent.click(pauseItem);
-
-      await waitFor(() => {
-        expect(updateMutateAsync).toHaveBeenCalledWith({
-          id: "conn-pause-1",
-          status: "paused",
+        const connector = createMockConnector({
+          id: "conn-toggle-1",
+          status,
         });
-      });
-    });
 
-    it("action menu option 'Resume' calls useUpdateConnector", async () => {
-      const updateMutateAsync = vi.fn().mockResolvedValue({});
-      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-        mutateAsync: updateMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
+        renderWithClient(
+          <ConnectorCard
+            connector={connector}
+            onEdit={vi.fn()}
+            onShowRuns={vi.fn()}
+          />,
+        );
 
-      const connector = createMockConnector({
-        id: "conn-resume-1",
-        status: "paused",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const resumeItem = screen.getByRole("menuitem", { name: "Resume" });
-      fireEvent.click(resumeItem);
-
-      await waitFor(() => {
-        expect(updateMutateAsync).toHaveBeenCalledWith({
-          id: "conn-resume-1",
-          status: "active",
+        const menuTrigger = screen.getByRole("button", {
+          name: `Actions for ${connector.name}`,
         });
-      });
-    });
+        fireEvent.click(menuTrigger);
 
-    it("action menu option 'Edit' calls onEdit", () => {
-      const onEditMock = vi.fn();
-      const connector = createMockConnector({ id: "conn-edit-1" });
+        fireEvent.click(screen.getByRole("menuitem", { name: item }));
 
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={onEditMock}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const editItem = screen.getByRole("menuitem", { name: "Edit" });
-      fireEvent.click(editItem);
-
-      expect(onEditMock).toHaveBeenCalledWith(connector);
-    });
-
-    it("action menu option 'Run history' calls onShowRuns", () => {
-      const onShowRunsMock = vi.fn();
-      const connector = createMockConnector({ id: "conn-runs-1" });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={onShowRunsMock}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const historyItem = screen.getByRole("menuitem", { name: "Run history" });
-      fireEvent.click(historyItem);
-
-      expect(onShowRunsMock).toHaveBeenCalledWith(connector);
-    });
+        await waitFor(() => {
+          expect(updateMutateAsync).toHaveBeenCalledWith({
+            id: "conn-toggle-1",
+            status: nextStatus,
+          });
+        });
+      },
+    );
 
     it("action menu option 'Remove' opens ConfirmDialog; checking deleteImported and confirming calls useDeleteConnector", async () => {
       const deleteMutateAsync = vi.fn().mockResolvedValue({});
@@ -888,26 +704,33 @@ describe("Frontend Connectors Components", () => {
         screen.getByRole("button", { name: `Actions for ${connector.name}` }),
       );
       fireEvent.click(screen.getByRole("menuitem", { name: "Pause" }));
-      await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Update failed"),
+      );
 
-      // Trigger delete error
+      // Trigger delete error: the dialog stays open for another try
       fireEvent.click(
         screen.getByRole("button", { name: `Actions for ${connector.name}` }),
       );
       fireEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
       fireEvent.click(screen.getByRole("button", { name: "Remove connector" }));
-      await waitFor(() => expect(deleteMutateAsync).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Delete failed"),
+      );
+      expect(screen.getByText("Remove Error Card?")).toBeTruthy();
     });
 
-    it("formatStats displays meetings, ghosts, and errors correctly", () => {
-      const connector = createMockConnector({
-        kind: "ics",
-        lastRunStats: {
-          meetings: 5,
-          ghosts: 2,
-          errors: 1,
-        },
-      });
+    it.each([
+      [
+        "5 meetings · 2 new people seen · 1 error",
+        { meetings: 5, ghosts: 2, errors: 1 },
+      ],
+      [
+        "1 meeting · 1 new person seen · 1 error",
+        { meetings: 1, ghosts: 1, errors: 1 },
+      ],
+    ])("formatStats displays %s", (line, lastRunStats) => {
+      const connector = createMockConnector({ kind: "ics", lastRunStats });
 
       renderWithClient(
         <ConnectorCard
@@ -917,63 +740,7 @@ describe("Frontend Connectors Components", () => {
         />,
       );
 
-      expect(
-        screen.getByText("Last sync: 5 meetings · 2 new people seen · 1 error"),
-      ).toBeTruthy();
-    });
-
-    it("formatStats handles singular forms correctly", () => {
-      const connector = createMockConnector({
-        kind: "ics",
-        lastRunStats: {
-          meetings: 1,
-          ghosts: 1,
-          errors: 1,
-        },
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      expect(
-        screen.getByText("Last sync: 1 meeting · 1 new person seen · 1 error"),
-      ).toBeTruthy();
-    });
-
-    it("renders needs_reauth state and offers Reconnect button calling onReconnect", () => {
-      const onReconnectMock = vi.fn();
-      const connector = createMockConnector({
-        id: "conn-reauth-1",
-        name: "Google Calendar",
-        status: "needs_reauth",
-        lastError: "Invalid credentials or feed token revoked",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-          onReconnect={onReconnectMock}
-        />,
-      );
-
-      expect(screen.getByText("Signed out")).toBeTruthy();
-      expect(screen.getByText("Sign-in expired")).toBeTruthy();
-      expect(
-        screen.getByText("Invalid credentials or feed token revoked"),
-      ).toBeTruthy();
-
-      const reconnectBtn = screen.getByRole("button", { name: "Reconnect" });
-      expect(reconnectBtn).toBeTruthy();
-
-      fireEvent.click(reconnectBtn);
-      expect(onReconnectMock).toHaveBeenCalledWith(connector);
+      expect(screen.getByText(`Last sync: ${line}`)).toBeTruthy();
     });
 
     it("Reconnect button falls back to onEdit if onReconnect not provided", () => {
@@ -1027,7 +794,7 @@ describe("Frontend Connectors Components", () => {
   });
 
   // =========================================================================
-  // 4. RunHistoryDrawer
+  // 3. RunHistoryDrawer
   // =========================================================================
   describe("RunHistoryDrawer", () => {
     const mockConnector = createMockConnector({
@@ -1145,23 +912,6 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getByText("—")).toBeTruthy();
     });
 
-    it("close button calls onClose", () => {
-      const onCloseMock = vi.fn();
-
-      renderWithClient(
-        <RunHistoryDrawer
-          isOpen={true}
-          onClose={onCloseMock}
-          connector={mockConnector}
-        />,
-      );
-
-      const closeBtn = screen.getByRole("button", { name: "Close" });
-      fireEvent.click(closeBtn);
-
-      expect(onCloseMock).toHaveBeenCalledTimes(1);
-    });
-
     it("handles copy details to clipboard and clipboard error fallback", async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const copySpy = vi
@@ -1206,11 +956,12 @@ describe("Frontend Connectors Components", () => {
       await act(async () => {
         fireEvent.click(copyBtn);
       });
+      expect(toast.error).toHaveBeenCalledWith(clipboard.CLIPBOARD_DENIED);
 
       vi.useRealTimers();
     });
 
-    it("formats empty and fallback stats and neutral status tone", () => {
+    it("formats fetched-only stats, a sub-second duration, and an unknown status label", () => {
       const run: ConnectorRun = {
         id: "run-neutral",
         connectorId: "conn-hist-1",
@@ -1271,7 +1022,7 @@ describe("Frontend Connectors Components", () => {
   });
 
   // =========================================================================
-  // 5. ConnectorsView
+  // 4. ConnectorsView
   // =========================================================================
   describe("ConnectorsView", () => {
     it("renders loading skeleton", () => {
@@ -1355,57 +1106,39 @@ describe("Frontend Connectors Components", () => {
       ).toBeTruthy();
     });
 
-    it("clicking 'Add connector' opens AddConnectorSheet", () => {
-      const connectorsList = [
-        createMockConnector({ id: "conn-v1", name: "Primary Calendar" }),
-      ];
+    it.each([
+      ["Calendar", /^Calendar\b/, "Connect calendar"],
+      ["Mailbox (IMAP)", /Mailbox \(IMAP\)/i, "Connect mailbox (IMAP)"],
+      ["Google Workspace", /Google Workspace/i, "Connect Google Workspace"],
+    ])(
+      "selecting %s from AddConnectorSheet opens its form",
+      (_kind, tile, heading) => {
+        const connectorsList = [
+          createMockConnector({ id: "conn-v1", name: "Primary Calendar" }),
+        ];
 
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: connectorsList,
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
+        vi.mocked(connectorsApi.useConnectors).mockReturnValue({
+          data: connectorsList,
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
 
-      renderWithClient(<ConnectorsView />);
+        renderWithClient(<ConnectorsView />);
 
-      const addBtn = screen.getByRole("button", { name: /Add connector/i });
-      fireEvent.click(addBtn);
+        // Open sheet
+        fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
+        expect(
+          screen.getByRole("heading", { name: "Add a connector" }),
+        ).toBeTruthy();
 
-      expect(
-        screen.getByRole("heading", { name: "Add a connector" }),
-      ).toBeTruthy();
-    });
+        // Click the kind inside sheet
+        fireEvent.click(screen.getByRole("button", { name: tile }));
 
-    it("selecting Calendar from AddConnectorSheet opens CalendarFormModal", () => {
-      const connectorsList = [
-        createMockConnector({ id: "conn-v1", name: "Primary Calendar" }),
-      ];
-
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: connectorsList,
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      // Open sheet
-      fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
-      expect(
-        screen.getByRole("heading", { name: "Add a connector" }),
-      ).toBeTruthy();
-
-      // Click Calendar inside sheet
-      const calSheetBtn = screen.getByRole("button", { name: /^Calendar\b/ });
-      fireEvent.click(calSheetBtn);
-
-      // Sheet closes and CalendarFormModal opens
-      expect(
-        screen.getByRole("heading", { name: "Connect calendar" }),
-      ).toBeTruthy();
-    });
+        // Sheet closes and the kind's form opens
+        expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
+      },
+    );
 
     it("clicking Edit on a connector card opens CalendarFormModal in edit mode", () => {
       const connector = createMockConnector({
@@ -1436,37 +1169,6 @@ describe("Frontend Connectors Components", () => {
         screen.getByRole("heading", { name: "Edit Personal iCloud" }),
       ).toBeTruthy();
       expect(screen.getByDisplayValue("Personal iCloud")).toBeTruthy();
-    });
-
-    it("clicking Run history on a connector card opens RunHistoryDrawer", () => {
-      const connector = createMockConnector({
-        id: "conn-history-view",
-        name: "Personal iCloud",
-        kind: "ics",
-      });
-
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: [connector],
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const historyItem = screen.getByRole("menuitem", { name: "Run history" });
-      fireEvent.click(historyItem);
-
-      expect(
-        screen.getByRole("heading", {
-          name: "Run history for Personal iCloud",
-        }),
-      ).toBeTruthy();
     });
 
     it("renders error state and retry button when loading connectors fails", () => {

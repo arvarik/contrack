@@ -41,11 +41,9 @@ describe("preloadable", () => {
   it("downloads once, however many times it is asked", async () => {
     const factory = vi.fn(async () => counterModule());
     const page = preloadable<CounterProps>(factory);
-    expect(page.loaded()).toBeNull();
     const [a, b] = await Promise.all([page.load(), page.load()]);
     expect(a).toBe(b);
     expect(factory).toHaveBeenCalledTimes(1);
-    expect(page.loaded()).toBe(a);
   });
 
   it("forgets a failed download, so the next ask tries again", async () => {

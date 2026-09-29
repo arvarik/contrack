@@ -200,14 +200,6 @@ describe("every act", () => {
       );
     }
   });
-
-  it("never touches the ring: every track is a field of the bird's pose", () => {
-    for (const name of [...FINITE, "ready", "doze"] as MotionName[]) {
-      const motion = makeCorvidMotion(name, createRng(2));
-      for (const field of Object.keys(motion.tracks))
-        expect(POSE_KEYS).toContain(field);
-    }
-  });
 });
 
 describe("blinks", () => {
@@ -240,12 +232,6 @@ describe("blinks", () => {
 });
 
 describe("held postures", () => {
-  it("hold for as long as they are asked to", () => {
-    for (const name of ["ready", "doze"] as MotionName[]) {
-      expect(makeCorvidMotion(name, createRng(1)).duration).toBe(Infinity);
-    }
-  });
-
   it("put the bird to sleep with its eye shut and its feathers up, then hold still", () => {
     const doze = makeCorvidMotion("doze", createRng(1));
     const deep = at(doze, 10_000);

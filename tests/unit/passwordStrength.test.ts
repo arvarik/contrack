@@ -4,8 +4,6 @@ import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import {
   passwordStrength,
-  WORST_PASSWORDS,
-  STRENGTH_WORDS,
   PasswordStrengthMeter,
 } from "../../src/lib/passwordStrength";
 
@@ -14,10 +12,6 @@ afterEach(() => {
 });
 
 describe("passwordStrength", () => {
-  it("has exactly 40 worst passwords", () => {
-    expect(WORST_PASSWORDS).toHaveLength(40);
-  });
-
   it("returns 0 for empty password", () => {
     expect(passwordStrength("")).toBe(0);
   });
@@ -48,13 +42,6 @@ describe("passwordStrength", () => {
     expect(passwordStrength("correct horse battery staple")).toBe(4);
     expect(passwordStrength("ValidPassw0rd123!")).toBe(4);
   });
-
-  it("defines standard words Short, OK, Good, Strong", () => {
-    expect(STRENGTH_WORDS[1]).toBe("Short");
-    expect(STRENGTH_WORDS[2]).toBe("OK");
-    expect(STRENGTH_WORDS[3]).toBe("Good");
-    expect(STRENGTH_WORDS[4]).toBe("Strong");
-  });
 });
 
 describe("PasswordStrengthMeter", () => {
@@ -65,23 +52,16 @@ describe("PasswordStrengthMeter", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders Short for weak password", () => {
-    render(React.createElement(PasswordStrengthMeter, { password: "abc" }));
-    expect(screen.getByText("Short")).toBeTruthy();
+  it.each([
+    ["Short", "abc"],
+    ["OK", "lowercase1"],
+    ["Good", "Pass1234!"],
+    ["Strong", "Correct-Horse-Battery-Staple-2026!"],
+  ])("renders %s for %s", (word, password) => {
+    render(React.createElement(PasswordStrengthMeter, { password }));
+    expect(screen.getByText(word)).toBeTruthy();
     expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
-      "Password strength: Short",
-    );
-  });
-
-  it("renders Strong for strong password", () => {
-    render(
-      React.createElement(PasswordStrengthMeter, {
-        password: "Correct-Horse-Battery-Staple-2026!",
-      }),
-    );
-    expect(screen.getByText("Strong")).toBeTruthy();
-    expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
-      "Password strength: Strong",
+      `Password strength: ${word}`,
     );
   });
 });

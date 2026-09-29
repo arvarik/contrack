@@ -3,10 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import {
-  FollowUpModal,
-  getPresetDate,
-} from "../../src/views/map/FollowUpModal";
+import { FollowUpModal } from "../../src/views/map/FollowUpModal";
 import * as client from "../../src/api/client";
 import { toast } from "sonner";
 
@@ -45,13 +42,6 @@ describe("FollowUpModal", () => {
       </QueryClientProvider>,
     );
   };
-
-  it("calculates preset dates accurately", () => {
-    const fixedNow = new Date("2026-06-10T12:00:00.000Z");
-    expect(getPresetDate("tomorrow", fixedNow)).toBe("2026-06-11");
-    expect(getPresetDate("3days", fixedNow)).toBe("2026-06-13");
-    expect(getPresetDate("nextweek", fixedNow)).toBe("2026-06-17");
-  });
 
   it("creates one POST per id for selected contacts", async () => {
     const apiFetchSpy = vi.spyOn(client, "apiFetch").mockResolvedValue({

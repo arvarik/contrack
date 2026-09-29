@@ -159,6 +159,13 @@ describe("renderAvatar", () => {
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg.length).toBeGreaterThan(200);
+    // A style that fails falls back to the monogram, which passes the lines
+    // above too. So every other style must draw something else.
+    if (style !== "initials") {
+      expect(svg).not.toBe(
+        renderAvatar({ style: "initials", seed: "Karen White" }),
+      );
+    }
   });
 
   it("is deterministic — the same seed always yields the same face", () => {
@@ -223,11 +230,12 @@ describe("renderAvatar", () => {
 
   it("escapes XML metacharacters rather than emitting broken markup", () => {
     // Reaches the hand-built monogram, the one path with no library escaping.
+    // Its two letters here are "<" and "&".
     const svg = renderAvatar({
       style: "not-a-style" as AvatarStyle,
       seed: "<Bobby> & Tables",
     });
-    expect(svg).not.toMatch(/>\s*<Bobby/);
+    expect(svg).toContain(">&lt;&amp;</text>");
   });
 });
 

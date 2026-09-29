@@ -1,9 +1,9 @@
 // =============================================================================
-// The dedupe scan's progress card: its mode names and its pipeline rows
+// The dedupe scan's progress card: which modes run the AI pass, and its
+// pipeline rows
 // =============================================================================
 import { describe, expect, it } from "vitest";
 import {
-  MODE_NAME,
   runsAiPass,
   stepStatus,
 } from "../../src/views/dedupe/utils/scanPhases";
@@ -52,14 +52,5 @@ describe("stepStatus", () => {
     expect(stepStatus("error", "deterministic", "deterministic")).toBe(
       "pending",
     );
-  });
-});
-
-describe("MODE_NAME", () => {
-  it("names the picker's modes in its own words, in sentence case", () => {
-    expect(MODE_NAME.quick).toBe("Quick");
-    expect(MODE_NAME.deep).toBe("Smart");
-    expect(MODE_NAME.full).toBe("Full");
-    expect(MODE_NAME.ai).toBe("AI");
   });
 });

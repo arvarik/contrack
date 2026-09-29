@@ -29,15 +29,10 @@ beforeEach(() => {
 });
 
 describe("guardedLookup", () => {
-  it("blocks a name that resolves to a private address", async () => {
+  it.each([
     // The rebinding scenario: the check earlier saw a public address, and by
     // connect time the attacker's DNS answers with loopback.
-    lookupMock.mockImplementation((_h, _o, cb) => cb(null, "127.0.0.1", 4));
-    const { err } = await resolve("rebind.attacker.example");
-    expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
-  });
-
-  it.each([
+    "127.0.0.1",
     "10.0.0.8",
     "192.168.1.20",
     "169.254.169.254",
@@ -59,22 +54,16 @@ describe("guardedLookup", () => {
   });
 
   it.each(["93.184.216.34", "2606:4700:4700::1111", "::ffff:8.8.8.8"])(
-    "passes public %s",
+    "passes public %s through untouched",
     async (address) => {
       lookupMock.mockImplementation((_h, _o, cb) =>
         cb(null, address, address.includes(":") ? 6 : 4),
       );
-      const { err } = await resolve("public.example");
+      const { err, address: passed } = await resolve("public.example");
       expect(err).toBeNull();
+      expect(passed).toBe(address);
     },
   );
-
-  it("passes a public address through untouched", async () => {
-    lookupMock.mockImplementation((_h, _o, cb) => cb(null, "93.184.216.34", 4));
-    const { err, address } = await resolve("example.com");
-    expect(err).toBeNull();
-    expect(address).toBe("93.184.216.34");
-  });
 
   it("propagates resolver failures", async () => {
     const boom: NodeJS.ErrnoException = new Error("ENOTFOUND");

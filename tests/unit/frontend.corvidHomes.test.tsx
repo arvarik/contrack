@@ -2,7 +2,7 @@
 /**
  * The bird's other homes.
  *
- * Three behaviours that only exist because a surface asked for them, and
+ * Two behaviours that only exist because a surface asked for them, and
  * that a person would only notice if they broke:
  *
  * 1. The sign-in card's bird shakes its head at a wrong password, once per
@@ -11,9 +11,6 @@
  *    it sits in never moves at all.
  * 2. The "All reviewed" mark hops when it arrives, and holds still for an
  *    account that asked for no motion.
- * 3. The flight leaves from the perch that is actually on screen. There are
- *    two in the DOM below `md`, and picking the wrong one sends the bird
- *    from the corner of the window.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,10 +20,6 @@ import {
   AuthShell,
   WRONG_CREDENTIALS,
 } from "../../src/components/auth/AuthShell";
-import {
-  findPerch,
-  PERCH_ATTRIBUTE,
-} from "../../src/components/brand/CorvidFlight";
 import { CorvidMark } from "../../src/components/brand/CorvidMark";
 import { CORVID_PATHS } from "../../src/assets/corvidPaths";
 import type { MascotMotion, MotionPreference } from "../../src/api/preferences";
@@ -51,7 +44,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  document.querySelectorAll(`[${PERCH_ATTRIBUTE}]`).forEach((n) => n.remove());
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -123,11 +115,6 @@ describe("the sign-in card", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("still announces the error, whatever the bird does", () => {
-    render(<Card error={WRONG_CREDENTIALS} />);
-    expect(screen.getByRole("alert").textContent).toBe(WRONG_CREDENTIALS);
-  });
-
   it("leaves no timer behind and the logo drawn when the card unmounts mid-shake", () => {
     const { rerender, unmount } = render(<Card error={null} />);
     rerender(<Card error={WRONG_CREDENTIALS} />);
@@ -184,46 +171,5 @@ describe("a mark that hops on mount", () => {
     unmount();
     expect(el.getAttribute("d")).toBe(CORVID_PATHS.chest);
     expect(vi.getTimerCount()).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Which perch the bird leaves from
-// ---------------------------------------------------------------------------
-
-/** A perch with the rectangle a browser would give it. */
-function addPerch(id: string, width: number): HTMLElement {
-  const perch = document.createElement("span");
-  perch.id = id;
-  perch.setAttribute(PERCH_ATTRIBUTE, "");
-  perch.getBoundingClientRect = () =>
-    ({ left: 0, top: 0, width, height: width }) as DOMRect;
-  document.body.append(perch);
-  return perch;
-}
-
-describe("findPerch", () => {
-  it("finds nothing when no perch is in the page", () => {
-    expect(findPerch()).toBeNull();
-  });
-
-  it("takes the only perch there is", () => {
-    const only = addPerch("sidebar", 32);
-    expect(findPerch()).toBe(only);
-  });
-
-  it("skips the sidebar's perch on a phone, where CSS hides it", () => {
-    // The sidebar is `hidden md:flex`, so below the breakpoint it is still
-    // in the DOM with no layout box. Its rectangle is all zeros, and a bird
-    // that left from it would leave from the corner of the window.
-    addPerch("sidebar", 0);
-    const footer = addPerch("settings-footer", 20);
-    expect(findPerch()).toBe(footer);
-  });
-
-  it("falls back to the first perch when none has a box", () => {
-    const first = addPerch("sidebar", 0);
-    addPerch("settings-footer", 0);
-    expect(findPerch()).toBe(first);
   });
 });

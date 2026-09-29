@@ -282,37 +282,33 @@ function ask(question: string) {
 const QUESTION = "Who likes espresso?";
 
 describe("asking the same question again", () => {
-  it("runs the same question again after the search was cleared", async () => {
-    const sent = stubFetch();
-    renderView();
+  it.each([
+    [
+      "the Clear button",
+      () =>
+        fireEvent.click(screen.getByRole("button", { name: "Clear search" })),
+    ],
+    ["Escape", () => fireEvent.keyDown(input(), { key: "Escape" })],
+  ])(
+    "runs the same question again after %s cleared it",
+    async (_how, clear) => {
+      const sent = stubFetch();
+      renderView();
 
-    ask(QUESTION);
-    await screen.findByText("Ada Lovelace");
-    expect(semantic(sent)).toHaveLength(1);
+      ask(QUESTION);
+      await screen.findByText("Ada Lovelace");
+      expect(semantic(sent)).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
-    expect(input().value).toBe("");
-    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+      clear();
+      expect(input().value).toBe("");
+      expect(screen.queryByText("Ada Lovelace")).toBeNull();
 
-    ask(QUESTION);
-    await screen.findByText("Ada Lovelace");
-    expect(semantic(sent)).toHaveLength(2);
-    expect(semantic(sent)[1].body).toEqual({ query: QUESTION });
-  });
-
-  it("runs the same question again after Escape cleared it", async () => {
-    const sent = stubFetch();
-    renderView();
-
-    ask(QUESTION);
-    await screen.findByText("Ada Lovelace");
-
-    fireEvent.keyDown(input(), { key: "Escape" });
-    expect(input().value).toBe("");
-
-    ask(QUESTION);
-    await waitFor(() => expect(semantic(sent)).toHaveLength(2));
-  });
+      ask(QUESTION);
+      await screen.findByText("Ada Lovelace");
+      expect(semantic(sent)).toHaveLength(2);
+      expect(semantic(sent)[1].body).toEqual({ query: QUESTION });
+    },
+  );
 
   it("does not send the same question twice while it is being answered", async () => {
     const pending = stream();
@@ -356,6 +352,8 @@ describe("asking the same question again", () => {
       screen.queryByRole("button", { name: "Refresh results" }),
     ).toBeNull();
 
+    // Retry asks the question that failed, not whatever is typed by now.
+    fireEvent.change(input(), { target: { value: "something else" } });
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await screen.findByText("Ada Lovelace");
     expect(semantic(sent)).toHaveLength(2);
@@ -579,35 +577,23 @@ describe("the history", () => {
     const sent = stubFetch();
     renderView();
 
-    // A disclosure for the panel. The page header has no History button.
+    // A disclosure for the panel. The page header has no History button,
+    // and the panel has no second close button.
     const icon = await screen.findByRole("button", { name: "History" });
     expect(icon.getAttribute("aria-expanded")).toBe("true");
     expect(icon.getAttribute("aria-controls")).toBe("search-history");
     expect(icon.hasAttribute("aria-pressed")).toBe(false);
+    const aside = screen.getByRole("complementary", { name: "History" });
+    expect(within(aside).queryByRole("button", { name: /hide/i })).toBeNull();
+    // A press focuses the button in a browser. jsdom's click does not.
+    icon.focus();
     fireEvent.click(icon);
 
     await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
     expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
     expect(icon.getAttribute("aria-expanded")).toBe("false");
     expect(panel()?.hasAttribute("inert")).toBe(true);
-  });
-
-  it("closes from the History button that opened it, with no second close button", async () => {
-    const sent = stubFetch();
-    renderView();
-
-    const aside = await screen.findByRole("complementary", { name: "History" });
-    expect(within(aside).queryByRole("button", { name: /hide/i })).toBeNull();
-    const button = screen.getByRole("button", { name: "History" });
-    expect(button.getAttribute("aria-expanded")).toBe("true");
-    // A press focuses the button in a browser. jsdom's click does not.
-    button.focus();
-    fireEvent.click(button);
-
-    await waitFor(() => expect(preferencePatches(sent)).toHaveLength(1));
-    expect(preferencePatches(sent)[0].body).toEqual({ askHistoryOpen: false });
-    expect(panel()?.hasAttribute("inert")).toBe(true);
-    expect(document.activeElement).toBe(button);
+    expect(document.activeElement).toBe(icon);
   });
 
   it("toggles the panel with the H key outside a text field", async () => {
@@ -702,34 +688,6 @@ describe("the history", () => {
 });
 
 describe("the wait for AI", () => {
-  it("keeps back the list AI has not checked, and shows AI's answer", async () => {
-    const pending = stream();
-    stubFetch((s) => {
-      if (s.url.endsWith("/search/semantic")) return pending.response;
-    });
-    renderView();
-
-    ask(QUESTION);
-    await act(async () => {
-      // The local list first, unverified, as the server streams it.
-      pending.push(
-        line({ phase: "instant", matches: OTHER_MATCHES, fallback: true }),
-      );
-    });
-    expect(await screen.findByTestId("searching-stage")).toBeTruthy();
-    expect(screen.queryByText("Linus Torvalds")).toBeNull();
-    expect(screen.queryByText("Enriching with AI…")).toBeNull();
-
-    await act(async () => {
-      pending.push(complete());
-      pending.end();
-    });
-    await screen.findByText("Ada Lovelace");
-    expect(screen.queryByText("Linus Torvalds")).toBeNull();
-    expect(screen.queryByTestId("searching-stage")).toBeNull();
-    expect(screen.queryByText("Not verified by AI")).toBeNull();
-  });
-
   it("says once, over the list, when AI did not verify the answer", async () => {
     stubFetch((s) => {
       if (s.url.endsWith("/search/semantic"))
@@ -760,6 +718,12 @@ describe("the page", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Ask Contrack" }),
     ).toBeTruthy();
+    const modes = screen.getByRole("radiogroup", { name: "What to search" });
+    expect(
+      within(modes)
+        .getByRole("radio", { name: "People" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
     expect(
       screen.queryByText("Ask a question about your network in plain words"),
     ).toBeNull();

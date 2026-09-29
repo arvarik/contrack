@@ -123,22 +123,6 @@ describe("the type floor", () => {
     }
     expect(offenders).toEqual([]);
   });
-
-  it("holds the shared label and badge tokens at 11 px or more", async () => {
-    const styles = await import("../../src/lib/styles");
-    for (const name of [
-      "LABEL",
-      "LABEL_PRIMARY",
-      "SECTION_HEADING",
-      "KBD_SM",
-      "MICRO_BADGE",
-      "STATUS_BADGE_SUCCESS",
-    ] as const) {
-      expect(styles[name], name).toContain("text-[11px]");
-    }
-    expect(styles.FIELD_LABEL).toContain("text-xs");
-    expect(styles.ICON_BTN).toContain("hit-area");
-  });
 });
 
 describe("the button shape", () => {

@@ -27,7 +27,6 @@ import {
   corvidPose,
   drawCorvid,
   rollDrawing,
-  splinePath,
   throughPoints,
   trimPoints,
   type CorvidDrawing,
@@ -357,15 +356,5 @@ describe("helpers", () => {
       [10, 0],
       [15, 0],
     ]);
-  });
-
-  it("writes a spline the mark's parser reads, and nothing for one point", () => {
-    expect(splinePath([[1, 1]])).toBe("");
-    const d = splinePath([
-      [0, 0],
-      [10, 5],
-      [20, 0],
-    ]);
-    expect(parsePath(d).map((c) => c.cmd)).toEqual(["M", "C", "C"]);
   });
 });

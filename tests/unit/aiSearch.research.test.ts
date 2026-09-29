@@ -11,11 +11,11 @@
 //                          a page writes it
 //   researchDate           dates as the dossier stores them
 //   linkedInHandle         the profile a LinkedIn address names
-//   resolveCitations       Gemini's redirect links, as the pages they name
+//   resolveRedirects       Gemini's redirect links, as the pages they name
 //   shared/researchRecord  the record the dossier's Research card reads
 // =============================================================================
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type { HydratedContact } from "../../server/repositories/types.ts";
 import {
   attachSources,
@@ -39,7 +39,7 @@ import {
   sameLabel,
   sameOrg,
 } from "../../server/services/aiSearch/normalize.ts";
-import { resolveCitations } from "../../server/ai/citations.ts";
+import { resolveRedirects } from "../../server/ai/citations.ts";
 import {
   isLegacyDossier,
   parseResearchRecord,
@@ -647,61 +647,57 @@ describe("one organization, however it is written", () => {
   });
 });
 
-describe("resolveCitations", () => {
+describe("resolveRedirects", () => {
   const redirect = (id: string) =>
     `https://vertexaisearch.cloud.google.com/grounding-api-redirect/${id}`;
+  const finra = "https://brokercheck.finra.org/individual/summary/1234567";
+  const fellows = "http://fellows.example.org/people/rowan-vale";
 
-  it("replaces a grounding redirect with the page it names, and merges repeats", async () => {
-    const fetchImpl = vi.fn(
-      async (url: string | URL | Request) =>
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("maps each grounding redirect to the page it names", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async (url) =>
         new Response(null, {
           status: 302,
-          headers: {
-            location: String(url).endsWith("a")
-              ? "https://brokercheck.finra.org/individual/summary/1234567"
-              : "http://fellows.example.org/people/rowan-vale",
-          },
+          headers: { location: String(url).endsWith("a") ? finra : fellows },
         }),
-    ) as unknown as typeof fetch;
-    const resolved = await resolveCitations(
-      [
-        { title: "finra.org", uri: redirect("a") },
-        { title: "finra.org", uri: redirect("aa") },
-        { title: "fellows.example.org", uri: redirect("b") },
-        { title: "A page", uri: "https://example.com/page" },
-      ],
-      { fetchImpl },
     );
-    expect(resolved).toEqual([
-      {
-        title: "finra.org",
-        uri: "https://brokercheck.finra.org/individual/summary/1234567",
-      },
-      {
-        title: "fellows.example.org",
-        uri: "http://fellows.example.org/people/rowan-vale",
-      },
-      { title: "A page", uri: "https://example.com/page" },
+    vi.stubGlobal("fetch", fetchMock);
+    const pages = await resolveRedirects([
+      redirect("a"),
+      redirect("aa"),
+      redirect("b"),
+      "https://example.com/page",
     ]);
+    expect(pages).toEqual(
+      new Map([
+        [redirect("a"), finra],
+        [redirect("aa"), finra],
+        [redirect("b"), fellows],
+      ]),
+    );
     // Only Google's redirects are asked, with HEAD, and never followed: the
     // page itself is not requested.
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-    for (const [, init] of vi.mocked(fetchImpl).mock.calls)
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const [, init] of fetchMock.mock.calls)
       expect(init).toMatchObject({ method: "HEAD", redirect: "manual" });
   });
 
-  it("keeps the redirect when it does not answer with a page", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("timeout"))
-      .mockResolvedValueOnce(
-        new Response("", { status: 200 }),
-      ) as unknown as typeof fetch;
-    const links = [
-      { title: "a.com", uri: redirect("x") },
-      { title: "b.com", uri: redirect("y") },
-    ];
-    expect(await resolveCitations(links, { fetchImpl })).toEqual(links);
+  it("leaves a redirect out when it does not answer with a page", async () => {
+    // The caller then keeps the redirect itself.
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockRejectedValueOnce(new Error("timeout"))
+        .mockResolvedValueOnce(new Response("", { status: 200 })),
+    );
+    expect(await resolveRedirects([redirect("x"), redirect("y")])).toEqual(
+      new Map(),
+    );
   });
 });
 

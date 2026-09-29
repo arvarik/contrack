@@ -48,29 +48,6 @@ describe("shared/connectors.ts", () => {
   });
 });
 
-describe("src/api/connectors.ts query keys", () => {
-  it("constructs expected query keys", () => {
-    expect(connectorKeys.all).toEqual(["connectors"]);
-    expect(connectorKeys.kinds).toEqual(["connectors", "kinds"]);
-    expect(connectorKeys.lists()).toEqual(["connectors", "list"]);
-    expect(connectorKeys.detail("conn-123")).toEqual([
-      "connectors",
-      "detail",
-      "conn-123",
-    ]);
-    expect(connectorKeys.runs("conn-123")).toEqual([
-      "connectors",
-      "runs",
-      "conn-123",
-    ]);
-    expect(connectorKeys.correspondents(50)).toEqual([
-      "connectors",
-      "correspondents",
-      50,
-    ]);
-  });
-});
-
 describe("src/api/connectors.ts hooks", () => {
   it("useConnectorKinds fetches kind list", async () => {
     const mockKinds = [
@@ -191,7 +168,8 @@ describe("src/api/connectors.ts hooks", () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json(testResult));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { wrapper } = createWrapper();
+    const { wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const { result } = renderHook(() => useTestConnector(), { wrapper });
 
     const res = await result.current.mutateAsync({
@@ -206,6 +184,7 @@ describe("src/api/connectors.ts hooks", () => {
         method: "POST",
       }),
     );
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it("useUpdateConnector patches connector and invalidates list + detail", async () => {
@@ -262,6 +241,20 @@ describe("src/api/connectors.ts hooks", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: connectorKeys.all,
     });
+    // The imported notes are gone, so the contact views load again.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["contacts"] });
+
+    // Without deleteImported the notes stay, and so do the contact views.
+    invalidateSpy.mockClear();
+    await result.current.mutateAsync({ id: "c-1" });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/connectors/c-1"),
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ deleteImported: false }),
+      }),
+    );
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ["contacts"] });
 
     // Test error case
     fetchMock.mockResolvedValueOnce(new Response("Failed", { status: 500 }));

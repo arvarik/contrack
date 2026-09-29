@@ -24,7 +24,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 /** The toasts, so a test can read the options and press Undo. */
 const toastMock = vi.hoisted(() =>
@@ -146,12 +146,18 @@ function makeProps(overrides: Partial<TimelineTabProps> = {}) {
 
 type Props = ReturnType<typeof makeProps>;
 
+/** Where the router is, so a test can see where a click went. */
+function Where() {
+  return <p data-testid="where">{useLocation().pathname}</p>;
+}
+
 /** Render the tab and wait for the lazy composer. */
 async function mount(overrides: Partial<Props> = {}, url = "/contact/c1") {
   const props = makeProps(overrides);
   const ui = (next: Props) => (
     <MemoryRouter initialEntries={[url]}>
       <TimelineTab {...next} />
+      <Where />
     </MemoryRouter>
   );
   const view = render(ui(props));
@@ -264,11 +270,14 @@ describe("the groups", () => {
     );
     const [, options] = vi.mocked(props.promoteGhost.mutate).mock.calls[0];
     act(() => options?.onSuccess?.());
+    // The promoted contact opens.
+    expect(screen.getByTestId("where").textContent).toBe("/contact/g1");
 
-    // The via badge is a real button.
+    // The via badge is a real button, and opens the contact it names.
     fireEvent.click(
       within(entry("aug")!).getByRole("button", { name: /via Alan/ }),
     );
+    expect(screen.getByTestId("where").textContent).toBe("/contact/c2");
   });
 });
 
@@ -403,14 +412,16 @@ describe("delete", () => {
 
   it("shows the entry again on Undo and never sends the delete", async () => {
     const { props } = await mount();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     confirmDelete("Call with Ada");
     const options = lastToast();
 
     act(() => options.action.onClick());
     expect(entry("call")).not.toBeNull();
-    // A close after Undo ends nothing.
+    // A close after Undo ends nothing, and neither does the fallback timer.
     act(() => options.onDismiss());
     act(() => options.onAutoClose());
+    act(() => vi.advanceTimersByTime(FALLBACK_MS));
     expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
   });
 

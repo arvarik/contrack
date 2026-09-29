@@ -11,7 +11,6 @@ import {
   keepLatestPerFamily,
   familyToModelClass,
   getLatestModelForClass,
-  prettyModelName,
   RECENCY_WINDOW_MS,
 } from "../../server/ai/modelFilter.ts";
 
@@ -299,13 +298,5 @@ describe("family to model class mapping", () => {
 
   it("returns null for unknown family", () => {
     expect(familyToModelClass("gemini", null)).toBe(null);
-  });
-});
-
-describe("prettyModelName", () => {
-  it("formats model names cleanly", () => {
-    expect(prettyModelName("models/gemini-3.8-flash")).toBe("Gemini 3.8 Flash");
-    expect(prettyModelName("gpt-5.4-mini")).toBe("GPT 5.4 Mini");
-    expect(prettyModelName("")).toBe("");
   });
 });

@@ -7,7 +7,7 @@
 // independent v1.5.4 review; pinned here so it cannot come back.
 // =============================================================================
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { startBackupSchedule } from "../../server/services/backupService.ts";
 
 const saved: Record<string, string | undefined> = {};
@@ -22,6 +22,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (handle) clearInterval(handle);
   handle = null;
   for (const key of KEYS) {
@@ -60,8 +61,13 @@ describe("startBackupSchedule", () => {
 
   it("honours an explicit interval", () => {
     process.env.BACKUP_INTERVAL_HOURS = "6";
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
     handle = startBackupSchedule();
     expect(handle).not.toBeNull();
+    expect(setIntervalSpy).toHaveBeenCalledWith(
+      expect.any(Function),
+      6 * 3_600_000,
+    );
   });
 
   it("stays off under DISABLE_BACKGROUND_JOBS regardless", () => {

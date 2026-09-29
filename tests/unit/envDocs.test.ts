@@ -132,6 +132,30 @@ describe("environment variables", () => {
     expect(exampleNames().filter((n) => !main.includes(n))).toEqual([]);
   });
 
+  // A provider is chosen by which key is present, so the example offers a
+  // key for each. One key must be enough to run, so every per-task model is
+  // offered commented out: a pin left in would break that promise for
+  // anyone who copies the file as it is.
+  it("offers a key for every built-in provider in .env.example", () => {
+    for (const name of [
+      "GEMINI_API_KEY",
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+    ])
+      expect(exampleNames()).toContain(name);
+  });
+
+  it("offers every per-task model in .env.example, commented out", () => {
+    const example = read(".env.example");
+    for (const name of [
+      "AI_QUICK_MODEL",
+      "AI_DEEP_MODEL",
+      "AI_RESEARCH_MODEL",
+      "AI_EMBEDDINGS_MODEL",
+    ])
+      expect(example).toMatch(new RegExp(`^# ${name}=`, "m"));
+  });
+
   it("passes every documented variable to the container but eight", () => {
     const { main } = documented();
     for (const name of NOT_FORWARDED) expect(main).toContain(name);

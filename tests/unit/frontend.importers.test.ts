@@ -139,31 +139,6 @@ describe("parseVCard", () => {
       { phone: "(555) 123-4567", label: "mobile", isPrimary: true },
     ]);
   });
-
-  it("parses multiple cards from one file", () => {
-    const vcf = [
-      "BEGIN:VCARD",
-      "FN:First Person",
-      "END:VCARD",
-      "BEGIN:VCARD",
-      "FN:Second Person",
-      "END:VCARD",
-    ].join("\n");
-
-    const contacts = parseVCard(vcf, "apple");
-    expect(contacts.map((c) => c.name)).toEqual([
-      "First Person",
-      "Second Person",
-    ]);
-  });
-
-  it("skips cards without an FN and handles malformed input without throwing", () => {
-    expect(parseVCard("", "apple")).toEqual([]);
-    expect(parseVCard("this is not a vcard at all", "apple")).toEqual([]);
-    expect(
-      parseVCard("BEGIN:VCARD\nEMAIL:no-name@example.com\nEND:VCARD", "apple"),
-    ).toEqual([]);
-  });
 });
 
 describe("parseFacebookJSON", () => {

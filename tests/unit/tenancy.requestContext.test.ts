@@ -16,12 +16,10 @@ import { EventEmitter } from "node:events";
 import {
   runWithContext,
   getContext,
-  currentScope,
   currentScopeOrNull,
   type RequestContext,
 } from "../../server/tenancy/requestContext.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
-import { AppError } from "../../server/utils/AppError.ts";
 
 const ctx = (id: string): RequestContext => ({
   requestId: `req-${id}`,
@@ -36,7 +34,7 @@ describe("request context: async boundaries", () => {
   it("survives await", async () => {
     await runWithContext(ctx(A), async () => {
       await Promise.resolve();
-      expect(currentScope().ownerId).toBe(A);
+      expect(currentScopeOrNull()?.ownerId).toBe(A);
     });
   });
 
@@ -46,7 +44,7 @@ describe("request context: async boundaries", () => {
       () =>
         new Promise<void>((resolve) =>
           setTimeout(() => {
-            expect(currentScope().ownerId).toBe(A);
+            expect(currentScopeOrNull()?.ownerId).toBe(A);
             resolve();
           }, 1),
         ),
@@ -59,7 +57,7 @@ describe("request context: async boundaries", () => {
       () =>
         new Promise<void>((resolve) =>
           setImmediate(() => {
-            expect(currentScope().ownerId).toBe(A);
+            expect(currentScopeOrNull()?.ownerId).toBe(A);
             resolve();
           }),
         ),
@@ -69,7 +67,7 @@ describe("request context: async boundaries", () => {
   it("survives Promise.all and keeps each context separate", async () => {
     const read = async () => {
       await Promise.resolve();
-      return currentScope().ownerId;
+      return currentScopeOrNull()?.ownerId;
     };
     const [a, b] = await Promise.all([
       runWithContext(ctx(A), () => Promise.all([read(), read()])),
@@ -87,7 +85,7 @@ describe("request context: async boundaries", () => {
     }
     await runWithContext(ctx(A), async () => {
       for await (const _ of gen()) {
-        expect(currentScope().ownerId).toBe(A);
+        expect(currentScopeOrNull()?.ownerId).toBe(A);
       }
     });
   });
@@ -114,22 +112,6 @@ describe("request context: the EventEmitter rule", () => {
 });
 
 describe("request context: no scope", () => {
-  it("currentScope throws NO_SCOPE outside a context", () => {
-    expect(() => currentScope()).toThrow(AppError);
-    try {
-      currentScope();
-    } catch (e) {
-      expect((e as AppError).statusCode).toBe(500);
-      expect((e as AppError).code).toBe("NO_SCOPE");
-    }
-  });
-
-  it("currentScope throws when the context carries a null scope", () => {
-    runWithContext({ requestId: "r", principal: null, scope: null }, () => {
-      expect(() => currentScope()).toThrow(/No owner scope/);
-    });
-  });
-
   it("currentScopeOrNull returns null instead of throwing", () => {
     expect(currentScopeOrNull()).toBeNull();
     runWithContext({ requestId: "r", principal: null, scope: null }, () => {

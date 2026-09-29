@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { haversineKm } from "../../shared/geo";
 import {
-  haversineKm,
   boundsContain,
   pointInPolygon,
   boundsOf,

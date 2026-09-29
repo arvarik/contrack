@@ -3,6 +3,7 @@
  * A radio group's keyboard: one Tab stop, and the arrows move the choice.
  * The settings pages and the duplicate review build their groups from
  * buttons, and these two helpers give each of them what a native group has.
+ * The one Tab stop is tested through ChoiceGroup, in choiceGroup.test.tsx.
  */
 import React, { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,18 +37,6 @@ const Group = ({ initial }: { initial: string | null }) => {
 };
 
 const radio = (name: string) => screen.getByRole("radio", { name });
-
-describe("radioTabIndex", () => {
-  it("makes the checked option the one Tab stop", () => {
-    render(<Group initial="90 days" />);
-    expect(OPTIONS.map((o) => radio(o).tabIndex)).toEqual([-1, 0, -1]);
-  });
-
-  it("falls back to the first option when none is checked", () => {
-    render(<Group initial="7 days" />);
-    expect(OPTIONS.map((o) => radio(o).tabIndex)).toEqual([0, -1, -1]);
-  });
-});
 
 describe("radioKeys", () => {
   it("moves the choice and the focus with the arrows, wrapping at the ends", () => {

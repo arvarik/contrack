@@ -1,6 +1,7 @@
 /**
- * The heat layer's numbers: who weighs what, the scale a network sets, the
- * ramp in both palettes, and where the heat sits among the basemap's layers.
+ * The heat layer's numbers: who weighs what, the scale a network sets, and
+ * the ramp in both palettes. Where the heat sits among the basemap's layers
+ * is tested through its hook, in map.heatHooks.test.tsx.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,7 +13,6 @@ const {
   HEAT_END_ZOOM,
   HEAT_FADE_ZOOM,
   HEAT_PINS_ZOOM,
-  firstLabelLayer,
   heatGradient,
   heatIntensity,
   heatPaint,
@@ -227,32 +227,5 @@ describe("heatGradient", () => {
     expect(gradient).toContain(`${stops[0].color} 0%`);
     expect(gradient).toContain(`${stops[4].color} 50%`);
     expect(gradient.endsWith(`${stops[8].color} 100%)`)).toBe(true);
-  });
-});
-
-describe("firstLabelLayer", () => {
-  it("finds where the labels start, over the last road", () => {
-    // The dark basemap names the water under its roads. The heat under that
-    // label had the roads drawn across it.
-    expect(
-      firstLabelLayer([
-        { id: "background", type: "background" },
-        { id: "water", type: "fill" },
-        { id: "water_name", type: "symbol" },
-        { id: "road", type: "line" },
-        { id: "place_city", type: "symbol" },
-        { id: "place_town", type: "symbol" },
-      ]),
-    ).toBe("place_city");
-  });
-
-  it("finds nothing in a style with no labels", () => {
-    expect(
-      firstLabelLayer([
-        { id: "background", type: "background" },
-        { id: "water", type: "fill" },
-      ]),
-    ).toBeUndefined();
-    expect(firstLabelLayer([])).toBeUndefined();
   });
 });

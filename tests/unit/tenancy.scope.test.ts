@@ -2,9 +2,11 @@
 // Unit Tests — Scope and the FTS5 owner and contact tokens
 // =============================================================================
 // The tokens are generated in two places that must never drift: TypeScript,
-// here, and the SQL that server/db.ts writes into the FTS triggers in Phase 1.
-// Both forms are computed in this test and compared, so a change to either
-// one fails rather than silently splitting a user's search index in half.
+// in server/tenancy/scope.ts, and the SQL the FTS triggers write
+// (OWNER_TOKEN_SQL in server/services/search/). This file pins the TypeScript
+// side to the documented SQL form. It does not read the SQL side: the scoped
+// searches in tests/integration hold that, because a token that differs from
+// the stored one finds nothing and splits a user's search index in half.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
@@ -58,7 +60,7 @@ describe("Scope", () => {
 });
 
 describe("FTS5 tokens", () => {
-  it("matches the SQL expression server/db.ts uses", () => {
+  it("gives the owner and contact tokens the documented SQL form, 'o' or 'c' || replace(id, '-', '')", () => {
     const db = new Database(":memory:");
     const sqlOwner = db
       .prepare("SELECT 'o' || replace(?, '-', '') AS t")

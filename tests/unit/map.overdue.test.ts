@@ -18,15 +18,19 @@ import {
 import type { MapContact } from "../../shared/geo";
 import { computeMapStats } from "../../src/views/map/mapStats";
 
+/** 6 PM on Tuesday, September 22, 2026, in Los Angeles (PDT, UTC-7). */
+const SIX_PM = new Date("2026-09-23T01:00:00.000Z");
+
 beforeAll(() => {
   vi.stubEnv("TZ", "America/Los_Angeles");
+  // Every test here reads the calendar in Los Angeles. A lost stub fails
+  // here, before any of them runs in the wrong zone.
+  expect(SIX_PM.getHours()).toBe(18);
+  expect(SIX_PM.getDate()).toBe(22);
 });
 afterAll(() => {
   vi.unstubAllEnvs();
 });
-
-/** 6 PM on Tuesday, September 22, 2026, in Los Angeles (PDT, UTC-7). */
-const SIX_PM = new Date("2026-09-23T01:00:00.000Z");
 
 const pin = (id: string, nextFollowUpAt: string | null): MapContact => ({
   id,
@@ -41,11 +45,6 @@ const pin = (id: string, nextFollowUpAt: string | null): MapContact => ({
 });
 
 describe("overdue on the map", () => {
-  it("runs in Los Angeles", () => {
-    expect(SIX_PM.getHours()).toBe(18);
-    expect(SIX_PM.getDate()).toBe(22);
-  });
-
   it("counts a follow-up only once its day is before today", () => {
     const pins = [
       pin("tomorrow", "2026-09-23"),

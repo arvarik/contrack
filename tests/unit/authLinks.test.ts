@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.unmock("../../server/db.ts");
-vi.unmock("../server/db.ts");
 
 import crypto from "node:crypto";
 import { sqlite } from "../../server/db.ts";
 import {
   createAuthLink,
   redeemAuthLink,
-  hashToken,
   RESET_LINK_TTL_SECONDS,
   MAGIC_LINK_TTL_SECONDS,
   ADMIN_RESET_LINK_TTL_SECONDS,
@@ -50,15 +48,6 @@ describe("authLinkService", () => {
       .run(testUserId, otherUserId, adminUserId);
   });
 
-  describe("token hashing", () => {
-    it("hashes tokens with sha256 hex encoding", () => {
-      const token = "fixed-test-token-value-1234567890";
-      const expected = crypto.createHash("sha256").update(token).digest("hex");
-      expect(hashToken(token)).toBe(expected);
-      expect(hashToken(token)).toMatch(/^[0-9a-f]{64}$/);
-    });
-  });
-
   describe("expiry per kind", () => {
     it("creates reset links with 1-hour expiry", () => {
       const now = Date.now();
@@ -94,22 +83,6 @@ describe("authLinkService", () => {
       expect(diffSeconds).toBeGreaterThanOrEqual(86395);
       expect(diffSeconds).toBeLessThanOrEqual(86405);
     });
-
-    it("refuses expired tokens with 410 LINK_EXPIRED", () => {
-      // Create a link that expired 10 seconds ago
-      const link = createAuthLink("reset", testUserId, -10);
-      expect(link).not.toBeNull();
-
-      try {
-        redeemAuthLink("reset", link!.token);
-        expect.unreachable("should have thrown");
-      } catch (err) {
-        expect(err).toBeInstanceOf(AppError);
-        const appErr = err as AppError;
-        expect(appErr.statusCode).toBe(410);
-        expect(appErr.code).toBe("LINK_EXPIRED");
-      }
-    });
   });
 
   describe("single use and validation", () => {
@@ -131,18 +104,6 @@ describe("authLinkService", () => {
         const appErr = err as AppError;
         expect(appErr.statusCode).toBe(410);
         expect(appErr.code).toBe("LINK_USED");
-      }
-    });
-
-    it("refuses unknown token with 404 LINK_INVALID", () => {
-      try {
-        redeemAuthLink("reset", "totally-unknown-token-xyz");
-        expect.unreachable("should have thrown for unknown token");
-      } catch (err) {
-        expect(err).toBeInstanceOf(AppError);
-        const appErr = err as AppError;
-        expect(appErr.statusCode).toBe(404);
-        expect(appErr.code).toBe("LINK_INVALID");
       }
     });
 

@@ -11,10 +11,18 @@
 //   • Every row carries `ownerTok`, and it is the same string
 //     `ownerToken()` builds. Phase 2 scopes search by matching on it, and a
 //     mismatch between the SQL and the helper means every scoped search
-//     silently returns nothing.
+//     silently returns nothing. The scoped searches in
+//     tests/integration/search.index.test.ts check it.
+//     tests/unit/tenancy.scope.test.ts pins the helper to the same SQL
+//     form, and the snapshot holds the trigger's copy of it.
 //   • `contacts_au` fires on `ownerId`, so reassigning a contact reindexes it.
 //
 // The snapshot is here to make a change to any of them deliberate.
+//
+// The BM25 weights are positional. bm25() counts the UNINDEXED contactId
+// column, so a list one entry short shifts every weight one column to the
+// left, and "name" gets the weight meant for contactId. That was the state in
+// v1.5.5.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
@@ -25,7 +33,6 @@ import {
   contactTriggerSql,
 } from "../../server/services/search/ftsIndex.ts";
 import { WEIGHTS } from "../../server/services/search/lexical.ts";
-import { ownerToken } from "../../server/tenancy/scope.ts";
 
 const sql = contactTriggerSql();
 
@@ -42,15 +49,6 @@ describe("FTS trigger SQL", () => {
     expect(deletes.length).toBeGreaterThan(0);
     for (const statement of deletes) {
       expect(statement).toMatch(/WHERE rowid = old\.rowid/);
-    }
-  });
-
-  it("writes ownerTok on every insert", () => {
-    const inserts = sql.match(/INSERT INTO contacts_fts[^;]*/gi) ?? [];
-    expect(inserts.length).toBe(2); // contacts_ai and contacts_au
-    for (const statement of inserts) {
-      expect(statement).toContain("ownerTok");
-      expect(statement).toContain("'o' || replace(c.ownerId, '-', '')");
     }
   });
 
@@ -72,45 +70,45 @@ describe("FTS trigger SQL", () => {
 });
 
 describe("BM25 weights", () => {
-  it("declares one weight per FTS column", () => {
-    const columns = COLUMNS.split(",").length;
-    const weights = WEIGHTS.split(",").length;
-    expect(weights, `${weights} weights for ${columns} columns`).toBe(columns);
+  it("applies weights by column position, including the UNINDEXED column", () => {
+    const db = new Database(":memory:");
+    db.exec("CREATE VIRTUAL TABLE t USING fts5(id UNINDEXED, a, b)");
+    const insert = db.prepare("INSERT INTO t(id, a, b) VALUES (?, ?, ?)");
+    insert.run("in-a", "needle", "filler");
+    insert.run("in-b", "filler", "needle");
+
+    // bm25() returns a negative score, so ascending order is best-first.
+    const best = (weights: string) =>
+      (
+        db
+          .prepare(
+            `SELECT id FROM t WHERE t MATCH 'needle' ORDER BY bm25(t, ${weights})`,
+          )
+          .all() as { id: string }[]
+      )[0].id;
+
+    // Position 0 is the UNINDEXED id, position 1 is a, position 2 is b.
+    expect(best("0.0, 10.0, 1.0")).toBe("in-a");
+    expect(best("0.0, 1.0, 10.0")).toBe("in-b");
+    db.close();
   });
 
-  it("gives contactId and ownerTok no ranking influence", () => {
+  it("declares one weight per FTS column, none for contactId or ownerTok, and the most for name", () => {
     const weights = WEIGHTS.split(",").map((w) => Number(w.trim()));
     const columns = COLUMNS.split(",").map((c) => c.trim());
-    expect(weights[columns.indexOf("contactId")]).toBe(0);
+
+    expect(
+      weights,
+      `${weights.length} weights for ${columns.length} columns`,
+    ).toHaveLength(columns.length);
+    expect(weights.every((w) => Number.isFinite(w))).toBe(true);
+    // contactId is UNINDEXED and can never match, so it must not score.
+    expect(columns[0]).toBe("contactId");
+    expect(weights[0]).toBe(0);
+    // ownerTok is a scoping filter, so it must not score either.
     expect(weights[columns.indexOf("ownerTok")]).toBe(0);
-  });
-});
-
-describe("the owner token", () => {
-  it("is one FTS5 term, and the same string the SQL builds", () => {
-    const db = new Database(":memory:");
-    try {
-      const id = "3f2c1d0e-9a84-4b7c-8d6e-5f4a3b2c1d0e";
-      const fromSql = (
-        db.prepare("SELECT 'o' || replace(?, '-', '') AS tok").get(id) as {
-          tok: string;
-        }
-      ).tok;
-      expect(ownerToken({ ownerId: id } as never)).toBe(fromSql);
-
-      // A raw UUID would be five terms under unicode61, which is why the
-      // hyphens come out. fts5vocab is how that gets checked rather than
-      // assumed.
-      db.exec(`CREATE VIRTUAL TABLE t USING fts5(ownerTok);
-        CREATE VIRTUAL TABLE tok_v USING fts5vocab(t, 'row');`);
-      db.prepare("INSERT INTO t (ownerTok) VALUES (?)").run(fromSql);
-      const terms = db.prepare("SELECT term FROM tok_v").all() as {
-        term: string;
-      }[];
-      expect(terms).toHaveLength(1);
-      expect(terms[0].term).toBe(fromSql.toLowerCase());
-    } finally {
-      db.close();
-    }
+    // name is the most informative column and outranks the rest.
+    expect(columns[1]).toBe("name");
+    expect(Math.max(...weights)).toBe(weights[1]);
   });
 });

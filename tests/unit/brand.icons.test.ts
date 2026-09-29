@@ -204,8 +204,8 @@ describe("the app icons", () => {
         type: string;
       }>;
     };
-    expect(manifest.theme_color).toBe("#006a91");
-    expect(manifest.background_color).toBe("#f8f6f2");
+    expect(manifest.theme_color).toBe(BRAND.mark);
+    expect(manifest.background_color).toBe(BRAND.surface);
     const listed = manifest.icons.map(
       (icon) => `${icon.purpose}:${icon.sizes}`,
     );

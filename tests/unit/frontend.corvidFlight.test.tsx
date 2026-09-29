@@ -297,6 +297,33 @@ describe("CorvidFlight", () => {
     expect(perchBird().style.visibility).toBe("");
   });
 
+  it("leaves from the perch that is on screen, not a hidden one before it", () => {
+    // Below `md` the sidebar's perch stays in the DOM with no layout box, and
+    // the Settings footer carries the one on screen. A bird that left from
+    // the hidden one would leave from the corner of the window.
+    render(
+      <MemoryRouter>
+        <span {...perchProps} />
+        <Perch />
+        <CorvidFlight />
+      </MemoryRouter>,
+    );
+    screen.getByTestId("perch").getBoundingClientRect = () => box(16, 12, 40);
+    fly();
+    expect(overlay()).not.toBeNull();
+    expect(birdAt()[0]).toBeCloseTo(38.4, 1);
+  });
+
+  it("swoops in from off screen when the page has no perch at all", () => {
+    render(
+      <MemoryRouter>
+        <CorvidFlight />
+      </MemoryRouter>,
+    );
+    fly("swoop");
+    expect(birdAt()[0]).toBeLessThan(0);
+  });
+
   it("hears a second press only while the bird is out and on its way", () => {
     mount();
     fly();

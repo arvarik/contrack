@@ -12,9 +12,13 @@
 //
 // This test follows every relative import from server.ts and from each
 // script in scripts/, so a gap fails here instead of at `node server.ts`.
+// It also runs Node's own type stripper on every file it reaches, so an enum,
+// a namespace or a parameter property fails here whatever tsconfig says.
+// verbatimModuleSyntax has no such check, so the last test reads the flag.
 // =============================================================================
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 
@@ -51,6 +55,11 @@ function problems(entries: string[]): string[] {
     const file = queue.pop()!;
     if (seen.has(file)) continue;
     seen.add(file);
+    try {
+      stripTypeScriptTypes(readFileSync(file, "utf8"));
+    } catch (err) {
+      found.push(`${path.relative(ROOT, file)}: ${(err as Error).message}`);
+    }
     for (const spec of relativeImports(file)) {
       const target = path.resolve(path.dirname(file), spec);
       const from = path.relative(ROOT, file);
@@ -69,17 +78,16 @@ function problems(entries: string[]): string[] {
 }
 
 describe("native TypeScript", () => {
-  it("resolves every import the server loads", () => {
+  it("resolves every import the server loads, and strips every file's types", () => {
     expect(problems([path.join(ROOT, "server.ts")])).toEqual([]);
   });
 
-  it("resolves every import each script loads", () => {
+  it("resolves every import each script loads, and strips every file's types", () => {
     expect(problems(scriptEntries(path.join(ROOT, "scripts")))).toEqual([]);
   });
 
-  it("keeps the compiler checks that stand in for a loader", () => {
+  it("keeps the compiler check that stands in for a loader", () => {
     const tsconfig = readFileSync(path.join(ROOT, "tsconfig.json"), "utf8");
     expect(tsconfig).toMatch(/"verbatimModuleSyntax":\s*true/);
-    expect(tsconfig).toMatch(/"erasableSyntaxOnly":\s*true/);
   });
 });

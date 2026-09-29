@@ -63,6 +63,10 @@ const mockContacts: MapContact[] = [
   },
 ];
 
+/**
+ * The toolbar over one filter, as the map page has it. With `results`, the
+ * bottom line and the list of who is on the map come under it.
+ */
 function TestComponent({
   contacts = mockContacts,
   map = null,
@@ -74,6 +78,7 @@ function TestComponent({
   onStartLasso,
   onSelectInView,
   room,
+  results = false,
 }: {
   room?: number | null;
   contacts?: MapContact[];
@@ -85,31 +90,48 @@ function TestComponent({
   onOpenSaveModal?: () => void;
   onStartLasso?: () => void;
   onSelectInView?: () => void;
+  results?: boolean;
 }) {
   const filter = useMapFilter(contacts);
 
   return (
-    <MapToolbar
-      map={map}
-      rawInput={filter.rawInput}
-      setRawInput={filter.setRawInput}
-      tokenizer={filter.tokenizer}
-      effectiveFilters={filter.effectiveFilters}
-      totalCount={filter.totalCount}
-      matchCount={filter.matchCount}
-      hasActiveFilter={filter.hasActiveFilter}
-      resolveNearFilters={filter.resolveNearFilters}
-      clearFilters={filter.clearFilters}
-      layer={layer}
-      onLayerChange={onLayerChange}
-      onFitAll={() => {}}
-      views={views}
-      onSelectView={onSelectView}
-      onOpenSaveModal={onOpenSaveModal}
-      onStartLasso={onStartLasso}
-      onSelectInView={onSelectInView}
-      room={room}
-    />
+    <>
+      <MapToolbar
+        map={map}
+        rawInput={filter.rawInput}
+        setRawInput={filter.setRawInput}
+        tokenizer={filter.tokenizer}
+        effectiveFilters={filter.effectiveFilters}
+        totalCount={filter.totalCount}
+        matchCount={filter.matchCount}
+        hasActiveFilter={filter.hasActiveFilter}
+        resolveNearFilters={filter.resolveNearFilters}
+        clearFilters={filter.clearFilters}
+        layer={layer}
+        onLayerChange={onLayerChange}
+        onFitAll={() => {}}
+        views={views}
+        onSelectView={onSelectView}
+        onOpenSaveModal={onOpenSaveModal}
+        onStartLasso={onStartLasso}
+        onSelectInView={onSelectInView}
+        room={room}
+      />
+      {results && (
+        <>
+          <StatsStrip
+            stats={computeMapStats(filter.filteredContacts)}
+            overdueOnly={filter.overdueOnly}
+            onOverdueOnlyChange={filter.setOverdueOnly}
+          />
+          <ul aria-label="On the map">
+            {filter.filteredContacts.map((contact) => (
+              <li key={contact.id}>{contact.name}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
   );
 }
 
@@ -127,6 +149,12 @@ function renderWithProviders(ui: React.ReactElement, initialPath = "/map") {
     </QueryClientProvider>,
   );
 }
+
+/** The names on the map, in order, from the list `results` adds. */
+const shown = () =>
+  Array.from(
+    screen.getByRole("list", { name: "On the map" }).querySelectorAll("li"),
+  ).map((item) => item.textContent);
 
 describe("MapToolbar and useMapFilter", () => {
   beforeEach(() => {
@@ -175,83 +203,30 @@ describe("MapToolbar and useMapFilter", () => {
   });
 
   it("filters contacts by company facet token", async () => {
-    function FilterTester() {
-      const filter = useMapFilter(mockContacts);
-      return (
-        <div>
-          <MapToolbar
-            map={null}
-            rawInput={filter.rawInput}
-            setRawInput={filter.setRawInput}
-            tokenizer={filter.tokenizer}
-            effectiveFilters={filter.effectiveFilters}
-            totalCount={filter.totalCount}
-            matchCount={filter.matchCount}
-            hasActiveFilter={filter.hasActiveFilter}
-            resolveNearFilters={filter.resolveNearFilters}
-            clearFilters={filter.clearFilters}
-            layer="pins"
-            onLayerChange={() => {}}
-            onFitAll={() => {}}
-          />
-          <div data-testid="matches">
-            {filter.filteredContacts.map((c) => c.name).join(", ")}
-          </div>
-        </div>
-      );
-    }
-
-    renderWithProviders(<FilterTester />, "/map?q=company:Babbage%20");
+    renderWithProviders(<TestComponent results />, "/map?q=company:Babbage%20");
 
     await waitFor(() => {
-      expect(screen.getByTestId("matches").textContent).toBe("Ada Lovelace");
+      expect(shown()).toEqual(["Ada Lovelace"]);
     });
   });
 
   it("shows 0 of N match and allows clearing filters", async () => {
-    function FilterTester() {
-      const filter = useMapFilter(mockContacts);
-      return (
-        <div>
-          <MapToolbar
-            map={null}
-            rawInput={filter.rawInput}
-            setRawInput={filter.setRawInput}
-            tokenizer={filter.tokenizer}
-            effectiveFilters={filter.effectiveFilters}
-            totalCount={filter.totalCount}
-            matchCount={filter.matchCount}
-            hasActiveFilter={filter.hasActiveFilter}
-            resolveNearFilters={filter.resolveNearFilters}
-            clearFilters={filter.clearFilters}
-            layer="pins"
-            onLayerChange={() => {}}
-            onFitAll={() => {}}
-          />
-          <div data-testid="matches">
-            {filter.filteredContacts.map((c) => c.name).join(", ")}
-          </div>
-        </div>
-      );
-    }
-
-    renderWithProviders(<FilterTester />, "/map?q=company:NonExistent%20");
+    renderWithProviders(
+      <TestComponent results />,
+      "/map?q=company:NonExistent%20",
+    );
 
     await waitFor(() => {
       expect(screen.getByText("0 of 2 match")).toBeTruthy();
-      expect(screen.getByTestId("matches").textContent).toBe("");
+      expect(shown()).toEqual([]);
     });
 
     const clearButton = screen.getByRole("button", { name: "Clear filters" });
     fireEvent.click(clearButton);
 
     await waitFor(() => {
-      expect(screen.getByTestId("matches").textContent).toContain(
-        "Ada Lovelace",
-      );
-      expect(screen.getByTestId("matches").textContent).toContain(
-        "Grace Hopper",
-      );
+      expect(shown()).toContain("Ada Lovelace");
+      expect(shown()).toContain("Grace Hopper");
     });
   });
 
@@ -322,31 +297,6 @@ describe("MapToolbar and useMapFilter", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert").textContent).toContain(
         "Nothing found for that place",
-      );
-    });
-  });
-
-  describe("client-side validateBounds", () => {
-    it("accepts valid bounds within [-180, 180] and [-90, 90] with south < north", async () => {
-      const { validateBounds } = await import("../../src/api/mapViews");
-      expect(() => validateBounds([-180, -90, 180, 90])).not.toThrow();
-      expect(() => validateBounds([-0.2, 51.4, 0.0, 51.6])).not.toThrow();
-      expect(() => validateBounds([0, 0, 10, 10])).not.toThrow();
-    });
-
-    it("rejects invalid bounds coordinates and order", async () => {
-      const { validateBounds } = await import("../../src/api/mapViews");
-      expect(() => validateBounds(null)).toThrow(/array of 4 coordinates/);
-      expect(() => validateBounds([1, 2, 3])).toThrow(/array of 4 coordinates/);
-      expect(() => validateBounds(["-180", -90, 180, 90])).toThrow(
-        /finite numbers/,
-      );
-      expect(() => validateBounds([-185, 0, 10, 10])).toThrow(/West longitude/);
-      expect(() => validateBounds([0, 0, 185, 10])).toThrow(/East longitude/);
-      expect(() => validateBounds([0, -95, 10, 10])).toThrow(/South latitude/);
-      expect(() => validateBounds([0, 0, 10, 95])).toThrow(/North latitude/);
-      expect(() => validateBounds([0, 50, 10, 40])).toThrow(
-        /South latitude must be less than north latitude/,
       );
     });
   });
@@ -439,40 +389,6 @@ const daysAgo = (days: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** The toolbar and the bottom line over one filter, as the map page has them. */
-function OverdueHarness({ contacts }: { contacts: MapContact[] }) {
-  const filter = useMapFilter(contacts);
-  return (
-    <>
-      <MapToolbar
-        map={null}
-        rawInput={filter.rawInput}
-        setRawInput={filter.setRawInput}
-        tokenizer={filter.tokenizer}
-        effectiveFilters={filter.effectiveFilters}
-        totalCount={filter.totalCount}
-        matchCount={filter.matchCount}
-        hasActiveFilter={filter.hasActiveFilter}
-        resolveNearFilters={filter.resolveNearFilters}
-        clearFilters={filter.clearFilters}
-        layer="pins"
-        onLayerChange={() => {}}
-        onFitAll={() => {}}
-      />
-      <StatsStrip
-        stats={computeMapStats(filter.filteredContacts)}
-        overdueOnly={filter.overdueOnly}
-        onOverdueOnlyChange={filter.setOverdueOnly}
-      />
-      <ul aria-label="On the map">
-        {filter.filteredContacts.map((contact) => (
-          <li key={contact.id}>{contact.name}</li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
 // No facet filters by follow-up, so overdue is a filter of its own, pressed
 // on the bottom line, and Clear filters clears it with the query.
 describe("the overdue filter", () => {
@@ -480,15 +396,11 @@ describe("the overdue filter", () => {
     { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
     { ...mockContacts[1], nextFollowUpAt: null },
   ];
-  const shown = () =>
-    Array.from(
-      screen.getByRole("list", { name: "On the map" }).querySelectorAll("li"),
-    ).map((item) => item.textContent);
 
   afterEach(() => cleanup());
 
   it("narrows the map to the overdue, and lets everyone back", () => {
-    renderWithProviders(<OverdueHarness contacts={people} />);
+    renderWithProviders(<TestComponent contacts={people} results />);
     expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
 
     fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
@@ -504,7 +416,7 @@ describe("the overdue filter", () => {
   });
 
   it("clears with the query when nobody matches both", () => {
-    renderWithProviders(<OverdueHarness contacts={people} />);
+    renderWithProviders(<TestComponent contacts={people} results />);
     fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Filter contacts" }), {
       target: { value: "Hopper" },

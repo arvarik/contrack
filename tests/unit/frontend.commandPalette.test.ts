@@ -382,7 +382,7 @@ describe("useSearchHistory", () => {
 });
 
 describe("ZeroStateView", () => {
-  it("renders history entries with mode icons and propagates mode to onSelectHistory", async () => {
+  it("shows history entries without the ? prefix and passes the mode to onSelectHistory", async () => {
     const { render, screen, fireEvent } =
       await import("@testing-library/react");
     const { Command } = await import("cmdk");

@@ -9,16 +9,41 @@
  * contact with an address the geocoder has not placed gets a line of text,
  * a contact with neither gets nothing at all, and either of the first two
  * can open the dialog.
+ *
+ * And when it asks for the map. A contact page is built fresh for each
+ * person, so this map is a new WebGL canvas every time somebody moves down
+ * the list. Two rules keep that from showing, and both are timing, which the
+ * "timing" block pins down on a fake clock:
+ *
+ *   1. The map is built only once the same pin has held still for
+ *      SETTLE_MS. Pass through a person and nothing is built at all.
+ *   2. The placeholder holds until the map says it has loaded. The map fades
+ *      up through it, so the empty canvas is never on screen.
+ *
+ * A check that no map is drawn proves nothing before that wait is over, so
+ * the two such checks that are not about timing (over the map page, and
+ * for an address with no pin) run on the fake clock too.
  */
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+/** The props the map was asked for, and the hook it reports loading with. */
 const mapProps = vi.fn();
+let reportReady: (() => void) | null = null;
 vi.mock("../../src/views/map/ContactMap", () => ({
-  ContactMap: (props: Record<string, unknown>) => {
+  ContactMap: (
+    props: Record<string, unknown> & { onMapReady?: (map: unknown) => void },
+  ) => {
     mapProps(props);
+    reportReady = () => props.onMapReady?.({});
     return <div data-testid="contact-map" />;
   },
 }));
@@ -31,7 +56,8 @@ vi.mock("../../src/views/map/AdjustPinModal", () => ({
   },
 }));
 
-const { LocationMiniMap } = await import("../../src/views/map/LocationMiniMap");
+const { LocationMiniMap, SETTLE_MS } =
+  await import("../../src/views/map/LocationMiniMap");
 
 const ADA = {
   id: "c1",
@@ -98,13 +124,6 @@ describe("LocationMiniMap", () => {
     expect(props.label).toBe("Location map");
   });
 
-  it("says an address the geocoder has not placed is not on the map", () => {
-    draw({ ...ADA, lat: null, lng: null }, true);
-    expect(screen.getByText("Not on the map yet")).toBeTruthy();
-    expect(screen.queryByTestId("contact-map")).toBeNull();
-    expect(screen.getByRole("button", { name: "Set location" })).toBeTruthy();
-  });
-
   it("draws nothing for a contact with no address and no pin", () => {
     const { container } = draw({ ...ADA, lat: null, lng: null }, false);
     expect(container.textContent).toBe("");
@@ -138,24 +157,6 @@ describe("LocationMiniMap", () => {
     expect(await screen.findByTestId("adjust-pin-modal")).toBeTruthy();
   });
 
-  it("keeps the actions and drops the picture over the map page", async () => {
-    render(
-      <MemoryRouter initialEntries={["/map/contact/c1"]}>
-        <LocationMiniMap contact={{ ...ADA, geoSource: "manual" }} hasAddress />
-      </MemoryRouter>,
-    );
-
-    // The map behind the panel already holds the pin, so no second map and
-    // no link to where the reader already is. A wrong pin is most visible
-    // from there, so the way to fix it stays.
-    expect(screen.getByRole("button", { name: "Adjust pin" })).toBeTruthy();
-    expect(screen.getByText("Placed by hand")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Open in map" })).toBeNull();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.queryByTestId("contact-map")).toBeNull();
-    expect(mapProps).not.toHaveBeenCalled();
-  });
-
   it("says when a person placed the pin, and only then", async () => {
     draw(ADA, true);
     await screen.findByTestId("contact-map");
@@ -168,5 +169,140 @@ describe("LocationMiniMap", () => {
     expect(
       screen.getByRole("button", { name: "About Placed by hand" }),
     ).toBeTruthy();
+  });
+
+  describe("timing", () => {
+    /**
+     * Move time on by `ms` and let React finish.
+     *
+     * The map is behind `React.lazy`, which resolves in a microtask rather
+     * than on a timer, so the flush has to follow the clock. `waitFor` is no
+     * use here: it polls on the same fake clock this test is driving.
+     */
+    async function tick(ms: number) {
+      await act(async () => {
+        vi.advanceTimersByTime(ms);
+      });
+      await act(async () => {});
+    }
+
+    /** Push past the wait, and let the map's chunk arrive. */
+    const settle = () => tick(SETTLE_MS);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      reportReady = null;
+    });
+
+    afterEach(() => {
+      cleanup();
+      vi.useRealTimers();
+    });
+
+    it("builds no map until the pin has held still", async () => {
+      draw(ADA, true);
+
+      // The caption is there from the first frame. The map is not.
+      expect(screen.getByRole("link", { name: "Open in map" })).toBeTruthy();
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+
+      await tick(SETTLE_MS - 1);
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+
+      await tick(1);
+      expect(screen.getByTestId("contact-map")).toBeTruthy();
+    });
+
+    it("builds nothing at all for a contact that is passed through", async () => {
+      const { rerender } = draw(ADA, true);
+      await tick(SETTLE_MS - 1);
+
+      // On to the next person a moment before Ada's wait is over. Her wait
+      // must not build a map for the next pin.
+      const grace = {
+        ...ADA,
+        id: "c2",
+        name: "Grace Hopper",
+        company: "US Navy",
+        location: "Arlington, VA",
+        lat: 38.8799,
+        lng: -77.1067,
+      };
+      rerender(
+        <MemoryRouter>
+          <LocationMiniMap contact={grace} hasAddress />
+        </MemoryRouter>,
+      );
+      await tick(1);
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+
+      await settle();
+      expect(screen.getByTestId("contact-map")).toBeTruthy();
+    });
+
+    it("starts the wait again when the pin moves", async () => {
+      const { rerender } = draw(ADA, true);
+      await settle();
+      expect(screen.getByTestId("contact-map")).toBeTruthy();
+
+      // The same person, somewhere else: a new place to draw, a new wait.
+      rerender(
+        <MemoryRouter>
+          <LocationMiniMap
+            contact={{ ...ADA, lat: -33.8688, lng: 151.209 }}
+            hasAddress
+          />
+        </MemoryRouter>,
+      );
+      await act(async () => {});
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+
+      await settle();
+      expect(screen.getByTestId("contact-map")).toBeTruthy();
+    });
+
+    it("holds the map clear until it reports that it has loaded", async () => {
+      draw(ADA, true);
+      await settle();
+
+      const fader = () =>
+        screen.getByTestId("contact-map").closest("[class*='opacity-']");
+      expect(fader()?.className).toContain("opacity-0");
+
+      await act(async () => {
+        reportReady?.();
+      });
+      expect(fader()?.className).toContain("opacity-100");
+    });
+
+    it("says an address the geocoder has not placed is not on the map", async () => {
+      draw({ ...ADA, lat: null, lng: null }, true);
+      expect(screen.getByText("Not on the map yet")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Set location" })).toBeTruthy();
+
+      await tick(SETTLE_MS * 4);
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+    });
+
+    it("keeps the actions and drops the picture over the map page", async () => {
+      render(
+        <MemoryRouter initialEntries={["/map/contact/c1"]}>
+          <LocationMiniMap
+            contact={{ ...ADA, geoSource: "manual" }}
+            hasAddress
+          />
+        </MemoryRouter>,
+      );
+
+      // The map behind the panel already holds the pin, so no second map and
+      // no link to where the reader already is. A wrong pin is most visible
+      // from there, so the way to fix it stays.
+      expect(screen.getByRole("button", { name: "Adjust pin" })).toBeTruthy();
+      expect(screen.getByText("Placed by hand")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Open in map" })).toBeNull();
+      await tick(SETTLE_MS * 4);
+      expect(screen.queryByTestId("contact-map")).toBeNull();
+      expect(mapProps).not.toHaveBeenCalled();
+    });
   });
 });

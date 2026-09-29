@@ -99,6 +99,44 @@ describe("useHeatUnderLabels", () => {
     expect(fake.listening("styledata")).toBe(0);
   });
 
+  it.each<[string, Layer[], [string, string][]]>([
+    [
+      // The dark basemap names the water under its roads. The heat under
+      // that label had the roads drawn across it.
+      "where the labels start, over the last road",
+      [
+        { id: "background", type: "background" },
+        { id: "water", type: "fill" },
+        { id: "water_name", type: "symbol", source: "openmaptiles" },
+        { id: "road", type: "line" },
+        { id: "place_city", type: "symbol", source: "openmaptiles" },
+        { id: "place_town", type: "symbol", source: "openmaptiles" },
+      ],
+      [[HEAT_LAYER_ID, "place_city"]],
+    ],
+    [
+      "nothing in a style with no labels",
+      [
+        { id: "background", type: "background" },
+        { id: "water", type: "fill" },
+      ],
+      [],
+    ],
+  ])("finds %s", (_label, basemap, moves) => {
+    const fake = fakeMap(
+      [
+        ...basemap,
+        { id: HEAT_LAYER_ID, type: "heatmap", source: "contacts-heat" },
+      ],
+      {
+        openmaptiles: { type: "vector" },
+        "contacts-heat": { type: "geojson" },
+      },
+    );
+    renderHook(() => useHeatUnderLabels(fake.map, true));
+    expect(fake.raw.moveLayer.mock.calls).toEqual(moves);
+  });
+
   it("does nothing while the heat is off", () => {
     const fake = fakeMap(BASEMAP, { openmaptiles: { type: "vector" } });
     renderHook(() => useHeatUnderLabels(fake.map, false));

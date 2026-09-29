@@ -9,27 +9,9 @@ import React, { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import {
-  liftAt,
   PROXIMITY_ROW_ATTR,
   useProximityLift,
 } from "../../src/hooks/useProximityLift";
-
-describe("liftAt", () => {
-  it("is 1 at a row's centre, half on the line between rows and 0 a row away", () => {
-    expect(liftAt(0)).toBe(1);
-    expect(liftAt(0.5)).toBeCloseTo(0.5);
-    expect(liftAt(1)).toBe(0);
-    expect(liftAt(1.7)).toBe(0);
-  });
-
-  it("hands the lift from one row to the next without losing any", () => {
-    // The two rows' lifts always add up to one whole lift, so the rise
-    // moves between rows rather than dipping or doubling on the way.
-    for (const d of [0, 0.1, 0.25, 0.5, 0.8, 1]) {
-      expect(liftAt(d) + liftAt(1 - d)).toBeCloseTo(1);
-    }
-  });
-});
 
 /** Three 56 px rows, 8 px apart, from y 0. */
 const ROW = 56;
@@ -123,6 +105,21 @@ describe("useProximityLift", () => {
     const [first, second] = lifts().map(Number);
     expect(first).toBeCloseTo(0.5, 1);
     expect(second).toBeCloseTo(0.5, 1);
+  });
+
+  it("hands the lift from one row to the next without losing any", async () => {
+    // Between row 0's centre (y 28) and row 1's (y 92) the lifts always add
+    // up to one whole lift, so the rise moves between rows rather than
+    // dipping or doubling on the way.
+    const list = screen.getByTestId("list");
+    for (const y of [28, 34, 44, 60, 76, 86]) {
+      list.dispatchEvent(pointer("pointermove", y));
+      await nextFrame();
+      const total = lifts()
+        .map(Number)
+        .reduce((sum, p) => sum + p, 0);
+      expect(total, `y ${y}`).toBeCloseTo(1);
+    }
   });
 
   it("lays the rows down when the pointer leaves or a key is pressed", async () => {

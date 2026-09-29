@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // =============================================================================
-// The local time on a contact's meta line, and its zone
+// The local time on a contact's meta line, its zone, and the weather
 // =============================================================================
 // "New York · 2:13 PM EDT". The zone is the abbreviation people write when
 // one exists, found by asking a short list of locales, and the short offset
@@ -13,12 +13,11 @@
 // =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   LocalTimeWeather,
   describeLocalTime,
-  roundCoordinate,
-  weatherUrl,
   zoneName,
 } from "../../src/components/LocalTimeWeather";
 
@@ -29,6 +28,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("zoneName", () => {
@@ -161,18 +161,50 @@ describe("LocalTimeWeather", () => {
   });
 });
 
-// Open-Meteo is a third party. It gets the town, not the contact's front door:
-// both coordinates rounded to two decimals, about 1.1 km.
-describe("weatherUrl", () => {
-  it("rounds both coordinates to two decimals", () => {
-    expect(roundCoordinate(-33.868819)).toBe(-33.87);
-    expect(roundCoordinate(151.209295)).toBe(151.21);
-    expect(roundCoordinate(40.7)).toBe(40.7);
-    expect(roundCoordinate(0.004)).toBe(0);
+// Open-Meteo is a third party. It is asked only when the weather is allowed,
+// and it gets the town, not the contact's front door: both coordinates
+// rounded to two decimals, about 1.1 km.
+describe("the weather", () => {
+  /** A pin on a front door in Sydney, finer than the town. */
+  const DOOR = { lat: -33.868819, lng: 151.209295 };
+
+  /** Draw the time and the weather, with every request answered 13°C. */
+  function mount(showWeather: boolean) {
+    const fetchMock = vi.fn((_url: string) =>
+      Promise.resolve(
+        Response.json({
+          current_weather: { temperature: 13, weathercode: 0 },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <LocalTimeWeather {...DOOR} showWeather={showWeather} />
+      </QueryClientProvider>,
+    );
+    return fetchMock;
+  }
+
+  it("never asks Open-Meteo when the weather is not allowed", async () => {
+    const fetchMock = mount(false);
+    expect(screen.getByText(/local time/)).toBeTruthy();
+    // Give a query that should not exist the chance to start.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/°C/)).toBeNull();
   });
 
-  it("asks Open-Meteo for the current weather at the rounded point", () => {
-    const url = new URL(weatherUrl(-33.868819, 151.209295));
+  it("asks Open-Meteo once for the current weather at the rounded point, and shows the temperature", async () => {
+    const fetchMock = mount(true);
+    await waitFor(() => expect(screen.getByText("13°C")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = new URL(fetchMock.mock.calls[0][0]);
     expect(url.origin).toBe("https://api.open-meteo.com");
     expect(url.pathname).toBe("/v1/forecast");
     expect(url.searchParams.get("latitude")).toBe("-33.87");

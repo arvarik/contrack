@@ -70,12 +70,10 @@ describe("the arc", () => {
     );
   });
 
+  // One score a band. The band edges belong to scoreBand.test.ts.
   it.each([
     [100, "success"],
-    [70, "success"],
-    [69, "warning"],
-    [40, "warning"],
-    [39, "error"],
+    [55, "warning"],
     [5, "error"],
   ])("colours a score of %i with the %s token", (score, token) => {
     const { arc, root } = mount({
