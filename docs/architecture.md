@@ -53,6 +53,19 @@ graph TD
 | **Virtualization** | @tanstack/react-virtual              | <20ms page transitions for 100K+ contacts                       |
 | **Mapping**        | MapLibre GL + @vis.gl/react-maplibre | Vector basemap from OpenFreeMap, clustering done by the map     |
 
+### Code Loading
+
+The Network list and the contact page are in the first bundle. Every other view is its own module: the map, Pulse, Ask Contrack, Settings, and each settings page. Two rules make a view open at once all the same:
+
+1. **Warm in idle moments.** The app loads the map's code, then Settings' shell and the code of each settings page the viewer can open, one per idle moment (`src/lib/idle.ts`, `src/views/settings/warm.ts`). All of Settings is about 106 KB gzipped. Pointing at, focusing or pressing a link to Settings or to a settings page starts its code too, and its first data when the page exports a `prefetch` (the Account page reads its devices, tokens and passkeys). A browser told to save data is left alone.
+2. **Render at once when loaded.** `React.lazy` suspends on its first render even when the module is in memory, and in a Suspense boundary that is new on screen React shows the fallback and holds the content back until 300 ms after it. `src/lib/preloadable.tsx` keeps the loaded module, so the view renders in the same frame. Settings has one Suspense boundary for all its pages, which stays on screen from page to page: a page whose code is still on its way keeps the last page up until it arrives.
+
+Measured on 5,824 contacts with a production build: Settings opens from the Network page in 52 to 103 ms (365 ms before), and each settings page opens from the rail in 13 to 63 ms, with no "Loading…".
+
+### Long Lists
+
+A list that can hold every contact draws only the rows near the screen, with `@tanstack/react-virtual`: the Network list, the map's list, the Tracked contacts page, and past 200 rows the Duplicates picker and the Enrichment list (`src/components/ui/VirtualRows.tsx`). `VirtualRows` finds the nearest ancestor that scrolls, the page's one scroller or a box of its own, and up to 200 rows it is a plain list.
+
 ### Design System: "No-Line" Hierarchy
 
 The UI follows strict Tailwind CSS v4 tokens:

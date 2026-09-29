@@ -17,6 +17,11 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
 import { whenIdle } from "./lib/idle";
+import {
+  settingsShell,
+  useWarmSettingsFromApp,
+  warmSettingsShell,
+} from "./views/settings/warm";
 import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
 import { Toaster } from "sonner";
 import { CorvidFlight } from "./components/brand/CorvidFlight";
@@ -44,11 +49,11 @@ const loadMapView = () => import("./views/map");
 const MapView = React.lazy(() =>
   loadMapView().then((m) => ({ default: m.MapView })),
 );
-const SettingsShell = React.lazy(() =>
-  import("./views/settings/SettingsShell").then((m) => ({
-    default: m.SettingsShell,
-  })),
-);
+/**
+ * Settings renders at once when its code is here (`settingsShell` in
+ * `views/settings/warm.ts`), and the app warms that code in idle moments.
+ */
+const SettingsShell = settingsShell.Component;
 const SearchView = React.lazy(() =>
   import("./views/SearchView").then((m) => ({ default: m.SearchView })),
 );
@@ -114,6 +119,9 @@ const ResponsiveLayout = () => {
    * browser told to save data is left alone (see `lib/idle.ts`).
    */
   useEffect(() => whenIdle(() => void loadMapView()), []);
+
+  // Warm Settings the same way: its shell, then its pages (`warm.ts`).
+  useWarmSettingsFromApp();
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
 
@@ -192,6 +200,9 @@ const ResponsiveLayout = () => {
         <Link
           key={label}
           to={to}
+          // A touch on the Settings tab starts its code a moment before the
+          // tap lands (`warm.ts`).
+          onPointerDown={to === "/settings" ? warmSettingsShell : undefined}
           aria-current={active ? "page" : undefined}
           className={cn(
             "relative flex flex-1 flex-col items-center justify-center gap-0.5",

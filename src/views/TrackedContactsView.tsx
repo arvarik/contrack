@@ -11,19 +11,33 @@
  * From the top:
  *
  * 1. The shell's heading and one sentence.
- * 2. A search box that narrows every group by name, company or role, and
- *    the order: Name, or Recently tracked (by `trackedAt`, newest first,
- *    tracked groups only).
+ * 2. One card with the search box (name, company or role), the order, and
+ *    two rows of filter pills, as on the Enrichment page
+ *    (`lib/trackedFilters`):
+ *
+ *    ```
+ *    [ Search by name, company or role ]  [Name|Last spoke|Recently tracked]
+ *    TRACKING     All 5824 · Tracked 79 · Not tracked 5745
+ *    LAST SPOKE   Any · Past month 12 · Past year 80 · Over a year ago 31 · Never
+ *    ```
+ *
+ *    Each pill counts what it would show beside the other row's choice, so
+ *    "Not tracked" and "Past month" together are the people most worth
+ *    tracking next. The filters and the order live in the address, so Back
+ *    from a contact returns to the same list, and a new filter clears the
+ *    selection. Name is A to Z, Last spoke is the last interaction, newest
+ *    first, and Recently tracked is `trackedAt`, newest first (Not tracked
+ *    stays A to Z).
  * 3. The groups, each a section with a heading and a count: At risk,
  *    Fading, Strong, No interactions yet, Not tracked. The first four are
- *    the tracked contacts by `scoreView`. The last is A to Z. Each heading
- *    has an id (`#at-risk`, `#fading`, `#strong`, `#unscored`,
- *    `#not-tracked`) for the Keeping up card's links. An empty group is
- *    left out.
+ *    the tracked contacts by `scoreView`. Each heading has an id
+ *    (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`) for
+ *    the Keeping up card's links. An empty group is left out.
  * 4. A row: the ring, the name as a link, the company, the cadence in words
- *    ("quarterly", or "every 2 months" for a cadence off the four words)
- *    and "3 weeks past due" when it is, and a 44 px toggle named "Untrack
- *    Ada Lovelace" or "Track Ada Lovelace".
+ *    ("quarterly", or "every 2 months" for a cadence off the four words),
+ *    "3 weeks past due" when it is, "spoke 2 months ago" when there is
+ *    an interaction, and a 44 px toggle named "Untrack Ada Lovelace" or
+ *    "Track Ada Lovelace".
  * 5. Select mode, as on the Archived page: Select, Select all in each
  *    group's heading, Done, and a bar with Track, Untrack, a Cadence menu
  *    (the four cadences the app offers: Weekly, Monthly, Quarterly and
@@ -31,41 +45,69 @@
  * 6. Past 200 rows the list is virtualised, the way the Network list is:
  *    the groups flatten into one list of headings and rows.
  * 7. When nobody is tracked, an `EmptyState` says so, and the Not tracked
- *    group under it is the way in.
+ *    group under it is the way in. When the filters leave nobody, an
+ *    `EmptyState` offers to clear them.
  *
  * @module views/TrackedContactsView
  */
 import React, {
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CalendarClock,
+  CalendarDays,
+  CircleDashed,
   CircleSlash,
+  Clock,
+  Globe,
+  History,
   Radar,
   Search,
   SearchX,
   Square,
+  Users,
 } from "lucide-react";
 import { CADENCE_CHOICES, describeCadence } from "../../shared/cadence";
 import { scoreView } from "../../shared/scoreBand";
 import { useContacts } from "../api";
 import { ActionMenu } from "../components/ui/ActionMenu";
 import { EmptyState } from "../components/ui/EmptyState";
+import { FilterRow, type FilterPill } from "../components/ui/FilterRow";
 import { Segmented } from "../components/ui/Segmented";
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
+import { VIRTUAL_ROWS } from "../components/ui/VirtualRows";
 import { useBulkActions } from "../components/bulk/useBulkActions";
 import { useSwapFocus } from "../components/bulk/useSwapFocus";
 import { useTrackToggle, type TrackableContact } from "../hooks/useTrackToggle";
-import { describePastDue, parseServerTime } from "../lib/datetime";
-import { TRACKED_INTRO } from "../lib/names";
+import {
+  describePastDue,
+  formatDay,
+  formatRelative,
+  parseServerTime,
+} from "../lib/datetime";
+import { NAMES, TRACKED_INTRO } from "../lib/names";
+import {
+  lastSpokeAt,
+  matchesSpokeAt,
+  matchesSpokeFilter,
+  matchesTrackingFilter,
+  paramsWithTrackedView,
+  trackedViewFromParams,
+  DEFAULT_TRACKED_VIEW,
+  type SpokeFilter,
+  type TrackedOrder,
+  type TrackedView,
+  type TrackingFilter,
+} from "../lib/trackedFilters";
 import {
   BAR_BUTTON,
   BAR_LABEL,
@@ -96,7 +138,7 @@ export interface TrackedGroup {
   contacts: Contact[];
 }
 
-export type TrackedOrder = "name" | "recent";
+export type { TrackedOrder };
 
 export const GROUP_TITLES: Record<TrackedGroupId, string> = {
   "at-risk": "At risk",
@@ -114,9 +156,6 @@ const GROUP_ORDER: readonly TrackedGroupId[] = [
   "not-tracked",
 ];
 
-/** Past this many rows the list is virtualised. */
-const VIRTUAL_ROWS = 200;
-
 /** Which group a contact belongs to: its ring state, by `scoreView`. */
 export function groupOf(contact: Contact): TrackedGroupId {
   const view = scoreView(contact);
@@ -125,23 +164,52 @@ export function groupOf(contact: Contact): TrackedGroupId {
   return view.band.band;
 }
 
+/** Whether a contact's name, company or role has the query in it. */
+export function matchesQuery(
+  contact: Pick<Contact, "name" | "company" | "role">,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  return (
+    !q ||
+    [contact.name, contact.company, contact.role].some((value) =>
+      value?.toLowerCase().includes(q),
+    )
+  );
+}
+
+/** The options `groupContacts` takes: the search, the order, the filters. */
+export interface GroupOptions {
+  query?: string;
+  order?: TrackedOrder;
+  tracking?: TrackingFilter;
+  spoke?: SpokeFilter;
+  now?: number;
+}
+
 /**
  * The five groups, in order, each sorted, with the empty ones left out.
  *
- * `query` narrows every group by name, company or role. `order` sorts the
- * tracked groups by name or by `trackedAt`, newest first. Not tracked is
- * always A to Z: nobody in it has a `trackedAt`.
+ * `query` narrows every group by name, company or role, and the two filters
+ * (`lib/trackedFilters`) narrow them by tracking and by the last
+ * interaction. `order` sorts the groups: by name, by the last interaction
+ * (newest first, and never last), or by `trackedAt` (newest first). Not
+ * tracked keeps A to Z for `recent`: nobody in it has a `trackedAt`.
  */
 export function groupContacts(
   contacts: readonly Contact[],
-  { query = "", order = "name" }: { query?: string; order?: TrackedOrder } = {},
+  {
+    query = "",
+    order = "name",
+    tracking = "all",
+    spoke = "any",
+    now = Date.now(),
+  }: GroupOptions = {},
 ): TrackedGroup[] {
-  const q = query.trim().toLowerCase();
   const matches = (c: Contact) =>
-    !q ||
-    [c.name, c.company, c.role].some((value) =>
-      value?.toLowerCase().includes(q),
-    );
+    matchesQuery(c, query) &&
+    matchesTrackingFilter(c, tracking) &&
+    matchesSpokeFilter(c, spoke, now);
   const buckets: Record<TrackedGroupId, Contact[]> = {
     "at-risk": [],
     fading: [],
@@ -159,12 +227,28 @@ export function groupContacts(
     parseServerTime(c.trackedAt)?.getTime() ?? 0;
   const byRecent = (a: Contact, b: Contact) =>
     trackedAt(b) - trackedAt(a) || byName(a, b);
+  // Each date is read once, not once per comparison: a sort of 5,824
+  // contacts compares about 150,000 times.
+  const spokeAt = new Map<string, number>();
+  if (order === "spoke") {
+    for (const id of GROUP_ORDER) {
+      for (const c of buckets[id]) {
+        spokeAt.set(c.id, lastSpokeAt(c) ?? Number.NEGATIVE_INFINITY);
+      }
+    }
+  }
+  const bySpoke = (a: Contact, b: Contact) =>
+    spokeAt.get(b.id)! - spokeAt.get(a.id)! || byName(a, b);
+  const sorter = (id: TrackedGroupId) =>
+    order === "spoke"
+      ? bySpoke
+      : order === "recent" && id !== "not-tracked"
+        ? byRecent
+        : byName;
   return GROUP_ORDER.map((id) => ({
     id,
     title: GROUP_TITLES[id],
-    contacts: buckets[id].sort(
-      id === "not-tracked" || order === "name" ? byName : byRecent,
-    ),
+    contacts: buckets[id].sort(sorter(id)),
   })).filter((group) => group.contacts.length > 0);
 }
 
@@ -199,6 +283,8 @@ interface RowProps {
   onToggleSelect: (id: string) => void;
   onFlip: (contact: TrackableContact) => void;
   flipPending: boolean;
+  /** The link's state for the contact page: Back returns to this list. */
+  openState?: unknown;
 }
 
 const TrackedRow = React.memo(function TrackedRow({
@@ -208,6 +294,7 @@ const TrackedRow = React.memo(function TrackedRow({
   onToggleSelect,
   onFlip,
   flipPending,
+  openState,
 }: RowProps) {
   const tracked = contact.isTracked;
   const due = pastDue(contact);
@@ -221,6 +308,16 @@ const TrackedRow = React.memo(function TrackedRow({
     );
   }
   if (due) facts.push(<span key="due">{due}</span>);
+  // When you last spoke, "spoke 3 weeks ago" or "spoke last week": the
+  // fact that decides whom to track next. A row with no interaction says
+  // nothing, so a list of 5,000 new people is not 5,000 lines of "never".
+  if (contact.lastContactedAt) {
+    facts.push(
+      <span key="spoke" title={formatDay(contact.lastContactedAt)}>
+        spoke {formatRelative(contact.lastContactedAt)}
+      </span>,
+    );
+  }
 
   // In select mode the checkbox is the control: a real one, named for the
   // contact, with the 44 px box from `hit-area`. The row itself is not a
@@ -254,6 +351,7 @@ const TrackedRow = React.memo(function TrackedRow({
             about 1.06 to 1. */}
         <Link
           to={`/contact/${contact.id}`}
+          state={openState}
           className={cn(
             "hit-area font-semibold text-sm hover:underline rounded truncate block w-fit max-w-full",
             selectMode && selected ? "text-on-primary-wash" : "text-on-surface",
@@ -371,16 +469,94 @@ const BarButton = ({
 type Item =
   { kind: "heading"; group: TrackedGroup } | { kind: "row"; contact: Contact };
 
+/** Who: everyone, the tracked people, or the rest. */
+const TRACKING_PILLS: readonly FilterPill<TrackingFilter>[] = [
+  { id: "all", label: "All", icon: <Users className="w-3 h-3" /> },
+  { id: "tracked", label: "Tracked", icon: <Radar className="w-3 h-3" /> },
+  {
+    id: "not_tracked",
+    label: "Not tracked",
+    icon: <CircleSlash className="w-3 h-3" />,
+  },
+];
+
+/** When you last spoke, by the last logged interaction. */
+const SPOKE_PILLS: readonly FilterPill<SpokeFilter>[] = [
+  { id: "any", label: "Any", icon: <Globe className="w-3 h-3" /> },
+  { id: "month", label: "Past month", icon: <Clock className="w-3 h-3" /> },
+  {
+    id: "year",
+    label: "Past year",
+    icon: <CalendarDays className="w-3 h-3" />,
+  },
+  {
+    id: "older",
+    label: "Over a year ago",
+    icon: <History className="w-3 h-3" />,
+  },
+  { id: "never", label: "Never", icon: <CircleDashed className="w-3 h-3" /> },
+];
+
 export const TrackedContactsView = () => {
   const location = useLocation();
   const { data: contacts = [], isLoading } = useContacts();
 
   const [query, setQuery] = useState("");
-  const [order, setOrder] = useState<TrackedOrder>("name");
+  // The list follows a deferred copy of the box, so each letter shows at
+  // once and the groups catch up a moment later.
+  const deferredQuery = useDeferredValue(query);
+  // The two filters and the order live in the page's address, so Back from
+  // a contact opened from the list comes back to the same list.
+  const [params, setParams] = useSearchParams();
+  const { tracking, spoke, order } = trackedViewFromParams(params);
+  const filtered =
+    tracking !== DEFAULT_TRACKED_VIEW.tracking ||
+    spoke !== DEFAULT_TRACKED_VIEW.spoke;
+  const setView = (next: Partial<TrackedView>) =>
+    setParams((prev) => paramsWithTrackedView(prev, next), { replace: true });
 
   const groups = useMemo(
-    () => groupContacts(contacts, { query, order }),
-    [contacts, query, order],
+    () =>
+      groupContacts(contacts, { query: deferredQuery, order, tracking, spoke }),
+    [contacts, deferredQuery, order, tracking, spoke],
+  );
+
+  // What each pill would show beside the other row's choice and the search.
+  const counts = useMemo(() => {
+    const now = Date.now();
+    const trackingCounts = new Map<TrackingFilter, number>();
+    const spokeCounts = new Map<SpokeFilter, number>();
+    for (const c of contacts) {
+      if (c.isArchived || c.isGhost || !matchesQuery(c, deferredQuery)) {
+        continue;
+      }
+      const at = lastSpokeAt(c);
+      const spokeMatch = matchesSpokeAt(at, spoke, now);
+      const trackingMatch = matchesTrackingFilter(c, tracking);
+      for (const pill of TRACKING_PILLS) {
+        if (spokeMatch && matchesTrackingFilter(c, pill.id)) {
+          trackingCounts.set(pill.id, (trackingCounts.get(pill.id) ?? 0) + 1);
+        }
+      }
+      for (const pill of SPOKE_PILLS) {
+        if (trackingMatch && matchesSpokeAt(at, pill.id, now)) {
+          spokeCounts.set(pill.id, (spokeCounts.get(pill.id) ?? 0) + 1);
+        }
+      }
+    }
+    return { trackingCounts, spokeCounts };
+  }, [contacts, deferredQuery, tracking, spoke]);
+
+  // What a row's link hands the contact page: Back returns to this list,
+  // with its filters, and says so.
+  const openState = useMemo(
+    () => ({
+      back: {
+        to: `${location.pathname}${location.search}`,
+        label: NAMES.tracked.label,
+      },
+    }),
+    [location.pathname, location.search],
   );
   const visible = useMemo(
     () => groups.flatMap((group) => group.contacts),
@@ -422,6 +598,23 @@ export const TrackedContactsView = () => {
       return next;
     });
   }, []);
+  // A new filter is a new list, and a selection kept from the old one would
+  // change people the person can no longer see.
+  const chooseTracking = (next: TrackingFilter) => {
+    setView({ tracking: next });
+    setSelectedIds(new Set());
+  };
+  const chooseSpoke = (next: SpokeFilter) => {
+    setView({ spoke: next });
+    setSelectedIds(new Set());
+  };
+  const clearFilters = () => {
+    setView({
+      tracking: DEFAULT_TRACKED_VIEW.tracking,
+      spoke: DEFAULT_TRACKED_VIEW.spoke,
+    });
+    setSelectedIds(new Set());
+  };
   // Select and Done trade places. Focus follows to the one that appears.
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const doneButtonRef = useRef<HTMLButtonElement>(null);
@@ -493,6 +686,9 @@ export const TrackedContactsView = () => {
     getScrollElement: () => scrollRef.current,
     scrollMargin,
     estimateSize: (index) => (items[index]?.kind === "heading" ? 48 : 60),
+    // The room under the last row, which the card's padding cannot give a
+    // list of placed rows.
+    paddingEnd: 8,
     overscan: 8,
   });
   // How far the list starts below the top of the scroller, so a jump to a
@@ -542,6 +738,7 @@ export const TrackedContactsView = () => {
       onToggleSelect={toggleSelect}
       onFlip={flip}
       flipPending={flipPending}
+      openState={openState}
     />
   );
 
@@ -585,30 +782,50 @@ export const TrackedContactsView = () => {
       </SettingsHeaderActions>
 
       <div className={cn(SETTINGS_BOX, "pt-4 pb-24 md:pb-6 space-y-5")}>
-        {/* Search and the order */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[12rem]">
-            <Search
-              aria-hidden="true"
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant"
-            />
-            <input
-              type="search"
-              aria-label="Search tracked contacts"
-              placeholder="Search by name, company or role"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className={SEARCH_INPUT}
+        {/* The search, the order, and two rows of filters, each pill with
+            the number it would show, as on the Enrichment page. */}
+        <div className={cn(CARD, "p-4 space-y-3")}>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[12rem]">
+              <Search
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant"
+              />
+              <input
+                type="search"
+                aria-label="Search tracked contacts"
+                placeholder="Search by name, company or role"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className={SEARCH_INPUT}
+              />
+            </div>
+            <Segmented
+              label="Order"
+              value={order}
+              onChange={(next) => setView({ order: next })}
+              options={[
+                { value: "name", label: "Name" },
+                { value: "spoke", label: "Last spoke" },
+                { value: "recent", label: "Recently tracked" },
+              ]}
             />
           </div>
-          <Segmented
-            label="Order"
-            value={order}
-            onChange={setOrder}
-            options={[
-              { value: "name", label: "Name" },
-              { value: "recent", label: "Recently tracked" },
-            ]}
+          <FilterRow
+            idPrefix="tracked-filter"
+            label="Tracking"
+            pills={TRACKING_PILLS}
+            value={tracking}
+            counts={counts.trackingCounts}
+            onChange={chooseTracking}
+          />
+          <FilterRow
+            idPrefix="tracked-filter"
+            label="Last spoke"
+            pills={SPOKE_PILLS}
+            value={spoke}
+            counts={counts.spokeCounts}
+            onChange={chooseSpoke}
           />
         </div>
 
@@ -629,23 +846,48 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* Nobody tracked: the way in is the Not tracked group under it. */}
-        {nobodyTracked && !query && (
+        {/* Nobody tracked: the way in is the Not tracked group under it.
+            With Tracked chosen that group is filtered out, so the button
+            brings it back. */}
+        {nobodyTracked && !query && tracking !== "not_tracked" && (
           <EmptyState
             icon={Radar}
             title="Nobody is tracked yet"
             body={TRACKED_INTRO}
+            action={
+              tracking === "tracked"
+                ? {
+                    label: "Show people to track",
+                    onClick: () => chooseTracking("not_tracked"),
+                  }
+                : undefined
+            }
           />
         )}
 
-        {!isLoading && query && visible.length === 0 && (
-          <EmptyState
-            icon={SearchX}
-            title={`Nobody matches "${query}"`}
-            body="Try fewer letters, or search a company or a role"
-            action={{ label: "Clear search", onClick: () => setQuery("") }}
-          />
-        )}
+        {!isLoading &&
+          visible.length === 0 &&
+          (query || filtered) &&
+          !(nobodyTracked && tracking === "tracked" && !query) && (
+            <EmptyState
+              icon={SearchX}
+              title={
+                query
+                  ? `Nobody matches "${query}"`
+                  : "Nobody matches these filters"
+              }
+              body={
+                query
+                  ? "Try fewer letters, or search a company or a role"
+                  : "Try another choice in either row"
+              }
+              action={
+                query
+                  ? { label: "Clear search", onClick: () => setQuery("") }
+                  : { label: "Clear filters", onClick: clearFilters }
+              }
+            />
+          )}
 
         {!isLoading && !virtual && (
           <div className="space-y-5">
@@ -684,16 +926,25 @@ export const TrackedContactsView = () => {
                   key={virtualItem.key}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
+                  // A heading spans the card, as it does on a group's own
+                  // card, and a row sits 8 px in from each side. A child
+                  // placed this way ignores the card's padding.
                   style={{
                     position: "absolute",
                     top: 0,
-                    left: 0,
-                    width: "100%",
+                    left: item.kind === "heading" ? 0 : 8,
+                    width:
+                      item.kind === "heading" ? "100%" : "calc(100% - 16px)",
                     transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                   }}
                 >
                   {item.kind === "heading" ? (
-                    <div className="-mx-2 rounded-t-xl overflow-hidden">
+                    <div
+                      className={cn(
+                        "overflow-hidden",
+                        virtualItem.index === 0 && "rounded-t-2xl",
+                      )}
+                    >
                       <GroupHeading
                         group={item.group}
                         selectMode={selectMode}

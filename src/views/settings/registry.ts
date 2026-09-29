@@ -7,6 +7,7 @@
  * @module views/settings/registry
  */
 import type React from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Activity,
   Archive,
@@ -58,6 +59,17 @@ export interface SettingsRow {
   keywords: string[];
 }
 
+/** What a settings page's module gives the shell. */
+export interface SettingsPageModule {
+  default: React.ComponentType;
+  /**
+   * Starts loading the data the page shows first, so the page opens with
+   * it. The rail and the list call it when a person points at, focuses or
+   * presses the page's link (`warmSettingsPage`).
+   */
+  prefetch?: (queryClient: QueryClient) => void;
+}
+
 export interface SettingsPage {
   id: string;
   path: string;
@@ -71,7 +83,7 @@ export interface SettingsPage {
   needsAccount?: boolean;
   keywords: string[];
   rows?: SettingsRow[];
-  load: () => Promise<{ default: React.ComponentType }>;
+  load: () => Promise<SettingsPageModule>;
   ownsScrolling?: boolean;
   /**
    * A page that owns its scrolling but sits in the centred settings box, as
@@ -147,6 +159,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () =>
       import("./AccountSettings").then((m) => ({
         default: m.AccountSettings,
+        prefetch: m.prefetchAccount,
       })),
   },
   {

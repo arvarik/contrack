@@ -4,7 +4,12 @@
  * @module views/settings/account/PasskeysCard
  */
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Check,
@@ -39,6 +44,13 @@ function formatWhen(iso: string): string {
   });
 }
 
+/** The account's passkeys: the card's query, and the page's prefetch. */
+export const passkeysQuery = queryOptions({
+  queryKey: ["auth", "passkeys"],
+  queryFn: listPasskeys,
+  staleTime: 30_000,
+});
+
 export const PasskeysCard = () => {
   const queryClient = useQueryClient();
   const isSupported = passkeysSupported();
@@ -49,10 +61,8 @@ export const PasskeysCard = () => {
   const [isAdding, setIsAdding] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["auth", "passkeys"],
-    queryFn: listPasskeys,
+    ...passkeysQuery,
     enabled: isSupported,
-    staleTime: 30_000,
   });
 
   const passkeys = data?.passkeys ?? [];

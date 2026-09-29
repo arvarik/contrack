@@ -20,8 +20,9 @@
  * them. The label keeps one weight in both states, so the selected row's
  * label is as wide as it was.
  */
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { QueryClientContext } from "@tanstack/react-query";
 import {
   SETTINGS_GROUPS,
   SETTINGS_PAGES,
@@ -36,11 +37,15 @@ import { ResizeHandle } from "../../components/layout/ResizeHandle";
 import { LEFT_PANE } from "../../components/layout/paneWidth";
 import { SECTION_HEADING, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { warmSettingsPage } from "./warm";
 
 export const SettingsRail = () => {
   const location = useLocation();
   const { isAdmin, authRequired } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  // A link's page starts loading, code and first data, when a person
+  // points at it or tabs to it (`warm.ts`), so it opens complete.
+  const queryClient = useContext(QueryClientContext);
 
   const counts = useAttentionCounts();
 
@@ -112,6 +117,10 @@ export const SettingsRail = () => {
                         <Link
                           key={page.id}
                           to={page.path}
+                          onPointerEnter={() =>
+                            warmSettingsPage(page, queryClient)
+                          }
+                          onFocus={() => warmSettingsPage(page, queryClient)}
                           aria-current={isActive ? "page" : undefined}
                           aria-label={
                             badgeCount

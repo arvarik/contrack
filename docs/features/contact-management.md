@@ -400,12 +400,24 @@ The relationship score and Pulse are about the people you chose to keep up with.
 `/settings/tracked` is a settings page, under **Your data**: the Settings rail stays beside it as it does beside every settings page, and the sidebar keeps Settings lit. Two more doors reach it: the Tracked chip's **Manage** link and the Keeping up card on Pulse. The old `/tracked` path leads there, with its hash. The page scrolls itself, so its virtualised list has its own scroller, and **Select** sits in the page header's actions. From the top:
 
 1. The heading and one sentence, the shell's, as on every settings page.
-2. A search box that narrows every group by name, company or role, and the order: **Name**, or **Recently tracked** (by the moment of tracking, newest first).
-3. The groups, each with a heading and a count, in this order: **At risk**, **Fading**, **Strong**, **No interactions yet**, **Not tracked**. The first four are the tracked contacts by their ring state. The last is A to Z. An empty group is left out. The headings carry ids (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`), so a link can land on a group.
-4. A row: the ring, the name as a link, the company, the cadence in words, and how far past it the contact is ("3 weeks past due") when it is. The clock is the last interaction, or the moment of tracking when nothing is logged yet. At the end, a 44 px toggle named "Untrack Ada Lovelace" or "Track Ada Lovelace".
+2. One card with the search, the order and two rows of filters, as on the Enrichment page:
+
+   ```
+   [ Search by name, company or role ]   [ Name | Last spoke | Recently tracked ]
+   TRACKING     All 5824 · Tracked 79 · Not tracked 5745
+   LAST SPOKE   Any · Past month 43 · Past year 533 · Over a year ago 67 · Never 5224
+   ```
+
+   - The search narrows every group by name, company or role.
+   - **Tracking** is All, Tracked or Not tracked. **Last spoke** reads the last logged interaction: Any, Past month (the last 30 days), Past year (the last 365 days), Over a year ago, or Never. A contact shows when it matches both rows. Each pill counts the contacts it would show beside the other row's choice, so **Not tracked** with **Past month** is the list of people you spoke to this month and do not track yet.
+   - The order: **Name** (A to Z), **Last spoke** (the last interaction, newest first, and never last), or **Recently tracked** (the moment of tracking, newest first, with Not tracked A to Z).
+   - The two filters and the order stay in the page's address, such as `?tracking=not_tracked&spoke=month&order=spoke`. The browser's Back, and the contact page's **Back to Tracked contacts**, return to the same list. A new filter clears the selection, so the bar never acts on a contact the list hides. The rules are in `src/lib/trackedFilters.ts`.
+
+3. The groups, each with a heading and a count, in this order: **At risk**, **Fading**, **Strong**, **No interactions yet**, **Not tracked**. The first four are the tracked contacts by their ring state. An empty group is left out. The headings carry ids (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`), so a link can land on a group.
+4. A row: the ring, the name as a link, the company, the cadence in words, how far past it the contact is ("3 weeks past due") when it is, and when you last spoke ("spoke 3 weeks ago") when an interaction is logged. The past-due clock is the last interaction, or the moment of tracking when nothing is logged yet. At the end, a 44 px toggle named "Untrack Ada Lovelace" or "Track Ada Lovelace".
 5. **Select** mode: a **Select all** in each group's heading, **Done**, and a bar with **Track**, **Untrack**, a **Cadence** menu that sets one cadence for the selection, and the count. The same Undo toasts as the Network bar.
 6. Past 200 rows the list is virtualised, the way the Network list is.
-7. When nobody is tracked, the page says "Nobody is tracked yet", and the Not tracked group under it is the way in.
+7. When nobody is tracked, the page says "Nobody is tracked yet", and the Not tracked group under it is the way in. With **Tracked** chosen, the message has a **Show people to track** button, which chooses **Not tracked**. When the filters leave nobody, the page says "Nobody matches these filters", with **Clear filters**.
 
 ### Settings
 

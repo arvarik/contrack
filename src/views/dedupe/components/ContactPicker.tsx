@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useDeferredValue, useMemo, useState } from "react";
 import { Search, Users, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Contact } from "../../../types";
@@ -7,10 +7,16 @@ import { ContactMiniCard } from "./shared/ContactMiniCard";
 import { LABEL, SEARCH_INPUT, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { VirtualRows } from "../../../components/ui/VirtualRows";
 import { roomAtTop } from "../utils/stickyRoom";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
+//
+// The list draws only the rows near the screen (`VirtualRows`), in the
+// page's one scroller. It drew every contact before, and 5,824 of them took
+// 44 s to show. The search filters on a deferred copy of the query, so a
+// letter shows in the box before the list catches up.
 // =============================================================================
 
 interface ContactPickerProps {
@@ -26,12 +32,13 @@ export const ContactPicker = ({
 }: ContactPickerProps) => {
   const { data: allContacts = [], isLoading } = useContacts();
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
 
   // Filter out ghosts and archived, then apply search
   const filteredContacts = useMemo(() => {
     const pool = allContacts.filter((c) => !c.isGhost && !c.isArchived);
-    if (!query.trim()) return pool;
-    const q = query.toLowerCase().trim();
+    if (!deferredQuery.trim()) return pool;
+    const q = deferredQuery.toLowerCase().trim();
     return pool.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
@@ -40,7 +47,7 @@ export const ContactPicker = ({
         c.emails?.some((e) => e.email.toLowerCase().includes(q)) ||
         c.phones?.some((p) => p.phone.includes(q)),
     );
-  }, [allContacts, query]);
+  }, [allContacts, deferredQuery]);
 
   const selectedIds = useMemo(
     () => new Set(selected.map((c) => c.id)),
@@ -147,27 +154,30 @@ export const ContactPicker = ({
 
       {/* Contact list. It takes its full height and the page scrolls it:
           a list that scrolled inside the page showed two rows at 900 px. */}
-      <div className="space-y-1">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-on-surface-variant">
-            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          </div>
-        ) : filteredContacts.length === 0 ? (
-          <div className="text-center py-12 text-on-surface-variant text-sm">
-            {query ? "No contacts match your search" : "No contacts available"}
-          </div>
-        ) : (
-          filteredContacts.map((contact) => (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12 text-on-surface-variant">
+          <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      ) : filteredContacts.length === 0 ? (
+        <div className="text-center py-12 text-on-surface-variant text-sm">
+          {query ? "No contacts match your search" : "No contacts available"}
+        </div>
+      ) : (
+        <VirtualRows
+          items={filteredContacts}
+          getKey={(contact) => contact.id}
+          estimateSize={64}
+          gap={4}
+          renderRow={(contact) => (
             <ContactMiniCard
-              key={contact.id}
               contact={contact}
               selected={selectedIds.has(contact.id)}
               onToggle={() => toggleContact(contact)}
               disabled={atMax}
             />
-          ))
-        )}
-      </div>
+          )}
+        />
+      )}
     </div>
   );
 };

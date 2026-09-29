@@ -5,7 +5,9 @@
 // One page groups everyone by their ring state, At risk to Not tracked, with
 // a toggle on every row and a bar for many at once. The groups, their ids
 // (the Keeping up card links to them), the row's words, the order switch,
-// select mode with the cadence menu, and the empty state are pinned here.
+// select mode with the cadence menu, and the empty state are pinned here,
+// and so are the two rows of filters (tracking, and when you last spoke),
+// which live in the page's address.
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +19,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const toastMock = vi.hoisted(() =>
@@ -470,5 +472,246 @@ describe("the Tracked contacts page", () => {
     expect(
       screen.queryByRole("heading", { level: 2, name: /^Strong/ }),
     ).toBeNull();
+  });
+});
+
+// ─── The filters ────────────────────────────────────────────────────────────
+
+/** Two more people nobody tracks: one met ten days ago, one 500 days ago. */
+const WITH_TALKS: Contact[] = [
+  ...PEOPLE,
+  person({
+    id: "barbara",
+    name: "Barbara Liskov",
+    company: "MIT",
+    lastContactedAt: daysAgo(10),
+  }),
+  person({ id: "alan", name: "Alan Kay", lastContactedAt: daysAgo(500) }),
+];
+
+/** Shows the page's address, so a test can read what the filters wrote. */
+const Where = () => {
+  const location = useLocation();
+  return <output data-testid="where">{location.search}</output>;
+};
+
+/** The contact page's stand-in: what the row's link handed it. */
+const ContactProbe = () => {
+  const state = useLocation().state as {
+    back?: { to: string; label: string };
+  } | null;
+  return (
+    <p data-testid="back">
+      {state?.back?.to} | {state?.back?.label}
+    </p>
+  );
+};
+
+function mountRoutes(path = "/tracked") {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route
+            path="/tracked"
+            element={
+              <>
+                <TrackedContactsView />
+                <Where />
+              </>
+            }
+          />
+          <Route path="/contact/:id" element={<ContactProbe />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+/** A row of pills by its label, and each pill's words. */
+const pills = (row: string) =>
+  within(screen.getByRole("group", { name: row }))
+    .getAllByRole("button")
+    .map((pill) => pill.textContent);
+const pill = (row: string, name: RegExp) =>
+  within(screen.getByRole("group", { name: row })).getByRole("button", {
+    name,
+  });
+const where = () => screen.getByTestId("where").textContent;
+
+describe("groupContacts, with the filters", () => {
+  it("narrows by tracking and by the last interaction", () => {
+    const now = Date.now();
+    const notTrackedThisMonth = groupContacts(WITH_TALKS, {
+      tracking: "not_tracked",
+      spoke: "month",
+      now,
+    });
+    expect(
+      notTrackedThisMonth.map((g) => [g.id, g.contacts.map((c) => c.id)]),
+    ).toEqual([["not-tracked", ["barbara"]]]);
+    const trackedNever = groupContacts(WITH_TALKS, {
+      tracking: "tracked",
+      spoke: "never",
+      now,
+    });
+    expect(
+      trackedNever.map((g) => [g.id, g.contacts.map((c) => c.id)]),
+    ).toEqual([["unscored", ["zed"]]]);
+  });
+
+  it("orders by the last interaction, newest first, and never last, by name", () => {
+    const groups = groupContacts(WITH_TALKS, { order: "spoke" });
+    const notTracked = groups.find((g) => g.id === "not-tracked")!;
+    expect(notTracked.contacts.map((c) => c.id)).toEqual([
+      "barbara",
+      "alan",
+      "linus",
+      "margaret",
+    ]);
+  });
+});
+
+describe("the Tracked contacts page's filters", () => {
+  beforeEach(() => {
+    api.contacts = WITH_TALKS;
+  });
+
+  it("counts every pill beside the other row's choice", () => {
+    mountRoutes();
+    expect(pills("Tracking")).toEqual(["All9", "Tracked5", "Not tracked4"]);
+    expect(pills("Last spoke")).toEqual([
+      "Any9",
+      "Past month4",
+      "Past year5",
+      "Over a year ago1",
+      "Never3",
+    ]);
+    expect(pill("Tracking", /^All/).getAttribute("aria-pressed")).toBe("true");
+    expect(pill("Last spoke", /^Any/).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  it("narrows the groups, writes the choices into the address, and recounts the other row", () => {
+    mountRoutes();
+    fireEvent.click(pill("Tracking", /^Not tracked/));
+    expect(where()).toBe("?tracking=not_tracked");
+    expect(
+      screen.queryByRole("heading", { level: 2, name: /^Strong/ }),
+    ).toBeNull();
+    expect(namesIn(/^Not tracked/)).toEqual([
+      "Alan Kay",
+      "Barbara Liskov",
+      "Linus Torvalds",
+      "Margaret Hamilton",
+    ]);
+    expect(pills("Last spoke")).toEqual([
+      "Any4",
+      "Past month1",
+      "Past year1",
+      "Over a year ago1",
+      "Never2",
+    ]);
+
+    fireEvent.click(pill("Last spoke", /^Past month/));
+    expect(where()).toBe("?tracking=not_tracked&spoke=month");
+    expect(namesIn(/^Not tracked/)).toEqual(["Barbara Liskov"]);
+    expect(pills("Tracking")).toEqual(["All4", "Tracked3", "Not tracked1"]);
+  });
+
+  it("opens with the choices the address names", () => {
+    mountRoutes("/tracked?tracking=tracked&spoke=year&order=spoke");
+    expect(pill("Tracking", /^Tracked/).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(
+      screen
+        .getByRole("radio", { name: "Last spoke" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(
+      screen.queryByRole("heading", { level: 2, name: /^Not tracked/ }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", { level: 2, name: /^No interactions/ }),
+    ).toBeNull();
+  });
+
+  it("orders by Last spoke, and keeps the order in the address", () => {
+    mountRoutes();
+    fireEvent.click(screen.getByRole("radio", { name: "Last spoke" }));
+    expect(where()).toBe("?order=spoke");
+    expect(namesIn(/^Not tracked/)).toEqual([
+      "Barbara Liskov",
+      "Alan Kay",
+      "Linus Torvalds",
+      "Margaret Hamilton",
+    ]);
+  });
+
+  it("says when you last spoke on a row that has an interaction, and nothing on one that has none", () => {
+    mountRoutes();
+    const ada = screen.getByText("Ada Lovelace").closest("[data-contact-id]")!;
+    expect(ada.textContent).toContain("spoke 3 days ago");
+    const barbara = screen
+      .getByText("Barbara Liskov")
+      .closest("[data-contact-id]")!;
+    expect(barbara.textContent).toContain("spoke last week");
+    const linus = screen
+      .getByText("Linus Torvalds")
+      .closest("[data-contact-id]")!;
+    expect(linus.textContent).not.toContain("spoke");
+  });
+
+  it("says when the filters leave nobody, and clears them", () => {
+    mountRoutes("/tracked?tracking=tracked&spoke=older");
+    expect(
+      screen.getByRole("heading", { name: "Nobody matches these filters" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(where()).toBe("");
+    expect(heading(/^At risk/)).toBeTruthy();
+  });
+
+  it("offers the people to track when Tracked is chosen and nobody is", () => {
+    api.contacts = WITH_TALKS.filter((p) => !p.isTracked);
+    mountRoutes("/tracked?tracking=tracked");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Nobody is tracked yet" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Nobody matches these filters" }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show people to track" }),
+    );
+    expect(where()).toBe("?tracking=not_tracked");
+    expect(namesIn(/^Not tracked/)).toHaveLength(4);
+  });
+
+  it("clears the selection when a filter changes, so the bar never acts on hidden people", () => {
+    mountRoutes();
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
+    fireEvent.click(
+      within(section(/^Not tracked/)).getByRole("button", {
+        name: "Select all",
+      }),
+    );
+    expect(bar.textContent).toContain("4 selected");
+    fireEvent.click(pill("Last spoke", /^Past month/));
+    expect(bar.textContent).toContain("0 selected");
+  });
+
+  it("hands the contact page this list, filters included, for its Back", () => {
+    mountRoutes("/tracked?order=spoke");
+    fireEvent.click(screen.getByRole("link", { name: "Ada Lovelace" }));
+    expect(screen.getByTestId("back").textContent).toBe(
+      "/tracked?order=spoke | Tracked contacts",
+    );
   });
 });

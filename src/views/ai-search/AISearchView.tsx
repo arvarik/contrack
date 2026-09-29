@@ -13,7 +13,13 @@
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  */
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+} from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
   CircleDashed,
@@ -32,15 +38,12 @@ import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
 import { AISearchConfirmModal } from "./components/AISearchConfirmModal";
-import {
-  CARD,
-  SECTION_HEADING,
-  SEARCH_INPUT,
-  filterPill,
-} from "../../lib/styles";
+import { CARD, SECTION_HEADING, SEARCH_INPUT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
+import { FilterRow, type FilterPill } from "../../components/ui/FilterRow";
+import { VirtualRows } from "../../components/ui/VirtualRows";
 import {
   batchEstimate,
   COST_NOTE,
@@ -72,13 +75,6 @@ const depthChoices = (figures: boolean): readonly Choice<ResearchDepth>[] =>
     ...(figures && { detail: perContact(depth) }),
   }));
 
-/** One pill: its value, its words, and its glyph. */
-interface FilterPill<T> {
-  id: T;
-  label: string;
-  icon: React.ReactNode;
-}
-
 /** Who: every contact, the tracked ones, or by what the records have. */
 const CONTACT_FILTERS: readonly FilterPill<ContactFilter>[] = [
   { id: "all", label: "All", icon: <User className="w-3 h-3" /> },
@@ -107,13 +103,6 @@ const RESEARCH_FILTERS: readonly FilterPill<ResearchFilter>[] = [
     icon: <SearchX className="w-3 h-3" />,
   },
 ];
-
-/**
- * The label of a row of pills: above the pills on a phone, where the pills
- * need the width, and before them from `sm`, level with their first line.
- */
-const ROW_LABEL =
-  "shrink-0 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant sm:w-[4.5rem] sm:pt-2";
 
 export interface AISearchViewProps {
   selectedIds?: Set<string>;
@@ -148,6 +137,9 @@ export function AISearchView({
   );
 
   const [searchQuery, setSearchQuery] = useState("");
+  // The list follows a deferred copy of the box, so a letter shows in the
+  // box at once and the list and its counts catch up a moment later.
+  const deferredQuery = useDeferredValue(searchQuery);
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(
     new Set(),
   );
@@ -199,7 +191,7 @@ export function AISearchView({
   // narrows the rest before either row of filters does.
   const searchedContacts = useMemo(() => {
     const list = contacts.filter((c) => !c.isArchived && !c.isGhost);
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
       (c) =>
@@ -207,7 +199,7 @@ export function AISearchView({
         (c.company || "").toLowerCase().includes(q) ||
         (c.role || "").toLowerCase().includes(q),
     );
-  }, [contacts, searchQuery]);
+  }, [contacts, deferredQuery]);
 
   const filteredContacts = useMemo(() => {
     const now = Date.now();
@@ -389,6 +381,7 @@ export function AISearchView({
                   pill counts what it would show.
                 */}
                 <FilterRow
+                  idPrefix="enrichment-filter"
                   label="Contacts"
                   pills={CONTACT_FILTERS}
                   value={contactFilter}
@@ -396,6 +389,7 @@ export function AISearchView({
                   onChange={chooseContactFilter}
                 />
                 <FilterRow
+                  idPrefix="enrichment-filter"
                   label="Research"
                   pills={RESEARCH_FILTERS}
                   value={researchFilter}
@@ -424,7 +418,9 @@ export function AISearchView({
                 </button>
               </div>
 
-              {/* Contact rows — reduced max height to avoid scrolling on 14" */}
+              {/* Contact rows, in a box of their own that scrolls, so the
+                  Start button stays near. Only the rows in view are drawn
+                  (`VirtualRows`): all 5,824 took 44 s to open the page. */}
               <div className="max-h-[360px] overflow-y-auto">
                 {filteredContacts.length === 0 && (searchQuery || filtered) && (
                   <div className="px-6 py-6 text-center text-sm text-on-surface-variant space-y-2">
@@ -443,16 +439,20 @@ export function AISearchView({
                     )}
                   </div>
                 )}
-                {filteredContacts.map((contact) => (
-                  <ContactRow
-                    key={contact.id}
-                    contact={contact}
-                    isSelected={selectedIds.has(contact.id)}
-                    hasError={erroredContactIds.has(contact.id)}
-                    onToggle={() => toggleSelect(contact.id)}
-                    openState={openState}
-                  />
-                ))}
+                <VirtualRows
+                  items={filteredContacts}
+                  getKey={(contact) => contact.id}
+                  estimateSize={68}
+                  renderRow={(contact) => (
+                    <ContactRow
+                      contact={contact}
+                      isSelected={selectedIds.has(contact.id)}
+                      hasError={erroredContactIds.has(contact.id)}
+                      onToggle={() => toggleSelect(contact.id)}
+                      openState={openState}
+                    />
+                  )}
+                />
               </div>
             </div>
 
@@ -512,55 +512,6 @@ export function AISearchView({
         depth={depth}
         showEstimate={depthFiguresApply}
       />
-    </div>
-  );
-}
-
-/**
- * One row of filter pills: a label, then one choice among the pills, each
- * with the number of contacts it would show. A group of toggle buttons, so a
- * screen reader hears the row's name and which pill is pressed.
- */
-function FilterRow<T extends string>({
-  label,
-  pills,
-  value,
-  counts,
-  onChange,
-}: {
-  label: string;
-  pills: readonly FilterPill<T>[];
-  value: T;
-  counts: ReadonlyMap<T, number>;
-  onChange: (value: T) => void;
-}) {
-  const labelId = `enrichment-filter-${label.toLowerCase()}`;
-  return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-2">
-      <span id={labelId} className={ROW_LABEL}>
-        {label}
-      </span>
-      <div
-        role="group"
-        aria-labelledby={labelId}
-        className="flex flex-1 flex-wrap gap-1.5"
-      >
-        {pills.map((pill) => (
-          <button
-            key={pill.id}
-            type="button"
-            aria-pressed={value === pill.id}
-            onClick={() => onChange(pill.id)}
-            className={cn("hit-area", filterPill(value === pill.id))}
-          >
-            {pill.icon}
-            {pill.label}
-            <span className="font-medium tabular-nums opacity-70">
-              {counts.get(pill.id) ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

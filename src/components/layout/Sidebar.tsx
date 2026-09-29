@@ -34,6 +34,7 @@ import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 import { NAMES } from "../../lib/names";
+import { warmSettingsShell } from "../../views/settings/warm";
 import { RailTooltip } from "../ui/RailTooltip";
 
 // ---------------------------------------------------------------------------
@@ -283,6 +284,10 @@ export const Sidebar = () => {
         <RailTooltip label={NAMES.settings.label} shortcut="⌘⇧,">
           <Link
             to="/settings"
+            // Pointing at the link starts Settings' code (`warm.ts`), so it
+            // is here when the click lands.
+            onPointerEnter={warmSettingsShell}
+            onFocus={warmSettingsShell}
             className={navLink(isCleanup)}
             aria-label={NAMES.settings.label}
           >

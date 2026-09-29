@@ -17,20 +17,14 @@
  * @module views/dedupe/utils/stickyRoom
  */
 
+import { scrollParent } from "../../../lib/scrollParent";
+
 type Side = "top" | "bottom";
 
 const PROPERTY = {
   top: "scrollPaddingTop",
   bottom: "scrollPaddingBottom",
 } as const;
-
-/** The nearest ancestor that scrolls vertically. */
-function scrollParent(element: HTMLElement): HTMLElement | null {
-  for (let node = element.parentElement; node; node = node.parentElement) {
-    if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node;
-  }
-  return null;
-}
 
 function stickyRoom(side: Side) {
   return (block: HTMLElement | null) => {

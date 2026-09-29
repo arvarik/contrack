@@ -30,7 +30,7 @@
 import React, { useCallback } from "react";
 import { Link, useNavigate, type LinkProps } from "react-router-dom";
 import { WIDE_QUERY } from "../../hooks/useMediaQuery";
-import { findSettingsPage } from "./registry";
+import { useWarmSettingsLink } from "./warm";
 
 export type SlideDirection = "forward" | "back";
 
@@ -142,21 +142,11 @@ export function isPlainClick(event: React.MouseEvent): boolean {
 }
 
 /**
- * Starts loading a settings page's code, so it is there when the link's
- * click lands. The module system keeps the one copy, so a second call costs
- * nothing, and a failure here is left for the page's own load to report.
- */
-function prefetchPage(to: string) {
-  findSettingsPage(to.split(/[?#]/)[0])
-    ?.load()
-    .catch(() => undefined);
-}
-
-/**
  * A link from the settings list into a page, which slides the page in below
  * `lg`. It is still a link: its `href` is real, and a modified click opens a
- * tab as any link does. A press starts loading the page, a tenth of a second
- * or so before the click.
+ * tab as any link does. Pointing at it, focusing it or pressing it starts
+ * loading the page, its code and its first data (`warm.ts`), before the
+ * click lands.
  */
 export const SlideLink = ({
   to,
@@ -165,13 +155,16 @@ export const SlideLink = ({
   ...rest
 }: Omit<LinkProps, "to"> & { to: string }) => {
   const slide = useSlideNavigate();
+  const warm = useWarmSettingsLink(to);
   return (
     <Link
       to={to}
+      onPointerEnter={warm.onPointerEnter}
+      onFocus={warm.onFocus}
       {...rest}
       onPointerDown={(event) => {
         onPointerDown?.(event);
-        prefetchPage(to);
+        warm.onPointerDown();
       }}
       onClick={(event) => {
         onClick?.(event);
