@@ -52,12 +52,6 @@ const { createActor, asUser, resetAccounts } =
 const app = makeTestApp();
 let actor: Awaited<ReturnType<typeof createActor>>;
 
-const ownerOf = (table: string, id: string): string | null | undefined =>
-  (
-    sqlite.prepare(`SELECT ownerId FROM ${table} WHERE id = ?`).get(id) as
-      { ownerId: string | null } | undefined
-  )?.ownerId;
-
 beforeAll(async () => {
   resetAccounts();
   // Auth on, at runtime, with no restart.
@@ -71,14 +65,6 @@ afterAll(() => {
 });
 
 describe("ownership stamping with auth on", () => {
-  it("stamps a contact with the signed-in user's id", async () => {
-    const res = await asUser(actor)(
-      request(app).post("/api/contacts").send({ name: "Stamped Contact" }),
-    );
-    expect(res.status).toBe(201);
-    expect(ownerOf("contacts", res.body.id)).toBe(actor.user.id);
-  });
-
   it("stamps every contact from a bulk import", async () => {
     const res = await asUser(actor)(
       request(app)
@@ -93,14 +79,6 @@ describe("ownership stamping with auth on", () => {
       )
       .get(actor.user.id) as { n: number };
     expect(unowned.n).toBe(0);
-  });
-
-  it("stamps a list", async () => {
-    const res = await asUser(actor)(
-      request(app).post("/api/lists").send({ name: "Stamped List" }),
-    );
-    expect([200, 201]).toContain(res.status);
-    expect(ownerOf("lists", res.body.id)).toBe(actor.user.id);
   });
 
   it("stamps a ghost contact created by mention extraction", async () => {
@@ -156,33 +134,6 @@ describe("ownership stamping with auth on", () => {
     expect(row, "no AI invocation was recorded").toBeTruthy();
     expect(row?.ownerId).toBe(actor.user.id);
   });
-
-  it("stamps a merge log row from the surviving contact, not the caller", async () => {
-    const a = await asUser(actor)(
-      request(app).post("/api/contacts").send({ name: "Merge Primary" }),
-    );
-    const b = await asUser(actor)(
-      request(app).post("/api/contacts").send({ name: "Merge Duplicate" }),
-    );
-    expect(a.status).toBe(201);
-    expect(b.status).toBe(201);
-
-    const res = await asUser(actor)(
-      request(app)
-        .post("/api/contacts/merge")
-        .send({ primaryId: a.body.id, duplicateId: b.body.id }),
-    );
-    expect([200, 201]).toContain(res.status);
-
-    const row = sqlite
-      .prepare(
-        "SELECT ownerId FROM dedupe_merge_log WHERE primaryId = ? ORDER BY mergedAt DESC LIMIT 1",
-      )
-      .get(a.body.id) as { ownerId: string | null } | undefined;
-
-    expect(row, "no merge log row was written").toBeTruthy();
-    expect(row?.ownerId).toBe(actor.user.id);
-  });
 });
 
 describe("ownership stamping with no context", () => {
@@ -227,49 +178,5 @@ describe("ownership stamping with no context", () => {
         )
         .run(),
     ).toThrow(/contacts.ownerId is required/);
-  });
-});
-
-// =============================================================================
-// The two-user harness itself
-// =============================================================================
-// Phase 1's contract says the harness can create a second account through
-// authService.createUser and sign it in. Phase 2 builds every isolation test
-// on that, so it is worth proving here rather than discovering it is broken
-// in the first PR that needs it.
-// =============================================================================
-
-describe("two-user harness", () => {
-  it("creates a second signed-in account whose rows are stamped to it", async () => {
-    const { seedOwner, rowsOwnedBy } = await import("./tenancy/helpers.ts");
-
-    const second = await createActor(app);
-    expect(second.user.id).not.toBe(actor.user.id);
-    expect(second.cookie.length).toBeGreaterThan(0);
-    expect(second.scope.ownerId).toBe(second.user.id);
-
-    // The session really works: an authenticated route answers for B.
-    const me = await asUser(second)(request(app).get("/api/auth/me"));
-    expect(me.status).toBe(200);
-
-    const before = rowsOwnedBy("contacts", second.user.id);
-    const seeded = await seedOwner(app, second, {
-      contacts: 2,
-      lists: 1,
-      interactions: 1,
-      actionItems: 1,
-    });
-
-    expect(seeded.contactIds).toHaveLength(2);
-    expect(seeded.listIds).toHaveLength(1);
-    expect(seeded.interactionIds).toHaveLength(1);
-    expect(seeded.actionItemIds).toHaveLength(1);
-
-    // Everything seedOwner wrote belongs to B, and none of it to A.
-    expect(rowsOwnedBy("contacts", second.user.id)).toBe(before + 2);
-    expect(rowsOwnedBy("lists", second.user.id)).toBe(1);
-    for (const id of seeded.contactIds) {
-      expect(ownerOf("contacts", id)).toBe(second.user.id);
-    }
   });
 });

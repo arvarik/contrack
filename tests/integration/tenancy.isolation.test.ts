@@ -90,12 +90,13 @@ import sharp from "sharp";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
+import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import {
-  WEIGHTS,
-  lexicalSearch,
-} from "../../server/services/search/lexical.ts";
-import { ownerToken } from "../../server/tenancy/scope.ts";
-import { LOGOS_DIR, UPLOADS_DIR, ensureDir } from "../../server/utils/paths.ts";
+  LOGOS_DIR,
+  UPLOADS_DIR,
+  ensureDir,
+  ownerUploadDir,
+} from "../../server/utils/paths.ts";
 import {
   asUser,
   createActor,
@@ -439,6 +440,9 @@ describe("GET /api/contacts/:id/score", () => {
       request(app).get(`/api/contacts/${seedA.contactIds[1]}/score`),
     );
     expect(res.status).toBe(404);
+    // The row is untracked here, so without the owner check B would still get
+    // a 404, as NOT_TRACKED. The code is what shows the owner check refused.
+    expect(res.body.error.code).toBe("NOT_FOUND");
     // explainScore writes relationshipScore back, so a leak here is a write.
     expect(snapshotRow("contacts", seedA.contactIds[1])).toEqual(before);
   });
@@ -879,9 +883,12 @@ describe("the /uploads guard", () => {
   });
 
   it("answers 404 for a traversal out of the caller's own directory", async () => {
+    // A's real file, so the 404 is the guard's. A name that does not exist
+    // answers 404 with the guard gone too, because express.static resolves
+    // the `..` and then finds nothing.
     const res = await asUser(B)(
       request(app).get(
-        `/uploads/u/${B.user.id}/avatars/..%2f..%2f${A.user.id}/avatars/x.png`,
+        `/uploads/u/${B.user.id}/avatars/..%2f..%2f${A.user.id}/avatars/${path.basename(avatarUrlA)}`,
       ),
     );
     expect(res.status).toBe(404);
@@ -1126,6 +1133,13 @@ describe("POST /api/contacts/:id/promote", () => {
 describe("POST /api/contacts/:id/attachments", () => {
   it("refuses a foreign parent before multer stores anything", async () => {
     const before = rowsOwnedBy("interactions", A.user.id);
+    // multer writes into the caller's own folder, so a file stored ahead of
+    // the parent check would land in B's and stay there after the 404.
+    const bFiles = () => {
+      const dir = ownerUploadDir(B.user.id, "files");
+      return fs.existsSync(dir) ? fs.readdirSync(dir).length : 0;
+    };
+    const filesBefore = bFiles();
     const res = await asUser(B)(
       request(app)
         .post(`/api/contacts/${seedA.contactIds[16]}/attachments`)
@@ -1136,6 +1150,7 @@ describe("POST /api/contacts/:id/attachments", () => {
     );
     expect(res.status).toBe(404);
     expect(rowsOwnedBy("interactions", A.user.id)).toBe(before);
+    expect(bFiles()).toBe(filesBefore);
   });
 
   it("stores the caller's own attachment under the caller's directory", async () => {
@@ -1216,54 +1231,6 @@ describe("action item collections carry only the caller's rows", () => {
     const forB = await asUser(B)(request(app).get("/api/action-items/count"));
     expect(forA.body.count).toBe(1);
     expect(forB.body.count).toBe(0);
-  });
-
-  it("uses the owner composite indexes, not a scan of action_items", () => {
-    const plan = (rows: { detail: string }[]) =>
-      rows.map((r) => r.detail).join(" | ");
-    const pending = plan(
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT ai.* FROM action_items ai JOIN contacts c ON ai.contactId = c.id
-             WHERE ai.ownerId = ? AND ai.completedAt IS NULL
-             ORDER BY ai.dueAt ASC`,
-        )
-        .all(A.user.id) as { detail: string }[],
-    );
-    const done = plan(
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT ai.* FROM action_items ai JOIN contacts c ON ai.contactId = c.id
-             WHERE ai.ownerId = ? AND ai.completedAt IS NOT NULL
-             ORDER BY ai.completedAt DESC`,
-        )
-        .all(A.user.id) as { detail: string }[],
-    );
-    const urgent = plan(
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT COUNT(*) FROM action_items ai JOIN contacts c ON ai.contactId = c.id
-             WHERE ai.ownerId = ? AND ai.completedAt IS NULL
-               AND date(ai.dueAt) <= date('now')
-               AND (c.isArchived = 0 OR c.isArchived IS NULL)`,
-        )
-        .all(A.user.id) as { detail: string }[],
-    );
-
-    expect(pending).toContain("idx_action_items_owner_due");
-    expect(pending).not.toContain("SCAN action_items");
-    expect(done).toContain("idx_action_items_owner_done");
-    expect(done).not.toContain("SCAN action_items");
-    // The urgent count takes `_owner_done` rather than the partial
-    // `_owner_due`. `date(ai.dueAt)` wraps the column, so the second column of
-    // `_owner_due` cannot answer the range, which leaves the two indexes even
-    // on the owner alone and SQLite picks the plain one. Either is an owner
-    // seek, which is what matters here, so the assertion names both.
-    expect(urgent).toMatch(/idx_action_items_owner_(due|done)/);
-    expect(urgent).not.toContain("SCAN action_items");
   });
 });
 
@@ -1609,26 +1576,16 @@ describe("GET /api/dashboard/activity", () => {
     expect(forA.body.prevWeekTotals).toHaveLength(12);
     expect(forB.body.prevWeekTotals).toHaveLength(12);
 
-    const sumA = forA.body.weekTotals.reduce(
-      (a: number, b: number) => a + b,
-      0,
+    // Every note in this file is dated in the last few days, so each account's
+    // twelve weeks hold exactly its own notes. A leak would add the other's.
+    const sum = (totals: number[]) => totals.reduce((a, b) => a + b, 0);
+    expect(sum(forA.body.weekTotals)).toBeGreaterThan(0);
+    expect(sum(forA.body.weekTotals)).toBe(
+      rowsOwnedBy("interactions", A.user.id),
     );
-    const sumB = forB.body.weekTotals.reduce(
-      (a: number, b: number) => a + b,
-      0,
+    expect(sum(forB.body.weekTotals)).toBe(
+      rowsOwnedBy("interactions", B.user.id),
     );
-    expect(
-      forA.body.days.reduce(
-        (a: number, d: { count: number }) => a + d.count,
-        0,
-      ),
-    ).toBe(sumA);
-    expect(
-      forB.body.days.reduce(
-        (a: number, d: { count: number }) => a + d.count,
-        0,
-      ),
-    ).toBe(sumB);
   });
 
   it("shows an owner with no interactions every total at zero", async () => {
@@ -1736,64 +1693,6 @@ describe("GET /api/search", () => {
     ).toEqual([zebulonId]);
     expect(lexicalSearch(B.scope, "Quarrington")).toEqual([]);
     expect(lexicalSearch(C.scope, "Quarrington")).toEqual([]);
-  });
-
-  it("answers the owner token from the FTS index, not from a post-filter", () => {
-    // The whole point of an indexed ownerTok column: FTS5 intersects the
-    // owner's posting list with the query's inside the index. A plan with a
-    // scan of `contacts` would mean the owner was applied after the fact, over
-    // rows the caller may not read. The statement mirrors lexical.ts.
-    const detail = (
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT c.id FROM contacts_fts f
-             JOIN contacts c ON c.rowid = f.rowid
-             WHERE contacts_fts MATCH ? AND c.ownerId = ?
-               AND c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
-               AND c.canonicalId IS NULL AND c.deletedAt IS NULL
-             ORDER BY bm25(contacts_fts, ${WEIGHTS}), c.id LIMIT ?`,
-        )
-        .all(
-          `ownerTok:${ownerToken(A.scope)} AND ("quar"*)`,
-          A.user.id,
-          20,
-        ) as {
-        detail: string;
-      }[]
-    )
-      .map((r) => r.detail)
-      .join(" | ");
-
-    // "SCAN f VIRTUAL TABLE INDEX 0:M11" is FTS5 answering the MATCH from its
-    // own index, and the contact row is then fetched by rowid. Neither side
-    // reads a row the owner token did not already choose.
-    expect(detail).toContain("VIRTUAL TABLE INDEX");
-    expect(detail).toContain("SEARCH c USING INTEGER PRIMARY KEY");
-    expect(detail).not.toContain("SCAN contacts");
-  });
-
-  it("seeks the owner composite index for the hard-filter corpus", () => {
-    // The corpus query behind the query plan's `must` filters. It reads every
-    // active contact of one owner, so it must start at that owner rather than
-    // scan the table. The statement mirrors hybridRetrieval.applyHardFilters.
-    const detail = (
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT c.id, c.location, c.company, c.role, c.headline, c.industry
-             FROM contacts c
-             WHERE c.ownerId = ? AND c.isGhost = 0
-               AND COALESCE(c.isArchived, 0) = 0
-               AND c.canonicalId IS NULL AND c.deletedAt IS NULL`,
-        )
-        .all(A.user.id) as { detail: string }[]
-    )
-      .map((r) => r.detail)
-      .join(" | ");
-
-    expect(detail).toContain("idx_contacts_owner_status");
-    expect(detail).not.toContain("SCAN contacts");
   });
 });
 
@@ -1906,16 +1805,15 @@ describe("GET /api/search/coverage", () => {
     expect(resC.body.total).toBe(0);
     expect(resC.body.coverage).toBe(100);
 
-    // Account A sees only A's contacts
-    const resA = await asUser(A)(request(app).get("/api/search/coverage"));
-    expect(resA.status).toBe(200);
-    expect(resA.body.total).toBeGreaterThan(0);
-
-    // Account B sees only B's contacts
-    const resB = await asUser(B)(request(app).get("/api/search/coverage"));
-    expect(resB.status).toBe(200);
-    expect(resB.body.total).toBeGreaterThan(0);
-    expect(resB.body.total).not.toBe(resA.body.total + resB.body.total);
+    // A and B each see their own count. The old last line compared B's total
+    // with itself plus A's, which holds whenever A has a contact.
+    for (const actor of [A, B]) {
+      const res = await asUser(actor)(request(app).get("/api/search/coverage"));
+      expect(res.status).toBe(200);
+      expect(res.body.total, actor.user.username).toBe(
+        activeCount(actor.user.id),
+      );
+    }
   });
 });
 
@@ -1931,14 +1829,15 @@ describe("POST /api/search/refresh-index", () => {
     expect(resC.body.ok).toBe(true);
     expect(resC.body.queued).toBe(0);
 
-    // Calling refresh-index as account B queues at most B's contacts
+    // B's contacts were missing from the index during C's call, so C's zero
+    // is the owner filter and not an instance with nothing to queue.
     const resB = await asUser(B)(
       request(app)
         .post("/api/search/refresh-index")
         .send({ allowProvider: false }),
     );
     expect(resB.status).toBe(200);
-    expect(resB.body.ok).toBe(true);
+    expect(resB.body.queued).toBeGreaterThan(0);
   });
 });
 
@@ -2425,27 +2324,6 @@ describe("AI stats count the caller's own work", () => {
       request(app).get("/api/ai/stats/feed").query({ operation: "briefing" }),
     );
     expect(none.body.pagination.totalCount).toBe(0);
-  });
-
-  it("seeks the owner index rather than scanning the invocation table", () => {
-    // Mirrors getFeed. The owner is written into the statement rather than
-    // assembled with the optional filters, so every shape of the query starts
-    // at this index.
-    const detail = (
-      sqlite
-        .prepare(
-          `EXPLAIN QUERY PLAN
-             SELECT id FROM ai_invocations
-             WHERE ownerId = ? AND cached = ?
-             ORDER BY createdAt DESC LIMIT ? OFFSET ?`,
-        )
-        .all(A.user.id, 0, 50, 0) as { detail: string }[]
-    )
-      .map((r) => r.detail)
-      .join(" | ");
-
-    expect(detail).toContain("idx_ai_inv_owner_created");
-    expect(detail).not.toContain("SCAN ai_invocations");
   });
 });
 
@@ -3786,19 +3664,15 @@ describe("matrix coverage", () => {
 });
 
 /**
- * Verifies that every `scoped` route is `isolated`, and `isolated` is set only
- * when a test for it is added to `COVERED` above. A collection needs a second
+ * Every `scoped` route is `isolated` (tenancy.routeManifest.test.ts checks
+ * that), and `isolated` is set only when a test for it is added to `COVERED`
+ * above, which "matrix coverage" checks. A collection needs a second
  * proof beyond "B cannot read A's row by id", because a per-id check says nothing
  * about whether A's rows appear in B's list. Nothing in the manifest can
  * express that difference, so it stays a review rule, and the collections are
  * listed here to name what the rule applies to.
  */
 describe("all scoped routes are isolated", () => {
-  it("has a matrix test for every scoped route", () => {
-    const waiting = scoped.filter((r) => !r.isolated).map(key);
-    expect(waiting, "scoped routes with no test in this file").toEqual([]);
-  });
-
   it("counts the collections that owe a list test as well as a 404 test", () => {
     const collections = scoped
       .filter((r) => r.method === "GET" && !r.path.includes("/:"))

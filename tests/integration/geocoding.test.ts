@@ -5,6 +5,7 @@ import { geocodeWithFallback } from "../../server/services/geocoding/provider.ts
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("Geocoding Integration Tests", () => {
@@ -15,10 +16,19 @@ describe("Geocoding Integration Tests", () => {
     expect(normalizeLocationKey("san  francisco,ca")).toBe("san francisco, ca");
   });
 
-  it("skips processing if location is null or empty", () => {
-    const fnCacheHit = vi.spyOn(console, "log");
+  it("skips processing if location is null or empty", async () => {
+    // The suite turns background jobs off, and queueGeocode returns on that
+    // before it looks at the location. The flag is read at the call.
+    vi.stubEnv("DISABLE_BACKGROUND_JOBS", "false");
+    const fetchMock = vi.fn(async () => Response.json([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    queueGeocode("123", "   ");
     queueGeocode("123", "");
-    expect(fnCacheHit).not.toHaveBeenCalled();
+    queueGeocode("123", null as unknown as string);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("asks Nominatim with its User-Agent and names it as the provider", async () => {

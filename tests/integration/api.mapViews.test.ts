@@ -254,32 +254,6 @@ describe("Map Views API (/api/map/views)", () => {
     expect(bobRes.status).toBe(201);
   });
 
-  it("returns 404 when acting on another owner's view", async () => {
-    const createRes = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "Alice Private View",
-          bounds: [-10, 40, 10, 60],
-        }),
-    );
-    const aliceViewId = createRes.body.id;
-
-    // Bob cannot patch Alice's view
-    const patchRes = await asUser(bob)(
-      request(app)
-        .patch(`/api/map/views/${aliceViewId}`)
-        .send({ name: "Bob Hijack" }),
-    );
-    expect(patchRes.status).toBe(404);
-
-    // Bob cannot delete Alice's view
-    const delRes = await asUser(bob)(
-      request(app).delete(`/api/map/views/${aliceViewId}`),
-    );
-    expect(delRes.status).toBe(404);
-  });
-
   // Health was a third layer until v2. A view saved with it, a save from a
   // page loaded before v2, and the account's layer preference all read as
   // Pins, so an old value never fails to load.

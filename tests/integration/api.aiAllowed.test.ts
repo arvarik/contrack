@@ -97,9 +97,6 @@ describe("requireAiAllowed middleware", () => {
       const res = await asUser(userOn)(req);
       // It must NOT be refused by requireAiAllowed
       expect(res.body?.error?.code).not.toBe("AI_OFF_FOR_ACCOUNT");
-      if (res.status === 403) {
-        expect(res.body.error.code).not.toBe("AI_OFF_FOR_ACCOUNT");
-      }
     });
   }
 

@@ -166,5 +166,7 @@ describe("lists", () => {
 
     const removed = await request(app).delete(`/api/lists/${listId}`);
     expect(removed.status).toBeLessThan(300);
+    const after = await request(app).get("/api/lists");
+    expect(after.body.some((l: { id: string }) => l.id === listId)).toBe(false);
   });
 });

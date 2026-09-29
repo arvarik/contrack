@@ -172,7 +172,13 @@ describe("API: Password reset and magic links", () => {
         .post("/api/auth/password-reset/request")
         .send({ email: admin.email });
       expect(res.status).toBe(202);
-      expect(mailService.__getSentMessages()).toHaveLength(0);
+      // With the test transport off nothing is ever captured, so the sent list
+      // proves nothing on its own. No link row means no mail was attempted.
+      expect(
+        sqlite
+          .prepare("SELECT * FROM auth_links WHERE userId = ?")
+          .get(admin.id),
+      ).toBeUndefined();
     });
 
     it("creates an auth link and sends reset email when mail is configured", async () => {

@@ -35,8 +35,6 @@ vi.mock("../../server/ai/embeddings.ts", async (importActual) => {
     await importActual<typeof import("../../server/ai/embeddings.ts")>();
   const { currentScopeOrNull } =
     await import("../../server/tenancy/requestContext.ts");
-  const { recordInvocation } =
-    await import("../../server/services/aiStatsService.ts");
   return {
     ...actual,
     resolveEmbeddings: () => ({
@@ -52,23 +50,11 @@ vi.mock("../../server/ai/embeddings.ts", async (importActual) => {
       texts: string[],
     ) => {
       // The owner the async context names right now is the owner
-      // recordInvocation would stamp. Capturing it here is the assertion.
+      // recordInvocation would stamp. Capturing it here is the assertion: the
+      // embedding path records no invocation of its own today, and a row the
+      // fake wrote would only prove the fake.
       const owner = currentScopeOrNull()?.ownerId ?? null;
       for (const text of texts) embedded.push({ text, owner });
-      // A real generation adapter records the call here, so this writes a
-      // real row through the real function rather than asserting on the
-      // captured owner alone. `searchExpansion` stands in for the operation
-      // name: `AI_OPERATIONS` has no embedding kind, because the embedding
-      // path records nothing today. That is a separate gap, and the owner it
-      // would stamp is the owner this row proves.
-      recordInvocation({
-        operation: "searchExpansion",
-        model: "mock-embed",
-        tokenCount: texts.length,
-        latencyMs: 1,
-        cached: false,
-        description: "stands in for an embedding call",
-      });
       return texts.map(() => Array.from({ length: width }, () => 0.1));
     },
   };
@@ -76,7 +62,7 @@ vi.mock("../../server/ai/embeddings.ts", async (importActual) => {
 
 import { sqlite } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
-import { localOwnerId, resetAccounts } from "./tenancy/helpers.ts";
+import { resetAccounts } from "./tenancy/helpers.ts";
 import {
   backfillEmbeddings,
   backfillOwnerEmbeddings,
@@ -146,7 +132,6 @@ describe("the dedupe embedding backfill", () => {
   beforeAll(async () => {
     width = 768; // contact_embeddings is built at 768.
     embedded.length = 0;
-    sqlite.prepare("DELETE FROM ai_invocations").run();
     await backfillEmbeddings();
   });
 
@@ -161,22 +146,6 @@ describe("the dedupe embedding backfill", () => {
       const expected = call.text.includes("alpha Person") ? ownerA : ownerB;
       expect(call.owner, call.text).toBe(expected);
     }
-  });
-
-  it("bills each account for its own contacts", () => {
-    const rows = sqlite
-      .prepare(
-        `SELECT ownerId, COUNT(*) AS n FROM ai_invocations
-          WHERE operation = 'searchExpansion' GROUP BY ownerId`,
-      )
-      .all() as { ownerId: string; n: number }[];
-    const byOwner = Object.fromEntries(rows.map((r) => [r.ownerId, r.n]));
-
-    expect(byOwner[ownerA]).toBeGreaterThan(0);
-    expect(byOwner[ownerB]).toBeGreaterThan(0);
-    // The account the fallback would have charged. Every row it holds is a row
-    // that ran outside a context.
-    expect(byOwner[localOwnerId()] ?? 0).toBe(0);
   });
 
   it("lets the accounts take turns instead of draining one at a time", () => {

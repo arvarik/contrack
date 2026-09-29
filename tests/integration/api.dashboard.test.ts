@@ -96,11 +96,60 @@ describe("GET /api/dashboard", () => {
     expect(res2.body.hygiene.stale).toBe(0);
   });
 
-  it("returns empty meetings array when upcoming_events table does not exist", async () => {
-    // In our test database upcoming_events table is not created
+  it("lists the caller's meetings in the next seven days, with their contacts", async () => {
+    // Boot creates upcoming_events, so an empty list proves nothing about it.
+    const other = await createActor(app, {
+      username: "dashother",
+      email: "dashother@test.dev",
+    });
+    const calendar = sqlite.prepare(
+      `INSERT INTO connectors (id, ownerId, kind, name) VALUES (?, ?, 'ics', 'Calendar')`,
+    );
+    calendar.run("dash-cal", actor.user.id);
+    calendar.run("dash-cal-other", other.user.id);
+    // ISO strings, the way the calendar adapters write them.
+    const inDays = (n: number) =>
+      new Date(Date.now() + n * 86_400_000).toISOString();
+    const event = sqlite.prepare(
+      `INSERT INTO upcoming_events
+         (connectorId, ownerId, externalId, title, startsAt, endsAt, participants, contactIds)
+       VALUES (?, ?, ?, ?, ?, ?, '[]', ?)`,
+    );
+    const soon = inDays(2);
+    event.run("dash-cal", actor.user.id, "soon", "Soon", soon, soon, '["c-1"]');
+    event.run(
+      "dash-cal",
+      actor.user.id,
+      "far",
+      "Far",
+      inDays(10),
+      inDays(10),
+      "[]",
+    );
+    event.run(
+      "dash-cal",
+      actor.user.id,
+      "over",
+      "Over",
+      inDays(-2),
+      inDays(-2),
+      "[]",
+    );
+    event.run(
+      "dash-cal-other",
+      other.user.id,
+      "theirs",
+      "Theirs",
+      soon,
+      soon,
+      "[]",
+    );
+
     const res = await getDashboard();
     expect(res.status).toBe(200);
-    expect(res.body.meetings).toEqual([]);
+    expect(res.body.meetings).toEqual([
+      { title: "Soon", startsAt: soon, endsAt: soon, contactIds: ["c-1"] },
+    ]);
   });
 
   it("returns birthday on slim contacts list", async () => {

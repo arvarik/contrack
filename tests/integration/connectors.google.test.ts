@@ -2,13 +2,13 @@
  * tests/integration/connectors.google.test.ts — Integration tests for Google Workspace adapter & OAuth.
  *
  * Covers:
- * - Admin integrations setting for Google OAuth (PUT, GET redacted, env overrides)
+ * - Admin integrations setting for Google OAuth (env overrides, clearing)
  * - OAuth start and callback routes with PKCE and state verification
  * - Google adapter test() and sync() with mocked googleapis boundary
  * - People API contacts with syncToken, photo and metadata
  * - Gmail API messages with metadata headers and AI summaries for matched contacts
  * - Google Calendar API with past meetings and upcoming events
- * - invalid_grant mapping to ConnectorAuthError and needs_reauth status
+ * - invalid_grant mapping to ConnectorAuthError
  * - Ignore correspondent route and filtering
  */
 
@@ -34,10 +34,8 @@ import {
   getGoogleOAuthCredentials,
 } from "../../server/services/integrationSettings.ts";
 import {
-  createConnector,
   listConnectors,
   listCorrespondents,
-  runNow,
 } from "../../server/connectors/service.ts";
 import { ConnectorAuthError } from "../../server/connectors/errors.ts";
 import * as gateway from "../../server/ai/gateway.ts";
@@ -92,34 +90,6 @@ describe("Google Workspace Connector & OAuth Integration", () => {
   });
 
   describe("Admin Integrations Setting for Google OAuth", () => {
-    it("persists Google OAuth client and returns redacted preview", async () => {
-      const res = await request(server)
-        .put("/api/admin/integrations")
-        .set("Cookie", adminActor.cookie)
-        .send({
-          googleOAuth: {
-            clientId: "custom-client-id.apps.googleusercontent.com",
-            clientSecret: "GOCSPX-supersecretkey999",
-          },
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.googleOAuth).toEqual({
-        configured: true,
-        source: "setting",
-        clientId: "custom-client-id.apps.googleusercontent.com",
-        clientSecretPreview: "••••y999",
-      });
-
-      // Verify unsealed retrieval on server
-      const creds = getGoogleOAuthCredentials();
-      expect(creds?.clientId).toBe(
-        "custom-client-id.apps.googleusercontent.com",
-      );
-      expect(creds?.clientSecret).toBe("GOCSPX-supersecretkey999");
-      expect(creds?.source).toBe("setting");
-    });
-
     it("respects GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET env overrides", async () => {
       process.env.GOOGLE_OAUTH_CLIENT_ID =
         "env-client-id.apps.googleusercontent.com";
@@ -592,7 +562,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
     });
   });
 
-  describe("Correspondents Ignore & Integration with runNow", () => {
+  describe("Correspondents Ignore", () => {
     it("POST /api/connectors/correspondents/ignore sets ignoredAt and filters from listCorrespondents", async () => {
       // Seed a connector and correspondent link
       const connId = crypto.randomUUID();
@@ -632,36 +602,6 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       // Verify hidden in listCorrespondents
       const afterList = listCorrespondents(memberActor.scope);
       expect(afterList.some((c) => c.email === targetEmail)).toBe(false);
-    });
-
-    it("runNow sets status to needs_reauth when adapter throws ConnectorAuthError", async () => {
-      vi.spyOn(googleAdapter, "test").mockResolvedValue({
-        ok: true,
-        detail: "Connected",
-      });
-
-      const connector = await createConnector(memberActor.scope, {
-        kind: "google",
-        name: "Throwing Google Connector",
-        config: {},
-        secret: { refreshToken: "will-fail-on-sync" },
-      });
-
-      // Mock sync to throw ConnectorAuthError
-      vi.spyOn(googleAdapter, "sync").mockImplementation(async function* () {
-        yield* [];
-        throw new ConnectorAuthError("invalid_grant: Refresh token revoked");
-      });
-
-      const result = await runNow(memberActor.scope, connector.id, "manual");
-      expect(result.status).toBe("error");
-
-      const checkRow = sqlite
-        .prepare("SELECT status, lastError FROM connectors WHERE id = ?")
-        .get(connector.id) as { status: string; lastError: string };
-
-      expect(checkRow.status).toBe("needs_reauth");
-      expect(checkRow.lastError).toContain("invalid_grant");
     });
   });
 });

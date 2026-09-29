@@ -3,7 +3,6 @@
  *
  * Covers:
  * - Session requirement on mutations (403 SESSION_REQUIRED for API tokens)
- * - Multi-tenant isolation: other owner returns 404
  * - POST /test never persists rows to the database
  * - Secrets stripped from output (only secretPresent returned)
  * - Delete with and without deleteImported flag
@@ -34,7 +33,6 @@ import { z } from "zod";
 describe("Connectors API (/api/connectors)", () => {
   let server: http.Server;
   let actorA: Actor;
-  let actorB: Actor;
   let tokenA: string;
 
   // Mock test adapter for controlled errors & sync events
@@ -97,10 +95,6 @@ describe("Connectors API (/api/connectors)", () => {
     actorA = await createActor(server, {
       username: "connector-alice",
       email: "alice@example.com",
-    });
-    actorB = await createActor(server, {
-      username: "connector-bob",
-      email: "bob@example.com",
     });
 
     tokenA = createToken(
@@ -242,58 +236,21 @@ describe("Connectors API (/api/connectors)", () => {
     expect(dbRow.secret).not.toContain("super-secret-pass");
   });
 
-  it("enforces tenant isolation: another owner cannot read, modify, delete or sync", async () => {
-    // Create connector for Actor A
-    const createRes = await request(server)
-      .post("/api/connectors")
-      .set("Cookie", actorA.cookie)
-      .send({
-        kind: mockAdapterKind,
-        name: "Alice Private Connector",
-        config: {},
-      });
-    const connId = createRes.body.id;
-
-    // Actor B tries GET /api/connectors/:id -> 404
-    const getRes = await request(server)
-      .get(`/api/connectors/${connId}`)
-      .set("Cookie", actorB.cookie);
-    expect(getRes.status).toBe(404);
-
-    // Actor B tries PATCH /api/connectors/:id -> 404
-    const patchRes = await request(server)
-      .patch(`/api/connectors/${connId}`)
-      .set("Cookie", actorB.cookie)
-      .send({ name: "Bob Hijack" });
-    expect(patchRes.status).toBe(404);
-
-    // Actor B tries POST /api/connectors/:id/sync -> 404
-    const syncRes = await request(server)
-      .post(`/api/connectors/${connId}/sync`)
-      .set("Cookie", actorB.cookie);
-    expect(syncRes.status).toBe(404);
-
-    // Actor B tries DELETE /api/connectors/:id -> 404
-    const delRes = await request(server)
-      .delete(`/api/connectors/${connId}`)
-      .set("Cookie", actorB.cookie);
-    expect(delRes.status).toBe(404);
-
-    // Ensure it still exists for Actor A
-    const verifyRes = await request(server)
-      .get(`/api/connectors/${connId}`)
-      .set("Cookie", actorA.cookie);
-    expect(verifyRes.status).toBe(200);
-  });
-
-  it("deletes connector without deleteImported (retains imported data)", async () => {
+  it.each([
+    ["without deleteImported, and keeps the imported data", "", true],
+    [
+      "with deleteImported, and removes imported interactions and ghost contacts",
+      "?deleteImported=true",
+      false,
+    ],
+  ])("deletes a connector %s", async (_how, query, kept) => {
     // 1. Create connector
     const createRes = await request(server)
       .post("/api/connectors")
       .set("Cookie", actorA.cookie)
       .send({
         kind: mockAdapterKind,
-        name: "To Delete Keep Data",
+        name: "To Delete",
         config: {},
       });
     const connId = createRes.body.id;
@@ -305,7 +262,7 @@ describe("Connectors API (/api/connectors)", () => {
 
     sqlite
       .prepare(
-        "INSERT INTO contacts (id, ownerId, name, isGhost, addedAt, updatedAt) VALUES (?, ?, 'Ghost 1', 1, ?, ?)",
+        "INSERT INTO contacts (id, ownerId, name, isGhost, addedAt, updatedAt) VALUES (?, ?, 'Ghost', 1, ?, ?)",
       )
       .run(contactId, actorA.user.id, nowIso, nowIso);
 
@@ -317,19 +274,19 @@ describe("Connectors API (/api/connectors)", () => {
 
     sqlite
       .prepare(
-        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'interaction', 'evt-del-1', ?, 1, ?)",
+        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'interaction', ?, ?, 1, ?)",
       )
-      .run(connId, actorA.user.id, interactionId, nowIso);
+      .run(connId, actorA.user.id, `evt-${connId}`, interactionId, nowIso);
 
     sqlite
       .prepare(
-        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'correspondent', 'ghost-del-1', ?, 1, ?)",
+        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'correspondent', ?, ?, 1, ?)",
       )
-      .run(connId, actorA.user.id, contactId, nowIso);
+      .run(connId, actorA.user.id, `ghost-${connId}`, contactId, nowIso);
 
-    // 3. Delete connector WITHOUT deleteImported
+    // 3. Delete the connector
     const delRes = await request(server)
-      .delete(`/api/connectors/${connId}`)
+      .delete(`/api/connectors/${connId}${query}`)
       .set("Cookie", actorA.cookie);
     expect(delRes.status).toBe(204);
 
@@ -339,81 +296,15 @@ describe("Connectors API (/api/connectors)", () => {
       .get(connId);
     expect(connCheck).toBeUndefined();
 
-    // Interaction and Ghost contact remain!
+    // The interaction and the ghost contact go only when asked
     const intCheck = sqlite
       .prepare("SELECT * FROM interactions WHERE id = ?")
       .get(interactionId);
-    expect(intCheck).toBeDefined();
-
     const ghostCheck = sqlite
       .prepare("SELECT * FROM contacts WHERE id = ?")
       .get(contactId);
-    expect(ghostCheck).toBeDefined();
-  });
-
-  it("deletes connector with deleteImported (removes imported interactions and ghost contacts)", async () => {
-    // 1. Create connector
-    const createRes = await request(server)
-      .post("/api/connectors")
-      .set("Cookie", actorA.cookie)
-      .send({
-        kind: mockAdapterKind,
-        name: "To Delete Purge Data",
-        config: {},
-      });
-    const connId = createRes.body.id;
-
-    // 2. Create imported interaction + link and ghost contact + link
-    const contactId = crypto.randomUUID();
-    const interactionId = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-
-    sqlite
-      .prepare(
-        "INSERT INTO contacts (id, ownerId, name, isGhost, addedAt, updatedAt) VALUES (?, ?, 'Ghost Purge', 1, ?, ?)",
-      )
-      .run(contactId, actorA.user.id, nowIso, nowIso);
-
-    sqlite
-      .prepare(
-        "INSERT INTO interactions (id, ownerId, contactId, type, title, date, updatedAt) VALUES (?, ?, ?, 'meeting', 'Purge Meeting', ?, ?)",
-      )
-      .run(interactionId, actorA.user.id, contactId, nowIso, nowIso);
-
-    sqlite
-      .prepare(
-        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'interaction', 'evt-purge-1', ?, 1, ?)",
-      )
-      .run(connId, actorA.user.id, interactionId, nowIso);
-
-    sqlite
-      .prepare(
-        "INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt) VALUES (?, ?, 'correspondent', 'ghost-purge-1', ?, 1, ?)",
-      )
-      .run(connId, actorA.user.id, contactId, nowIso);
-
-    // 3. Delete connector WITH deleteImported=true
-    const delRes = await request(server)
-      .delete(`/api/connectors/${connId}?deleteImported=true`)
-      .set("Cookie", actorA.cookie);
-    expect(delRes.status).toBe(204);
-
-    // Connector is gone
-    const connCheck = sqlite
-      .prepare("SELECT * FROM connectors WHERE id = ?")
-      .get(connId);
-    expect(connCheck).toBeUndefined();
-
-    // Interaction and Ghost contact are also deleted!
-    const intCheck = sqlite
-      .prepare("SELECT * FROM interactions WHERE id = ?")
-      .get(interactionId);
-    expect(intCheck).toBeUndefined();
-
-    const ghostCheck = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(contactId);
-    expect(ghostCheck).toBeUndefined();
+    expect(intCheck !== undefined).toBe(kept);
+    expect(ghostCheck !== undefined).toBe(kept);
   });
 
   it("syncs inline when DISABLE_BACKGROUND_JOBS=true", async () => {

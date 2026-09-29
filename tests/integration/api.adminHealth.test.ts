@@ -7,10 +7,10 @@
 // until now were answerable only by reading the server log or opening the
 // database.
 //
-// Two things are tested and they are different in kind. That a member cannot
-// reach it is a guard. That the numbers in it are real is the reason it
-// exists: a health panel full of zeros because every query threw is worse
-// than no panel, because somebody will believe it.
+// That a member cannot reach it is the admin guard, which api.admin.test.ts
+// checks on every admin route. This file checks that the numbers in it are
+// real, which is the reason it exists: a health panel full of zeros because
+// every query threw is worse than no panel, because somebody will believe it.
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -86,27 +86,6 @@ async function health(): Promise<Record<string, never>> {
   expect(res.status).toBe(200);
   return res.body;
 }
-
-describe("who can read it", () => {
-  it("refuses a member", async () => {
-    const res = await asUser(member)(request(app).get("/api/admin/health"));
-
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("ADMIN_REQUIRED");
-  });
-
-  it("refuses a caller with no credential at all", async () => {
-    const res = await request(app).get("/api/admin/health");
-
-    expect(res.status).toBe(401);
-  });
-
-  it("answers an admin", async () => {
-    const res = await asUser(admin)(request(app).get("/api/admin/health"));
-
-    expect(res.status).toBe(200);
-  });
-});
 
 describe("what it says", () => {
   it("reports the schema this database is actually on", async () => {

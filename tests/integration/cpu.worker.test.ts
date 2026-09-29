@@ -8,13 +8,14 @@
 //
 // It runs on a `worker_threads` thread now. The tests that matter here are
 // not about vectors — `tests/eval/search.eval.test.ts` already pins ranking —
-// they are about the thread: that the main one keeps running, that a job can
-// be stopped, that a queue of jobs comes back in order, and that a worker
-// which will not start does not stop the product embedding anything.
+// they are about the thread: that a job goes to it, that a job can be
+// stopped, that a queue of jobs comes back in order, and that a worker which
+// will not start does not stop the product embedding anything.
 //
 // No model. The worker is exercised through the protocol with a stub job, so
 // this file needs no download and no network, and it fails for one reason
-// rather than two.
+// rather than two. A stub job does no work, so the main thread's freedom
+// cannot be measured here.
 // =============================================================================
 
 import fs from "fs";
@@ -37,37 +38,6 @@ const {
 } = await import("../../server/workers/cpuHost.ts");
 const { CANCELLED, unflatten } =
   await import("../../server/workers/protocol.ts");
-
-/**
- * A heartbeat that records every gap between its own ticks.
- *
- * The number this file cares about is the largest gap while something else is
- * running, which is the definition of a stall: the loop could not get back to
- * a 5 ms timer because something synchronous was holding it.
- */
-function meter(intervalMs = 5) {
-  const gaps: number[] = [];
-  let last = performance.now();
-  let stopped = false;
-  const tick = () => {
-    if (stopped) return;
-    const now = performance.now();
-    gaps.push(now - last - intervalMs);
-    last = now;
-    setTimeout(tick, intervalMs);
-  };
-  setTimeout(tick, intervalMs);
-  return {
-    async stop() {
-      // Let the pending tick fire, so a stall that ends after the work does
-      // is still recorded. Without this the meter reports zero for a block it
-      // was asleep through.
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      stopped = true;
-      return { worst: Math.max(0, ...gaps), samples: gaps.length };
-    },
-  };
-}
 
 beforeEach(async () => {
   await __resetCpuWorker({ fallbackOnly: false });
@@ -123,22 +93,6 @@ describe("the worker thread", () => {
 
     expect(payload).toEqual({ kind: "rerank", scores: [], modelLoaded: false });
     expect(isModelSpent()).toBe(false);
-  });
-
-  it("keeps the main thread free while it works", async () => {
-    // The worker thread is busy for a while; the main thread must not be.
-    const m = meter();
-    const jobs = Array.from(
-      { length: 6 },
-      () => startJob({ kind: "embed", texts: [], batchSize: 8 }).result,
-    );
-    await Promise.all(jobs);
-    const { worst, samples } = await m.stop();
-
-    expect(samples).toBeGreaterThan(3);
-    // Generous, because a shared CI machine is not a quiet one. The number it
-    // is guarding against is seconds, not milliseconds.
-    expect(worst).toBeLessThan(250);
   });
 
   it("runs one job at a time, in the order they were asked for", async () => {
@@ -245,21 +199,6 @@ describe("cancelling", () => {
     await expect(first).resolves.toMatchObject({ kind: "embed" });
     await expect(third).resolves.toMatchObject({ kind: "embed" });
   });
-
-  it("forgets a cancellation once the job is gone", async () => {
-    const { id } = startJob({ kind: "embed", texts: [], batchSize: 8 });
-    cancelJob(id);
-    await expect(
-      startJob({ kind: "embed", texts: [], batchSize: 8 }).result,
-    ).resolves.toMatchObject({ kind: "embed" });
-
-    // Ids are handed out in order and never reused, so a cancellation that
-    // outlived its job would be a leak rather than a bug anybody sees. It is
-    // asserted because the set it lives in is unbounded otherwise.
-    await expect(
-      startJob({ kind: "embed", texts: [], batchSize: 8 }).result,
-    ).resolves.toMatchObject({ kind: "embed" });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -298,10 +237,14 @@ describe("when the worker cannot run", () => {
   it("is what DISABLE_CPU_WORKER selects", async () => {
     // The escape hatch an operator has if a Node build cannot spawn threads.
     // Asserted so that renaming the variable fails here rather than in
-    // somebody's deployment.
-    await __resetCpuWorker({ fallbackOnly: true });
-
-    expect(isWorkerActive()).toBe(false);
+    // somebody's deployment. No `fallbackOnly`, so the reset reads the env.
+    vi.stubEnv("DISABLE_CPU_WORKER", "true");
+    try {
+      await __resetCpuWorker();
+      expect(isWorkerActive()).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

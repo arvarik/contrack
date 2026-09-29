@@ -551,41 +551,60 @@ describe("GET /api/imports", () => {
     await json([{ name: "Import 1 Person" }], id1);
     await json([{ name: "Import 2 Person" }], id2);
 
+    // Each test starts with no imports, so the list is exactly these two. A
+    // findIndex comparison passed with the newer import missing (-1 < n).
     const res = await request(app).get("/api/imports");
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("imports");
-    expect(Array.isArray(res.body.imports)).toBe(true);
-    expect(res.body.imports.length).toBeGreaterThanOrEqual(2);
-    const idx2 = (res.body.imports as { id: string }[]).findIndex(
-      (i) => i.id === id2,
-    );
-    const idx1 = (res.body.imports as { id: string }[]).findIndex(
-      (i) => i.id === id1,
-    );
-    expect(idx2).toBeLessThan(idx1);
+    expect((res.body.imports as { id: string }[]).map((i) => i.id)).toEqual([
+      id2,
+      id1,
+    ]);
   });
 });
 
 describe("dedupeOnImport preference", () => {
-  it("skips duplicate scan when dedupeOnImport is false", async () => {
-    const { dedupeService } =
-      await import("../../server/services/dedupe/index.ts");
-    const scanSpy = vi.spyOn(dedupeService, "runImportScan");
+  it("runs the duplicate check after an import only while it is on", async () => {
+    // One pair per half, so the second half cannot find the first one's pair.
+    const pair = async (existing: string, imported: string, email: string) => {
+      const res = await request(app)
+        .post("/api/contacts")
+        .send({ name: existing, emails: [email] });
+      expect(res.status).toBe(201);
+      const importId = crypto.randomUUID();
+      await json([{ name: imported, emails: [email] }], importId);
+      return until(importId, "complete");
+    };
+    const merged = () =>
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS n FROM contacts WHERE canonicalId IS NOT NULL",
+          )
+          .get() as { n: number }
+      ).n;
 
     await request(app)
       .patch("/api/auth/preferences")
       .send({ dedupeOnImport: false });
+    const off = await pair(
+      "Margaret Ellington",
+      "Peggy Ellington",
+      "peggy@example.com",
+    );
+    expect(off.summary?.autoMerged).toBe(0);
+    expect(merged()).toBe(0);
 
-    const importId = crypto.randomUUID();
-    await json([{ name: "No Dedupe Person" }], importId);
-    await until(importId, "complete");
-
-    expect(scanSpy).not.toHaveBeenCalled();
-
-    // Reset preference
+    // The same shape with the preference back on merges, so the half above
+    // is off because of the preference and not because the pair is weak.
     await request(app)
       .patch("/api/auth/preferences")
       .send({ dedupeOnImport: true });
-    scanSpy.mockRestore();
+    const on = await pair(
+      "Robert Castellanos",
+      "Bob Castellanos",
+      "bob@example.com",
+    );
+    expect(on.summary?.autoMerged).toBe(1);
+    expect(merged()).toBe(1);
   });
 });

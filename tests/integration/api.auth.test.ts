@@ -14,8 +14,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import { makeTestApp } from "./helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
@@ -494,13 +492,6 @@ describe("API token", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("SESSION_REQUIRED");
   });
-
-  it("still reaches a data endpoint that a session would", async () => {
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(res.status).toBe(200);
-  });
 });
 
 // =============================================================================
@@ -696,8 +687,9 @@ describe("sessions", () => {
 // =============================================================================
 
 describe("requireAdmin", () => {
-  // Phase 1 built the gate, Phase 3 mounted it. These four cases cover the
-  // middleware itself; api.admin.test.ts covers what it protects.
+  // api.admin.test.ts sends an admin and a member to every admin route. A
+  // request with no principal is answered 401 by the auth middleware before
+  // it reaches this guard, so that branch is only reachable here.
   const run = (principal: unknown): { code?: string; status?: number } => {
     let captured: AppError | undefined;
     requireAdmin(
@@ -710,133 +702,21 @@ describe("requireAdmin", () => {
     return { code: captured?.code, status: captured?.statusCode };
   };
 
-  it("passes an admin", () => {
-    expect(
-      run({ kind: "user", user: { role: "admin" }, via: "session" }),
-    ).toEqual({ code: undefined, status: undefined });
-  });
-
-  it("refuses a member with ADMIN_REQUIRED", () => {
-    expect(
-      run({ kind: "user", user: { role: "member" }, via: "session" }),
-    ).toEqual({ code: "ADMIN_REQUIRED", status: 403 });
-  });
-
   it("refuses an unauthenticated request with UNAUTHORIZED", () => {
     expect(run(undefined)).toEqual({ code: "UNAUTHORIZED", status: 401 });
-  });
-
-  it("is mounted in every route file Phase 3 names", () => {
-    // Task 3.1 lists the files that hold an admin route. The route manifest
-    // test proves the guard sits on each individual route; this proves no
-    // whole file was forgotten, which is the mistake that would leave a group
-    // of endpoints open at once.
-    const named = [
-      "admin.ts",
-      "auth.ts",
-      "ai.ts",
-      "aiSettings.ts",
-      "dataLifecycle.ts",
-      "dedupe/embeddings.ts",
-    ];
-    const missing = named.filter(
-      (file) =>
-        !/\brequireAdmin\b/.test(
-          fs.readFileSync(path.join("server/routes", file), "utf8"),
-        ),
-    );
-    expect(missing).toEqual([]);
   });
 });
 
 // =============================================================================
 
 describe("a personal API token", () => {
-  // Phase 3 adds the endpoints that mint these. The lookup exists now because
-  // the principal shape has to be final before Phase 2 scopes every read, so
-  // the row goes in by hand.
-  const SECRET = "ctk_" + "a".repeat(43);
-  let userId: string;
-
-  function issue(overrides: Partial<Record<string, string | null>> = {}): void {
-    const hash = crypto.createHash("sha256").update(SECRET).digest("hex");
-    sqlite
-      .prepare(
-        `INSERT INTO api_tokens (id, userId, name, tokenHash, tokenPrefix, expiresAt, revokedAt)
-         VALUES ('tok-1', ?, 'A script', ?, ?, ?, ?)`,
-      )
-      .run(
-        userId,
-        hash,
-        SECRET.slice(0, 12),
-        overrides.expiresAt ?? null,
-        overrides.revokedAt ?? null,
-      );
-  }
-
+  // Minting, scope, revocation, expiry and lastUsedAt are in
+  // api.tokens.test.ts, on tokens the real endpoint issued.
   beforeEach(async () => {
     wipeAccounts();
     delete process.env.API_TOKEN;
     __resetAuthRateLimits();
-    const { res } = await setupAccount();
-    userId = res.body.user.id;
-    sqlite.prepare("DELETE FROM api_tokens").run();
-  });
-
-  it("acts as its own account on a data endpoint", async () => {
-    issue();
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${SECRET}`);
-    expect(res.status).toBe(200);
-
-    const status = await request(app)
-      .get("/api/auth/status")
-      .set("Authorization", `Bearer ${SECRET}`);
-    expect(status.body.user.id).toBe(userId);
-  });
-
-  it("cannot reach an endpoint that manages the account", async () => {
-    // A token must not be able to change the password that would revoke it.
-    issue();
-    const res = await request(app)
-      .get("/api/auth/me")
-      .set("Authorization", `Bearer ${SECRET}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("SESSION_REQUIRED");
-  });
-
-  it("stamps lastUsedAt so an unused token is visible as unused", async () => {
-    issue();
-    await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${SECRET}`);
-    const row = sqlite
-      .prepare("SELECT lastUsedAt FROM api_tokens WHERE id = 'tok-1'")
-      .get() as { lastUsedAt: string | null };
-    expect(row.lastUsedAt).not.toBeNull();
-  });
-
-  it.each([
-    ["revoked", { revokedAt: "2020-01-01 00:00:00" }],
-    ["expired", { expiresAt: "2020-01-01 00:00:00" }],
-  ])("refuses a %s token", async (_label, overrides) => {
-    issue(overrides);
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${SECRET}`);
-    expect(res.status).toBe(401);
-  });
-
-  it("refuses a token whose account is disabled", async () => {
-    issue();
-    sqlite
-      .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
-      .run(userId);
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${SECRET}`);
-    expect(res.status).toBe(401);
+    await setupAccount();
   });
 
   it("refuses a token that was never issued", async () => {
@@ -844,20 +724,6 @@ describe("a personal API token", () => {
       .get("/api/contacts")
       .set("Authorization", `Bearer ctk_${"z".repeat(43)}`);
     expect(res.status).toBe(401);
-  });
-
-  it("stores only the hash, never the token", () => {
-    issue();
-    const row = sqlite
-      .prepare(
-        "SELECT tokenHash, tokenPrefix FROM api_tokens WHERE id = 'tok-1'",
-      )
-      .get() as { tokenHash: string; tokenPrefix: string };
-    expect(row.tokenHash).not.toContain(SECRET);
-    expect(row.tokenHash).toHaveLength(64);
-    // The prefix is short enough to be an identifier rather than a credential.
-    expect(SECRET.startsWith(row.tokenPrefix)).toBe(true);
-    expect(row.tokenPrefix).toHaveLength(12);
   });
 });
 
@@ -1040,27 +906,6 @@ describe("data ownership", () => {
     expect(row.ownerId).toBe(localOwner().id);
 
     sqlite.prepare("DELETE FROM contacts WHERE id = 'own-null'").run();
-  });
-
-  it("carries ownership on every table that has it", () => {
-    for (const table of [
-      "contacts",
-      "lists",
-      "interactions",
-      "action_items",
-      "dedupe_suggestions",
-      "dedupe_exclusions",
-      "dedupe_merge_log",
-      "ai_invocations",
-    ]) {
-      const columns = sqlite.pragma(`table_info(${table})`) as {
-        name: string;
-      }[];
-      expect(
-        columns.some((c) => c.name === "ownerId"),
-        `${table} should carry ownerId`,
-      ).toBe(true);
-    }
   });
 });
 

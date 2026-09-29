@@ -10,6 +10,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
+import { setProviderKey } from "../../server/services/aiSettingsService.ts";
 
 const app = makeTestApp();
 
@@ -238,24 +239,6 @@ describe("provider credentials", () => {
     expect(endpoint.apiKey).toBeUndefined();
   });
 
-  it("surfaces a discovery failure without discarding the credential", async () => {
-    const res = await request(app).put("/api/settings/ai/endpoints").send({
-      id: "unreachable",
-      label: "Unreachable",
-      baseUrl: UNREACHABLE,
-      apiKey: "sk-still-stored-9999",
-    });
-    expect(res.status).toBe(502);
-    expect(res.body.error.code).toBe("DISCOVERY_FAILED");
-
-    // A typo'd URL must not cost the user the key they just typed.
-    const view = await request(app).get("/api/settings/ai");
-    const endpoint = view.body.customEndpoints.find(
-      (e: { id: string }) => e.id === "unreachable",
-    );
-    expect(endpoint.keyPreview).toBe("••••9999");
-  });
-
   it("rejects an unknown provider id", async () => {
     const res = await request(app)
       .put("/api/settings/ai/providers/skynet/key")
@@ -272,24 +255,23 @@ describe("provider credentials", () => {
   });
 
   it("removes a stored key", async () => {
-    await request(app).put("/api/settings/ai/endpoints").send({
-      id: "temp-key",
-      label: "Temp",
-      baseUrl: UNREACHABLE,
-      apiKey: "sk-remove-me",
-    });
+    // Saved through the service, because the route checks a built-in key
+    // against the real vendor.
+    setProviderKey("openai", "sk-remove-me-1234");
+    const providerIds = async () =>
+      (await request(app).get("/api/settings/ai")).body.providers.map(
+        (p: { id: string }) => p.id,
+      );
+    expect(await providerIds()).toContain("openai");
+
     const removed = await request(app).delete(
-      "/api/settings/ai/endpoints/temp-key",
+      "/api/settings/ai/providers/openai/key",
     );
     expect(removed.status).toBe(200);
-
-    const res = await request(app).get("/api/settings/ai");
-    expect(
-      res.body.customEndpoints.find((e: { id: string }) => e.id === "temp-key"),
-    ).toBeUndefined();
+    expect(await providerIds()).not.toContain("openai");
   });
 
-  it("404s model refresh for an unconfigured provider", async () => {
+  it("refuses model refresh for an unconfigured provider with 400", async () => {
     const res = await request(app).post(
       "/api/settings/ai/providers/anthropic/refresh-models",
     );
@@ -316,19 +298,23 @@ describe("custom OpenAI-compatible endpoints", () => {
     expect(res.status).toBe(400);
   });
 
-  it("stores the endpoint even when connectivity validation fails", async () => {
+  it("stores the endpoint and its key even when connectivity validation fails", async () => {
     // Nothing is listening on this port — discovery fails, config persists.
     const res = await request(app).put("/api/settings/ai/endpoints").send({
       id: "homelab",
       label: "Homelab Ollama",
       baseUrl: "http://127.0.0.1:59999/v1",
+      apiKey: "sk-still-stored-9999",
     });
     expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe("DISCOVERY_FAILED");
 
+    // A typo'd URL must not cost the user the key they just typed.
     const view = await request(app).get("/api/settings/ai");
-    expect(
-      view.body.customEndpoints.find((e: { id: string }) => e.id === "homelab"),
-    ).toBeTruthy();
+    const endpoint = view.body.customEndpoints.find(
+      (e: { id: string }) => e.id === "homelab",
+    );
+    expect(endpoint.keyPreview).toBe("••••9999");
     // …and it becomes a selectable provider for chat capabilities.
     expect(
       view.body.providers.find(

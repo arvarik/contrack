@@ -25,14 +25,16 @@ function addContact(
     isGhost: number;
     deletedAt: string | null;
     canonicalId: string | null;
+    isTracked: number;
   }> = {},
 ): string {
   const id = `snap-c-${++seq}`;
-  // Tracked: only a tracked contact is scored, so only one is snapshotted.
+  // Tracked by default: only a tracked contact is scored, so only a tracked
+  // one is snapshotted.
   sqlite
     .prepare(
       `INSERT INTO contacts (id, ownerId, name, relationshipScore, isArchived, isGhost, deletedAt, canonicalId, isTracked)
-       VALUES (?, ?, 'Contact', ?, ?, ?, ?, ?, 1)`,
+       VALUES (?, ?, 'Contact', ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -42,6 +44,7 @@ function addContact(
       overrides.isGhost ?? 0,
       overrides.deletedAt ?? null,
       overrides.canonicalId ?? null,
+      overrides.isTracked ?? 1,
     );
   return id;
 }
@@ -75,6 +78,7 @@ describe("snapshotScores", () => {
     addContact(A.user.id, 40, { isGhost: 1 });
     addContact(A.user.id, 30, { deletedAt: new Date().toISOString() });
     addContact(A.user.id, 20, { canonicalId: cA1 });
+    addContact(A.user.id, 10, { isTracked: 0 });
 
     const inserted = snapshotScores(A.user.id, "2026-09-14");
     expect(inserted).toBe(2);

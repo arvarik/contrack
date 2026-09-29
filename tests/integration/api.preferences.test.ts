@@ -145,14 +145,10 @@ describe("PATCH /api/auth/preferences", () => {
     ["a density that is not a density", { listDensity: "roomy" }],
     ["a preset that is not a preset", { dedupePreset: "reckless" }],
     ["an empty body", {}],
-  ])("refuses %s", async (_label, body) => {
+  ])("refuses %s, and leaves the stored values alone", async (_label, body) => {
+    const before = getPreferences(A.user.id);
     const res = await patch(A, body);
     expect(res.status).toBe(400);
-  });
-
-  it("leaves the stored value alone when a patch is refused", async () => {
-    const before = getPreferences(A.user.id);
-    await patch(A, { listDensity: "roomy" });
     expect(getPreferences(A.user.id)).toEqual(before);
   });
 });

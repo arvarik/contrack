@@ -75,7 +75,11 @@ describe("trash: soft delete → restore", () => {
       .post("/api/contacts/bulk-delete")
       .send({ ids: [a, b] })
       .expect(200);
+    // A bulk delete uses the same trash as a single one.
     expect((await request(app).get(`/api/contacts/${a}`)).status).toBe(404);
+    const trash = await request(app).get("/api/trash");
+    const trashedIds = trash.body.items.map((t: { id: string }) => t.id);
+    expect(trashedIds).toEqual(expect.arrayContaining([a, b]));
 
     const undo = await request(app)
       .post("/api/trash/bulk-restore")
@@ -116,20 +120,6 @@ describe("trash: soft delete → restore", () => {
     const id = await createContact({ name: "Never Deleted" });
     const res = await request(app).post(`/api/trash/${id}/restore`);
     expect(res.status).toBe(404);
-  });
-
-  it("bulk delete uses the same trash semantics", async () => {
-    const a = await createContact({ name: "Bulk Trash A" });
-    const b = await createContact({ name: "Bulk Trash B" });
-
-    await request(app)
-      .post("/api/contacts/bulk-delete")
-      .send({ ids: [a, b] });
-
-    const trash = await request(app).get("/api/trash");
-    const trashedIds = trash.body.items.map((t: { id: string }) => t.id);
-    expect(trashedIds).toContain(a);
-    expect(trashedIds).toContain(b);
   });
 });
 

@@ -231,4 +231,18 @@ describe("API and UI data contracts", () => {
       ).status,
     ).toBe(400);
   });
+
+  it("caps the MCP query route at 200 rows", async () => {
+    // Unbounded values used to reach SQL directly.
+    const owner = localOwnerId();
+    sqlite.transaction(() => {
+      for (let i = 0; i < 201; i++)
+        sqlite
+          .prepare("INSERT INTO contacts(id,name,ownerId) VALUES (?,?,?)")
+          .run(`cap-${i}`, `Capped ${i}`, owner);
+    })();
+    const page = (query: Record<string, number>) =>
+      request(app).get("/api/query/contacts").query(query);
+    expect((await page({ limit: 999_999_999 })).body).toHaveLength(200);
+  });
 });

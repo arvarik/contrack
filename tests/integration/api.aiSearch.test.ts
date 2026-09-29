@@ -130,7 +130,19 @@ describe("POST /api/ai-search", () => {
         model: "local-test",
       },
     });
+    // A provider that can ground makes the default two-pass. Without one the
+    // default is already searxng, and an ignored request would still pass.
+    setSetting(SETTING_KEYS.aiProviderKeys, { gemini: "test-gemini-key" });
     invalidateProviderCache();
+
+    const byDefault = await request(app)
+      .post("/api/ai-search")
+      .send({ contactIds: [contactId] });
+    expect(byDefault.status).toBe(200);
+    expect(jobQueue.getBatch(scope(), byDefault.body.batchId)?.strategy).toBe(
+      "two-pass",
+    );
+    jobQueue.__resetForTests();
 
     const res = await request(app)
       .post("/api/ai-search")

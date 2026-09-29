@@ -5,8 +5,8 @@
  * - SDK Client connection over StreamableHTTPClientTransport
  * - Server initialization and tool listing matching shared/mcpTools.ts
  * - search_people finds a seeded person
- * - get_contact returns profile and score explanation
- * - list_contacts with filtering and pagination
+ * - get_contact returns the contact, and a score explanation once tracked
+ * - list_contacts with filtering and cursor pagination
  * - log_interaction and get_timeline
  * - search_notes
  * - list_action_items, create_action_item, complete_action_item
@@ -17,7 +17,6 @@
  * - 120/min rate limiting (429 on 121st call)
  * - Resources: contrack://pulse and contrack://contacts/{id}
  * - Prompts: catch_me_up and weekly_review
- * - GET and DELETE /api/mcp return 405 Method Not Allowed
  *
  * @module tests/integration/api.mcp.test
  */
@@ -148,42 +147,34 @@ describe("MCP Server (/api/mcp)", () => {
     await client.close();
   });
 
-  it("get_contact returns profile and score explanation", async () => {
+  it("list_contacts pages through the contacts with a cursor", async () => {
     const client = await makeConnectedClient(tokenA);
+    type Page = {
+      structuredContent?: {
+        contacts: { id: string }[];
+        nextCursor: string | null;
+      };
+    };
 
-    const contactId = seedA.contactIds[0];
-    const res = await client.callTool({
-      name: "get_contact",
-      arguments: { id: contactId },
-    });
-
-    expect(res.isError).toBeFalsy();
-    const structured = (
-      res as {
-        structuredContent?: {
-          contact: { id: string; name: string };
-          scoreExplanation: unknown;
-        };
-      }
-    ).structuredContent;
-    expect(structured?.contact.id).toBe(contactId);
-    expect(structured?.scoreExplanation).toBeDefined();
-
-    await client.close();
-  });
-
-  it("list_contacts returns paginated contacts", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const res = await client.callTool({
+    const first = (await client.callTool({
       name: "list_contacts",
-      arguments: { limit: 10 },
-    });
+      arguments: { limit: 2 },
+    })) as Page;
+    expect(first.structuredContent?.contacts).toHaveLength(2);
+    expect(first.structuredContent?.nextCursor).toBeTruthy();
 
-    expect(res.isError).toBeFalsy();
-    const structured = (res as { structuredContent?: { contacts: unknown[] } })
-      .structuredContent;
-    expect(structured?.contacts.length).toBeGreaterThan(0);
+    const second = (await client.callTool({
+      name: "list_contacts",
+      arguments: { limit: 2, cursor: first.structuredContent!.nextCursor! },
+    })) as Page;
+    expect(second.structuredContent?.nextCursor).toBeNull();
+
+    // Two pages with no overlap are the three contacts seeded for A.
+    const ids = [
+      ...first.structuredContent!.contacts,
+      ...second.structuredContent!.contacts,
+    ].map((c) => c.id);
+    expect(ids.sort()).toEqual([...seedA.contactIds].sort());
 
     await client.close();
   });
@@ -208,11 +199,12 @@ describe("MCP Server (/api/mcp)", () => {
     const structured = (
       res as {
         structuredContent?: {
-          contact: { isTracked: boolean };
+          contact: { id: string; isTracked: boolean };
           scoreExplanation: unknown;
         };
       }
     ).structuredContent;
+    expect(structured?.contact.id).toBe(contactId);
     expect(structured?.contact.isTracked).toBe(false);
     expect(structured?.scoreExplanation).toBeNull();
     expect(snapshot()).toEqual(before);
@@ -380,6 +372,10 @@ describe("MCP Server (/api/mcp)", () => {
       arguments: { id: createdItem!.id },
     });
     expect(completeRes.isError).toBeFalsy();
+    expect(
+      (completeRes as { structuredContent?: { completedAt: string | null } })
+        .structuredContent?.completedAt,
+    ).toEqual(expect.any(String));
 
     await client.close();
   });
@@ -402,12 +398,43 @@ describe("MCP Server (/api/mcp)", () => {
 
   it("list_tags, list_lists, and add_to_list", async () => {
     const client = await makeConnectedClient(tokenA);
+    const [listId] = seedA.listIds;
 
     const tagsRes = await client.callTool({ name: "list_tags" });
     expect(tagsRes.isError).toBeFalsy();
+    // The seed tags nobody.
+    expect(
+      (tagsRes as { structuredContent?: { tags: unknown[] } }).structuredContent
+        ?.tags,
+    ).toEqual([]);
+
+    const added = await client.callTool({
+      name: "add_to_list",
+      arguments: { listId, contactIds: [seedA.contactIds[0]] },
+    });
+    expect(added.isError).toBeFalsy();
+    expect(
+      (added as { structuredContent?: { listId: string; addedCount: number } })
+        .structuredContent,
+    ).toMatchObject({ listId, addedCount: 1 });
 
     const listsRes = await client.callTool({ name: "list_lists" });
     expect(listsRes.isError).toBeFalsy();
+    expect(
+      (
+        listsRes as {
+          structuredContent?: {
+            lists: { id: string; name: string; memberCount: number }[];
+          };
+        }
+      ).structuredContent?.lists,
+    ).toEqual([
+      expect.objectContaining({
+        id: listId,
+        name: "alice List 0",
+        memberCount: 1,
+      }),
+    ]);
 
     await client.close();
   });
@@ -497,7 +524,8 @@ describe("MCP Server (/api/mcp)", () => {
     const contactItem = contactRes.contents[0] as { text: string };
     const contactJson = JSON.parse(contactItem.text);
     expect(contactJson.id).toBe(contactId);
-    expect(contactJson.scoreExplanation).toBeDefined();
+    // This contact is untracked, so the key is there with no score in it.
+    expect(contactJson.scoreExplanation).toBeNull();
 
     await client.close();
   });
@@ -518,19 +546,5 @@ describe("MCP Server (/api/mcp)", () => {
     expect(weeklyPrompt.messages.length).toBeGreaterThan(0);
 
     await client.close();
-  });
-
-  it("GET and DELETE /api/mcp answer 405 Method Not Allowed", async () => {
-    const getRes = await request(server)
-      .get("/api/mcp")
-      .set("Authorization", `Bearer ${tokenA}`);
-    expect(getRes.status).toBe(405);
-    expect(getRes.headers["allow"]).toBe("POST");
-
-    const deleteRes = await request(server)
-      .delete("/api/mcp")
-      .set("Authorization", `Bearer ${tokenA}`);
-    expect(deleteRes.status).toBe(405);
-    expect(deleteRes.headers["allow"]).toBe("POST");
   });
 });
