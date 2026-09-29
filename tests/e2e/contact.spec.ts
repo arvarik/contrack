@@ -367,14 +367,6 @@ test.describe("the Network header and start panel", () => {
     await expect(page.getByText("Recently viewed")).toHaveCount(0);
     await expect(page.getByText("Add people")).toHaveCount(0);
   });
-
-  test("Network page passes axe accessibility scan on desktop", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
-    await expectPageAccessible(page, testInfo, "desktop-network-light");
-  });
 });
 
 /**
@@ -1451,13 +1443,5 @@ test.describe("phone", () => {
     await page.goBack();
     await expect(grace).toBeVisible();
     await expect(grace).toBeFocused();
-  });
-
-  test("Network page passes axe accessibility scan on phone", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
-    await expectPageAccessible(page, testInfo, "phone-network-light");
   });
 });

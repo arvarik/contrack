@@ -7,7 +7,7 @@
  * - Ephemeral token field updating configuration snippets
  * - Ephemeral token is never persisted (cleared on reload)
  * - Dynamic tools table with 15 registered tools
- * - Accessibility scans on desktop and mobile viewports
+ * - Accessibility scan on a phone (settings.spec.ts scans the desktop page)
  *
  * @module tests/e2e/mcp.spec
  */
@@ -99,14 +99,6 @@ test.describe("Settings — MCP & API Server", () => {
     const reloadedTokenInput = page.locator("#mcp-token-input");
     await expect(reloadedTokenInput).toHaveValue("");
     await expect(page.locator("#claude-code")).toContainText("<your-token>");
-  });
-
-  test("passes accessibility scan on desktop", async ({ page }, testInfo) => {
-    await page.goto("/settings/mcp");
-    await expect(
-      page.getByRole("heading", { name: NAMES.mcp.title, level: 1 }),
-    ).toBeVisible();
-    await expectPageAccessible(page, testInfo, "mcp-settings-desktop");
   });
 });
 

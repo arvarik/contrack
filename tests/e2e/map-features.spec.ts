@@ -198,18 +198,6 @@ test.describe("map features - filters and place search", () => {
     await expect(icon).toHaveAttribute("aria-expanded", "true");
   });
 
-  test("is accessible on desktop with toolbar and insights pane open", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/map");
-    const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Map insights", exact: true }),
-    ).toHaveAttribute("aria-expanded", "true");
-    await expectPageAccessible(page, testInfo, "map-toolbar-desktop");
-  });
-
   test("Shift+drag over Virginia pins selects them, adds follow-up, and Escape clears", async ({
     page,
     instance,

@@ -254,36 +254,24 @@ END:VCALENDAR`;
       await local.stop();
     }
   });
+});
 
-  test("phone viewport: connectors view renders and is accessible", async ({
-    browser,
+// The empty page needs no instance of its own: the worker's shared one has
+// no connectors.
+test.describe("Settings — Connectors on a phone", () => {
+  test.use({ ...PHONE });
+
+  test("the empty Connectors page is accessible", async ({
+    page,
   }, testInfo) => {
-    const local = await ContrackInstance.start({
-      authRequired: false,
-      env: {
-        CONNECTORS_ALLOW_PRIVATE_HOSTS: "true",
-      },
-    });
+    await page.goto("/settings/connectors");
+    await expect(
+      page.getByRole("heading", {
+        name: NAMES.connectors.title,
+        exact: true,
+      }),
+    ).toBeVisible();
 
-    try {
-      const context = await browser.newContext({
-        baseURL: local.baseURL,
-        ...PHONE,
-      });
-      const page = await context.newPage();
-
-      await page.goto("/settings/connectors");
-      await expect(
-        page.getByRole("heading", {
-          name: NAMES.connectors.title,
-          exact: true,
-        }),
-      ).toBeVisible();
-
-      await expectPageAccessible(page, testInfo, "connectors-phone");
-      await context.close();
-    } finally {
-      await local.stop();
-    }
+    await expectPageAccessible(page, testInfo, "connectors-phone");
   });
 });

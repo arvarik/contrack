@@ -188,7 +188,7 @@ test("sign-in front door: password toggle and session-only cookie when remember 
   page,
   context,
   gated: _gated,
-}, testInfo) => {
+}) => {
   // Complete setup first
   await completeSetup(page, ADMIN);
 
@@ -211,8 +211,7 @@ test("sign-in front door: password toggle and session-only cookie when remember 
     page.getByRole("button", { name: "Show password" }),
   ).toBeVisible();
 
-  // Run a11y scan on sign-in
-  await expectPageAccessible(page, testInfo, "sign-in-front-door");
+  // account-transitions.spec.ts scans this screen.
 
   // Uncheck Keep me signed in and sign in
   const keepMeSignedIn = page.getByLabel("Keep me signed in on this device");

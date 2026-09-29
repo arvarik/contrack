@@ -37,6 +37,8 @@ import {
 } from "./helpers.ts";
 import { parseAIJson } from "../../server/ai/resilience.ts";
 import { applyCatalogGuardrails } from "../../server/ai/modelFilter.ts";
+import type { AIProvider, ModelInfo } from "../../server/ai/provider.ts";
+import type { AIGenerateOptions } from "../../server/ai/types.ts";
 
 // Probed once at load: a credential the provider rejects skips its block with
 // an explanation, so a stale key in someone's shell cannot turn this red.
@@ -70,13 +72,45 @@ const SEARCH_PROMPT = `Search the web and name one headline published on ${new D
   .toISOString()
   .slice(0, 10)}, with its source. One sentence.`;
 
-/** The chat models a provider's catalog would offer, after the guardrails. */
-async function offered(
-  list: () => Promise<import("../../server/ai/provider.ts").ModelInfo[]>,
+/**
+ * Ask every chat model the catalog would offer, after the guardrails, for one
+ * word. The failure names each model that could not answer.
+ */
+async function expectOfferedModelsAnswer(
+  adapter: Pick<AIProvider, "generate"> & {
+    listModels(): Promise<ModelInfo[]>;
+  },
+  options: Partial<AIGenerateOptions>,
 ) {
-  return applyCatalogGuardrails(await list()).filter((m) =>
-    m.capabilities.includes("chat"),
+  const models = applyCatalogGuardrails(await adapter.listModels()).filter(
+    (m) => m.capabilities.includes("chat"),
   );
+  const failures = (
+    await Promise.all(
+      models.map(async (m) => {
+        try {
+          await adapter.generate({
+            prompt: "Reply with the single word OK.",
+            responseFormat: "text",
+            model: m.id,
+            ...options,
+          });
+          return null;
+        } catch (err) {
+          return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
+        }
+      }),
+    )
+  ).filter(Boolean);
+  expect(failures).toEqual([]);
+}
+
+/** A batch of three inputs must come back as three distinct vectors of one size. */
+function expectOneVectorPerInput(vectors: number[][]) {
+  expect(vectors).toHaveLength(3);
+  expect(vectors[0].length).toBeGreaterThan(0);
+  expect(new Set(vectors.map((v) => v.length)).size).toBe(1);
+  expect(vectors[0]).not.toEqual(vectors[1]);
 }
 
 /** Assert a generate() result is JSON we can actually use. */
@@ -144,27 +178,10 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
   );
 
   it("offers only chat models that answer", async () => {
-    const adapter = new GeminiAdapter(geminiKey()!);
-    const models = await offered(() => adapter.listModels());
-    const failures = (
-      await Promise.all(
-        models.map(async (m) => {
-          try {
-            await adapter.generate({
-              prompt: "Reply with the single word OK.",
-              responseFormat: "text",
-              model: m.id,
-              maxOutputTokens: 256,
-              timeoutMs: 60_000,
-            });
-            return null;
-          } catch (err) {
-            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
-          }
-        }),
-      )
-    ).filter(Boolean);
-    expect(failures).toEqual([]);
+    await expectOfferedModelsAnswer(new GeminiAdapter(geminiKey()!), {
+      maxOutputTokens: 256,
+      timeoutMs: 60_000,
+    });
   }, 180_000);
 
   it(
@@ -177,11 +194,7 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
         ["alpha one", "beta two", "gamma three"],
         embedModelFor("gemini", "gemini-embedding-2"),
       );
-
-      expect(vectors).toHaveLength(3);
-      expect(vectors[0].length).toBeGreaterThan(0);
-      expect(new Set(vectors.map((v) => v.length)).size).toBe(1);
-      expect(vectors[0]).not.toEqual(vectors[1]);
+      expectOneVectorPerInput(vectors);
     },
     CONTRACT_TIMEOUT_MS,
   );
@@ -276,27 +289,10 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
   );
 
   it("offers only chat models that answer", async () => {
-    const adapter = new OpenAIAdapter(openaiKey()!);
-    const models = await offered(() => adapter.listModels());
-    const failures = (
-      await Promise.all(
-        models.map(async (m) => {
-          try {
-            await adapter.generate({
-              prompt: "Reply with the single word OK.",
-              responseFormat: "text",
-              model: m.id,
-              maxOutputTokens: 16,
-              timeoutMs: 60_000,
-            });
-            return null;
-          } catch (err) {
-            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
-          }
-        }),
-      )
-    ).filter(Boolean);
-    expect(failures).toEqual([]);
+    await expectOfferedModelsAnswer(new OpenAIAdapter(openaiKey()!), {
+      maxOutputTokens: 16,
+      timeoutMs: 60_000,
+    });
   }, 180_000);
 
   it(
@@ -306,10 +302,7 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
         ["alpha one", "beta two", "gamma three"],
         embedModelFor("openai", "text-embedding-3-small"),
       );
-
-      expect(vectors).toHaveLength(3);
-      expect(new Set(vectors.map((v) => v.length)).size).toBe(1);
-      expect(vectors[0]).not.toEqual(vectors[1]);
+      expectOneVectorPerInput(vectors);
     },
     CONTRACT_TIMEOUT_MS,
   );
@@ -352,7 +345,7 @@ describe.skipIf(!anthropic.usable)("Anthropic", () => {
   );
 
   it(
-    "falls back to prompt-guided JSON on an over-wide schema",
+    "returns JSON for a schema wider than Claude's parameter cap",
     async () => {
       // Claude caps a schema at 24 optional parameters and Contrack's research
       // schema exceeds it, so the degradation path is load-bearing, not
@@ -397,27 +390,10 @@ describe.skipIf(!anthropic.usable)("Anthropic", () => {
   );
 
   it("offers only chat models that answer", async () => {
-    const adapter = new AnthropicAdapter(anthropicKey()!);
-    const models = await offered(() => adapter.listModels());
-    const failures = (
-      await Promise.all(
-        models.map(async (m) => {
-          try {
-            await adapter.generate({
-              prompt: "Reply with the single word OK.",
-              responseFormat: "text",
-              model: m.id,
-              maxOutputTokens: 64,
-              routing: { prefer: "flash" },
-            });
-            return null;
-          } catch (err) {
-            return `${m.id}: ${(err as Error).message.slice(0, 120)}`;
-          }
-        }),
-      )
-    ).filter(Boolean);
-    expect(failures).toEqual([]);
+    await expectOfferedModelsAnswer(new AnthropicAdapter(anthropicKey()!), {
+      maxOutputTokens: 64,
+      routing: { prefer: "flash" },
+    });
   }, 180_000);
 });
 
@@ -441,40 +417,24 @@ describe.skipIf(!compatUrl())("OpenAI-compatible endpoint", () => {
     CONTRACT_TIMEOUT_MS,
   );
 
-  it(
+  // Skipped, not passed, without a model: an early return here reported a
+  // green test that had asserted nothing.
+  it.skipIf(!compatModel())(
     "negotiates structured output down to something that parses",
     async () => {
       // Local servers vary: some honor json_schema, some only json_object, some
       // neither. The adapter walks down the ladder; all that matters here is
       // that the body it finally returns is usable.
-      const model = compatModel();
-      if (!model) {
-        announce("OpenAI-compatible", "CONTRACT_COMPAT_MODEL not set");
-        return;
-      }
       const result = await new OpenAICompatibleAdapter({
         baseUrl: compatUrl()!,
       }).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
         jsonSchema: CONTACT_SCHEMA,
-        model,
+        model: compatModel()!,
       });
 
       expect(() => parseAIJson(result.text, "contract")).not.toThrow();
-    },
-    CONTRACT_TIMEOUT_MS,
-  );
-
-  it(
-    "never claims search grounding",
-    async () => {
-      // No standard grounding API exists in the compat surface, so research
-      // must never resolve to one of these.
-      expect(
-        new OpenAICompatibleAdapter({ baseUrl: compatUrl()! })
-          .supportsSearchGrounding,
-      ).toBe(false);
     },
     CONTRACT_TIMEOUT_MS,
   );

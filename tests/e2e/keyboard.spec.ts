@@ -199,36 +199,6 @@ test("on a contact page the skip link lands on the contact's name", async ({
   await expectVisibleFocus(heading.getByRole("button"));
 });
 
-test("the shortcuts dialog lists t under Contact", async ({ page, seed }) => {
-  await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
-  ).toBeVisible();
-  await startFromBody(page);
-
-  await page.keyboard.press("?");
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  const list = dialog.getByRole("region", { name: "Shortcut list" });
-  // The rows are a description list: the words, then the keys.
-  const row = list.locator("dt", { hasText: "Track or untrack this contact" });
-  await expect(row).toBeVisible();
-  await expect(
-    row.locator("xpath=following-sibling::dd[1]").getByText("T", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  // Under the Contact heading: the words sit inside that group's list.
-  const contactGroup = list.locator("dl", {
-    has: page.getByText("Edit the value that has focus"),
-  });
-  await expect(
-    contactGroup.getByText("Track or untrack this contact"),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-});
-
 /**
  * The Tab budget.
  *

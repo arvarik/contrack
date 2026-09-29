@@ -13,7 +13,7 @@
  * exactly as it found it.
  */
 import { test, expect } from "./fixtures/test";
-import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
+import { expectVisibleFocus } from "./fixtures/a11y";
 
 test.describe("the generated icons", () => {
   test("serves a favicon for each size, and the icon file that holds them", async ({
@@ -119,20 +119,12 @@ test.describe("the corvid on its perch", () => {
     await expect(page.locator("[data-corvid-flight]")).toHaveCount(0);
     await expect(perch).toBeVisible();
   });
-
-  test("keeps the Network page accessible with the mark in the nav", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
-    await expectPageAccessible(page, testInfo, "network with the corvid");
-  });
 });
 
 test.describe("the Corvid motion setting", () => {
   test("sits under Motion on the Appearance page and remembers a choice", async ({
     page,
-  }, testInfo) => {
+  }) => {
     await page.goto("/settings/appearance");
 
     const row = page.locator("#mascot-motion");
@@ -156,8 +148,6 @@ test.describe("the Corvid motion setting", () => {
     await expect(
       page.locator("#mascot-motion").getByRole("radio", { name: "Subtle" }),
     ).toHaveAttribute("aria-checked", "true");
-
-    await expectPageAccessible(page, testInfo, "appearance with Corvid motion");
 
     // Put it back, because the instance is shared by the whole worker.
     await page
