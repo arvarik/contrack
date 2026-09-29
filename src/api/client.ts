@@ -11,7 +11,7 @@
  * the answer, announces it once on the window, and still throws, so the
  * calling query fails exactly the way it always has.
  *
- * `tests/unit/frontend.apiClient.test.ts` reads every file in this directory
+ * `tests/unit/frontend/api/client.test.ts` reads every file in this directory
  * and fails if one calls `fetch` without coming back through here.
  *
  * @module api/client

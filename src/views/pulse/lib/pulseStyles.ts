@@ -66,7 +66,7 @@ export const PULSE_CHIP =
  * control's edge needs 3 to 1 (WCAG 1.4.11), and at 40 percent the ring
  * measured 1.8 to 1 on the row's wash. At 75 it clears 3 to 1 on the wash
  * and on the selected tint in both palettes, and stays a step under the
- * full ink of hover. `pulse.contrast.test.ts` measures it.
+ * full ink of hover. `tests/unit/frontend/pulse/contrast.test.ts` measures it.
  */
 export const CHECK_RING_REST = "border-current/75";
 

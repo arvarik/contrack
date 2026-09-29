@@ -33,14 +33,15 @@
  *
  * Every colour here is a literal from `BRAND` and `TILE`. A favicon cannot
  * read CSS tokens, and librsvg, which sharp rasterises through, does not
- * resolve `var()` either. `tests/unit/brand.paths.test.ts` checks each
- * literal against the token it copies. Every word is an outline in the
- * app's own faces (see `type.ts`), so no render depends on the fonts the
- * machine has.
+ * resolve `var()` either. `tests/unit/frontend/brand/corvidPaths.test.ts`
+ * checks each literal against the token it copies. Every word is an outline
+ * in the app's own faces (see `type.ts`), so no render depends on the fonts
+ * the machine has.
  *
- * The outputs are committed. `tests/unit/brand.icons.test.ts` renders every
- * SVG again and compares it with the committed file, byte for byte, so a
- * change to the paths, the masters or the fonts without a rebuild fails CI.
+ * The outputs are committed. `tests/unit/frontend/brand/icons.test.ts`
+ * renders every SVG again and compares it with the committed file, byte for
+ * byte, so a change to the paths, the masters or the fonts without a rebuild
+ * fails CI.
  * It checks each raster's size and the icon file's frames. A raster's bytes
  * depend on the libvips and librsvg of the machine that drew it, so they
  * are not compared.

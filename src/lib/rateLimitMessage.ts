@@ -14,7 +14,7 @@
  * they did not create, which is both wrong and unhelpful: it invites them to
  * retry, and retrying is exactly what will not work.
  *
- * Pure, so `tests/unit/frontend.apiClient.test.ts` can pin every branch.
+ * Pure, so `tests/unit/frontend/api/client.test.ts` can pin every branch.
  *
  * @module lib/rateLimitMessage
  */

@@ -89,8 +89,9 @@ export interface PreferencesResponse {
  *
  * A copy of the server's defaults, because the app renders before the first
  * response arrives and a list that jumps from comfortable to compact a moment
- * after it paints is worse than one that waits. `tests/unit/preferences.test.ts`
- * asserts this object equals the server's, so the copy cannot drift.
+ * after it paints is worse than one that waits.
+ * `tests/unit/frontend/preferences/preferencesClient.test.ts` asserts this
+ * object equals the server's, so the copy cannot drift.
  */
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: "system",

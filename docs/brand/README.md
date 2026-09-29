@@ -10,7 +10,7 @@ npm run brand:icons   # writes public/ and docs/brand/, then commit what it writ
 
 Never edit a generated file by hand. Change the drawing, the sizes or the
 colours in `src/assets/corvidPaths.ts`, run the script, and commit the result.
-`tests/unit/brand.icons.test.ts` fails when a committed SVG differs from a
+`tests/unit/frontend/brand/icons.test.ts` fails when a committed SVG differs from a
 fresh render.
 
 ## The mark
@@ -75,7 +75,7 @@ Strokes are in the mark's 100-unit box.
 | On surface variant | `#566164` | `--color-on-surface-variant` | The line under the name                    |
 
 `BRAND` and `TILE` in `src/assets/corvidPaths.ts` hold these as literals,
-because a favicon cannot read a CSS token. `tests/unit/brand.paths.test.ts`
+because a favicon cannot read a CSS token. `tests/unit/frontend/brand/corvidPaths.test.ts`
 holds each literal to its token.
 
 **The tile runs from primary dim to 55 percent of the branding gradient.** The

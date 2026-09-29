@@ -27,14 +27,15 @@
  *
  * `--accent` additionally paints the five derived tokens, which is the only
  * way to see a picked accent composited against real backgrounds.
- * `tests/unit/theme.contrast.test.ts` checks the palettes and the derivation
- * arithmetically and needs no browser; this checks what a browser paints.
+ * `tests/unit/frontend/style/themeContrast.test.ts` checks the palettes and
+ * the derivation arithmetically and needs no browser; this checks what a
+ * browser paints.
  *
  * Notes / limits:
  *   - Only text that is rendered on load is checked. States behind
  *     interaction (open modals, dropdowns, select mode, hover) are not. The
  *     active filter pill is one of those, which is why the static gate in
- *     tests/unit/theme.contrast.test.ts exists alongside this.
+ *     tests/unit/frontend/style/themeContrast.test.ts exists alongside this.
  *   - Gradient-filled text is skipped: it is painted by its background, so
  *     its `color` is meaningless.
  *   - Disabled controls are reported separately. WCAG exempts them; an

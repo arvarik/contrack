@@ -30,7 +30,8 @@ import {
  *
  * No violet: the accent replaces the primary on every button and link, and
  * violet is the AI colour's hue. Each preset keeps `AI_HUE_CLEARANCE`
- * degrees away from it, which `tests/unit/theme.contrast.test.ts` holds.
+ * degrees away from it, which
+ * `tests/unit/frontend/style/themeContrast.test.ts` holds.
  */
 export const ACCENT_PRESETS: readonly { value: string; label: string }[] = [
   { value: DEFAULT_ACCENT, label: "Contrack blue" },

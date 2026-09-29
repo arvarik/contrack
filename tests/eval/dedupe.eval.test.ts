@@ -1,9 +1,10 @@
 // =============================================================================
 // The dedupe precision and recall gate
 // =============================================================================
-// `tests/unit/nlp.*.test.ts` check the matchers one at a time. Nothing checked
-// the engine, so a change to blocking, to a threshold, or to the order the
-// passes run in could move which pairs come out and no test would notice.
+// `tests/unit/server/nlp/*.test.ts` check the matchers one at a time.
+// Nothing checked the engine, so a change to blocking, to a threshold, or to
+// the order the passes run in could move which pairs come out and no test
+// would notice.
 //
 // This runs the passes over a corpus whose answers are written down and
 // compares precision and recall with a committed baseline. It fails in both

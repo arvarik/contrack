@@ -46,7 +46,7 @@ services:
       # Everything below is optional, and each one can be set in the app
       # instead. It is forwarded so a value in .env reaches the container: a
       # variable left off this list is silently ignored on the Docker path.
-      # tests/unit/envDocs.test.ts fails when a documented one is missing.
+      # tests/unit/repo/envDocs.test.ts fails when a documented one is missing.
       - SMTP_URL=${SMTP_URL:-}
       - MAIL_FROM=${MAIL_FROM:-}
       - MAIL_REPLY_TO=${MAIL_REPLY_TO:-}

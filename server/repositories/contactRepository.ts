@@ -70,7 +70,7 @@ const PLATFORM_DOMAINS: readonly (readonly [string, readonly string[]])[] = [
  * https, the way a person types it, so an import keeps its platforms. Text
  * that is not a URL at all is "other".
  *
- * Exported for `tests/unit/detectPlatform.test.ts`.
+ * Exported for `tests/unit/server/repositories/detectPlatform.test.ts`.
  */
 export function detectPlatformFromUrl(url: string): string {
   const text = url.trim();

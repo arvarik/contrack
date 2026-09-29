@@ -86,7 +86,7 @@ embedding worker in the container. `TRANSFORMERS_CACHE` follows `DATA_DIR`
 there, and `AUTH_TOKEN` is removed. Compose passes `MODEL_DIR` and
 `MODEL_DOWNLOADS` with the image's own values as defaults (`/app/models` and
 `false`), because an empty value would point the server away from the models
-the image ships. `tests/unit/envDocs.test.ts` fails when this table, `.env.example`,
+the image ships. `tests/unit/repo/envDocs.test.ts` fails when this table, `.env.example`,
 the compose file and the code disagree.
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches

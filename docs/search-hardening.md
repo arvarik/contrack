@@ -108,7 +108,7 @@ Three facets need more than one column:
 
 `facetKey(filters)` is a cache key that does not change with the order of the facets.
 Ask Contrack puts it in the L1 cache key and in the key that lets identical requests share one search.
-`tests/unit/search.facetSql.test.ts` checks that every facet keeps the same rows in SQL as in `matchesFacet`.
+`tests/unit/server/search/facetSql.test.ts` checks that every facet keeps the same rows in SQL as in `matchesFacet`.
 
 ## Local models and vector storage
 

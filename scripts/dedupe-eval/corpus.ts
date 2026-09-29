@@ -1,9 +1,9 @@
 // =============================================================================
 // The dedupe evaluation corpus
 // =============================================================================
-// `tests/unit/nlp.*.test.ts` check the matchers one at a time: does Jaro-
-// Winkler score this pair above that one, does the nickname table know Bob is
-// Robert. Nothing measured the engine. A pass can score every matcher
+// `tests/unit/server/nlp/*.test.ts` check the matchers one at a time: does
+// Jaro-Winkler score this pair above that one, does the nickname table know
+// Bob is Robert. Nothing measured the engine. A pass can score every matcher
 // correctly and still produce the wrong pairs, because what reaches a matcher
 // is decided by blocking, by the corpus, and by the order the passes run in.
 //

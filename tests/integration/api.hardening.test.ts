@@ -50,7 +50,8 @@ describe("security headers", () => {
     const res = await request(app).get("/api/auth/status");
     const csp = String(res.headers["content-security-policy"]);
     // NODE_ENV is "test" here, so this is the dev policy. Each directive is
-    // checked in tests/unit/securityPolicies.test.ts; this proves they are sent.
+    // checked in tests/unit/server/http/securityPolicies.test.ts; this proves
+    // they are sent.
     expect(csp).toContain("script-src 'self' 'unsafe-inline'");
     expect(csp).toMatch(/connect-src [^;]*\bws:/);
     expect(csp).toContain("frame-ancestors 'none'");

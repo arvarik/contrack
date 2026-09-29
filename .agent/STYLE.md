@@ -103,10 +103,10 @@ timeline (`bg-ai/10 text-ai`).
   `AI_HUE_CLEARANCE` (30) degrees of OKLCH hue away from `ai`, so there is no
   violet or indigo vibe and no violet preset: on a violet contact the Save
   button and every link wore the colour that means "a model wrote this".
-  `tests/unit/theme.contrast.test.ts` holds it.
+  `tests/unit/frontend/style/themeContrast.test.ts` holds it.
 - Defined in three places in `src/index.css` (`@theme` and both dark blocks)
   and in `LIGHT` and `DARK` in `src/lib/theme.ts`.
-  `tests/unit/theme.contrast.test.ts` checks that they agree and clear AA.
+  `tests/unit/frontend/style/themeContrast.test.ts` checks that they agree and clear AA.
 
 #### Off-Palette Colors (FORBIDDEN)
 
@@ -143,7 +143,7 @@ timeline (`bg-ai/10 text-ai`).
 
 Every uppercase label tracks at `0.08em`: `LABEL`, `SECTION_HEADING`,
 `FORM_LABEL`, or `tracking-[0.08em]` where none of those fits. Never
-`tracking-widest`. `tests/unit/styles.floor.test.ts` fails on it.
+`tracking-widest`. `tests/unit/frontend/style/stylesFloor.test.ts` fails on it.
 
 #### Sentence case (REQUIRED)
 
@@ -170,7 +170,7 @@ keeps the periods between them and drops the last one. An ellipsis
   words (`lib/searchAnnouncements.ts`) and the drag announcements
   (`PulseGrid`). A string that copies another system's words exactly keeps
   them too, such as the server's sign-in error.
-- `tests/unit/copy.periods.test.ts` fails on a statement prop, on the text
+- `tests/unit/frontend/style/copyPeriods.test.ts` fails on a statement prop, on the text
   before a closing tag and on any sentence written as a string under `src/`
   that ends with one, and on a settings page's or a destination's
   description that does.
@@ -182,7 +182,7 @@ values are 12 px or more, and 11 px is for uppercase labels, badges and
 keyboard chips.
 
 - ❌ `text-[9px]` and `text-[10px]` (or any arbitrary size under 11 px).
-  `tests/unit/styles.floor.test.ts` fails on them in `src/`.
+  `tests/unit/frontend/style/stylesFloor.test.ts` fails on them in `src/`.
 - ✅ Use the tokens below. They already sit on the floor.
 - `tests/e2e/metrics.spec.ts` measures the rendered size of every visible text
   node on a 390 px phone.
@@ -272,12 +272,12 @@ contact's vibe and the dark palette.
 - ❌ A background, text size, padding, height, shadow, ring, hover, active,
   opacity or disabled class on a `.btn-*`. Utilities come after the class, so
   each of them takes the edge or the face away. The scan in
-  `tests/unit/styles.floor.test.ts` fails on them.
+  `tests/unit/frontend/style/stylesFloor.test.ts` fails on them.
 - ❌ An ad-hoc filled button (`bg-primary text-on-primary rounded-xl px-4`,
   `bg-red-500 text-white`). It is a `.btn-*`.
 - ❌ `rounded-full` on a filled `bg-primary` button, and on any chip, badge,
   filter pill or `Segmented` option: those are `rounded-md`. Circles are for
-  avatars, dots, rings and switch tracks. `tests/unit/styles.floor.test.ts`
+  avatars, dots, rings and switch tracks. `tests/unit/frontend/style/stylesFloor.test.ts`
   fails on a class string with a solid `bg-primary`, `rounded-full` and
   `px-2` or more outside its allow-list.
 
@@ -417,8 +417,9 @@ A page with a side panel (Ask Contrack's history, the map's insights) uses
 - ❌ A coloured bar or sliver down a box's leading edge, for a selection, a
   tone or an accent: a `border-l-*` colour, a `before:` bar or an inset
   shadow. It is the stock accent of generated interfaces, and a list that
-  wears it looks assembled rather than designed. `styles.floor.test.ts`
-  fails on it. A tone goes on a dot, a chip or the text.
+  wears it looks assembled rather than designed.
+  `tests/unit/frontend/style/stylesFloor.test.ts` fails on it. A tone goes on
+  a dot, a chip or the text.
 - ❌ A ring on a selected row. It reads as keyboard focus, on every visit.
 - ✅ An option in a radio group (a preset tile, a role, a scan, a reset's
   delivery) takes the tint and a `RadioDot`
@@ -795,7 +796,7 @@ Use `sonner` via the `<Toaster>` in `App.tsx`. Toasts use `glass-panel` styling 
 ### Import Conventions
 
 - The `@/` path alias resolves to the project root in frontend code only. Vite reads it, and Node does not.
-- In `server/`, `shared/`, `src/db/` and `scripts/`, every relative import names its file with its extension (`./geo.ts`). Node 26 runs the TypeScript itself and resolves no extensionless path or folder index. `tests/unit/nativeTypeScript.test.ts` checks it.
+- In `server/`, `shared/`, `src/db/` and `scripts/`, every relative import names its file with its extension (`./geo.ts`). Node 26 runs the TypeScript itself and resolves no extensionless path or folder index. `tests/unit/repo/nativeTypeScript.test.ts` checks it.
 - Barrel exports (`index.ts`) used for major module boundaries (`server/ai/`, `src/api/`, view directories).
 
 ### State Management
@@ -916,14 +917,14 @@ person sees picks the master, not the file's pixels (`opticalSize`).
   is for.
 - ❌ Never edit a file the script writes. Change `corvidPaths.ts` or
   `corvidRig.ts`, run the script, commit what it writes.
-  `tests/unit/brand.icons.test.ts` renders every SVG again and fails when a
+  `tests/unit/frontend/brand/icons.test.ts` renders every SVG again and fails when a
   committed file differs.
 - ❌ No SVG favicon. A browser takes it over every sized picture and scales
   one weight to every size. Each favicon is drawn for its pixels, and the two
   smallest are fitted to the pixel grid.
 - ❌ No CSS variables in anything the script renders. librsvg does not resolve
   them. Colours there are literals from `BRAND` and `TILE` in
-  `corvidPaths.ts`, and `tests/unit/brand.paths.test.ts` holds each to its
+  `corvidPaths.ts`, and `tests/unit/frontend/brand/corvidPaths.test.ts` holds each to its
   token.
 - ❌ No text set by the machine's fonts. Words in a brand image are outlines
   of the app's own faces (`scripts/brand/type.ts`). Pango on macOS looks

@@ -9,7 +9,7 @@
 // 3. Admin health panel (/api/admin/health) reports AI queue status and the
 //    production limits (concurrency 2, waiting capacity 16).
 // The scheduling rules themselves (anti-starvation, tail drop) are pinned in
-// tests/unit/ai.workQueue.test.ts.
+// tests/unit/server/ai/workQueue.test.ts.
 // =============================================================================
 
 import {

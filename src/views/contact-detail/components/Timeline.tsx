@@ -121,7 +121,7 @@ const INFO_WASH = "bg-info/10 text-info";
 /**
  * The glyph for an interaction type, on its colour's wash. Every other type
  * reads from the shared tones (`TONE_WASH`), which
- * `tests/unit/theme.contrast.test.ts` measures.
+ * `tests/unit/frontend/style/themeContrast.test.ts` measures.
  */
 function getInteractionStyle(type: string): { Icon: LucideIcon; tone: string } {
   switch (type) {

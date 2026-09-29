@@ -168,8 +168,8 @@ export function opticalSize(points: number, density = 2): OpticalSize {
 /**
  * Brand colours for renders outside the app, where no token applies. Each is
  * a literal copy of the token its comment names, in `src/index.css`.
- * `tests/unit/brand.paths.test.ts` reads the stylesheet and fails when a
- * token changes without its copy.
+ * `tests/unit/frontend/brand/corvidPaths.test.ts` reads the stylesheet and
+ * fails when a token changes without its copy.
  */
 export const BRAND = {
   /** `--color-primary`, light. The mark on a light ground. */
