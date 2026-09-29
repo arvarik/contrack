@@ -269,7 +269,6 @@ const V1_OWNED_TABLES = [
 export interface V1Fixture {
   /** DATA_DIR to hand the app under test. */
   dataDir: string;
-  dbPath: string;
   contactIds: string[];
   /** The contact §8 will build an action item for on the next boot. */
   legacyFollowUpId: string;
@@ -279,7 +278,6 @@ export interface V1Fixture {
   /** A fixed query vector and the nearest neighbour it found before the rebuild. */
   queryVector: Buffer;
   nearestSearch: string;
-  nearestDedupe: string;
   vectorCounts: { search: number; dedupe: number };
   /** Files on disk, and the URLs the rows point at. */
   avatarUrls: { id: string; url: string; file: string }[];
@@ -599,13 +597,6 @@ export function makeV1Database(
       )
       .get(queryVector) as { contactId: string }
   ).contactId;
-  const nearestDedupe = (
-    db
-      .prepare(
-        "SELECT contactId FROM contact_embeddings WHERE embedding MATCH ? AND k = 1",
-      )
-      .get(vector(3, 768)) as { contactId: string }
-  ).contactId;
 
   // ---------------------------------------------------------------------
   // Uploads, in the flat 1.x layout
@@ -698,14 +689,12 @@ export function makeV1Database(
 
   return {
     dataDir,
-    dbPath,
     contactIds,
     legacyFollowUpId: contactIds[49],
     contactUpdatedAt,
     interactionUpdatedAt,
     queryVector,
     nearestSearch,
-    nearestDedupe,
     vectorCounts,
     avatarUrls,
     attachmentUrls,

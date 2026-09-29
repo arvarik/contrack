@@ -33,7 +33,6 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
 import {
-  AUTO_MERGE_THRESHOLD,
   BASELINE_PATH,
   THRESHOLDS,
   PASSES,
@@ -211,7 +210,6 @@ describe("what would merge with nobody asked", () => {
     // moved, so a preset change fails here by name rather than showing up as
     // an unexplained shift in precision somewhere else.
     expect(THRESHOLDS).toEqual(baseline.thresholds);
-    expect(AUTO_MERGE_THRESHOLD).toBe(baseline.thresholds.autoMerge);
   });
 
   for (const pass of PASSES) {
@@ -224,11 +222,11 @@ describe("what would merge with nobody asked", () => {
       // that traded one for the other would pass a single F1 check.
       expect(
         now.autoFalsePositives,
-        `${pass}: pairs at or above ${AUTO_MERGE_THRESHOLD} that are two different people`,
+        `${pass}: pairs at or above ${THRESHOLDS.autoMerge} that are two different people`,
       ).toBeLessThanOrEqual(then.autoFalsePositives);
       expect(
         now.autoTruePositives,
-        `${pass}: pairs at or above ${AUTO_MERGE_THRESHOLD} that are one person`,
+        `${pass}: pairs at or above ${THRESHOLDS.autoMerge} that are one person`,
       ).toBeGreaterThanOrEqual(then.autoTruePositives);
     });
   }
@@ -327,10 +325,12 @@ describe("floors that a re-recorded baseline cannot lower", () => {
     }
   });
 
-  it("merges the same pairs with nobody asked whichever path finds them", () => {
-    // The point of one policy. A pair the import path would merge is a pair
-    // a scan would merge, and the other way round. Namesakes are the one
-    // kind still at auto on both, because nothing separates them.
+  it("puts the same hard negatives at auto-merge whichever path finds them", () => {
+    // The point of one policy: a scan and an import agree on which two
+    // different people to merge with nobody asked. Namesakes are the one
+    // kind still at auto on both, because nothing separates them. The true
+    // pairs are not compared, because the import path reaches more of them
+    // at auto (125 against 109 in the baseline).
     expect(measurement.incremental.autoNegativesByKind).toEqual(
       measurement.combined.autoNegativesByKind,
     );
