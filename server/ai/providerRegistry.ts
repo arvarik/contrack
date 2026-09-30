@@ -119,7 +119,7 @@ export function readStoredKey(
       unreadable.add(value);
       log.warn(
         "AIRegistry",
-        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → AI.`,
+        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → Administration → AI providers.`,
       );
     }
     return undefined;
@@ -218,8 +218,8 @@ function instantiate(config: ProviderConfig): AIProvider {
  * generation (through resolveCapability), each provider embedding
  * (embedWithProvider), model discovery and the model test before a pin. So
  * the instance switch is checked here, and nothing else has to remember it.
- * `getProviderConfigs` does not check it, so Settings → AI still lists the
- * stored keys and endpoints while AI is off.
+ * `getProviderConfigs` does not check it, so the AI providers page still
+ * lists the stored keys and endpoints while AI is off.
  */
 export function getProvider(id: string): AIProvider | null {
   if (isAiOffForInstance()) return null;

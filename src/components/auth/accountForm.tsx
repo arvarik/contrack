@@ -220,7 +220,21 @@ export async function createAccountThenPhoto(
  * `autoFocus` is on the first field because each of the three screens is the
  * whole page with one thing to do on it.
  */
-export const AccountFields = ({ form }: { form: AccountForm }) => {
+export const AccountFields = ({
+  form,
+  mailConfigured = false,
+}: {
+  form: AccountForm;
+  /**
+   * True when the instance can email links. The email hint tells the truth
+   * about it: with outgoing mail set up, Contrack sends the links somebody
+   * asks for, a reset or a sign-in.
+   */
+  mailConfigured?: boolean;
+}) => {
+  const emailHint = mailConfigured
+    ? "Used to sign in, and to email you links you ask for"
+    : "Used to sign in. This Contrack cannot send email";
   const usernameHint = form.isUsernameSuggested
     ? "Suggested from your email. Change it if you like"
     : "Lowercase letters, numbers, dots, dashes, underscores";
@@ -254,7 +268,7 @@ export const AccountFields = ({ form }: { form: AccountForm }) => {
       <AuthField
         id="email"
         label="Email"
-        hint="Used to sign in. Contrack never sends mail"
+        hint={emailHint}
         type="email"
         inputMode="email"
         value={form.values.email}

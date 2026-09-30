@@ -78,9 +78,10 @@ export function useBulkActions({
     const ids = getIds();
     if (ids.length === 0) return;
     bulkDelete.mutate(ids, {
-      onSuccess: ({ count }) => {
+      onSuccess: ({ count, retentionDays }) => {
         toastUndoableDelete({
           count,
+          retentionDays,
           onUndo: () =>
             bulkRestore.mutate(ids, {
               onError: (err) =>

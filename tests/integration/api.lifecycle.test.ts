@@ -2,7 +2,7 @@
 // Integration: data lifecycle — trash/restore/purge, backups, full export
 // =============================================================================
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import request from "supertest";
 import fs from "fs";
 import path from "path";
@@ -17,6 +17,44 @@ async function createContact(body: Record<string, unknown>): Promise<string> {
   expect(res.status).toBe(201);
   return res.body.id as string;
 }
+
+describe("a delete says how long the trash keeps the contact", () => {
+  afterEach(() => {
+    delete process.env.TRASH_RETENTION_DAYS;
+  });
+
+  it("DELETE answers the retention in force, not a fixed 30 days", async () => {
+    const id = await createContact({ name: "Retention Single" });
+    process.env.TRASH_RETENTION_DAYS = "7";
+
+    const del = await request(app).delete(`/api/contacts/${id}`);
+
+    expect(del.status).toBe(200);
+    expect(del.body.retentionDays).toBe(7);
+  });
+
+  it("bulk delete answers the retention in force", async () => {
+    const a = await createContact({ name: "Retention Bulk A" });
+    const b = await createContact({ name: "Retention Bulk B" });
+    process.env.TRASH_RETENTION_DAYS = "90";
+
+    const del = await request(app)
+      .post("/api/contacts/bulk-delete")
+      .send({ ids: [a, b] });
+
+    expect(del.status).toBe(200);
+    expect(del.body.count).toBe(2);
+    expect(del.body.retentionDays).toBe(90);
+  });
+
+  it("answers 30 days when nobody has set a retention", async () => {
+    const id = await createContact({ name: "Retention Default" });
+
+    const del = await request(app).delete(`/api/contacts/${id}`);
+
+    expect(del.body.retentionDays).toBe(30);
+  });
+});
 
 describe("trash: soft delete → restore", () => {
   it("DELETE moves a contact to trash instead of destroying it", async () => {

@@ -66,7 +66,7 @@ import { SecretReveal } from "../../components/ui/SecretReveal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { describeDevice } from "../../../shared/devices";
+import { describeDevice, describeSessionMethod } from "../../../shared/devices";
 import { PasskeysCard, passkeysQuery } from "./account/PasskeysCard";
 import { passkeysSupported } from "../../api/passkeys";
 import { useHashTarget } from "./SettingRow";
@@ -286,12 +286,6 @@ const SaveButton = ({
     {children}
   </button>
 );
-
-function formatSessionMethod(method?: string | null): string {
-  if (method === "passkey") return "Passkey";
-  if (method === "link") return "Emailed link";
-  return "Password";
-}
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -541,7 +535,7 @@ const SessionRow = ({ session }: { session: SessionSummary }) => (
       </p>
       <p className="text-xs text-on-surface-variant">
         Last used {formatWhen(session.lastSeenAt)} ·{" "}
-        {formatSessionMethod(session.method)}
+        {describeSessionMethod(session.method)}
       </p>
     </div>
   </li>

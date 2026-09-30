@@ -113,9 +113,10 @@ account with a temporary password must choose its own password first.
   save with **Save changes**.
 - **Sign-in methods.** Your password and your **Passkeys**. **Change
   password** signs out every other device.
-- **Devices.** Each browser where you are signed in, and when it was last
-  used. **This device** marks the one you are using. **Sign out other
-  devices** ends the others.
+- **Devices.** Each browser where you are signed in, how it signed in
+  (**Password**, **Passkey** or **Emailed link**), and when it was last used.
+  **This device** marks the one you are using. **Sign out other devices**
+  ends the others.
 - **API tokens.** Tokens for MCP clients and scripts, see
   [Create a token](mcp.md#create-a-token).
 - **Session.** **Sign out** signs out this device. An admin also sees a link

@@ -31,12 +31,15 @@ export const SetupWizard = ({
   onCreated,
   deviceContacts = 0,
   localOwnerPresent = false,
+  mailConfigured = false,
 }: {
   onCreated: () => void;
   /** Contacts already in this database, waiting to be claimed. */
   deviceContacts?: number;
   /** True when this instance has been running with sign-in switched off. */
   localOwnerPresent?: boolean;
+  /** True when the instance can email links. The email hint says which. */
+  mailConfigured?: boolean;
 }) => {
   const form = useAccountForm();
   const [formError, setFormError] = useState<string | null>(null);
@@ -108,7 +111,7 @@ export const SetupWizard = ({
       }
     >
       <div className="space-y-4">
-        <AccountFields form={form} />
+        <AccountFields form={form} mailConfigured={mailConfigured} />
         {formError && <AuthError>{formError}</AuthError>}
       </div>
 

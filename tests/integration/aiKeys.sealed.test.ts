@@ -1,8 +1,8 @@
 // =============================================================================
 // Integration: AI keys saved in Settings are sealed at rest
 // =============================================================================
-// Keys entered in Settings → AI sat in app_settings as plain text, and so in
-// every backup and every copy of the database. SMTP passwords, connector
+// Keys entered on the AI providers page sat in app_settings as plain text, and
+// so in every backup and every copy of the database. SMTP passwords, connector
 // feeds and Google OAuth were already sealed with the instance secret. AI keys
 // are now sealed the same way. A key saved before this change still works,
 // and a boot pass seals it.

@@ -357,7 +357,7 @@ export const AvatarPickerModal = ({
                         : "Drop a photo or click to browse"}
                     </p>
                     <p className="text-xs text-on-surface-variant mt-1">
-                      JPEG, PNG, WebP, GIF · up to 10 MB
+                      JPEG, PNG, WebP, GIF, AVIF · up to 10 MB
                     </p>
                   </div>
                 </div>

@@ -25,9 +25,12 @@ import {
 export const Register = ({
   onRegistered,
   onCancel,
+  mailConfigured = false,
 }: {
   onRegistered: () => void;
   onCancel: () => void;
+  /** True when the instance can email links. The email hint says which. */
+  mailConfigured?: boolean;
 }) => {
   const form = useAccountForm();
   const [formError, setFormError] = useState<string | null>(null);
@@ -86,7 +89,7 @@ export const Register = ({
       }
     >
       <div className="space-y-4">
-        <AccountFields form={form} />
+        <AccountFields form={form} mailConfigured={mailConfigured} />
         {formError && <AuthError>{formError}</AuthError>}
       </div>
 
