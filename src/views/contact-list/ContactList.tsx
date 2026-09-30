@@ -18,7 +18,7 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
-import { Link, useMatch, useNavigate, useLocation } from "react-router-dom";
+import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
   Users,
@@ -33,7 +33,6 @@ import {
   Archive,
   Copy,
   ChevronDown,
-  ArrowRight,
   Hash,
   Radar,
   Tag,
@@ -55,7 +54,6 @@ import { toast } from "sonner";
 import {
   SEARCH_INPUT,
   filterPill,
-  BTN_QUIET,
   ICON_BTN,
   LABEL,
   PAGE_TOP,
@@ -1004,17 +1002,6 @@ export const ContactList = () => {
                   />
                 </div>
               ))}
-              {/* Under the Tracked chip, the door to the page that groups
-                  everyone by their ring state and tracks in bulk. */}
-              {filterMode === TRACKED_FILTER && (
-                <Link
-                  to="/settings/tracked"
-                  className={cn(BTN_QUIET, "shrink-0")}
-                >
-                  Manage
-                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                </Link>
-              )}
               <div className="shrink-0 w-6" aria-hidden />
             </div>
           </div>
