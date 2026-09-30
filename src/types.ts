@@ -517,6 +517,11 @@ export interface SemanticSearchResult {
   matches: SemanticMatch[];
   fallback: boolean;
   tokensUsed?: number;
+  /**
+   * For a question of facets alone, how many contacts they hold. The list
+   * stops at 30, and "Who do I track?" can hold thousands.
+   */
+  total?: number;
 }
 
 // =============================================================================

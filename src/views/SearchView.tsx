@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
 import {
   Sparkles,
   AlertTriangle,
+  ArrowRight,
   HistoryIcon,
   RotateCw,
   SearchX,
@@ -43,6 +44,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
+import { generalQuestionFor } from "../../shared/generalQuestions";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
 // =============================================================================
@@ -307,8 +309,10 @@ export const SearchView = () => {
   const isLoading = isPending;
   const results = isLoading ? [] : (semanticSearch.data?.matches ?? []);
   const isFallback = semanticSearch.data?.fallback ?? false;
+  const total = semanticSearch.data?.total ?? results.length;
   /** The question the results on screen answer. Never the input. */
   const answeredQuery = semanticSearch.data?.query ?? "";
+  const general = generalQuestionFor(answeredQuery);
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
@@ -323,7 +327,7 @@ export const SearchView = () => {
     isLoading,
     isError: semanticSearch.isError,
     hasSearched,
-    count: results.length,
+    count: total,
     query: answeredQuery || submittedQuery || "",
     fallback: isFallback,
   });
@@ -495,11 +499,26 @@ export const SearchView = () => {
                           would read as a link. */}
                       <span className={SECTION_HEADING}>Search results</span>
                       <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
-                        {results.length} match
-                        {results.length !== 1 ? "es" : ""}
+                        {total > results.length
+                          ? `${results.length} of ${total.toLocaleString()} matches`
+                          : `${results.length} match${results.length !== 1 ? "es" : ""}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* The rest of a general question's list, where it
+                          can be sorted and acted on. */}
+                      {general && total > results.length && (
+                        <Link
+                          to={`/?q=${encodeURIComponent(general.facets)}`}
+                          className={BTN_QUIET}
+                        >
+                          See all in {NAMES.network.label}
+                          <ArrowRight
+                            className="w-3.5 h-3.5"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      )}
                       {/*
                         AI did not check this list. Said once in words for
                         the whole list, with the question mark every

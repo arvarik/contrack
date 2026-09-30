@@ -165,6 +165,8 @@ Contrack answers these questions on your server, with no AI call, and every matc
 - a place, a company or an industry from your contacts, with nothing else asked: "people in Lisbon", "who works at Northwind Logistics", "who works in fintech"
 - one of the seven general questions, written exactly as **Try asking** writes it, such as "Who do I track?" or "Who is missing an email address?". Each is the same list as its facet: `tracked:yes`, `missing:email`
 
+The answer lists 30 people at most. When a question made only of facets finds more, the count says so, for example "30 of 1,501 matches", and a general question shows **See all in Network**, which opens the whole list there.
+
 For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
 
 ### Verified answers and reasons

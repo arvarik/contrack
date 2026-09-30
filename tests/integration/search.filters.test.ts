@@ -296,6 +296,15 @@ describe("Ask takes facets from the request and the question", () => {
     expect(result.matches.map((m) => [m.name, m.verified, m.aiReason])).toEqual(
       [["Rhea Quill", true, "Tagged rare."]],
     );
+    expect(result.total).toBe(1);
+    // A facet that holds 150 people shows the first 30 and counts them all.
+    const guild = await searchService.semanticSearch(
+      scope(),
+      'company:"Engineering Guild"',
+      "filters-total",
+    );
+    expect(guild.matches).toHaveLength(30);
+    expect(guild.total).toBe(ENGINEERS);
   });
 
   it("combines the request's facets with the typed ones, over HTTP", async () => {
