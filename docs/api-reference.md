@@ -827,11 +827,13 @@ cached brief sends no `delta` lines.
 
 `GET /api/search/starters` answers `{ questions }`, each `{ text, kind }`, such
 as `{ "text": "Who do I know in Lisbon?", "kind": "city" }`. The kinds are
-`industry`, `city`, `company`, `role`, `interest`, `tag` and `pair` (an
-industry and a city together).
+`industry`, `city`, `company`, `role`, `interest`, `tag`, `pair` (an
+industry and a city together) and `general`.
 
 - Each question names a value that two of your active contacts share, or one
-  contact in an account of under ten.
+  contact in an account of under ten. A `general` question names no value.
+  There are seven, such as `Who do I track?`, and each is in the pool only
+  when its facets find a contact. The search reads each as its facets.
 - The pool holds at most 500 questions, and never more than you have
   contacts. With no contacts it is `[]`.
 - The server keeps the pool per account and search revision, and builds it
