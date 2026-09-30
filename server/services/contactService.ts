@@ -833,7 +833,7 @@ export const contactService = {
 
     // Fire-and-forget: recompute search embedding if searchable fields changed
     // NOTE: FTS5 is already updated by the contacts_au trigger, but the
-    // vector embedding + Doc2Query expansion must be refreshed explicitly.
+    // vector embedding must be refreshed explicitly.
     if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
       scheduleSearchIndex(id);
     }

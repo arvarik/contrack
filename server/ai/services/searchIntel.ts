@@ -6,9 +6,8 @@ import { AppError } from "../../utils/AppError.ts";
 // =============================================================================
 // AI Services — Search Intelligence (Ask Contrack pipeline)
 // =============================================================================
-// The LLM stages of the search pipeline: query planning, HyDE expansion,
-// write-time Doc2Query enrichment, candidate reranking with server-side
-// evidence verification, and result synthesis.
+// The LLM stages of the search pipeline: query planning, candidate reranking
+// with server-side evidence verification, and result synthesis.
 //
 // Extracted verbatim from aiService.ts in the domain split; the barrel there
 // re-exports this module, so import sites are unchanged.

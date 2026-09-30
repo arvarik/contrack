@@ -436,7 +436,7 @@ export function markSuggestionMerged(
  *
  * Why this matters: prior to this split the audit log was written AFTER
  * the merge txn committed. A crash (or any thrown exception in the audit
- * insert) between commit and recordMerge would orphan the merge — the
+ * insert) between commit and the log write would orphan the merge — the
  * contacts were merged, but `dedupe_merge_log` had no row, so `undoSoftMerge`
  * was permanently impossible.
  */

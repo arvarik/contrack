@@ -352,7 +352,7 @@ function ftsRetrieval(
 }
 
 // =============================================================================
-// Phase 1b: Local Vector KNN Retrieval (HyDE-expanded query)
+// Phase 1b: Local Vector KNN Retrieval
 // =============================================================================
 
 /**
