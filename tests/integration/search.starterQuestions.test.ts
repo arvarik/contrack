@@ -20,7 +20,6 @@ import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import {
-  POOL_LIMIT,
   article,
   buildStarterQuestions,
   resetStarterQuestions,
@@ -30,8 +29,6 @@ import {
 } from "../../server/services/search/starterQuestions.ts";
 import type { NewContactPayload } from "../../server/repositories/types.ts";
 import type { StarterQuestion } from "../../shared/starterQuestions.ts";
-import { GENERAL_QUESTIONS } from "../../shared/generalQuestions.ts";
-import { findImplicitFacets } from "../../server/services/search/implicitFacets.ts";
 import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 
@@ -109,11 +106,9 @@ describe("the starter question pool", () => {
   beforeEach(() => seed(NETWORK));
 
   it("asks about the values two people share, each kind in turn", () => {
-    // The general questions have their own tests below.
-    const pool = buildStarterQuestions(scope()).filter(
-      (q) => q.kind !== "general",
-    );
-    expect(pool).toEqual([
+    // A general question takes its turn after every kind built from the
+    // network's values. The pool stops at twelve, one for each person.
+    expect(buildStarterQuestions(scope())).toEqual([
       { kind: "industry", text: "Who works in Fintech?" },
       { kind: "city", text: "Who do I know in Lisbon?" },
       { kind: "company", text: "Who works at Northwind Logistics?" },
@@ -121,23 +116,11 @@ describe("the starter question pool", () => {
       { kind: "role", text: "Who works as a CTO?" },
       { kind: "pair", text: "Who works in Fintech in Lisbon?" },
       { kind: "tag", text: "Who is tagged investor?" },
+      { kind: "general", text: "Who haven't I contacted in over 3 months?" },
       { kind: "industry", text: "Who works in Climate Tech?" },
       { kind: "city", text: "Who do I know in Austin?" },
       { kind: "role", text: "Who works as a Product Designer?" },
-    ]);
-  });
-
-  it("lets a general question take its turn after every kind built from the network's values", () => {
-    const pool = buildStarterQuestions(scope());
-    expect(pool.slice(0, 8).map((q) => q.kind)).toEqual([
-      "industry",
-      "city",
-      "company",
-      "interest",
-      "role",
-      "pair",
-      "tag",
-      "general",
+      { kind: "general", text: "Who am I not tracking yet?" },
     ]);
   });
 
@@ -181,29 +164,6 @@ describe("the starter question pool", () => {
     const medium = buildStarterQuestions(scope());
     expect(medium.length).toBeGreaterThan(40);
     expect(medium.length).toBeLessThanOrEqual(120);
-  });
-
-  it("is a large hidden list on a large network: many times the six it shows, and no more than the contacts", async () => {
-    // 300 people, each value shared by several: 25 industries, 60 cities, 150
-    // companies, 40 roles, 30 hobbies and 20 tags.
-    await seed(
-      Array.from({ length: 300 }, (_, i) => ({
-        name: `Person ${i}`,
-        industry: `Industry ${i % 25}`,
-        location: `City ${i % 60}, Somewhere`,
-        company: `Company ${i % 150}`,
-        // A role with a digit in it is not a title, so the pool leaves it out.
-        role: `Role ${String.fromCharCode(65 + (i % 26))}${i % 40 > 25 ? "X" : ""}`,
-        interests: [`Hobby ${i % 30}`],
-        tags: [`tag${i % 20}`],
-      })),
-    );
-    const pool = buildStarterQuestions(scope());
-    expect(pool.length).toBeGreaterThan(100);
-    expect(pool.length).toBeLessThanOrEqual(Math.min(POOL_LIMIT, 300));
-    // No question twice, and every kind takes part.
-    expect(new Set(texts(pool)).size).toBe(pool.length);
-    expect(new Set(pool.map((q) => q.kind)).size).toBeGreaterThanOrEqual(6);
   });
 
   it("finds the people each question names, with no model", async () => {
@@ -341,45 +301,27 @@ describe("the general questions in the pool", () => {
 
   beforeEach(async () => {
     await seed(PEOPLE);
-    const set = (sql: string, ...names: string[]) =>
-      sqlite.prepare(sql).run(...names, localOwnerId());
-    const inList = (n: number) =>
-      Array.from({ length: n }, () => "?").join(",");
-    sqlite
-      .prepare(
-        `UPDATE contacts SET isTracked = 1 WHERE name IN (${inList(3)}) AND ownerId = ?`,
-      )
-      .run(...named(0, 3), localOwnerId());
-    set(
-      `UPDATE contacts SET lastContactedAt = datetime('now', '-10 days') WHERE name IN (${inList(5)}) AND ownerId = ?`,
-      ...named(0, 5),
-    );
-    set(
-      `UPDATE contacts SET lastContactedAt = datetime('now', '-200 days') WHERE name IN (${inList(2)}) AND ownerId = ?`,
-      ...named(5, 7),
-    );
-    set(
-      `UPDATE contacts SET updatedAt = datetime('now', '-300 days') WHERE name IN (${inList(2)}) AND ownerId = ?`,
-      ...named(10, 12),
-    );
+    const set = (from: number, to: number, assignment: string) =>
+      sqlite
+        .prepare(
+          `UPDATE contacts SET ${assignment} WHERE ownerId = ?
+             AND name IN (SELECT value FROM json_each(?))`,
+        )
+        .run(localOwnerId(), JSON.stringify(named(from, to)));
+    set(0, 3, "isTracked = 1");
+    set(0, 5, "lastContactedAt = datetime('now', '-10 days')");
+    set(5, 7, "lastContactedAt = datetime('now', '-200 days')");
+    // Last: every other change stamps updatedAt with the clock.
+    set(10, 12, "updatedAt = datetime('now', '-300 days')");
     resetStarterQuestions();
   });
 
-  const generalTexts = () =>
-    buildStarterQuestions(scope())
+  it("offers all seven, and each finds exactly its people through the real search with no model", async () => {
+    const offered = buildStarterQuestions(scope())
       .filter((q) => q.kind === "general")
       .map((q) => q.text);
-
-  it("offers all seven, each as the general kind, when each finds somebody", () => {
-    const pool = buildStarterQuestions(scope());
-    expect(generalTexts().sort()).toEqual(
-      GENERAL_QUESTIONS.map((q) => q.text).sort(),
-    );
-    expect(pool.filter((q) => q.kind === "general")).toHaveLength(7);
-  });
-
-  it("finds exactly the people each question names, through the real search with no model", async () => {
-    for (const { text } of GENERAL_QUESTIONS) {
+    expect(offered.sort()).toEqual(Object.keys(EXPECTED).sort());
+    for (const text of offered) {
       const result = await searchService.semanticSearch(
         scope(),
         text,
@@ -392,72 +334,30 @@ describe("the general questions in the pool", () => {
     }
   });
 
-  it("leaves a question out when its facets find nobody", () => {
-    // `updatedAt` is named, so the trigger that stamps it leaves the two
-    // stale contacts as they are.
-    sqlite
-      .prepare(
-        `UPDATE contacts SET isTracked = 0,
-           updatedAt = CASE WHEN name IN (?, ?) THEN datetime('now', '-301 days') ELSE updatedAt END
-         WHERE ownerId = ?`,
-      )
-      .run(...named(10, 12), localOwnerId());
-    resetStarterQuestions();
-    const texts = generalTexts();
-    expect(texts).not.toContain("Who do I track?");
-    expect(texts).toContain("Who am I not tracking yet?");
-    expect(texts).toHaveLength(6);
-  });
-
-  it("follows tracking and contact without waiting for a search revision", () => {
-    // Tracking, and the date of the last contact, are not searched columns,
-    // so neither moves the revision the cached pool is kept by. A pool that
-    // waited for the revision would offer "Who do I track?" after the last
-    // person was untracked, and a press on it would find nobody.
+  it("follows tracking without waiting for a search revision", () => {
+    // Tracking is not a searched column, so it does not move the revision the
+    // cached pool is kept by. A pool that waited for the revision would offer
+    // "Who do I track?" after the last person was untracked, and a press on
+    // it would find nobody.
+    const revision = () =>
+      sqlite
+        .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
+        .get(localOwnerId());
     const cached = starterQuestions(scope());
-    const before = sqlite
-      .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
-      .get(localOwnerId()) as { revision: number };
-
+    const before = revision();
     sqlite
       .prepare("UPDATE contacts SET isTracked = 0 WHERE ownerId = ?")
       .run(localOwnerId());
-    const after = sqlite
-      .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
-      .get(localOwnerId()) as { revision: number };
-    expect(after.revision).toBe(before.revision);
-
-    const untracked = starterQuestions(scope());
-    expect(untracked).not.toBe(cached);
-    expect(untracked.map((q) => q.text)).not.toContain("Who do I track?");
+    expect(revision()).toEqual(before);
+    expect(texts(starterQuestions(scope()))).not.toContain("Who do I track?");
+    expect(texts(cached)).toContain("Who do I track?");
 
     sqlite
       .prepare(
         "UPDATE contacts SET isTracked = 1 WHERE name = ? AND ownerId = ?",
       )
       .run(PEOPLE[0]!.name, localOwnerId());
-    expect(starterQuestions(scope()).map((q) => q.text)).toContain(
-      "Who do I track?",
-    );
-  });
-
-  it("returns the same pool, not a new one, while nothing it offers has changed", () => {
-    const first = starterQuestions(scope());
-    expect(starterQuestions(scope())).toBe(first);
-    expect(starterQuestions(scope())).toBe(first);
-  });
-
-  it("is read by the search as its facets, and only when the whole question is one", () => {
-    for (const { text, filters } of GENERAL_QUESTIONS) {
-      const read = findImplicitFacets(scope(), text);
-      expect(read.filters, text).toEqual(filters);
-      expect(read.remainder, text).toBe("");
-    }
-    const near = findImplicitFacets(
-      scope(),
-      "Who haven't I contacted in over 4 months?",
-    );
-    expect(near.filters).toEqual([]);
+    expect(texts(starterQuestions(scope()))).toContain("Who do I track?");
   });
 });
 

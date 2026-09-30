@@ -93,29 +93,7 @@ describe("BM25 weights", () => {
     db.close();
   });
 
-  it("weighs an address least of any text, below every field a person writes about someone", () => {
-    const weights = WEIGHTS.split(",").map((w) => Number(w.trim()));
-    const columns = COLUMNS.split(",").map((c) => c.trim());
-    const weightOf = (column: string) => weights[columns.indexOf(column)];
-
-    expect(columns).toContain("addresses");
-    expect(weightOf("addresses")).toBeGreaterThan(0);
-    for (const column of [
-      "name",
-      "company",
-      "role",
-      "headline",
-      "location",
-      "about",
-      "industry",
-      "tags",
-      "extras",
-    ]) {
-      expect(weightOf("addresses"), column).toBeLessThan(weightOf(column));
-    }
-  });
-
-  it("declares one weight per FTS column, none for contactId or ownerTok, and the most for name", () => {
+  it("declares one weight per FTS column, none for contactId or ownerTok, the most for name and the least text for an address", () => {
     const weights = WEIGHTS.split(",").map((w) => Number(w.trim()));
     const columns = COLUMNS.split(",").map((c) => c.trim());
 
@@ -132,5 +110,15 @@ describe("BM25 weights", () => {
     // name is the most informative column and outranks the rest.
     expect(columns[1]).toBe("name");
     expect(Math.max(...weights)).toBe(weights[1]);
+    // An address counts, below every field a person writes about someone.
+    const address = weights[columns.indexOf("addresses")]!;
+    expect(address).toBeGreaterThan(0);
+    for (const [i, column] of columns.entries())
+      if (
+        !["contactId", "addresses", "searchExpansion", "ownerTok"].includes(
+          column,
+        )
+      )
+        expect(address, column).toBeLessThan(weights[i]!);
   });
 });

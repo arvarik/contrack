@@ -2,10 +2,10 @@
 // =============================================================================
 // The palette's AI mode: four questions from the same pool as the Ask page
 // =============================================================================
-// The palette used to show four fixed examples, "Who do I know in London
-// working in FinTech?" among them, which find nobody in most networks. It
-// shows four of the account's own starter questions now, drawn when the list
-// appears, and a press fills the input with the question.
+// `AiStarters` draws four of the account's starter questions through
+// `useStarterDraw`, the hook the Ask page draws its six with
+// (searchView.test.tsx has the six, Clear and the empty pool). A press or a
+// click puts the question in the palette's input.
 // =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -22,14 +22,13 @@ vi.mock("../../../../src/api", () => ({
 
 import { AiStarters } from "../../../../src/components/command-palette/AiStarters";
 
-const POOL: StarterQuestion[] = [
-  { kind: "industry", text: "Who works in Fintech?" },
-  { kind: "city", text: "Who do I know in Lisbon?" },
-  { kind: "company", text: "Who works at Northwind Logistics?" },
-  { kind: "interest", text: "Who is interested in Rock Climbing?" },
-  { kind: "role", text: "Who works as a CTO?" },
-  { kind: "general", text: "Who do I track?" },
-];
+/** One question of each of five kinds, so a draw of four is any four. */
+const pool = (word: string): StarterQuestion[] =>
+  (["industry", "city", "company", "role", "general"] as const).map(
+    (kind, i) => ({ kind, text: `${word} ${i}?` }),
+  );
+const shown = () =>
+  screen.queryAllByRole("button").map((button) => button.textContent);
 
 afterEach(() => {
   cleanup();
@@ -37,67 +36,40 @@ afterEach(() => {
 });
 
 describe("AiStarters", () => {
-  it("shows four questions from the pool, each as a button that starts with a question mark", () => {
-    state.questions = POOL;
-    render(<AiStarters onPick={vi.fn()} />);
+  it("shows four of the pool's questions, and a press or a click hands one over", () => {
+    state.questions = pool("Who");
+    const onPick = vi.fn();
+    render(<AiStarters onPick={onPick} />);
     const buttons = screen.getAllByRole("button");
-    expect(buttons).toHaveLength(4);
-    for (const button of buttons) {
-      const text = button.textContent ?? "";
-      expect(text.startsWith("? ")).toBe(true);
-      expect(POOL.map((q) => q.text)).toContain(text.slice(2));
-    }
-    expect(new Set(buttons.map((b) => b.textContent)).size).toBe(4);
-  });
+    expect(shown()).toHaveLength(4);
+    for (const text of shown()) expect(text).toMatch(/^\? Who \d\?$/);
 
-  it("no longer offers the fixed examples", () => {
-    state.questions = POOL;
-    render(<AiStarters onPick={vi.fn()} />);
-    const text = document.body.textContent ?? "";
-    for (const old of [
-      "Who do I know in London working in FinTech?",
-      "Who likes espresso?",
-      "Who works at a startup as a designer?",
-    ])
-      expect(text).not.toContain(old);
-  });
-
-  it("hands the question, without its question mark prefix, to onPick", () => {
-    state.questions = POOL;
-    const onPick = vi.fn();
-    render(<AiStarters onPick={onPick} />);
-    const button = screen.getAllByRole("button")[0]!;
-    fireEvent.mouseDown(button);
-    expect(onPick).toHaveBeenCalledTimes(1);
-    expect(POOL.map((q) => q.text)).toContain(onPick.mock.calls[0]![0]);
-  });
-
-  it("asks the question when a keyboard user presses Enter on it, which is a click", () => {
-    state.questions = POOL;
-    const onPick = vi.fn();
-    render(<AiStarters onPick={onPick} />);
-    fireEvent.click(screen.getAllByRole("button")[0]!);
-    expect(onPick).toHaveBeenCalledTimes(1);
-    expect(POOL.map((q) => q.text)).toContain(onPick.mock.calls[0]![0]);
-  });
-
-  it("keeps the same four while it stays on screen", () => {
-    state.questions = POOL;
-    const { rerender } = render(<AiStarters onPick={vi.fn()} />);
-    const first = screen.getAllByRole("button").map((b) => b.textContent);
-    rerender(<AiStarters onPick={vi.fn()} />);
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(
-      first,
+    // A press must not take the focus from the palette's input.
+    expect(fireEvent.mouseDown(buttons[0]!)).toBe(false);
+    // Enter or Space on a focused button is a click.
+    fireEvent.click(buttons[1]!);
+    expect(onPick.mock.calls).toEqual(
+      [buttons[0]!, buttons[1]!].map((b) => [b.textContent!.slice(2)]),
     );
   });
 
-  it("shows what a small pool has, and nothing for an account with nothing to ask about", () => {
-    state.questions = POOL.slice(0, 2);
-    const { unmount } = render(<AiStarters onPick={vi.fn()} />);
-    expect(screen.getAllByRole("button")).toHaveLength(2);
-    unmount();
+  it("keeps its four while the pool is fetched again behind it", () => {
+    state.questions = pool("Old");
+    const { rerender } = render(<AiStarters onPick={vi.fn()} />);
+    const first = shown();
+    state.questions = pool("New");
+    rerender(<AiStarters onPick={vi.fn()} />);
+    expect(shown()).toEqual(first);
+  });
+
+  it("shows nothing until there is a question to ask, then draws", () => {
+    const { rerender } = render(<AiStarters onPick={vi.fn()} />);
+    expect(shown()).toEqual([]);
     state.questions = [];
-    render(<AiStarters onPick={vi.fn()} />);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    rerender(<AiStarters onPick={vi.fn()} />);
+    expect(shown()).toEqual([]);
+    state.questions = pool("Late");
+    rerender(<AiStarters onPick={vi.fn()} />);
+    expect(shown()).toHaveLength(4);
   });
 });

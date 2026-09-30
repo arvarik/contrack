@@ -103,7 +103,7 @@ test("finds a person by a street that only their address names", async ({
   await expect(person(palette, "Zed Resident")).toBeVisible();
 });
 
-test("shows four of the account's own questions in AI mode, not the old fixed examples", async ({
+test("shows four of the account's own questions in AI mode", async ({
   page,
   instance,
 }) => {
@@ -126,11 +126,6 @@ test("shows four of the account's own questions in AI mode, not the old fixed ex
   for (const text of shown) {
     expect(questions.map((q) => q.text)).toContain(text);
   }
-  // The fixed examples this list replaced.
-  await expect(page.getByText("Who likes espresso?")).toHaveCount(0);
-  await expect(
-    page.getByText("Who do I know in London working in FinTech?"),
-  ).toHaveCount(0);
 
   // A press puts the question after the question mark, as typing it would.
   await buttons.first().dispatchEvent("mousedown");

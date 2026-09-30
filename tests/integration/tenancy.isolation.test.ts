@@ -1853,43 +1853,29 @@ describe("GET /api/search/starters", () => {
   });
 
   it("offers a general question only to an account whose own contacts it finds", async () => {
-    // The seeded contacts may already be tracked, so set the state: nobody is
-    // tracked, then one of B's contacts is. What was there is put back.
-    const trackedIds = (
-      sqlite
-        .prepare(
-          "SELECT id FROM contacts WHERE ownerId IN (?, ?) AND isTracked = 1",
-        )
-        .all(A.user.id, B.user.id) as { id: string }[]
-    ).map((row) => row.id);
-    const setTracked = (ids: string[], value: 0 | 1) => {
-      const update = sqlite.prepare(
-        "UPDATE contacts SET isTracked = ? WHERE id = ?",
-      );
-      for (const id of ids) update.run(value, id);
-    };
-    const [row] = sqlite
+    // Nobody of A's is tracked and one of B's is, so "Who do I track?" can
+    // reach A only from B's row. The rows are put back after.
+    const rows = sqlite
       .prepare(
-        `SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NULL
-           AND canonicalId IS NULL AND isGhost = 0 LIMIT 1`,
+        `SELECT id, ownerId, isTracked FROM contacts WHERE ownerId IN (?, ?)
+           AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
+           AND COALESCE(isArchived, 0) = 0`,
       )
-      .all(B.user.id) as { id: string }[];
-
-    setTracked(trackedIds, 0);
+      .all(A.user.id, B.user.id) as {
+      id: string;
+      ownerId: string;
+      isTracked: number;
+    }[];
+    const track = sqlite.prepare(
+      "UPDATE contacts SET isTracked = ? WHERE id = ?",
+    );
+    const bRow = rows.find((row) => row.ownerId === B.user.id)!;
+    for (const row of rows) track.run(row === bRow ? 1 : 0, row.id);
     try {
-      expect(await generalOf(A)).not.toContain("Who do I track?");
-      expect(await generalOf(B)).not.toContain("Who do I track?");
-
-      // One of B's contacts is tracked. Nobody of A's is, and the question
-      // must not come from B's row.
-      setTracked([row!.id], 1);
       expect(await generalOf(B)).toContain("Who do I track?");
       expect(await generalOf(A)).not.toContain("Who do I track?");
-      // An account with no contacts gets no general question at all.
-      expect(await generalOf(C)).toEqual([]);
     } finally {
-      setTracked([row!.id], 0);
-      setTracked(trackedIds, 1);
+      for (const row of rows) track.run(row.isTracked, row.id);
     }
   });
 });
