@@ -35,7 +35,7 @@ import { Search, X, type LucideIcon } from "lucide-react";
 import { CARD, ICON_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
-export interface AskSearchBoxProps {
+interface AskSearchBoxProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (value: string) => void;

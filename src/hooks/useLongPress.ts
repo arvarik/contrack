@@ -20,7 +20,7 @@ import React, { useRef, useCallback, useEffect } from "react";
 const DEFAULT_DELAY_MS = 500;
 const MOVE_THRESHOLD_PX = 10; // px of movement that cancels the press
 
-export interface LongPressCoords {
+interface LongPressCoords {
   clientX: number;
   clientY: number;
 }

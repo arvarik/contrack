@@ -18,7 +18,6 @@
  * keystroke. A placeholder that quietly cannot be typed into for ~100ms is
  * better than one that accepts a keystroke and drops it.
  */
-import React from "react";
 import { CalendarClock } from "lucide-react";
 import { COMPOSER } from "../lib/styles";
 import { cn } from "../lib/utils";

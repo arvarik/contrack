@@ -19,7 +19,7 @@ export interface UpcomingBirthday {
   nextDate: Date;
 }
 
-export interface ContactWithBirthday {
+interface ContactWithBirthday {
   id: string;
   name: string;
   birthday?: string | null;

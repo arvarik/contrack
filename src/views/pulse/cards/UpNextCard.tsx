@@ -14,7 +14,7 @@ import { GROUP_TONE, PULSE_TYPE } from "../lib/pulseStyles";
 import { groupHeadingId } from "../lib/jumpToGroup";
 import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
-export interface UpNextCardProps {
+interface UpNextCardProps {
   items: UpNextItem[];
   groups: UpNextGroupMeta[];
   selectedIndex: number;

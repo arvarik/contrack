@@ -248,8 +248,9 @@ The map loads one style per palette:
 
 The basemap colours come from the style file, not from the app's colour
 tokens. A light basemap inside a dark app is a bright rectangle in the middle
-of the page. `src/views/map/mapStyles.ts` also names `liberty`, `bright` and
-`fiord`, which are one-line alternatives.
+of the page. OpenFreeMap also publishes `liberty`, `bright` and `fiord` at
+`https://tiles.openfreemap.org/styles/<name>`. Any of them works as the value
+of `MAP_STYLE_LIGHT` or `MAP_STYLE_DARK`.
 
 ### Map Overlay Detail
 

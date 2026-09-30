@@ -3,7 +3,7 @@
  *
  * @module views/settings/account/PasskeysCard
  */
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   queryOptions,
   useQuery,

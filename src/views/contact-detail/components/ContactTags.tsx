@@ -7,7 +7,6 @@
  * of the Details tab. One component, so both places add and remove a tag the
  * same way, with the same undo.
  */
-import React from "react";
 import { toast } from "sonner";
 
 import type { Contact, ContactUpdateData } from "../../../types";
@@ -15,7 +14,7 @@ import { cn } from "../../../lib/utils";
 import { ChipInput, type Chip } from "./ChipInput";
 import { ContactListsSection } from "./ContactListsSection";
 
-export interface ContactTagsProps {
+interface ContactTagsProps {
   contact: Contact;
   updateContact: {
     mutate: (args: { id: string; data: ContactUpdateData }) => void;

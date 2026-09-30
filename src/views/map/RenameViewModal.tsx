@@ -3,7 +3,7 @@ import { Modal } from "../../components/ui/Modal";
 import type { MapView } from "../../api/mapViews";
 import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
 
-export interface RenameViewModalProps {
+interface RenameViewModalProps {
   view: MapView | null;
   isOpen: boolean;
   onClose: () => void;

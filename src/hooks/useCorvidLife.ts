@@ -77,7 +77,7 @@ export function useCorvidControls(): CorvidControls {
   }, []);
 }
 
-export interface CorvidLifeOptions {
+interface CorvidLifeOptions {
   /** False at motion level "off". */
   enabled: boolean;
   /** Run the brain: the bird acts by itself. */

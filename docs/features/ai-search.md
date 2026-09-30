@@ -676,7 +676,7 @@ Every enrichment is recorded on the contact, in `contacts.aiResearch` (shape: `s
 - **What the research found:** the latest facts, each linked to its page
 - **Sources:** every page the research cited, by site and address
 
-Before this record existed, enrichment wrote a dossier text into `aiBackground` that copied the about, career and education cards and listed its sources as "Source 1" links. The next enrichment of such a contact replaces that text with the record, and the history counts the earlier enrichment. Notes in `aiBackground` from anywhere else stay, under **Research notes**.
+Notes in `aiBackground` from an import or the API stay, under **Research notes**.
 
 ### When research finds no page
 

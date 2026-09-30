@@ -5,7 +5,7 @@
  * Caching bugs are notoriously hard to debug because stale data looks correct
  * until it doesn't. This module centralizes all staleTime values in one place
  * so they can be audited at a glance, and provides a diagnostic logger that
- * reports cache hit/miss/stale decisions to the browser console.
+ * reports the contacts prefetch to the browser console.
  *
  * HOW TO USE:
  * 1. Import `STALE_TIMES` and apply to `useQuery({ staleTime: STALE_TIMES.contactDetail })`
@@ -38,13 +38,6 @@ export const STALE_TIMES = {
    * toggling between list ↔ detail ↔ list. Mutations invalidate immediately.
    */
   contactDetail: 60_000,
-
-  /**
-   * Map data (geocoded coordinates + markers).
-   * WHY 5min: Geocoded lat/lng values change only when a contact's location
-   * field is edited — extremely rare. 5 minutes is very conservative.
-   */
-  mapData: 5 * 60_000,
 
   /**
    * Saved map views.
@@ -93,14 +86,13 @@ export const STALE_TIMES = {
 // Cache Diagnostic Logger
 // =============================================================================
 // Opt-in logging for debugging cache behavior in development. When enabled,
-// logs cache decisions (hit/miss/stale/invalidate) to the browser console
-// with structured metadata.
+// logs the contacts prefetch to the browser console with structured
+// metadata.
 //
 // Enable in browser console: window.__CONTRACK_CACHE_DEBUG = true
 // =============================================================================
 
-type CacheEventType =
-  "hit" | "miss" | "stale" | "invalidate" | "prefetch" | "placeholder";
+type CacheEventType = "prefetch";
 
 interface CacheEvent {
   type: CacheEventType;
@@ -110,12 +102,7 @@ interface CacheEvent {
 
 // Color coding for each event type — makes console output scannable
 const EVENT_COLORS: Record<CacheEventType, string> = {
-  hit: "color: #10b981; font-weight: bold", // green
-  miss: "color: #ef4444; font-weight: bold", // red
-  stale: "color: #f59e0b; font-weight: bold", // amber
-  invalidate: "color: #8b5cf6; font-weight: bold", // purple
   prefetch: "color: #3b82f6; font-weight: bold", // blue
-  placeholder: "color: #6b7280; font-weight: bold", // gray
 };
 
 /**
@@ -123,7 +110,7 @@ const EVENT_COLORS: Record<CacheEventType, string> = {
  * Only fires when `window.__CONTRACK_CACHE_DEBUG` is truthy.
  *
  * @example
- * logCacheEvent({ type: 'hit', queryKey: "['contacts']", meta: { age: '12s' } });
+ * logCacheEvent({ type: 'prefetch', queryKey: "['contacts']", meta: { count: 12 } });
  */
 export function logCacheEvent(event: CacheEvent): void {
   if (typeof window === "undefined") return;

@@ -9,7 +9,6 @@
  * - How many have been previously searched (re-search info)
  * - Additive-only data safety guarantee
  */
-import React from "react";
 import { Sparkles } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import type { Contact } from "../../../types";

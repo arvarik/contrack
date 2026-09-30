@@ -16,7 +16,6 @@
  *
  * @module src/components/command-palette/ResultPeek
  */
-import React from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Tag, Clock } from "lucide-react";
@@ -29,7 +28,6 @@ import { DURATION, EASE } from "../../lib/motion";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PeekContact {
-  id: string;
   name: string;
   avatarUrl?: string | null;
   role?: string | null;
@@ -38,7 +36,6 @@ export interface PeekContact {
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
   tags?: Array<{ tag: string }>;
-  updatedAt?: string | null;
 }
 
 interface ResultPeekProps {

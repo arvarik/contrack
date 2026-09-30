@@ -38,9 +38,9 @@ import {
 import { NAMES } from "../../lib/names";
 import type { Tone } from "../../lib/styles";
 
-export type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
+type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
 
-export interface SettingsGroupMeta {
+interface SettingsGroupMeta {
   id: SettingsGroup;
   title: string;
 }
@@ -53,7 +53,7 @@ export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
   { id: "admin", title: "Administration" },
 ];
 
-export interface SettingsRow {
+interface SettingsRow {
   id: string;
   label: string;
   keywords: string[];
@@ -655,9 +655,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./pages/ExportPage"),
   },
   {
-    // A page in the shell like every other: the rail stays beside it. The
-    // old `/tracked` path redirects here (App.tsx). It scrolls itself, so
-    // its virtualised list has a scroller of its own.
+    // A page in the shell like every other: the rail stays beside it. It
+    // scrolls itself, so its virtualised list has a scroller of its own.
     id: "tracked",
     path: "/settings/tracked",
     title: NAMES.tracked.title,
@@ -1078,17 +1077,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       })),
   },
 ];
-
-export type RedirectTarget = string | ((ctx: { isAdmin: boolean }) => string);
-
-export const REDIRECTS: Record<string, RedirectTarget> = {
-  "/settings/dedupe": "/settings/duplicates",
-  "/settings/ai-search": "/settings/enrichment",
-  "/settings/ai-stats": ({ isAdmin }) =>
-    isAdmin ? "/settings/admin/ai-usage" : "/settings/ai-usage",
-  "/settings/ai-config": "/settings/admin/ai",
-  "/settings/admin/instance": "/settings/admin/general",
-};
 
 /** Who is looking: an admin, and whether this instance asks anyone to sign in. */
 export interface SettingsViewer {

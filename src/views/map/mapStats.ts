@@ -16,8 +16,7 @@ export interface TopBucket {
   count: number;
 }
 
-export interface TimeZoneBucket {
-  offset: string;
+interface TimeZoneBucket {
   label: string;
   count: number;
   offsetMinutes: number;
@@ -40,7 +39,7 @@ export interface MapStats {
   timeZones: TimeZoneBucket[];
 }
 
-export type MapBounds =
+type MapBounds =
   | [west: number, south: number, east: number, north: number]
   | {
       getWest: () => number;
@@ -178,9 +177,8 @@ export function computeMapStats(
     }
   }
 
-  const timeZones: TimeZoneBucket[] = Array.from(tzBuckets.entries())
-    .map(([offset, data]) => ({
-      offset,
+  const timeZones: TimeZoneBucket[] = Array.from(tzBuckets.values())
+    .map((data) => ({
       label: data.label,
       count: data.count,
       offsetMinutes: data.offsetMinutes,

@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "motion/react";
 import { CheckCircle2 } from "lucide-react";
 import type { Contact } from "../../../../types";

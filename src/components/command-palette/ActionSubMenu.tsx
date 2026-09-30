@@ -40,7 +40,7 @@ import { ListPicker } from "./ListPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type SubMenuMode = "actions" | "note" | "call" | "list";
+type SubMenuMode = "actions" | "note" | "call" | "list";
 
 interface ActionSubMenuProps {
   contactId: string;

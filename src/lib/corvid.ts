@@ -29,8 +29,6 @@ import type { CorvidReaction } from "./corvidBrain";
 import { between, type Rng } from "./corvidMotion";
 import type { FlightKind } from "./corvidFlight";
 
-export type { CorvidReaction } from "./corvidBrain";
-
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
@@ -48,7 +46,7 @@ export const CORVID_HOME_EVENT = "contrack:corvid-home";
 /** Whatever the bird is doing out there, come home now. */
 export const CORVID_RECALL_EVENT = "contrack:corvid-recall";
 
-export type CorvidFlightKind = FlightKind;
+type CorvidFlightKind = FlightKind;
 
 /** The payload {@link CORVID_FLY_EVENT} carries. */
 export interface CorvidFlyDetail {
@@ -156,7 +154,7 @@ export const API_STIR_EVERY: readonly [number, number] = [70, 130];
 /** How many AI answers: six to twelve. */
 export const AI_STIR_EVERY: readonly [number, number] = [6, 12];
 
-export interface ActivityCounter {
+interface ActivityCounter {
   /** Count one request. Returns its kind when that kind's count came due. */
   note(kind: "api" | "ai"): "api" | "ai" | null;
 }
@@ -190,7 +188,7 @@ export const STIR_GAP = 20_000;
 /** A flight of its own at most this often. */
 export const SORTIE_GAP = 180_000;
 /** How often a stir is a short flight rather than an act on the perch. */
-export const SORTIE_CHANCE = { api: 0.15, ai: 0.35 } as const;
+const SORTIE_CHANCE = { api: 0.15, ai: 0.35 } as const;
 
 let counter = createActivityCounter(Math.random);
 let lastStir = -Infinity;
@@ -205,7 +203,7 @@ export function resetCorvidActivity(rng: Rng = Math.random): void {
 }
 
 /** Whether a dialog, a menu or the palette is open over the page. */
-export function overlayIsOpen(): boolean {
+function overlayIsOpen(): boolean {
   if (typeof document === "undefined") return true;
   return !!document.querySelector(
     '[role="dialog"], [role="menu"], [cmdk-dialog]',

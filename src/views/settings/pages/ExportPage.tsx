@@ -4,7 +4,6 @@
  * vCard, CSV, and JSON exports. An admin also gets the way to a copy of the
  * whole database.
  */
-import React from "react";
 import { Link } from "react-router-dom";
 import { ExportCard } from "../ExportCard";
 import { SETTINGS_PAGE } from "../layout";

@@ -1,26 +1,18 @@
 /**
  * The words and the pipeline of a dedupe scan's progress card.
  *
- * Kept apart from `DedupeView` so a unit test can hold them. The card used
- * to test the old mode names only (deterministic, ai, both), so the three
- * modes the picker offers (quick, deep, full) showed no exact-match or AI
- * row, and a row turned done before its phase had run.
+ * Kept apart from `DedupeView` so a unit test can hold them. A row turns
+ * done only after its phase has run.
  *
  * @module views/dedupe/utils/scanPhases
  */
 import type { DedupeScanMode, DedupeScanPhase } from "../../../types";
 
-/**
- * A scan mode's name on the progress card, in sentence case and with the
- * picker's words for its three modes. `capitalize` printed "Ai Mode".
- */
+/** A scan mode's name on the progress card, in the picker's words. */
 export const MODE_NAME: Record<DedupeScanMode, string> = {
   quick: "Quick",
   deep: "Smart",
   full: "Full",
-  deterministic: "Deterministic",
-  ai: "AI",
-  both: "Deterministic and AI",
 };
 
 /**
@@ -40,9 +32,8 @@ const PHASE_ORDER: DedupeScanPhase[] = [
   "complete",
 ];
 
-/** Whether the mode runs the AI pass: every mode but Quick (the server's `resolveMode`). */
-export const runsAiPass = (mode: DedupeScanMode): boolean =>
-  mode !== "quick" && mode !== "deterministic";
+/** Whether the mode runs the AI pass: every mode but Quick (the server's `runScan`). */
+export const runsAiPass = (mode: DedupeScanMode): boolean => mode !== "quick";
 
 /**
  * A pipeline row's status: pending before the phase `from`, active from

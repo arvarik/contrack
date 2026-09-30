@@ -124,7 +124,6 @@ export const MapView = () => {
   const [activeViewId, setActiveViewId] = useState<string | null>(urlViewId);
 
   const filter = useMapFilter(contacts, {
-    activeViewId,
     onClearActiveView: () => setActiveViewId(null),
   });
   const navigate = useNavigate();

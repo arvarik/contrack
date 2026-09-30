@@ -568,7 +568,6 @@ describe("reopening the modal", () => {
     rememberImport("acct-1", {
       importId: "remembered-1",
       fileName: "everyone.vcf",
-      startedAt: Date.now(),
     });
     const server = stubServer({
       onImport: () => {
@@ -611,7 +610,6 @@ describe("reopening the modal", () => {
     rememberImport("acct-2", {
       importId: "theirs",
       fileName: "theirs.vcf",
-      startedAt: Date.now(),
     });
     const server = stubServer({
       onImport: () => {
@@ -629,7 +627,6 @@ describe("reopening the modal", () => {
     rememberImport("acct-1", {
       importId: "gone",
       fileName: "old.vcf",
-      startedAt: Date.now(),
     });
     stubServer({
       onImport: () => {

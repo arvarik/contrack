@@ -65,7 +65,7 @@ import {
 /** Between blinks, in ms. */
 export const BLINK_EVERY: readonly [number, number] = [2_800, 7_200];
 /** Between small acts: a look about, a cock of the head, a look back. */
-export const SMALL_EVERY: readonly [number, number] = [6_000, 14_000];
+const SMALL_EVERY: readonly [number, number] = [6_000, 14_000];
 /** Between big acts: a preen, a shake, a stretch, a caw, a hop. */
 export const BIG_EVERY: readonly [number, number] = [20_000, 50_000];
 /** A big act waits this long after the last key or click. */
@@ -144,7 +144,7 @@ export function makeCorvidMotion(name: MotionName, rng: Rng): Motion {
 // The brain
 // ---------------------------------------------------------------------------
 
-export interface CorvidBrainOptions {
+interface CorvidBrainOptions {
   rng: Rng;
   /** The clock the brain starts at, in ms. */
   now: number;

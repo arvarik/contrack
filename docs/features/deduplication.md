@@ -44,14 +44,11 @@ curl -X POST http://localhost:3000/api/dedupe/scan \
 
 **Scan modes:**
 
-| Mode            | What it does                                 |
-| --------------- | -------------------------------------------- |
-| `quick`         | Deterministic passes only (fast)             |
-| `deep`          | Deterministic + fuzzy scoring                |
-| `full`          | All passes including AI embedding comparison |
-| `deterministic` | Only exact-match passes                      |
-| `ai`            | Only AI-powered passes                       |
-| `both`          | Deterministic + AI                           |
+| Mode    | What it does                                 |
+| ------- | -------------------------------------------- |
+| `quick` | Deterministic passes only (fast)             |
+| `deep`  | Deterministic + fuzzy scoring                |
+| `full`  | All passes including AI embedding comparison |
 
 The scan streams progress via SSE through these phases:
 `starting` → `normalizing` → `deterministic` → `blocking` → `scoring` → `ai` → `clustering` → `persisting` → `complete`

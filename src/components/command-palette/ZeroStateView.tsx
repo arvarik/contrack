@@ -9,7 +9,6 @@
  *
  * All items are Command.Item elements — fully keyboard-navigable with ↑/↓/Enter.
  */
-import React from "react";
 import { Command } from "cmdk";
 import {
   Clock,

@@ -174,7 +174,7 @@ const InstanceName = () => {
  * fields lose their name the moment you type, which is exactly when a form
  * with four fields needs it most.
  */
-export interface AuthFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface AuthFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   id: string;
   label: string;
   hint?: string;

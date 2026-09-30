@@ -13,7 +13,7 @@
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  */
-import React, {
+import {
   useState,
   useCallback,
   useDeferredValue,
@@ -104,7 +104,7 @@ const RESEARCH_FILTERS: readonly FilterPill<ResearchFilter>[] = [
   },
 ];
 
-export interface AISearchViewProps {
+interface AISearchViewProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   hideHeaderDescription?: boolean;

@@ -51,17 +51,6 @@ export function useConnectors() {
   });
 }
 
-export function useConnector(id: string | null | undefined) {
-  return useQuery({
-    queryKey: id ? connectorKeys.detail(id) : ["connectors", "detail", "noop"],
-    queryFn: ({ signal }) =>
-      apiJson<ConnectorDetail>(`/connectors/${encodeURIComponent(id!)}`, {
-        signal,
-      }),
-    enabled: Boolean(id),
-  });
-}
-
 export function useCreateConnector() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -24,7 +24,6 @@ interface ModalProps {
   ariaLabel?: string;
   children: ReactNode;
   size?: keyof typeof SIZE_MAP;
-  disableMobileSheet?: boolean;
   /**
    * Where focus goes on close, when it is not wherever it was on open: the
    * control that opened the dialog. Safari does not focus a clicked button,
@@ -41,7 +40,6 @@ export function Modal({
   ariaLabel = "Dialog",
   children,
   size = "md",
-  disableMobileSheet = false,
   returnFocusRef,
 }: ModalProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -63,9 +61,8 @@ export function Modal({
     previousFocus.current = document.activeElement as HTMLElement | null;
   }
   wasOpen.current = isOpen;
-  const position = disableMobileSheet
-    ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] rounded-3xl"
-    : "inset-x-0 bottom-0 rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
+  const position =
+    "inset-x-0 bottom-0 rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
   return (
     <Dialog.Root
       open={isOpen}

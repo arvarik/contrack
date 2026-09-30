@@ -3,7 +3,7 @@ import { Modal } from "../../components/ui/Modal";
 import type { MapLayer } from "../../api/mapViews";
 import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
 
-export interface SaveViewModalProps {
+interface SaveViewModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (name: string) => Promise<void>;

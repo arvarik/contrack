@@ -19,7 +19,7 @@ import { PULSE_TYPE } from "../lib/pulseStyles";
 import { sentenceCase } from "../lib/insight";
 import type { DailyInsight } from "../../../api";
 
-export interface InsightCardProps {
+interface InsightCardProps {
   insight?: DailyInsight | null;
   isLoading: boolean;
   aiAllowed?: boolean;

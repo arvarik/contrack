@@ -1,4 +1,3 @@
-import React from "react";
 import { AtSign, Mail, Phone, Sparkles, UserPlus, Zap } from "lucide-react";
 import { TONE_WASH } from "../../../../lib/styles";
 
@@ -6,7 +5,7 @@ import { TONE_WASH } from "../../../../lib/styles";
 // MatchBadge — Match type indicator (email/phone/AI/manual)
 // =============================================================================
 
-export interface MatchBadgeProps {
+interface MatchBadgeProps {
   type: string;
   confidence: number;
 }

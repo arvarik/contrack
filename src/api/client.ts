@@ -72,7 +72,7 @@ export class ApiError extends Error {
  * the honest message names that rather than implying the reader did something
  * wrong. `yours === true` (or absent) is the caller's own limit.
  */
-export interface RateLimitFacts {
+interface RateLimitFacts {
   /** False when another account holds the lock this request wanted. */
   yours: boolean;
   /** True when the server will start this work on its own once free. */
@@ -270,7 +270,7 @@ export async function apiFetch(
  * both resolve to `undefined`, so a delete endpoint that returns nothing does
  * not have to pretend to return something.
  */
-export async function handleResponse<T>(res: Response): Promise<T> {
+async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) throw await failureOf(res);
   if (res.status === 204) return undefined as T;
   const text = await res.text();

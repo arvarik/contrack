@@ -27,7 +27,7 @@ import {
 } from "../lib/pulseStyles";
 import type { UpNextItem } from "../lib/upNext";
 
-export interface ActionRowProps {
+interface ActionRowProps {
   item: UpNextItem;
   /**
    * The row is the list's current row: `aria-current` and the one tab stop.

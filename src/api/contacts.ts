@@ -33,17 +33,10 @@ import { apiFetch } from "./client";
 export const fetchContactsSlim = async (context?: {
   signal?: AbortSignal;
 }): Promise<Contact[]> => {
-  const start = performance.now();
   const res = await apiFetch("/contacts?view=slim", {
     signal: context?.signal,
   });
   const data: Contact[] = await res.json();
-  const duration = performance.now() - start;
-  if (import.meta.env.DEV) {
-    console.log(
-      `[Perf] fetchContactsSlim: fetch took ${duration.toFixed(2)}ms, items=${data.length}`,
-    );
-  }
   return data;
 };
 
@@ -276,8 +269,7 @@ export const useUpdateContact = () => {
  * The body of `PATCH /api/contacts/:id/location`: a pin a person dropped, or
  * a request to hand the pin back to the geocoder.
  */
-export type ContactLocationInput =
-  { lat: number; lng: number } | { regeocode: true };
+type ContactLocationInput = { lat: number; lng: number } | { regeocode: true };
 
 /**
  * Move a contact's pin by hand, or hand it back to the geocoder.
@@ -324,7 +316,7 @@ export const useSetContactLocation = () => {
 };
 
 /** The body of `PATCH /api/contacts/:id` when a person tracks or untracks. */
-export interface SetTrackedInput {
+interface SetTrackedInput {
   id: string;
   isTracked: boolean;
   /**
@@ -419,7 +411,7 @@ export const useSetCadence = () => {
   });
 };
 
-export interface TrashResponse {
+interface TrashResponse {
   items: TrashedContact[];
   retentionDays: number;
 }

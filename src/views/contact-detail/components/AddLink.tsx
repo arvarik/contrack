@@ -93,10 +93,10 @@ export function linkKey(text: string): string {
 }
 
 /** What the field says when it refuses the text. */
-export const NOT_A_LINK = "That is not a web address";
-export const ALREADY_LINKED = "This contact already has that link";
+const NOT_A_LINK = "That is not a web address";
+const ALREADY_LINKED = "This contact already has that link";
 
-export interface AddLinkProps {
+interface AddLinkProps {
   /** The links the contact has now, and its website: a new link must differ. */
   links: readonly string[];
   /** Called with the tidied URL of a new link. */

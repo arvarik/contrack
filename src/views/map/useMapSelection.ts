@@ -19,7 +19,7 @@ import { isValidLatLng } from "../../../shared/geo";
 import { boundsContain, pointInPolygon, type Point } from "./mapMath";
 import { CONTACTS_SOURCE_ID } from "./ContactMap";
 
-export interface UseMapSelectionOptions {
+interface UseMapSelectionOptions {
   contacts?: MapContact[];
   filteredContacts?: MapContact[];
 }
@@ -31,18 +31,6 @@ export function useMapSelection({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const activeContacts = filteredContacts ?? contacts;
-
-  const toggle = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
 
   const addMany = useCallback((ids: string[]) => {
     setSelectedIds((prev) => {
@@ -175,7 +163,6 @@ export function useMapSelection({
     visibleSelectedCount,
     hiddenCount,
     announcement,
-    toggle,
     addMany,
     clear,
     selectInView,

@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  useMemo,
-  useEffect,
-  useRef,
-} from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   X,

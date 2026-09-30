@@ -1,4 +1,3 @@
-import React from "react";
 import { ListPlus, X, type LucideIcon } from "lucide-react";
 import {
   Star,
@@ -55,7 +54,7 @@ const LIST_ICON_MAP: Record<string, LucideIcon> = {
   sun: Sun,
 };
 
-export const DetailListIcon = ({
+const DetailListIcon = ({
   icon,
   className,
 }: {

@@ -28,22 +28,22 @@ import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
 
 /** Where a pin is, or is about to be. */
-export interface PinPosition {
+interface PinPosition {
   latitude: number;
   longitude: number;
 }
 
 /** One arrow key moves the pin this many pixels. Shift makes it five times. */
-export const NUDGE_PX = 10;
-export const NUDGE_SHIFT_PX = 50;
+const NUDGE_PX = 10;
+const NUDGE_SHIFT_PX = 50;
 
 /** The pin, as text a person can read back or paste elsewhere. */
-export function formatPin(pin: PinPosition): string {
+function formatPin(pin: PinPosition): string {
   return `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`;
 }
 
 /** The pixel offset an arrow key asks for, or null for any other key. */
-export function nudgeFor(
+function nudgeFor(
   key: string,
   shift: boolean,
 ): { dx: number; dy: number } | null {
@@ -64,7 +64,7 @@ export function nudgeFor(
 
 const noSelect = () => {};
 
-export interface AdjustPinModalProps {
+interface AdjustPinModalProps {
   contact: MiniMapContact;
   isOpen: boolean;
   onClose: () => void;

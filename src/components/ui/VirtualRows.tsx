@@ -36,7 +36,7 @@ import { scrollParent } from "../../lib/scrollParent";
 /** Past this many rows a list draws only the rows near the screen. */
 export const VIRTUAL_ROWS = 200;
 
-export interface VirtualRowsProps<T> {
+interface VirtualRowsProps<T> {
   /** The rows' items, in order. */
   items: readonly T[];
   /** A stable key for an item, such as a contact's id. */
@@ -47,10 +47,6 @@ export interface VirtualRowsProps<T> {
   estimateSize: number;
   /** The space between two rows, in px. */
   gap?: number;
-  /** Rows drawn past each edge of the view. */
-  overscan?: number;
-  /** Classes for the box that holds the rows. */
-  className?: string;
 }
 
 export function VirtualRows<T>({
@@ -59,8 +55,6 @@ export function VirtualRows<T>({
   renderRow,
   estimateSize,
   gap = 0,
-  overscan = 8,
-  className,
 }: VirtualRowsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   // Undefined until the list has looked for its scroller, and null when it
@@ -99,7 +93,8 @@ export function VirtualRows<T>({
     getItemKey: (index) => getKey(items[index]),
     estimateSize: () => estimateSize,
     gap,
-    overscan,
+    // Rows drawn past each edge of the view.
+    overscan: 8,
     scrollMargin,
     // Where the scroller already is. The page may be scrolled when the list
     // appears, and the first rows drawn are the ones in view.
@@ -110,7 +105,6 @@ export function VirtualRows<T>({
     return (
       <div
         ref={listRef}
-        className={className}
         style={gap ? { display: "flex", flexDirection: "column", gap } : {}}
       >
         {items.map((item, index) => (
@@ -125,7 +119,6 @@ export function VirtualRows<T>({
   return (
     <div
       ref={listRef}
-      className={className}
       style={{ position: "relative", height: virtualizer.getTotalSize() }}
     >
       {virtualizer.getVirtualItems().map((row) => (

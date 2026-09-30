@@ -27,7 +27,7 @@ import { useClickOutside } from "../../../hooks/useClickOutside";
 import { cn } from "../../../lib/utils";
 import { FIELD_LABEL } from "../../../lib/styles";
 
-export interface VibePickerPopoverProps {
+interface VibePickerPopoverProps {
   open: boolean;
   onClose: () => void;
   /** The contact's stored colour id. An unknown id shows as the first vibe. */

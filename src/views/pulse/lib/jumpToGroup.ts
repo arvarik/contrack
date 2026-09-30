@@ -19,7 +19,7 @@ import type { UpNextGroup } from "./upNext";
 export const groupHeadingId = (group: UpNextGroup) => `up-next-${group}`;
 
 /** The pane the queue scrolls in. `UpNextCard` names it. */
-export const UP_NEXT_PANE_SELECTOR = '[aria-label="Up next items"]';
+const UP_NEXT_PANE_SELECTOR = '[aria-label="Up next items"]';
 
 export function jumpToGroup(group: UpNextGroup): boolean {
   if (typeof document === "undefined") return false;

@@ -39,67 +39,6 @@ export function registerMergeRoutes(router: Router) {
   );
 
   router.post(
-    "/contacts/merge-batch",
-    asyncHandler(async (req, res) => {
-      const scope = scopeOf(req);
-      const rid = req.requestId;
-      const { merges } = req.body;
-
-      if (!Array.isArray(merges) || merges.length === 0) {
-        throw new AppError(
-          "merges array is required and must not be empty",
-          400,
-        );
-      }
-
-      if (merges.length > 250) {
-        throw new AppError("Maximum 250 merges per batch", 400);
-      }
-
-      const results: {
-        primaryId: string;
-        duplicateId: string;
-        success: boolean;
-        error?: string;
-      }[] = [];
-
-      for (const { primaryId, duplicateId } of merges) {
-        if (!primaryId || !duplicateId || primaryId === duplicateId) {
-          results.push({
-            primaryId,
-            duplicateId,
-            success: false,
-            error: "Invalid merge pair",
-          });
-          continue;
-        }
-        try {
-          dedupeService.mergeContacts(scope, primaryId, duplicateId, rid);
-          results.push({ primaryId, duplicateId, success: true });
-        } catch (err: unknown) {
-          results.push({
-            primaryId,
-            duplicateId,
-            success: false,
-            error: getErrorMessage(err),
-          });
-        }
-      }
-
-      const succeeded = results.filter((r) => r.success).length;
-      // Merging tombstones contacts, which can strand OTHER pending
-      // suggestions that reference them. Clear them now, exactly as a scan
-      // does, so the review queue never shows a pair that can no longer merge.
-      if (succeeded > 0) clearStaleSuggestions(scope);
-      log.info(
-        "API",
-        `[${rid}] POST /api/contacts/merge-batch → ${succeeded}/${merges.length} merged`,
-      );
-      res.json({ results, succeeded, total: merges.length });
-    }),
-  );
-
-  router.post(
     "/contacts/merge-cluster",
     asyncHandler(async (req, res) => {
       const scope = scopeOf(req);

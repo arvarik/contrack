@@ -89,7 +89,7 @@ const TextBar = ({
  * has one, a settings page below `lg`, cannot be told from the settings
  * list while the chunk loads, and the list has none.
  */
-export const PageHeaderSkeleton = ({
+const PageHeaderSkeleton = ({
   title,
   suffix,
   description,

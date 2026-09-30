@@ -14,7 +14,7 @@ import React, { useEffect, useState, useRef } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Point } from "./mapMath";
 
-export interface SelectionOverlayProps {
+interface SelectionOverlayProps {
   map: MapLibreMap | null;
   containerRef: React.RefObject<HTMLDivElement | null>;
   onSelectBox: (

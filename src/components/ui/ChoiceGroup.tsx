@@ -34,7 +34,6 @@
  *
  * @module components/ui/ChoiceGroup
  */
-import React from "react";
 import { radioKeys, radioTabIndex } from "../../lib/a11y";
 import { SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
@@ -49,7 +48,7 @@ export interface Choice<T> {
   detail?: string;
 }
 
-export interface ChoiceGroupProps<T> {
+interface ChoiceGroupProps<T> {
   /** The group's accessible name, such as "Session length". */
   label: string;
   /** The chosen value. A value no tile has checks none. */

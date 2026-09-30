@@ -53,7 +53,7 @@ const stats: MapStats = {
   topIndustries: [{ name: "Computing", count: 2 }],
   topCompanies: [{ name: "Babbage & Co", count: 1 }],
   topTags: [{ name: "pioneer", count: 2 }],
-  timeZones: [{ offset: "GMT+1", label: "GMT+1", count: 2, offsetMinutes: 60 }],
+  timeZones: [{ label: "GMT+1", count: 2, offsetMinutes: 60 }],
 };
 
 const people: MapContact[] = [

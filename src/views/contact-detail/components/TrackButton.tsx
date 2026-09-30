@@ -81,18 +81,17 @@ import {
 import { SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
-export interface TrackButtonProps {
+interface TrackButtonProps {
   contact: TrackableContact;
   /** The narrow header: the glyph and the chevron, with the word in the name. */
   compact?: boolean;
-  className?: string;
 }
 
 /** The button's name before the contact is tracked. */
-export const TRACK_LABEL = "Track, choose how often";
+const TRACK_LABEL = "Track, choose how often";
 
 /** The button's name while tracked: "Tracking quarterly, change or stop". */
-export const trackingLabel = (cadenceDays: number) =>
+const trackingLabel = (cadenceDays: number) =>
   `Tracking ${describeCadence(cadenceDays, { sentence: true })}, change or stop`;
 
 /**
@@ -117,11 +116,7 @@ const ON = cn(SELECTED_TINT, "hover:text-on-primary-wash");
 /** Off: the container fill, flat. */
 const OFF = "bg-surface-container-high text-on-surface hover:text-on-surface";
 
-export const TrackButton = ({
-  contact,
-  compact = false,
-  className,
-}: TrackButtonProps) => {
+export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
   const { toggle, trackAt, isPending } = useTrackToggle();
   const setCadence = useSetCadence();
   const { preferences } = usePreferences();
@@ -188,7 +183,6 @@ export const TrackButton = ({
       heading="Keep up"
       items={items}
       align="end"
-      className={className}
       panelClassName="min-w-44"
       triggerClassName={cn(
         SHAPE,

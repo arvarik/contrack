@@ -6,7 +6,7 @@
  * goes back to the pencil when it closes, by Apply, Cancel, Escape or the
  * close button (`returnFocusRef`).
  */
-import React, { useState, useCallback, type RefObject } from "react";
+import { useState, useCallback, type RefObject } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Check, RefreshCw } from "lucide-react";

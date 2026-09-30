@@ -1,12 +1,12 @@
 /**
- * AIStatsView — Main page component for /settings/ai-stats.
+ * AIStatsView — Main page component for /settings/ai-usage.
  *
  * Three-zone layout:
  * 1. Summary Bar + KPI row (from useAIStatsSummary)
  * 2. Activity Feed with filters (from useAIStatsFeed)
  * 3. Cache Tiers accordion (from summary data)
  */
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Activity, Coins, Gauge, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";

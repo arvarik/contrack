@@ -23,7 +23,7 @@ interface DataSavingNavigator {
 }
 
 /** True when this browser was told to save data. */
-export function savesData(): boolean {
+function savesData(): boolean {
   if (typeof navigator === "undefined") return false;
   return (
     (navigator as Navigator & DataSavingNavigator).connection?.saveData === true
@@ -31,7 +31,7 @@ export function savesData(): boolean {
 }
 
 /** How long a task waits, at most, for an idle moment that never comes. */
-export const IDLE_TIMEOUT_MS = 10_000;
+const IDLE_TIMEOUT_MS = 10_000;
 
 /** The wait in a browser with no idle callback. */
 const FALLBACK_DELAY_MS = 2_000;

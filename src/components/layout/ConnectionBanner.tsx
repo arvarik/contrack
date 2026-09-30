@@ -8,7 +8,6 @@
  *
  * @see hooks/useConnectionStatus
  */
-import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CloudOff, Loader2, RefreshCw, WifiOff } from "lucide-react";
 import { useConnectionStatus } from "../../hooks/useConnectionStatus";

@@ -27,7 +27,7 @@ export interface ClusterFeature {
   latitude: number;
 }
 
-export interface PointFeature {
+interface PointFeature {
   kind: "point";
   key: string;
   /** The contact id. */
@@ -39,7 +39,7 @@ export interface PointFeature {
 export type VisibleFeature = ClusterFeature | PointFeature;
 
 /** The part of a queried feature this module reads. */
-export interface QueriedFeature {
+interface QueriedFeature {
   geometry: { type: string; coordinates?: unknown };
   properties: Record<string, unknown> | null;
 }

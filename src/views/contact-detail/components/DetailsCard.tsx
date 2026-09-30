@@ -35,7 +35,7 @@ import {
 // Props
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface DetailsCardProps {
+interface DetailsCardProps {
   contact: Contact;
   contactId: string;
   onUpdate: (field: string, val: string) => void;

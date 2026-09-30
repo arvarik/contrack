@@ -83,7 +83,7 @@ export const perchProps = { [PERCH_ATTRIBUTE]: "" } as const;
  * A hidden element has no layout box, so its width is the test. Exported for
  * the test that holds this rule.
  */
-export function findPerch(): HTMLElement | null {
+function findPerch(): HTMLElement | null {
   const perches = [
     ...document.querySelectorAll<HTMLElement>(`[${PERCH_ATTRIBUTE}]`),
   ];
@@ -464,5 +464,3 @@ export const CorvidFlight = () => {
     </div>
   );
 };
-
-export default CorvidFlight;

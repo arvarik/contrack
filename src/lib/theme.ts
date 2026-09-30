@@ -86,7 +86,6 @@ export interface Palette {
   "primary-dim": string;
   "primary-container": string;
   "on-primary": string;
-  "on-primary-container": string;
   /**
    * Text and icons drawn ON a `bg-primary/<n>` wash.
    *
@@ -116,8 +115,6 @@ export interface Palette {
    */
   highlight: string;
   secondary: string;
-  "secondary-container": string;
-  "on-secondary-container": string;
   success: string;
   warning: string;
   info: string;
@@ -140,7 +137,6 @@ export const LIGHT: Palette = {
   "primary-dim": "#00628a",
   "primary-container": "#47befd",
   "on-primary": "#ffffff",
-  "on-primary-container": "#001e2f",
   // Four lightness steps below the primary, which is what `deriveWashText`
   // returns for it. 4.66:1 at worst, against 4.21:1 for the primary itself.
   "on-primary-wash": "#005e81",
@@ -150,8 +146,6 @@ export const LIGHT: Palette = {
   "on-ai-wash": "#6734c6",
   highlight: "#fce7a6",
   secondary: "#4d626c",
-  "secondary-container": "#cfe6f2",
-  "on-secondary-container": "#40555f",
   success: "#046b4e",
   warning: "#9a4c08",
   info: "#036796",
@@ -189,7 +183,6 @@ export const DARK: Palette = {
   "primary-dim": "#8ed4f4",
   "primary-container": "#00506f",
   "on-primary": "#00242f",
-  "on-primary-container": "#c2e7fb",
   // The primary unchanged. It already reads at 5.38:1 on its own heaviest
   // wash, so `deriveWashText` returns it at step zero and the dark pills look
   // exactly as they shipped.
@@ -199,8 +192,6 @@ export const DARK: Palette = {
   "on-ai-wash": "#bfa3f9",
   highlight: "#5a4116",
   secondary: "#b0c2ca",
-  "secondary-container": "#2d4049",
-  "on-secondary-container": "#cfe6f2",
   success: "#5ad3a3",
   warning: "#f1b569",
   info: "#72c5ec",
@@ -224,7 +215,7 @@ export const PALETTES: Record<ResolvedMode, Palette> = {
 };
 
 /** Every surface a piece of text can be painted on, in one palette. */
-export const SURFACE_TOKENS = [
+const SURFACE_TOKENS = [
   "surface",
   "surface-variant",
   "surface-container-lowest",
@@ -244,7 +235,6 @@ export const ACCENT_TOKENS = [
   "primary-dim",
   "primary-container",
   "on-primary",
-  "on-primary-container",
   "on-primary-wash",
 ] as const;
 
@@ -392,25 +382,11 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
     ),
   );
 
-  // `on-primary-container` does carry text, so it is pushed until it reads on
-  // the container it sits on.
-  const onContainerBase = withLightness(base, mode === "light" ? 0.2 : 0.92);
-  let onContainer = rgbToHex(oklchToRgb(onContainerBase));
-  for (let i = 0; i < 100; i++) {
-    if (contrast(hexToRgb(onContainer), hexToRgb(container)) >= AA) break;
-    const next = withLightness(
-      onContainerBase,
-      onContainerBase.l + (mode === "light" ? -0.01 : 0.01) * (i + 1),
-    );
-    onContainer = rgbToHex(oklchToRgb(next));
-  }
-
   return {
     primary,
     "primary-dim": dim,
     "primary-container": container,
     "on-primary": bestOn(primary),
-    "on-primary-container": onContainer,
     // From the searched primary, not from `hex`. The wash on screen is made
     // from the primary that ends up in the stylesheet, so that is the colour
     // the text has to read against.
@@ -548,11 +524,8 @@ export function resolveMode(theme: ThemeMode): ResolvedMode {
  * the shipped palette is hand-tuned and measured, and re-deriving it would
  * replace audited values with computed ones for no gain.
  */
-export function applyTheme(
-  theme: ThemeMode,
-  accent: string,
-  root: HTMLElement = document.documentElement,
-): ResolvedMode {
+export function applyTheme(theme: ThemeMode, accent: string): ResolvedMode {
+  const root = document.documentElement;
   const mode = resolveMode(theme);
   // "system" removes the attribute rather than writing the resolved value:
   // the stylesheet's `prefers-color-scheme` block already answers, and an

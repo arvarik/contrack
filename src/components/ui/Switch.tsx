@@ -21,19 +21,16 @@
  *
  * @module components/ui/Switch
  */
-import React from "react";
 import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export interface SwitchProps {
+interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   /** The control's accessible name. */
   label: string;
   disabled?: boolean;
   id?: string;
-  /** Extra classes for the track. */
-  className?: string;
 }
 
 export const Switch = ({
@@ -42,7 +39,6 @@ export const Switch = ({
   label,
   disabled = false,
   id,
-  className,
 }: SwitchProps) => (
   <button
     id={id}
@@ -59,7 +55,6 @@ export const Switch = ({
       checked
         ? "bg-primary"
         : "bg-surface-container-highest ring-1 ring-inset ring-outline-variant",
-      className,
     )}
   >
     <span

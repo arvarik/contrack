@@ -4,9 +4,9 @@
  * A settings page, under Your data, at `/settings/tracked`: the rail stays
  * beside it, the way it does beside every other settings page. It has two
  * more doors, the Tracked chip's Manage link on the Network page and the
- * Keeping up card on Pulse, and the old `/tracked` path leads here too. It
- * scrolls itself, so the virtualised list has its own scroller, and the
- * shell draws its header with Select in the header's actions.
+ * Keeping up card on Pulse. It scrolls itself, so the virtualised list has
+ * its own scroller, and the shell draws its header with Select in the
+ * header's actions.
  *
  * From the top:
  *
@@ -129,18 +129,16 @@ import { SETTINGS_BOX } from "./settings/layout";
 // The groups
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type TrackedGroupId =
+type TrackedGroupId =
   "at-risk" | "fading" | "strong" | "unscored" | "not-tracked";
 
-export interface TrackedGroup {
+interface TrackedGroup {
   id: TrackedGroupId;
   title: string;
   contacts: Contact[];
 }
 
-export type { TrackedOrder };
-
-export const GROUP_TITLES: Record<TrackedGroupId, string> = {
+const GROUP_TITLES: Record<TrackedGroupId, string> = {
   "at-risk": "At risk",
   fading: "Fading",
   strong: "Strong",
@@ -157,7 +155,7 @@ const GROUP_ORDER: readonly TrackedGroupId[] = [
 ];
 
 /** Which group a contact belongs to: its ring state, by `scoreView`. */
-export function groupOf(contact: Contact): TrackedGroupId {
+function groupOf(contact: Contact): TrackedGroupId {
   const view = scoreView(contact);
   if (view.kind === "untracked") return "not-tracked";
   if (view.kind === "unscored") return "unscored";
@@ -165,7 +163,7 @@ export function groupOf(contact: Contact): TrackedGroupId {
 }
 
 /** Whether a contact's name, company or role has the query in it. */
-export function matchesQuery(
+function matchesQuery(
   contact: Pick<Contact, "name" | "company" | "role">,
   query: string,
 ): boolean {
@@ -179,7 +177,7 @@ export function matchesQuery(
 }
 
 /** The options `groupContacts` takes: the search, the order, the filters. */
-export interface GroupOptions {
+interface GroupOptions {
   query?: string;
   order?: TrackedOrder;
   tracking?: TrackingFilter;
@@ -262,8 +260,8 @@ export function pastDue(
     Contact,
     "isTracked" | "cadenceDays" | "lastContactedAt" | "trackedAt"
   >,
-  now = Date.now(),
 ): string | null {
+  const now = Date.now();
   if (!contact.isTracked || !(contact.cadenceDays > 0)) return null;
   const clock = parseServerTime(contact.lastContactedAt ?? contact.trackedAt);
   if (!clock) return null;
@@ -1036,5 +1034,3 @@ export const TrackedContactsView = () => {
     </div>
   );
 };
-
-export default TrackedContactsView;

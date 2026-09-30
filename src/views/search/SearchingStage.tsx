@@ -40,15 +40,13 @@ export const STAGE_DELAY_MS = 150;
 /** How long the stage stands before the bird takes off, in ms. */
 export const TAKEOFF_DELAY_MS = 200;
 
-export interface CorvidSearchFlight {
+interface CorvidSearchFlight {
   /** The search box's bird: the perch the flight leaves and lands on. */
   perchRef: React.RefObject<HTMLSpanElement | null>;
   /** The stage: the ground the bird hunts over. */
   areaRef: React.RefObject<HTMLDivElement | null>;
   /** The stage is up. */
   staged: boolean;
-  /** The bird is out of the search box, hunting or on its way home. */
-  out: boolean;
   /** No flight at this motion level: the stage holds a larger bird. */
   still: boolean;
   /** The search box shows the bird: it will fly, it is flying, or it lands. */
@@ -134,13 +132,12 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
     perchRef,
     areaRef,
     staged,
-    out,
     still: !flies,
     perched: flies && (searching || out),
   };
 }
 
-export interface SearchingStageProps {
+interface SearchingStageProps {
   /** No flight: show a larger bird in the middle of the stage. */
   still: boolean;
   /** False when the account uses local search without an AI provider. */

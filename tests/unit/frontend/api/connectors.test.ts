@@ -7,7 +7,6 @@ import {
   connectorKeys,
   useConnectorKinds,
   useConnectors,
-  useConnector,
   useCreateConnector,
   useTestConnector,
   useUpdateConnector,
@@ -98,43 +97,6 @@ describe("src/api/connectors.ts hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(mockConnectors);
-  });
-
-  it("useConnector fetches single connector when id provided, disables when null", async () => {
-    const mockDetail = {
-      id: "c-1",
-      kind: "ics",
-      name: "My Cal",
-      status: "active",
-      config: {},
-      secretPresent: false,
-      intervalMinutes: 30,
-      nextRunAt: null,
-      lastRunAt: null,
-      lastError: null,
-      createdAt: "2026-01-01",
-      updatedAt: "2026-01-01",
-      recentRuns: [],
-    };
-    const fetchMock = vi.fn().mockResolvedValue(Response.json(mockDetail));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { wrapper } = createWrapper();
-    const { result: enabledResult } = renderHook(() => useConnector("c-1"), {
-      wrapper,
-    });
-
-    await waitFor(() => expect(enabledResult.current.isSuccess).toBe(true));
-    expect(enabledResult.current.data).toEqual(mockDetail);
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/connectors/c-1"),
-      expect.anything(),
-    );
-
-    const { result: disabledResult } = renderHook(() => useConnector(null), {
-      wrapper,
-    });
-    expect(disabledResult.current.fetchStatus).toBe("idle");
   });
 
   it("useCreateConnector posts new connector and invalidates cache", async () => {

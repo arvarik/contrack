@@ -374,7 +374,6 @@ describe("useSearchHistory", () => {
     });
 
     expect(result.current.entries[0]).toMatchObject({
-      id: "3",
       query: "meeting with Alice",
       mode: "notes",
     });

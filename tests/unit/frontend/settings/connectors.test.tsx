@@ -27,7 +27,6 @@ import type {
 vi.mock("../../../../src/api/connectors", () => ({
   useConnectorKinds: vi.fn(),
   useConnectors: vi.fn(),
-  useConnector: vi.fn(),
   useCreateConnector: vi.fn(),
   useTestConnector: vi.fn(),
   useUpdateConnector: vi.fn(),
@@ -100,11 +99,6 @@ describe("Frontend Connectors Components", () => {
       isError: false,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-    vi.mocked(connectorsApi.useConnector).mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    } as unknown as ReturnType<typeof connectorsApi.useConnector>);
 
     vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
       data: [],
@@ -743,7 +737,7 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getByText(`Last sync: ${line}`)).toBeTruthy();
     });
 
-    it("Reconnect button falls back to onEdit if onReconnect not provided", () => {
+    it("Reconnect button opens the connector for editing", () => {
       const onEditMock = vi.fn();
       const connector = createMockConnector({
         id: "conn-reauth-2",

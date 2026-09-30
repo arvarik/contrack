@@ -898,7 +898,6 @@ describe("frontend.pulse", () => {
               {
                 title: "Sprint planning",
                 startsAt: new Date(2026, 8, 23, 15).toISOString(),
-                endsAt: new Date(2026, 8, 23, 16).toISOString(),
                 contactIds: ["c-1"],
               },
             ]}

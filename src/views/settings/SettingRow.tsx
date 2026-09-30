@@ -34,13 +34,12 @@ import { cn } from "../../lib/utils";
 import { CHANGED_MARK } from "../../lib/styles";
 import { useResetScopeKey } from "./ResetToDefaults";
 
-export interface SettingRowProps {
+interface SettingRowProps {
   /** Stable kebab-case fragment id. */
   id: string;
   title: string;
   description: React.ReactNode;
   children?: React.ReactNode;
-  control?: React.ReactNode;
   /** Key in Preferences if this row controls an account preference. */
   prefKey?: keyof Preferences;
   /**
@@ -50,10 +49,9 @@ export interface SettingRowProps {
   inline?: boolean;
   /** The control is wide, so it sits under the text at every width. */
   below?: boolean;
-  className?: string;
 }
 
-export const CHANGED_LABEL = "Changed from the default";
+const CHANGED_LABEL = "Changed from the default";
 
 /**
  * The target of a settings search result: when the location's hash is `id`,
@@ -89,18 +87,15 @@ export const SettingRow = ({
   title,
   description,
   children,
-  control,
   prefKey,
   inline = false,
   below = false,
-  className,
 }: SettingRowProps) => {
   const { changed } = usePreferences();
   const { ref: rowRef, flashing } = useHashTarget<HTMLDivElement>(id);
   useResetScopeKey(prefKey, rowRef);
 
   const isChanged = prefKey ? changed.includes(prefKey) : false;
-  const controlNode = control ?? children;
 
   return (
     <div
@@ -117,7 +112,6 @@ export const SettingRow = ({
         // above and below for the flash, inside the card's own padding.
         "-mx-3 px-3 py-4 first:-mt-2 first:pt-2 last:-mb-2 last:pb-2",
         flashing && "flash bg-primary/10",
-        className,
       )}
     >
       <div
@@ -147,17 +141,15 @@ export const SettingRow = ({
             {description}
           </div>
         </div>
-        {controlNode &&
+        {children &&
           (below ? (
-            <div className="min-w-0">{controlNode}</div>
+            <div className="min-w-0">{children}</div>
           ) : (
             <div className="shrink-0 sm:ml-4 flex items-center gap-2">
-              {controlNode}
+              {children}
             </div>
           ))}
       </div>
     </div>
   );
 };
-
-export default SettingRow;

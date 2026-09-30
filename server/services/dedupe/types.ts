@@ -119,8 +119,7 @@ export interface MatchSignals {
   nameCarriers: number;
 }
 
-export type DedupeScanMode =
-  "deterministic" | "ai" | "both" | "quick" | "deep" | "full";
+export type DedupeScanMode = "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
   | "normalizing"

@@ -42,17 +42,16 @@ export const PROXIMITY_ROW_ATTR = "data-proximity-row";
 const ROW_GAP_PX = 8;
 
 /** The lift at `d` row pitches from a row's centre, from 1 to 0. */
-export function liftAt(d: number): number {
+function liftAt(d: number): number {
   return d >= 1 ? 0 : 0.5 * (1 + Math.cos(Math.PI * Math.max(0, d)));
 }
 
 export function useProximityLift(
   containerRef: RefObject<HTMLElement | null>,
-  enabled = true,
 ): void {
   useEffect(() => {
     const root = containerRef.current;
-    if (!root || !enabled) return;
+    if (!root) return;
 
     const selector = `[${PROXIMITY_ROW_ATTR}]`;
     let frame = 0;
@@ -134,5 +133,5 @@ export function useProximityLift(
       cancelAnimationFrame(frame);
       settle();
     };
-  }, [containerRef, enabled]);
+  }, [containerRef]);
 }

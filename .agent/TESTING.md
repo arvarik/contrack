@@ -522,7 +522,6 @@ _Populated by the SDET during the Trap phase. One row per API endpoint._
 | `/api/dedupe/backfill-embeddings`       | POST      |        |             |              |               |            |            |
 | `/api/dedupe/embedding-status`          | GET       |        |             |              |               |            |            |
 | `/api/contacts/merge`                   | POST      |        |             |              |               |            |            |
-| `/api/contacts/merge-batch`             | POST      |        |             |              |               |            |            |
 | `/api/contacts/merge-cluster`           | POST      |        |             |              |               |            |            |
 | `/api/contacts/merge-clusters`          | POST      |        |             |              |               |            |            |
 | `/api/query/contacts` (MCP)             | GET       |        |             |              |               |            |            |

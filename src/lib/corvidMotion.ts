@@ -77,7 +77,7 @@ export function pickWeighted<T>(
 // Easing
 // ---------------------------------------------------------------------------
 
-export type Easing = (t: number) => number;
+type Easing = (t: number) => number;
 
 const clamp01 = (t: number) => Math.min(Math.max(t, 0), 1);
 
@@ -85,7 +85,6 @@ export const easeInOut: Easing = (t) =>
   0.5 - 0.5 * Math.cos(Math.PI * clamp01(t));
 export const easeOut: Easing = (t) => Math.sin((Math.PI / 2) * clamp01(t));
 export const easeIn: Easing = (t) => 1 - Math.cos((Math.PI / 2) * clamp01(t));
-export const linear: Easing = (t) => clamp01(t);
 /** Overshoots a little and settles: a head that snaps and stops. */
 export const easeOutBack: Easing = (t) => {
   const x = clamp01(t) - 1;
@@ -97,7 +96,7 @@ export const easeOutBack: Easing = (t) => {
 // ---------------------------------------------------------------------------
 
 /** One keyframe: the track reaches `value` at `at` ms, arriving by `ease`. */
-export interface Key {
+interface Key {
   at: number;
   value: number;
   ease?: Easing;
@@ -226,16 +225,16 @@ export type MotionName =
   | "doze";
 
 /** A blink: shut in a third of it, and one in five is two blinks. */
-export function makeBlink(rng: Rng, slow = false): Motion {
-  const close = slow ? between(rng, 180, 260) : between(rng, 45, 70);
-  const hold = slow ? between(rng, 120, 220) : between(rng, 20, 45);
-  const open = slow ? between(rng, 220, 320) : between(rng, 60, 90);
+export function makeBlink(rng: Rng): Motion {
+  const close = between(rng, 45, 70);
+  const hold = between(rng, 20, 45);
+  const open = between(rng, 60, 90);
   const moments: { at: number; ease?: Easing; set: Partial<CorvidPose> }[] = [
     { at: close, set: { eye: 0 } },
     { at: close + hold, set: { eye: 0 } },
     { at: close + hold + open, set: { eye: 1 } },
   ];
-  if (!slow && chance(rng, 0.2)) {
+  if (chance(rng, 0.2)) {
     const gap = between(rng, 90, 160);
     const start = close + hold + open + gap;
     moments.push(
@@ -465,7 +464,8 @@ export function makeCaw(rng: Rng): Motion {
 }
 
 /** One small hop on the spot, squashing into it and out of it. */
-export function makeHop(rng: Rng, height = between(rng, 3, 4.5)): Motion {
+export function makeHop(rng: Rng): Motion {
+  const height = between(rng, 3, 4.5);
   const moments = [
     { at: 80, ease: easeOut, set: { crouch: 0.7 } },
     { at: 200, ease: easeOut, set: { crouch: -0.4, y: -height, headAngle: 4 } },

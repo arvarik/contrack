@@ -123,12 +123,10 @@ const Panel = ({ contactId }: { contactId: string }) => {
 export const ScoreBreakdown = ({
   contactId,
   score,
-  className,
   children,
 }: {
   contactId: string;
   score: number;
-  className?: string;
   /** The trigger's visible content — usually the score badge itself. */
   children?: React.ReactNode;
 }) => {
@@ -175,7 +173,7 @@ export const ScoreBreakdown = ({
   }, [open]);
 
   return (
-    <span ref={wrapperRef} className={cn("relative inline-flex", className)}>
+    <span ref={wrapperRef} className="relative inline-flex">
       <button
         ref={triggerRef}
         type="button"

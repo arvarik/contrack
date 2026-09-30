@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useRef,
   useCallback,
@@ -50,7 +50,7 @@ import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
-import { useSession } from "../contexts/SessionContext";
+import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
@@ -72,15 +72,6 @@ const MODES: readonly { value: SearchMode; label: string }[] = [
 // ─── Main SearchView Component ────────────────────────────────────────────────
 
 export const SearchView = () => {
-  const mountStart = useRef(performance.now());
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log(
-        `[Perf] SearchView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, []);
-
   const {
     lastAISearchQuery,
     setLastAISearchQuery,
@@ -88,7 +79,7 @@ export const SearchView = () => {
     setLastAISearchData,
     lastAISearchPhase,
     setLastAISearchPhase,
-  } = useSession();
+  } = useAISearchSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
   /**

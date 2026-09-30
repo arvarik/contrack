@@ -17,36 +17,34 @@ export interface DonutSlice {
   opacity?: number;
 }
 
-export interface DonutProps {
+interface DonutProps {
   slices: DonutSlice[];
   total: number;
-  size?: number;
-  strokeWidth?: number;
   /** The accessible name. Default names the count of groups and contacts. */
   label?: string;
 }
 
-export const Donut: React.FC<DonutProps> = ({
-  slices,
-  total,
-  size = 96,
-  strokeWidth = 12,
-  label,
-}) => {
-  const radius = (size - strokeWidth) / 2;
-  const center = size / 2;
+/** The donut's width and height, in CSS pixels. */
+const SIZE = 96;
+
+/** The ring's thickness, in CSS pixels. */
+const STROKE_WIDTH = 12;
+
+export const Donut: React.FC<DonutProps> = ({ slices, total, label }) => {
+  const radius = (SIZE - STROKE_WIDTH) / 2;
+  const center = SIZE / 2;
   const circumference = 2 * Math.PI * radius;
   let accumulated = 0;
 
   return (
     <div
       className="relative flex items-center justify-center shrink-0"
-      style={{ width: size, height: size }}
+      style={{ width: SIZE, height: SIZE }}
     >
       <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
+        width={SIZE}
+        height={SIZE}
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
         className="-rotate-90"
         role="img"
         aria-label={
@@ -60,7 +58,7 @@ export const Donut: React.FC<DonutProps> = ({
           r={radius}
           fill="none"
           stroke="var(--color-surface-container-high)"
-          strokeWidth={strokeWidth}
+          strokeWidth={STROKE_WIDTH}
         />
         {total > 0 &&
           slices.map((slice) => {
@@ -78,7 +76,7 @@ export const Donut: React.FC<DonutProps> = ({
                 fill="none"
                 stroke={slice.color}
                 strokeOpacity={slice.opacity ?? 1}
-                strokeWidth={strokeWidth}
+                strokeWidth={STROKE_WIDTH}
                 strokeDasharray={dasharray}
                 strokeDashoffset={dashoffset}
                 className="transition-all duration-(--dur-slow)"

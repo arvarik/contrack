@@ -15,13 +15,21 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   __resetInvitationToken,
   groupSecret,
-  parseInvitationToken,
+  JOIN_PATH,
+  JOIN_TOKEN_PARAM,
+  parseUrlSecret,
   takeInvitationToken,
-  urlWithoutInvitationToken,
   takeUrlSecret,
+  urlWithoutSecret,
   RESET_PASSWORD_PATH,
   SIGNIN_LINK_PATH,
 } from "../../../../src/lib/credentials";
+
+// The invitation link is the join path with the `token` parameter.
+const parseInvitationToken = (href: string) =>
+  parseUrlSecret(href, JOIN_PATH, JOIN_TOKEN_PARAM);
+const urlWithoutInvitationToken = (href: string) =>
+  urlWithoutSecret(href, JOIN_PATH, JOIN_TOKEN_PARAM);
 
 describe("invitation links", () => {
   it("reads the token out of the link the server builds", () => {

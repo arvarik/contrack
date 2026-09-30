@@ -42,7 +42,6 @@ import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import {
-  isLegacyDossier,
   MAX_ADDED_ENTRIES,
   MAX_RESEARCH_RUNS,
   MAX_RESEARCH_SOURCES,
@@ -633,10 +632,6 @@ export function mergeSearchResult(
       "MergeEngine",
       `Contact ${contactId}: research record did not validate; not saved`,
     );
-  // The old dossier copied the cards the tab now builds, and linked its
-  // sources as "Source 1". The record replaces it.
-  if (isLegacyDossier(existing.aiBackground))
-    scalarUpdate["aiBackground"] = null;
 
   // 4. TRANSACTION: Apply all mutations atomically
   const txn = sqlite.transaction(() => {

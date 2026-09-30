@@ -27,7 +27,7 @@ import type { MapStats } from "./mapStats";
 const LINE_BUTTON =
   "hit-area state-layer inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold cursor-pointer";
 
-export interface StatsStripProps {
+interface StatsStripProps {
   stats: Pick<MapStats, "inView" | "matching" | "overdue">;
   /** The overdue filter is on. */
   overdueOnly: boolean;

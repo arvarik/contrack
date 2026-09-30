@@ -1,5 +1,3 @@
-import crypto from "crypto";
-import { sqlite } from "../../db.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
@@ -44,21 +42,6 @@ import { getErrorMessage } from "../../utils/helpers.ts";
  * tests pin it by this name.
  */
 export { DEFAULT_AUTO_MERGE_THRESHOLD };
-
-function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
-  switch (mode) {
-    case "quick":
-    case "deterministic":
-      return "quick";
-    case "full":
-      return "full";
-    case "deep":
-    case "ai":
-    case "both":
-    default:
-      return "deep";
-  }
-}
 
 /**
  * Persist the pairs one contact produced.
@@ -200,7 +183,6 @@ export const dedupeService = {
     requestedThreshold?: number,
   ): Promise<void> {
     dedupeQueue.setProcessing(true);
-    const resolved = resolveMode(mode);
     // The account's preset unless the caller named a number. The same
     // resolution the import and the single-contact check make, so a preset
     // chosen in Settings governs every path that merges.
@@ -226,21 +208,21 @@ export const dedupeService = {
         return;
       }
 
-      if (resolved !== "quick" && isEmbeddingAvailable()) {
+      if (mode !== "quick" && isEmbeddingAvailable()) {
         const existingCount = getEmbeddingCount(scope);
-        const needsBackfill = resolved === "full" || existingCount === 0;
+        const needsBackfill = mode === "full" || existingCount === 0;
 
         if (needsBackfill) {
           dedupeQueue.update(scanId, {
             phase: "normalizing",
             phaseName:
-              resolved === "full"
+              mode === "full"
                 ? "Re-embedding all contacts…"
                 : "Generating contact embeddings…",
           });
 
           try {
-            if (resolved === "full") {
+            if (mode === "full") {
               clearOwnerEmbeddings(scope);
               log.info(
                 "DedupeService",
@@ -298,7 +280,7 @@ export const dedupeService = {
             embeddingsReady = getEmbeddingCount(scope) > 0;
           }
         }
-      } else if (resolved !== "quick") {
+      } else if (mode !== "quick") {
         log.warn(
           "DedupeService",
           `[${rid}] Gemini API unavailable — skipping embedding-based blocking`,
@@ -321,7 +303,7 @@ export const dedupeService = {
         contactsScanned: ctx.allContacts.length,
       });
 
-      if (resolved !== "quick") {
+      if (mode !== "quick") {
         const funnelResults = await runFunnelPass(ctx, scanId, embeddingsReady);
         allPairs.push(...funnelResults);
 
@@ -587,65 +569,5 @@ export const dedupeService = {
       `[${rid}] Import scan: ${contactIds.length} new contacts against ${corpus.normalized.length} existing in ${Date.now() - t0}ms at threshold ${autoMergeThreshold} — ${autoMerged} auto-merged, ${pending} pending`,
     );
     return { autoMerged, pending, matchedIds };
-  },
-
-  seedDuplicates(scope: Scope) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "seedDuplicates() is a dev-only utility and cannot run in production",
-      );
-    }
-    const ids = [
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-    ];
-
-    // Dev-only seed. Stamped like every other insert so the seeded rows
-    // belong to whoever asked for them.
-    const owner = scope.ownerId;
-    const insertContact = sqlite.prepare(
-      "INSERT INTO contacts (id, name, company, role, themeColor, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
-    );
-    const insertEmail = sqlite.prepare(
-      "INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)",
-    );
-    const insertPhone = sqlite.prepare(
-      "INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)",
-    );
-
-    insertContact.run(
-      ids[0],
-      "Bobby Johnson",
-      "Acme Corp",
-      "VP Sales",
-      "brand",
-      owner,
-    );
-    insertPhone.run(crypto.randomUUID(), ids[0], "(555) 867-5309");
-
-    insertContact.run(
-      ids[1],
-      "Robert A. Johnson",
-      "Acme Corp",
-      "Vice President of Sales",
-      "pink",
-      owner,
-    );
-    insertEmail.run(crypto.randomUUID(), ids[1], "bob.johnson@gmail.com");
-
-    insertContact.run(
-      ids[2],
-      "Robert Johnson",
-      "Acme Corporation",
-      "VP Sales",
-      "emerald",
-      owner,
-    );
-    insertEmail.run(crypto.randomUUID(), ids[2], "bob.johnson@gmail.com");
-
-    insertContact.run(ids[3], "R. Johnson", null, null, "teal", owner);
-    insertPhone.run(crypto.randomUUID(), ids[3], "555-867-5309");
   },
 };

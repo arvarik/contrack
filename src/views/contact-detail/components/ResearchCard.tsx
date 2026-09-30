@@ -37,7 +37,6 @@ import { CARD, FIELD_LABEL, SECTION_HEADING_SPACED } from "../../../lib/styles";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { EnrichMenu, useCanEnrich } from "./EnrichMenu";
 import {
-  isLegacyDossier,
   parseResearchRecord,
   sourceForSite,
   type ResearchRun,
@@ -267,10 +266,9 @@ export function ResearchCard({
     () => parseResearchRecord(contact.aiResearch),
     [contact.aiResearch],
   );
-  const legacy = isLegacyDossier(contact.aiBackground);
-  // Notes that came from somewhere other than the old merge: an import, or
+  // Notes that came from somewhere other than an enrichment: an import, or
   // the API. They are the reader's own, so they are shown as written.
-  const notes = !legacy && contact.aiBackground ? contact.aiBackground : null;
+  const notes = contact.aiBackground || null;
   const runs = record?.runs ?? [];
   const sources = record?.sources ?? [];
   // The facts of every run that kept them (the latest two), newest first,
@@ -287,7 +285,7 @@ export function ResearchCard({
       }),
     );
   }, [record]);
-  const researched = runs.length > 0 || legacy || !!contact.aiHydratedAt;
+  const researched = runs.length > 0 || !!contact.aiHydratedAt;
 
   if (!researched && !notes) return null;
 
@@ -470,14 +468,6 @@ export function ResearchCard({
             />
           )}
         </div>
-      )}
-
-      {legacy && (
-        <p className="mt-5 text-sm text-on-surface-variant text-pretty">
-          The earlier enrichment
-          {contact.aiHydratedAt ? ` on ${when(contact.aiHydratedAt)}` : ""} kept
-          no list of the pages it read. Enrich again to record them
-        </p>
       )}
 
       {notes && (

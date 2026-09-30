@@ -42,7 +42,7 @@ export function prefersReducedMotion(): boolean {
 /** The id the slides carry, so the next change can find and stop them. */
 const FLIP_ID = "pulse-flip";
 
-export interface Flip {
+interface Flip {
   /** Measure where each card is on screen, before the change that moves it. */
   capture: () => void;
   /** Slide each card that moved from where it was to where it is now. */
@@ -50,14 +50,12 @@ export interface Flip {
 }
 
 /**
- * FLIP over the elements under `getRoot()` that carry `attribute`, matched
+ * FLIP over the elements under `getRoot()` that carry `data-flip-id`, matched
  * by its value, so a card that moved to another column (a new element with
  * the same id) slides across too.
  */
-export function createFlip(
-  getRoot: () => HTMLElement | null,
-  attribute = "data-flip-id",
-): Flip {
+export function createFlip(getRoot: () => HTMLElement | null): Flip {
+  const attribute = "data-flip-id";
   let before: Map<string, DOMRect> | null = null;
   const nodes = () =>
     Array.from(

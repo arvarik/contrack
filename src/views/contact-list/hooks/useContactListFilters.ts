@@ -30,12 +30,12 @@ import { parseFacetQuery } from "../../../../shared/facetQuery";
 import { matchesFacet } from "../../../../shared/searchFacets";
 import type { Contact } from "../../../types";
 
-export type SortField = "name" | "date";
-export type SortDir = "asc" | "desc";
+type SortField = "name" | "date";
+type SortDir = "asc" | "desc";
 
-export type SortOption = "name-asc" | "name-desc" | "date-desc" | "date-asc";
+type SortOption = "name-asc" | "name-desc" | "date-desc" | "date-asc";
 
-export interface SortChoice {
+interface SortChoice {
   id: SortOption;
   label: string;
   field: SortField;
@@ -59,14 +59,14 @@ export const SORT_CHOICES: readonly SortChoice[] = [
   { id: "date-asc", label: "Oldest", field: "date", dir: "asc" },
 ] as const;
 
-export function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
+function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
   if (sortBy === "name") {
     return sortDir === "desc" ? SORT_CHOICES[1] : SORT_CHOICES[0];
   }
   return sortDir === "asc" ? SORT_CHOICES[3] : SORT_CHOICES[2];
 }
 
-export const SESSION_SORT_KEY = "contrack.network_sort";
+const SESSION_SORT_KEY = "contrack.network_sort";
 
 /** The `filterMode` of the Tracked chip: the people a person keeps up with. */
 export const TRACKED_FILTER = "tracked";

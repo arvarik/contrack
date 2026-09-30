@@ -2,7 +2,6 @@ import { apiFetch } from "./client";
 import { corvidReact } from "../lib/corvid";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ActionItem } from "../types";
-export type { ActionItem };
 
 export const useCompletedActionItems = () => {
   return useQuery({

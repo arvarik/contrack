@@ -27,7 +27,6 @@ interface GoogleFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   connector?: ConnectorDetail | ConnectorSummary | null;
-  reconnectOnly?: boolean;
 }
 
 export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({

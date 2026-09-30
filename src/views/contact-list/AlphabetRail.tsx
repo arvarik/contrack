@@ -33,7 +33,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 
 /** Non-alphabetic names (numbers, symbols, other scripts) bucket under "#". */
-export const OTHER_BUCKET = "#";
+const OTHER_BUCKET = "#";
 
 const LETTERS = [
   ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)),

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   SETTINGS_PAGES,
-  REDIRECTS,
   findRows,
 } from "../../../../src/views/settings/registry";
 import { NAMES } from "../../../../src/lib/names";
@@ -11,30 +10,6 @@ describe("settings registry", () => {
     const paths = SETTINGS_PAGES.map((p) => p.path);
     const unique = new Set(paths);
     expect(unique.size).toBe(paths.length);
-  });
-
-  it("all redirect targets exist in SETTINGS_PAGES", () => {
-    const validPaths = new Set(SETTINGS_PAGES.map((p) => p.path));
-
-    for (const [from, target] of Object.entries(REDIRECTS)) {
-      if (typeof target === "string") {
-        expect(
-          validPaths.has(target),
-          `Redirect from ${from} targets non-existent path ${target}`,
-        ).toBe(true);
-      } else {
-        const adminTarget = target({ isAdmin: true });
-        const memberTarget = target({ isAdmin: false });
-        expect(
-          validPaths.has(adminTarget),
-          `Admin redirect from ${from} targets non-existent path ${adminTarget}`,
-        ).toBe(true);
-        expect(
-          validPaths.has(memberTarget),
-          `Member redirect from ${from} targets non-existent path ${memberTarget}`,
-        ).toBe(true);
-      }
-    }
   });
 
   it("admin pages carry admin: true", () => {

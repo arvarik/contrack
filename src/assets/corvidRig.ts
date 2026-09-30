@@ -80,10 +80,10 @@ const JAW_RIGID = 4;
 export const NECK: Vec = [37, 35];
 
 /** The wing hinges here, in the round of its base. */
-export const SHOULDER: Vec = [38.6, 47.4];
+const SHOULDER: Vec = [38.6, 47.4];
 
 /** Where the sitting bird's weight is: a crouch squats onto this point. */
-export const FEET: Vec = [44, 84];
+const FEET: Vec = [44, 84];
 
 // ---------------------------------------------------------------------------
 // Small vector helpers
@@ -507,7 +507,7 @@ const num = (n: number): string => String(Math.round(n * 10) / 10 || 0);
  * A Catmull-Rom spline through the points, as absolute `M` and `C` only, at
  * the tension the mark was traced with. `parsePath` reads it back.
  */
-export function splinePath(points: readonly Vec[]): string {
+function splinePath(points: readonly Vec[]): string {
   if (points.length < 2) return "";
   const n = points.length;
   const at = (i: number) => points[Math.min(Math.max(i, 0), n - 1)]!;
@@ -526,7 +526,7 @@ export function splinePath(points: readonly Vec[]): string {
 }
 
 /** The strokes a drawing makes, keyed like the mark's parts. */
-export interface CorvidPathData {
+interface CorvidPathData {
   head: string;
   chest: string;
   wing: string;

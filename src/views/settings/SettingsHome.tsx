@@ -7,7 +7,7 @@
  * Below `lg` this is the list a person opens every page from, and a page
  * slides in over it (`SlideLink`).
  */
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
@@ -183,5 +183,3 @@ export const SettingsHome = () => {
     </div>
   );
 };
-
-export default SettingsHome;

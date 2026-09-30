@@ -37,13 +37,11 @@ export const SecretReveal = ({
   label,
   /** Break the value into readable groups. For values a person will type. */
   grouped = false,
-  note = "Copy it now. It will not be shown again",
 }: {
   value: string;
   /** Names the value in the copy confirmation, e.g. "Token". */
   label: string;
   grouped?: boolean;
-  note?: string;
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -96,9 +94,9 @@ export const SecretReveal = ({
           )}
         </button>
       </div>
-      {note && (
-        <p className="text-xs font-bold text-warning text-pretty">{note}</p>
-      )}
+      <p className="text-xs font-bold text-warning text-pretty">
+        Copy it now. It will not be shown again
+      </p>
     </div>
   );
 };

@@ -24,7 +24,7 @@ import {
 } from "../../assets/corvidRig";
 
 /** The bird's strokes, as a mark or the flying bird draws them. */
-export const BIRD_STROKES = [
+const BIRD_STROKES = [
   "nape",
   "chest",
   "wing",
@@ -32,7 +32,7 @@ export const BIRD_STROKES = [
   "tail2",
   "head",
 ] as const;
-export type BirdStroke = (typeof BIRD_STROKES)[number];
+type BirdStroke = (typeof BIRD_STROKES)[number];
 
 export interface BirdElements {
   strokes: Partial<Record<BirdStroke, SVGPathElement>>;

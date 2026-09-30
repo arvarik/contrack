@@ -54,10 +54,9 @@ export function formatDay(
 export function formatShortDay(
   value: string | null | undefined,
   now: Date = new Date(),
-  fallback = "Unknown",
 ): string {
   const date = parseServerTime(value);
-  if (!date) return fallback;
+  if (!date) return "Unknown";
   return date.getFullYear() === now.getFullYear()
     ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : date.toLocaleDateString(undefined, { month: "short", year: "numeric" });

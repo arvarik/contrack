@@ -20,7 +20,7 @@ import { FACET_FIELD_PATTERN, parseFilterValue } from "../../shared/facetQuery";
 import type { FacetField, FacetFilter } from "../../shared/searchFacets";
 export type { FacetField, FacetFilter } from "../../shared/searchFacets";
 
-export interface ParsedQuery {
+interface ParsedQuery {
   /** Locked facet pills */
   filters: FacetFilter[];
   /** Remaining free-text for FTS/vector search */

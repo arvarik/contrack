@@ -298,9 +298,6 @@ export const BTN_QUIET =
 export const CHANGED_MARK =
   "inline-block w-1.5 h-1.5 rounded-full bg-primary shrink-0";
 
-/** Text link style — inline clickable text */
-export const TEXT_LINK = "text-primary hover:underline font-bold";
-
 /**
  * "+ Add": the control under a field or after a row of chips.
  *
@@ -327,10 +324,6 @@ export const BAR_LABEL = cn(LABEL, "text-inherit whitespace-nowrap");
 /** Tag pill — used in contact tags, filter indicators */
 export const TAG_PILL =
   "text-[11px] font-bold bg-primary/10 text-on-primary-wash px-2 py-0.5 rounded-md";
-
-/** Micro badge — tiny inline status labels (e.g. "Current", "work", "personal") */
-export const MICRO_BADGE =
-  "text-[11px] uppercase tracking-[0.08em] opacity-50 bg-surface-container px-1 rounded";
 
 /** Status badge — success variant (e.g. "Current" on experience) */
 export const STATUS_BADGE_SUCCESS =

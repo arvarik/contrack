@@ -38,9 +38,9 @@ import {
   type MastheadCounts,
 } from "../lib/dayLine";
 
-export type { JumpTarget, MastheadCounts };
+export type { JumpTarget };
 
-export interface MastheadProps {
+interface MastheadProps {
   counts: MastheadCounts;
   isEditing: boolean;
   onToggleCustomize: () => void;

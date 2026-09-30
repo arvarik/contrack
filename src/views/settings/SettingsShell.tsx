@@ -39,11 +39,9 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import {
   SETTINGS_LIST_PATH,
   SETTINGS_PAGES,
-  REDIRECTS,
   findSettingsPage,
   settingsBackLink,
   type SettingsPage,
-  type RedirectTarget,
 } from "./registry";
 import { SettingsRail } from "./SettingsRail";
 import { SettingsHome } from "./SettingsHome";
@@ -109,12 +107,6 @@ const PageRoute = ({
   ) : (
     <>{children}</>
   );
-
-const RedirectRoute = ({ to }: { to: RedirectTarget }) => {
-  const { isAdmin } = useAuth();
-  const target = typeof to === "function" ? to({ isAdmin }) : to;
-  return <Navigate to={target} replace />;
-};
 
 export const SettingsShell = () => {
   const location = useLocation();
@@ -300,18 +292,6 @@ export const SettingsShell = () => {
                     );
                   })}
 
-                  {/* Registry driven redirects */}
-                  {Object.entries(REDIRECTS).map(([from, to]) => {
-                    const relativeFrom = from.replace(/^\/settings\/?/, "");
-                    return (
-                      <Route
-                        key={from}
-                        path={relativeFrom}
-                        element={<RedirectRoute to={to} />}
-                      />
-                    );
-                  })}
-
                   {/* Wildcard fallback to /settings */}
                   <Route
                     path="*"
@@ -334,5 +314,3 @@ export const SettingsShell = () => {
     </SettingsHeaderContext.Provider>
   );
 };
-
-export default SettingsShell;

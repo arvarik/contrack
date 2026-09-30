@@ -30,14 +30,14 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { TONE_WASH, type Tone } from "../../lib/styles";
 
-export interface EmptyStateAction {
+interface EmptyStateAction {
   label: string;
   onClick: () => void;
   /** An icon before the label. Decorative. */
   icon?: LucideIcon;
 }
 
-export interface EmptyStateProps {
+interface EmptyStateProps {
   /** The icon in the 48 px tile. Ignored when `illustration` is given. */
   icon?: LucideIcon;
   /** A node drawn in place of the icon tile. The corvid mark goes here. */

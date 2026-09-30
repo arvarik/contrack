@@ -57,7 +57,7 @@ import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { formatDay, parseServerTime } from "../../../lib/datetime";
 import {
   startPendingDelete,
-  useHiddenInteractionIds,
+  useHiddenPendingIds,
 } from "../../../lib/pendingDeletes";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -97,7 +97,7 @@ export interface OpenedInteraction {
   editing: boolean;
 }
 
-export interface TimelineProps {
+interface TimelineProps {
   contactId: string;
   timeline: Interaction[];
   /** The interaction in the detail modal. The tab owns it for `?interaction=`. */
@@ -546,7 +546,7 @@ export const Timeline = ({
   updateInteraction,
   promoteGhost,
 }: TimelineProps) => {
-  const hidden = useHiddenInteractionIds();
+  const hidden = useHiddenPendingIds();
   const completeActionItem = useCompleteActionItem();
   const headingPrefix = useId();
   const [confirming, setConfirming] = useState<Interaction | null>(null);

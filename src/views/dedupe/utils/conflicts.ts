@@ -1,7 +1,6 @@
 import type { Contact } from "../../../types";
 
-export interface FieldConflict {
-  field: string;
+interface FieldConflict {
   label: string;
   primaryValue: string;
   duplicateValue: string;
@@ -50,7 +49,6 @@ export function detectMergeConflicts(
         pVal.trim().toLowerCase() !== dVal.trim().toLowerCase()
       ) {
         conflicts.push({
-          field: String(key),
           label,
           primaryValue: pVal.trim(),
           duplicateValue: dVal.trim(),
@@ -74,7 +72,6 @@ export function detectMergeConflicts(
       const dVal = (dAttr.value || "").trim();
       if (pVal && dVal && pVal.toLowerCase().trim() !== dVal.toLowerCase()) {
         conflicts.push({
-          field: `attribute:${dAttr.name}`,
           label: `Attribute: ${dAttr.name}`,
           primaryValue: pVal.trim(),
           duplicateValue: dVal,

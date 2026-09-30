@@ -90,6 +90,7 @@ Run the full test suite:
 npm test              # Unit + integration (500+ tests, no API keys needed)
 npm run test:coverage # ...with a coverage report
 npm run lint          # Oxlint + tsc --noEmit (strict)
+npm run knip          # Files, exports and types in src that nothing uses
 npm run build && npm run test:e2e   # Browser journeys in headless Chromium
 ```
 

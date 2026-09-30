@@ -49,9 +49,9 @@ import {
 /** The thinking bird's weight: the favicon's at 32 px. */
 const GLYPH = CORVID_OPTICAL.small;
 
-export type CorvidVariant = "mark" | "glyph";
+type CorvidVariant = "mark" | "glyph";
 
-export interface CorvidMarkProps extends Omit<
+interface CorvidMarkProps extends Omit<
   React.SVGProps<SVGSVGElement>,
   "width" | "height" | "viewBox" | "role" | "aria-hidden" | "aria-label" | "ref"
 > {

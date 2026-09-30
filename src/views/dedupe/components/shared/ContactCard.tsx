@@ -48,7 +48,7 @@ const Email = ({ address }: { address: string }) => {
   );
 };
 
-export interface ContactCardProps {
+interface ContactCardProps {
   key?: React.Key;
   contact: Contact;
   label: string;

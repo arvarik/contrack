@@ -19,7 +19,7 @@
 import type { Editor } from "@tiptap/core";
 import { Selection, type Transaction } from "@tiptap/pm/state";
 
-export interface SubmissionMark {
+interface SubmissionMark {
   /** Where the submitted content ends now, after every edit since. */
   end(): number;
   /** Stop following the document. Idempotent. */

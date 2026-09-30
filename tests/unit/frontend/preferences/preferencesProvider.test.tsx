@@ -26,7 +26,7 @@ import {
   usePreferences,
 } from "../../../../src/contexts/PreferencesContext";
 import { DEFAULT_PREFERENCES } from "../../../../src/api/preferences";
-import { LEGACY_KEYS } from "../../../../src/lib/localPreferenceMigration";
+import { LEGACY_KEYS } from "../../../../src/lib/forgetLegacyKeys";
 
 /** Requests the app made, newest last. */
 let calls: { url: string; method: string; body: unknown }[] = [];
@@ -350,33 +350,11 @@ describe("following the machine", () => {
   });
 });
 
-describe("the one-time migration", () => {
-  it("sends what the browser still holds, once", async () => {
+describe("the keys 1.x left behind", () => {
+  it("removes them and sends none of their values to the account", async () => {
     localStorage.setItem(LEGACY_KEYS.listDensity, "compact");
     localStorage.setItem(LEGACY_KEYS.tempUnit, "fahrenheit");
-
-    const { result, rerender } = renderHook(() => usePreferences(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(patches()).toHaveLength(1));
-    expect(patches()[0]).toEqual({
-      listDensity: "compact",
-      tempUnit: "fahrenheit",
-    });
-
-    rerender();
-    rerender();
-    await waitFor(() => expect(result.current.isLoaded).toBe(true));
-    expect(patches()).toHaveLength(1);
-
-    // And the browser no longer holds them.
-    expect(localStorage.getItem(LEGACY_KEYS.listDensity)).toBeNull();
-    expect(localStorage.getItem(LEGACY_KEYS.tempUnit)).toBeNull();
-  });
-
-  it("leaves a choice the account already made on another device", async () => {
-    stored = { listDensity: "comfortable" };
-    localStorage.setItem(LEGACY_KEYS.listDensity, "compact");
+    localStorage.setItem("unrelated", "kept");
 
     const { result } = renderHook(() => usePreferences(), {
       wrapper: makeWrapper(),
@@ -386,8 +364,12 @@ describe("the one-time migration", () => {
       expect(localStorage.getItem(LEGACY_KEYS.listDensity)).toBeNull(),
     );
 
+    expect(localStorage.getItem(LEGACY_KEYS.tempUnit)).toBeNull();
+    expect(localStorage.getItem("unrelated")).toBe("kept");
     expect(patches()).toEqual([]);
-    expect(result.current.preferences.listDensity).toBe("comfortable");
+    expect(result.current.preferences.listDensity).toBe(
+      DEFAULT_PREFERENCES.listDensity,
+    );
   });
 
   it("sends nothing when the browser holds nothing", async () => {

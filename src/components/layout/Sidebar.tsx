@@ -21,7 +21,7 @@ import {
   Activity,
   Keyboard,
 } from "lucide-react";
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";

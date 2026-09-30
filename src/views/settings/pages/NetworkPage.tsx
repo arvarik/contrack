@@ -4,7 +4,6 @@
  * Start page, list sort, recent contacts, the default cadence, whether new
  * contacts start tracked, week start, weather, and temperature unit.
  */
-import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import {
   useRecentContactsLimit,

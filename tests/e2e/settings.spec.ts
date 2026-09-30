@@ -179,21 +179,6 @@ test.describe("Settings — Desktop", () => {
       page.getByText("1 setting is back to its default"),
     ).toBeVisible();
   });
-
-  test("old URLs redirect to their new paths", async ({ page }) => {
-    const redirects: [string, RegExp][] = [
-      ["/settings/dedupe", /\/settings\/duplicates$/],
-      ["/settings/ai-search", /\/settings\/enrichment$/],
-      ["/settings/ai-config", /\/settings\/admin\/ai$/],
-      ["/settings/admin/instance", /\/settings\/admin\/general$/],
-      ["/settings/ai-stats", /\/settings\/admin\/ai-usage$/],
-    ];
-
-    for (const [from, to] of redirects) {
-      await page.goto(from);
-      await expect(page).toHaveURL(to);
-    }
-  });
 });
 
 test.describe("Settings — Phone", () => {
@@ -539,7 +524,7 @@ test.describe("Tracked contacts", () => {
     }
   });
 
-  test("Settings, Your data opens the page beside the rail, and the old path leads there", async ({
+  test("Settings, Your data opens the page beside the rail", async ({
     page,
   }) => {
     await page.goto("/settings");
@@ -553,11 +538,6 @@ test.describe("Tracked contacts", () => {
     await expect(
       rail.getByRole("link", { name: "Tracked contacts" }),
     ).toHaveAttribute("aria-current", "page");
-
-    // The old path, with the group it named.
-    await page.goto("/tracked#fading");
-    await expect(page).toHaveURL(/\/settings\/tracked#fading$/);
-    await expect(rail).toBeVisible();
   });
 
   test("the page groups people by their ring, a row toggle tracks, and Settings stays lit", async ({

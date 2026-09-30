@@ -16,7 +16,7 @@ import {
 // Types (match backend response shapes exactly)
 // =============================================================================
 
-export interface AIStatsSessionKPIs {
+interface AIStatsSessionKPIs {
   totalInvocations: number;
   freshCalls: number;
   cachedCalls: number;
@@ -36,7 +36,7 @@ export interface AIStatsCacheTier {
 }
 
 /** Gemini's usage meter. Empty when Gemini is not connected. */
-export interface AIStatsQuota {
+interface AIStatsQuota {
   models: Record<string, { rpm: number; tpm: number; rpd: number }>;
   /** Grounded requests sent today. */
   grounding: { rpd: number };
@@ -93,7 +93,7 @@ export interface AIStatsFeedItem {
   username?: string | null;
 }
 
-export interface AIStatsFeedResponse {
+interface AIStatsFeedResponse {
   items: AIStatsFeedItem[];
   pagination: {
     offset: number;

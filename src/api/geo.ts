@@ -1,6 +1,6 @@
 import { apiJson } from "./client";
 
-export interface GeoSearchResult {
+interface GeoSearchResult {
   query: string;
   lat: number;
   lng: number;

@@ -37,9 +37,7 @@ interface NearResolution {
 export function useMapFilter(
   contacts: MapContact[],
   options?: {
-    activeViewId?: string | null;
     onClearActiveView?: () => void;
-    onFilterChange?: () => void;
   },
 ) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -120,7 +118,7 @@ export function useMapFilter(
         if (debounceRef.current) clearTimeout(debounceRef.current);
         return;
       }
-      (options?.onClearActiveView ?? options?.onFilterChange)?.();
+      options?.onClearActiveView?.();
       syncQueryToUrl(val);
     },
     [syncQueryToUrl, options],
@@ -225,9 +223,9 @@ export function useMapFilter(
     setRawInputState("");
     setOverdueOnlyState(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Read first, then call: Oxlint's exhaustive-deps reads
-    // `(options?.a ?? options?.b)?.()` as a use of all of `options`.
-    const onClear = options?.onClearActiveView ?? options?.onFilterChange;
+    // Read first, then call, so the dependency is the function and not
+    // all of `options`.
+    const onClear = options?.onClearActiveView;
     onClear?.();
     isInternalUpdateRef.current = true;
     setSearchParams(
@@ -248,7 +246,6 @@ export function useMapFilter(
     removeFilter,
     setSearchParams,
     options?.onClearActiveView,
-    options?.onFilterChange,
   ]);
 
   const hasActiveFilter = Boolean(

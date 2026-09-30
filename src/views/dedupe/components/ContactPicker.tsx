@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Search, Users, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Contact } from "../../../types";

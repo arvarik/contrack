@@ -63,11 +63,9 @@ export const RoleBadge = ({
 export const AccountAvatar = ({
   user,
   size = 32,
-  className,
 }: {
   user: Pick<AccountUser, "username" | "displayName" | "avatarUrl">;
   size?: number;
-  className?: string;
 }) => {
   // The monogram is a served image, so it cannot inherit the page's palette.
   // It answers `prefers-color-scheme` on its own, which covers the default
@@ -102,17 +100,14 @@ export const AccountAvatar = ({
           setFailedUrl(user.avatarUrl);
         }
       }}
-      className={cn(
-        "rounded-full bg-surface-container-high shrink-0 object-cover",
-        className,
-      )}
+      className="rounded-full bg-surface-container-high shrink-0 object-cover"
       style={{ width: size, height: size }}
     />
   );
 };
 
 /** The name to show, falling back through what the account actually has. */
-export function accountLabel(user: AccountUser): string {
+function accountLabel(user: AccountUser): string {
   return user.displayName?.trim() || user.username;
 }
 

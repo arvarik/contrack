@@ -39,7 +39,7 @@ export function collapseAttribution(container: ParentNode): boolean {
 }
 
 /** The two handlers of a MapLibre map that can turn it. */
-export interface RotatableMap {
+interface RotatableMap {
   touchZoomRotate: { disableRotation(): void };
   keyboard: { disableRotation(): void };
 }

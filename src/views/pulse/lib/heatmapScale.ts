@@ -15,7 +15,7 @@
 
 export const HEATMAP_ALPHA_STEPS = [0, 0.12, 0.3, 0.55, 0.8, 1] as const;
 
-export type HeatmapStep = 0 | 1 | 2 | 3 | 4 | 5;
+type HeatmapStep = 0 | 1 | 2 | 3 | 4 | 5;
 
 /**
  * Returns a quantile scaling function for a given array of interaction counts.

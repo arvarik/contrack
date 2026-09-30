@@ -36,13 +36,13 @@ export type SpokeFilter = "any" | "month" | "year" | "older" | "never";
  */
 export type TrackedOrder = "name" | "spoke" | "recent";
 
-export const TRACKING_FILTER_IDS: readonly TrackingFilter[] = [
+const TRACKING_FILTER_IDS: readonly TrackingFilter[] = [
   "all",
   "tracked",
   "not_tracked",
 ];
 
-export const SPOKE_FILTER_IDS: readonly SpokeFilter[] = [
+const SPOKE_FILTER_IDS: readonly SpokeFilter[] = [
   "any",
   "month",
   "year",
@@ -50,11 +50,7 @@ export const SPOKE_FILTER_IDS: readonly SpokeFilter[] = [
   "never",
 ];
 
-export const TRACKED_ORDER_IDS: readonly TrackedOrder[] = [
-  "name",
-  "spoke",
-  "recent",
-];
+const TRACKED_ORDER_IDS: readonly TrackedOrder[] = ["name", "spoke", "recent"];
 
 /** The page's three choices. */
 export interface TrackedView {
@@ -106,13 +102,13 @@ export function paramsWithTrackedView(
 const DAY_MS = 86_400_000;
 
 /** "Past month" is the last 30 days. */
-export const MONTH_DAYS = 30;
+const MONTH_DAYS = 30;
 
 /** "Past year" is the last 365 days, and "Over a year ago" is before it. */
-export const YEAR_DAYS = 365;
+const YEAR_DAYS = 365;
 
 /** The contact fields the rules read. */
-export type FilteredContact = Pick<Contact, "isTracked" | "lastContactedAt">;
+type FilteredContact = Pick<Contact, "isTracked" | "lastContactedAt">;
 
 /** The last interaction as epoch milliseconds, or null when there is none. */
 export function lastSpokeAt(contact: Pick<Contact, "lastContactedAt">) {

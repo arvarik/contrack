@@ -438,11 +438,13 @@ describe("the sentence shown for a 429", () => {
 
   it("names the other account when the lock is not the reader's", () => {
     expect(
-      rateLimitMessage(limited({ yours: false, queued: true }), "scan"),
-    ).toBe("Another user's scan is running. Yours will start automatically");
-    expect(
-      rateLimitMessage(limited({ yours: false, queued: false }), "enrichment"),
-    ).toBe("Another user's enrichment is running. Try again in a moment");
+      rateLimitMessage(limited({ yours: false, queued: true }), "enrichment"),
+    ).toBe(
+      "Another user's enrichment is running. Yours will start automatically",
+    );
+    expect(rateLimitMessage(limited({ yours: false, queued: false }))).toBe(
+      "Another user is using this right now. Try again in a moment",
+    );
   });
 
   it("counts the seconds when the limit is the reader's own", () => {

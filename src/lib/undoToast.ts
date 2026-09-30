@@ -28,7 +28,7 @@ import { toast } from "sonner";
  */
 export const UNDO_DURATION_MS = 10_000;
 
-export interface UndoableDeleteOptions {
+interface UndoableDeleteOptions {
   /** How many contacts went to Trash. */
   count: number;
   /** Used instead of a count when exactly one contact is named. */

@@ -16,7 +16,6 @@ import { Cake, Video } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
 import { CardFrame } from "../components/CardFrame";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
-import { SETTINGS_PAGES } from "../../settings/registry";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -29,21 +28,20 @@ import {
 import { describeDueChip } from "../lib/upNext";
 import type { UpcomingBirthday } from "../lib/birthdays";
 
-export interface MeetingItem {
+interface MeetingItem {
   title: string;
   startsAt: string;
-  endsAt: string;
   contactIds: string[];
 }
 
-export interface ComingUpCardProps {
+interface ComingUpCardProps {
   birthdays?: UpcomingBirthday[];
   meetings?: MeetingItem[];
   contactsMap?: Map<string, { name: string; avatarUrl?: string | null }>;
 }
 
 /** Up next owns birthdays through day seven. This card starts at day eight. */
-export const COMING_UP_FROM_DAY = 8;
+const COMING_UP_FROM_DAY = 8;
 
 type Entry =
   | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
@@ -67,10 +65,6 @@ export const ComingUpCard = ({
   meetings = [],
   contactsMap = new Map(),
 }: ComingUpCardProps) => {
-  const hasConnectorsPage = SETTINGS_PAGES.some(
-    (p) => p.id === "connectors" || p.path === "/settings/connectors",
-  );
-
   const entries = useMemo<Entry[]>(() => {
     const list: Entry[] = [];
     for (const b of birthdays) {
@@ -97,18 +91,13 @@ export const ComingUpCard = ({
   if (entries.length === 0) {
     return (
       <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
-        Nothing in the next two weeks.
-        {hasConnectorsPage && (
-          <>
-            {" "}
-            <Link
-              to="/settings/connectors"
-              className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
-            >
-              Connect a calendar
-            </Link>
-          </>
-        )}
+        Nothing in the next two weeks.{" "}
+        <Link
+          to="/settings/connectors"
+          className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
+        >
+          Connect a calendar
+        </Link>
       </CardFrame>
     );
   }

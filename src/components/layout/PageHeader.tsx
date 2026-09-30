@@ -47,7 +47,7 @@ import {
   TITLE_GRID_TITLE,
 } from "../../lib/styles";
 
-export interface PageHeaderProps {
+interface PageHeaderProps {
   /** The page's name. */
   title: React.ReactNode;
   /** The title's element. `h1` by default, `h2` beside another `h1`. */

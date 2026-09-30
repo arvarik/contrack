@@ -42,19 +42,10 @@ const SkeletonLine = ({
  * wrap where the loaded line's words wrap, one bar for each line of text. A
  * screen reader skips them: they are a shape, not the page's words.
  */
-export const SkeletonWords = ({
-  className,
-  children,
-}: {
-  className?: string;
-  children: string;
-}) => (
+const SkeletonWords = ({ children }: { children: string }) => (
   <span
     aria-hidden="true"
-    className={cn(
-      "text-transparent select-none rounded bg-surface-container-highest/60 animate-pulse [box-decoration-break:clone]",
-      className,
-    )}
+    className="text-transparent select-none rounded bg-surface-container-highest/60 animate-pulse [box-decoration-break:clone]"
   >
     {children}
   </span>

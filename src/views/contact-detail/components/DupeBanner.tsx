@@ -5,7 +5,7 @@
  * a likely duplicate of the currently viewed contact. Provides inline
  * review with side-by-side comparison and one-click merge/dismiss.
  */
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeftRight,

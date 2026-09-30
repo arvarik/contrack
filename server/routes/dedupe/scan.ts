@@ -51,14 +51,7 @@ export function registerScanRoutes(router: Router) {
       const rid = req.requestId;
       const { mode = "deep", autoMergeThreshold } = req.body;
 
-      const validModes = [
-        "deterministic",
-        "ai",
-        "both",
-        "quick",
-        "deep",
-        "full",
-      ];
+      const validModes = ["quick", "deep", "full"];
       if (!validModes.includes(mode)) {
         throw new AppError(
           `mode must be one of: ${validModes.join(", ")}`,
@@ -194,19 +187,4 @@ export function registerScanRoutes(router: Router) {
       res.json(scan);
     }),
   );
-
-  if (process.env.NODE_ENV !== "production") {
-    router.post(
-      "/dev/seed-duplicates",
-      asyncHandler(async (req, res) => {
-        const rid = req.requestId;
-        dedupeService.seedDuplicates(scopeOf(req));
-        log.info(
-          "API",
-          `[${rid}] POST /api/dev/seed-duplicates → Seeded duplicate pair`,
-        );
-        res.json({ success: true, message: "Seeded 1 duplicate pair" });
-      }),
-    );
-  }
 }

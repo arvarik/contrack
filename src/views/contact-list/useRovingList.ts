@@ -49,7 +49,7 @@ const MAX_FRAMES = 60;
  */
 const HOLD_FRAMES = 4;
 
-export interface RovingListOptions {
+interface RovingListOptions {
   /** How many rows the list holds, mounted or not. */
   count: number;
   /**
@@ -76,7 +76,7 @@ export interface RovingItemProps {
   onFocus: (event: React.FocusEvent<HTMLElement>) => void;
 }
 
-export interface RovingList {
+interface RovingList {
   /** Move the Tab stop to a row, scroll it into view and focus it. */
   focusIndex: (index: number) => void;
   /** Spread on each row. */

@@ -2,7 +2,7 @@
  * CacheTiersAccordion — Collapsible cache tier detail section.
  * Shows hit/miss/eviction stats per AI cache tier with color-coded hit rates.
  */
-import React, { useState } from "react";
+import { useState } from "react";
 import { cn } from "../../../lib/utils";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { DatabaseZap, ChevronDown } from "lucide-react";

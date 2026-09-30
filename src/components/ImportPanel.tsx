@@ -59,15 +59,14 @@ import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
-export interface ImportPanelProps {
+interface ImportPanelProps {
   onComplete?: (summary: ImportSummary) => void;
   onClose?: () => void;
-  className?: string;
 }
 
-export type ImportTab = "apple" | "linkedin" | "facebook" | "google";
+type ImportTab = "apple" | "linkedin" | "facebook" | "google";
 
-export type ImportPhaseState =
+type ImportPhaseState =
   | "idle"
   | "importing"
   | "embedding"
@@ -101,7 +100,7 @@ const ERROR_BANNER = cn(
   TONE_WASH.error,
 );
 
-export const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
+const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
 const VALID_SOURCES: readonly ImportTab[] = [
   "apple",
   "linkedin",
@@ -109,7 +108,7 @@ const VALID_SOURCES: readonly ImportTab[] = [
   "facebook",
 ];
 
-export function readInitialSource(): ImportTab {
+function readInitialSource(): ImportTab {
   try {
     const saved = localStorage.getItem(IMPORT_LAST_SOURCE_KEY);
     if (saved && (VALID_SOURCES as readonly string[]).includes(saved)) {
@@ -121,7 +120,7 @@ export function readInitialSource(): ImportTab {
   return "apple";
 }
 
-export function persistSource(source: ImportTab) {
+function persistSource(source: ImportTab) {
   try {
     localStorage.setItem(IMPORT_LAST_SOURCE_KEY, source);
   } catch {
@@ -132,11 +131,7 @@ export function persistSource(source: ImportTab) {
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export const ImportPanel = ({
-  onComplete,
-  onClose,
-  className,
-}: ImportPanelProps) => {
+export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   const { user } = useAuth();
   const accountId = user?.id ?? null;
   const [activeTab, setActiveTabState] = useState<ImportTab>(readInitialSource);
@@ -327,7 +322,7 @@ export const ImportPanel = ({
           setProgress(p);
         });
       } catch {
-        result = { kind: "interrupted", importId: id };
+        result = { kind: "interrupted" };
       }
 
       if (
@@ -399,11 +394,7 @@ export const ImportPanel = ({
     pendingRef.current = { id, contacts: newContacts };
     setImportId(id);
     setFileName(file.name);
-    rememberImport(accountId, {
-      importId: id,
-      fileName: file.name,
-      startedAt: Date.now(),
-    });
+    rememberImport(accountId, { importId: id, fileName: file.name });
     if (fileInputRef.current) fileInputRef.current.value = "";
     await runImport(id, newContacts);
   };
@@ -565,7 +556,7 @@ export const ImportPanel = ({
   const canTryAgain = !!importId && pendingRef.current?.id === importId;
 
   return (
-    <div className={cn("w-full space-y-6", className)}>
+    <div className="w-full space-y-6">
       <input
         aria-label="Choose a file to import"
         type="file"
@@ -1075,5 +1066,3 @@ export const ImportPanel = ({
     </div>
   );
 };
-
-export default ImportPanel;

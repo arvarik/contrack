@@ -6,7 +6,7 @@
  *
  * @module views/settings/pages/EnrichmentPage
  */
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { AISearchView } from "../../ai-search";
 import { SettingRow } from "../SettingRow";

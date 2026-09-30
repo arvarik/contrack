@@ -24,7 +24,7 @@
 /** The four interaction kinds the composer offers. */
 export type DraftKind = "note" | "call" | "meeting" | "email";
 
-export interface ComposerDraft {
+interface ComposerDraft {
   /** The editor's HTML, exactly as `editor.getHTML()` returned it. */
   html: string;
   /** The "next action" field. */
@@ -34,13 +34,13 @@ export interface ComposerDraft {
   savedAt: number;
 }
 
-export const DRAFT_KEY_PREFIX = "contrack:draft:";
+const DRAFT_KEY_PREFIX = "contrack:draft:";
 
 /** A draft larger than this is not written. 64 KB is pages of notes. */
-export const MAX_DRAFT_BYTES = 64 * 1024;
+const MAX_DRAFT_BYTES = 64 * 1024;
 
 /** A draft nobody touched for this long is discarded on read. */
-export const MAX_DRAFT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_DRAFT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** The account an un-gated instance runs as, when no user id is known. */
 const LOCAL_ACCOUNT = "local";
@@ -152,7 +152,7 @@ export function writeDraft(
 }
 
 /** Remove the draft under `key`. Never throws. */
-export function clearDraft(key: string): void {
+function clearDraft(key: string): void {
   try {
     localStorage.removeItem(key);
   } catch {

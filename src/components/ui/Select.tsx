@@ -66,8 +66,6 @@ export interface SelectOption<T extends string = string> {
   value: T;
   /** The visible text, which is also the option's accessible name. */
   label: string;
-  /** A second, smaller line under the label. */
-  description?: string;
   /** A 16 px glyph before the label. Decoration only. */
   icon?: LucideIcon;
   /** Options that share a group sit under one heading. */
@@ -75,9 +73,9 @@ export interface SelectOption<T extends string = string> {
   disabled?: boolean;
 }
 
-export type SelectVariant = "field" | "chip" | "ghost";
+type SelectVariant = "field" | "chip" | "ghost";
 
-export interface SelectProps<T extends string = string> {
+interface SelectProps<T extends string = string> {
   value: T;
   onChange: (value: T) => void;
   options: readonly SelectOption<T>[];
@@ -342,9 +340,6 @@ export function Select<T extends string = string>({
                     onClick={() => choose(option)}
                     className={cn(
                       MENU_ITEM,
-                      // A second line makes a taller row. The padding keeps
-                      // the two lines off the row's edges.
-                      option.description && "py-2",
                       isSelected && MENU_ITEM_SELECTED,
                       option.disabled && "opacity-50 cursor-not-allowed",
                     )}
@@ -357,11 +352,6 @@ export function Select<T extends string = string>({
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{option.label}</span>
-                      {option.description && (
-                        <span className="block text-xs font-normal text-on-surface-variant text-pretty">
-                          {option.description}
-                        </span>
-                      )}
                     </span>
                     {isSelected && (
                       <Check

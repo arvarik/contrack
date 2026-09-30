@@ -8,7 +8,7 @@ import { fallbackAvatarUrl } from "../../../../lib/avatar";
 // ContactMiniCard — Compact contact card for the picker
 // =============================================================================
 
-export interface ContactMiniCardProps {
+interface ContactMiniCardProps {
   key?: React.Key;
   contact: Contact;
   selected: boolean;

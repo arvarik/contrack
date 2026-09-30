@@ -18,7 +18,7 @@ export interface CapabilityAssignment {
   model?: string;
 }
 
-export interface ProviderStatus {
+interface ProviderStatus {
   id: string;
   label: string;
   kind: string;
@@ -36,7 +36,7 @@ export interface ProviderStatus {
   freeTier?: boolean;
 }
 
-export interface CustomEndpoint {
+interface CustomEndpoint {
   id: string;
   label: string;
   baseUrl: string;
@@ -80,7 +80,7 @@ export interface AISettings {
   instance: InstanceAi;
 }
 
-export interface ModelOption {
+interface ModelOption {
   id: string;
   label: string;
   /** "chat" | "embeddings" | "grounding" — see server/ai/provider.ts */
@@ -89,7 +89,7 @@ export interface ModelOption {
   contextWindow?: number;
 }
 
-export interface ModelGroup {
+interface ModelGroup {
   providerId: string;
   providerLabel: string;
   models: ModelOption[];

@@ -50,7 +50,7 @@ export const useDedupeCount = () =>
   });
 
 /** Hydrated pending suggestions for the review queue. */
-export const usePendingSuggestions = (enabled = true) =>
+export const usePendingSuggestions = () =>
   useQuery({
     queryKey: suggestionKeys.pending,
     queryFn: async ({ signal }) => {
@@ -59,7 +59,6 @@ export const usePendingSuggestions = (enabled = true) =>
       const data = await res.json();
       return data.suggestions as PersistedDedupeSuggestion[];
     },
-    enabled,
     staleTime: 15_000,
   });
 
@@ -80,7 +79,7 @@ export const useSuggestionForContact = (contactId: string | undefined) =>
   });
 
 /** Recent merge audit log. */
-export const useMergeLog = (enabled = true) =>
+export const useMergeLog = () =>
   useQuery({
     queryKey: suggestionKeys.mergeLog,
     queryFn: async ({ signal }) => {
@@ -89,7 +88,6 @@ export const useMergeLog = (enabled = true) =>
       const data = await res.json();
       return data.entries as MergeLogEntry[];
     },
-    enabled,
     staleTime: 15_000,
   });
 

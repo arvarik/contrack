@@ -76,7 +76,7 @@ export interface ContactExperience {
 }
 
 /** A per-import provenance record — which platform did this contact come from. */
-export interface ContactSource {
+interface ContactSource {
   id: string;
   platform: string;
   /** External system's stable ID for this contact (e.g. LinkedIn member URN). */
@@ -88,7 +88,7 @@ export interface ContactSource {
 }
 
 /** A free-form tag. Multiple tags per contact, no schema-enforced taxonomy. */
-export interface ContactTag {
+interface ContactTag {
   id: string;
   tag: string;
 }
@@ -331,17 +331,6 @@ export interface ActionItem {
 // Dedupe Engine Types
 // =============================================================================
 
-/** @deprecated Pairwise suggestion — kept for backward compat during Phase 3 migration. */
-export interface DedupeSuggestion {
-  id: string;
-  contactA: Contact;
-  contactB: Contact;
-  matchType: "email" | "phone" | "ai";
-  confidence: number;
-  reasoning: string;
-  matchedField?: string;
-}
-
 /**
  * A persisted dedupe suggestion row from /api/dedupe/suggestions.
  * Mirrors the server's DedupeSuggestion (server/services/dedupe/suggestions.ts).
@@ -387,7 +376,7 @@ export interface MergeLogEntry {
   duplicateName?: string;
 }
 
-export interface MergeConflict {
+interface MergeConflict {
   type: "scalar_edited" | "record_edited" | "record_deleted" | "task_completed";
   entity: string;
   id?: string;
@@ -439,8 +428,7 @@ export interface DedupeCluster {
   requiresConfirmation: boolean;
 }
 
-export type DedupeScanMode =
-  "deterministic" | "ai" | "both" | "quick" | "deep" | "full";
+export type DedupeScanMode = "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
   | "normalizing"
@@ -467,7 +455,6 @@ export interface DedupeScanProgress {
   scoringAutoMerge: number;
   scoringAiQueue: number;
   scoringDiscarded: number;
-  suggestions: DedupeSuggestion[]; // Deprecated — kept for backward compat only
   clustersFound: number;
   totalPairs: number;
   autoMerged: number;
@@ -528,12 +515,7 @@ export interface SemanticSearchResult {
 // AI Search Types
 // =============================================================================
 
-export type {
-  AISearchBatch,
-  AISearchJob,
-  AISearchJobStatus,
-  AISearchErrorType,
-} from "../shared/aiSearchContract";
+export type { AISearchBatch, AISearchJob } from "../shared/aiSearchContract";
 
 // =============================================================================
 // Command Palette Zero-State Types
@@ -590,7 +572,7 @@ export interface InteractionSearchHit {
 }
 
 /** The period a search was limited to, and where it came from. */
-export interface InteractionSearchRange {
+interface InteractionSearchRange {
   /** ISO instant, inclusive. Null when open at this end. */
   from: string | null;
   /** ISO instant, exclusive. Null when open at this end. */

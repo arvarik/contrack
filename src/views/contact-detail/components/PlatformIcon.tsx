@@ -31,14 +31,12 @@ export const PLATFORM_COLORS: Record<string, string> = {
   twitter: "text-[#1DA1F2]",
   instagram: "text-[#E4405F]",
   youtube: "text-[#FF0000]",
-  website: "text-on-surface-variant",
-  homepage: "text-on-surface-variant",
 };
 
 /**
  * Extract domain from a URL for favicon resolution.
  */
-export function getDomainFromUrl(url: string): string | null {
+function getDomainFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     return parsed.hostname;
@@ -50,7 +48,7 @@ export function getDomainFromUrl(url: string): string | null {
 /**
  * Get a favicon URL for a domain using Google's favicon service.
  */
-export function getFaviconUrl(url: string): string | null {
+function getFaviconUrl(url: string): string | null {
   const domain = getDomainFromUrl(url);
   if (!domain) return null;
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;

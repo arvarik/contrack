@@ -5,12 +5,11 @@
  *
  * @module components/ImportModal
  */
-import React from "react";
 import { Modal } from "./ui/Modal";
 import { ImportPanel } from "./ImportPanel";
 import type { ImportSummary } from "../api/imports";
 
-export interface ImportModalProps {
+interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -31,5 +30,3 @@ export const ImportModal = ({
     </Modal>
   );
 };
-
-export default ImportModal;

@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "motion/react";
 import { Merge, ArrowRight } from "lucide-react";
 import { ContactPicker } from "../ContactPicker";

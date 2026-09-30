@@ -23,7 +23,7 @@ import type { Tone } from "./styles";
  */
 export const BANNER_DAYS = 7;
 
-export interface FollowUpDue {
+interface FollowUpDue {
   /** Calendar days from today to the due day. Negative once it is past. */
   days: number;
   /** The sentence, in sentence case. */

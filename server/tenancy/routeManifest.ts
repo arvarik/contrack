@@ -692,12 +692,6 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   {
     method: "POST",
-    path: "/api/contacts/merge-batch",
-    class: "scoped",
-    isolated: true,
-  },
-  {
-    method: "POST",
     path: "/api/contacts/merge-cluster",
     class: "scoped",
     isolated: true,
@@ -805,13 +799,6 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     path: "/api/dedupe/suggestions/count",
     class: "scoped",
     isolated: true,
-  },
-  {
-    method: "POST",
-    path: "/api/dev/seed-duplicates",
-    class: "scoped",
-    isolated: true,
-    devOnly: true,
   },
   { method: "GET", path: "/api/export/csv", class: "scoped", isolated: true },
   { method: "GET", path: "/api/export/json", class: "scoped", isolated: true },

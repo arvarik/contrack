@@ -22,7 +22,7 @@ import type { UpcomingBirthday } from "./birthdays";
 export type UpNextGroup =
   "overdue" | "today" | "thisWeek" | "birthdays" | "catch-up";
 
-export type UpNextItemKind = "action_item" | "birthday" | "catch-up";
+type UpNextItemKind = "action_item" | "birthday" | "catch-up";
 
 /**
  * What a row's ring needs, for a contact the row itself does not carry.
@@ -32,7 +32,7 @@ export type UpNextItemKind = "action_item" | "birthday" | "catch-up";
  * the slim contact cache, which the Pulse page already holds, and a row
  * whose contact is missing from it shows the picture alone.
  */
-export interface UpNextContactScore {
+interface UpNextContactScore {
   isTracked: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
@@ -70,7 +70,7 @@ export interface UpNextGroupMeta {
   of?: number;
 }
 
-export interface UpNextResult {
+interface UpNextResult {
   items: UpNextItem[];
   groups: UpNextGroupMeta[];
   counts: {
@@ -83,7 +83,7 @@ export interface UpNextResult {
   };
 }
 
-export interface BuildUpNextOptions {
+interface BuildUpNextOptions {
   overdue?: ActionItem[];
   dueToday?: ActionItem[];
   upcoming?: ActionItem[];
@@ -98,7 +98,7 @@ export interface BuildUpNextOptions {
 }
 
 /** The group headings, in sentence case. */
-export const GROUP_LABELS: Record<UpNextGroup, string> = {
+const GROUP_LABELS: Record<UpNextGroup, string> = {
   overdue: "Overdue",
   today: "Today",
   thisWeek: "This week",

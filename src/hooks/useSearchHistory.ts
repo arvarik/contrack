@@ -27,7 +27,6 @@ import { parseServerTime } from "../lib/datetime";
 import type { HistoryMode } from "../../shared/searchHistory";
 
 export interface SearchHistoryEntry {
-  id?: string;
   query: string;
   mode: "normal" | "ai" | "action" | "people" | "notes" | "palette";
   timestamp: number;
@@ -66,7 +65,6 @@ export const useSearchHistory = () => {
             ? new Date(e.lastRunAt).getTime()
             : Date.now();
         return {
-          id: e.id,
           query,
           mode,
           timestamp: Number.isNaN(timestamp) ? Date.now() : timestamp,

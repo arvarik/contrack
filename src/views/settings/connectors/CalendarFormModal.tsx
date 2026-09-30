@@ -29,7 +29,6 @@ interface CalendarFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   connector?: ConnectorDetail | ConnectorSummary | null;
-  reconnectOnly?: boolean;
 }
 
 export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({

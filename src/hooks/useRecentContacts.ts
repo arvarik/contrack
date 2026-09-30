@@ -107,15 +107,5 @@ export const useRecentContacts = () => {
     [key],
   );
 
-  /** Clear all recent contacts — useful for privacy or testing. */
-  const clearRecent = useCallback(() => {
-    try {
-      sessionStorage.removeItem(key);
-    } catch {
-      // Nothing to remove.
-    }
-    setRecentIds([]);
-  }, [key]);
-
-  return { recentIds, recordVisit, clearRecent };
+  return { recentIds, recordVisit };
 };

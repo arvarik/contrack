@@ -21,7 +21,7 @@ type AvatarStyle = "avataaars" | "bottts" | "lorelei" | "initials";
  * and needs no parameter. Pass a value only where the app knows the theme was
  * chosen explicitly, so an `<img>` cannot be left in the other palette.
  */
-export type AvatarTheme = "light" | "dark";
+type AvatarTheme = "light" | "dark";
 
 /**
  * The seed the route will accept.

@@ -20,18 +20,14 @@
  */
 import { useEffect, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
-import { NAMES } from "../lib/names";
 
 /** Shortcut definitions — exported for reuse in ZeroStateView KBD hints */
-export const NAV_SHORTCUTS: Record<
-  string,
-  { path: string; label: string; keys: string }
-> = {
-  "/": { path: "/", label: NAMES.network.label, keys: "⌘⇧H" },
-  "/pulse": { path: "/pulse", label: NAMES.pulse.label, keys: "⌘⇧P" },
-  "/map": { path: "/map", label: NAMES.map.label, keys: "⌘⇧M" },
-  "/search": { path: "/search", label: NAMES.ask.label, keys: "⌘⇧S" },
-  "/settings": { path: "/settings", label: NAMES.settings.label, keys: "⌘⇧," },
+export const NAV_SHORTCUTS: Record<string, { keys: string }> = {
+  "/": { keys: "⌘⇧H" },
+  "/pulse": { keys: "⌘⇧P" },
+  "/map": { keys: "⌘⇧M" },
+  "/search": { keys: "⌘⇧S" },
+  "/settings": { keys: "⌘⇧," },
 };
 
 export const useGlobalNavShortcuts = () => {

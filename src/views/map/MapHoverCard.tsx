@@ -43,11 +43,11 @@ import { cn } from "../../lib/utils";
 /** Half the 48 px pin plus clearance so the card clears the ring. */
 const PIN_CLEARANCE = 30;
 
-export function formatCardLocalTime(
+function formatCardLocalTime(
   lat: number | null | undefined,
   lng: number | null | undefined,
-  now = new Date(),
 ): string | null {
+  const now = new Date();
   if (lat == null || lng == null) return null;
   const tz = timeZoneAt(lat, lng);
   if (!tz) return null;
@@ -71,7 +71,7 @@ export function formatCardLocalTime(
   }
 }
 
-export function formatLastContact(lastContactedAt?: string | null): string {
+function formatLastContact(lastContactedAt?: string | null): string {
   if (!lastContactedAt) return "Never";
   try {
     return `Last contact ${formatDistanceToNow(new Date(lastContactedAt), { addSuffix: true })}`;
@@ -80,7 +80,7 @@ export function formatLastContact(lastContactedAt?: string | null): string {
   }
 }
 
-export interface MapHoverCardProps {
+interface MapHoverCardProps {
   contact: MapContact;
   pinned: boolean;
   onClose: () => void;

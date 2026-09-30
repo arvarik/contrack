@@ -59,7 +59,7 @@ const TOGGLE_ON = cn(SELECTED_TINT, "border-transparent");
 const TOGGLE_OFF =
   "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30";
 
-export interface MapToolbarProps {
+interface MapToolbarProps {
   map: MapLibreMap | null;
   rawInput: string;
   setRawInput: (v: string) => void;

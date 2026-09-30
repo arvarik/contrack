@@ -10,7 +10,7 @@ import { Sparkline } from "./Sparkline";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import type { DashboardActivityResponse } from "../../../../shared/pulse";
 
-export interface ActivityCardProps {
+interface ActivityCardProps {
   /** Undefined while the page loads it. */
   activity?: DashboardActivityResponse | null;
 }

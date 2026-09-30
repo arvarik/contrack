@@ -295,28 +295,6 @@ describe("cluster merge from overlapping suggestions", () => {
     // queue cannot offer pairs that no longer exist as separate contacts.
     expect(pendingCount()).toBe(before - 2);
   });
-
-  it("clears stranded suggestions after a batch merge too", async () => {
-    const a = await createContact({ name: "Batch A" });
-    const b = await createContact({ name: "Batch B" });
-    const c = await createContact({ name: "Batch C" });
-    seedSuggestion(a, b);
-    seedSuggestion(b, c); // stranded once B merges
-
-    const res = await request(app)
-      .post("/api/contacts/merge-batch")
-      .send({ merges: [{ primaryId: a, duplicateId: b }] });
-    expect(res.status).toBe(200);
-    expect(res.body.succeeded).toBe(1);
-
-    // The (B,C) suggestion references a tombstone now — it must be gone.
-    const stranded = sqlite
-      .prepare(
-        "SELECT COUNT(*) n FROM dedupe_suggestions WHERE status = 'pending' AND (contactIdA = ? OR contactIdB = ?)",
-      )
-      .get(b, b) as { n: number };
-    expect(stranded.n).toBe(0);
-  });
 });
 
 // =============================================================================

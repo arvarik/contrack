@@ -71,10 +71,8 @@ import {
   type InteractionKind,
 } from "../lib/interactionKinds";
 
-export type { InteractionKind };
-
 /** The type control's options, in the order they are shown. */
-export const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
+const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
   { value: "note", label: INTERACTION_LABELS.note, icon: FileText },
   { value: "call", label: INTERACTION_LABELS.call, icon: Phone },
   { value: "meeting", label: INTERACTION_LABELS.meeting, icon: Handshake },
@@ -90,7 +88,7 @@ const PLACEHOLDERS: Record<InteractionKind, string> = {
 };
 
 /** What a Save that cannot go ahead says. */
-export const COMPOSER_MESSAGES = {
+const COMPOSER_MESSAGES = {
   empty: "Write something first",
   contact: "Choose a contact first",
 } as const;
@@ -158,7 +156,7 @@ function titleFor(kind: InteractionKind, hasContent: boolean): string {
   return hasContent ? "Quick Note" : "Action Scheduled";
 }
 
-export interface InteractionComposerProps {
+interface InteractionComposerProps {
   /**
    * Who the interaction is with. Null in the quick interaction dialog until
    * a contact is chosen, and a Save then asks for one.

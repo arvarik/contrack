@@ -34,7 +34,6 @@
  * Built on the shared `Modal`: `role="dialog"`, the focus trap, Escape, and
  * focus back where it was when it closes.
  */
-import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import {

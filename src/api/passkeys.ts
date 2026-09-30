@@ -31,7 +31,7 @@ export interface PasskeySummary {
   lastUsedAt: string | null;
 }
 
-export interface ListPasskeysResponse {
+interface ListPasskeysResponse {
   passkeys: PasskeySummary[];
   nudgeDismissed: boolean;
 }
@@ -118,7 +118,7 @@ export async function dismissPasskeyNudge(): Promise<void> {
 /**
  * Run the WebAuthn registration ceremony for the current user.
  */
-export async function registerPasskey(name?: string): Promise<PasskeySummary> {
+export async function registerPasskey(): Promise<PasskeySummary> {
   const { ceremonyId, options } = await apiJson<{
     ceremonyId: string;
     options: PublicKeyCredentialCreationOptionsJSON;
@@ -134,7 +134,6 @@ export async function registerPasskey(name?: string): Promise<PasskeySummary> {
       method: "POST",
       ...jsonBody({
         ceremonyId,
-        name,
         response,
       }),
     },
@@ -143,7 +142,7 @@ export async function registerPasskey(name?: string): Promise<PasskeySummary> {
   return result.passkey;
 }
 
-export interface SignInWithPasskeyOptions {
+interface SignInWithPasskeyOptions {
   remember?: boolean;
   signal?: AbortSignal;
   useBrowserAutofill?: boolean;

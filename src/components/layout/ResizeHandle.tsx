@@ -44,7 +44,7 @@ export const RESIZE_STEP_LARGE = 64;
  */
 export const DOUBLE_PRESS_MS = 300;
 
-export interface ResizeHandleProps extends PaneWidthBounds {
+interface ResizeHandleProps extends PaneWidthBounds {
   /** The custom property the pane's width class reads. */
   property: `--${string}`;
   /** The `localStorage` key for this device's width. */

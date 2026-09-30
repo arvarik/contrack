@@ -15,7 +15,7 @@
  * @module lib/names
  */
 
-export interface DestinationName {
+interface DestinationName {
   label: string;
   title: string;
   description: string;
@@ -88,8 +88,6 @@ export const NAMES = {
     description: "Who you keep up with, and who you don't",
   },
 } as const satisfies Record<string, DestinationName>;
-
-export type DestinationKey = keyof typeof NAMES;
 
 /**
  * The sentence under the Tracked contacts heading, and the body of the empty

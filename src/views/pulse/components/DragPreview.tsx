@@ -20,7 +20,7 @@ import { MetaDot } from "../../../components/ui/MetaDot";
 import { cn } from "../../../lib/utils";
 import { DRAG_PREVIEW, PULSE_TYPE } from "../lib/pulseStyles";
 
-export interface DragPreviewProps {
+interface DragPreviewProps {
   /** The card's title. */
   title: string;
   /** The column the card lands in, by name. */

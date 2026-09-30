@@ -13,9 +13,8 @@
  *
  * @module components/ui/MetaDot
  */
-import React from "react";
 
-export interface MetaDotProps {
+interface MetaDotProps {
   /** A comma for a screen reader, for a line it reads as one sentence. */
   pause?: boolean;
 }

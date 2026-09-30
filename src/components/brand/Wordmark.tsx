@@ -6,11 +6,10 @@
  * The mark takes `text-primary` and follows the accent; the word is set in
  * the headline face on `text-on-surface`, like every other heading.
  */
-import React from "react";
 import { cn } from "../../lib/utils";
 import { CorvidMark } from "./CorvidMark";
 
-export interface WordmarkProps {
+interface WordmarkProps {
   /** The mark's height, in CSS pixels. The word scales with it. */
   size?: number;
   className?: string;

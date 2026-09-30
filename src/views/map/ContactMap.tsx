@@ -51,12 +51,11 @@ import { toFeatureCollection, type MapContact } from "../../../shared/geo";
 import { useAuth } from "../../components/auth/AuthGate";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { cn } from "../../lib/utils";
 import type { MapLayer } from "../../api/mapViews";
 import { ClusterMarker } from "./ClusterMarker";
 import { ContactMarker } from "./ContactMarker";
 import { MapHoverCard } from "./MapHoverCard";
-import { STACK_LIMIT, StackPopup, type ContactStack } from "./ContactPopup";
+import { STACK_LIMIT, StackPopup, type ContactStack } from "./StackPopup";
 import { prefersReducedMotion } from "./flyTo";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";
@@ -81,10 +80,10 @@ registerPmtilesProtocol();
 export const CONTACTS_SOURCE_ID = "contacts";
 
 /** Clusters split into single pins past this zoom. */
-export const CLUSTER_MAX_ZOOM = 14;
+const CLUSTER_MAX_ZOOM = 14;
 
 /** Pins closer than this many pixels join one cluster. */
-export const CLUSTER_RADIUS = 50;
+const CLUSTER_RADIUS = 50;
 
 /**
  * An invisible layer on the contacts source.
@@ -126,7 +125,7 @@ const DEFAULT_VIEW = { longitude: -95, latitude: 20, zoom: 1 };
 /** Where a pin reports its hover when the map draws no card. */
 const noPreview = () => {};
 
-export interface ContactMapProps {
+interface ContactMapProps {
   contacts: MapContact[];
   /** The contact whose detail is open, drawn above the others. */
   selectedId?: string | null;
@@ -171,7 +170,6 @@ export interface ContactMapProps {
   onMapReady?: (map: MapLibreMap) => void;
   /** The contacts are still loading. */
   loading?: boolean;
-  className?: string;
   onLogNote?: (id: string) => void;
   onAddToList?: (id: string) => void;
   onFollowUp?: (id: string) => void;
@@ -199,7 +197,6 @@ export const ContactMap = ({
   label = "Contact map",
   onMapReady,
   loading = false,
-  className,
   onLogNote,
   onAddToList,
   onFollowUp,
@@ -477,10 +474,7 @@ export const ContactMap = ({
       role="region"
       aria-label={label}
       data-map-ready={ready ? "true" : "false"}
-      className={cn(
-        "contact-map relative w-full h-full overflow-hidden bg-surface-container-low",
-        className,
-      )}
+      className="contact-map relative w-full h-full overflow-hidden bg-surface-container-low"
     >
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm">
