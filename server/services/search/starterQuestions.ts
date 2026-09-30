@@ -33,8 +33,17 @@ import type {
   StarterQuestion,
 } from "../../../shared/starterQuestions.ts";
 
-/** The most questions a pool holds. */
-export const POOL_LIMIT = 40;
+/**
+ * The most questions a pool holds.
+ *
+ * The page shows six of them at random, so the pool is a large hidden list:
+ * at 40 it was the same forty questions in another order, and a network of a
+ * few thousand people was asked about its six biggest companies and nothing
+ * else. 500 questions are about 22 KB of JSON, which the app fetches once in
+ * an idle moment, and a build is the same few grouped reads however long the
+ * list. The pool still holds no more questions than the account has contacts.
+ */
+export const POOL_LIMIT = 500;
 /**
  * From this many contacts, a value must be shared by two people to become a
  * question. Below it, one person is enough, or a small network has no pool.

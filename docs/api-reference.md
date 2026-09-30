@@ -832,7 +832,7 @@ industry and a city together).
 
 - Each question names a value that two of your active contacts share, or one
   contact in an account of under ten.
-- The pool holds at most 40 questions, and never more than you have
+- The pool holds at most 500 questions, and never more than you have
   contacts. With no contacts it is `[]`.
 - The server keeps the pool per account and search revision, and builds it
   again after an import.

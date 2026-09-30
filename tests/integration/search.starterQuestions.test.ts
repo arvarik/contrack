@@ -146,7 +146,9 @@ describe("the starter question pool", () => {
     await seed(NETWORK.slice(0, 0));
     expect(buildStarterQuestions(scope())).toEqual([]);
 
-    // A large, varied network fills the pool to its limit and no further.
+    // A varied network of a hundred people, well past the ten from which a
+    // value must be shared by two. The pool holds every such value, far more
+    // than the six the page draws, and never more than there are people.
     await seed(
       Array.from({ length: 120 }, (_, i) => ({
         name: `Person ${i}`,
@@ -157,7 +159,32 @@ describe("the starter question pool", () => {
         interests: [`Hobby ${String.fromCharCode(65 + (i % 8))}`],
       })),
     );
-    expect(buildStarterQuestions(scope())).toHaveLength(POOL_LIMIT);
+    const medium = buildStarterQuestions(scope());
+    expect(medium.length).toBeGreaterThan(40);
+    expect(medium.length).toBeLessThanOrEqual(120);
+  });
+
+  it("is a large hidden list on a large network: many times the six it shows, and no more than the contacts", async () => {
+    // 300 people, each value shared by several: 25 industries, 60 cities, 150
+    // companies, 40 roles, 30 hobbies and 20 tags.
+    await seed(
+      Array.from({ length: 300 }, (_, i) => ({
+        name: `Person ${i}`,
+        industry: `Industry ${i % 25}`,
+        location: `City ${i % 60}, Somewhere`,
+        company: `Company ${i % 150}`,
+        // A role with a digit in it is not a title, so the pool leaves it out.
+        role: `Role ${String.fromCharCode(65 + (i % 26))}${i % 40 > 25 ? "X" : ""}`,
+        interests: [`Hobby ${i % 30}`],
+        tags: [`tag${i % 20}`],
+      })),
+    );
+    const pool = buildStarterQuestions(scope());
+    expect(pool.length).toBeGreaterThan(100);
+    expect(pool.length).toBeLessThanOrEqual(Math.min(POOL_LIMIT, 300));
+    // No question twice, and every kind takes part.
+    expect(new Set(texts(pool)).size).toBe(pool.length);
+    expect(new Set(pool.map((q) => q.kind)).size).toBeGreaterThanOrEqual(6);
   });
 
   it("finds the people each question names, with no model", async () => {
