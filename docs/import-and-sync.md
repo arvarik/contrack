@@ -274,11 +274,11 @@ is stored in the database as it is. Treat it like a password.
 Open **Settings → Export** and select a format. Each file holds your own data
 only, never another account's on the instance.
 
-| Format                 | What it holds                                                                                                     | Use it for                                                                         |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **vCard (.vcf)**       | Your contacts, archived ones included. Not the Trash and not ghosts                                               | Apple Contacts, Google Contacts, Outlook, a phone, or an import back into Contrack |
-| **Spreadsheet (.csv)** | One row per contact, archived ones included, not the Trash. Emails, phones, and tags are joined into single cells | A spreadsheet                                                                      |
-| **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges              | A complete copy of your data                                                       |
+| Format                 | What it holds                                                                                            | Use it for                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **vCard (.vcf)**       | Your contacts, archived ones included. Not the Trash, ghosts, or contacts merged into another            | Apple Contacts, Google Contacts, Outlook, a phone, or an import back into Contrack |
+| **Spreadsheet (.csv)** | The same contacts as the vCard file, one row each. Emails, phones, and tags are joined into single cells | A spreadsheet                                                                      |
+| **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A complete copy of your data                                                       |
 
 The CSV has the columns Name, First Name, Last Name, Company, Role, Location,
 Industry, Website, Emails, Phones, and Tags. Then come Archived, Tracked,

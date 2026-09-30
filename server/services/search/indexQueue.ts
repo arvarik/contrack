@@ -204,7 +204,13 @@ export async function drainIndexQueue(
               .run(item.contactId);
           } else if (embedRes.status === "skipped") {
             result.skipped++;
-            if (embedRes.reason === "inactive_or_deleted") {
+            // A contact whose owner turned AI off leaves the queue as well.
+            // It counts as missing, and "Index missing" queues it again once
+            // the owner turns AI back on.
+            if (
+              embedRes.reason === "inactive_or_deleted" ||
+              embedRes.reason === "ai_off"
+            ) {
               sqlite
                 .prepare("DELETE FROM search_index_queue WHERE contactId = ?")
                 .run(item.contactId);

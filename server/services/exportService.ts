@@ -148,13 +148,19 @@ export function csvCell(value: unknown): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** One account's flat contacts CSV (active + archived; trash excluded). */
+/**
+ * One account's flat contacts CSV.
+ *
+ * The same rows as the vCard file: active and archived contacts, and not the
+ * Trash, ghosts or merged-away contacts (`buildContactsVcf` says why).
+ */
 export function buildContactsCsv(scope: Scope): string {
   const contacts = contactRepo.hydrateMany(
     sqlite
       .prepare(
         `SELECT * FROM contacts
-          WHERE ownerId = ? AND deletedAt IS NULL
+          WHERE ownerId = ? AND deletedAt IS NULL AND isGhost = 0
+            AND canonicalId IS NULL
           ORDER BY name COLLATE NOCASE ASC`,
       )
       .all(scope.ownerId),
@@ -214,10 +220,13 @@ export function buildContactsCsv(scope: Scope): string {
  * is one the person deleted, and handing it back in the file they are taking
  * to another address book undoes their decision.
  *
- * Ghosts are excluded, and that is the one place this differs from the CSV. A
- * ghost is a name Contrack extracted from a note and has no card of its own to
- * write — no email, no phone, often no surname. Exporting a thousand of them
- * into somebody's phone is not migration.
+ * Ghosts are excluded. A ghost is a name Contrack extracted from a note and
+ * has no card of its own to write — no email, no phone, often no surname.
+ * Exporting a thousand of them into somebody's phone is not migration.
+ *
+ * Merged-away contacts are excluded too. After a merge the kept contact holds
+ * the emails, phones and notes of both, and the other row stays only so the
+ * merge can be undone. Exporting it writes the same person twice.
  */
 export function buildContactsVcf(scope: Scope): string {
   const contacts = contactRepo.hydrateMany(
@@ -225,6 +234,7 @@ export function buildContactsVcf(scope: Scope): string {
       .prepare(
         `SELECT * FROM contacts
           WHERE ownerId = ? AND deletedAt IS NULL AND isGhost = 0
+            AND canonicalId IS NULL
           ORDER BY name COLLATE NOCASE ASC`,
       )
       .all(scope.ownerId),

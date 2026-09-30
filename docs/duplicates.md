@@ -271,8 +271,9 @@ the two automatic checks on or off. While a setting differs from its default,
   household address such as `park.family@` is not proof of one person. It
   counts like a shared company.
 - **A known pair.** Once you mark two contacts as different people, the pair
-  does not come back to **Possible duplicates**. The automatic checks also
-  leave alone two people mentioned in the same note.
+  does not come back to **Possible duplicates**, and a scan does not merge it,
+  even when the two share an email address or a phone number. Every check
+  also leaves alone two people mentioned in the same note.
 
 Scripts can start a scan and merge contacts too. See the
 [REST API reference](api-reference.md).

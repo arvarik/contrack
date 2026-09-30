@@ -11,7 +11,11 @@
 
 import { Router } from "express";
 import { getProvider } from "../ai/providerRegistry.ts";
-import { capabilityTarget, resolveCapability } from "../ai/capabilities.ts";
+import {
+  capabilityTarget,
+  isResearchOff,
+  resolveCapability,
+} from "../ai/capabilities.ts";
 import { GEMINI_REGISTRY } from "../ai/routing/registry.ts";
 import type { DiagnosticsSnapshot } from "../ai/types.ts";
 import { getSearxngUrl } from "../services/aiSearch/strategies/searxng.ts";
@@ -71,8 +75,8 @@ router.get(
  * for the Enrichment page. It used to answer from Gemini's local grounding
  * pool, and only when AI_PROVIDER was gemini, so it was wrong whenever
  * research ran elsewhere. Now: research resolves to a provider (or SearXNG is
- * set), and when that provider is Gemini, at least one of its search models
- * is not paused.
+ * set and research is not "Off"), and when that provider is Gemini, at least
+ * one of its search models is not paused.
  */
 router.get(
   "/grounding-capacity",
@@ -81,7 +85,8 @@ router.get(
     const research = resolveCapability("research");
     const researchRuns24h = researchRunsLastDay();
     if (!research) {
-      const searxng = !!getSearxngUrl() && !!resolveCapability("deep");
+      const searxng =
+        !!getSearxngUrl() && !!resolveCapability("deep") && !isResearchOff();
       return res.json({
         hasCapacity: searxng,
         provider: searxng ? "searxng" : null,

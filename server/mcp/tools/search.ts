@@ -20,6 +20,7 @@ import {
 } from "../../../shared/searchFacets.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
+import { aiAllowedFor } from "../../middleware/aiAllowed.ts";
 
 export function registerSearchTools(
   server: McpServer,
@@ -59,10 +60,14 @@ export function registerSearchTools(
     },
     trackedTool(onError, async (params) => {
       const rid = req.requestId ?? "mcp-search";
+      // The same rule as Ask Contrack in the app: with AI off for the token's
+      // account or for the instance, the search is local and runs no model.
       const result = await searchService.semanticSearch(
         scope,
         params.query,
         rid,
+        undefined,
+        { aiAllowed: aiAllowedFor(req) },
       );
       let matches = result.matches;
 

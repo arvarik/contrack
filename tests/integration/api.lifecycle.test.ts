@@ -236,4 +236,37 @@ describe("full export", () => {
     expect(res.text).toContain('"Comma, Inc Person"');
     expect(res.text).toContain('"Quotes ""R"" Us, LLC"');
   });
+
+  it("leaves ghosts and merged-away contacts out of the CSV, like the vCard file", async () => {
+    // A ghost is a name pulled out of a note, not a contact of its own.
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, isGhost)
+         SELECT 'ghost-csv', ownerId, 'Ghost Csv Person', 1 FROM contacts LIMIT 1`,
+      )
+      .run();
+    // After a merge the kept contact holds both, so the other row would be
+    // the same person twice.
+    const kept = await createContact({
+      name: "Kept Csv Person",
+      emails: ["kept@csv.example"],
+    });
+    const mergedAway = await createContact({
+      name: "Merged Csv Person",
+      emails: ["gone@csv.example"],
+    });
+    const merge = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId: kept, duplicateId: mergedAway });
+    expect(merge.status).toBe(200);
+
+    const res = await request(app).get("/api/export/csv");
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain("Ghost Csv Person");
+    expect(res.text).not.toContain("Merged Csv Person");
+    const keptRow = res.text
+      .split("\r\n")
+      .find((line) => line.startsWith("Kept Csv Person,"));
+    expect(keptRow).toContain("gone@csv.example");
+  });
 });

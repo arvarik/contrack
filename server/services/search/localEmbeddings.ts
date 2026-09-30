@@ -48,6 +48,7 @@ import { unflatten } from "../../workers/protocol.ts";
 import {
   resolveEmbeddings,
   embedWithProvider,
+  mayEmbedContactsFor,
   probeDimension,
   getEmbeddingsState,
   setEmbeddingsState,
@@ -846,6 +847,12 @@ async function runBackfill(): Promise<number> {
     remaining = false;
     for (const queue of queues) {
       if (queue.done) continue;
+      // Read each round, because the owner can turn AI off while a provider
+      // backfill runs.
+      if (!mayEmbedContactsFor(queue.ownerId)) {
+        queue.done = true;
+        continue;
+      }
       const round = stmts.missing.all(
         queue.ownerId,
         queue.cursor,
@@ -900,14 +907,17 @@ export async function embedContact(
     .prepare(
       // tenant-lint: allow owner-checked by caller
       `
-    SELECT id, name, company, role, location, industry, headline, about, preferences, searchExpansion
+    SELECT id, ownerId, name, company, role, location, industry, headline, about, preferences, searchExpansion
     FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}
   `,
     )
-    .get(contactId) as SearchTextRow | undefined;
+    .get(contactId) as (SearchTextRow & { ownerId: string }) | undefined;
 
   if (!row) {
     return { status: "skipped", reason: "inactive_or_deleted" };
+  }
+  if (!mayEmbedContactsFor(row.ownerId)) {
+    return { status: "skipped", reason: "ai_off" };
   }
 
   const tags = (

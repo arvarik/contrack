@@ -33,6 +33,7 @@ import { cn } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
 
 import { usePageTitle } from "../../../hooks/usePageTitle";
+import { useAiAllowed } from "../../../hooks/useAiAllowed";
 
 import {
   useContact,
@@ -194,13 +195,15 @@ export const ContactProfile = ({
   const mainTab: Section = activeTab === "dossier" ? "dossier" : "timeline";
 
   // ── Dropzone (file uploads & .eml ingestion) ──────────────────────────
+  // With AI off, the server saves an .eml with no summary, like any file.
+  const aiAllowed = useAiAllowed();
   const onDrop = useCallback(
     (acceptedFiles: globalThis.File[]) => {
       if (acceptedFiles.length > 0 && id) {
         acceptedFiles.forEach((file) => {
           const isEml = file.name.toLowerCase().endsWith(".eml");
           const toastId = toast.loading(
-            isEml
+            isEml && aiAllowed
               ? `Summarizing email thread with AI...`
               : `Uploading "${file.name}"...`,
           );
@@ -208,10 +211,10 @@ export const ContactProfile = ({
           addAttachment.mutate(
             { contactId: id, file },
             {
-              onSuccess: () => {
+              onSuccess: (interaction) => {
                 toast.dismiss(toastId);
                 toast.success(
-                  isEml
+                  isEml && interaction.content
                     ? `Email imported & summarized!`
                     : `Attached "${file.name}"`,
                 );
@@ -227,7 +230,7 @@ export const ContactProfile = ({
         });
       }
     },
-    [id, addAttachment],
+    [id, addAttachment, aiAllowed],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

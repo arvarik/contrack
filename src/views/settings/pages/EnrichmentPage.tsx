@@ -29,7 +29,7 @@ export const EnrichmentPage = () => {
           id="auto-enrich"
           title="Enrich new contacts automatically"
           prefKey="autoEnrich"
-          description="Researches every contact you add, at Standard depth"
+          description="Researches each contact that you add yourself, at Standard depth. Not the contacts from an import, a sync or an MCP client"
           inline
         >
           <Switch
