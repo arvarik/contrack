@@ -3,24 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import type { ActionItem, ZeroStatePayload } from "../types";
 import type {
-  ActivityDay,
   CatchUpCard,
   DashboardActivityResponse,
-  ContactCard,
-  MomentumCard,
-  StreakResult,
   TrackingSummary,
 } from "../../shared/pulse";
 
-export type {
-  ActivityDay,
-  CatchUpCard,
-  DashboardActivityResponse,
-  ContactCard,
-  MomentumCard,
-  StreakResult,
-  TrackingSummary,
-};
+export type { CatchUpCard, TrackingSummary };
 
 export interface DashboardPayload {
   overdue: ActionItem[];

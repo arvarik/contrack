@@ -50,11 +50,7 @@ export const SPOKE_FILTER_IDS: readonly SpokeFilter[] = [
   "never",
 ];
 
-export const TRACKED_ORDER_IDS: readonly TrackedOrder[] = [
-  "name",
-  "spoke",
-  "recent",
-];
+const TRACKED_ORDER_IDS: readonly TrackedOrder[] = ["name", "spoke", "recent"];
 
 /** The page's three choices. */
 export interface TrackedView {

@@ -118,8 +118,6 @@ const ALL_PRIMARY_ALPHAS = [...WASH_ALPHAS];
 const FILLS: [keyof Palette, keyof Palette][] = [
   ["on-primary", "primary"],
   ["on-error", "error"],
-  ["on-primary-container", "primary-container"],
-  ["on-secondary-container", "secondary-container"],
 ];
 
 /** Every (text, background) pair one palette has to answer for. */
@@ -338,18 +336,11 @@ describe("deriveAccent", () => {
             hexToRgb(tokens["on-primary"]),
             hexToRgb(tokens.primary),
           ),
-          onContainer: contrast(
-            hexToRgb(tokens["on-primary-container"]),
-            hexToRgb(tokens["primary-container"]),
-          ),
         };
       })
-      .filter((r) => r.onPrimary < AA || r.onContainer < AA)
+      .filter((r) => r.onPrimary < AA)
       .slice(0, 10)
-      .map(
-        (r) =>
-          `${r.hex} ${r.mode}: on-primary ${r.onPrimary.toFixed(2)}, on-container ${r.onContainer.toFixed(2)}`,
-      );
+      .map((r) => `${r.hex} ${r.mode}: on-primary ${r.onPrimary.toFixed(2)}`);
     expect(failures).toEqual([]);
   });
 

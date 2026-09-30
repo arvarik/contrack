@@ -72,15 +72,6 @@ const MODES: readonly { value: SearchMode; label: string }[] = [
 // ─── Main SearchView Component ────────────────────────────────────────────────
 
 export const SearchView = () => {
-  const mountStart = useRef(performance.now());
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log(
-        `[Perf] SearchView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, []);
-
   const {
     lastAISearchQuery,
     setLastAISearchQuery,

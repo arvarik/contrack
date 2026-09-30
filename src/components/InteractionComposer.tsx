@@ -71,8 +71,6 @@ import {
   type InteractionKind,
 } from "../lib/interactionKinds";
 
-export type { InteractionKind };
-
 /** The type control's options, in the order they are shown. */
 export const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
   { value: "note", label: INTERACTION_LABELS.note, icon: FileText },

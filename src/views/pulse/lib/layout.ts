@@ -28,9 +28,7 @@ export const PULSE_CARD_IDS = [
 
 export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
 
-export const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(
-  PULSE_CARD_IDS,
-);
+const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(PULSE_CARD_IDS);
 
 export const MAX_CARDS_PER_COL = 20;
 

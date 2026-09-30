@@ -52,14 +52,7 @@ export interface Shortcut {
 }
 
 /** The modifier keys, as `keys` prints them. */
-export const MODIFIER_KEYS: readonly string[] = [
-  "⌘",
-  "⇧",
-  "⌥",
-  "⌃",
-  "Ctrl",
-  "Alt",
-];
+const MODIFIER_KEYS: readonly string[] = ["⌘", "⇧", "⌥", "⌃", "Ctrl", "Alt"];
 
 /** True when the keys are pressed together rather than one or the other. */
 export const isCombination = (keys: readonly string[]): boolean =>

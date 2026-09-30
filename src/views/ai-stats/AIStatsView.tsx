@@ -1,5 +1,5 @@
 /**
- * AIStatsView — Main page component for /settings/ai-stats.
+ * AIStatsView — Main page component for /settings/ai-usage.
  *
  * Three-zone layout:
  * 1. Summary Bar + KPI row (from useAIStatsSummary)

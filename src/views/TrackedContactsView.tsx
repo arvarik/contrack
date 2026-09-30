@@ -4,9 +4,9 @@
  * A settings page, under Your data, at `/settings/tracked`: the rail stays
  * beside it, the way it does beside every other settings page. It has two
  * more doors, the Tracked chip's Manage link on the Network page and the
- * Keeping up card on Pulse, and the old `/tracked` path leads here too. It
- * scrolls itself, so the virtualised list has its own scroller, and the
- * shell draws its header with Select in the header's actions.
+ * Keeping up card on Pulse. It scrolls itself, so the virtualised list has
+ * its own scroller, and the shell draws its header with Select in the
+ * header's actions.
  *
  * From the top:
  *
@@ -138,9 +138,7 @@ export interface TrackedGroup {
   contacts: Contact[];
 }
 
-export type { TrackedOrder };
-
-export const GROUP_TITLES: Record<TrackedGroupId, string> = {
+const GROUP_TITLES: Record<TrackedGroupId, string> = {
   "at-risk": "At risk",
   fading: "Fading",
   strong: "Strong",
@@ -1036,5 +1034,3 @@ export const TrackedContactsView = () => {
     </div>
   );
 };
-
-export default TrackedContactsView;

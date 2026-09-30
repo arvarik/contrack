@@ -331,9 +331,7 @@ export function browserTimeZone(): string | undefined {
 }
 
 /** The query string for a note search, with empty fields left out. */
-export function interactionSearchQueryString(
-  params: InteractionSearchParams,
-): string {
+function interactionSearchQueryString(params: InteractionSearchParams): string {
   const query = new URLSearchParams();
   const entries: [string, string | number | undefined][] = [
     ["q", params.q],

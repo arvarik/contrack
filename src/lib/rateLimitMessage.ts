@@ -22,10 +22,9 @@
 import { ApiError, rateLimitFacts } from "../api/client";
 
 /** What kind of work was refused. Only changes the noun in the sentence. */
-export type LimitedWork = "scan" | "enrichment" | "request";
+type LimitedWork = "enrichment" | "request";
 
 const OTHERS_WORK: Record<LimitedWork, string> = {
-  scan: "Another user's scan is running",
   enrichment: "Another user's enrichment is running",
   request: "Another user is using this right now",
 };

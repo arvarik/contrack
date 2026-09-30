@@ -19,8 +19,6 @@ import { useCallback } from "react";
 import { usePreferences } from "../contexts/PreferencesContext";
 import type { MergePreset } from "../api/preferences";
 
-export type { MergePreset };
-
 export function useDedupeSettings() {
   const { preferences, setPreference } = usePreferences();
   const preset = preferences.dedupePreset;

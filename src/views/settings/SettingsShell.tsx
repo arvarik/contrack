@@ -314,5 +314,3 @@ export const SettingsShell = () => {
     </SettingsHeaderContext.Provider>
   );
 };
-
-export default SettingsShell;

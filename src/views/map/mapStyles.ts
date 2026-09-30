@@ -17,16 +17,12 @@ import type { MapStyleUrls } from "../../../shared/geo";
 export type { MapStyleUrls };
 
 /**
- * OpenFreeMap's public styles. `positron` and `dark` are the defaults, the
- * closest match to the minimal light and dark raster basemaps the map used
- * before. The other three are one-line alternatives.
+ * OpenFreeMap's public styles the map uses by default: `positron` for the
+ * light palette and `dark` for the dark one.
  */
 export const OPENFREEMAP_STYLES = {
   positron: "https://tiles.openfreemap.org/styles/positron",
   dark: "https://tiles.openfreemap.org/styles/dark",
-  liberty: "https://tiles.openfreemap.org/styles/liberty",
-  bright: "https://tiles.openfreemap.org/styles/bright",
-  fiord: "https://tiles.openfreemap.org/styles/fiord",
 } as const;
 
 export const DEFAULT_MAP_STYLES: MapStyleUrls = {

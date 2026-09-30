@@ -6,7 +6,6 @@
 @theme {
   --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-label: "Inter", ui-sans-serif, system-ui, sans-serif;
 
   /* ===================================================================
    * THE CONTRACK DESIGN SYSTEM
@@ -51,7 +50,6 @@
   /* Light end of the branding gradient and pale fills only — never text. */
   --color-primary-container: #47befd;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #001e2f;
   /* Text and icons drawn ON a bg-primary/10, /15 or /20 wash: the active
      filter pill, the selected row in the list manager, the audit range chips
      and about twenty hover states. Four lightness steps below the primary,
@@ -90,8 +88,6 @@
 
   /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
-  --color-secondary-container: #cfe6f2;
-  --color-on-secondary-container: #40555f;
 
   /* ── Status ─────────────────────────────────────────────────────────
    * Text and icons only. The pale `bg-*-500/10` washes these sit on stay
@@ -248,7 +244,6 @@
     --color-primary-dim: #8ed4f4;
     --color-primary-container: #00506f;
     --color-on-primary: #00242f;
-    --color-on-primary-container: #c2e7fb;
     /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
     --color-on-primary-wash: #6ec6ee;
     --color-corvid-eye: #7fd6ff;
@@ -257,8 +252,6 @@
     --color-on-ai-wash: #bfa3f9;
     --color-highlight: #5a4116;
     --color-secondary: #b0c2ca;
-    --color-secondary-container: #2d4049;
-    --color-on-secondary-container: #cfe6f2;
     --color-success: #5ad3a3;
     --color-warning: #f1b569;
     --color-info: #72c5ec;
@@ -284,7 +277,6 @@
   --color-primary-dim: #8ed4f4;
   --color-primary-container: #00506f;
   --color-on-primary: #00242f;
-  --color-on-primary-container: #c2e7fb;
   /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
   --color-on-primary-wash: #6ec6ee;
   --color-corvid-eye: #7fd6ff;
@@ -293,8 +285,6 @@
   --color-on-ai-wash: #bfa3f9;
   --color-highlight: #5a4116;
   --color-secondary: #b0c2ca;
-  --color-secondary-container: #2d4049;
-  --color-on-secondary-container: #cfe6f2;
   --color-success: #5ad3a3;
   --color-warning: #f1b569;
   --color-info: #72c5ec;

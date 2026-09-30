@@ -72,15 +72,6 @@ const QUEUE_KEYS = new Set(["j", "k", "d", "s", "l"]);
 const logNote = (contactId: string) => openQuickNote(contactId);
 
 const PulseOffice = () => {
-  const mountStart = useRef(performance.now());
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log(
-        `[Perf] PulseView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, []);
-
   const navigate = useNavigate();
 
   usePageTitle(NAMES.pulse.title);

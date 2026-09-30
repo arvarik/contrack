@@ -655,9 +655,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./pages/ExportPage"),
   },
   {
-    // A page in the shell like every other: the rail stays beside it. The
-    // old `/tracked` path redirects here (App.tsx). It scrolls itself, so
-    // its virtualised list has a scroller of its own.
+    // A page in the shell like every other: the rail stays beside it. It
+    // scrolls itself, so its virtualised list has a scroller of its own.
     id: "tracked",
     path: "/settings/tracked",
     title: NAMES.tracked.title,

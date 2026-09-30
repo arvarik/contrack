@@ -3,8 +3,7 @@
 // =============================================================================
 // Every enrichment is recorded on the contact (`aiResearch`): when it ran,
 // which models, what it added field by field, the searches, the facts and the
-// pages. A second enrichment adds to the record; the old dossier text that
-// copied the other cards is replaced by it.
+// pages. A second enrichment adds to the record.
 // =============================================================================
 
 import { beforeEach, describe, it, expect } from "vitest";
@@ -161,23 +160,15 @@ describe("the research record", () => {
     expect(enrichmentContact(scope(), id).location).toBe("New York, NY");
   });
 
-  it("replaces the old dossier text, and counts the enrichment that wrote it", () => {
+  it("counts an enrichment that left no record in the history", () => {
     sqlite
-      .prepare(
-        "UPDATE contacts SET aiBackground = ?, aiHydratedAt = ? WHERE id = ?",
-      )
-      .run(
-        "About.\n\n### Sources\n- [Source 1](<https://vertexaisearch.cloud.google.com/grounding-api-redirect/X>)",
-        "2026-09-26T22:21:58.046Z",
-        id,
-      );
+      .prepare("UPDATE contacts SET aiHydratedAt = ? WHERE id = ?")
+      .run("2026-09-26T22:21:58.046Z", id);
     const before = enrichmentContact(scope(), id);
     expect(researchHistory(before)?.runs).toEqual([
       expect.objectContaining({ at: "2026-09-26T22:21:58.046Z", models: [] }),
     ]);
     merge({ location: "New York, NY" }, { citations: [finra] });
-    const after = enrichmentContact(scope(), id);
-    expect(after.aiBackground).toBeNull();
     expect(record().runs.map((run) => run.models.length)).toEqual([0, 2]);
   });
 
@@ -201,7 +192,7 @@ describe("the research record", () => {
     expect(await outcome()).toBeNull();
   });
 
-  it("keeps notes that the old merge did not write", () => {
+  it("keeps notes that came from an import or the API", () => {
     sqlite
       .prepare("UPDATE contacts SET aiBackground = ? WHERE id = ?")
       .run("Met at the Example alumni dinner.", id);

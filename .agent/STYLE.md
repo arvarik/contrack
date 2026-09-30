@@ -189,20 +189,20 @@ keyboard chips.
 
 #### Shared class tokens (`src/lib/styles.ts`)
 
-| Token                                           | Size          | Use                                                            |
-| ----------------------------------------------- | ------------- | -------------------------------------------------------------- |
-| `LABEL`, `LABEL_PRIMARY`                        | 11 px, caps   | Micro labels, tracking 0.08em                                  |
-| `SECTION_HEADING`                               | 11 px, caps   | Card titles ("DETAILS"), one step below body                   |
-| `FIELD_LABEL`                                   | 12 px         | The name above one value ("Location"), sentence case           |
-| `META_LINE`                                     | 14 px         | Facts under a name, joined by a middle dot                     |
-| `KBD_SM`, `MICRO_BADGE`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                                  |
-| `TAG_PILL`, `SOURCE_BADGE`                      | 11 px         | Pills                                                          |
-| `ICON_BTN`                                      | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)     |
-| `PAGE_TITLE`                                    | 24 / 30 px    | A page's title, its name and its `h1` (see \"Page header\")    |
-| `PAGE_TITLE_SUFFIX`                             | 24 / 30 px    | The title line's second part in the variant ink: Pulse's day   |
-| `PAGE_EYEBROW`                                  | 13 px         | The small line above a title: the back link to the parent page |
-| `PAGE_DESCRIPTION`                              | 14 / 16 px    | The one line under a title                                     |
-| `SEARCH_INPUT`                                  | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm`    |
+| Token                            | Size          | Use                                                            |
+| -------------------------------- | ------------- | -------------------------------------------------------------- |
+| `LABEL`, `LABEL_PRIMARY`         | 11 px, caps   | Micro labels, tracking 0.08em                                  |
+| `SECTION_HEADING`                | 11 px, caps   | Card titles ("DETAILS"), one step below body                   |
+| `FIELD_LABEL`                    | 12 px         | The name above one value ("Location"), sentence case           |
+| `META_LINE`                      | 14 px         | Facts under a name, joined by a middle dot                     |
+| `KBD_SM`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                                  |
+| `TAG_PILL`, `SOURCE_BADGE`       | 11 px         | Pills                                                          |
+| `ICON_BTN`                       | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)     |
+| `PAGE_TITLE`                     | 24 / 30 px    | A page's title, its name and its `h1` (see \"Page header\")    |
+| `PAGE_TITLE_SUFFIX`              | 24 / 30 px    | The title line's second part in the variant ink: Pulse's day   |
+| `PAGE_EYEBROW`                   | 13 px         | The small line above a title: the back link to the parent page |
+| `PAGE_DESCRIPTION`               | 14 / 16 px    | The one line under a title                                     |
+| `SEARCH_INPUT`                   | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm`    |
 
 ### Radius System
 
