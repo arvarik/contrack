@@ -8,7 +8,7 @@
  */
 import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
-import { expectPageAccessible } from "./fixtures/a11y";
+import { expectPageAccessible, settleAnimations } from "./fixtures/a11y";
 import type { ContrackInstance } from "./fixtures/instance";
 import type { Page } from "@playwright/test";
 
@@ -741,6 +741,11 @@ test.describe("Pulse Office", () => {
     await expect(
       page.locator('[data-card-id="activity"]').locator('svg[role="img"]'),
     ).toBeVisible();
+    // The suite runs with reduced motion, which gives every property change
+    // a 0.01 ms transition. A line that has just landed can still read its
+    // old font size for one frame, and that is 4 px of height. Measure once
+    // nothing is moving.
+    await settleAnimations(page);
     const atRest = await boxes();
 
     // Customize from the More menu
