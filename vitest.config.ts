@@ -8,9 +8,8 @@ export default defineConfig({
       /**
        * A floor, not a target.
        *
-       * `docs/ci-and-release.md` said coverage was collected and nothing was
-       * enforced, which made it a number somebody could read and nothing
-       * more. The matrix and manifest tests are what hold the isolation
+       * Coverage used to be collected and not enforced, which made it a
+       * number somebody could read and nothing more. The matrix and manifest tests are what hold the isolation
        * guarantee up, and before this a pull request could delete them and go
        * green.
        *

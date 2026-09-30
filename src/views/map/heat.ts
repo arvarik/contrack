@@ -5,9 +5,8 @@
  * is one point), weighs every person, scales to the densest place, and
  * colours density with a ramp that turns with the basemap: darkest for the
  * most over a light map, brightest over a dark one. From zoom 7 it fades,
- * and the pins come back. `docs/features/map-view.md` ("Map Layers") has
- * the reasons, from MapLibre's heatmap example and the cartography on
- * colour ramps.
+ * and the pins come back. The approach follows MapLibre's heatmap example
+ * and the usual cartography of colour ramps.
  *
  * @module views/map/heat
  */

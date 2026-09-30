@@ -1,763 +1,219 @@
 # Architecture
 
-_This document acts as the definitive anchor for understanding system design, data models, API contracts, and technology boundaries. Update this document during the Design and Review phases._
-
-## 0. Project Topology
-
-**Topology:** `[frontend, backend, ml-ai]`
-
-_Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `backend.md`, and `ml-ai.md`) from `~/.gemini/antigravity/global_workflows/` before proceeding with any workflow step. These profiles enforce component state coverage, data integrity testing, Evaluation-Driven Development (EDD), circuit breaker cost controls, and prompt versioning._
-
-## 1. Tech Stack & Infrastructure
-
-- **Language / Runtime**: TypeScript 7 / Node.js 26.10+. Node strips the types and runs the `.ts` files itself, with no tsx or build step for the server
-- **Frontend**: React 19 via Vite 8, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Motion 13 (`motion/react`) for layout animations, and MapLibre GL JS via `@vis.gl/react-maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
-- **Backend / API**: Express 5, run by Node 26 as `node server.ts`, in development and in the Docker image. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
-- **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
-- **AI Provider**: Capability-routed multi-provider — Google Gemini via `@google/genai`, OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`, plus a generic OpenAI-compatible adapter for self-hosted servers. Providers are resolved per capability at call time (see `capabilities.ts`), not fixed at startup; `AI_PROVIDER` is now only the Auto-mode preference. Local embeddings via `@huggingface/transformers` (Transformers.js).
-- **Deployment**: Local-first / Self-hosted. Single Node.js process serves both API and frontend.
-- **Package Management**: npm
-- **Styling**: Tailwind CSS v4 via `@tailwindcss/vite` plugin.
-
-## 2. System Boundaries & Data Flow
-
-### Request / Data Flow
-
-- **Client to Server**: React Components → React Query (`useQuery`/`useMutation` in `src/api/`) → Express API routes (`server/routes/`) → Services (`server/services/`) → Repositories (`server/repositories/`) → Drizzle ORM → SQLite. **Never** write native `useEffect` fetch loops.
-- **Cold-Boot Prefetch**: `src/main.tsx` calls `queryClient.prefetchQuery` for `['contacts']` before the first render, ensuring Cmd+K has 0ms client-side data availability.
-
-### Map View & Viewport Analytics
-
-- **Pure Stats Computation**: `src/views/map/mapStats.ts` defines `computeMapStats` to calculate in-view counts, at-risk/overdue contacts, average health score, top industries, top companies, top tags, and time zones from bounding-box coordinates.
-- **Reactive Viewport Tracking**: `src/views/map/useMapStats.ts` debounces `map.on("moveend")` by 150ms to keep stats fresh without camera stutter.
-- **Stats Strip**: `src/views/map/StatsStrip.tsx` renders bottom-left aggregate chips with facet filtering on click and live status announcements.
-- **Map Insights Pane**: `src/views/map/MapInsightsPane.tsx` provides desktop 320px drawer and mobile modal sheet with "Stats" distribution charts and "People" virtualized list.
-- **Preferences**: `mapPaneOpen` (boolean, default true) in `userPreferencesService` and `src/api/preferences.ts` persists desktop drawer open state across sessions.
-
-### Map Selection & Bulk Workflows
-
-- **Geospatial Selection Math**: `src/views/map/mapMath.ts` provides `pointInPolygon` (ray-casting even-odd rule) and `boundsOf` to evaluate contacts against freehand polygons and rectangles without DOM or MapLibre feature rendering dependencies.
-- **Selection State**: `src/views/map/useMapSelection.ts` maintains a reactive `Set<string>` of contact IDs supporting box, lasso, cluster, and in-view selections across filter updates with aria-live announcements.
-- **Drawing Overlay**: `src/views/map/SelectionOverlay.tsx` renders an SVG layer capturing Shift+drag boxes and L-key lasso drawing while suppressing pointer propagation to MapLibre.
-- **Shared Bulk Operations**: `src/components/bulk/useBulkActions.ts` and `src/components/bulk/BulkModals.tsx` extract list mutations (delete, archive, add to list, edit field, color change, and CSV export) so they are shared identically between the Network list and the Map view.
-- **Follow-up Tasks**: `src/views/map/FollowUpModal.tsx` creates action items in bulk with date presets (Tomorrow, 3 days, Next week, custom date picker) and a 100-contact safety cap.
-- **Rich Hover Card**: `src/views/map/MapHoverCard.tsx` provides a non-interactive 150ms tooltip mode on hover or focus, plus a pinned dialog mode on click or Space with four quick actions, avatar score ring, local time lookup, and focus restoration to the pin.
-
-### Search Pipeline (Ask Contrack v5 — Plan → Filter → Rank → Verify)
-
-The retrieval pipeline is split into four pipeline stages, each enforcing a different
-quality guarantee:
-
-| Stage      | Goal                                | Mechanism                                                                                                                                                              | Failure mode                                           |
-| ---------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Plan**   | Understand user intent              | `parseSearchQuery` → `QueryPlan { must, should, confidence }`                                                                                                          | LLM unavailable → empty plan, pipeline still runs      |
-| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list, plus the request's facets as SQL (`compileFacets`)             | Empty filter set → honest "no matches" response        |
-| **Rank**   | Surface relevance within candidates | FTS5 (BM25, four tiers in broad mode) + HyDE-vector KNN + soft trait lists → weighted RRF (k=15, weights from the query's kind)                                        | One channel down → others still produce results        |
-| **Verify** | Reject false positives              | `rerankCandidates` returns `contact_id`, `verified_field` and `verified_value`. The server re-checks the value and the plan. Skipped when the database proves the plan | LLM unavailable → a fresh local list, `fallback: true` |
-
-The architectural fix for "Sydney leaking into 'Who lives in America'" is the
-**Filter** stage: when the planner reports `confidence: "high"|"medium"` and emits
-`must.locationMatchers`, the JS-side word-boundary regex filter is the gate that
-FTS/vector run against — not a downstream RRF boost that can be outweighed by
-strong vector similarity on irrelevant signals.
-
-**Request flow** (`runSearch` in `server/services/searchService.ts`, for
-`POST /api/search/semantic`). The JSON and the NDJSON callers share it.
-
-1. **L1 cache** (`getCachedSearch`, the `rerank` tier of `aiCache`). The key
-   holds the owner, `search_revision`, a 5-minute bucket, the quick
-   capability's provider and model, the facets (`facetKey`, in a fixed
-   order), the benchmark's `rrfK` when it is set, the cross-encoder's model
-   and candidate count once it has loaded (`fused` before), and the
-   normalized query. With AI off or no provider, `local` takes the place of
-   the provider and model. An AI-off request therefore never reads an entry
-   that a model verified.
-2. **Facets.** `parseFacetQuery` (`shared/facetQuery.ts`) takes the typed
-   facets out of the question. They join the request's `filters`
-   (`SemanticSearchOptions.filters`), and a facet sent both ways counts
-   once. `compileFacets(scope, filters)` (`server/services/search/facetSql.ts`)
-   turns them into one predicate over the alias `c`. Every later stage
-   applies it before its limit.
-3. **Facet-only answer.** A question with no free text left is a filter.
-   `facetAnswer` returns the matching contacts in name order, top 30,
-   `verified: true`, with no model call. `facetEvidence` gives the reason
-   from the role, company, location, industry, tag and `contacted:` facets.
-4. **Strict keyword search and the kind** (`queryIntent(scope, text, facets)`
-   in `hybridRetrieval.ts`). `lexicalSearch` in strict mode runs inside the
-   facets: every token must match, then approximate names follow, top 30.
-   `classifyQuery(query, signals)` (`server/services/search/intent.ts`) then
-   reads the result's names. The kinds are `email`, `phone`, `quoted`,
-   `name`, `conceptual` and `mixed`. The first four are local kinds. The
-   result also carries fusion weights per kind: lexical 0.7 and dense 0.3
-   for the local kinds, 0.3 and 0.7 for `conceptual`, and 0.5 and 0.5 for
-   `mixed`. `localRetrieval` gives the keyword and vector lists these
-   weights.
-5. **Local kinds.** The strict keyword result is the final answer. Every
-   match has `verified: true`, no model runs, and L1 keeps the answer.
-   "Approximate" still marks a close name. The p95 at 5,000 contacts is
-   4.5 ms for a name, 3.2 ms for an email and 0.8 ms for a phone number.
-6. **Implicit facets** (`findImplicitFacets(scope, text)` in
-   `server/services/search/implicitFacets.ts`). "at X" and "works at X" give
-   a company facet. "in X", "based in X", "near X" and "around X" give a
-   location facet, and "in X" gives an industry facet. X must equal a
-   company, a place or an industry of the owner's active contacts, with case
-   and accents folded. A place stays with the planner when a comma and a
-   word that is not a filler word follow it, or when "and" or "or" follows
-   it. The same holds when a word such as "State" or another known place
-   follows it, and for a value that is both a place and an industry. When
-   `hasContentWords(remainder)` is false, the answer is the facet answer of
-   step 3, with no model call. Otherwise the implicit facets join the facets
-   for every later stage, and the planner still reads the whole question.
-   The known values are cached per owner and `search_revision`, for at most
-   50 owners.
-7. **Local list** (`localRetrieval` in `hybridRetrieval.ts`). FTS5 in broad
-   mode, vector KNN, and weighted RRF with k = 15, with no planner, in about
-   10 ms. Broad mode ranks four tiers: every token, approximate names from
-   0.85, partial matches, and approximate names from 0.75. The top 30 are
-   hydrated. For a `conceptual` question, `rerankLocal`
-   (`server/services/search/crossEncoder.ts`) reorders them by
-   cross-encoder score on the CPU worker, inside `SEARCH_RERANK_BUDGET_MS`
-   (25 ms). Scores that come later are dropped, and the list keeps its fused
-   order. A `mixed` query is usually a misspelled name or a prefix, and a
-   cross-encoder is not typo-tolerant, so it keeps the fused order too. The
-   list streams as the instant chunk, `fallback: true`, every match
-   `verified: false`.
-8. **AI off or no provider.** The route reads the caller's `aiAssist` with
-   `aiAllowedFor(req)` (`server/middleware/aiAllowed.ts`) and passes
-   `aiAllowed` to the service. With AI off, or with `isMockMode()`, the local
-   list is the final answer with `fallback: true`. The stream sends only the
-   complete chunk, because no model stage follows. With AI off, a provider
-   embedding model does not embed the query. The built-in local model still
-   embeds it.
-9. **L2, the semantic cache** (`server/services/search/semanticCache.ts`).
-   With a model to run and the built-in embedding model, the question's
-   vector is computed first (`embedQuery`, about 1 ms). `getSemanticAnswer`
-   looks for a verified answer of the last 5 minutes, at most 100 per owner,
-   with the same revision, facets, provider and model, the same entity key
-   (the capitalized words, numbers, quoted phrases and emails) and a cosine
-   of 0.97 or more. Ordered constraint words and comparison operators must
-   also match after proven facets and leading request words are removed.
-   The lookup rechecks the revision after embedding. Local embedding waits
-   stop after 100 ms and fall back to keywords without retrying the vector.
-   A hit is the answer, with no model call, and it goes into
-   L1 for the exact words. Every verified answer that L1 keeps goes into L2
-   too, with its vector. `aiCache.invalidateAll()` empties L2 through
-   `onInvalidateAll`.
-10. **Model stages**, inside `MODEL_BUDGET_MS` (12 s). They start before
-    step 7 builds the local list, so the planner's request is on the network
-    while the list is built. `hybridRetrieval` runs the planner
-    (`parseSearchQuery`) in the search lane, then the hard filter, then
-    `localRetrieval` inside the filter, with the question's vector.
-    It passes the kind of step 4 and the facets to every stage: the hard
-    filter, the keyword and vector lists, and the trait lists. The
-    coalescing key holds the facets too. `answerFromPlan` then picks the
-    final answer with `databaseProof(plan)`, and the facets add their
-    evidence to the plan's:
-
-- `"filters"`: confidence "high", no `should.traits`, and hard filters
-  that hold every constraint. The answer is the filtered contacts in
-  retrieval order, then the other filtered contacts by name, top 30,
-  `verified: true`. No reranker runs.
-- `"temporal"`: only `must.temporal`, and confidence not "low". The
-  answer is the filtered contacts by last contact, never contacted first.
-  No reranker runs.
-- `null`, or no hard filter applied: the compact reranker checks the
-  top 30 candidates. They travel to the model with short ids, `c1` to
-  `c30`, which the server maps back. With 30 UUIDs the answer overran its
-  1,200-token limit.
-
-11. **Failure.** An error, a timeout or a `search_revision` change during
-    the model stages ends with a fresh local list, `fallback: true`. L1 and
-    L2 do not keep it. The keyword-only list (`searchFts`, recall@10 0.52) is
-    never the Ask answer now.
-
-`hybridRetrieval` keeps its signature and runs `localRetrieval` inside the
-plan's hard filter. The search gate's `fused` channel
-(`tests/eval/search.eval.test.ts`) therefore measures the same arithmetic.
-Its `hybrid` channel measures what `runSearch` answers with no model. The
-filter also records the fields it proved for each contact (`evidence`), and
-`buildReason` (`server/services/search/reasons.ts`) turns them into the
-reason. The reason joins at most two parts, from the contact's own fields:
-"Product Manager at Northwind Logistics, based in Lisbon, Portugal." With no
-evidence left, the reason is `null`.
-
-The legacy v4 description follows for historical context (now superseded):
-
-> v4 added LLM-driven query understanding on top of the v3 retrieval core: the user's
-> natural-language query is parsed and expanded by the LLM _before_ retrieval
-> runs, so the local FTS + vector channels work against a richer signal.
-
-1. **Parallel AI Query Augmentation** (lite-tier LLM, ~150-300ms each, cached 24h):
-   - `parseSearchQuery()` emits a `QueryPlan { must, should, confidence, rationale }`. The planner expands each concept into an _exhaustive synonym set_ a contact field could literally contain (for "America": ["United States","USA","America","CA","NY","TX",...,"San Francisco","Boston",...]). The split into `must` (hard) and `should` (soft) is the planner's responsibility — high-confidence structured intent ("who lives in X", "VCs at Y") goes to `must`; vague descriptive intent ("loves climbing") goes to `should.traits`.
-   - `expandQueryForEmbedding()` rewrites the query as a hypothetical contact-shaped paragraph (HyDE — Gao et al., 2022) for the vector channel.
-   - Both fail gracefully. On AI outage, the pipeline runs FTS + HyDE-or-raw vector with no hard filter — still produces results.
-2. **Hard Pre-Filter** (`applyHardFilters` in `hybridRetrieval.ts`): For each populated `must.*Matchers` list, build a case-insensitive **word-boundary** regex and pass only contacts whose corresponding field matches. Word-boundary is `(?:^|[^a-zA-Z0-9])` so 2-letter codes like `CA` match `"Los Angeles, CA"` but not `"Casablanca"`. When `confidence: "low"` the hard filter is skipped — exploratory queries shouldn't be gated. Empty result set returns early with `candidates: []` rather than falling through to broad retrieval. The request's facets narrow the same SQL query.
-3. **FTS5 Weighted BM25**: Runs over the filtered candidate corpus (or full corpus if no plan). Column priority via BM25 weights (FTS version 5) `(name 10, company 5, role 3, tags 3, headline 2, location 2, about 1, industry 1, extras 1, expansion 0.5)`. `tags` holds tags and interests. `extras` holds emails, and each phone number followed by its digit forms.
-4. **Local Vector KNN (HyDE-enhanced)**: `sqlite-vec` cosine similarity over the filtered candidate corpus. Embedding model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally via Transformers.js).
-5. **Soft Trait Boosts**: each entry in `should.traits` is a separate ranked list — a contact matching multiple traits accumulates score, but absence of a trait is not penalized. Intersected with the hard filter set and the facets. Each trait list ranks its matches in the fused keyword and vector order.
-6. **Weighted RRF Fusion (k=15)**: `reciprocalRankFusion` combines the FTS5, HyDE-vector and trait lists into a single ranked candidate list. Each list is `{ channel, weight, items }`, and a contact scores `weight / (k + rank)` per list. The query's kind weighs the keyword and vector lists, and the trait lists share 0.3.
-7. **Verified LLM Reranker** (`rerankCandidates`): receives the `QueryPlan` alongside the top 30 candidates. It runs only when the database cannot prove the plan (step 7 of the request flow). The LLM returns evidence only, `{ contact_id, verified_field, verified_value }`, with no reason sentence. `verified_field` is an enum of the nine candidate fields, and `maxOutputTokens` is 1,200 (it was 3,000). The server performs four checks, and a match that fails one is dropped:
-   - The id is one of the candidates.
-   - `verified_value` is a literal substring of the named field on the actual candidate row.
-   - The candidate's actual field satisfies at least one of the active `must.*Matchers` (word-boundary).
-   - The value passes `sanitizeAiOutputValue`, because the reason quotes it on the card.
-
-   Verified matches come back in candidate (retrieval) order, not the model's order. With `must.temporal`, the prompt says that the database already checked recency. Candidates carry no dates. Before this change, the model rejected every recency match. The prompt also tells the model to cite a name as the candidate's field spells it. `buildReason` then starts the reason with the cited field, followed by the filter's evidence. This is the second line of defense behind the hard pre-filter.
-
-8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally. The brief streams through `streamFor` in the search lane. `safeDeltas` removes control characters from each piece before `onDelta` gets it. The pieces stop when the text so far matches an injection pattern or passes 2,000 characters. The function returns the whole brief after `sanitizeAiOutputValue`. A cache hit sends no pieces.
-9. **Two-Phase NDJSON Streaming**: Phase 1 is the `localRetrieval` list, hydrated, top 30, every match `verified: false`. Its p95 at 5,000 contacts is 13.0 to 13.1 ms. Phase 2 is the final answer, and it replaces Phase 1. A local kind, a facet answer, an AI-off request and an L1 hit send only the complete chunk. See the PR for the live numbers of the model stages.
-
-**Caching**: `parseSearchQuery`, `expandQueryForEmbedding` and `synthesizeSearchResults` cache by content-hashed query under their own `aiCache` tiers. The whole search answer is the L1 entry (`getCachedSearch`, the owner-keyed `rerank` tier), with the key from step 1 of the request flow. A verified answer is also an L2 entry (`semanticCache.ts`), found by the question's vector for a question asked in other words (step 9). A fallback after a model failure is cached in neither. Repeat queries pay zero AI cost.
-
-### AI Adapter Pipeline
-
-All AI operations route through a layered architecture in `server/ai/`:
-
-- **`provider.ts`**: Abstract `AIProvider` interface — the single contract all adapters implement. Methods: `generate(options)` (required), `generateStream(options, onDelta)` (optional), `getQuotaSnapshot()` (optional, Gemini-only). `generateStream` calls `onDelta` with each new piece of text, in order, and resolves with the result `generate` would return. Only a plain text request streams. A JSON or grounded request runs `generate` and sends one piece. A failure before the first piece falls back to `generate`, and a failure after the first piece is thrown.
-- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates` (accepts `QueryPlan`, enforces per-filter evidence, and returns evidence with no reason), `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults` (accepts `QueryPlan` for grounding, and streams pieces to `onDelta`), `parseSearchQuery` (v5 — emits `QueryPlan { must, should, confidence, rationale }`), `expandQueryForEmbedding` (HyDE). **Never imports any SDK directly.**
-- **`singleton.ts`**: Back-compat surface. `sharedProvider` is a Proxy that delegates to the registry's default provider, so per-provider state (Gemini's SmartRouter, QuotaTracker) stays singleton while the underlying provider can change at runtime. New code should call `generateFor()` from `gateway.ts` instead.
-- **`types.ts`**: Provider-agnostic type definitions including `AIProviderName = "gemini" | "openai" | "anthropic"`, `AIGenerateOptions`, `AIGenerateResult`, `JsonSchemaNode`, `RoutingPolicy`.
-- **Adapters** (`server/ai/adapters/`):
-  - `gemini.ts` — Google Gemini via `@google/genai`. SmartRouter picks the model; a 429, 5xx or timeout pauses it for Google's `retryDelay` (circuit breaker); QuotaTracker only counts usage. Sets `thinkingLevel: "low"` on 3.x models for deep and grounded work, because thinking tokens count against `maxOutputTokens`. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums. `generateStream` uses `generateContentStream`.
-  - `openai.ts` — OpenAI via `openai` npm package. Chat Completions with non-strict `response_format: { type: "json_schema", json_schema: { name, schema } }`, an array root wrapped in an object (OpenAI refuses array roots). Research via the Responses API: flat non-strict `text.format`, the `web_search` tool, and `include: ["web_search_call.action.sources"]` for the sources. `reasoning_effort` per class (`none` quick, `low` deep and research), stepping to the nearest supported value when a model refuses one and remembering it. `generateStream` uses Chat Completions with `stream: true`.
-  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`, or prompt-guided JSON when the schema passes Claude's limits (24 optional, 16 union-typed parameters). `output_config.effort: "low"` for models that declare effort. Research uses the basic `web_search_20250305` tool with `max_uses: 5` (the dynamic-filtering variant was five times slower), resumes `pause_turn`, and returns the search results as sources. Requires explicit `max_tokens` on every request. `generateStream` uses `messages.create` with `stream: true`.
-  - Every adapter returns JSON text re-serialised from the parsed value, so a fence or a sentence of prose around the JSON never reaches a caller's `JSON.parse`.
-- **Routing** (Gemini-only, `server/ai/routing/`):
-  - `SmartRouter.ts` — filter (paused, policy, grounding) then sort (preferred class, newest generation, stable before preview, cheapest). **Only used by GeminiAdapter.** No capacity check: there is no free or paid tier, and a real limit shows up as a 429.
-  - `QuotaTracker.ts` — In-memory usage meter (requests and tokens per minute, requests today, grounded requests today) for the Health page. Blocks nothing.
-  - `registry.ts` — Gemini models with class, generation, stability, price and grounding. Discovery adds models the list lacks. Model classes: `lite`, `flash`, `pro`.
-  - `ParallelQueue.ts` — Concurrency limiter for batch work (bulk parsing runs two workers). Provider-agnostic.
-- **Model class mapping** (`routing.prefer`). Capabilities: quick → `lite`, deep → `flash`, research → `flash`. With models discovered, each adapter takes the newest model of the family; the fallbacks when discovery has not run:
-
-  | `prefer`  | Gemini                   | OpenAI        | Anthropic          |
-  | --------- | ------------------------ | ------------- | ------------------ |
-  | `"lite"`  | `gemini-3.5-flash-lite`  | `gpt-6-luna`  | `claude-haiku-4-5` |
-  | `"flash"` | `gemini-3.8-flash`       | `gpt-6-sol`   | `claude-sonnet-5`  |
-  | `"pro"`   | `gemini-3.1-pro-preview` | `gpt-6-astra` | `claude-opus-5`    |
-
-  OpenAI renamed its tiers between generations: in GPT-5.6, Sol is the flagship and Terra the middle; in GPT-6, Astra is the flagship and Sol the middle. `inferModelFamily` reads the generation to tell them apart.
-
-### AI Search Enrichment Pipeline (`server/services/aiSearch/`)
-
-Deep enrichment system for contact data using LLM-powered web search:
-
-- **`jobQueue.ts`**: Background job processor with concurrency controls.
-- **`mergeEngine.ts`**: Merges AI-discovered data into existing contact records.
-- **`promptTemplate.ts`**: Structured prompts for search-based enrichment.
-- **`strategies/`**: Pluggable enrichment strategy implementations.
-
-### AI Response Caching (`server/utils/aiCache.ts`)
-
-Multi-tier LRU cache for AI responses:
-
-- Tiers: `mentions`, `synthesis`, and extensible.
-- Content-addressed via SHA-256 hash of input text.
-- Prevents redundant LLM calls for identical inputs (e.g., immutable interaction text → mention extraction).
-
-### Link Unfurling
-
-Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extraction without headless browsers (see `server/services/linkPreviewService.ts`).
-
-### Concurrency / Threading Model
-
-- **Server**: Single Node.js process, async I/O. Background sweeps run on startup: relationship score recomputation in yielding batches of 200 (then hourly via `setInterval`), retroactive geocoding, local embedding backfill, dedupe embedding backfill.
-- **AI Queue**: `GenerationQueue` (`server/ai/workQueue.ts`) runs every generation that `generateFor` or `streamFor` starts. The gateway's timeout covers the wait for a slot as well as the call.
-  - **Shared slots**: 2 at once and at most 16 waiting, interactive before background (with anti-starvation), and fair per account.
-  - **Search lane** (`lane: "search"`): 2 slots of its own and one FIFO of at most 16 waiting, then `429 AI_BUSY`. It has no priorities and no fair share. The planner, the reranker and the brief pass `GatewayOptions.lane`. A provider can therefore see up to 4 calls at once from one server. `getAIQueueSnapshot().search` reports the lane (`active`, `concurrency`, `waiting`, `capacity`). Why: on 2026-09-26 an Ask question waited 12 s behind two research calls and answered with nothing.
-  - `ParallelQueue` limits batch work, such as bulk parsing.
-
-## 3. Data Models & Database Schema
-
-### Core Tables (Drizzle ORM — `src/db/schema.ts`)
-
-| Table                  | Purpose                             | Key Fields                                                                                                                                                                                                                                                                  |
-| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contacts`             | Primary entity boundary             | `id`, `name`, `firstName`, `lastName`, `headline`, `role`, `company`, `location`, `lat/lng`, `isGhost`, `isArchived`, `isTracked`, `trackedAt`, `canonicalId`, `phoneticHash`, `relationshipScore`, `searchExpansion`, `aiBriefing`, `aiSummary`, `cadenceDays`, `birthday` |
-| `contact_emails`       | Multi-value emails                  | `contactId` FK CASCADE, `email`, `label`, `isPrimary`, `source`                                                                                                                                                                                                             |
-| `contact_phones`       | Multi-value phones                  | `contactId` FK CASCADE, `phone`, `label`, `isPrimary`, `source`                                                                                                                                                                                                             |
-| `contact_addresses`    | Multi-value addresses               | `contactId` FK CASCADE, `address`, `label`, UNIQUE(contactId, address)                                                                                                                                                                                                      |
-| `contact_social_links` | Typed social/professional URLs      | `contactId` FK CASCADE, `platform`, `url`, `handle`                                                                                                                                                                                                                         |
-| `contact_education`    | Normalized education history        | `contactId` FK CASCADE, `school`, `degree`, `fieldOfStudy`, `startDate`, `endDate`                                                                                                                                                                                          |
-| `contact_experience`   | Normalized work history             | `contactId` FK CASCADE, `company`, `role`, `startDate`, `endDate`, `isCurrent`, `location`                                                                                                                                                                                  |
-| `contact_sources`      | Per-import provenance               | `contactId` FK CASCADE, `platform`, `externalId`, `connectedOn`, `rawData`                                                                                                                                                                                                  |
-| `contact_tags`         | Free-form tagging                   | `contactId` FK CASCADE, `tag`                                                                                                                                                                                                                                               |
-| `contact_interests`    | AI-generated personal interests     | `contactId` FK CASCADE, `interest`, `isAiGenerated`, UNIQUE(contactId, interest)                                                                                                                                                                                            |
-| `contact_attributes`   | Flexible key-value LLM extractions  | `contactId` FK CASCADE, `name`, `value`, UNIQUE(contactId, name)                                                                                                                                                                                                            |
-| `interactions`         | Chronological timeline entries      | `contactId` FK CASCADE, `type`, `title`, `content`, `date`, `mentions`, `fileUrl`                                                                                                                                                                                           |
-| `interaction_mentions` | Bi-directional graph connections    | Composite PK(`interactionId`, `contactId`), both FK CASCADE                                                                                                                                                                                                                 |
-| `action_items`         | First-class follow-up tasks         | `contactId` FK CASCADE, `interactionId` FK SET NULL, `title`, `dueAt`, `completedAt`                                                                                                                                                                                        |
-| `lists`                | User-created contact groups         | `id`, `name`, `icon`, `sortOrder`                                                                                                                                                                                                                                           |
-| `list_members`         | List↔Contact junction               | Composite PK(`listId`, `contactId`), both FK CASCADE                                                                                                                                                                                                                        |
-| `score_snapshots`      | Weekly relationship score snapshots | Composite PK(`contactId`, `weekStart`), `ownerId` FK RESTRICT, `contactId` FK CASCADE, `score`, `createdAt`                                                                                                                                                                 |
-| `search_history`       | Persistent question history         | `id`, `ownerId` FK RESTRICT, `mode`, `query`, `normalizedQuery`, `resultCount`, `resultIds`, `fallback`, `pinned`, `runCount`, `createdAt`, `lastRunAt`, UNIQUE(`ownerId`, `mode`, `normalizedQuery`)                                                                       |
-
-### Deduplication Engine Tables
-
-| Table                   | Purpose                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `dedupe_suggestions`    | Pending match pairs with confidence, reasoning, status lifecycle (`pending` → `merged` / `dismissed` / `auto_merged`) |
-| `dedupe_exclusions`     | Permanent never-merge constraints. Composite PK(`contactIdA`, `contactIdB`)                                           |
-| `dedupe_merge_log`      | Full audit trail for merge/undo operations (soft + hard merges) with `duplicateSnapshot` JSON blob                    |
-| `dedupe_embedding_meta` | Tracks `embeddedAt` timestamp per contact for staleness detection                                                     |
-
-### Connector Tables
-
-| Table             | Purpose                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connectors`      | Configured sync integrations (`kind`, `name`, `status`, `config`, `secret`, `intervalMinutes`, `nextRunAt`, `lastRunAt`, `lastError`, `lastRunStats`) |
-| `connector_runs`  | Execution logs for sync runs (`trigger`, `status`, `startedAt`, `finishedAt`, `stats`, `error`)                                                       |
-| `connector_links` | Deduplication links between external entities and Contrack (`connectorId`, `externalId`, `contactId`, `interactionId`, `actionItemId`)                |
-| `upcoming_events` | Future meetings for Pulse/Dashboard (`connectorId`, `externalId`, `title`, `startsAt`, `endsAt`, `location`, `attendeeCount`)                         |
-| `oauth_states`    | Short-lived OAuth CSRF state verification tokens (`token`, `connectorId`, `redirectUrl`, `expiresAt`)                                                 |
-
-### Virtual Tables (NOT managed by Drizzle — defined in `server/db.ts`)
-
-| Table                | Engine | Dimensions   | Purpose                                                                                                                                                                                                                                |
-| -------------------- | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contacts_fts`       | FTS5   | N/A          | Full-text search index with weighted columns, FTS version 5. Rebuilt when `FTS_SCHEMA_VERSION` changes. Maintained by 12+ SQL triggers on contacts + child tables.                                                                     |
-| `search_embeddings`  | `vec0` | 384-dim int8 | Local embeddings via `Xenova/all-MiniLM-L6-v2` (Transformers.js), one byte per component at one scale for the table (`search.vectorScale` in `app_settings`, `server/services/search/vectorScale.ts`). Powers KNN search in Spotlight. |
-| `contact_embeddings` | `vec0` | 768-dim      | Gemini API embeddings exclusively for deduplication NLP.                                                                                                                                                                               |
-
-### Critical Rules (Virtual Tables)
-
-**`vec0` virtual tables do NOT support foreign key cascading.**
-When deleting or merging contacts, you **MUST** manually execute:
-
-```sql
-DELETE FROM search_embeddings WHERE contactId = ?;
-DELETE FROM contact_embeddings WHERE contactId = ?;
-```
-
-Failure to do this creates orphaned embedding vectors that corrupt KNN search results.
-
-### SQL Triggers (installed in `server/db.ts`)
-
-- **FTS5 Sync**: 12 triggers maintain `contacts_fts` consistency across inserts/updates/deletes on `contacts`, `contact_tags`, `contact_interests`, `contact_emails`, `contact_phones`.
-- **`updatedAt` Auto-stamp**: 3 triggers on `contacts`, `interactions`, `action_items` — auto-set `updatedAt` to `datetime('now')` when the field isn't explicitly changed.
-- **Track stamp**: 2 triggers on `contacts` (`contacts_track_stamp_ins`, `contacts_track_stamp_upd`) write `trackedAt` when `isTracked` turns on and clear it when it turns off, so a route, an MCP tool, a merge and an import all record the moment the same way. Only a tracked contact is scored: `ELIGIBLE` in `relationshipService.ts`, the weekly snapshot, every Pulse query and the palette's zero state read `isTracked = 1` through the partial index `idx_contacts_owner_tracked`.
-- **Action Item Sync**: 3 triggers keep `contacts.nextFollowUpAt` = `MIN(dueAt)` of pending (non-completed) action items. Fires on insert/update/delete of `action_items`.
-
-### Schema Change Process
-
-1. Modify `src/db/schema.ts` (Drizzle schema definition).
-2. Run `npm run db:generate` to output a Drizzle migration to `./drizzle/`.
-3. The server automatically applies pending migrations on startup via `migrate()`.
-4. Virtual table configs and triggers persist in `server/db.ts` (NOT managed by Drizzle).
-
-### Performance PRAGMAs (set in `server/db.ts`)
-
-| PRAGMA         | Value     | Purpose                                       |
-| -------------- | --------- | --------------------------------------------- |
-| `journal_mode` | WAL       | Concurrent reads during writes                |
-| `foreign_keys` | ON        | Enforce referential integrity                 |
-| `cache_size`   | -8000     | ~8MB page cache (pins ~90% of DB)             |
-| `mmap_size`    | 268435456 | Memory-map up to 256MB                        |
-| `synchronous`  | NORMAL    | Fewer fsync calls, acceptable for local-first |
-| `temp_store`   | MEMORY    | In-memory temp tables for complex JOINs       |
-
-## 4. Layered Directory Structure (Strict Segregation)
-
-### Backend (`server/`)
-
-- `server/ai/` — AI layer: `aiService.ts` facade, `singleton.ts`, `provider.ts`, `types.ts`
-  - `server/ai/adapters/` — Vendor integrations: `gemini.ts` (`@google/genai`), `openai.ts` (`openai`), `anthropic.ts` (`@anthropic-ai/sdk`)
-  - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
-- `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`, `connectors.ts`
-- `server/connectors/` — Connectors subsystem: `service.ts` (CRUD, secrets, backoff), `scheduler.ts` (polling loop, concurrency), `ingest.ts` (idempotent stream commit, ghost promotion, day roll-up), `matching.ts` (participant contact resolution), `registry.ts` (adapter catalog), `summaries.ts` (prompt-injection shielded AI digests), `email/normalize.ts` (subject & address canonicalization), `adapters/ics.ts` (Calendar), `adapters/imap.ts` (Mailbox via IMAP), `adapters/google.ts` (Google Workspace contacts, mail, calendar via OAuth 2.0, with the per-API `@googleapis/*` clients from `googleApis.ts`)
-- `server/services/` — Heavy business logic:
-  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `catchUp.ts` (the catch-up rule in SQL, once, read by the dashboard's Catch up list and count and by the palette's zero state), `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
-  - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
-  - `server/services/search/` — `hybridRetrieval.ts` (weighted RRF pipeline: `localRetrieval` fuses the keyword and vector channels with no plan, `hybridRetrieval` runs it inside the plan's hard filter, and `queryIntent` reads the kind from the strict keyword matches), `intent.ts` (`classifyQuery` and `nameSignals`: the query kind and its fusion weights), `lexical.ts` (`lexicalSearch`: strict mode, and broad mode in four tiers), `approximateName.ts` (name candidates by prefix, nickname and phonetic code), `ftsIndex.ts` (the `contacts_fts` columns, triggers and version gate), `facetSql.ts` (`compileFacets` and `facetKey`: facets as one SQL predicate, with the `facet_contains`, `facet_time` and `haversine_km` functions), `implicitFacets.ts` (`findImplicitFacets` and `hasContentWords`: company, place and industry facets read from the words of a question), `reasons.ts` (`buildReason`: the reason line from the proven fields), `crossEncoder.ts` (`rerankLocal`: the local cross-encoder on the CPU worker, inside its budget, and `initCrossEncoder`, its boot load), `semanticCache.ts` (L2: verified answers by question vector, revision, facets and entity key), `vectorScale.ts` (the int8 scale, `quantize` and `scaleFor`, also used by the boot migration in `server/db.ts`), `localEmbeddings.ts` (Transformers.js)
-  - `server/services/geocoding/` — Nominatim geocoding with retroactive backfill
-  - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
-- `server/mcp/` — Model Context Protocol (MCP) server subsystem:
-  - `server.ts` — Per-request `McpServer` factory bound to caller's `Scope`
-  - `errors.ts` — Maps operational `AppError` to JSON-RPC errors with code and status
-  - `resources.ts` — Static resources `contrack://pulse` and `contrack://contacts/{id}`
-  - `prompts.ts` — Workflow prompts `catch_me_up` and `weekly_review`
-  - `tools/` — 15 tools across `contacts.ts`, `search.ts`, `interactions.ts`, `actions.ts`, `pulse.ts`, and `taxonomy.ts`
-- `shared/mcpTools.ts` — Canonical registry of 15 MCP tools and descriptions shared between server and UI
-- `shared/searchFacets.ts` - The facet fields (`FACET_FIELDS`), `matchesFacet`, and `facetFiltersSchema`, the zod schema for the facets that `GET /api/search` and `POST /api/search/semantic` accept
-- `shared/facetQuery.ts` - `parseFacetQuery` and `parseFilterValue`: the one facet parser for the palette's tokenizer, the Network list and Ask Contrack
-- `server/repositories/` — Data-access patterns: `contactRepository.ts`, `types.ts`
-- `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts` (the default avatar's look: pronouns, then a title, then the first name in `nlp/givenNames.tsv.gz`), `avatarUrl.ts`, `unionFind.ts`
-  - `server/utils/nlp/` — NLP primitives: `names.ts` (`nameScorer`, `nameSimilarity`), `nicknames.ts` (`nicknameVariants`), `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts` (`isPhoneQuery`)
-- `server/middleware/auth.ts` — Resolves a `Principal` (`anonymous` | `user` | `service`) onto every request via `attachPrincipal`, then gates `/api` + `/uploads` with `requireAuth` when `AUTH_REQUIRED=true` or `API_TOKEN` is set. `requireUser` additionally rejects service tokens for endpoints that need a real account. Cookie helpers set `Secure` only over HTTPS (honouring `X-Forwarded-Proto`, one proxy hop). Timing-safe token comparison; env read per request so tests can toggle. `AUTH_TOKEN` is a deprecated alias for `API_TOKEN`.
-- `server/routes/auth.ts` - `/api/auth` router mounted pre-gate: status, setup (closes itself once an account exists), login, logout, me, me/avatar (POST profile photo normalised with sharp, DELETE removal), change-password, sessions, passkey registration/login, password reset, and magic link endpoints. Credential endpoints are rate limited per IP.
-- `server/services/authService.ts` - Accounts and sessions. Sessions are server-side rows keyed by the SHA-256 of the cookie secret, tracking the sign-in `method` (`"password"`, `"passkey"`, or `"email-link"`). `reconcileOwnership()` calls `ensureLocalOwner()` and `claimUnownedData()` from `server/db.ts` on every boot. `convertLocalOwner` is what `POST /api/auth/setup` calls on an instance that has been used without auth: it turns the local owner into a real account in place, keeping the id, so nothing has to be re-owned.
-- `server/services/authLinkService.ts` - Manages single-use hashed tokens in `auth_links` table for password resets (1 hour user, 24 hour admin) and magic links (15 minutes). Enforces an hourly limit of 3 link creations per account for self-service requests.
-- `scripts/reset-password.ts` - CLI operator recovery script setting a secure temporary password, flagging `mustChangePassword`, and revoking active sessions without manual database edits.
-- `server/services/passkeyService.ts` - WebAuthn registration and authentication ceremonies powered by `@simplewebauthn/server`. Manages 5-minute single-use challenges in `auth_challenges` table, per-user credentials in `passkeys` table, and first-run nudge dismissal in `user_settings` (`auth.passkeyNudge`).
-- `server/utils/publicOrigin.ts` - Computes canonical external origin and WebAuthn `rpID` via `publicOrigin(req)` and `publicRpId(req)`. Prioritizes `PUBLIC_URL` env variable, falls back to `X-Forwarded-Proto` and `X-Forwarded-Host` or `Host`. Throws `PASSKEY_UNSUPPORTED_ORIGIN` for bare IP addresses.
-- `server/utils/secretBox.ts` - AES-256-GCM encryption for stored secrets (such as SMTP passwords), using a 32-byte key from `CONTRACK_SECRET_KEY` or `DATA_DIR/secret.key` (0600 permissions). Prefix format `v1:<iv>:<tag>:<ciphertext>`.
-- `server/services/mailService.ts` - Outgoing SMTP mail service via `nodemailer`. Resolves config from env (`SMTP_URL`, `MAIL_FROM`) or instance settings (`mail.smtp`). Enforces 10-second transport timeout, dispatches invitations, and exposes test seam `__useJsonTransport`.
-- `server/mail/templates.ts` - Plaintext and HTML email templates for invitations, test emails, password resets, and magic links.
-- `server/services/passwords.ts` - scrypt hashing with parameters embedded in the hash string (`scrypt$N$r$p$salt$hash`), so cost can be raised without invalidating existing passwords. `needsRehash` drives silent upgrade on sign-in.
-- `src/components/auth/` - `AuthGate` routes between setup wizard, sign-in, passkey-nudge, password reset, magic link landing, and the app, publishing the current account through `useAuth`. Tokens in query parameters are extracted and stripped with `takeUrlSecret`. `ForgotPassword` supports both mail-enabled link requests and no-mail guidance. `ResetPassword` and `MagicLinkLanding` handle token redemption. `AuthField` provides an accessible 44px password visibility toggle (`revealable`) and live Caps Lock alerts (`capsLockHint`). `accountForm` suggests usernames from email input (`suggestUsername`) and omits confirmation password fields. `src/lib/passwordStrength.ts` computes 0-4 password strength and renders the accessible four-segment `PasswordStrengthMeter`. `SignIn` supports username persistence via localStorage (`contrack.lastIdentifier`) and configurable session lifetime via "Keep me signed in on this device". Listens for `AUTH_EXPIRED_EVENT` (dispatched by `src/api/client.ts` on any 401) so an expired session returns to sign-in instead of a wall of error toasts. `PasskeyButton` offers biometric/hardware login. `PasskeyNudge` offers first-run passkey enrollment. `PasskeysCard` manages credentials in Account settings.
-- `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`BACKUP_INTERVAL_HOURS`/`BACKUP_KEEP`).
-- `src/components/auth/` - `AuthGate` routes between setup wizard, sign-in, passkey-nudge, password reset, magic link landing, and the app, publishing the current account through `useAuth`. Tokens in query parameters are extracted and stripped with `takeUrlSecret`. `ForgotPassword` supports both mail-enabled link requests and no-mail guidance. `ResetPassword` and `MagicLinkLanding` handle token redemption. Listens for `AUTH_EXPIRED_EVENT` (dispatched by `src/api/client.ts` on any 401) so an expired session returns to sign-in instead of a wall of error toasts. `PasskeyButton` offers biometric/hardware login. `PasskeyNudge` offers first-run passkey enrollment. `PasskeysCard` manages credentials in Account settings.
-- `server/services/lifecycleSettings.ts` - Instance lifecycle configuration (`trashRetentionDays`, `backupIntervalHours`, `backupKeep`) with setting > env > default hierarchy, change listeners, and env override detection.
-- `server/services/integrationSettings.ts` - Third-party service integration settings (`searxngUrl`, and the Google OAuth client sealed via `secretBox`) with env overrides, status reporting, and write-only secret masking.
-- `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`backupIntervalHours`/`backupKeep`), dynamic `rescheduleBackups()` on interval change, and single active timer handle management.
-- `server/services/exportService.ts` — Full-DB JSON export + flat contacts CSV.
-- `server/routes/dataLifecycle.ts` — `/api/trash` (+restore/purge, reports dynamic `retentionDays`), `/api/backups`, `/api/export/{json,csv}`.
-- **Trash semantics**: `DELETE /api/contacts/:id` is a SOFT delete (`deletedAt` + `isArchived=1`; FTS row dropped by trash-aware triggers; embeddings purged). Restore clears both and re-embeds. `purgeExpiredTrash()` hard-deletes after dynamic `trashRetentionDays().value` (default 30, daily sweep). The `deletedAt` column must exist BEFORE the FTS trigger DDL in db.ts (pre-FTS ALTER).
-- `server/app.ts` — Express app factory (`createApp`/`finalizeApp`): middleware + routers + error pipeline without listen/Vite. server.ts and the integration tests both consume it.
-- `server/ai/capabilities.ts` — Capability routing (`quick` / `deep` / `research` / `embeddings`): resolves each capability to a provider + model from settings pins → env overrides (`AI_QUICK_MODEL` etc.) → Auto (legacy `AI_PROVIDER` first, then a preference order). Internal classes preserved: quick→lite, deep→flash, research→pro.
-- `server/ai/gateway.ts` — `generateFor(capability, options)` and `streamFor(capability, options, onDelta)`: the entry points business logic uses for generation. Replaces calling one shared provider with `routing.prefer`. `streamFor` runs a text generation in the same queue, with the same lane and timeout rules, and hands each piece to `onDelta`. It falls back to `generate` with one piece when an adapter has no `generateStream`. `GatewayOptions.lane?: "search"` runs a call in the search lane.
-- `server/ai/workQueue.ts` - `GenerationQueue`: the shared slots and the search lane (see Concurrency / Threading Model).
-- `server/ai/providerRegistry.ts` — All _configured_ providers (env keys, UI-stored keys, custom OpenAI-compatible endpoints), instance-cached per id so Gemini's SmartRouter/QuotaTracker stay singleton.
-- `server/ai/adapters/openaiCompatible.ts` — One adapter for every OpenAI-format backend (Ollama, vLLM, LM Studio, xAI, DeepSeek, Mistral). Adaptive structured output: json_schema → json_object → prompt, remembered per model. `generateStream` uses Chat Completions with `stream: true`.
-- `server/ai/embeddings.ts` — Embeddings capability + vec0 dimension lifecycle (probe → rebuild → re-embed).
-- `server/ai/promptSafety.ts` — Prompt-injection defenses: `wrapUntrusted()` fencing + `UNTRUSTED_DATA_RULE` (applied at every prompt that interpolates contact/file/web text) and `sanitizeAiOutputValue()` (write-side backstop in aiSearch mergeEngine).
-- `server/db.ts` — Database initialization, FTS5 setup (full rebuild gated behind the `user_version` pragma — bump `FTS_SCHEMA_VERSION` when FTS schema/trigger payloads change), triggers, virtual tables, performance PRAGMAs, data cleanup
-
-### Frontend (`src/`)
-
-- `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `connectors.ts`, `index.ts`
-- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useCorvidLife.ts` (a living mark: runs the corvid's brain, paints its poses, and hands out `useCorvidControls()` for an owner to ask for an act), `useCorvidLevel.ts` (the one place a surface asks how much the bird may move), `useTrackToggle.ts` (track or untrack one contact, with the toast and the Undo every control shares), `usePaneWidth.ts` (a resizable pane's width in a CSS custom property, kept per device), `useElementWidth.ts` (a pane's own width, or only whether it is at least a given width)
-- `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
-- `src/components/layout/` — Shell components: `Sidebar.tsx` (the left nav), `SidePanel.tsx` (the right-hand rail and the panel it opens over the page, for Ask Contrack's history and the map's insights), `ResizeHandle.tsx` (the Network list's draggable edge), `PageHeader.tsx`, `RouteFallback.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
-- `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`, `EmptyState.tsx`, `RailTooltip.tsx` (the label beside an icon on the left nav or a right rail)
-- `src/components/` — Feature components: `ImportModal.tsx`, `ImportPanel.tsx` (inline dropzone, upload, and progress panel), `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `ScoreRingAvatar.tsx` (the avatar in its score ring, and no ring at all for a contact nobody tracks), `FloatingContactCard.tsx`
-- `src/views/` — Route-driven page components:
-  - `src/views/contact-list/` — Network list (left panel)
-  - `src/views/contact-detail/` — Contact profile (right panel). `components/TrackButton.tsx` and `components/CadenceMenu.tsx` are the two tracking controls in the header, and `components/useTrackShortcut.ts` is the `t` key
-  - `src/views/dedupe/` — Deduplication management (Tinder-style swipe UI)
-  - `src/views/search/` — Search result cards
-  - `src/views/lists/` — List management (create, detail, members)
-  - `src/views/pulse/` — Pulse: `PulseView.tsx`, `lib/upNext.ts` (the ranked queue, with the Catch up group), `lib/layout.ts` (the eight card ids and the default columns), `lib/jumpToGroup.ts` (the scroll to a queue group, shared by the masthead and Keeping up), `lib/insight.ts` (the insight's category in sentence case), `components/Masthead.tsx` (the day, the sentence, Log note and the More menu), `cards/` (one file per card, `KeepingUpCard.tsx` for the people you track and their trend, `Heatmap.tsx` and `Sparkline.tsx` inside Activity, `Donut.tsx` inside Composition). `NetworkCompositionModal.tsx` is the one modal left: the New people card and `NetworkGrowthModal.tsx` folded into an Inbox row.
-  - `src/views/ai-search/` — AI-powered semantic search view
-  - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `StackPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`
-  - `SearchView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`), `TrackedContactsView.tsx` (the people you keep up with, grouped by their ring state, at `/tracked`)
-  - `src/views/settings/` — Settings revamp:
-    - `registry.ts`: Declarative registry of settings pages, navigation groups, redirect aliases, and row-level search.
-    - `SettingsShell.tsx`: Two-pane layout with 240px navigation rail on wide screens (`lg`), single-pane on phone.
-    - `SettingsRail.tsx`: Desktop navigation rail with embedded row search.
-    - `SettingsSearch.tsx`: Row-level instant search with deep-link navigation and keyboard controls.
-    - `SettingRow.tsx`: Reusable row component with anchor ID, 1.2s flash highlight, modified dot indicator, and reset button.
-    - `SettingsHome.tsx`: Registry-driven mobile/root landing view with NeedsAttention banner.
-    - `NeedsAttention.tsx`: Action banner presenting up to three urgent tasks across duplicates, enrichment, and failed imports.
-    - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ImportPage.tsx`, `TagsPage.tsx`, `ExportPage.tsx`).
-    - `admin/`: Admin settings views (`GeneralView.tsx`, `AiProvidersView.tsx`, `MailView.tsx`, etc.).
-- `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
-- `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`, `corvid.ts` (the corvid's events: `flyCorvid()`, `corvidReact()`, `noteCorvidActivity()`, and `motionLevel()`), `corvidMotion.ts` (the seeded random source, easing and the perched repertoire), `corvidBrain.ts` (what a perched bird does next, and when), `corvidFlight.ts` (the pure random flight planner)
-- `src/assets/` — `corvidPaths.ts` (the mark's one drawing: the ring and the bird in it) and `corvidRig.ts` (the bird's rig: every pose it takes, drawn from those same paths)
-- `src/db/` — `schema.ts` (Drizzle ORM schema definitions)
-- `src/types.ts` — Shared TypeScript type definitions
-
-### Root Files
-
-- `server.ts` — Express application entry point (boots server, mounts routes, starts background tasks)
-- `index.html` — SPA shell
-- `seed.ts` / `seedMock.ts` — Database seeding scripts
-- `vite.config.ts` — Vite + Tailwind + React plugin config (path alias `@` → project root)
-- `vitest.config.ts` — Test runner config (Node environment, `v8` coverage)
-- `drizzle.config.ts` — Drizzle Kit config (schema → `./src/db/schema.ts`, output → `./drizzle/`, dialect → sqlite, DB → `curator.db`)
-- `tsconfig.json` — TypeScript config (ES2022 target, ESNext modules, bundler resolution, `@/*` path alias)
-
-## 5. External Integrations
-
-- **LLM Providers** (resolved per capability; `AI_PROVIDER` sets the Auto preference):
-  - **Gemini** (default): 7 registered models via `@google/genai` (3.5 to 3.8 Flash, 3.5 and 3.1 Flash-Lite, 3.1 Pro preview), plus newer models that discovery finds. SmartRouter orders them per class, and a 429 pauses a model for Google's `retryDelay`. Includes Google Search grounding and embedding models.
-  - **OpenAI**: `gpt-6-luna` (quick), `gpt-6-sol` (deep and research) and `gpt-6-astra` (pro) via the `openai` package, unless discovery finds a newer model of the class. Web search via the Responses API, which returns the pages it read (`web_search_call.action.sources`). Structured output via a non-strict `json_schema`, with an array root wrapped in an object.
-  - **Anthropic**: `claude-haiku-4-5` (quick), `claude-sonnet-5` (deep and research) and `claude-opus-5` (pro) via `@anthropic-ai/sdk`, unless discovery finds a newer model of the class. Web search via the basic `web_search_20250305` tool, at most 5 searches, with a `pause_turn` resumed up to 3 times. Structured output via `output_config.format: json_schema`, and prompt-guided JSON when a schema passes Claude's limits (24 optional fields, 16 unions).
-- **Dedupe Embeddings**: resolved from the embeddings capability — the same model that backs semantic search. Defaults to the built-in local model. Degrades to deterministic-only matching when unavailable.
-- **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
-- **Geocoding**: Nominatim (OpenStreetMap), the one geocoder. No key needed. The background queue spaces requests 1.1 s apart, and `geocode_cache` keeps every answer, a failure for seven days.
-- **Web Search (Enrichment)**: Google Search Grounding (Gemini), OpenAI Responses API web search, Anthropic native web search tool, or self-hosted SearXNG instance (configured via `SEARXNG_URL` or Admin Settings).
-- **Avatar Processing**: `sharp` for image resizing/optimization.
-- **Icons**: `lucide-react` 1.x. The six social brand icons that Lucide 1.0 dropped are kept, with the same drawings, in `src/components/socialIcons.ts`.
-- **Toast Notifications**: `sonner`.
-- **Drag & Drop**: `@dnd-kit/core` + `@dnd-kit/sortable` for list reordering.
-- **Date Utilities**: `date-fns` for formatting, `chrono-node` for NLP date parsing.
-- **Validation**: `zod` for runtime payload validation.
-- **Utilities**: `clsx` + `tailwind-merge` for class merging, `dompurify` for HTML sanitization, `papaparse` for CSV parsing, `mailparser` for .eml email parsing (the IMAP connector uses it too).
-
-### Model Ledger (ML/AI Topology)
-
-_Documents every LLM/ML model in use. Required by the ml-ai topology profile for Circuit Breaker calculations._
-
-#### Gemini Models
-
-Prices are the paid Standard tier, per 1M tokens, from https://ai.google.dev/gemini-api/docs/pricing (September 2026). Google no longer publishes free-tier limits, and Contrack holds none: a 429 pauses the model for Google's `retryDelay`.
-
-| Model                        | Role                                                                            | Cost (1M in / 1M out)           | Context Window | Structured Output |
-| ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------- | -------------- | ----------------- |
-| `gemini-3.5-flash-lite`      | Lite: extraction, mentions, planning, insights                                  | $0.30 / $2.50                   | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.8-flash`           | Flash: summaries, duplicate checks, grounded research                           | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.7-flash`           | Flash fallback                                                                  | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.6-flash`           | Flash fallback                                                                  | $0.75 / $3.75 (to Dec 31, 2026) | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.5-flash`           | Flash fallback                                                                  | $1.50 / $9.00                   | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.1-flash-lite`      | Lite fallback                                                                   | $0.25 / $1.50                   | 1M tokens      | Yes (JSON schema) |
-| `gemini-3.1-pro-preview`     | Pro, pinned only. No free tier; thinking cannot be turned off                   | $2 / $12                        | 1M tokens      | Yes (JSON schema) |
-| `gemini-2.5-*` (not offered) | Listed by Google, but a new project gets 404 "no longer available to new users" | $0.10–$1.25 / $0.40–$10         | 1M tokens      | Yes (JSON schema) |
-
-_Grounding on Gemini 3.x is paid only: 5,000 searches a month free, then $14 per 1,000 search queries. Google bills each query the model runs._
-
-#### OpenAI Models
-
-| Model           | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search          | Notes                                  |
-| --------------- | ----- | --------------------- | -------------- | ------------------- | ------------------- | -------------------------------------- |
-| `gpt-6-luna`    | lite  | $0.10 / $0.50         | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Default for quick tasks, effort `none` |
-| `gpt-6-sol`     | flash | $2.00 / $10.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Default for deep tasks and research    |
-| `gpt-6-astra`   | pro   | $10.00 / $50.00       | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Flagship. Refuses effort `none`        |
-| `gpt-5.6-terra` | flash | $2.00 / $12.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Previous middle tier                   |
-
-_The catalog leaves out the codex, `*-chat-latest`, `-pro`, live, search, realtime, audio and image models, which answer 404 or "not a chat model" on Chat Completions, and chat models more than a year old. Web search costs $10 per 1,000 calls plus the search content at model rates._
-
-#### Anthropic Models
-
-| Model              | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search        | Notes                                      |
-| ------------------ | ----- | --------------------- | -------------- | ------------------- | ----------------- | ------------------------------------------ |
-| `claude-haiku-4-5` | lite  | $1.00 / $5.00         | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Default for quick tasks. Takes no effort   |
-| `claude-sonnet-5`  | flash | $2.00 / $10.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Default for deep tasks and research        |
-| `claude-opus-5-5`  | pro   | $4.00 / $20.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Newest Opus. Thinking cannot be turned off |
-| `claude-opus-5`    | pro   | $5.00 / $25.00        | 1M tokens      | Yes (`json_schema`) | Yes (native tool) | Fallback when discovery has not run        |
-
-_Web search costs $10 per 1,000 searches plus tokens. No first-party embedding models._
-
-#### Local Models (Provider-Agnostic)
-
-| Model                     | Role                                | Cost         | Dimensions | Notes                                                           |
-| ------------------------- | ----------------------------------- | ------------ | ---------- | --------------------------------------------------------------- |
-| `Xenova/all-MiniLM-L6-v2` | Search embeddings (Transformers.js) | Free (local) | 384-dim    | Powers KNN in Spotlight. Default for the embeddings capability. |
-
-## 6. Environment Variables
-
-The common variables are below. `docs/configuration.md` lists all of them, and `tests/unit/repo/envDocs.test.ts` fails when that list, `.env.example`, `docker-compose.yml` and the code disagree.
-
-| Variable              | Required                | Default      | Purpose                                                                                                   |
-| --------------------- | ----------------------- | ------------ | --------------------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.        |
-| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                     |
-| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                                 |
-| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                       |
-| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                        |
-| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Enables Gemini for any capability set to Auto.                                     |
-| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                 |
-| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                       |
-| `PORT`                | No                      | `3210`       | Server port.                                                                                              |
-| `HOST`                | No                      | `127.0.0.1`  | Bind interface. Localhost by default; Docker sets `0.0.0.0`. Set `AUTH_REQUIRED=true` before exposing it. |
-| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                    |
-| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.      |
-| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                  |
-| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR. A second dev server needs it: the first holds the reload port.         |
-
-## 7. Invariants & Safety Rules
-
-- **NEVER** write native `useEffect` fetch loops for data operations. Rely solely on `@tanstack/react-query`.
-- **NEVER** silently swallow errors (`.catch(() => {})`).
-- **MUST** manually purge `search_embeddings`, `contact_embeddings`, and `dedupe_embedding_meta` on contact deletion/merge.
-- **MUST** resolve stored `/uploads/...` URLs through `resolveUploadPath()` (`server/utils/paths.ts`) before any filesystem read/unlink — these columns are user-writable and the helper enforces containment inside the uploads root.
-- **MUST** route all AI calls through the `ai` singleton exported from `server/ai/index.ts`. Never import `@google/genai`, `openai`, or `@anthropic-ai/sdk` directly outside the adapter layer.
-- **Exception**: `server/services/dedupe/embeddings.ts` imports `@google/genai` directly for embedding generation — this is Gemini-only and does not go through the provider adapter.
-- **Local-First Mandate**: External relational database usage is forbidden. All data lives in `curator.db`.
-- **Thin Routes / Heavy Services**: Express routes parse payloads and delegate. Business logic lives in `server/services/`.
-- **MUST** take a `Scope` as the first argument in every function that reads or writes an owned table, and put the user-supplied id and the owner in the SAME SQL statement (`WHERE id = ? AND ownerId = ?`). Never select by id and compare in JavaScript. See `server/tenancy/scope.ts`. The request context in `server/tenancy/requestContext.ts` is for attribution only and is never the isolation mechanism.
-- **MUST NOT** insert into an owned table without an owner. Nine tables carry `ownerId` (`contacts`, `lists`, `interactions`, `action_items`, `map_views`, `dedupe_suggestions`, `dedupe_exclusions`, `dedupe_merge_log`, `ai_invocations`) and triggers enforce it: `<table>_owner_required` aborts on the five with no parent contact, `<table>_owner_fill` fills from the contact on the four that have one, and `<table>_owner_check` aborts a child row whose owner disagrees with its contact. `currentOwnerId()` is the one place to get the answer: the caller inside a request, the primary admin outside one.
-- **MUST NOT** delete from `contacts_fts` on the `contactId` column. It is `UNINDEXED`, and FTS5 pushes down only `MATCH`, `rowid` and `rank`, so an `=` on it scans the whole virtual table — measured at 499 ms against 40 ms for 1,000 contact updates. Every trigger delete is `WHERE rowid = old.rowid`, pinned by `tests/unit/server/search/ftsTriggers.test.ts`.
-- **MUST NOT** `UPDATE` a `vec0` partition key or `ALTER TABLE ... RENAME` a `vec0` table. sqlite-vec 0.1.9 refuses the first and silently breaks the second (the shadow tables keep the old name). Every vector upsert is `DELETE` then `INSERT`; `INSERT OR REPLACE` fails on a partitioned table. Rebuilds copy rows into a new table, and all three DDL sites go through `vecTableDdl()` in `server/db.ts`.
-- **MUST NOT** answer a request for another owner's row with anything but `404`, and the body must equal the body for an id that does not exist. A `403`, or a message that names the id, tells the caller which ids are real. `contactRepo.requireOwned()` throws `NotFoundError("Contact")` with no id for exactly this reason, and `tests/integration/tenancy.isolation.test.ts` compares the two bodies.
-- **MUST NOT** trust a contact id that arrived in a request body. The editor's mention markup carries `data-id` attributes, which must not be inserted into `interaction_mentions` without verification, or any id at all could link a mention to a stranger's contact. Every such id goes through `contactRepo.findManyOwned` first, and ids the caller does not own are dropped in silence: reporting them would say which ids exist.
-- **MUST** key a shared cache entry by owner when its value is derived from one owner's rows. `dailyInsight` is the worked example: an AI-written paragraph about one person's network sat under an instance-wide key and was served to everybody for 24 hours. `aiCache.invalidate(tier, prefix)` already invalidates by prefix, so an owner-led key is also what makes a per-owner flush possible. `ownerKey(scope, key)` in `server/utils/aiCache.ts` builds the prefix, `invalidateForOwner(tier, ownerId)` drops one owner's entries with it, and `rerank`, `synthesis`, `briefing` and `dailyInsight` all use both. Never flush a whole owner-keyed tier: it costs every other account a regeneration through a paid provider. `queryParse`, `hyde` and `mentions` deliberately do not: each value is a pure function of text the caller supplied, names no contact, and sharing it saves a paid call.
-- **MUST** filter every full-text query with the indexed `ownerTok` column, as `ownerTok:<token> AND (<strategy>)`. `lexicalSearch` (`server/services/search/lexical.ts`) is the only place that builds a `contacts_fts` MATCH and is the only place that needs it. An `UNINDEXED` `ownerId` column or a `JOIN contacts` would be a post-filter over rows the caller may not read: FTS5 pushes down only `MATCH`, `rowid` and `rank`. `ownerToken()` in `server/tenancy/scope.ts` and `OWNER_TOKEN_SQL` in `ftsIndex.ts` must agree, and a unit test pins both against SQLite's `replace()`.
-- **MUST** name the owner in every `vec0` KNN, as `AND ownerId = ?` beside the `MATCH` and `k`. It is the partition key, so this reads one owner's chunks instead of the table. A global top-k followed by a JavaScript filter is not a substitute: on a large instance a small account rarely appears in the global top-k at all, so its vector channel returns nothing. `ownerId IN (...)` is not supported on a partition column, so it is one owner per statement. The two duplicate-detection queries that hold their own `MATCH` (`dedupe/blocking.ts`, `dedupe/context.ts`) read the owner from their anchor contact inside the same statement.
-- **MUST NOT** serve a file under `/uploads/u/<ownerId>/` to anyone but that owner. `guardUploads` (`server/middleware/uploads.ts`) sits between `requireAuth` and `express.static` and compares the owner segment against `req.principal.user.id`. `/uploads/logos/` is shared; every other `/uploads` path is `404`. It reads no database.
-- **MUST** treat an in-memory queue or map keyed by a client-supplied id as owned data. The AI Search batch queue (`server/services/aiSearch/jobQueue.ts`) and the dedupe scan queue (`server/services/dedupe/jobQueue.ts`) each hold their record beside its owner and refuse a read from anybody else, because no `WHERE` clause protects a `Map`. A dedupe scan record is the sharper case: it holds every cluster it found with the contacts hydrated inside it. A per-account limit (the research cooldown) is keyed by owner; a limit that protects a shared resource (the single-batch run lock, which guards one provider API key, and the single-scan run lock, which guards memory and the same quota) stays instance-wide, and the accounts it turns away take a FIFO turn rather than a refusal.
-- **MUST** prove that both contacts belong to the caller, in one statement, before a merge moves a single child row. `loadMergePair` (`server/services/dedupe/merging.ts`) is that statement, and the sixty statements after it re-parent child rows by contact id alone because of it. It is also what makes the re-parenting legal: moving an interaction between two contacts keeps its `ownerId`, and the `interactions_owner_check` trigger accepts that only when both contacts share an owner. A merge that fails the check is `404` before the transaction opens.
-- **MUST** scope a whole-table load in a dedupe pass in SQL, not only in the JavaScript filter that follows it. The four loads in `server/services/dedupe/passes.ts` each filter their rows through `ctx.contactMap`, which comes from a scoped query, so the owner joins look redundant. They stop the database reading every account's addresses and phone numbers on every scan, and they stop a later cleanup of the "redundant" filter from opening a hole. `tests/integration/dedupe.twoOwners.test.ts` builds a context for one account, puts another account's rows into its map by hand, and asserts the pass still returns one account's pairs.
-- **MUST** run a background sweep that calls AI, or writes an attributable row, one account at a time inside `runWithContext`. `recordInvocation` reads the async context through `currentOwnerId()`, which falls back to the primary admin when there is none, so an instance-wide sweep bills one person for everybody's corpus. Both embedding backfills (`search/localEmbeddings.ts` `backfillSearchEmbeddings`, `dedupe/embeddings.ts` `backfillEmbeddings`) build one queue per account and take turns in rounds of 200, so a large account cannot hold up a small one's first results. `backfillOwnerEmbeddings(scope)` opens its own context rather than trusting its caller to have one, because the argument is not what `recordInvocation` reads. A sweep that does uniform per-row work with no AI and no attributable write stays instance-wide with `// tenant-lint: allow instance sweep`: the geocoding backfill and the trash purge are the examples.
-- **MUST** keep the owner predicate an index seek. Every composite index is `(ownerId, <what the query orders or filters by>)`, and `tests/integration/tenancy.queryPlans.test.ts` runs `EXPLAIN QUERY PLAN` over eleven named statements on a seeded, analyzed, ten-account database and fails if any step of the ten relational plans is a scan. The eleventh is the full-text query, which reaches its owner through the `MATCH` expression rather than an index on `contacts`. A predicate the planner evaluates row by row is correct and reads every account's rows to answer for one, so its cost grows with the number of people on the instance rather than with the size of one person's data. The four single-column `idx_<table>_owner` indexes were dropped in tenancy schema version 2 for the same reason: each was a prefix of a composite, and leaving it gave the planner a narrower index to prefer over the one the read was built for.
-- **MUST** classify every route in `ROUTE_MANIFEST`, and every `scoped` route must be `isolated: true` with a test behind it in `tests/integration/tenancy.isolation.test.ts`. The manifest test fails on an unclassified route, a stale row, a scoped route with no isolation test, and an `admin` route that lost its class.
-- **MUST** mount `requireAdmin` on the route itself, never with `router.use`, and it must stay a named function declaration. The manifest test reads each route's handler stack and fails in both directions: an `admin` row with no guard is an operator endpoint anybody can reach, and a guarded route with another class is a manifest that lies about who can reach it. An arrow assigned to a `const` has an empty `handle.name`, so the test would see nothing and pass.
-- **MUST** read a timestamp column through `datetime()` when comparing it in SQL, and never compare a column against `new Date(...).toISOString()` in JavaScript. Both halves of the comparison have to be in one format, and this codebase writes two: `CURRENT_TIMESTAMP` gives `2026-09-10 05:33:50` while `createToken`, `createSession` and `createInvitation` give `2026-09-10T05:33:50.050Z`. SQLite compares TEXT byte by byte and a `T` sorts after a space, so a value from earlier the same day looks later than now. `datetime()` parses both and yields NULL for a value it cannot parse, which refuses a credential and keeps a row, and both are the safe direction. `CURRENT_TIMESTAMP` writes `2026-09-10 05:33:50` and an ISO string is `2026-09-10T04:33:50.000Z`: a space sorts before a `T`, so the stored value looks older than any cut-off from the same day. `resolveToken` stamped `lastUsedAt` on every request for exactly this reason, and let an expired token through until the UTC date rolled over for the other half of it. `maintenanceService` computes all five of its retention cut-offs in SQL. `resolveSession` still parses `lastSeenAt` with `new Date()`, which reads a UTC value as local time: measured at seven hours of drift in `America/Los_Angeles` and two in `Europe/Berlin`, so it stamps on every request east of UTC and stops stamping west of it. That one is Phase 1 code and is still open.
-- **MUST** match a path against the cost patterns in lower case. Express routes case-insensitively unless the app sets `case sensitive routing`, and this one does not, so `GET /API/Contacts` returns 200. Matching the path as it arrived let one capital letter escape both AI limiters entirely.
-- **MUST** limit an AI-cost route per account as well as per address. `aiEndpointRateLimit` runs before `attachPrincipal` and answers "is one machine hammering this instance"; `aiUserRateLimit` runs after it and answers "is one account spending more than its share of a shared provider key". Neither replaces the other: behind one office address the first alone lets one person exhaust everybody's budget, and the second alone lets an unidentified caller retry forever. A `keyBy` that returns `null` skips the limiter rather than pooling every such request into one window.
-- **MUST NOT** put a credential in a URL that this server logs. The invitation link is `<origin>/join?token=<secret>`, so the invitee's browser sends the secret here as an ordinary page request, and morgan's `:url` token is `req.originalUrl`. `redactUrlForLog` (`server/utils/helpers.ts`) replaces the value of `token`, `secret` and `api_key`, and `server/app.ts` overrides morgan's built-in `url` token with it so every format is covered rather than the one in use. Everything else about invitations is built to keep that value out of storage, and an access log the operator keeps for a month would have undone all of it.
-- **MUST** gate a route that writes an instance setting even when it lives in `server/routes/auth.ts`. That router is mounted ahead of `requirePasswordCurrent`, so `PUT /api/auth/session-policy` carries the guard on the route. The middleware's exemption is a list of the six paths a forced-change account needs, not the `/api/auth` prefix: the prefix was the first shape and it let an account holding a hand-over password set every future session on the instance to a year.
-- **MUST** write one `auditService.record()` row for every administrative action, and put no credential in its `details`. The service redacts a key whose name reads like one and a value shaped like a personal token, because call sites change and the guard belongs next to the insert rather than at each of them. The insert sits inside a `try`/`catch` that logs and returns: losing an audit row is bad, refusing to disable a compromised account because the audit table is locked is worse.
-- **MUST NOT** delete an account without removing the four tables that have no foreign key to follow. `search_embeddings`, `contact_embeddings`, `dedupe_embedding_meta` and `dedupe_merge_log` are not reached by any cascade, so `purgeOwner` (`server/services/adminService.ts`) names each of them. `contacts` is deleted last and cascades the ten child tables, list membership and the FTS row. The upload directory goes after the transaction commits, because a filesystem removal cannot be rolled back. Measured at 147 ms for 10,000 contacts.
-- **MUST** keep three guards between an administrator and an instance nobody can administer, in this order: the local owner is protected while authentication is off, the last active admin cannot be demoted, disabled or deleted, and no admin may disable or delete their own account. The order is what makes each message useful. On an unsecured instance all three are true at once, and "secure this instance first" is the only one of the three that names a fix.
-- **MUST NOT** stamp `updatedAt` during a bulk migration step. `findStaleEmbeddings` (`server/services/dedupe/embeddings.ts`) re-embeds any contact whose `updatedAt` is newer than its `embeddedAt`, so a migration that touches every row bills the operator for re-embedding the corpus through a paid provider. Bulk boot steps run inside the window in `server/db.ts` §2z-4 where the seventeen relevant triggers are dropped.
-
-## 8. Error Handling
-
-### Request Tracing
-
-Every request is assigned an 8-char UUID prefix by middleware (`crypto.randomUUID().split("-")[0]`). The id appears in every log line **and** is echoed back to the client in the error response body, so users can quote it when reporting an issue.
-
-### `asyncHandler`
-
-`server/utils/asyncHandler.ts` is a higher-order function that wraps any async (or sync-throwing) Express handler so its errors flow into the central error middleware. Every route in the codebase uses it — bare `async (req, res) => …` handlers are a code-review block because Express won't catch a rejected promise on its own.
-
-### `AppError` hierarchy (`server/utils/AppError.ts`)
-
-Every operational error thrown from a service or repository MUST be an `AppError` (or one of its subclasses). Plain `throw new Error(...)` in the service layer is a code-review block — it surfaces as a generic 500 and loses both the HTTP status and the machine-readable code.
-
-| Class                               | Status       | `code`                | Use when…                                              |
-| ----------------------------------- | ------------ | --------------------- | ------------------------------------------------------ |
-| `AppError`                          | configurable | derived from status   | The catch-all — only for cases no subclass fits        |
-| `NotFoundError(entity, id?)`        | 404          | `NOT_FOUND`           | An entity wasn't found                                 |
-| `ValidationError(message, details)` | 400          | `VALIDATION_ERROR`    | Inbound payload failed validation (carries Zod issues) |
-| `ConflictError`                     | 409          | `CONFLICT`            | Resource already exists / state conflict               |
-| `RateLimitedError`                  | 429          | `RATE_LIMITED`        | Upstream or local rate limit hit                       |
-| `ServiceUnavailableError`           | 503          | `SERVICE_UNAVAILABLE` | Dependency is down (e.g. AI provider after retries)    |
-| `UpstreamTimeoutError`              | 504          | `UPSTREAM_TIMEOUT`    | A bounded upstream call exceeded its timeout           |
-
-Every `AppError` carries: `message`, `statusCode`, `code` (stable machine-readable identifier), `details` (arbitrary structured blob — used by `ValidationError` to carry the Zod issue list), `cause` (the original underlying error, kept for log forensics — never sent to clients), and `isOperational` (`true` for expected errors, `false` for programmer errors).
-
-### Centralized Error Middleware (`server/middleware/errorHandler.ts`)
-
-A single Express error handler translates every known thrown shape into the canonical response body:
-
-```json
-{
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "Contact c_123 not found",
-    "requestId": "ab12cd34",
-    "details": { "entity": "Contact", "id": "c_123" },
-    "stack": "..."
-  }
-}
-```
-
-The middleware handles:
-
-- `AppError` and subclasses — uses the carried `statusCode`, `code`, `message`, `details`
-- `ZodError` — 400 / `VALIDATION_ERROR` with `issues` as `details`
-- Express `entity.parse.failed` — 400 / `INVALID_JSON`
-- `SQLITE_CONSTRAINT` — 400 / `DB_CONSTRAINT`
-- `SQLITE_BUSY` — 503 / `DB_BUSY`
-- `SQLITE_READONLY` — 503 / `DB_READONLY`
-- Anything else — 500 / `INTERNAL` with a generic message (raw thrown text is never leaked)
-
-`stack` is included in the response body only when `NODE_ENV !== "production"`. `cause` is never serialized to clients — it's strictly for the server log. When the response has already started streaming (e.g. SSE routes), the middleware ends the connection instead of trying to write a JSON body on top of partial bytes.
-
-### `notFoundHandler`
-
-Mounted after every API router and before the SPA fallback. Catches any `/api/*` request that didn't match a route and emits an `AppError(404, "ROUTE_NOT_FOUND")` so the client gets a JSON 404 instead of falling through to `index.html`. Non-`/api/*` paths pass through unchanged so the SPA can render the route.
-
-### Input Validation (`server/utils/validators.ts`)
-
-- `validateBody(schema)`, `validateParams(schema)`, `validateQuery(schema)` — Zod-driven middleware factories. They mutate `req.body` / `req.params` / `req.query` to the parsed value and throw `ValidationError` on failure (never writing to `res` directly).
-
-### Client Error Boundaries
-
-- `ErrorBoundary` (global) and `RouteErrorBoundary` (per-route) catch rendering crashes with recovery UI.
-
-## 8a. AI Resilience (`server/ai/resilience.ts`)
-
-Shared utilities that every adapter (Gemini, OpenAI, Anthropic) wraps its SDK call in. Without this module, each adapter would reinvent (or skip) retries and timeouts independently.
-
-### `withTimeout(op, timeoutMs, parentSignal?)`
-
-Runs `op(signal)` with a hard timeout. Resolves with the op's value within `timeoutMs`, or rejects with an `UpstreamTimeoutError` once the timer fires. The signal passed into `op` is aborted when the timer fires AND when `parentSignal` aborts (if provided). Adapters MUST forward this signal to their SDK call (`{ signal }` on the OpenAI / Anthropic clients) so the underlying socket is actually closed — without that, the timer just lets the request leak in the background.
-
-### `withRetry(op, opts)`
-
-Exponential-backoff retry with jitter. Defaults: 3 attempts, base 500ms, jitter 250ms. Recognizes transient failures via `isRetryableError`: HTTP 408/429/5xx, `ECONNRESET`/`ECONNREFUSED`/`ETIMEDOUT`/`EAI_AGAIN`, and message-keyword matches (`rate limit`, `quota`, `overloaded`, `temporarily unavailable`, `timeout`, `deadline`). `UpstreamTimeoutError` is always retryable. When retries are exhausted, the final error is mapped to a typed `AppError`: 429 → `RateLimitedError`, 5xx → `ServiceUnavailableError`, anything else → `ServiceUnavailableError("AI provider call failed after retries")`. The caller's `signal` is honored — if it aborts mid-flight the retry loop breaks immediately and an `AppError(499, "CANCELLED")` is thrown.
-
-The `onRetry(attempt, err)` hook is the adapter's seam for `log.warn(...)` retry telemetry and per-adapter side effects like circuit-breaker tripping.
-
-### `parseAIJson(raw, context?)`
-
-Tolerant JSON parser for model output. Strips markdown code fences (`json … `), trims surrounding whitespace, and falls back to extracting the first balanced `{...}` or `[...]` block when models wrap JSON in prose. On unrecoverable input, throws `AppError(502, "AI_INVALID_JSON")` with a snippet of the offending response — clients can branch on that code to substitute a default or retry.
-
-### Adapter integration
-
-All three adapters (`server/ai/adapters/{gemini,openai,anthropic}.ts`) share the same shape:
-
-```ts
-return withRetry(
-  async (attempt) => {
-    const result = await withTimeout(
-      (signal) => this.client.someMethod(params, { signal }),
-      timeoutMs,
-      options.signal,
-    );
-    if (options.responseFormat === "json")
-      parseAIJson(result.text, "ProviderAdapter.generate(...)");
-    return result;
-  },
-  {
-    signal: options.signal,
-    onRetry: (attempt, err) =>
-      log.warn(
-        "ProviderAdapter",
-        `attempt ${attempt} failed: ${getErrorMessage(err)}`,
-      ),
-  },
-);
-```
-
-### Transactional Data Integrity
-
-- `ContactRepository.insertChildRecords` runs all child-table inserts inside a single `sqlite.transaction()` — if any insert fails the entire contact write is rolled back.
-- `mergeContacts` and `softMergeContacts` in `server/services/dedupe/merging.ts` re-fetch contact data **inside** the transaction (to mitigate TOCTOU) and write the audit log via `recordMergeUnsafe` **inside** the same transaction — there is no longer a window where a merge succeeds but the audit log doesn't.
-
-## 9. Startup Lifecycle (`server.ts`)
-
-1. Load environment variables (`server/utils/loadEnv.ts`, which calls `process.loadEnvFile`)
-2. Validate that at least one provider is configured (env key, stored key, or custom endpoint); warn if none
-3. Initialize Express with optional CORS (only when `CORS_ORIGIN` is set), JSON parsing (50MB limit), per-IP rate limiting on AI-cost endpoints (60 req/min via `server/middleware/rateLimit.ts`), request ID middleware, Morgan logging
-4. Mount all API routers
-5. Cache diagnostics endpoint (dev only: `/api/debug/cache-stats`)
-6. Attach Vite dev middleware (dev) or serve static `dist/` (production)
-7. Install centralized error handler
-8. Start HTTP server on `PORT` (default 3210), bound to `HOST` (default 127.0.0.1)
-9. **Background tasks** (non-blocking):
-   - `startRetroactiveGeocoding()` — backfill missing lat/lng (skipped when `DISABLE_BACKGROUND_JOBS=true`, used by integration tests)
-   - `relationshipService.recomputeAll()` — full score recompute, then hourly via `setInterval`
-   - `initLocalEmbeddings()` → `backfillSearchEmbeddings()` — load Transformers.js model, backfill 384-dim vectors
-   - `backfillEmbeddings()` — backfill 768-dim Gemini dedupe embeddings (only if count === 0)
-
-## 10. Development Lifecycle
-
-- **Install**: `npm install`
-- **Boot**: `npm run dev` (Vite middleware + Express on `:3210`)
-- **Build**: `npm run build` (Vite production build to `dist/`)
-- **Database Seed**: `npm run seed` (resets data, recreates schemas, provides fixture data)
-- **Migrations**: `npm run db:generate` (outputs Drizzle migration)
-- **Type Check**: `npm run lint` (`tsc --noEmit`)
-- **Test**: `npm test` (Vitest, one run of the unit, integration and eval projects) / `npm run test:watch` (watch mode)
-- **Requirements**: None to start. Contacts and semantic search run on the built-in local model. AI features need one credential: an API key in `.env` (copy from `.env.example`), a key entered under Settings → AI, or a custom OpenAI-compatible endpoint
-
-## 11. AI Stats API Contracts
-
-Two endpoints under `/api/ai/stats` (mounted via `aiStatsRouter`).
-
-### `GET /api/ai/stats/summary`
-
-Returns aggregate session KPIs, quota state, and cache tier statistics.
-
-**Response** `200`:
-
-```
-{
-  session: { totalInvocations, freshCalls, cachedCalls, totalTokens, estimatedCostUsd, cacheHitRate },
-  tier: "LIVE" | "MOCK",
-  freeTier: boolean,  // Google answered the Gemini key with a free-tier quota error
-  quota: { models: Record<modelId, { rpm, tpm, rpd }>, grounding: { rpd } },
-  cacheTiers: Record<tierName, { entries, hits, misses, evictions, hitRate, ttlMs, maxEntries }>,
-  timestamp: string  // ISO 8601
-}
-```
-
-### `GET /api/ai/stats/feed`
-
-Paginated, filterable AI invocation history.
-
-**Query params**: `offset` (default 0), `limit` (default 50, max 200), `operation` (comma-separated filter), `cached` ("true"|"false"), `sort` ("newest"|"oldest").
-
-**Response** `200`:
-
-```
-{
-  items: Array<{ id, operation, model, tokenCount, latencyMs, cached: boolean, description, createdAt }>,
-  pagination: { offset, limit, totalCount, hasMore }
-}
-```
-
-**Data source**: `ai_invocations` table in `curator.db`. 30-day rolling retention. Full contract details in `docs/designs/2026-04-14-architect-ai-stats-page.md`.
+What an agent needs to know before it changes Contrack v2. The long form is
+`docs/architecture.md`. Every route is in `docs/api-reference.md`. Visual and
+code rules are in `STYLE.md`, test rules in `TESTING.md`.
+
+## 1. Stack
+
+- **Runtime.** Node 26.10 or later runs the TypeScript itself. There is no
+  tsx and no server build. `tsc --noEmit` (TypeScript 7) only type-checks.
+- **Server.** Express 5. `server.ts` boots the process. `server/app.ts`
+  (`createApp`, `finalizeApp`) builds the app for the server and for the
+  integration tests. In development Vite 8 runs as middleware inside the same
+  process. In production the server serves `dist/`. One port, 3210.
+- **Client.** React 19, React Router 7, React Query 5, Tailwind CSS 4,
+  Motion 13, Tiptap 3, cmdk, MapLibre GL 6 through `@vis.gl/react-maplibre`.
+- **Data.** SQLite in WAL mode through better-sqlite3 and Drizzle ORM. FTS5
+  for keyword search. sqlite-vec (`vec0`) for vectors.
+- **AI.** Optional. Gemini, OpenAI, Anthropic, or any OpenAI-compatible
+  endpoint. Two local models run on a CPU worker with Transformers.js:
+  `Xenova/all-MiniLM-L6-v2` (384-dim embeddings) and
+  `Xenova/ms-marco-TinyBERT-L-2-v2` (a cross-encoder). They ship in the Docker
+  image, or `npm run models:fetch` downloads them.
+- **Tooling.** Oxlint (`.oxlintrc.json`), `tsc`, the tenant lint
+  (`scripts/tenant-lint.mjs`), knip for unused code, Prettier, husky with
+  lint-staged.
+
+## 2. Layout
+
+| Folder                 | Holds                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `server/routes/`       | Thin Express routers. Validate with zod, delegate, wrap in `asyncHandler`                         |
+| `server/services/`     | Business logic, including `search/`, `dedupe/`, `aiSearch/` (research), `geocoding/`              |
+| `server/repositories/` | Contact hydration and query helpers                                                               |
+| `server/ai/`           | Capabilities, gateway, work queue, adapters, prompt safety                                        |
+| `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                            |
+| `server/mcp/`          | The MCP server: tools, resources, prompts                                                         |
+| `server/tenancy/`      | `Scope`, the request context, `ROUTE_MANIFEST`                                                    |
+| `server/middleware/`   | Auth, rate limits, AI switches, uploads guard, errors, cache headers                              |
+| `server/workers/`      | The CPU worker that runs the local models                                                         |
+| `server/utils/`        | `AppError`, validators, `aiCache`, `secretBox`, `urlSafety`, paths, logger                        |
+| `server/db.ts`         | Connection, migrations, virtual tables, triggers, boot steps                                      |
+| `shared/`              | Code both sides import: facets, score bands, research records, MCP tool list                      |
+| `src/api/`             | React Query hooks, one file per domain                                                            |
+| `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `ai-search/`, `map/`, `settings/`, `dedupe/` |
+| `src/components/`      | Shared UI: `ui/` primitives, `layout/`, `command-palette/`, `brand/` (the corvid), `auth/`        |
+| `src/lib/`             | Tokens (`styles.ts`), names, shortcuts, theme, the corvid's motion                                |
+| `src/db/schema.ts`     | The Drizzle schema                                                                                |
+| `scripts/`             | Seeds, model fetch, eval recorders, brand icons, password reset                                   |
+| `tests/`               | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/`                                             |
+
+## 3. A request
+
+1. A component calls a hook in `src/api/`. Never fetch in a `useEffect`.
+2. The route validates its input with zod: the body through
+   `validateBody(schema)`, and params and query with the schemas in
+   `server/utils/validators.ts` or its own.
+3. The route calls a service and returns JSON. Business logic stays out of
+   routes.
+4. A service throws an `AppError` subclass (`NotFoundError`,
+   `ValidationError`, `ConflictError`, `RateLimitedError`,
+   `ServiceUnavailableError`, `UpstreamTimeoutError`). Never a plain `Error`.
+5. `server/middleware/errorHandler.ts` turns every error into
+   `{ error: { code, message, requestId, details } }`. The client never sees a
+   raw message for a 500. Every response carries `X-Request-Id`.
+6. A multi-step write runs inside `sqlite.transaction(...)`.
+
+## 4. Accounts and isolation
+
+Version 2 hosts several accounts on one instance. Isolation is enforced in
+SQL, and tests prove it.
+
+- Owned tables carry `ownerId`. Triggers refuse an insert with no owner, fill
+  it from the parent contact, or refuse a child whose owner disagrees.
+- A function that reads or writes owned data takes a `Scope` first
+  (`server/tenancy/scope.ts`). The id and the owner go in the SAME statement:
+  `WHERE id = ? AND ownerId = ?`. Never select by id and compare in
+  JavaScript. The request context is for attribution only.
+- Another owner's row answers `404` with the same body as an id that does not
+  exist. Never `403`, never a message that names the id.
+- An id that arrives in a body (a mention's `data-id`, a list member) is
+  checked with `contactRepo.findManyOwned` first. Unknown ids drop silently.
+- Full-text queries filter by the indexed owner token:
+  `ownerTok:<token> AND (<query>)`. Only `server/services/search/lexical.ts`
+  builds a `contacts_fts` MATCH.
+- Every `vec0` KNN names the owner beside `MATCH` and `k`
+  (`AND ownerId = ?`), because `ownerId` is the partition key.
+- A cache value built from one owner's rows is keyed by owner (`ownerKey`
+  in `server/utils/aiCache.ts`). An in-memory queue or map keyed by a client id
+  stores the owner beside each record and refuses other readers.
+- A background sweep that calls AI or writes an attributable row runs one
+  account at a time inside `runWithContext`.
+- `ROUTE_MANIFEST` (`server/tenancy/routeManifest.ts`) classes every route:
+  `public`, `session-self`, `scoped`, `admin`, `instance-read`, `static`. A
+  test fails on an unclassified route, a stale row, a scoped route without an
+  isolation test, or an admin route without `requireAdmin` on the route
+  itself (a named function, never `router.use`).
+- Composite indexes lead with `ownerId`. `tenancy.queryPlans.test.ts` fails
+  when an owner predicate becomes a scan.
+- Sign-in is off by default (`AUTH_REQUIRED=false`): one local owner holds the
+  data. `POST /api/auth/setup` turns that owner into the first admin in place.
+  Sessions are server-side rows keyed by the SHA-256 of the cookie secret.
+  Personal API tokens start with `ctk_`. Passkeys use
+  `@simplewebauthn/server`. Mailed links need `PUBLIC_URL`. `API_TOKEN` is
+  deprecated.
+
+## 5. Data
+
+- The schema is `src/db/schema.ts`. Change it, run `npm run db:generate`, and
+  commit the migration in `drizzle/`. The server applies migrations at boot.
+- Virtual tables, triggers and boot steps live in `server/db.ts`, outside
+  Drizzle:
+  - `contacts_fts` and `interactions_fts` (FTS5). Bump `FTS_SCHEMA_VERSION`
+    when their columns or trigger payloads change; the index then rebuilds.
+  - `search_embeddings` (`vec0`, `INT8[384]`, one scale per table),
+    `search_passage_vectors` (long profile text in passages, same format), and
+    `contact_embeddings` (float vectors for duplicate detection).
+  - Triggers keep FTS in step (deletes by `rowid`, never by `contactId`),
+    stamp `updatedAt` with named columns, stamp `trackedAt`, keep
+    `nextFollowUpAt` equal to the earliest open follow-up, and mark contacts
+    whose score must be recomputed.
+- `vec0` tables do not cascade. Deleting or merging a contact must delete its
+  rows in `search_embeddings`, `contact_embeddings` and
+  `dedupe_embedding_meta`. Never `UPDATE` a partition key or rename a `vec0`
+  table: every upsert is `DELETE` then `INSERT`, and rebuilds go through
+  `vecTableDdl()`.
+- Timestamps come in two formats (`2026-09-10 05:33:50` and ISO with `T` and
+  `Z`). Compare them in SQL through `datetime()` or `strftime`, never against
+  `new Date().toISOString()`.
+- A bulk boot step must not stamp `updatedAt`: a stale-looking contact is
+  re-embedded, which can bill a paid provider.
+- Deletes are soft: `DELETE /api/contacts/:id` moves a contact to the trash,
+  and a daily sweep purges it after the retention period.
+
+## 6. Search
+
+People search (`server/services/searchService.ts`, `runSearch`) answers as
+cheaply as it can:
+
+1. The L1 cache, keyed by owner, `search_revision`, facets, model and query.
+2. Facets (typed in the question or sent as `filters`) compile to one SQL
+   predicate (`search/facetSql.ts`). A facet-only question is answered from the
+   database.
+3. A strict keyword search classifies the query (`search/intent.ts`). An
+   email, a phone number, a quoted phrase or a name is answered locally,
+   verified, with no model.
+4. Implicit facets ("at Northwind", "in Lisbon") answer simple questions
+   locally too.
+5. The L2 semantic cache returns a verified answer to the same question in
+   other words.
+6. Local retrieval: FTS5 and vector KNN, fused by weighted RRF (k = 15), then
+   the cross-encoder reorders the top 30 inside a 25 ms budget. This list
+   streams first, marked unverified.
+7. With AI on, the model stages run in the search lane inside 12 s: the
+   planner, a hard filter, then either a database proof or a compact reranker
+   that must cite a real field value. A failure ends with a fresh local list.
+
+Note search (`interactionSearchService.ts`) is local only: FTS5 over note text
+with date phrases read in the caller's time zone. The eval gates in
+`tests/eval/` replay recorded vectors and model answers, so search quality is
+measured in CI without keys.
+
+## 7. AI
+
+- **Capabilities** (`server/ai/capabilities.ts`): quick, deep, research and
+  embeddings. Each resolves to a provider and model: a Settings pin, then an
+  env pin (`AI_QUICK_MODEL` and the others), then Auto (`AI_PROVIDER` first).
+- **Gateway** (`server/ai/gateway.ts`): `generateFor(capability, options)` and
+  `streamFor(...)`. Business code calls these. Never import a provider SDK
+  outside `server/ai/adapters/`.
+- **Queue** (`server/ai/workQueue.ts`): 2 shared slots and 16 waiting, fair per
+  account, interactive before background. Ask Contrack's calls use a search
+  lane with 2 slots of its own. A full queue answers `429 AI_BUSY`.
+- **Adapters** wrap every call in `withTimeout`, `withRetry` and
+  `parseAIJson` (`server/ai/resilience.ts`).
+- **Prompt safety** (`server/ai/promptSafety.ts`): `wrapUntrusted()` fences
+  contact, file and web text in every prompt. `sanitizeAiOutputValue()`
+  checks what a model writes before it is stored or shown.
+- **Switches.** An account switch (`aiAssist`) and an instance switch (the
+  admin page, or `AI_DISABLED=true`). `aiAllowedFor(req)` reads both. With AI
+  off, no request reaches a provider and search answers from local data.
+- **Cost.** Every call is recorded in `ai_invocations` for the AI usage pages.
+  AI-cost routes are rate limited per address and per account.
+
+## 8. Background work
+
+At boot: migrations and ownership reconcile, the CPU worker loads the local
+models, embedding backfills run per account in rounds, and the geocoder fills
+missing coordinates from Nominatim (1.1 s apart, cached). On schedules: the
+score sweep (hourly for changed contacts, daily for all), backups
+(`BACKUP_INTERVAL_HOURS`), trash purge and maintenance, and the connector
+scheduler (a 60 s tick). `DISABLE_BACKGROUND_JOBS=true` skips all of it.
+
+## 9. Rules that are easy to break
+
+- Resolve a stored `/uploads/...` path with `resolveUploadPath()` before any
+  file read or delete. `guardUploads` serves `/uploads/u/<ownerId>/` to that
+  owner only.
+- Fetch outside URLs (link previews, images, feeds) through `safeFetch`
+  (`server/utils/urlSafety.ts`), which blocks private addresses at connect
+  time.
+- Never put a credential in a URL the server logs. `redactUrlForLog` covers
+  morgan's `url` token.
+- Seal stored secrets with `secretBox` (`CONTRACK_SECRET_KEY` or
+  `DATA_DIR/secret.key`).
+- Write one `auditService.record()` row for every admin action, with no
+  credential in `details`.
+- Relative imports in `server/`, `shared/`, `src/db/` and `scripts/` name the
+  file with its extension (`./geo.ts`). The `@/` alias works in frontend code
+  only.
+- Log with `log.info` for state changes, `log.warn` for retries and
+  degradation, `log.error` for failures. Never `console.log` in app code, and
+  never an empty `.catch(() => {})`.
+
+## 10. Commands
+
+`npm run dev` (port 3210), `npm run build`, `npm test`, `npm run lint`,
+`npm run knip`, `npm run test:e2e`, `npm run db:generate`,
+`npm run models:fetch`, `npm run brand:icons`. `CONTRIBUTING.md` explains each.

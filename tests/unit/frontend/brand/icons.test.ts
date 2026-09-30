@@ -19,12 +19,19 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
+  BLINK_EVERY,
+  livingBird,
+  loopPose,
+  perchLoop,
+} from "../../../../scripts/brand/animatedLockup";
+import {
   MARK_VARIANTS,
   MASKABLE_SAFE_RADIUS,
   descriptionLine,
   icoFile,
   inkReach,
   maskableInset,
+  renderAnimatedLockupSvg,
   renderAppIconSvg,
   renderCardSvg,
   renderLockupSvg,
@@ -37,10 +44,16 @@ import {
 } from "../../../../scripts/brand/poseSheet";
 import { face, measure, outline, wrap } from "../../../../scripts/brand/type";
 import {
+  BIRD_PART_ORDER,
   BRAND,
+  CORVID_EYE,
   CORVID_OPTICAL,
+  CORVID_PATHS,
   TILE,
 } from "../../../../src/assets/corvidPaths";
+import { HOME_POSE, POSE_KEYS } from "../../../../src/assets/corvidRig";
+import { BLINK_EVERY as BRAIN_BLINK_EVERY } from "../../../../src/lib/corvidBrain";
+import type { Motion } from "../../../../src/lib/corvidMotion";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -72,6 +85,41 @@ function icoFrames(bytes: Buffer): { size: number; png: Buffer }[] {
 }
 
 const VARIANTS = Object.keys(MARK_VARIANTS) as MarkVariant[];
+
+/** Every `<animate>` in an SVG, with the attributes of the element it moves. */
+function animations(svg: string) {
+  const found: {
+    tag: string;
+    rest: Record<string, string>;
+    attribute: string;
+    keyTimes: number[];
+    values: string[];
+  }[] = [];
+  const elements = svg.matchAll(
+    /<(path|ellipse)((?: [\w-]+="[^"]*")*)>\n((?:\s*<animate [^\n]*\/>\n)+)\s*<\/\1>/g,
+  );
+  for (const [, tag, attributes, children] of elements) {
+    const rest = Object.fromEntries(
+      [...attributes!.matchAll(/ ([\w-]+)="([^"]*)"/g)].map((m) => [
+        m[1]!,
+        m[2]!,
+      ]),
+    );
+    const animates = children!.matchAll(
+      /<animate attributeName="([\w-]+)"[^\n]*? keyTimes="([^"]*)" values="([^"]*)" \/>/g,
+    );
+    for (const [, attribute, keyTimes, values] of animates) {
+      found.push({
+        tag: tag!,
+        rest,
+        attribute: attribute!,
+        keyTimes: keyTimes!.split(";").map(Number),
+        values: values!.split(";"),
+      });
+    }
+  }
+  return found;
+}
 
 describe("the brand kit's SVGs", () => {
   it("commits every mark, the app icon and the lockups the script draws, byte for byte", async () => {
@@ -111,6 +159,8 @@ describe("the brand kit's SVGs", () => {
       renderAppIconSvg(),
       await renderLockupSvg(false),
       await renderLockupSvg(true),
+      await renderAnimatedLockupSvg(false),
+      await renderAnimatedLockupSvg(true),
     ];
     for (const svg of svgs) {
       expect(svg).not.toContain("var(");
@@ -133,6 +183,183 @@ describe("the brand kit's SVGs", () => {
     expect(icon).toContain(`stroke-width="${medium.stroke}"`);
     expect(icon).toContain(`stop-color="${TILE.gradientTo}"`);
     expect(icon.match(/<path /g)).toHaveLength(medium.parts.length);
+  });
+});
+
+describe("the living lockup", () => {
+  const LIVING = ["contrack-lockup-animated", "contrack-lockup-animated-dark"];
+
+  it("commits the animated lockups the script draws, byte for byte", async () => {
+    expect(read("docs/brand/contrack-lockup-animated.svg")).toBe(
+      await renderAnimatedLockupSvg(false),
+    );
+    expect(read("docs/brand/contrack-lockup-animated-dark.svg")).toBe(
+      await renderAnimatedLockupSvg(true),
+    );
+  });
+
+  it("draws the lockup's box, ring, pen and name, and moves only the bird", async () => {
+    for (const dark of [false, true]) {
+      const still = await renderLockupSvg(dark);
+      const living = await renderAnimatedLockupSvg(dark);
+      // Every line of the static lockup but its comment is here: the box,
+      // the group's pen, the ring, the logo's bird and the name.
+      const lines = new Set(living.split("\n").map((line) => line.trim()));
+      for (const line of still.split("\n")) {
+        if (line.includes("<!--")) continue;
+        expect(lines.has(line.trim()), line.slice(0, 60)).toBe(true);
+      }
+      // One ring, never animated. Every animation is in the living bird.
+      expect(living.split(`<path d="${CORVID_PATHS.ring}" />`)).toHaveLength(2);
+      expect(living).not.toMatch(/<animate(Transform|Motion)/);
+      const alive = living.slice(living.indexOf('<g class="alive">'));
+      expect(alive.split("<animate ").length).toBe(
+        living.split("<animate ").length,
+      );
+    }
+  });
+
+  it("starts and ends every animation on the logo, and holds it exactly between acts", async () => {
+    const loop = perchLoop();
+    for (const t of [0, loop.duration]) {
+      const pose = loopPose(loop, t);
+      for (const key of POSE_KEYS) expect(pose[key], key).toBe(HOME_POSE[key]);
+    }
+    // The middle of each still moment before an act, and after the last,
+    // where no blink is playing either.
+    const ends = [
+      0,
+      ...loop.acts.map(({ motion, start }) => start + motion.duration),
+    ];
+    const still = ends
+      .map((end, i) => (end + (loop.acts[i]?.start ?? loop.duration)) / 2)
+      .filter((t) =>
+        loop.blinks.every(
+          ({ motion, start }) => t < start || t > start + motion.duration,
+        ),
+      );
+    expect(still.length).toBeGreaterThanOrEqual(3);
+
+    const logo = new Set(BIRD_PART_ORDER.map((part) => CORVID_PATHS[part]));
+    const eye: Record<string, string> = {
+      cx: String(CORVID_EYE.cx),
+      cy: String(CORVID_EYE.cy),
+      rx: String(CORVID_EYE.r),
+      ry: String(CORVID_EYE.r),
+    };
+    for (const dark of [false, true]) {
+      const found = animations(await renderAnimatedLockupSvg(dark));
+      // Every stroke moves, and the eye turns and blinks.
+      expect(found.filter(({ tag }) => tag === "path")).toHaveLength(
+        BIRD_PART_ORDER.length,
+      );
+      expect(found.filter(({ tag }) => tag === "ellipse")).toHaveLength(4);
+      for (const { tag, rest, attribute, keyTimes, values } of found) {
+        const home = rest[attribute]!;
+        if (tag === "path") expect(logo.has(home), attribute).toBe(true);
+        else expect(home, attribute).toBe(eye[attribute]);
+        expect(values[0], attribute).toBe(home);
+        expect(values.at(-1), attribute).toBe(home);
+        expect(keyTimes[0]).toBe(0);
+        expect(keyTimes.at(-1)).toBe(1);
+        expect(values).toHaveLength(keyTimes.length);
+        // In a still moment the keyframes either side are the logo's, so
+        // the browser draws the logo and not a line that passes near it.
+        for (const t of still) {
+          const i = keyTimes.filter((time) => time <= t / loop.duration).length;
+          expect(values[i - 1], `${attribute} at ${t}`).toBe(home);
+          expect(values[i], `${attribute} at ${t}`).toBe(home);
+        }
+      }
+    }
+  });
+
+  it("holds the bird still, as the logo, for a person who asked for reduced motion", async () => {
+    const living = await renderAnimatedLockupSvg(false);
+    expect(living).toMatch(
+      /\.still \{ display: none; \}\s*@media \(prefers-reduced-motion: reduce\) \{\s*\.alive \{ display: none; \}\s*\.still \{ display: inline; \}/,
+    );
+    const still = living.slice(
+      living.indexOf('<g class="still">'),
+      living.indexOf('<g class="alive">'),
+    );
+    expect(still).not.toContain("<animate");
+    for (const part of BIRD_PART_ORDER) {
+      expect(still, part).toContain(`<path d="${CORVID_PATHS[part]}" />`);
+    }
+    expect(still).toContain(
+      `<circle cx="${CORVID_EYE.cx}" cy="${CORVID_EYE.cy}" r="${CORVID_EYE.r}" fill="${BRAND.eyeLight}" stroke="none" />`,
+    );
+  });
+
+  it("plays blinks, three looks about and three big acts, one at a time, in 20 to 30 seconds", () => {
+    const loop = perchLoop();
+    expect(loop.duration).toBeGreaterThanOrEqual(20_000);
+    expect(loop.duration).toBeLessThanOrEqual(30_000);
+    const names = loop.acts.map((cue) => cue.motion.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["glance", "cock", "lookBack"]),
+    );
+    const big = names.filter((name) =>
+      ["preen", "ruffle", "stretch", "caw", "hop"].includes(name),
+    );
+    expect(big).toHaveLength(3);
+    // A still moment before each act, and after the last.
+    let end = 0;
+    for (const { motion, start } of loop.acts) {
+      expect(start - end, motion.name).toBeGreaterThanOrEqual(1_000);
+      end = start + motion.duration;
+    }
+    expect(loop.duration - end).toBeGreaterThanOrEqual(1_000);
+    // Blinks on the brain's own clock, give or take the frame they start on.
+    expect(BLINK_EVERY).toEqual(BRAIN_BLINK_EVERY);
+    expect(loop.blinks.length).toBeGreaterThanOrEqual(3);
+    loop.blinks.slice(1).forEach(({ start }, i) => {
+      const gap = start - loop.blinks[i]!.start;
+      expect(gap).toBeGreaterThan(BLINK_EVERY[0] - 17);
+      expect(gap).toBeLessThan(BLINK_EVERY[1] + 17);
+    });
+    // The same seed, the same loop.
+    expect(perchLoop()).toEqual(loop);
+  });
+
+  it("pads a stroke whose points change in number, and hides it while it is not drawn", () => {
+    // The nape draws itself in as the bird leaves the ring, with more points
+    // frame by frame. No perched act draws it, so this loop is made up.
+    const motion: Motion = {
+      name: "flutter",
+      duration: 600,
+      tracks: {
+        nape: [
+          { at: 0, value: 0 },
+          { at: 300, value: 1 },
+          { at: 600, value: 0 },
+        ],
+      },
+    };
+    const lines = livingBird("#000000", "", {
+      acts: [{ motion, start: 200 }],
+      blinks: [],
+      duration: 1_000,
+    });
+    const nape = animations(lines.join("\n")).filter(
+      ({ rest }) => rest.visibility === "hidden",
+    );
+    const d = nape.find(({ attribute }) => attribute === "d")!;
+    const visibility = nape.find(
+      ({ attribute }) => attribute === "visibility",
+    )!;
+    // One list of commands in every keyframe, so the browser can morph it.
+    const commands = new Set(d.values.map((v) => v.replace(/[^MC]/g, "")));
+    expect([...commands]).toEqual(["MCCCCCC"]);
+    expect(visibility.values).toEqual(["hidden", "visible", "hidden"]);
+  });
+
+  it("keeps each file under 150 KB, for the first image the README loads", () => {
+    for (const name of LIVING) {
+      const bytes = fs.statSync(file(`docs/brand/${name}.svg`)).size;
+      expect(bytes, name).toBeLessThan(150_000);
+    }
   });
 });
 
@@ -271,14 +498,14 @@ describe("the link preview and the kit's images", () => {
     expect(exists("docs/brand/README.md")).toBe(true);
   });
 
-  it("heads the README with the lockup, and a dark one for a dark page", () => {
+  it("heads the README with the living lockup, and a dark one for a dark page", () => {
     const readme = read("README.md");
     const header = readme.slice(0, readme.indexOf("</h1>"));
     expect(header).toContain(
-      '<source media="(prefers-color-scheme: dark)" srcset="docs/brand/contrack-lockup-dark.svg" />',
+      '<source media="(prefers-color-scheme: dark)" srcset="docs/brand/contrack-lockup-animated-dark.svg" />',
     );
     expect(header).toContain(
-      '<img src="docs/brand/contrack-lockup.svg" alt="Contrack"',
+      '<img src="docs/brand/contrack-lockup-animated.svg" alt="Contrack" width="400" />',
     );
   });
 

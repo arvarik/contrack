@@ -26,6 +26,9 @@
  *   corvid-app-icon.svg, -1024.png    the app icon's master
  *   contrack-lockup.svg, .png         the mark and the name, light ground
  *   contrack-lockup-dark.svg, .png    the same, dark ground
+ *   contrack-lockup-animated.svg, contrack-lockup-animated-dark.svg
+ *                                     the lockups with the bird alive, for
+ *                                     the README (see `animatedLockup.ts`)
  *   social-preview.png                1280 by 640, the repository's card
  *   corvid-optical-sizes.png          the four masters at the sizes they serve
  *   corvid-mark-variants.png          the four colour versions on their grounds
@@ -51,17 +54,21 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import sharp, { type OverlayOptions } from "sharp";
 import {
+  BIRD_PART_ORDER,
   BRAND,
   CORVID_BOX,
   CORVID_EYE,
   CORVID_OPTICAL,
   CORVID_PATHS,
+  CORVID_RING,
   TILE,
   fitMark,
   samplePath,
+  type CorvidPart,
   type OpticalMaster,
   type Placement,
 } from "../../src/assets/corvidPaths.ts";
+import { REDUCED_MOTION_STYLE, livingBird } from "./animatedLockup.ts";
 import { renderPoseSheet } from "./poseSheet.ts";
 import { face, outline, textPath, wrap, type FaceName } from "./type.ts";
 
@@ -90,24 +97,40 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 // SVG builders
 // ---------------------------------------------------------------------------
 
-/** A master's paths and eye in a group placed by `placement`, as SVG lines. */
+/** Some of the mark's parts, as SVG lines. */
+const partLines = (parts: readonly CorvidPart[], indent: string): string[] =>
+  parts.map((part) => `${indent}<path d="${CORVID_PATHS[part]}" />`);
+
+/** A master's eye, as SVG lines: none for a master that draws no eye. */
+const eyeLines = (
+  master: OpticalMaster,
+  eye: string,
+  indent: string,
+): string[] =>
+  master.eye > 0
+    ? [
+        `${indent}<circle cx="${CORVID_EYE.cx}" cy="${CORVID_EYE.cy}" r="${master.eye}" fill="${eye}" stroke="none" />`,
+      ]
+    : [];
+
+/**
+ * A master's paths and eye in a group placed by `placement`, as SVG lines.
+ * `inside` replaces the paths and the eye, and keeps the group's pen.
+ */
 function markGroup(
   master: OpticalMaster,
   { scale, tx, ty }: Placement,
   ink: string,
   eye: string,
   indent: string,
+  inside: readonly string[] = [
+    ...partLines(master.parts, `${indent}  `),
+    ...eyeLines(master, eye, `${indent}  `),
+  ],
 ): string[] {
   return [
     `${indent}<g transform="translate(${tx} ${ty}) scale(${scale})" fill="none" stroke="${ink}" stroke-width="${master.stroke}" stroke-linecap="round" stroke-linejoin="round">`,
-    ...master.parts.map(
-      (part) => `${indent}  <path d="${CORVID_PATHS[part]}" />`,
-    ),
-    ...(master.eye > 0
-      ? [
-          `${indent}  <circle cx="${CORVID_EYE.cx}" cy="${CORVID_EYE.cy}" r="${master.eye}" fill="${eye}" stroke="none" />`,
-        ]
-      : []),
+    ...inside,
     `${indent}</g>`,
   ];
 }
@@ -239,6 +262,15 @@ export function renderAppIconSvg(): string {
   return tileSvg({ master: medium, comment: APP_ICON_COMMENT });
 }
 
+interface LockupOptions {
+  /** What the file is, for its comment. */
+  about: string;
+  /** Lines to put before the mark, such as a style. */
+  head?: readonly string[];
+  /** What the mark's group holds in place of the logo's paths and eye. */
+  inside?: (eye: string) => string[];
+}
+
 /**
  * The lockup: the mark and the name, in the proportions of `<Wordmark>`.
  * The name is set at 0.7 of the mark's height, tracked as the app's
@@ -246,7 +278,38 @@ export function renderAppIconSvg(): string {
  * component's 8 px at 28 px, scaled. The box keeps the mark's own side
  * margin after the name too. Units are pixels at the PNG's size.
  */
-export async function renderLockupSvg(dark: boolean): Promise<string> {
+export function renderLockupSvg(dark: boolean): Promise<string> {
+  return lockupSvg(dark, {
+    about: `The mark and the name, for a ${dark ? "dark" : "light"} ground.`,
+  });
+}
+
+/**
+ * The lockup with the bird alive, for the README: the box, the ring, the pen
+ * and the name of `renderLockupSvg`, and the bird of `animatedLockup.ts`.
+ * The still bird is there too, hidden, and it takes the moving bird's place
+ * for a person who asked for reduced motion.
+ */
+export function renderAnimatedLockupSvg(dark: boolean): Promise<string> {
+  return lockupSvg(dark, {
+    about: `The mark and the name, for a ${dark ? "dark" : "light"} ground, with the bird alive. With reduced motion, the bird holds still.`,
+    head: REDUCED_MOTION_STYLE,
+    inside: (eye) => [
+      ...partLines([CORVID_RING], "    "),
+      `    <g class="still">`,
+      ...partLines(BIRD_PART_ORDER, "      "),
+      ...eyeLines(large, eye, "      "),
+      `    </g>`,
+      ...livingBird(eye, "    "),
+    ],
+  });
+}
+
+/** The layout both lockups share, as `renderLockupSvg` describes it. */
+async function lockupSvg(
+  dark: boolean,
+  { about, head = [], inside }: LockupOptions,
+): Promise<string> {
   const height = 240;
   const name = outline(
     await face("name"),
@@ -264,13 +327,15 @@ export async function renderLockupSvg(dark: boolean): Promise<string> {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Contrack">`,
     `  <title>Contrack</title>`,
-    `  <!-- The mark and the name, for a ${dark ? "dark" : "light"} ground. Generated by scripts/brand/build-icons.ts. Do not edit. -->`,
+    `  <!-- ${about} Generated by scripts/brand/build-icons.ts. Do not edit. -->`,
+    ...head.map((line) => `  ${line}`),
     ...markGroup(
       large,
       { scale, tx: 0, ty: 0 },
       variant.ink,
       variant.eye,
       "  ",
+      inside?.(variant.eye),
     ),
     `  ${textPath(name, height + gap - name.ink.left, baseline, dark ? BRAND.onSurfaceDark : BRAND.onSurface)}`,
     `</svg>`,
@@ -675,6 +740,14 @@ export async function build(): Promise<string[]> {
     [path.join(BRAND_DIR, "contrack-lockup.png"), await png(lockupLight)],
     [path.join(BRAND_DIR, "contrack-lockup-dark.svg"), lockupDark],
     [path.join(BRAND_DIR, "contrack-lockup-dark.png"), await png(lockupDark)],
+    [
+      path.join(BRAND_DIR, "contrack-lockup-animated.svg"),
+      await renderAnimatedLockupSvg(false),
+    ],
+    [
+      path.join(BRAND_DIR, "contrack-lockup-animated-dark.svg"),
+      await renderAnimatedLockupSvg(true),
+    ],
     [
       path.join(BRAND_DIR, "social-preview.png"),
       await png(await renderCardSvg(1280, 640, line)),
