@@ -6,7 +6,6 @@ node_modules
 .github
 .vscode
 .idea
-.cursorrules
 .agent
 .claude
 .husky

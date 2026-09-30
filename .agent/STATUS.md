@@ -1,138 +1,76 @@
-# Contrack CRM — Project Status
+# Status
 
-[STATE: IDLE]
+## Where v2 stands
 
-## Current Focus
+- Version 2 is built on the `v2.0` branch, and pull requests target it.
+  `main` holds the 1.5 line. The repository allows squash merges only.
+- `package.json` still says 1.5.5. The release bumps it to 2.0.0 and moves the
+  `[Unreleased]` section of `CHANGELOG.md` under that version.
+- `CHANGELOG.md` is the full record of what v2 changed. The summary below is
+  the map.
 
-Multi-tenancy implementation is complete across backend scoping, account/role management, tokens, and admin APIs.
+## What v2 changes
 
-## Feature Lifecycle
+- **Accounts.** Several accounts on one instance, isolated in SQL. Sign-in
+  with a password, a passkey or an emailed link. Invitations, roles, an admin
+  area, an audit log, outgoing mail, personal API tokens, and instance
+  settings that an environment variable can lock.
+- **Security.** A CSP and security headers on every response, no trusted proxy
+  unless `TRUST_PROXY_HOPS` says so, data files readable by their owner only,
+  mailed links from `PUBLIC_URL` only, outside fetches through `safeFetch`,
+  encrypted stored keys, formula-safe CSV.
+- **Tracking and Pulse.** Tracking is a choice, and the score ring shows only
+  for tracked people. Pulse is one morning page: the day's sentence, Up next
+  with Catch up, Keeping up, Activity, Inbox, Coming up, Composition, and a
+  layout a person can rearrange. Tracked contacts is a settings page.
+- **Search.** Ask Contrack answers locally first: facets in SQL, names, emails
+  and phone numbers with no model, a local cross-encoder, int8 vectors, a
+  semantic cache, passage evidence, and model-checked reasons. Note search is
+  new, and search history is shared with the palette.
+- **Contacts.** A contact page that follows its pane's width, one composer,
+  one pattern for every detail, the Dossier with the briefing and the research
+  record, default avatars from pronouns and names, a trash with undo, and
+  vCard export.
+- **Research.** Two depths, cited sources, a record of every run, and filters
+  on the Contact enrichment page.
+- **Map.** MapLibre on OpenFreeMap tiles, layers and saved views, selection
+  and bulk actions, the insights pane, pins placed by hand, and self-hosted
+  basemaps.
+- **Connectors.** Calendar (ICS), mailbox (IMAP) and Google, with a
+  correspondents review.
+- **MCP.** A built-in MCP server with 15 tools for Claude, Cursor and scripts.
+- **Settings.** A registry of pages with row search and a two-pane shell.
+- **AI.** Routing by task across Gemini, OpenAI, Anthropic and any
+  OpenAI-compatible endpoint. Account and instance switches. The local search
+  models ship in the Docker image.
+- **The corvid.** A brand kit drawn from one path file, a rig, a living mark,
+  and flights.
+- **Platform.** Node 26.10 runs the TypeScript itself, TypeScript 7, Oxlint,
+  Express 5, Vite 8, knip, test isolation, and eval gates for search,
+  duplicates and answers.
 
-_Empty — start a new feature with `/step1-spec`._
+## Open
 
-## Current State
+- **A-05.** `recencyScore` is discontinuous at zero: a contact stamped at or
+  ahead of now scores 100 on a signal weighted at 40 percent. The reachable
+  path is closed (future interaction dates are refused, and
+  `lastContactedAt` is clamped to now). The formula is unchanged, because
+  smoothing it moves every score and no eval shows which numbers are better.
+- **Large components.** `src/views/dedupe/DedupeView.tsx` (842 lines),
+  `src/views/dedupe/components/SuggestionReviewQueue.tsx` (1,089) and
+  `src/components/command-palette/CommandPalette.tsx` (1,269) each need a
+  refactor of their own.
+- **Test-only seams.** A few remain from the unit test audit, for example the
+  test hover delay in `src/views/map/ContactMap.tsx`,
+  `__resetInvitationToken` and `resetLastRecorded`. PR #147's description
+  lists them.
 
-**State:** Multi-tenancy complete (accounts, roles, tokens, and the admin API)
+## Resolved issues that code comments cite
 
-**Test Suite:** 1163 tests (1163 passing, 0 todo) — unit + integration (real SQLite), 0 regressions. Multi-tenancy backend implementation is complete. Mounts `requireAdmin` on every route the manifest classes `admin` and adds routes under `/api/admin`: the account list, create, patch, reset-password, disable, enable, export and delete, plus invitations and the audit log. Personal API tokens, open registration and the instance settings, a per-account rate limit on the AI routes beside the existing per-address one, the daily maintenance sweep, the instance view of AI usage, and the deprecation path for the environment `API_TOKEN`. `tests/integration/api.admin.test.ts` calls every admin route as a member and as an admin, and covers the temporary-password gate, the invitation life cycle, disable and enable, and the purge, which removes an account of 10,000 contacts in 147 ms to 160 ms against a two-second budget. The isolation matrix has no todo left, every `scoped` route is `isolated: true` in `ROUTE_MANIFEST`, `npm run lint` runs `tenant-lint --strict "server/**/*.ts"` over the whole server tree, and `tests/integration/tenancy.queryPlans.test.ts` proves the owner predicate is an index seek for core relational statements, with the full-text query pinned through its `MATCH` expression.
-
-The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
-
-## Relevant Files for Current Task
-
-_None — next feature not started._
-
-## Stabilization & Polish Sweep (Phase 2–4, 2026-05-14)
-
-**Phase 2 — Backend Stabilization & Robustness:**
-
-- `server/utils/AppError.ts` — added `code`, `details`, `cause` fields + named subclasses (`NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`)
-- `server/utils/asyncHandler.ts` — strict typing; catches synchronous throws
-- `server/middleware/errorHandler.ts` (NEW) — central translation for AppError / ZodError / Express parse errors / SQLite errors; production stack stripping; `notFoundHandler` for `/api/*` 404s
-- `server/utils/validators.ts` — `validateBody` / `validateParams` / `validateQuery` now throw `ValidationError` instead of writing responses
-- `server/ai/resilience.ts` (NEW) — shared `withTimeout`, `withRetry`, `isRetryableError`, `parseAIJson` primitives consumed by every adapter
-- OpenAI / Anthropic / Gemini adapters — all now have retries, hard timeouts, and tolerant JSON parsing
-- `server/repositories/contactRepository.ts` — `insertChildRecords` wrapped in `sqlite.transaction()`
-- `server/services/dedupe/merging.ts` + `suggestions.ts` — merge + audit log now atomic; `throw new Error` replaced with typed `AppError` subclasses
-
-**Phase 3 — Frontend Consistency & Mobile Responsiveness:**
-
-- `src/contexts/SessionContext.tsx` — split into `RecentContext` + `AISearchSessionContext`; both provider values memoized
-- `src/contexts/AISearchContext.tsx` + `DedupeContext.tsx` — provider values memoized to stop value-recreation cascades
-- `src/components/ui/Modal.tsx` — responsive bottom-sheet on mobile (full-width, slide-up); 44px close-button hit area; safe-area inset
-- `src/components/ui/IconButton.tsx` (NEW) — touch-safe 44×44 icon button primitive
-- `src/components/QuickInteractionModal.tsx` — re-platformed onto shared `Modal` + `IconButton`; `text-base` mobile inputs to suppress iOS auto-zoom
-- `src/components/BulkEditFieldModal.tsx` — fixed hard-coded dark dropdown (was `bg-[#242424]`); added click-outside; 44px touch targets
-
-**Phase 4 — Open Source Polish & Test Coverage:**
-
-- TSDoc enrichment for `src/lib/utils.ts`, `server/utils/helpers.ts`, `src/types.ts`, `server/repositories/types.ts`
-- New test file `tests/unit/resilience.test.ts` (35 tests) — full coverage of timeout, retry, classifier, JSON parser
-- New test file `tests/unit/appError.test.ts` (14 tests) — AppError contract + every subclass
-- New test file `tests/unit/errorHandler.test.ts` (18 tests) — middleware translation for every error shape
-- Removed `: any` on the 3 AI adapter SDK response sites (replaced with minimal local interfaces)
-- Logger usage verified: INFO for state changes, WARN for AI retries + operational errors, ERROR for unhandled exceptions
-
-## Recently Completed
-
-**Multi-Provider AI** (2026-04-24) — Shipped to main.
-
-- OpenAI (`gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4`) and Anthropic (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6`) as first-class providers alongside Gemini
-- Provider-agnostic `AIProvider` interface with adapters in `server/ai/adapters/`
-- Capability router (`ai/capabilities.ts`) resolves provider + model per capability; `AI_PROVIDER` is the Auto-mode preference
-- Single-pass search strategy for OpenAI/Anthropic (web search + structured output in one call)
-- Provider-aware UI: generic "AI" labels, per-provider tier badges, cost display for all paid tiers
-- Provider-aware diagnostics, quota visualization, error messages
-- 41 multi-provider contract tests + 72 existing = 113 total
-- 2 audit cycles (10 findings total, all resolved)
-- Archived to `docs/archive/multi-provider-ai/`
-
-**AI Stats Page** (2026-04-14) — Shipped to main.
-
-- Invocation tracking across all 10 AI functions + 2 cache-hit paths
-- `/settings/ai-stats` dashboard with SummaryBar, KPI cards, filtered feed, cache tiers accordion
-- `GET /api/ai/stats/summary` and `GET /api/ai/stats/feed` endpoints
-- 30-day retention cleanup, X-Powered-By disabled
-- Security audit: 0 critical/high findings, 5 low (documented)
-- Archived to `docs/archive/ai-stats-page/`
-
-## Known Issues Carried Forward
-
-- B-02: ~~Feed pagination replaces pages instead of appending~~ — **resolved 2026-09-11** by extra F6. The decision was append: `useAIStatsFeed` is an infinite query and "Load older activity" adds a page rather than replacing the one on screen
-- S-02: Error messages reflect raw user input in JSON (low risk, React escapes)
-- S-03: ~~No `Cache-Control: no-store` header on stats endpoints~~ — **resolved 2026-09-11** by extra F1. `server/middleware/cacheControl.ts` marks `/api/auth`, `/api/admin`, `/api/ai/stats` and `/api/export` as never storable, and uploads are `private` rather than `public`
-- P-01: ~~The dedupe scan's name and email passes join a table to itself through `LOWER(TRIM(...))`~~ — **resolved 2026-09-11** by story 1. No index can answer a join predicate wrapped in a function, so SQLite compared every contact with every other: 42.9 s on 10,000 contacts to find no duplicates at all, growing with the size of the account rather than the number of duplicates in it. Both passes group rows already in memory: 24 ms at 10,000, 131 ms at 50,000
-- P-02: ~~The KNN matcher can pair an active contact with an archived one~~ — **resolved 2026-09-11** by story 4. The dedupe neighbour search applies the ghost, archived and active predicates as sqlite-vec metadata columns, so a neighbour slot is no longer spent on a candidate the scorer would drop
-- A-01: ~~58 auto-merge pairs are two different people~~ — **partly resolved 2026-09-12**, and the number was wrong. Two findings. First, 26 of the 58 were a defect in the eval corpus rather than in the engine: `otherFor` advanced the second person's first name by one index where it needed a whole surname cycle, so 13 of 16 `siblings` pairs and 13 of 16 `shared-landline` pairs were two records of one name at one company, which no signal can separate. The generator now takes those names from a disjoint pool, `validateCorpus` refuses a negative that carries one name twice, and the honest starting figure was 45. Second, a shared email address is no longer an identity anchor when the address names a group: `isSharedMailbox` reads the local part, and `team.northwind@` or `haddad.family@` now scores as an employer signal rather than at 0.98. That removed all 15 shared-inbox merges with no true positive lost. **45 → 30 at auto, precision 0.6548 → 0.7857, F1 0.7555 → 0.8344.** What remains: 14 namesake pairs, which are one name at one company and which no available signal separates, and 16 shared-landline pairs, which are now separable because the corpus finally gives the two people different first names. The landline case was measured as unfixable and that measurement was an artifact of the corpus bug
-- A-03: ~~`text-primary` on `bg-primary/15` does not clear WCAG AA in the light palette~~ — **resolved 2026-09-12** with a scoped token rather than a darker brand. `--color-on-primary-wash` carries text that sits on a `bg-primary/10`, `/15` or `/20` wash, at `#005e81` in light and at the primary itself in dark, where nothing needed to change. Worst case 4.66:1 against 4.21:1 before. 31 call sites moved to `text-on-primary-wash`. `--color-primary` is untouched, which was the point: it is 299 call sites, every filled button and the branding gradient, and darkening it to satisfy a pill is a product decision this is not. A picked accent gets its own wash token from `deriveWashText`, so the guarantee is the same one the shipped palettes give. Three tests hold it: the wash token clears every alpha in both palettes, the primary still does not (pinned from both sides, so the token cannot become dead weight unnoticed), and a source scan refuses any class string that names `text-primary` and a heavy wash together. The live audit reads 0 failures on 19 routes in both palettes and for two custom accents
-- P-03: ~~The hourly relationship-score sweep rescores every contact of every account~~ — **resolved 2026-09-11** by story 10. It cost 989 ms on 50,000 contacts to change almost nothing; it now reads a partial index of contacts a trigger marked, at 0.08 ms on a quiet instance. A daily full pass still runs for recency decay, at 435 ms
-- P-04: ~~Writing a relationship score stamps `updatedAt` on the contact~~ — **resolved 2026-09-11** by story 10. The hourly sweep therefore moved `updatedAt` on every contact in the instance every hour, so the column meant "the last sweep" rather than "the last edit", and `findStaleEmbeddings` re-embedded the whole corpus on the next dedupe scan through whichever provider is configured. Both `updatedAt` triggers now name their columns, derived from the table so a column added later is covered
-- A-05: `recencyScore` is discontinuous at zero. It returns 100 when `daysSince <= 0` and 91.68 at any positive value with a 30-day cadence, so a contact stamped at or ahead of now takes full marks on a signal weighted at 40 percent. **The reachable path was closed on 2026-09-12 and the formula was not changed.** Two guards: `pastDateSchema` refuses a future interaction date at the route with five minutes of clock slack, and the derived `UPDATE` clamps `lastContactedAt` with `MIN(MAX(date), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`, which closes that slack and the rows an older version already wrote. The `strftime` spelling is not decoration: `datetime('now')` writes `2026-09-11 18:45:11` and the app writes `2026-09-11T18:45:10.665Z`, a space sorts below `T`, and a clamp built on `datetime('now')` would find every ISO timestamp larger and clamp nothing. The first version of the drizzle half had the same class of bug from the other direction, interpolating the expression as a bound parameter so `MIN` compared against the literal text; an integration test caught it. The formula stays discontinuous, because smoothing it moves every score in the instance and no eval exists that would show the new numbers are better. A row already holding a future value still scores 100 until its next interaction
-- A-04: Two placeholder prompts on the contact detail page were drawn at half opacity, which is half the contrast: 2.19:1 and 2.86:1 on a white card. **Resolved 2026-09-11** with the theme work — italic and muted instead of faded. Worth recording because of how it was found: the browser contrast audit had never reached the contact detail route, which it skips unless the instance has a contact in it
-- A-02: ~~No `middle-name` duplicates and 62% of `typo` ones with AI off~~ — **middle-name resolved 2026-09-12**. One exact cause, found by measuring rather than guessing: `runFunnelPass` keeps a pair only at 0.75 and above when no provider is configured, and the middle-name family scored 0.643 to 0.750. Blocking was never the problem, 15 of 15 shared a block key. `isMiddleNameExtension` is now a deterministic rule of its own at 0.88, which is below the auto threshold, so the pair is found and still reviewed: a father and a son can differ by exactly a middle name. **Recall 0.0667 → 1.0, with no new false positive.** The typo gap stays: 23 of 37, all of them in the same 0.75 band, and closing it means lowering that cutoff, which adds review volume rather than merges
-- D-02: ~~OpenAI/Anthropic adapters lack retry/error handling~~ — **resolved 2026-05-14** via the shared `server/ai/resilience.ts` module (`withTimeout` + `withRetry` + `parseAIJson` integrated into all three adapters)
-
-## Carried Tech Debt (not blocking ship)
-
-- `server/services/dedupe/` retains ~30 `any` casts on raw SQLite row access. These are pragmatic — the row shapes are joined-ad-hoc rather than `$inferSelect`-able — but should be narrowed to local row interfaces when next touched. (Out of scope for the polish sweep per the negative constraint "do not change feature logic".)
-- `src/views/dedupe/DedupeView.tsx` (742 LOC), `src/views/dedupe/components/SuggestionReviewQueue.tsx` (802 LOC), and `src/components/command-palette/CommandPalette.tsx` (850 LOC) remain "god components". They were flagged in the Phase 1 audit but not decomposed in Phase 3 — each warrants its own focused refactor.
-
----
-
-## Stub Audit Tracker
-
-_Track mock/stub status across the frontend. Populated during Build phase, cleared during Ship._
-
-| Stub Location                                                | Type                 | Real API Endpoint                     | Status                                           |
-| ------------------------------------------------------------ | -------------------- | ------------------------------------- | ------------------------------------------------ |
-| `server/ai/aiService.ts:76` — `parseContactRecord()`         | isMockMode guard     | Throws error (no mock data)           | Production — graceful degradation                |
-| `server/ai/aiService.ts:199` — `generateCatchMeUpBriefing()` | isMockMode mock data | `POST /api/contacts/:id/briefing`     | Production — returns hardcoded 3-bullet briefing |
-| `server/ai/aiService.ts:262` — `extractMentions()`           | isMockMode mock data | Inline AI call                        | Production — returns empty array                 |
-| `server/ai/aiService.ts:340` — `summarizeEmlEmail()`         | isMockMode mock data | `POST /api/contacts/:id/interactions` | Production — returns hardcoded HTML summary      |
-| `server/ai/aiService.ts:401` — `rerankCandidates()`          | isMockMode mock data | `POST /api/search/semantic`           | Production — returns first candidate             |
-| `server/ai/aiService.ts:509` — `generateDailyInsight()`      | isMockMode mock data | `GET /api/dashboard/insight`          | Production — returns null                        |
-| `server/ai/aiService.ts:592` — `bulkParseContacts()`         | isMockMode guard     | Throws error (no mock data)           | Production — graceful degradation                |
-| `server/ai/aiService.ts:664` — `generateSearchExpansion()`   | isMockMode guard     | Inline AI call                        | Production — returns null                        |
-| `server/ai/aiService.ts:715` — `synthesizeSearchResults()`   | isMockMode mock data | `POST /api/search/synthesize`         | Production — returns templated string            |
-| `src/views/ai-stats/components/SummaryBar.tsx:20`            | Tier badge label     | N/A (UI label)                        | Production — displays "Mock Mode" tier badge     |
-
-_All stubs are production-grade graceful degradation paths (triggered when no AI provider is configured). No MSW mocking or dev-only fake data detected._
-
----
-
-## Prompt Versioning Changelog
-
-_Track changes to LLM prompts so we can diff versions and rollback if evals degrade._
-
-| Version | Date       | Change Description                                                                   | Eval Score | Delta | File                                                     |
-| ------- | ---------- | ------------------------------------------------------------------------------------ | ---------- | ----- | -------------------------------------------------------- |
-| v1.0    | 2026-04-16 | Baseline — contact record parsing (structured extraction from unstructured text)     | —          | —     | `server/ai/aiService.ts:80-95`                           |
-| v1.0    | 2026-04-16 | Baseline — catch-me-up briefing (3-bullet executive brief from contact+timeline)     | —          | —     | `server/ai/aiService.ts:209-230`                         |
-| v1.0    | 2026-04-16 | Baseline — mention extraction (NER for people in CRM notes)                          | —          | —     | `server/ai/aiService.ts:277-294`                         |
-| v1.0    | 2026-04-16 | Baseline — EML email summarization (raw .eml → HTML digest)                          | —          | —     | `server/ai/aiService.ts:346-360`                         |
-| v1.0    | 2026-04-16 | Baseline — reranker (precision-focused candidate filtering for Ask Contrack)         | —          | —     | `server/ai/aiService.ts:412-427`                         |
-| v1.0    | 2026-04-16 | Baseline — daily insight (actionable CRM network insight from stats)                 | —          | —     | `server/ai/aiService.ts:515-529`                         |
-| v1.0    | 2026-04-16 | Baseline — search expansion / Doc2Query (write-time synonym generation)              | —          | —     | `server/ai/aiService.ts:680`                             |
-| v1.0    | 2026-04-16 | Baseline — synthesis brief (executive summary of search results)                     | —          | —     | `server/ai/aiService.ts:739-753`                         |
-| v1.0    | 2026-04-16 | Baseline — AI Search research prompt (grounded contact research with disambiguation) | —          | —     | `server/services/aiSearch/promptTemplate.ts:31-188`      |
-| v1.0    | 2026-04-16 | Baseline — AI Search extraction prompt (Pass 2 structured JSON extraction)           | —          | —     | `server/services/aiSearch/strategies/twoPass.ts:120-140` |
+| Id   | Issue                                                           | Resolution                                                                     |
+| ---- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| A-01 | The dedupe eval counted auto-merges of two different people     | 26 of 58 were a corpus defect; shared team mailboxes no longer anchor identity |
+| A-03 | `text-primary` on a primary wash failed WCAG AA                 | `--color-on-primary-wash` carries that text                                    |
+| B-02 | The AI usage feed replaced its page instead of appending        | The feed is an infinite query                                                  |
+| P-02 | Duplicate KNN could pair an active contact with an archived one | Status columns filter the KNN                                                  |
+| S-03 | The stats endpoints could be cached                             | `server/middleware/cacheControl.ts` marks them `no-store`                      |

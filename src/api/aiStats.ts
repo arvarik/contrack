@@ -2,7 +2,7 @@ import { apiJson } from "./client";
 /**
  * AI Stats API hooks — React Query hooks for the AI Stats Page.
  *
- * Two hooks matching the backend API contracts (ARCHITECTURE.md §11):
+ * Two hooks for the backend routes that `docs/api-reference.md` describes:
  * - useAIStatsSummary()  → GET /api/ai/stats/summary
  * - useAIStatsFeed()     → GET /api/ai/stats/feed
  */
