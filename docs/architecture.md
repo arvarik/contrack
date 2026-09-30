@@ -50,22 +50,22 @@ flowchart LR
 
 ## Repository layout
 
-| Folder                                              | What it holds                                                                                                                                                            |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema).                          |
-| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                                         |
-| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                                             |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                                                      |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                                          |
-| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                                            |
-| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                          |
-| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                          |
-| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                                                    |
-| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                      |
-| `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                                                    |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (fills the synthetic `benchseed` contacts), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks. |
-| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                   |
-| `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                                                 |
+| Folder                                              | What it holds                                                                                                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema). |
+| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
+| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                             |
+| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                 |
+| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
+| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
+| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                 |
+| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
+| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
+| `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich`, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                   |
+| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
+| `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
 
 ## A request from click to database
 
@@ -181,16 +181,16 @@ the migrations do not hold. To change the schema, edit `schema.ts` and run
 | Imports and sync | `imports`, `import_rows`, `connectors` (secret sealed), `connector_runs`, `connector_links` (external ids and correspondents), `upcoming_events`, `oauth_states`.                                                                                                                                             |
 | Other            | `map_views`, `ai_invocations` (the AI usage log), `geocode_cache`.                                                                                                                                                                                                                                            |
 
-| Virtual table            | Kind | What it holds                                                                                                                                                                                                |
-| ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `contacts_fts`           | FTS5 | One row for each visible contact: name, company, role, headline, location, about, industry, tags and interests, emails and phone digits, addresses, and an owner token. Prefix indexes of 2 to 4 characters. |
-| `interactions_fts`       | FTS5 | The title and the plain text of each note, with an owner token. The tokenizer stems and folds accents.                                                                                                       |
-| `search_passages_fts`    | FTS5 | The text of each search passage, with an owner token.                                                                                                                                                        |
-| `search_embeddings`      | vec0 | One int8 vector for each contact, partitioned by `ownerId`. 384 dimensions with the built-in model.                                                                                                          |
-| `search_passage_vectors` | vec0 | One int8 vector for each passage, partitioned by `ownerId`.                                                                                                                                                  |
-| `contact_embeddings`     | vec0 | One vector for each contact, for duplicate detection. Its width follows the embeddings model.                                                                                                                |
+| Virtual table            | Kind | What it holds                                                                                                                                                                                     |
+| ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contacts_fts`           | FTS5 | One row for every visible contact: name, company, role, headline, location, about, industry, tags, interests, emails, phone digits, addresses and the owner token. Prefixes of 2 to 4 characters. |
+| `interactions_fts`       | FTS5 | The title and the plain text of each note, with an owner token. The tokenizer stems and folds accents.                                                                                            |
+| `search_passages_fts`    | FTS5 | The text of each search passage, with an owner token.                                                                                                                                             |
+| `search_embeddings`      | vec0 | One int8 vector for each contact, partitioned by `ownerId`. 384 dimensions with the built-in model.                                                                                               |
+| `search_passage_vectors` | vec0 | One int8 vector for each passage, partitioned by `ownerId`.                                                                                                                                       |
+| `contact_embeddings`     | vec0 | One vector for each contact, for duplicate detection. Its width follows the embeddings model.                                                                                                     |
 
-`PRAGMA user_version` holds the full-text schema version, 5. A new version
+`PRAGMA user_version` holds the full-text schema version, 6. A new version
 rebuilds both FTS tables once at boot. A new embeddings model rebuilds the
 vector tables and embeds every contact again.
 
@@ -438,7 +438,7 @@ For the settings a person sees, see [Models for each task](ai.md#models-for-each
 | Purge trashed contacts after the retention period, 30 days by default                                                                                                                                         | At start, then daily                                           |
 | Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs), and checkpoint the WAL | At start, then daily                                           |
 | Refresh the model lists of the AI providers                                                                                                                                                                   | At start, then daily                                           |
-| Run `PRAGMA optimize`                                                                                                                                                                                         | Daily, and at shutdown                                         |
+| Run `PRAGMA optimize`                                                                                                                                                                                         | Daily, at shutdown, and after each search index drain          |
 | Score the contacts marked dirty                                                                                                                                                                               | At start, then hourly                                          |
 | Score every tracked contact and take the weekly snapshot                                                                                                                                                      | Daily. The snapshot is also taken at start when it is missing. |
 | Load the local models, rebuild the vector tables when the model changed, and fill missing vectors for search and duplicates                                                                                   | At start                                                       |
