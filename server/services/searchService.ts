@@ -755,7 +755,11 @@ async function runSearch(
   // Set once the question's vector exists, on the model path only.
   let semanticKey: SemanticKey | null = null;
   const final = (result: SearchResult, kind: string, path: string) => {
-    setCachedSearch(scope, cacheKey, result);
+    // A facet answer is one database read, and it reads columns the revision
+    // does not follow: tracking, the last contact, the date of an edit. Kept,
+    // "Who haven't I contacted in over 3 months?" listed a person for five
+    // minutes after a call with them was logged.
+    if (path !== "facets") setCachedSearch(scope, cacheKey, result);
     // L2 keeps only answers someone verified, with the question's vector.
     if (semanticKey && !result.fallback)
       setSemanticAnswer(scope, semanticKey, result);

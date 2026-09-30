@@ -334,23 +334,41 @@ describe("the general questions in the pool", () => {
     }
   });
 
-  it("follows tracking without waiting for a search revision", () => {
-    // Tracking is not a searched column, so it does not move the revision the
-    // cached pool is kept by. A pool that waited for the revision would offer
-    // "Who do I track?" after the last person was untracked, and a press on
-    // it would find nobody.
+  it("follows tracking and the last contact without waiting for a search revision", async () => {
+    // Neither is a searched column, so neither moves the revision the pool
+    // and the Ask cache are kept by. A pool that waited would offer "Who do
+    // I track?" after the last person was untracked, and a press on it would
+    // find nobody. An answer that waited would list a person after a call.
     const revision = () =>
       sqlite
         .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
         .get(localOwnerId());
+    const found = async (question: string) =>
+      (
+        await searchService.semanticSearch(
+          scope(),
+          question,
+          "general-follow",
+          undefined,
+          { aiAllowed: false },
+        )
+      ).matches.map((match) => match.name);
+    const stale = "Who haven't I contacted in over 3 months?";
     const cached = starterQuestions(scope());
+    expect(await found(stale)).toContain(PEOPLE[5]!.name);
     const before = revision();
     sqlite
       .prepare("UPDATE contacts SET isTracked = 0 WHERE ownerId = ?")
       .run(localOwnerId());
+    sqlite
+      .prepare(
+        "UPDATE contacts SET lastContactedAt = datetime('now') WHERE name = ? AND ownerId = ?",
+      )
+      .run(PEOPLE[5]!.name, localOwnerId());
     expect(revision()).toEqual(before);
     expect(texts(starterQuestions(scope()))).not.toContain("Who do I track?");
     expect(texts(cached)).toContain("Who do I track?");
+    expect(await found(stale)).not.toContain(PEOPLE[5]!.name);
 
     sqlite
       .prepare(
