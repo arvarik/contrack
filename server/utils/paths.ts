@@ -14,7 +14,6 @@ import fs from "fs";
 export const DATA_DIR = process.env.DATA_DIR ?? process.cwd();
 
 export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
-export const AVATARS_DIR = path.join(UPLOADS_DIR, "avatars");
 export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
 
 /**

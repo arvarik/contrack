@@ -197,22 +197,6 @@ describe("merge → audit log → undo", () => {
     expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
   });
 
-  it("legacy hard merges without snapshot return 409 HARD_MERGE_IRREVERSIBLE", async () => {
-    const fakeId = "legacy-test-entry-" + Date.now();
-    sqlite
-      .prepare(
-        `INSERT INTO dedupe_merge_log (id, ownerId, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot, mergedAt)
-         VALUES (?, ?, 'fake-p', 'fake-d', 'user', 'hard', 1.0, 'Legacy test', NULL, CURRENT_TIMESTAMP)`,
-      )
-      .run(fakeId, localOwnerId());
-
-    const undo = await request(app).post(
-      `/api/dedupe/merge-log/${fakeId}/undo`,
-    );
-    expect(undo.status).toBe(409);
-    expect(undo.body.error.code).toBe("HARD_MERGE_IRREVERSIBLE");
-  });
-
   it("rejects self-merge and missing ids", async () => {
     const id = await createContact({ name: "Self Merge" });
 

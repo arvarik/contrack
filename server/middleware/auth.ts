@@ -41,9 +41,6 @@ import { primaryAdminId, sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
 
-/** The legacy cookie, cleared on sight so old browsers don't hold a dead one. */
-const LEGACY_COOKIE_NAME = "contrack_token";
-
 // =============================================================================
 // Principal
 // =============================================================================
@@ -244,13 +241,9 @@ export function setSessionCookie(
   );
 }
 
-/** Clear the session cookie, and the pre-accounts one alongside it. */
+/** Clear the session cookie. */
 export function clearSessionCookie(req: Request, res: Response): void {
   res.append("Set-Cookie", `${COOKIE_NAME}=; ${cookieAttributes(req, 0)}`);
-  res.append(
-    "Set-Cookie",
-    `${LEGACY_COOKIE_NAME}=; ${cookieAttributes(req, 0)}`,
-  );
 }
 
 /** Read the session secret this request presented, if any. */

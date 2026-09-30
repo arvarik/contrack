@@ -34,13 +34,6 @@ import crypto from "crypto";
 // =============================================================================
 
 import path from "path";
-import {
-  AVATARS_DIR,
-  UPLOADS_DIR,
-  ownerUploadDir,
-  ownerUploadUrl,
-  resolveUploadPath,
-} from "./utils/paths.ts";
 // Under Vitest the database must live in a DATA_DIR the test setup made. The
 // fallback, ./curator.db, is the developer's own data when the suite runs
 // from a checkout, and three unit tests once wrote test accounts into it.
@@ -250,43 +243,11 @@ if (sweptSessions.changes > 0) {
 }
 
 /**
- * Bumped when the tenancy block gains a step an older database has not run.
- *
- * v1 adds the ownership columns, claims the existing rows, installs the
- * invariant triggers and the composite indexes. v2 drops the four
- * single-column owner indexes v1 created, now that the tenancy query plans
- * prove the composites serve every owner-first read.
+ * The tenancy schema version this build writes and expects. A database that
+ * reads less runs the tenancy block on its next boot. Version 1 added the
+ * ownership columns, the invariant triggers and the composite indexes.
  */
 export const TENANCY_SCHEMA_VERSION = 2;
-
-// =============================================================================
-// 2z-backup. Copy the database before anything below changes it
-// =============================================================================
-// This is the file an operator restores if the upgrade goes wrong, so it has
-// to predate every schema change — including the `users` columns in §2z-1,
-// which would otherwise be baked into the "pre-tenancy" copy. Harmless to 1.x,
-// which names its columns explicitly, but a backup that is not actually the
-// state you were in is a bad thing to hand somebody at the worst moment.
-//
-// VACUUM INTO cannot run inside a transaction, which is the other reason it is
-// here rather than in §2z-4.
-// =============================================================================
-
-// Only the v1 step rewrites data. v2 drops four indexes, which SQLite can
-// rebuild from the table, so it is not worth copying the whole file for.
-if (readTenancyVersion() < 1) {
-  const contactCount = (
-    sqlite
-      .prepare(
-        // tenant-lint: allow boot migration
-        `SELECT COUNT(*) AS n FROM contacts`,
-      )
-      .get() as { n: number }
-  ).n;
-  // Nothing to lose on an empty database, and this is also the fresh-install
-  // path, where a backup would just be noise in the data directory.
-  if (contactCount > 0) backupBeforeTenancyMigration();
-}
 
 // =============================================================================
 // 2z-0. Contacts columns the tenancy block indexes
@@ -682,25 +643,16 @@ sqlite.exec(`
 `);
 
 // =============================================================================
-// 2z-4. Tenancy — ownership columns, the local owner, and the claim
+// 2z-4. Tenancy — ownership columns and the local owner
 // =============================================================================
-// This block gives every row an owner. It has to run here, before §3, for two
-// independent architectural requirements:
+// This block gives every owned table an `ownerId` column, creates the local
+// owner, and installs the triggers and indexes that keep every owner true. It
+// has to run here, before §3: the FTS backfill selects `c.ownerId`. A SELECT
+// inside `exec` is prepared before it runs, so a missing column fails the boot
+// even on an empty database. The column must exist first.
 //
-//   • The FTS backfill selects `c.ownerId`. A SELECT inside `exec` is prepared
-//     before it runs, so a missing column fails the boot even on an empty
-//     database. The column must exist first.
-//   • The claim is a bulk UPDATE over `contacts`. The `_auto_updated_at`
-//     triggers would stamp `updatedAt` on every row, and `findStaleEmbeddings`
-//     re-embeds any contact whose `updatedAt` is newer than its `embeddedAt`.
-//     A stamped corpus means the next deep dedupe scan re-embeds everything
-//     through the paid provider. So the triggers come out first and §3 to §6
-//     put them back on the same boot.
-//
-// Order inside the transaction is fixed: columns, trigger drops, local owner,
-// claim, child backfill, invariant triggers, composite indexes, version write.
-// The invariant triggers are installed last because they forbid the very NULLs
-// the claim above them is there to remove.
+// Order inside the transaction is fixed: columns, local owner, invariant
+// triggers, composite indexes, version write.
 // =============================================================================
 
 /** Tables that carry `ownerId`. Every row in each has an owner after boot. */
@@ -763,46 +715,6 @@ const OWNER_CHILD_TABLES = [
     pk: "contactIdA = NEW.contactIdA AND contactIdB = NEW.contactIdB",
   },
 ] as const;
-
-/**
- * Every trigger that has to be absent while the claim and the backfill run.
- *
- * §3 recreates the first six through installSearchIndex, and §4, §5 and §6
- * recreate the rest. Each of those sections already begins with a
- * DROP TRIGGER IF EXISTS, so a crash between here and there costs one process
- * lifetime and the next boot closes it.
- */
-const TRIGGERS_DROPPED_FOR_CLAIM = [
-  "contacts_ai",
-  "contacts_au",
-  "contacts_ad",
-  "search_revision_INSERT",
-  "search_revision_UPDATE",
-  "search_revision_DELETE",
-  "contacts_auto_updated_at",
-  "interactions_auto_updated_at",
-  "action_items_auto_updated_at",
-  "action_items_sync_insert",
-  "action_items_sync_update",
-  "action_items_sync_delete",
-  "search_vector_update",
-  "search_vector_delete",
-  // The note index. Its update trigger fires on `ownerId`, which is exactly
-  // what the claim writes, and §3 reinstalls it and fills the rows the claim
-  // stamped.
-  "interactions_fts_ai",
-  "interactions_fts_au",
-  "interactions_fts_ad",
-  // Story S10. The claim writes `ownerId` on every row, which is an edit as
-  // far as these are concerned. §4 and §6 put them back on the same boot.
-  "contacts_score_dirty",
-  "interactions_score_dirty_ins",
-  "interactions_score_dirty_upd",
-  "interactions_score_dirty_del",
-  "action_items_score_dirty_ins",
-  "action_items_score_dirty_upd",
-  "action_items_score_dirty_del",
-];
 
 function countUsers(): number {
   const row = sqlite.prepare(`SELECT COUNT(*) AS n FROM users`).get() as {
@@ -953,9 +865,8 @@ function ownerInvariantTriggerSql(): string {
     );
   }
 
-  // The only owner change in 2.0 is the one-time claim above, which runs
-  // before this trigger exists. It is here for a future "reassign data"
-  // admin action. It cannot touch the vec0 tables: sqlite-vec refuses an
+  // No 2.0 code changes an owner. This trigger is here for a future "reassign
+  // data" admin action. It cannot touch the vec0 tables: sqlite-vec refuses an
   // UPDATE of a partition key, so that feature re-inserts those rows in code.
   out.push(
     `CREATE TRIGGER IF NOT EXISTS contacts_owner_propagate AFTER UPDATE OF ownerId ON contacts
@@ -991,80 +902,6 @@ const OWNER_COMPOSITE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_ai_inv_owner_created     ON ai_invocations(ownerId, createdAt DESC);
 `;
 
-/**
- * The single-column owner indexes v1 created, which v2 drops.
- *
- * Each one is the leading column of a composite above, so SQLite can answer
- * every query that used it from the composite instead. Leaving them costs a
- * second B-tree write on each insert, and gives the planner a narrower index
- * to prefer over the composite that query plan tests pin.
- */
-const OWNER_PREFIX_INDEXES = [
-  "idx_contacts_owner",
-  "idx_lists_owner",
-  "idx_ai_invocations_owner",
-  "idx_dedupe_merge_log_owner",
-] as const;
-
-/**
- * Copy the database before the first tenancy migration.
- *
- * VACUUM INTO is synchronous, correct in WAL mode, and produces one consistent
- * file — which sqlite.backup() would not, being asynchronous in a module that
- * runs at import time. It also cannot run inside a transaction, which is why
- * this happens before the transaction below opens.
- *
- * A missing backup never fails the boot. The operator still has the rotating
- * `curator-*.db` snapshots, and refusing to start would be a worse outcome
- * than starting without one extra copy.
- */
-function backupBeforeTenancyMigration(): void {
-  const dataDir = path.dirname(path.resolve(DB_PATH));
-  let dbBytes = 0;
-  try {
-    dbBytes = fs.statSync(DB_PATH).size;
-  } catch {
-    return; // No file yet, so nothing to lose.
-  }
-
-  try {
-    const stat = fs.statfsSync(dataDir);
-    const freeBytes = stat.bavail * stat.bsize;
-    if (freeBytes < dbBytes * 1.5) {
-      log.error(
-        "Database",
-        `Skipping the pre-tenancy backup: ${(freeBytes / 1e6).toFixed(0)} MB free is below 1.5x the ${(dbBytes / 1e6).toFixed(0)} MB database. Restore from a curator-*.db snapshot if the upgrade goes wrong.`,
-      );
-      return;
-    }
-  } catch {
-    // statfsSync is unavailable on some platforms. Attempt the copy anyway;
-    // a genuine out-of-space error surfaces from VACUUM INTO below.
-  }
-
-  const backupDir = path.join(dataDir, "backups");
-  fs.mkdirSync(backupDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  let target = path.join(backupDir, `pre-tenancy-${stamp}.db`);
-  for (let n = 2; fs.existsSync(target); n++) {
-    target = path.join(backupDir, `pre-tenancy-${stamp}-${n}.db`);
-  }
-
-  const started = performance.now();
-  try {
-    // The name deliberately does not start with `curator-`, so backupService
-    // never rotates this file away. The operator deletes it once they trust
-    // the upgrade.
-    sqlite.prepare(`VACUUM INTO ?`).run(target);
-    log.info(
-      "Database",
-      `Pre-tenancy backup written to ${target} in ${(performance.now() - started).toFixed(0)}ms`,
-    );
-  } catch (err) {
-    log.error("Database", `Pre-tenancy backup failed: ${String(err)}`);
-  }
-}
-
 const tenancyVersion = readTenancyVersion();
 if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
   const migrationStarted = performance.now();
@@ -1079,8 +916,8 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
   };
 
   sqlite.transaction(() => {
-    // v0 to v1: the columns, the claim, the triggers and the composites.
-    // A database that already reads 1 has all of them.
+    // The columns, the local owner, the triggers and the composites. A
+    // database that already reads 1 or more has all of them.
     if (tenancyVersion < 1) {
       step("columns", () => {
         let added = 0;
@@ -1095,10 +932,9 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
           }
           if (!columns.some((c) => c.name === "ownerId")) {
             // A REFERENCES clause is legal on ADD COLUMN only when the default
-            // is NULL, which is the semantics wanted anyway: existing rows are
-            // unowned until the claim below runs. RESTRICT rather than CASCADE
-            // on purpose — deleting an account that still owns contacts should
-            // fail loudly, not delete the contacts.
+            // is NULL, which is the semantics wanted anyway. RESTRICT rather
+            // than CASCADE on purpose: deleting an account that still owns
+            // contacts should fail loudly, not delete the contacts.
             sqlite.exec(
               `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
             );
@@ -1108,41 +944,9 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
         return `${added} added,`;
       });
 
-      step("trigger drops", () => {
-        for (const name of TRIGGERS_DROPPED_FOR_CLAIM) {
-          sqlite.exec(`DROP TRIGGER IF EXISTS ${name}`);
-        }
-        return `${TRIGGERS_DROPPED_FOR_CLAIM.length} dropped,`;
-      });
-
-      let owner = "";
       step("local owner", () => {
-        owner = ensureLocalOwner();
+        ensureLocalOwner();
         return "";
-      });
-
-      step("claim", () => {
-        const claimed = claimUnownedData(owner);
-        const total = Object.values(claimed).reduce((a, b) => a + b, 0);
-        return total > 0
-          ? `${Object.entries(claimed)
-              .map(([t, n]) => `${n} ${t}`)
-              .join(", ")},`
-          : "nothing to claim,";
-      });
-
-      step("child backfill", () => {
-        let rows = 0;
-        for (const { table, key } of OWNER_CHILD_TABLES) {
-          rows += sqlite
-            .prepare(
-              // tenant-lint: allow boot migration
-              `UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = ${table}.${key})
-                WHERE ownerId IS NULL`,
-            )
-            .run().changes;
-        }
-        return `${rows} rows,`;
       });
 
       step("invariant triggers", () => {
@@ -1156,264 +960,12 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
       });
     }
 
-    // v1 to v2: the prefix indexes go, now that the query plan tests prove the
-    // composites answer every owner-first read. DROP INDEX is metadata
-    // only, so this is fast on any size of database.
-    if (tenancyVersion < 2) {
-      step("prefix index drops", () => {
-        let dropped = 0;
-        for (const name of OWNER_PREFIX_INDEXES) {
-          const before = sqlite
-            .prepare(
-              `SELECT COUNT(*) AS n FROM sqlite_master
-                WHERE type = 'index' AND name = ?`,
-            )
-            .get(name) as { n: number };
-          sqlite.exec(`DROP INDEX IF EXISTS ${name}`);
-          dropped += before.n;
-        }
-        // A fresh database never had them, so this reads 0 there rather than
-        // claiming four drops that did nothing.
-        return `${dropped} dropped,`;
-      });
-    }
-
     writeTenancyVersion(TENANCY_SCHEMA_VERSION);
   })();
 
   log.info(
     "Database",
     `Tenancy migration v${tenancyVersion} to v${TENANCY_SCHEMA_VERSION} in ${(performance.now() - migrationStarted).toFixed(0)}ms (${steps.join("; ")})`,
-  );
-}
-
-// =============================================================================
-// 2z-5. Uploads relocation
-// =============================================================================
-// Files move from the flat `uploads/avatars/` and `uploads/` directories into
-// `uploads/u/<ownerId>/avatars/` and `uploads/u/<ownerId>/files/`, and the
-// stored URL is rewritten to match. Outside every transaction, because it
-// touches the filesystem: a rolled-back transaction cannot un-move a file.
-//
-// Position matters: running relocation after trigger installation would mean
-// rewriting `avatarUrl` fires `contacts_auto_updated_at`, which stamps `updatedAt`,
-// causing `findStaleEmbeddings` to re-embed every contact whose `updatedAt` is newer
-// than its `embeddedAt`.
-//
-// Here, on a migrating boot, §2z-4 has just dropped those triggers and §3 to
-// §6 have not yet put them back, so the rewrite stamps nothing. On any later
-// boot the WHERE clauses match no rows, so no UPDATE runs at all and the
-// question does not arise. `contacts.ownerId` exists by now, which is the
-// other thing this step needs.
-//
-// Idempotent by its WHERE clauses — a URL that already points at `/uploads/u/`
-// matches nothing. Nothing is ever deleted. A file no row references moves to
-// `uploads/orphaned/` so an operator can look at it before deciding.
-//
-// Access to `/uploads/u/<ownerId>/...` is guarded by tenant ownership middleware.
-// =============================================================================
-
-{
-  const moved: string[] = [];
-  const relocate = (
-    fromAbs: string | null,
-    ownerId: string,
-    kind: "avatars" | "files",
-    filename: string,
-  ): void => {
-    if (!fromAbs || !fs.existsSync(fromAbs)) return;
-    const dir = ownerUploadDir(ownerId, kind);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.renameSync(fromAbs, path.join(dir, filename));
-  };
-
-  const avatars = sqlite
-    .prepare(
-      `SELECT id, ownerId, avatarUrl FROM contacts WHERE avatarUrl LIKE '/uploads/avatars/%'`,
-    )
-    .all() as { id: string; ownerId: string; avatarUrl: string }[];
-
-  const attachments = sqlite
-    .prepare(
-      `SELECT id, ownerId, fileUrl FROM interactions
-        WHERE fileUrl LIKE '/uploads/%'
-          AND fileUrl NOT LIKE '/uploads/u/%'
-          AND fileUrl NOT LIKE '/uploads/logos/%'`,
-    )
-    .all() as { id: string; ownerId: string; fileUrl: string }[];
-
-  if (avatars.length > 0 || attachments.length > 0) {
-    const started = performance.now();
-    // The database rewrite is one transaction; the file moves are not, and
-    // run first. A file already at the new path with an un-rewritten URL is
-    // recoverable. The reverse — a rewritten URL pointing at a file still in
-    // the old place — is a broken image.
-    for (const row of avatars) {
-      const filename = path.basename(row.avatarUrl);
-      relocate(
-        resolveUploadPath(row.avatarUrl),
-        row.ownerId,
-        "avatars",
-        filename,
-      );
-      moved.push(filename);
-    }
-    for (const row of attachments) {
-      const filename = path.basename(row.fileUrl);
-      relocate(resolveUploadPath(row.fileUrl), row.ownerId, "files", filename);
-      moved.push(filename);
-    }
-
-    const setAvatar = sqlite.prepare(
-      // tenant-lint: allow boot migration
-      `UPDATE contacts SET avatarUrl = ? WHERE id = ?`,
-    );
-    const setFile = sqlite.prepare(
-      // tenant-lint: allow boot migration
-      `UPDATE interactions SET fileUrl = ? WHERE id = ?`,
-    );
-    sqlite.transaction(() => {
-      // A missing source file still gets its URL rewritten. Leaving the old
-      // URL would mean this block retries the same rows on every boot.
-      for (const row of avatars) {
-        setAvatar.run(
-          ownerUploadUrl(row.ownerId, "avatars", path.basename(row.avatarUrl)),
-          row.id,
-        );
-      }
-      for (const row of attachments) {
-        setFile.run(
-          ownerUploadUrl(row.ownerId, "files", path.basename(row.fileUrl)),
-          row.id,
-        );
-      }
-    })();
-
-    log.info(
-      "Database",
-      `Relocated ${avatars.length} avatar(s) and ${attachments.length} attachment(s) under uploads/u/ in ${(performance.now() - started).toFixed(0)}ms`,
-    );
-  }
-
-  // Anything left flat that no row points at. `/api/avatar/...` and external
-  // https:// avatars never had a file here, so they cannot orphan one.
-  const orphanDir = path.join(UPLOADS_DIR, "orphaned");
-  const sweep = (dir: string, referenced: Set<string>): number => {
-    if (!fs.existsSync(dir)) return 0;
-    let n = 0;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || referenced.has(entry.name)) continue;
-      fs.mkdirSync(orphanDir, { recursive: true });
-      fs.renameSync(
-        path.join(dir, entry.name),
-        path.join(orphanDir, entry.name),
-      );
-      log.warn(
-        "Database",
-        `Moved unreferenced upload ${entry.name} to uploads/orphaned/`,
-      );
-      n++;
-    }
-    return n;
-  };
-
-  const referencedAvatars = new Set(
-    (
-      sqlite
-        .prepare(
-          // tenant-lint: allow boot migration
-          `SELECT avatarUrl FROM contacts WHERE avatarUrl LIKE '/uploads/%'`,
-        )
-        .all() as { avatarUrl: string }[]
-    ).map((r) => path.basename(r.avatarUrl)),
-  );
-  const referencedFiles = new Set(
-    (
-      sqlite
-        .prepare(
-          // tenant-lint: allow boot migration
-          `SELECT fileUrl FROM interactions WHERE fileUrl LIKE '/uploads/%'`,
-        )
-        .all() as { fileUrl: string }[]
-    ).map((r) => path.basename(r.fileUrl)),
-  );
-
-  const orphans =
-    sweep(AVATARS_DIR, referencedAvatars) + sweep(UPLOADS_DIR, referencedFiles);
-  if (orphans > 0) {
-    log.warn(
-      "Database",
-      `${orphans} unreferenced upload(s) moved to uploads/orphaned/. Nothing was deleted.`,
-    );
-  }
-}
-
-// =============================================================================
-// 2a. Data Migration — Retire stored api.dicebear.com avatar URLs
-// =============================================================================
-// Contacts created before avatars were generated locally carry an absolute
-// `https://api.dicebear.com/9.x/<style>/svg?seed=...` URL in `avatarUrl`, so
-// every render of those rows sent the contact's name to a third party. Rewrite
-// them to the app's own route.
-//
-// Only the style and seed carry over. The old URLs also encoded expression and
-// clothing parameters, but those are now applied server-side at render time —
-// which is deliberate, because the old parameters constrained only the mouth
-// and left `eyebrows` free, so some contacts scowled. Faces whose brows were
-// angry will change; that is the point.
-//
-// Idempotent: the LIKE only matches URLs that have not been migrated, and an
-// unknown style falls back to avataaars rather than producing a dead route.
-// =============================================================================
-
-try {
-  const legacy = sqlite
-    .prepare(
-      // tenant-lint: allow boot migration
-      "SELECT id, avatarUrl FROM contacts WHERE avatarUrl LIKE 'https://api.dicebear.com/%'",
-    )
-    .all() as { id: string; avatarUrl: string }[];
-
-  if (legacy.length > 0) {
-    const KNOWN_STYLES = new Set([
-      "avataaars",
-      "lorelei",
-      "bottts",
-      "initials",
-    ]);
-    const update = sqlite.prepare(
-      // tenant-lint: allow boot migration
-      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
-    );
-    const migrateAll = sqlite.transaction(
-      (rows: { id: string; avatarUrl: string }[]) => {
-        for (const row of rows) {
-          let style = "avataaars";
-          let seed = "";
-          try {
-            const url = new URL(row.avatarUrl);
-            // Path shape: /9.x/<style>/svg
-            const fromPath = url.pathname.split("/").filter(Boolean)[1];
-            if (fromPath && KNOWN_STYLES.has(fromPath)) style = fromPath;
-            seed = url.searchParams.get("seed") ?? "";
-          } catch {
-            // Unparseable URL — fall through to the name-seeded default below.
-          }
-          const params = new URLSearchParams({ seed });
-          update.run(`/api/avatar/${style}?${params.toString()}`, row.id);
-        }
-      },
-    );
-    migrateAll(legacy.filter((row) => row.avatarUrl));
-    log.info(
-      "Database",
-      `Migrated ${legacy.length} avatar URL(s) off api.dicebear.com to local generation`,
-    );
-  }
-} catch (err) {
-  log.warn(
-    "Database",
-    `Avatar URL migration skipped: ${err instanceof Error ? err.message : String(err)}`,
   );
 }
 

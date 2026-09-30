@@ -7,7 +7,7 @@
 // Tables used:
 //   dedupe_suggestions — detected pairs with status lifecycle
 //   dedupe_exclusions  — never-merge pairs (populated on dismiss)
-//   dedupe_merge_log   — audit trail for all merges (soft + hard)
+//   dedupe_merge_log   — audit trail for all merges
 //
 // Design principles:
 // - All writes are transactional (single-statement or explicit transaction)
@@ -61,7 +61,7 @@ export interface MergeLogEntry {
   primaryId: string;
   duplicateId: string;
   mergedBy: string; // 'user' | 'auto' | 'user:suggestion'
-  mergeType: string; // 'soft' | 'hard'
+  mergeType: string; // 'soft'. Rows from before 2.0 may hold 'hard'.
   confidence: number;
   reasoning: string;
   mergedAt: string;
@@ -447,7 +447,7 @@ export function recordMergeUnsafe(
   confidence: number,
   reasoning: string,
   mergedBy: string,
-  mergeType: "soft" | "hard",
+  mergeType: "soft",
   snapshot?: string | null,
 ): string {
   const id = crypto.randomUUID();
@@ -483,7 +483,7 @@ export function getMergeLog(scope: Scope, limit: number = 50): MergeLogEntry[] {
   // Hydrate contact names for display
   for (const row of rows) {
     try {
-      // Primary may still exist; duplicate may be soft-merged (canonicalId set) or hard-deleted
+      // Primary may still exist; duplicate may be soft-merged (canonicalId set) or deleted
       const primary = _stmts.contactName.get(row.primaryId, scope.ownerId) as
         { name: string } | undefined;
       const duplicate = _stmts.contactName.get(
@@ -617,7 +617,7 @@ function isChildRowModified(
  * unchanged record transfers, preserves post-merge edits on survivor,
  * recomputes task follow-ups, and reports any conflicts encountered.
  *
- * @throws Error if the merge log entry is not found, already undone, or was a permanently deleted legacy hard merge
+ * @throws Error if the merge log entry is not found or already undone
  */
 export function undoSoftMerge(
   scope: Scope,
@@ -647,16 +647,6 @@ export function undoSoftMerge(
   const duplicate = contactRepo.findOwned(scope, entry.duplicateId);
 
   if (!duplicate) {
-    if (entry.mergeType === "hard" && !entry.duplicateSnapshot) {
-      throw new AppError(
-        `Cannot undo a hard merge — the duplicate was permanently deleted`,
-        409,
-        {
-          code: "HARD_MERGE_IRREVERSIBLE",
-          details: { mergeLogId },
-        },
-      );
-    }
     throw new AppError(
       `Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`,
       410,
