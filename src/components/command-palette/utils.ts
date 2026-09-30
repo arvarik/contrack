@@ -13,7 +13,7 @@ export const EXAMPLE_QUERIES = [
 ];
 
 /** cmdk group heading style — reused across all Command.Group instances */
-export const GROUP_HEADING =
+const GROUP_HEADING =
   "[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em]";
 
 /**

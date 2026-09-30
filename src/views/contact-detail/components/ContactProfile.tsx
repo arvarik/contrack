@@ -90,7 +90,7 @@ import { DupeBanner } from "./DupeBanner";
 // Props
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface ContactProfileProps {
+interface ContactProfileProps {
   contactId: string;
   onClose?: () => void;
   /** The name of the page Back goes to, for the Back button's text. */
@@ -99,7 +99,7 @@ export interface ContactProfileProps {
 }
 
 /** The pane width, in px, from which Details is a column and not a tab. */
-export const WIDE_CONTACT_MIN_PX = 768;
+const WIDE_CONTACT_MIN_PX = 768;
 
 type Section = "timeline" | "details" | "dossier";
 

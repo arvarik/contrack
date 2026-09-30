@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { isNetworkError } from "../api/client";
 
-export type ConnectionStatus =
+type ConnectionStatus =
   /** Everything is fine. */
   | "online"
   /** The browser says there is no network at all. */
@@ -29,7 +29,7 @@ export type ConnectionStatus =
   /** There is a network, but the Contrack server is not answering. */
   | "unreachable";
 
-export interface Connection {
+interface Connection {
   status: ConnectionStatus;
   /** Convenience: anything other than "online". */
   isDown: boolean;

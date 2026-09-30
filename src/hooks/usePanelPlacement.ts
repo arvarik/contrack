@@ -52,7 +52,7 @@ import {
 
 export type PanelEdge = "start" | "end";
 
-export interface PanelPlacement {
+interface PanelPlacement {
   /** True when the panel opens upwards. */
   dropUp: boolean;
   /** The trigger edge the panel lines up with once measured. */

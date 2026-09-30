@@ -24,7 +24,7 @@ import {
 } from "../../assets/corvidRig";
 
 /** The bird's strokes, as a mark or the flying bird draws them. */
-export const BIRD_STROKES = [
+const BIRD_STROKES = [
   "nape",
   "chest",
   "wing",

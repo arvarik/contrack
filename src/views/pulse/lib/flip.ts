@@ -42,7 +42,7 @@ export function prefersReducedMotion(): boolean {
 /** The id the slides carry, so the next change can find and stop them. */
 const FLIP_ID = "pulse-flip";
 
-export interface Flip {
+interface Flip {
   /** Measure where each card is on screen, before the change that moves it. */
   capture: () => void;
   /** Slide each card that moved from where it was to where it is now. */

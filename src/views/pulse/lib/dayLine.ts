@@ -35,7 +35,7 @@ export type JumpTarget = "overdue" | "today" | "birthdays";
  * masthead renders it as a jump button from `sm` up. An item without one is
  * plain text: "Nothing due today", "All caught up" or the streak.
  */
-export interface DayLineItem {
+interface DayLineItem {
   text: string;
   target?: JumpTarget;
 }

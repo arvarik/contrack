@@ -241,7 +241,7 @@ export interface SearchCoverage {
   failedItems: FailedIndexItem[];
 }
 
-export interface RefreshIndexResponse {
+interface RefreshIndexResponse {
   ok: boolean;
   queued: number;
   message: string;
@@ -308,7 +308,7 @@ export const useRefreshSearchIndex = () => {
 /** The query-key prefix every note search shares, for invalidation. */
 export const INTERACTION_SEARCH_KEY = ["interactions", "search"] as const;
 
-export interface InteractionSearchParams {
+interface InteractionSearchParams {
   q: string;
   /** A calendar date (`YYYY-MM-DD`, a whole day) or an ISO instant. */
   from?: string;
@@ -322,7 +322,7 @@ export interface InteractionSearchParams {
 }
 
 /** The browser's IANA zone, so "last month" is the reader's month. */
-export function browserTimeZone(): string | undefined {
+function browserTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
   } catch {

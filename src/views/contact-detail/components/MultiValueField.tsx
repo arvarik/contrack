@@ -275,7 +275,7 @@ const SortableRow = ({
 // The field
 // ---------------------------------------------------------------------------
 
-export interface MultiValueFieldProps {
+interface MultiValueFieldProps {
   items: MultiValueItem[];
   /** Saves the whole list, in order. The first value is the primary one. */
   onSave: (items: { value: string; label: string }[]) => void;

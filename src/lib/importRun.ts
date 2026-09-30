@@ -139,7 +139,7 @@ export async function readImportStream(
 // ---------------------------------------------------------------------------
 
 /** What the browser keeps about the import it started. */
-export interface RememberedImport {
+interface RememberedImport {
   importId: string;
   fileName: string;
 }

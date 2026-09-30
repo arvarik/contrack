@@ -14,7 +14,7 @@ export interface TagSummary {
   count: number;
 }
 
-export const fetchTagSummary = async (): Promise<TagSummary[]> => {
+const fetchTagSummary = async (): Promise<TagSummary[]> => {
   const data = await apiJson<{ tags: TagSummary[] }>("/tags/summary");
   return data.tags;
 };
@@ -25,7 +25,7 @@ export const useTagSummary = () =>
     queryFn: fetchTagSummary,
   });
 
-export const renameTag = (
+const renameTag = (
   fromTag: string,
   toTag: string,
 ): Promise<{ affected: number }> =>
@@ -46,7 +46,7 @@ export const useRenameTag = () => {
   });
 };
 
-export const deleteTag = (tag: string): Promise<{ affected: number }> =>
+const deleteTag = (tag: string): Promise<{ affected: number }> =>
   apiJson<{ affected: number }>(`/tags/${encodeURIComponent(tag)}`, {
     method: "DELETE",
   });

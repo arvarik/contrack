@@ -31,7 +31,7 @@ export interface PasskeySummary {
   lastUsedAt: string | null;
 }
 
-export interface ListPasskeysResponse {
+interface ListPasskeysResponse {
   passkeys: PasskeySummary[];
   nudgeDismissed: boolean;
 }
@@ -142,7 +142,7 @@ export async function registerPasskey(): Promise<PasskeySummary> {
   return result.passkey;
 }
 
-export interface SignInWithPasskeyOptions {
+interface SignInWithPasskeyOptions {
   remember?: boolean;
   signal?: AbortSignal;
   useBrowserAutofill?: boolean;

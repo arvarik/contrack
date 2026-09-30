@@ -2,7 +2,7 @@ import { motion, type HTMLMotionProps } from "motion/react";
 import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
 
-export interface AnimatedSkeletonProps extends HTMLMotionProps<"div"> {
+interface AnimatedSkeletonProps extends HTMLMotionProps<"div"> {
   className?: string;
   delay?: number;
 }

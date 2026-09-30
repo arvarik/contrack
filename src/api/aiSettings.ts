@@ -80,7 +80,7 @@ export interface AISettings {
   instance: InstanceAi;
 }
 
-export interface ModelOption {
+interface ModelOption {
   id: string;
   label: string;
   /** "chat" | "embeddings" | "grounding" — see server/ai/provider.ts */
@@ -89,7 +89,7 @@ export interface ModelOption {
   contextWindow?: number;
 }
 
-export interface ModelGroup {
+interface ModelGroup {
   providerId: string;
   providerLabel: string;
   models: ModelOption[];

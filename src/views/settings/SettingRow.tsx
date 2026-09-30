@@ -34,7 +34,7 @@ import { cn } from "../../lib/utils";
 import { CHANGED_MARK } from "../../lib/styles";
 import { useResetScopeKey } from "./ResetToDefaults";
 
-export interface SettingRowProps {
+interface SettingRowProps {
   /** Stable kebab-case fragment id. */
   id: string;
   title: string;
@@ -51,7 +51,7 @@ export interface SettingRowProps {
   below?: boolean;
 }
 
-export const CHANGED_LABEL = "Changed from the default";
+const CHANGED_LABEL = "Changed from the default";
 
 /**
  * The target of a settings search result: when the location's hash is `id`,

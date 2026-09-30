@@ -27,7 +27,7 @@ export const MERCATOR_MAX_LAT = 85.05112878;
  * that is NaN: the map throws on its first resize and draws nothing. Its own
  * code keeps the same hair's width inside the meridian for the same reason.
  */
-export const LNG_EPSILON = 1e-9;
+const LNG_EPSILON = 1e-9;
 
 /** The full Mercator world as `[west, south, east, north]`. */
 export const WORLD_BOUNDS: [number, number, number, number] = [

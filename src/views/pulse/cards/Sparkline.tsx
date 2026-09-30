@@ -16,7 +16,7 @@ import { TONE_TEXT, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 
-export interface SparklineProps {
+interface SparklineProps {
   weekTotals: number[];
   thisWeek: {
     logged: number;
@@ -28,7 +28,7 @@ const HEIGHT = 40;
 const PAD_Y = 4;
 
 /** "1 note, 3 meetings", in the order the server sent the types. */
-export function describeWeekByType(byType: Record<string, number>): string {
+function describeWeekByType(byType: Record<string, number>): string {
   const parts = Object.entries(byType || {})
     .filter(([, count]) => count > 0)
     .map(([type, count]) => {
@@ -40,7 +40,7 @@ export function describeWeekByType(byType: Record<string, number>): string {
 }
 
 /** The last four weeks against the four before, as words and a tone. */
-export function compareFourWeeks(weekTotals: number[]): {
+function compareFourWeeks(weekTotals: number[]): {
   recent: number;
   words: string;
   tone: "up" | "down" | "flat";

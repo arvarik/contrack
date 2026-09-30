@@ -39,7 +39,7 @@ export interface PaneWidthBounds {
   keep: number;
 }
 
-export interface PaneWidthOptions extends PaneWidthBounds {
+interface PaneWidthOptions extends PaneWidthBounds {
   /** The pane. Its parent is the row it shares with the content. */
   paneRef: RefObject<HTMLElement | null>;
   /** The custom property the pane's width class reads. */
@@ -48,7 +48,7 @@ export interface PaneWidthOptions extends PaneWidthBounds {
   storageKey: string;
 }
 
-export interface PaneWidth {
+interface PaneWidth {
   /** The pane's width now, in px. */
   width: number;
   /** The widest the pane can be on this window. `max` or less. */

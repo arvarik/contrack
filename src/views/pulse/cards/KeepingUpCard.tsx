@@ -30,7 +30,7 @@ import { PULSE_CHIP, PULSE_TYPE } from "../lib/pulseStyles";
 import { jumpToGroup } from "../lib/jumpToGroup";
 import type { MomentumCard, TrackingSummary } from "../../../../shared/pulse";
 
-export interface KeepingUpCardProps {
+interface KeepingUpCardProps {
   tracking: TrackingSummary | undefined;
 }
 

@@ -21,7 +21,7 @@
  * @module lib/color
  */
 
-export interface Rgb {
+interface Rgb {
   /** 0–255. */
   r: number;
   g: number;
@@ -88,7 +88,7 @@ function fromLinear(value: number): number {
 }
 
 /** WCAG relative luminance, 0–1. */
-export function luminance(color: Rgb): number {
+function luminance(color: Rgb): number {
   return (
     0.2126 * toLinear(color.r) +
     0.7152 * toLinear(color.g) +

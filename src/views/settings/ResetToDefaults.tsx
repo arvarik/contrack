@@ -80,7 +80,7 @@ export function useResetScopeKey(
 }
 
 /** "1 setting is back to its default", "3 settings are back to their defaults". */
-export const resetMessage = (count: number) =>
+const resetMessage = (count: number) =>
   count === 1
     ? "1 setting is back to its default"
     : `${count} settings are back to their defaults`;

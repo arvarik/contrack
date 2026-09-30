@@ -16,7 +16,7 @@ import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
 import { MENU_ITEM, MENU_PANEL, MENU_SEPARATOR } from "../../lib/styles";
 
-export interface ContextMenuItem {
+interface ContextMenuItem {
   id: string;
   label: string;
   icon?: React.ReactNode;

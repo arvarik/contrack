@@ -41,7 +41,7 @@ import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
 
 /** What a frame with its own heading row places. */
-export interface HistoryPaneParts {
+interface HistoryPaneParts {
   /** How many questions the filters leave. */
   count: number;
   /** Clear, while there is something to clear and no words in the filter. */
@@ -50,7 +50,7 @@ export interface HistoryPaneParts {
   body: React.ReactNode;
 }
 
-export interface HistoryPaneProps {
+interface HistoryPaneProps {
   currentQuery?: string;
   currentMode?: HistoryMode;
   onSelect: (entry: HistoryEntry) => void;

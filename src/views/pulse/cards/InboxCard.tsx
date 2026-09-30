@@ -34,7 +34,7 @@ import { TONE_TEXT, TONE_WASH, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_ROW, PULSE_ROW_STATIC, PULSE_TYPE } from "../lib/pulseStyles";
 
-export interface InboxCardProps {
+interface InboxCardProps {
   pendingDuplicates?: number;
   ghosts?: Array<{
     id: string;

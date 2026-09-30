@@ -17,7 +17,7 @@ import { toast } from "sonner";
 // Query Keys
 // =============================================================================
 
-export const enrichmentKeys = {
+const enrichmentKeys = {
   groundingCapacity: ["grounding-capacity"] as const,
 };
 

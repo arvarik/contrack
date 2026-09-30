@@ -5,7 +5,7 @@ import { TONE_WASH } from "../../../../lib/styles";
 // MatchBadge — Match type indicator (email/phone/AI/manual)
 // =============================================================================
 
-export interface MatchBadgeProps {
+interface MatchBadgeProps {
   type: string;
   confidence: number;
 }

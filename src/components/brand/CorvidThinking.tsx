@@ -30,7 +30,7 @@ import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 /** The class that runs the head-tilt loop. Matches the keyframe in `index.css`. */
 export const THINKING_CLASS = "corvid-thinking";
 
-export interface CorvidThinkingProps {
+interface CorvidThinkingProps {
   /** Rendered width and height, in CSS pixels. */
   size?: number;
   /** `true` keeps it out of the accessibility tree, where text says it too. */

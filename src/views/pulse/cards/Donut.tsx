@@ -17,7 +17,7 @@ export interface DonutSlice {
   opacity?: number;
 }
 
-export interface DonutProps {
+interface DonutProps {
   slices: DonutSlice[];
   total: number;
   /** The accessible name. Default names the count of groups and contacts. */

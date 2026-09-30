@@ -73,9 +73,9 @@ export interface SelectOption<T extends string = string> {
   disabled?: boolean;
 }
 
-export type SelectVariant = "field" | "chip" | "ghost";
+type SelectVariant = "field" | "chip" | "ghost";
 
-export interface SelectProps<T extends string = string> {
+interface SelectProps<T extends string = string> {
   value: T;
   onChange: (value: T) => void;
   options: readonly SelectOption<T>[];

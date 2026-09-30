@@ -14,7 +14,7 @@ import { cn } from "../../../lib/utils";
 import { ChipInput, type Chip } from "./ChipInput";
 import { ContactListsSection } from "./ContactListsSection";
 
-export interface ContactTagsProps {
+interface ContactTagsProps {
   contact: Contact;
   updateContact: {
     mutate: (args: { id: string; data: ContactUpdateData }) => void;

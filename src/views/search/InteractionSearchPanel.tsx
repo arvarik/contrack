@@ -191,7 +191,7 @@ function describeRange(from: string | null, to: string | null): string {
  * Each match is a plain `mark`: the base layer paints the highlighter and
  * the ink.
  */
-export const Highlighted = ({
+const Highlighted = ({
   text,
   ranges,
 }: {

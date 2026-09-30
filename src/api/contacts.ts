@@ -316,7 +316,7 @@ export const useSetContactLocation = () => {
 };
 
 /** The body of `PATCH /api/contacts/:id` when a person tracks or untracks. */
-export interface SetTrackedInput {
+interface SetTrackedInput {
   id: string;
   isTracked: boolean;
   /**
@@ -411,7 +411,7 @@ export const useSetCadence = () => {
   });
 };
 
-export interface TrashResponse {
+interface TrashResponse {
   items: TrashedContact[];
   retentionDays: number;
 }

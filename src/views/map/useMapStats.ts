@@ -13,9 +13,9 @@ import type { MapContact } from "../../../shared/geo";
 import { computeMapStats, getInViewContacts, type MapStats } from "./mapStats";
 import { clearBounds } from "./insets";
 
-export const MOVEEND_DEBOUNCE_MS = 150;
+const MOVEEND_DEBOUNCE_MS = 150;
 
-export interface UseMapStatsOptions {
+interface UseMapStatsOptions {
   contacts: readonly MapContact[];
   map: MapLibreMap | null;
   /** A contact is open over the map's right side. */
@@ -28,7 +28,7 @@ export interface UseMapStatsOptions {
   covers?: string;
 }
 
-export interface UseMapStatsResult {
+interface UseMapStatsResult {
   stats: MapStats;
   inViewContacts: MapContact[];
 }

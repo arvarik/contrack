@@ -57,7 +57,7 @@ const SCROLLER = SIDE_PANEL_SCROLLER;
 /** The small caps heading over each group. */
 const GROUP_HEADING = cn(SECTION_HEADING, "flex items-center gap-1.5 mb-1");
 
-export interface MapInsightsPaneProps {
+interface MapInsightsPaneProps {
   isOpen: boolean;
   onToggle: (open: boolean) => void;
   stats: MapStats;

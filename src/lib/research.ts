@@ -69,7 +69,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 /** "education" reads "Education", "experience" "Roles". */
-export function fieldLabel(field: string): string {
+function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field;
 }
 
@@ -149,7 +149,7 @@ export function sourceDisplay(source: ResearchSource): {
 export type ResearchAnchor = "city" | "workEmail" | "link";
 
 /** The contact fields the identity advice reads. */
-export type IdentityContact = Pick<
+type IdentityContact = Pick<
   Contact,
   "company" | "role" | "location" | "addresses" | "emails" | "socialLinks"
 > & {

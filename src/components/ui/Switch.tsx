@@ -24,7 +24,7 @@
 import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export interface SwitchProps {
+interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   /** The control's accessible name. */

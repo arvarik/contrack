@@ -43,7 +43,7 @@ import type { ResearchDepth } from "../../shared/researchDepth";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
 /** How one call to `startSearch` reports a limit. */
-export interface StartSearchOptions {
+interface StartSearchOptions {
   /**
    * Where a limit is said: the enrichment lock held by another account.
    * `"page"`, the default, keeps it in `limitMessage` and shows no toast,

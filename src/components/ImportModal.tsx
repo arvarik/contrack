@@ -9,7 +9,7 @@ import { Modal } from "./ui/Modal";
 import { ImportPanel } from "./ImportPanel";
 import type { ImportSummary } from "../api/imports";
 
-export interface ImportModalProps {
+interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;

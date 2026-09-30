@@ -25,7 +25,7 @@ const NetworkCompositionModal = React.lazy(() =>
   })),
 );
 
-export type CompositionTab = "industry" | "role" | "location";
+type CompositionTab = "industry" | "role" | "location";
 
 const TAB_OPTIONS: readonly SegmentedOption<CompositionTab>[] = [
   { value: "industry", label: "Industry" },
@@ -36,7 +36,7 @@ const TAB_OPTIONS: readonly SegmentedOption<CompositionTab>[] = [
 /** The six largest groups get a slice each. The rest are "Other". */
 const TOP_SLICES = COMPOSITION_RAMP.opacities.length;
 
-export interface CompositionCardProps {
+interface CompositionCardProps {
   dashboard?: DashboardPayload;
 }
 

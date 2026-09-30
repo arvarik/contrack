@@ -19,11 +19,11 @@ import { AuthField } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
-export const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
-export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MIN_PASSWORD_LENGTH = 8;
 
-export type AccountField = "displayName" | "email" | "username" | "password";
+type AccountField = "displayName" | "email" | "username" | "password";
 
 type Values = Record<AccountField, string>;
 type Errors = Partial<Record<AccountField, string>>;
@@ -96,7 +96,7 @@ function validate(values: Values): Errors {
   return { ...errors, ...passwordProblem(values.password) };
 }
 
-export interface AccountForm {
+interface AccountForm {
   values: Values;
   photo: File | null;
   setPhoto: (photo: File | null) => void;

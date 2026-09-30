@@ -32,7 +32,7 @@ import { Link, useNavigate, type LinkProps } from "react-router-dom";
 import { WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { useWarmSettingsLink } from "./warm";
 
-export type SlideDirection = "forward" | "back";
+type SlideDirection = "forward" | "back";
 
 /** The longest the screen holds the old picture while the new page loads. */
 const MAX_WAIT_MS = 350;

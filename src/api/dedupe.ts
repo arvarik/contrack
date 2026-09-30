@@ -54,7 +54,7 @@ export const useStartDedupeScan = () => {
 // =============================================================================
 
 /** What the server says about this account's scan right now. */
-export interface ActiveScanState {
+interface ActiveScanState {
   /** The scan record, whether it is running or only booked. */
   scan: DedupeScanProgress | null;
   /**

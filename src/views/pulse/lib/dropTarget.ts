@@ -45,7 +45,7 @@ export interface Box {
   height: number;
 }
 
-export interface Point {
+interface Point {
   x: number;
   y: number;
 }
@@ -63,7 +63,7 @@ export interface DropPlace {
 const ROW_TOLERANCE = 4;
 
 /** The id of a column's own droppable, which stands for its end. */
-export const COLUMN_DROP_PREFIX = "column-";
+const COLUMN_DROP_PREFIX = "column-";
 export const columnDropId = (column: PulseColumn) =>
   `${COLUMN_DROP_PREFIX}${column}`;
 

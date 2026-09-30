@@ -33,7 +33,7 @@ export interface Chip {
   ai?: boolean;
 }
 
-export interface ChipInputProps {
+interface ChipInputProps {
   chips: readonly Chip[];
   /** Called with the trimmed text. Never called with an empty string or a duplicate. */
   onAdd: (text: string) => void;

@@ -1,6 +1,6 @@
 import type { Contact } from "../../../types";
 
-export interface FieldConflict {
+interface FieldConflict {
   label: string;
   primaryValue: string;
   duplicateValue: string;

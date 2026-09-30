@@ -12,7 +12,7 @@ import React from "react";
 import { cn } from "./utils";
 import { TONE_DOT, TONE_TEXT, type Tone } from "./styles";
 
-export const WORST_PASSWORDS = [
+const WORST_PASSWORDS = [
   "password",
   "12345678",
   "123456789",
@@ -55,9 +55,9 @@ export const WORST_PASSWORDS = [
   "root1234",
 ] as const;
 
-export const WORST_PASSWORDS_SET = new Set<string>(WORST_PASSWORDS);
+const WORST_PASSWORDS_SET = new Set<string>(WORST_PASSWORDS);
 
-export const STRENGTH_WORDS = ["", "Short", "OK", "Good", "Strong"] as const;
+const STRENGTH_WORDS = ["", "Short", "OK", "Good", "Strong"] as const;
 
 /**
  * Score password strength from 0 (empty) to 4 (strong).

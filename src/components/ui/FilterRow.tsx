@@ -40,7 +40,7 @@ export interface FilterPill<T> {
 const ROW_LABEL =
   "shrink-0 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant sm:w-[5.75rem] sm:pt-2";
 
-export interface FilterRowProps<T extends string> {
+interface FilterRowProps<T extends string> {
   /** The row's name, such as "Contacts". It also makes the label's id. */
   label: string;
   pills: readonly FilterPill<T>[];

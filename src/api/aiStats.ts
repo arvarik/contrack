@@ -93,7 +93,7 @@ export interface AIStatsFeedItem {
   username?: string | null;
 }
 
-export interface AIStatsFeedResponse {
+interface AIStatsFeedResponse {
   items: AIStatsFeedItem[];
   pagination: {
     offset: number;

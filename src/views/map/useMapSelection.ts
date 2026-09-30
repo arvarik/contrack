@@ -19,7 +19,7 @@ import { isValidLatLng } from "../../../shared/geo";
 import { boundsContain, pointInPolygon, type Point } from "./mapMath";
 import { CONTACTS_SOURCE_ID } from "./ContactMap";
 
-export interface UseMapSelectionOptions {
+interface UseMapSelectionOptions {
   contacts?: MapContact[];
   filteredContacts?: MapContact[];
 }

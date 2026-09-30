@@ -238,7 +238,7 @@ export function useZoomAtLeast(
  * water under its roads), and the heat under that one would have the roads
  * drawn across it.
  */
-export function firstLabelLayer(
+function firstLabelLayer(
   layers: readonly { id: string; type: string }[],
 ): string | undefined {
   let lastShape = -1;

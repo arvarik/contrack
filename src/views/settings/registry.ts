@@ -40,7 +40,7 @@ import type { Tone } from "../../lib/styles";
 
 export type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
 
-export interface SettingsGroupMeta {
+interface SettingsGroupMeta {
   id: SettingsGroup;
   title: string;
 }

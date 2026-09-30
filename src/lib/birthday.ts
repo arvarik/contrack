@@ -1,12 +1,12 @@
 import { formatDay } from "./datetime";
 
-export interface ParsedBirthday {
+interface ParsedBirthday {
   year: number | null;
   month: number; // 1-12
   day: number; // 1-31
 }
 
-export interface UpcomingBirthdayInfo {
+interface UpcomingBirthdayInfo {
   daysUntil: number;
   turningAge: number | null;
   nextDate: Date;

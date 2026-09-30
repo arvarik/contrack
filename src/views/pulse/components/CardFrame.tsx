@@ -32,9 +32,9 @@ import {
   type CardCustomizeContextValue,
 } from "../context/CardCustomizeContext";
 
-export type CardFrameVariant = "card" | "line";
+type CardFrameVariant = "card" | "line";
 
-export interface CardFrameProps {
+interface CardFrameProps {
   cardId?: string;
   title: string;
   count?: number;

@@ -39,7 +39,7 @@ export interface MapStats {
   timeZones: TimeZoneBucket[];
 }
 
-export type MapBounds =
+type MapBounds =
   | [west: number, south: number, east: number, north: number]
   | {
       getWest: () => number;

@@ -6,7 +6,7 @@ import { cn } from "../../../../lib/utils";
 // FieldRow — A single labeled field row with optional diff highlight
 // =============================================================================
 
-export interface FieldRowProps {
+interface FieldRowProps {
   icon: React.ReactNode;
   label: string;
   children: React.ReactNode;

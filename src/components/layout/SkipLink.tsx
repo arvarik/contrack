@@ -25,7 +25,7 @@ export const MAIN_CONTENT_ID = "main-content";
 export const CONTACT_HEADING_ID = "contact-heading";
 
 /** The scroller that holds the contact rows. */
-export const CONTACT_LIST_ID = "contact-list";
+const CONTACT_LIST_ID = "contact-list";
 
 /**
  * Where "the content" is on this route.

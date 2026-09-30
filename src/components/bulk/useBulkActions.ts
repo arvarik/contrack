@@ -28,7 +28,7 @@ import {
 } from "../../api";
 import type { Contact, ContactUpdateData } from "../../types";
 
-export interface ContactLike {
+interface ContactLike {
   id: string;
   name: string;
   role?: string | null;
@@ -48,7 +48,7 @@ export interface ContactLike {
  */
 export type SelectionTracked = "all" | "none" | "mixed";
 
-export interface UseBulkActionsOptions {
+interface UseBulkActionsOptions {
   selectedIds: Set<string> | string[];
   onComplete?: () => void;
   contacts?: ContactLike[];

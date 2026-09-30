@@ -15,7 +15,7 @@
  * @module lib/names
  */
 
-export interface DestinationName {
+interface DestinationName {
   label: string;
   title: string;
   description: string;

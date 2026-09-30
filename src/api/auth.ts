@@ -52,7 +52,7 @@ export interface AccountUser {
   avatarUrl: string | null;
 }
 
-export interface AuthStatus {
+interface AuthStatus {
   /** The instance requires a credential. */
   authRequired: boolean;
   /** This browser currently has one. */
@@ -346,7 +346,7 @@ export async function uploadAccountAvatar(
  * Idempotent. Unlinks the uploaded file on the server and clears the account's
  * avatarUrl, falling back to initials.
  */
-export async function removeAccountAvatar(): Promise<{ user: AccountUser }> {
+async function removeAccountAvatar(): Promise<{ user: AccountUser }> {
   const res = await apiFetch("/auth/me/avatar", {
     method: "DELETE",
   });

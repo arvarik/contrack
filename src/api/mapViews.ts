@@ -21,7 +21,7 @@ export interface MapView {
   updatedAt: string;
 }
 
-export function validateBounds(bounds: unknown): asserts bounds is MapBounds {
+function validateBounds(bounds: unknown): asserts bounds is MapBounds {
   if (!Array.isArray(bounds) || bounds.length !== 4) {
     throw new Error(
       "Bounds must be an array of 4 coordinates [west, south, east, north]",

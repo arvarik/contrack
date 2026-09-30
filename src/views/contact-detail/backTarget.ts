@@ -9,7 +9,7 @@ import { NAMES } from "../../lib/names";
 const ARCHIVED_LABEL = "Archived contacts";
 
 /** Where Back goes, and the words on it. */
-export interface BackTarget {
+interface BackTarget {
   to: string;
   label: string;
 }

@@ -223,9 +223,9 @@ export const TILE = {
 // all measure the drawing the same way.
 // ---------------------------------------------------------------------------
 
-export type Point = readonly [number, number];
+type Point = readonly [number, number];
 
-export interface PathCommand {
+interface PathCommand {
   cmd: "M" | "C";
   points: Point[];
 }
@@ -266,7 +266,7 @@ export function parsePath(d: string): PathCommand[] {
   return out;
 }
 
-export interface Bounds {
+interface Bounds {
   minX: number;
   minY: number;
   maxX: number;

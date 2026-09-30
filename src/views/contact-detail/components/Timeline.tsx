@@ -97,7 +97,7 @@ export interface OpenedInteraction {
   editing: boolean;
 }
 
-export interface TimelineProps {
+interface TimelineProps {
   contactId: string;
   timeline: Interaction[];
   /** The interaction in the detail modal. The tab owns it for `?interaction=`. */

@@ -19,7 +19,7 @@ import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";
 
-export type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
+type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
 
 /** The due date choices, in the order the toggles show them. */
 const PRESETS: { value: DueDatePreset; label: string }[] = [
@@ -47,7 +47,7 @@ export function getPresetDate(
   return `${year}-${month}-${day}`;
 }
 
-export interface FollowUpModalProps {
+interface FollowUpModalProps {
   isOpen: boolean;
   onClose: () => void;
   contactIds: string[];

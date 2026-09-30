@@ -138,7 +138,7 @@ interface StatusBadgeProps {
   hasError: boolean;
 }
 
-export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
+function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   if (hasError) {
     return (
       <span className={cn(TONE_WASH.error, BADGE, "flex items-center gap-1")}>

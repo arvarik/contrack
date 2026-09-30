@@ -43,7 +43,7 @@ import {
   depthTime,
 } from "../../../lib/researchDepth";
 
-export interface EnrichMenuProps {
+interface EnrichMenuProps {
   contact: Pick<Contact, "id" | "isGhost">;
   /** The button's words: "Enrich contact", "Enrich again". */
   label: string;

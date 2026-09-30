@@ -344,7 +344,7 @@ const DroppableColumn = ({
   );
 };
 
-export interface PulseGridProps {
+interface PulseGridProps {
   /** The saved layout's visible columns. */
   layout: VisibleColumns;
   isEditing: boolean;

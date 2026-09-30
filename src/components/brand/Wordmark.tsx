@@ -9,7 +9,7 @@
 import { cn } from "../../lib/utils";
 import { CorvidMark } from "./CorvidMark";
 
-export interface WordmarkProps {
+interface WordmarkProps {
   /** The mark's height, in CSS pixels. The word scales with it. */
   size?: number;
   className?: string;

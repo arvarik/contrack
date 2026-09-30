@@ -40,7 +40,7 @@ import {
 
 export type { JumpTarget };
 
-export interface MastheadProps {
+interface MastheadProps {
   counts: MastheadCounts;
   isEditing: boolean;
   onToggleCustomize: () => void;

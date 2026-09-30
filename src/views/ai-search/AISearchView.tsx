@@ -104,7 +104,7 @@ const RESEARCH_FILTERS: readonly FilterPill<ResearchFilter>[] = [
   },
 ];
 
-export interface AISearchViewProps {
+interface AISearchViewProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   hideHeaderDescription?: boolean;

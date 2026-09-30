@@ -27,7 +27,7 @@ export type ContactFilter =
 export type ResearchFilter = "any" | "not_yet" | "stale" | "found_nothing";
 
 /** The first row's choices, in order. */
-export const CONTACT_FILTER_IDS: readonly ContactFilter[] = [
+const CONTACT_FILTER_IDS: readonly ContactFilter[] = [
   "all",
   "tracked",
   "has_links",
@@ -36,7 +36,7 @@ export const CONTACT_FILTER_IDS: readonly ContactFilter[] = [
 ];
 
 /** The second row's choices, in order. */
-export const RESEARCH_FILTER_IDS: readonly ResearchFilter[] = [
+const RESEARCH_FILTER_IDS: readonly ResearchFilter[] = [
   "any",
   "not_yet",
   "stale",
@@ -80,7 +80,7 @@ export function paramsWithFilters(
 }
 
 /** Research older than this is due again: six months. */
-export const STALE_AFTER_MS = 183 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 183 * 24 * 60 * 60 * 1000;
 
 /** The contact fields the rules read. */
 export type FilteredContact = Pick<

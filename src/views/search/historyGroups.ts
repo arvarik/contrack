@@ -15,7 +15,7 @@ import { format, isSameDay, isSameWeek, subDays } from "date-fns";
 import type { HistoryEntry } from "../../../shared/searchHistory";
 import { parseServerTime } from "../../lib/datetime";
 
-export interface HistoryGroup {
+interface HistoryGroup {
   key: string;
   label: string;
   entries: HistoryEntry[];

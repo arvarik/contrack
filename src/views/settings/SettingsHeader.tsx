@@ -16,7 +16,7 @@
 import React, { createContext, useContext, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
-export interface SettingsHeaderSlot {
+interface SettingsHeaderSlot {
   /** The element the actions render into, once the header has drawn it. */
   target: HTMLElement | null;
   /** Says a page has actions. Returns the function that takes it back. */

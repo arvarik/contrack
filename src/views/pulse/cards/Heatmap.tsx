@@ -22,7 +22,7 @@ import type { ActivityDay } from "../../../../shared/pulse";
 import { weekStartsOn, type WeekStartPref } from "../../../../shared/dates";
 import { toLocalDay } from "../../../../shared/pulse";
 
-export interface HeatmapProps {
+interface HeatmapProps {
   days: ActivityDay[];
   weekTotals: number[];
   thisWeekLogged?: number;
@@ -42,7 +42,7 @@ const VIEW_H = ROWS * STEP;
 const TOOLTIP_HALF = 90;
 
 /** "Wed, Sep 17" in the person's own locale. */
-export function formatCellDate(date: Date): string {
+function formatCellDate(date: Date): string {
   return date.toLocaleDateString(undefined, {
     weekday: "short",
     day: "numeric",
@@ -51,7 +51,7 @@ export function formatCellDate(date: Date): string {
 }
 
 /** The words for one day: the date, then the count by type. */
-export function formatCellTitle(
+function formatCellTitle(
   date: Date,
   count: number,
   byType: Record<string, number>,

@@ -80,10 +80,10 @@ registerPmtilesProtocol();
 export const CONTACTS_SOURCE_ID = "contacts";
 
 /** Clusters split into single pins past this zoom. */
-export const CLUSTER_MAX_ZOOM = 14;
+const CLUSTER_MAX_ZOOM = 14;
 
 /** Pins closer than this many pixels join one cluster. */
-export const CLUSTER_RADIUS = 50;
+const CLUSTER_RADIUS = 50;
 
 /**
  * An invisible layer on the contacts source.
@@ -125,7 +125,7 @@ const DEFAULT_VIEW = { longitude: -95, latitude: 20, zoom: 1 };
 /** Where a pin reports its hover when the map draws no card. */
 const noPreview = () => {};
 
-export interface ContactMapProps {
+interface ContactMapProps {
   contacts: MapContact[];
   /** The contact whose detail is open, drawn above the others. */
   selectedId?: string | null;

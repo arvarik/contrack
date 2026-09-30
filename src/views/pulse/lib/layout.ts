@@ -30,9 +30,9 @@ export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
 
 const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(PULSE_CARD_IDS);
 
-export const MAX_CARDS_PER_COL = 20;
+const MAX_CARDS_PER_COL = 20;
 
-export const DEFAULT_COLUMN_CARDS: Record<PulseColumn, PulseCardId[]> = {
+const DEFAULT_COLUMN_CARDS: Record<PulseColumn, PulseCardId[]> = {
   focus: ["up-next", "completed"],
   // Keeping up first: the state of the people you track is the Network
   // column's headline. A stored layout that still names "momentum" or
@@ -82,7 +82,7 @@ export function getDefaultColumnForCard(cardId: string): PulseColumn {
 /** Each column's visible cards, in order. */
 export type VisibleColumns = Record<PulseColumn, PulseCardId[]>;
 
-export interface ResolvedLayout {
+interface ResolvedLayout {
   visible: VisibleColumns;
   hidden: PulseCardId[];
 }

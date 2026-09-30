@@ -70,14 +70,14 @@ export const SIDE_PANEL_SCROLLER =
  * with a page title (Ask Contrack). `overlay` is level with a toolbar that
  * floats 16 px in, over a canvas (the map).
  */
-export type SidePanelInset = "page" | "overlay";
+type SidePanelInset = "page" | "overlay";
 
 const INSET_TOP: Record<SidePanelInset, string> = {
   page: "2rem",
   overlay: "1rem",
 };
 
-export interface SidePanelProps {
+interface SidePanelProps {
   /** The panel's id: the button's `aria-controls`. */
   id: string;
   /** The panel's name: its heading, its landmark and the button's name. */

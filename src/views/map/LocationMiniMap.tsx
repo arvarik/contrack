@@ -62,7 +62,7 @@ export interface MiniMapContact {
   geoSource?: GeoSource;
 }
 
-export interface LocationMiniMapProps {
+interface LocationMiniMapProps {
   contact: MiniMapContact;
   /** True when the contact has at least one address, placed or not. */
   hasAddress: boolean;

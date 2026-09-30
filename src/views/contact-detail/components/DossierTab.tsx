@@ -56,7 +56,7 @@ export interface BriefingMutation {
   isPending: boolean;
 }
 
-export interface DossierTabProps {
+interface DossierTabProps {
   contact: Contact;
   generateBriefing?: BriefingMutation;
   /**

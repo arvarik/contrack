@@ -14,7 +14,7 @@ import { SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { SlideLink, useSlideNavigate } from "./slide";
 
-export interface SettingsSearchProps {
+interface SettingsSearchProps {
   value: string;
   onChange: (val: string) => void;
   onSelect?: () => void;

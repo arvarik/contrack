@@ -17,7 +17,7 @@ import { formatRelative } from "../../lib/datetime";
 import { ICON_BTN, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
-export interface HistoryEntryRowProps {
+interface HistoryEntryRowProps {
   entry: HistoryEntry;
   isCurrent: boolean;
   onSelect: (entry: HistoryEntry) => void;

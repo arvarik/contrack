@@ -20,7 +20,7 @@ import {
   SELECTED_TINT,
 } from "../../lib/styles";
 
-export interface ViewsMenuProps {
+interface ViewsMenuProps {
   views: MapView[];
   activeViewId: string | null;
   onSelectView: (view: MapView) => void;

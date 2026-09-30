@@ -22,7 +22,7 @@ export const LAST_VIEW_KEY = "contrack.map.lastView";
 /** MapLibre's own zoom ceiling. */
 const MAX_ZOOM = 24;
 
-export interface MapViewState {
+interface MapViewState {
   longitude: number;
   latitude: number;
   zoom: number;
@@ -50,7 +50,7 @@ const inRange = (value: unknown, min: number, max: number): value is number =>
   value <= max;
 
 /** True for a view the map can open on. */
-export function isMapViewState(value: unknown): value is MapViewState {
+function isMapViewState(value: unknown): value is MapViewState {
   if (!value || typeof value !== "object") return false;
   const view = value as Record<string, unknown>;
   return (

@@ -36,7 +36,7 @@ import { scrollParent } from "../../lib/scrollParent";
 /** Past this many rows a list draws only the rows near the screen. */
 export const VIRTUAL_ROWS = 200;
 
-export interface VirtualRowsProps<T> {
+interface VirtualRowsProps<T> {
   /** The rows' items, in order. */
   items: readonly T[];
   /** A stable key for an item, such as a contact's id. */

@@ -30,7 +30,7 @@ import type { PulseCardId, PulseColumn } from "../lib/layout";
 import { DRAG_SLOT } from "../lib/pulseStyles";
 import { CardCustomizeContext } from "../context/CardCustomizeContext";
 
-export interface SortableCardProps {
+interface SortableCardProps {
   cardId: PulseCardId;
   column: PulseColumn;
   index: number;

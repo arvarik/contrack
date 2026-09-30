@@ -22,7 +22,7 @@ import {
   opticalSize,
 } from "../../assets/corvidPaths";
 
-export interface CorvidTileProps {
+interface CorvidTileProps {
   /** Rendered width and height, in CSS pixels. */
   size?: number;
   /** `true` hides the SVG from assistive tech. `false` names it "Contrack". */

@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { apiFetch } from "../api/client";
 
 /** How long Undo stays on screen. The same as `lib/undoToast.ts`. */
-export const UNDO_WINDOW_MS = 10_000;
+const UNDO_WINDOW_MS = 10_000;
 
 /**
  * The latest end of the window, if the toast never reports its close.
@@ -148,7 +148,7 @@ function undo(id: string, entry: PendingDelete): void {
  * Runs on `pagehide`. A request of a closing page is cancelled unless it uses
  * `keepalive`, so this path calls the API directly and not the mutation.
  */
-export function flushPendingDeletes(): void {
+function flushPendingDeletes(): void {
   for (const [id, entry] of entries) {
     if (entry.status !== "waiting") continue;
     const url = entry.flushUrl ?? `/interactions/${encodeURIComponent(id)}`;
@@ -164,7 +164,7 @@ export function flushPendingDeletes(): void {
   }
 }
 
-export interface PendingDeleteOptions {
+interface PendingDeleteOptions {
   /** The interaction or item to delete. */
   id: string;
   /** Sends the DELETE. Resolves when the server deleted the row. */

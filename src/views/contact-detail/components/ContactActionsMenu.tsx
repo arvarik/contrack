@@ -54,7 +54,7 @@ import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
 
 /** Name, emails and phones: enough to reach the person. */
-export function basicDetailsText(contact: Contact): string {
+function basicDetailsText(contact: Contact): string {
   const textChunks = [`Name: ${contact.name}`];
   if (contact.emails?.length)
     textChunks.push(`Email: ${contact.emails.map((e) => e.email).join(", ")}`);
@@ -64,7 +64,7 @@ export function basicDetailsText(contact: Contact): string {
 }
 
 /** Every plain fact on the contact, one per line. */
-export function fullDetailsText(contact: Contact): string {
+function fullDetailsText(contact: Contact): string {
   const textChunks = [`Name: ${contact.name}`];
   if (contact.role) textChunks.push(`Role: ${contact.role}`);
   if (contact.company) textChunks.push(`Company: ${contact.company}`);

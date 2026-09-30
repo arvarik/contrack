@@ -29,7 +29,7 @@ interface MentionListProps {
   command: (attrs: { id: string; label: string }) => void;
 }
 
-export const MentionList = forwardRef<
+const MentionList = forwardRef<
   { onKeyDown: (args: { event: KeyboardEvent }) => boolean },
   MentionListProps
 >((props, ref) => {

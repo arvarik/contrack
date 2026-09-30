@@ -48,7 +48,7 @@ export interface Choice<T> {
   detail?: string;
 }
 
-export interface ChoiceGroupProps<T> {
+interface ChoiceGroupProps<T> {
   /** The group's accessible name, such as "Session length". */
   label: string;
   /** The chosen value. A value no tile has checks none. */

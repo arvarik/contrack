@@ -90,7 +90,7 @@ export interface ActionMenuItem {
   separatorBefore?: boolean;
 }
 
-export interface ActionMenuProps {
+interface ActionMenuProps {
   /** The trigger's accessible name, for example "Contact actions". */
   label: string;
   items: readonly ActionMenuItem[];

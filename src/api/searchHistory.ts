@@ -19,22 +19,22 @@ import type {
 } from "../../shared/searchHistory";
 import { normalizeQuery } from "../../shared/searchHistory";
 
-export const SEARCH_HISTORY_KEY = ["searchHistory"] as const;
+const SEARCH_HISTORY_KEY = ["searchHistory"] as const;
 
-export interface HistoryListFilters {
+interface HistoryListFilters {
   mode?: HistoryMode;
   q?: string;
   pinned?: boolean;
   limit?: number;
 }
 
-export interface HistoryListResponse {
+interface HistoryListResponse {
   entries: HistoryEntry[];
   nextCursor: string | null;
   total: number;
 }
 
-export function searchHistoryListKey(filters?: HistoryListFilters) {
+function searchHistoryListKey(filters?: HistoryListFilters) {
   return [...SEARCH_HISTORY_KEY, "list", filters ?? {}] as const;
 }
 
@@ -72,7 +72,7 @@ let lastRecorded: {
   time: number;
 } | null = null;
 
-export function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
+function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
   const now = Date.now();
   const norm = normalizeQuery(query);
   if (

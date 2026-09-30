@@ -107,7 +107,7 @@ export const AccountAvatar = ({
 };
 
 /** The name to show, falling back through what the account actually has. */
-export function accountLabel(user: AccountUser): string {
+function accountLabel(user: AccountUser): string {
   return user.displayName?.trim() || user.username;
 }
 

@@ -21,7 +21,7 @@ import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";
 
 /** Why this screen appeared, when it was not the user's own doing. */
-export type SignInReason = "expired" | "disabled" | null;
+type SignInReason = "expired" | "disabled" | null;
 
 const HEADINGS: Record<
   "expired" | "disabled",

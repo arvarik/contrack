@@ -66,7 +66,7 @@ export interface FlightViewport {
   height: number;
 }
 
-export interface FlightBox {
+interface FlightBox {
   left: number;
   top: number;
   right: number;
@@ -121,7 +121,7 @@ export interface FlightPerch {
   size: number;
 }
 
-export interface FlightRequest {
+interface FlightRequest {
   kind: FlightKind;
   viewport: FlightViewport;
   /** Where the bird sits. Null: a flypast from off the left edge and out. */

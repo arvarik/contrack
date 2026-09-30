@@ -29,7 +29,7 @@ import { ADD_BUTTON, FIELD_LABEL } from "../../../lib/styles";
 /** The text of a value at rest: 14 px, medium weight, full contrast. */
 export const FIELD_VALUE = "text-sm font-medium text-on-surface";
 
-export interface AddButtonProps {
+interface AddButtonProps {
   /**
    * The accessible name, for example "Add email". The visible text is "Add",
    * so the name must contain "Add" for speech input to find the button.
@@ -56,7 +56,7 @@ export const AddButton = ({ label, onClick, ref }: AddButtonProps) => (
   </button>
 );
 
-export interface FieldProps {
+interface FieldProps {
   /** The name above the value, in sentence case: "Email", "Next follow-up". */
   label: string;
   children?: React.ReactNode;

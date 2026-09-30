@@ -129,10 +129,10 @@ import { SETTINGS_BOX } from "./settings/layout";
 // The groups
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type TrackedGroupId =
+type TrackedGroupId =
   "at-risk" | "fading" | "strong" | "unscored" | "not-tracked";
 
-export interface TrackedGroup {
+interface TrackedGroup {
   id: TrackedGroupId;
   title: string;
   contacts: Contact[];
@@ -155,7 +155,7 @@ const GROUP_ORDER: readonly TrackedGroupId[] = [
 ];
 
 /** Which group a contact belongs to: its ring state, by `scoreView`. */
-export function groupOf(contact: Contact): TrackedGroupId {
+function groupOf(contact: Contact): TrackedGroupId {
   const view = scoreView(contact);
   if (view.kind === "untracked") return "not-tracked";
   if (view.kind === "unscored") return "unscored";
@@ -163,7 +163,7 @@ export function groupOf(contact: Contact): TrackedGroupId {
 }
 
 /** Whether a contact's name, company or role has the query in it. */
-export function matchesQuery(
+function matchesQuery(
   contact: Pick<Contact, "name" | "company" | "role">,
   query: string,
 ): boolean {
@@ -177,7 +177,7 @@ export function matchesQuery(
 }
 
 /** The options `groupContacts` takes: the search, the order, the filters. */
-export interface GroupOptions {
+interface GroupOptions {
   query?: string;
   order?: TrackedOrder;
   tracking?: TrackingFilter;

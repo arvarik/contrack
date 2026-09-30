@@ -121,7 +121,7 @@ const ZONE_LOCALES = [
 const ABBREVIATION = /^[A-Z]{2,5}$/;
 
 /** A zone's name, short for the screen and long for a screen reader. */
-export interface ZoneName {
+interface ZoneName {
   /** "EDT", "AEST", or the offset when there is no abbreviation: "GMT+4". */
   short: string;
   /** "Eastern Daylight Time", "Gulf Standard Time". */
@@ -274,12 +274,12 @@ export function timeZoneAt(lat: number | null, lng: number | null) {
  * The weather in a town is the same a street away, and a contact's pin can
  * sit on their front door. Open-Meteo is a third party, so it gets the town.
  */
-export function roundCoordinate(value: number): number {
+function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
 /** The Open-Meteo request for the current weather near a point, rounded. */
-export function weatherUrl(lat: number, lng: number): string {
+function weatherUrl(lat: number, lng: number): string {
   const params = new URLSearchParams({
     latitude: String(roundCoordinate(lat)),
     longitude: String(roundCoordinate(lng)),

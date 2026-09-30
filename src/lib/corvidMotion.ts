@@ -77,7 +77,7 @@ export function pickWeighted<T>(
 // Easing
 // ---------------------------------------------------------------------------
 
-export type Easing = (t: number) => number;
+type Easing = (t: number) => number;
 
 const clamp01 = (t: number) => Math.min(Math.max(t, 0), 1);
 
@@ -96,7 +96,7 @@ export const easeOutBack: Easing = (t) => {
 // ---------------------------------------------------------------------------
 
 /** One keyframe: the track reaches `value` at `at` ms, arriving by `ease`. */
-export interface Key {
+interface Key {
   at: number;
   value: number;
   ease?: Easing;

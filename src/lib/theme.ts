@@ -215,7 +215,7 @@ export const PALETTES: Record<ResolvedMode, Palette> = {
 };
 
 /** Every surface a piece of text can be painted on, in one palette. */
-export const SURFACE_TOKENS = [
+const SURFACE_TOKENS = [
   "surface",
   "surface-variant",
   "surface-container-lowest",

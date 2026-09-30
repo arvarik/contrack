@@ -41,7 +41,7 @@ export const AdminPage = ({
 );
 
 /** What an empty list says: its icon, a title, and a sentence if one helps. */
-export interface AdminEmpty {
+interface AdminEmpty {
   icon: LucideIcon;
   title: string;
   body?: ReactNode;

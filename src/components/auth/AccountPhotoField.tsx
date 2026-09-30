@@ -13,7 +13,7 @@ import { Camera } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { DROPZONE_INPUT } from "../../lib/styles";
 
-export interface AccountPhotoFieldProps {
+interface AccountPhotoFieldProps {
   value: File | null;
   currentUrl?: string | null;
   fallbackUrl: string;

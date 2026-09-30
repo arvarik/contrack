@@ -59,14 +59,14 @@ import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
-export interface ImportPanelProps {
+interface ImportPanelProps {
   onComplete?: (summary: ImportSummary) => void;
   onClose?: () => void;
 }
 
-export type ImportTab = "apple" | "linkedin" | "facebook" | "google";
+type ImportTab = "apple" | "linkedin" | "facebook" | "google";
 
-export type ImportPhaseState =
+type ImportPhaseState =
   | "idle"
   | "importing"
   | "embedding"
@@ -100,7 +100,7 @@ const ERROR_BANNER = cn(
   TONE_WASH.error,
 );
 
-export const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
+const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
 const VALID_SOURCES: readonly ImportTab[] = [
   "apple",
   "linkedin",
@@ -108,7 +108,7 @@ const VALID_SOURCES: readonly ImportTab[] = [
   "facebook",
 ];
 
-export function readInitialSource(): ImportTab {
+function readInitialSource(): ImportTab {
   try {
     const saved = localStorage.getItem(IMPORT_LAST_SOURCE_KEY);
     if (saved && (VALID_SOURCES as readonly string[]).includes(saved)) {
@@ -120,7 +120,7 @@ export function readInitialSource(): ImportTab {
   return "apple";
 }
 
-export function persistSource(source: ImportTab) {
+function persistSource(source: ImportTab) {
   try {
     localStorage.setItem(IMPORT_LAST_SOURCE_KEY, source);
   } catch {

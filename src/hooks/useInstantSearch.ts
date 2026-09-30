@@ -24,7 +24,7 @@ import type { Contact } from "../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface InstantSearchResult {
+interface InstantSearchResult {
   /** The display results (either client-filtered SlimSearchContact or FTS5-upgraded Contact) */
   results: (Contact | SlimSearchContact)[];
   /** True when showing instant client results (before FTS5 arrival) */

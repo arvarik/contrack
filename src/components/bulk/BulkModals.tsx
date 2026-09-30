@@ -12,7 +12,7 @@ import { BulkEditFieldModal } from "../BulkEditFieldModal";
 import { useLists } from "../../api/lists";
 import { ListIcon } from "../../views/contact-list/CreateListModal";
 
-export interface BulkModalsProps {
+interface BulkModalsProps {
   selectedCount: number;
   // Add to list
   isAddToListOpen: boolean;

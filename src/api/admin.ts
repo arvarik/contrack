@@ -104,7 +104,7 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-export interface AuditPage {
+interface AuditPage {
   entries: AuditEntry[];
   /**
    * The cursor for the next page, or null at the end.
@@ -223,7 +223,7 @@ export interface InstanceHealth {
   };
 }
 
-export const adminKeys = {
+const adminKeys = {
   users: ["admin", "users"] as const,
   invitations: ["admin", "invitations"] as const,
   settings: ["admin", "settings"] as const,
@@ -506,7 +506,7 @@ export const useUpdateInstanceSettings = () => {
 // Integrations
 // ---------------------------------------------------------------------------
 
-export interface IntegrationsConfig {
+interface IntegrationsConfig {
   searxng: {
     url: string | null;
     source: "setting" | "env" | "none";
@@ -519,7 +519,7 @@ export interface IntegrationsConfig {
   };
 }
 
-export interface UpdateIntegrationsInput {
+interface UpdateIntegrationsInput {
   searxngUrl?: string;
   googleOAuth?: { clientId: string; clientSecret: string } | null;
 }
@@ -686,7 +686,7 @@ export const useCreateBackup = () => {
 // Mail
 // ---------------------------------------------------------------------------
 
-export interface MailConfig {
+interface MailConfig {
   source: "env" | "settings" | "none";
   host: string;
   port: number;
@@ -702,7 +702,7 @@ export interface MailConfig {
   publicUrl?: string | null;
 }
 
-export interface UpdateMailInput {
+interface UpdateMailInput {
   host: string;
   port: number;
   secure: boolean;

@@ -28,7 +28,7 @@ export const FLY_DURATION_MS = 800;
 /** The contact panel's slide takes 400 ms, and the map moves with it. */
 export const PADDING_DURATION_MS = 400;
 
-export interface FlyTarget {
+interface FlyTarget {
   longitude: number;
   latitude: number;
 }
@@ -62,7 +62,7 @@ export const prefersReducedMotion = (): boolean =>
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
-export interface MoveOptions {
+interface MoveOptions {
   /**
    * Forces the jump. It defaults to what the system says, and a caller
    * passes it only to be explicit.

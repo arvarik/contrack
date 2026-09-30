@@ -622,7 +622,7 @@ const TOKEN_EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
 type TokenState = "active" | "revoked" | "expired";
 
 /** What a token is doing now, from the two timestamps that can end it. */
-export function tokenState(
+function tokenState(
   token: Pick<ApiTokenSummary, "revokedAt" | "expiresAt">,
 ): TokenState {
   const now = Date.now();

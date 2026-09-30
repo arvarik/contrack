@@ -81,17 +81,17 @@ import {
 import { SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
-export interface TrackButtonProps {
+interface TrackButtonProps {
   contact: TrackableContact;
   /** The narrow header: the glyph and the chevron, with the word in the name. */
   compact?: boolean;
 }
 
 /** The button's name before the contact is tracked. */
-export const TRACK_LABEL = "Track, choose how often";
+const TRACK_LABEL = "Track, choose how often";
 
 /** The button's name while tracked: "Tracking quarterly, change or stop". */
-export const trackingLabel = (cadenceDays: number) =>
+const trackingLabel = (cadenceDays: number) =>
   `Tracking ${describeCadence(cadenceDays, { sentence: true })}, change or stop`;
 
 /**

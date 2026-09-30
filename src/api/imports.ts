@@ -63,7 +63,7 @@ export interface ImportRow {
   contactId: string | null;
 }
 
-export interface ImportRetryResult {
+interface ImportRetryResult {
   importId: string;
   status: ImportStatus;
   retried: number;
@@ -73,7 +73,7 @@ export interface ImportRetryResult {
 
 const path = (id: string) => `/imports/${encodeURIComponent(id)}`;
 
-export const fetchImports = async (): Promise<ImportRecord[]> => {
+const fetchImports = async (): Promise<ImportRecord[]> => {
   const data = await apiJson<{ imports: ImportRecord[] }>("/imports");
   return data.imports;
 };
