@@ -27,7 +27,7 @@
 import type { MascotMotion, MotionPreference } from "../api/preferences";
 import type { CorvidReaction } from "./corvidBrain";
 import { between, type Rng } from "./corvidMotion";
-import type { FlightKind } from "./corvidFlight";
+import type { FlightBox, FlightKind } from "./corvidFlight";
 
 // ---------------------------------------------------------------------------
 // Events
@@ -62,8 +62,18 @@ export interface CorvidFlyDetail {
    * hide: a flypast of something that is not a perch.
    */
   from?: DOMRect;
-  /** A `search` flight's hunting ground, in viewport px. */
-  area?: { left: number; top: number; right: number; bottom: number };
+  /**
+   * A `search` flight's page, in viewport px: the bird stays inside it. With
+   * `avoid`, it hunts in the part `avoid` leaves free. Without, over all of
+   * it.
+   */
+  area?: FlightBox;
+  /**
+   * The column a `search` flight keeps out of, in viewport px: the search
+   * box and the results under it. The bird hunts beside it and above it,
+   * and comes home round it.
+   */
+  avoid?: FlightBox;
 }
 
 /** The payload {@link CORVID_REACT_EVENT} carries. */
@@ -93,6 +103,7 @@ export const flyCorvid = (detail: Partial<CorvidFlyDetail> = {}): void =>
     perch: detail.perch,
     from: detail.from,
     area: detail.area,
+    avoid: detail.avoid,
   });
 
 /**

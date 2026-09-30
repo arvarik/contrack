@@ -1012,6 +1012,31 @@ Each match is the full contact, plus these fields:
 | `verified`                | `true` when an exact local answer, a database filter, a facet or the reranker proved the match. `false` for a local result nobody checked.                                                                                           |
 | `aiReason`                | One sentence that the server builds from the proven fields, for example "Works at Northwind Logistics, based in Lisbon, Portugal." It is `null` on a local answer, on an unverified list, and when no proven field is left to quote. |
 | `approximate`/`matchType` | Only on a local answer. `approximate: true` and `matchType: "approximate"` mark a close name. Otherwise `matchType` is `exact`.                                                                                                      |
+| `matchedOn`               | The fields that answer the question, at most three, most telling first. Each is `{field, text, marks, how}`. See the list below.                                                                                                     |
+
+`matchedOn` says why each person is in the list, with no model call.
+"Who is interested in machine learning?" gives one person
+`{"field":"interest","text":"Machine Learning",…}` and another
+`{"field":"role","text":"Machine Learning Engineer",…}`.
+
+- `field` is one of `role`, `headline`, `company`, `industry`, `location`,
+  `interest`, `tag`, `about`, `preferences`, `experience`, `education` and
+  `lastContact`.
+- `text` is the contact's own text for the field, cut to one line with the
+  first mark near its start. A list field joins its matching items:
+  "ml-reading-group, machine learning".
+- `marks` holds `[start, end)` offsets into `text`, where the question's
+  words are. Matching ignores case and accents, finds a word's other forms
+  ("designers" finds Design), and a few initialisms both ways (ML and
+  machine learning).
+- `how` is `filter` when a facet or the plan's filter proved the field,
+  `ai` when the reranker cited it, `words` when the question's words are in
+  it, and `meaning` for a passage close in meaning with none of the words.
+  Proven fields come first.
+
+A name, an email or a phone number gets `[]`: the card shows it anyway.
+The list is built for every match on every path, the instant list
+included, in about 0.2 ms for 30 matches.
 
 A chunk's `fallback` means that the model did not verify its list.
 
@@ -1152,6 +1177,46 @@ when the sanitizer rejects the text. A cached brief sends `start` and
 `complete` with no pieces. An account with AI off gets
 `403 AI_OFF_FOR_ACCOUNT`, and an instance with AI off gets
 `403 AI_OFF_FOR_INSTANCE`.
+
+---
+
+### `GET /api/search/starters`
+
+The account's pool of starter questions, which the Ask page shows six of
+at random under "Try asking".
+
+```bash
+curl http://localhost:3210/api/search/starters
+```
+
+```json
+{
+  "questions": [
+    { "text": "Who works in Fintech?", "kind": "industry" },
+    { "text": "Who do I know in Lisbon?", "kind": "city" },
+    { "text": "Who works at Northwind Logistics?", "kind": "company" },
+    { "text": "Who is interested in Rock Climbing?", "kind": "interest" },
+    { "text": "Who works as a CTO?", "kind": "role" },
+    { "text": "Who works in Fintech in Lisbon?", "kind": "pair" },
+    { "text": "Who is tagged investor?", "kind": "tag" }
+  ]
+}
+```
+
+- Each question names a value that two of the account's active contacts
+  hold, or one in an account under ten contacts. The kinds take turns, most
+  shared value first.
+- The pool holds at most 40 questions, and never more than the account has
+  contacts. An account with no contacts gets `[]`.
+- A value that the search would read as a different facet is left out:
+  an interest that is also a place, an industry that is also a place, a
+  tag on more than 60 percent of the account. Schools are left out,
+  because the keyword index does not hold education.
+- The server keeps the pool per account and search revision. It builds
+  every account's pool after boot, and an import schedules its account's
+  pool once its contacts commit. A pool a few edits behind is served at
+  once and built again in the background. One further behind is built
+  before the answer, about 20 ms at 5,000 contacts.
 
 ---
 

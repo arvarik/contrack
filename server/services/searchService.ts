@@ -36,6 +36,14 @@ import {
 import { resolveEmbeddings } from "../ai/embeddings.ts";
 import { buildReason, type ReasonEvidence } from "./search/reasons.ts";
 import {
+  explainMatch,
+  questionTerms,
+  type MatchProof,
+  type QuestionTerms,
+} from "./search/matchedOn.ts";
+import type { MatchedOn } from "../../shared/matchedOn.ts";
+import type { SearchPassage } from "./search/passages.ts";
+import {
   compileFacets,
   facetKey,
   type CompiledFacets,
@@ -105,6 +113,8 @@ export type HydratedMatch = Record<string, unknown> & {
    * local result nobody has checked yet.
    */
   verified?: boolean;
+  /** The fields that answer the question, for the card (`matchedOn.ts`). */
+  matchedOn?: MatchedOn[];
 };
 
 /** Options for one Ask Contrack search. */
@@ -217,6 +227,34 @@ function uniqueFacets(filters: FacetFilter[]): FacetFilter[] {
   });
 }
 
+/** Evidence a database filter proved. */
+const filterProofs = (evidence: ReasonEvidence[]): MatchProof[] =>
+  evidence.map((item) => ({ evidence: item, how: "filter" }));
+
+/**
+ * Each match with the fields that answer the question. `proofsOf` gives the
+ * fields a filter or the reranker proved, and `passagesOf` the passages the
+ * search read for the contact, for a match nothing else explains.
+ */
+function withMatchedOn<T extends HydratedMatch>(
+  matches: T[],
+  terms: QuestionTerms,
+  proofsOf: (match: T) => MatchProof[] = () => [],
+  passagesOf: (match: T) => SearchPassage[] = () => [],
+): T[] {
+  const now = new Date();
+  return matches.map((match) => ({
+    ...match,
+    matchedOn: explainMatch(
+      match,
+      terms,
+      proofsOf(match),
+      passagesOf(match),
+      now,
+    ),
+  }));
+}
+
 /**
  * What the facets prove about a contact, as reason evidence. A facet on a
  * score, a date of edit, a list, a distance or a missing field says nothing
@@ -262,6 +300,7 @@ function facetAnswer(
   scope: Scope,
   facets: CompiledFacets,
   filters: FacetFilter[],
+  terms: QuestionTerms,
 ): SearchResult {
   const ids = (
     sqlite
@@ -273,12 +312,16 @@ function facetAnswer(
       .all(scope.ownerId, ...facets.params, PHASE1_LIMIT) as { id: string }[]
   ).map((row) => row.id);
   return {
-    matches: [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
-      (contact) => ({
-        ...contact,
-        verified: true,
-        aiReason: buildReason(contact, facetEvidence(contact, filters)),
-      }),
+    matches: withMatchedOn(
+      [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
+        (contact) => ({
+          ...contact,
+          verified: true,
+          aiReason: buildReason(contact, facetEvidence(contact, filters)),
+        }),
+      ),
+      terms,
+      (contact) => filterProofs(facetEvidence(contact, filters)),
     ),
     fallback: false,
   };
@@ -492,6 +535,7 @@ async function answerFromPlan(
   retrieval: RetrievalResult,
   signal: AbortSignal,
   filters: FacetFilter[] = [],
+  terms: QuestionTerms = questionTerms(query),
 ): Promise<{ result: SearchResult; path: string }> {
   const { plan, candidates, allowed } = retrieval;
   const planEvidence =
@@ -521,11 +565,15 @@ async function answerFromPlan(
     return {
       path: proof === "temporal" ? "sql-temporal" : "sql",
       result: {
-        matches: [...hydrated.values()].map((contact) => ({
-          ...contact,
-          verified: true,
-          aiReason: buildReason(contact, evidenceOf(contact)),
-        })),
+        matches: withMatchedOn(
+          [...hydrated.values()].map((contact) => ({
+            ...contact,
+            verified: true,
+            aiReason: buildReason(contact, evidenceOf(contact)),
+          })),
+          terms,
+          (contact) => filterProofs(evidenceOf(contact)),
+        ),
         fallback: false,
       },
     };
@@ -574,10 +622,15 @@ async function answerFromPlan(
         const filtered = evidenceOf(contact).filter(
           (item) => item.field !== cited?.field,
         );
+        const proofs: MatchProof[] = [
+          ...(cited ? [{ evidence: cited, how: "ai" as const }] : []),
+          ...filterProofs(filtered),
+        ];
         return [
           {
             ...contact,
             verified: true,
+            matchedOn: explainMatch(contact, terms, proofs),
             ...(passage
               ? {
                   aiEvidence: {
@@ -640,6 +693,8 @@ async function runSearch(
   const typed = parseFacetQuery(query);
   const filters = uniqueFacets([...(options.filters ?? []), ...typed.filters]);
   const text = typed.freeText.trim();
+  // The question's words, read once for every result's matched fields.
+  const terms = questionTerms(text);
   const normalizedQuery = normalizeKey(text);
   // With no model to run, the answer is local, and "local" keeps it apart
   // from every answer a model verified.
@@ -696,26 +751,30 @@ async function runSearch(
   if (!text)
     return final(
       facets
-        ? facetAnswer(scope, facets, filters)
+        ? facetAnswer(scope, facets, filters, terms)
         : { matches: [], fallback: false },
       "facets",
       "facets",
     );
 
-  // Local kinds: the keyword answer is final and verified.
+  // Local kinds: the keyword answer is final and verified. A name, an
+  // email or a phone number needs no reason: the card shows it. A quoted
+  // phrase says where it was found.
   const { intent, strict } = queryIntent(scope, text, facets, PHASE1_LIMIT);
-  if (intent.local)
+  if (intent.local) {
+    const matches = hydrateLexical(scope, strict, PHASE1_LIMIT).map(
+      (match) => ({ ...match, verified: true }),
+    );
     return final(
       {
-        matches: hydrateLexical(scope, strict, PHASE1_LIMIT).map((match) => ({
-          ...match,
-          verified: true,
-        })),
+        matches:
+          intent.kind === "quoted" ? withMatchedOn(matches, terms) : matches,
         fallback: false,
       },
       intent.kind,
       "local",
     );
+  }
 
   // Facets in the words: a company, a place or an industry the owner's
   // contacts hold. When they are all the question asks, no model runs.
@@ -727,7 +786,7 @@ async function runSearch(
     facets = compileFacets(scope, allFilters);
     if (!hasContentWords(implicit.remainder))
       return final(
-        facetAnswer(scope, facets, allFilters),
+        facetAnswer(scope, facets, allFilters, terms),
         intent.kind,
         "facets",
       );
@@ -763,7 +822,7 @@ async function runSearch(
         listLength,
       ).values(),
     ];
-    const relevant = reorder
+    const relevant: Map<string, SearchPassage[]> = reorder
       ? selectPassages(
           scope,
           text,
@@ -805,16 +864,29 @@ async function runSearch(
       });
       return {
         local: fresh,
-        matches: unverified([
-          ...hydrateCandidates(
-            scope,
-            fresh.candidates.map((c) => c.contactId),
-            PHASE1_LIMIT,
-          ).values(),
-        ]),
+        matches: withMatchedOn(
+          unverified([
+            ...hydrateCandidates(
+              scope,
+              fresh.candidates.map((c) => c.contactId),
+              PHASE1_LIMIT,
+            ).values(),
+          ]),
+          terms,
+        ),
       };
     }
-    return { local, matches: unverified(ordered.slice(0, PHASE1_LIMIT)) };
+    // The passages the cross-encoder read explain a match in meaning when
+    // no field holds the question's words.
+    return {
+      local,
+      matches: withMatchedOn(
+        unverified(ordered.slice(0, PHASE1_LIMIT)),
+        terms,
+        () => [],
+        (contact) => relevant.get(contact.id) ?? [],
+      ),
+    };
   };
   if (!models) {
     // No model can run, so this list is the answer, the same until the next
@@ -896,7 +968,14 @@ async function runSearch(
               rrfK: options.rrfK,
             });
             budget.throwIfAborted();
-            return answerFromPlan(scope, text, retrieval, budget, allFilters);
+            return answerFromPlan(
+              scope,
+              text,
+              retrieval,
+              budget,
+              allFilters,
+              terms,
+            );
           },
           MODEL_BUDGET_MS,
           sharedSignal,

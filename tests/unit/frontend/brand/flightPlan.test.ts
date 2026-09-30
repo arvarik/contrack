@@ -23,9 +23,12 @@ import {
   FLIGHT_PHONE_BOTTOM,
   FLIGHT_TOP,
   SEARCH_HUNT_MS,
+  canHunt,
   flightBox,
   flightSize,
   planFlight,
+  searchGround,
+  type FlightBox,
   type FlightFrame,
   type FlightKind,
   type FlightPerch,
@@ -592,8 +595,8 @@ describe("the way home", () => {
   });
 });
 
-describe("a search", () => {
-  /** The Ask page's search box bird, and the ground below it on a laptop. */
+describe("a search over a ground, with no column to keep out of", () => {
+  /** A search box bird, and a ground below it on a laptop. */
   const BOX_BIRD: FlightPerch = { left: 316, top: 196, size: 20 };
   const GROUND = { left: 296, top: 330, right: 1144, bottom: 900 };
   /** The same on a phone: the whole width, down past the tab bar. */
@@ -722,6 +725,310 @@ describe("a search", () => {
     expect(plan.interruptible(600)).toBe(true);
     for (let t = 600; t < plan.duration - 2_000; t += 500)
       expect(plan.interruptible(t), `${t}`).toBe(true);
+  });
+});
+
+describe("a search round the column", () => {
+  /**
+   * The Ask page as measured in a browser: the page beside the nav rail,
+   * the search box, and the bird in it. The column the bird keeps out of is
+   * the search box and the results under it, down past the window's bottom.
+   */
+  interface Layout {
+    name: string;
+    viewport: FlightViewport;
+    area: FlightBox;
+    field: FlightBox;
+    perch: FlightPerch;
+    /** Where the hunt goes: beside the column, or over it. */
+    hunts: ("left" | "right" | "top")[];
+  }
+  const column = (field: FlightBox, viewport: FlightViewport): FlightBox => ({
+    ...field,
+    bottom: viewport.height,
+  });
+  const LAYOUTS: Layout[] = [
+    {
+      name: "a laptop",
+      viewport: LAPTOP,
+      area: { left: 64, top: 0, right: 1440, bottom: 900 },
+      field: { left: 408, top: 102, right: 1096, bottom: 182 },
+      perch: { left: 432, top: 132, size: 20 },
+      hunts: ["left", "right"],
+    },
+    {
+      name: "a small laptop",
+      viewport: { width: 1024, height: 768 },
+      area: { left: 64, top: 0, right: 1024, bottom: 768 },
+      field: { left: 184, top: 102, right: 680, bottom: 182 },
+      perch: { left: 208, top: 132, size: 20 },
+      hunts: ["right"],
+    },
+    {
+      name: "a tablet",
+      viewport: { width: 800, height: 1000 },
+      area: { left: 64, top: 0, right: 800, bottom: 1000 },
+      field: { left: 88, top: 96, right: 776, bottom: 176 },
+      perch: { left: 112, top: 126, size: 20 },
+      hunts: ["top"],
+    },
+    {
+      name: "a phone",
+      viewport: { width: 390, height: 664 },
+      area: { left: 0, top: 0, right: 390, bottom: 664 },
+      field: { left: 16, top: 142, right: 374, bottom: 202 },
+      perch: { left: 32, top: 162, size: 20 },
+      hunts: ["top"],
+    },
+  ];
+  const MANY = Array.from({ length: 24 }, (_, i) => i + 1);
+
+  const plan = (layout: Layout, seed: number) =>
+    planFlight({
+      kind: "search",
+      viewport: layout.viewport,
+      perch: layout.perch,
+      rng: createRng(seed),
+      area: layout.area,
+      avoid: column(layout.field, layout.viewport),
+    });
+
+  /** The frames away from the perch: not leaving it, not landing on it. */
+  const away = (frames: FlightFrame[], perch: FlightPerch) => {
+    const [px, py] = perchCentre(perch);
+    return frames.filter((f) => Math.hypot(f.x - px, f.y - py) >= 110);
+  };
+
+  /** Which part of the page a frame is in. */
+  const partOf = (f: FlightFrame, field: FlightBox) =>
+    f.x < field.left ? "left" : f.x > field.right ? "right" : "top";
+
+  for (const layout of LAYOUTS) {
+    const { name, viewport, area, field, perch } = layout;
+    const size = flightSize(viewport);
+
+    it(`never flies over the search box or the results, on ${name}`, () => {
+      for (const seed of MANY) {
+        for (const f of away(fly(plan(layout, seed)), perch)) {
+          // Half a bird out beside the column, or nearly as much over it:
+          // the body clears the column, and so does most of each wing.
+          const beside = Math.max(field.left - f.x, f.x - field.right);
+          const over = field.top - f.y;
+          expect(
+            beside >= 0.5 * size || over >= 0.4 * size,
+            `${seed} at ${f.x.toFixed(1)},${f.y.toFixed(1)}`,
+          ).toBe(true);
+        }
+      }
+    });
+
+    it(`stays on the page, off the nav rail and the tab bar, on ${name}`, () => {
+      const room = flightBox(viewport);
+      for (const seed of MANY.slice(0, 8)) {
+        for (const f of away(fly(plan(layout, seed)), perch)) {
+          expect(f.x).toBeGreaterThanOrEqual(area.left + size / 2 - 3);
+          expect(f.x).toBeLessThanOrEqual(area.right - size / 2 + 3);
+          expect(f.y).toBeGreaterThanOrEqual(FLIGHT_EDGE - 3);
+          expect(f.y).toBeLessThanOrEqual(room.bottom + 3);
+        }
+      }
+    });
+
+    it(`hunts where there is room, on ${name}`, () => {
+      const seen = new Set<string>();
+      for (const seed of MANY) {
+        const frames = away(fly(plan(layout, seed)), perch);
+        const parts = frames.map((f) => partOf(f, field));
+        for (const part of parts) seen.add(part);
+        // Nearly all of the hunt is where the layout has room for one.
+        const hunting = parts.filter((part) => layout.hunts.includes(part));
+        expect(hunting.length / parts.length, `${seed}`).toBeGreaterThan(0.85);
+      }
+      for (const part of layout.hunts) expect(seen).toContain(part);
+    });
+
+    it(`hunts for about ${SEARCH_HUNT_MS / 1000} seconds, then lands in the search box, on ${name}`, () => {
+      for (const seed of MANY) {
+        const flight = plan(layout, seed);
+        expect(flight.lands).toBe(true);
+        expect(flight.duration, `${seed}`).toBeGreaterThan(18_000);
+        expect(flight.duration, `${seed}`).toBeLessThan(40_000);
+        expectHome(flight.frame(0), perch);
+        expectHome(flight.frame(flight.duration), perch);
+      }
+    });
+
+    it(`comes home round the column when called early, on ${name}`, () => {
+      for (const seed of MANY.slice(0, 8)) {
+        const hunt = plan(layout, seed);
+        for (const t of [2_500, 7_000, 13_000]) {
+          const at = hunt.frame(t);
+          const home = planFlight({
+            kind: "loop",
+            viewport,
+            perch,
+            rng: createRng(seed),
+            airborne: { x: at.x, y: at.y, facing: 1, from: at },
+            area,
+            avoid: column(field, viewport),
+          });
+          for (const f of away(fly(home), perch)) {
+            const beside = Math.max(field.left - f.x, f.x - field.right);
+            expect(
+              beside >= 0.5 * size || field.top - f.y >= 0.4 * size,
+              `${seed} at ${t}`,
+            ).toBe(true);
+          }
+          expectHome(home.frame(home.duration), perch);
+          // The short way: a few seconds, however far out the bird is.
+          expect(home.duration).toBeLessThan(5_000);
+        }
+      }
+    });
+  }
+
+  /**
+   * How often the bird's height turns from rising to falling or back, per
+   * 100 px it travels across. A change counts once it has gone 4 px the
+   * other way, so the 1.8 px bob of a wingbeat is not one.
+   */
+  const reversalsPer100 = (frames: FlightFrame[]) => {
+    let dir = 0;
+    let extreme = frames[0]!.y;
+    let count = 0;
+    let across = 0;
+    for (let i = 1; i < frames.length; i++) {
+      across += Math.abs(frames[i]!.x - frames[i - 1]!.x);
+      const { y } = frames[i]!;
+      if (dir >= 0 && y > extreme) {
+        extreme = y;
+        dir = 1;
+      } else if (dir <= 0 && y < extreme) {
+        extreme = y;
+        dir = -1;
+      }
+      if (dir === 1 && extreme - y >= 4) {
+        count += 1;
+        dir = -1;
+        extreme = y;
+      } else if (dir === -1 && y - extreme >= 4) {
+        count += 1;
+        dir = 1;
+        extreme = y;
+      }
+    }
+    return (count / across) * 100;
+  };
+
+  for (const layout of LAYOUTS.filter((l) => l.hunts.includes("top"))) {
+    it(`patrols a band too thin to circle in, in long gentle passes, on ${layout.name}`, () => {
+      const band = searchGround(
+        layout.viewport,
+        layout.area,
+        column(layout.field, layout.viewport),
+        layout.perch,
+      ).zones.find((zone) => zone.side === "top")!.rect;
+      const size = flightSize(layout.viewport);
+      for (const seed of MANY) {
+        // The hunt alone: past the takeoff, and before the way home.
+        const frames = fly(plan(layout, seed)).slice(90, -120);
+        // Circling in a 40 px band turned nearly every step: about four
+        // times per 100 px. A patrol rises and falls about once.
+        expect(reversalsPer100(frames), `${seed}`).toBeLessThan(2);
+        const xs = frames.map((f) => f.x);
+        expect(
+          (Math.max(...xs) - Math.min(...xs)) / (band.right - band.left),
+          `${seed}`,
+        ).toBeGreaterThan(0.7);
+        for (const f of away(frames, layout.perch))
+          expect(layout.field.top - f.y, `${seed}`).toBeGreaterThanOrEqual(
+            0.4 * size,
+          );
+      }
+    });
+  }
+
+  it("draws a different hunt for each seed: the sides in a different order", () => {
+    const laptop = LAYOUTS[0]!;
+    const orders = new Set<string>();
+    let both = 0;
+    for (const seed of MANY) {
+      const parts = away(fly(plan(laptop, seed)), laptop.perch)
+        .map((f) => partOf(f, laptop.field))
+        .filter((part) => part !== "top");
+      const order = parts.filter((part, i) => part !== parts[i - 1]);
+      orders.add(order.join(" "));
+      if (order.includes("left") && order.includes("right")) both += 1;
+    }
+    expect(orders.size).toBeGreaterThanOrEqual(4);
+    // Many hunts cross over the top to the other side, and many stay.
+    expect(both).toBeGreaterThanOrEqual(6);
+    expect(both).toBeLessThan(MANY.length);
+  });
+
+  it("faces the way it flies round the column, nearly always", () => {
+    let checked = 0;
+    let wrong = 0;
+    for (const layout of LAYOUTS) {
+      for (const seed of SEEDS) {
+        const frames = fly(plan(layout, seed));
+        for (let i = 40; i < frames.length - 50; i++) {
+          const a = frames[i - 1]!;
+          const b = frames[i]!;
+          const vx = b.x - a.x;
+          const speed = Math.hypot(vx, b.y - a.y);
+          if (speed < 1 || Math.abs(vx) < 0.6 * speed) continue;
+          checked += 1;
+          if (Math.sign(vx) !== Math.sign(b.pose.headFacing)) wrong += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect(wrong / checked).toBeLessThan(0.06);
+  });
+
+  it("finds room on each layout, and none in a window with no margins", () => {
+    for (const { viewport, area, field, perch } of LAYOUTS)
+      expect(
+        canHunt(searchGround(viewport, area, column(field, viewport), perch)),
+      ).toBe(true);
+    // The page is the column's width, and the box is at the very top.
+    const cramped = { width: 400, height: 500 };
+    expect(
+      canHunt(
+        searchGround(
+          cramped,
+          { left: 0, top: 0, right: 400, bottom: 500 },
+          { left: 8, top: 4, right: 392, bottom: 500 },
+          { left: 24, top: 24, size: 20 },
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("with no band over the column, hunts only the side the perch can reach", () => {
+    const layout = {
+      ...LAYOUTS[0]!,
+      // Scrolled up: the search box's top is at the window's top.
+      field: { left: 408, top: 8, right: 1096, bottom: 88 },
+      perch: { left: 432, top: 38, size: 20 },
+      hunts: ["left" as const],
+    };
+    const ground = searchGround(
+      layout.viewport,
+      layout.area,
+      column(layout.field, layout.viewport),
+      layout.perch,
+    );
+    expect(ground.zones.map((zone) => [zone.side, zone.hunts])).toEqual([
+      ["left", true],
+      ["right", false],
+    ]);
+    for (const seed of SEEDS) {
+      for (const f of away(fly(plan(layout, seed)), layout.perch)) {
+        expect(f.x).toBeLessThan(layout.field.left - 0.5 * flightSize(LAPTOP));
+      }
+    }
   });
 });
 

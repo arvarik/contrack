@@ -44,6 +44,7 @@ vi.mock("../../../../src/api", async () => {
     useSemanticSearch: search.useSemanticSearch,
     useSearchCoverage: search.useSearchCoverage,
     useRefreshSearchIndex: search.useRefreshSearchIndex,
+    useStarterQuestions: search.useStarterQuestions,
   };
 });
 vi.mock("../../../../src/views/search/SearchCoverageBar", () => ({
@@ -104,8 +105,21 @@ const OTHER_MATCHES = ["Linus Torvalds", "Ken Thompson", "Dennis Ritchie"].map(
 );
 
 const line = (value: unknown) => JSON.stringify(value) + "\n";
-const complete = (matches = MATCHES) =>
-  line({ phase: "complete", matches, fallback: false });
+const complete = (matches = MATCHES, fallback = false) =>
+  line({ phase: "complete", matches, fallback });
+
+/** The account's starter questions, as `/search/starters` answers. */
+const POOL = [
+  { kind: "industry", text: "Who works in Fintech?" },
+  { kind: "industry", text: "Who works in Media?" },
+  { kind: "industry", text: "Who works in Robotics?" },
+  { kind: "city", text: "Who do I know in Lisbon?" },
+  { kind: "city", text: "Who do I know in Austin?" },
+  { kind: "company", text: "Who works at Northwind Logistics?" },
+  { kind: "interest", text: "Who is interested in Espresso?" },
+  { kind: "role", text: "Who works as a CTO?" },
+];
+let starterPool: typeof POOL = POOL;
 /** A stream that ends before the server says it is done. */
 const truncated = () =>
   line({ phase: "instant", matches: MATCHES, fallback: false });
@@ -193,6 +207,12 @@ const plainAnswers = (s: Sent) => {
       JSON.stringify({ total: 10, indexed: 10, pending: 0, failed: 0 }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
+  }
+  if (s.url.endsWith("/search/starters")) {
+    return new Response(JSON.stringify({ questions: starterPool }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   return new Response(complete());
 };
@@ -360,13 +380,23 @@ describe("asking the same question again", () => {
     expect(semantic(sent)[1].body).toEqual({ query: QUESTION });
   });
 
-  it("offers Refresh beside the results, which re-asks the answered question", async () => {
+  it("has no Refresh beside a list AI checked: asking again showed the same list", async () => {
+    stubFetch();
+    renderView();
+
+    ask(QUESTION);
+    await screen.findByText("Ada Lovelace");
+    expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ask AI again" })).toBeNull();
+  });
+
+  it("offers Ask AI again beside a list AI could not check, for the answered question", async () => {
     let semanticCalls = 0;
     const sent = stubFetch((s) => {
       if (s.url.endsWith("/search/semantic")) {
         semanticCalls++;
         return semanticCalls === 1
-          ? new Response(complete())
+          ? new Response(complete(MATCHES, true))
           : new Response(complete(OTHER_MATCHES));
       }
     });
@@ -375,14 +405,15 @@ describe("asking the same question again", () => {
     ask(QUESTION);
     await screen.findByText("Ada Lovelace");
 
-    // Whatever is in the input, Refresh re-asks the question the results
-    // belong to.
+    // Whatever is in the input, it asks the question the results belong to.
     fireEvent.change(input(), { target: { value: "something else" } });
-    fireEvent.click(screen.getByRole("button", { name: "Refresh results" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask AI again" }));
 
     await screen.findByText("Linus Torvalds");
     expect(semantic(sent)).toHaveLength(2);
     expect(semantic(sent)[1].body).toEqual({ query: QUESTION });
+    // AI checked the second answer: nothing to ask again.
+    expect(screen.queryByRole("button", { name: "Ask AI again" })).toBeNull();
   });
 });
 
@@ -735,19 +766,56 @@ describe("the page", () => {
     renderView();
 
     const list = await screen.findByRole("list", { name: "Try asking" });
-    const suggestion = within(list).getByRole("button", {
-      name: "Who likes espresso?",
-    });
+    const [suggestion] = within(list).getAllByRole("button");
+    const question = suggestion!.textContent!;
     // The words and nothing else: no glyph before them.
-    expect(suggestion.textContent).toBe("Who likes espresso?");
-    fireEvent.click(suggestion);
+    expect(POOL.map((q) => q.text)).toContain(question);
+    fireEvent.click(suggestion!);
 
-    expect(input().value).toBe("Who likes espresso?");
+    expect(input().value).toBe(question);
     await waitFor(() =>
-      expect(semantic(sent)[0]?.body).toEqual({
-        query: "Who likes espresso?",
-      }),
+      expect(semantic(sent)[0]?.body).toEqual({ query: question }),
     );
+  });
+
+  it("shows six questions from the account's pool, and a new draw after Clear", async () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    stubFetch();
+    renderView();
+
+    const chips = async () =>
+      within(await screen.findByRole("list", { name: "Try asking" }))
+        .getAllByRole("button")
+        .map((chip) => chip.textContent);
+    const first = await chips();
+    expect(first).toHaveLength(6);
+    for (const text of first) expect(POOL.map((q) => q.text)).toContain(text);
+    // At most two of one kind while other kinds are left.
+    expect(
+      first.filter((text) => text?.startsWith("Who works in")),
+    ).toHaveLength(2);
+
+    ask(QUESTION);
+    await screen.findByText("Ada Lovelace");
+    expect(screen.queryByRole("list", { name: "Try asking" })).toBeNull();
+
+    random.mockReturnValue(0.99);
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    const second = await chips();
+    expect(second).toHaveLength(6);
+    expect(second).not.toEqual(first);
+    random.mockRestore();
+  });
+
+  it("shows no Try asking for an account with nothing to ask about", async () => {
+    starterPool = [];
+    stubFetch();
+    renderView();
+
+    await screen.findByRole("heading", { level: 1, name: "Ask Contrack" });
+    await waitFor(() => expect(input()).toBeTruthy());
+    expect(screen.queryByRole("heading", { name: "Try asking" })).toBeNull();
+    starterPool = POOL;
   });
 
   it("says no one matches in one sentence, with nothing inside it", async () => {

@@ -3,8 +3,9 @@
  *
  * 1. While AI checks the answer, the page keeps back the local list the
  *    server streams first. A stage says what is happening, and with motion
- *    allowed the corvid leaves the search box and hunts over the empty
- *    results. The answer calls it home.
+ *    allowed the corvid leaves the search box and hunts beside and above
+ *    the search column, never over the results. The answer calls it home
+ *    round the column.
  * 2. A list AI did not check says so once, over the list, and each card
  *    carries an orange question mark in its top right corner. The mark is a
  *    toggletip: a hover, a click, a tap or a keyboard focus opens it, and
@@ -245,7 +246,7 @@ test.describe("the bird while AI works", () => {
     );
   });
 
-  test("leaves the search box, hunts over the empty results, and comes home with the answer", async ({
+  test("leaves the search box, hunts beside and above the results but never over them, and comes home round them", async ({
     page,
     seed,
   }) => {
@@ -261,21 +262,40 @@ test.describe("the bird while AI works", () => {
     const boxBird = page.locator('form[role="search"] [data-bird]');
     await expect(boxBird).toHaveCSS("visibility", "hidden");
 
-    // It hunts below the search box, where the results will be.
+    // The column is the search box and the results under it, from the
+    // box's top down. The bird hunts in the page's margins and the band
+    // over the box. Only its takeoff and landing, near the box's bird,
+    // cross the column's edge.
     const form = (await page.locator('form[role="search"]').boundingBox())!;
+    const perch = await boxBird.evaluate((bird) => {
+      const box = bird.getBoundingClientRect();
+      return [box.left + box.width / 2, box.top + box.height / 2];
+    });
+    const clearOfColumn = (at: number[] | null) =>
+      !at ||
+      Math.hypot(at[0]! - perch[0]!, at[1]! - perch[1]!) < 110 ||
+      at[0]! < form.x ||
+      at[0]! > form.x + form.width ||
+      at[1]! < form.y;
+
     await page.waitForTimeout(1_200);
-    let below = 0;
-    for (let i = 0; i < 8; i++) {
-      const at = await birdAt(page);
-      if (at && at[1]! > form.y + form.height) below += 1;
+    const hunt: (number[] | null)[] = [];
+    for (let i = 0; i < 10; i++) {
+      hunt.push(await birdAt(page));
       await page.waitForTimeout(250);
     }
-    expect(below).toBeGreaterThanOrEqual(6);
+    expect(hunt.filter(Boolean).length).toBeGreaterThanOrEqual(8);
+    for (const at of hunt) expect(clearOfColumn(at), `${at}`).toBe(true);
     await expect(overlay(page)).toHaveCount(1);
 
     await releasePeopleSearch(page);
     await expect(card(page, "Ada Lovelace")).toBeVisible();
-    // Home by the short way: well inside the hunt it would have flown.
+    // Home by the short way round the column, never across the answer.
+    for (let i = 0; i < 60 && (await overlay(page).count()) > 0; i++) {
+      const at = await birdAt(page);
+      expect(clearOfColumn(at), `home at ${at}`).toBe(true);
+      await page.waitForTimeout(100);
+    }
     await expect(overlay(page)).toHaveCount(0, { timeout: 6_000 });
     await expect(boxBird).toHaveCount(0);
   });

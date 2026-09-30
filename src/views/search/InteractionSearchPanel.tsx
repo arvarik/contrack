@@ -71,7 +71,8 @@ import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { IconButton } from "../../components/ui/IconButton";
 import { Select, type SelectOption } from "../../components/ui/Select";
-import type { HighlightRange, InteractionSearchHit } from "../../types";
+import type { InteractionSearchHit } from "../../types";
+import { Highlighted } from "../../components/ui/Highlighted";
 import { AskSearchBox } from "./AskSearchBox";
 import { ShimmerCard } from "./SearchResultCards";
 
@@ -183,41 +184,6 @@ function describeRange(from: string | null, to: string | null): string {
   if (lastDay) return `until ${day(lastDay)}`;
   return "";
 }
-
-// ─── Highlighted text ─────────────────────────────────────────────────────────
-
-/**
- * Text with the matched terms marked. Ranges come from the server, sorted.
- * Each match is a plain `mark`: the base layer paints the highlighter and
- * the ink.
- */
-const Highlighted = ({
-  text,
-  ranges,
-}: {
-  text: string;
-  ranges: HighlightRange[];
-}) => {
-  if (!ranges.length) return <>{text}</>;
-  const parts: React.ReactNode[] = [];
-  let cursor = 0;
-  ranges.forEach(([start, end], i) => {
-    if (start < cursor || end <= start || end > text.length) return;
-    if (start > cursor)
-      parts.push(
-        <React.Fragment key={`t${i}`}>
-          {text.slice(cursor, start)}
-        </React.Fragment>,
-      );
-    parts.push(<mark key={`m${i}`}>{text.slice(start, end)}</mark>);
-    cursor = end;
-  });
-  if (cursor < text.length)
-    parts.push(
-      <React.Fragment key="tail">{text.slice(cursor)}</React.Fragment>,
-    );
-  return <>{parts}</>;
-};
 
 // ─── Result card ──────────────────────────────────────────────────────────────
 

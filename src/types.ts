@@ -8,6 +8,8 @@
  * @see {@link file://server/repositories/types.ts} — Server-side counterpart
  */
 
+import type { MatchedOn } from "../shared/matchedOn";
+
 // =============================================================================
 // Normalized Child Entity Types
 // =============================================================================
@@ -489,6 +491,12 @@ export interface SemanticMatch extends Contact {
   aiReason: string | null;
   /** True when an exact answer, the model or a filter proved it. Older servers omit it. */
   verified?: boolean;
+  /**
+   * The fields that answer the question, most telling first, with the
+   * question's words marked. Empty for a name, an email or a phone number,
+   * which the card shows anyway.
+   */
+  matchedOn?: MatchedOn[];
 }
 
 /**

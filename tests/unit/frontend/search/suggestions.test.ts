@@ -1,71 +1,95 @@
 // =============================================================================
-// Ask Contrack's suggested questions, built from the person's own network
+// Ask Contrack's "Try asking": six questions drawn from the account's pool
 // =============================================================================
 import { describe, expect, it } from "vitest";
 import {
-  FIXED_QUESTIONS,
-  suggestedQuestions,
+  SUGGESTION_COUNT,
+  drawSuggestions,
 } from "../../../../src/views/search/suggestions";
+import type {
+  StarterKind,
+  StarterQuestion,
+} from "../../../../shared/starterQuestions";
 
-const person = (
-  over: Partial<{
-    industry: string | null;
-    location: string | null;
-    company: string | null;
-    isGhost: boolean;
-  }> = {},
-) => ({
-  industry: null,
-  location: null,
-  company: null,
-  isGhost: false,
-  ...over,
+/** A seeded random source, so a draw can be asked for twice. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 2 ** 32;
+  };
+}
+
+const question = (kind: StarterKind, n: number): StarterQuestion => ({
+  kind,
+  text: `${kind} question ${n}`,
 });
 
-describe("suggestedQuestions", () => {
-  it("asks about the network's most common industry, city and company first", () => {
-    const questions = suggestedQuestions([
-      person({
-        industry: "Music Streaming",
-        location: "Austin, TX",
-        company: "Pied Piper",
-      }),
-      person({
-        industry: "Music Streaming",
-        location: "Austin, TX",
-        company: "Pied Piper",
-      }),
-      person({
-        industry: "Finance",
-        location: "Sydney, Australia",
-        company: "Hooli",
-      }),
-    ]);
-    expect(questions.slice(0, 3)).toEqual([
-      "Who works in Music Streaming?",
-      "Who do I know in Austin?",
-      "Who works at Pied Piper?",
-    ]);
-    expect(questions).toHaveLength(6);
-    expect(questions.slice(3)).toEqual(FIXED_QUESTIONS.slice(0, 3));
+/** Six of each of four kinds, 24 in all. */
+const POOL: StarterQuestion[] = (
+  ["industry", "city", "company", "interest"] as StarterKind[]
+).flatMap((kind) => [1, 2, 3, 4, 5, 6].map((n) => question(kind, n)));
+
+const kindOf = (text: string) => text.split(" ")[0];
+
+describe("drawSuggestions", () => {
+  it("draws six distinct questions, all from the pool", () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const drawn = drawSuggestions(POOL, SUGGESTION_COUNT, seeded(seed));
+      expect(drawn).toHaveLength(6);
+      expect(new Set(drawn).size).toBe(6);
+      for (const text of drawn) expect(POOL.map((q) => q.text)).toContain(text);
+    }
   });
 
-  it("skips a fact that only one person has, and does not count ghosts", () => {
-    const questions = suggestedQuestions([
-      person({ industry: "Finance", company: "Hooli" }),
-      person({ industry: "Design", company: "Hooli", isGhost: true }),
-      person({ industry: "Design", company: "Initech" }),
-    ]);
-    // Finance, Design and each company appear once among the real people.
-    expect(questions).toEqual(FIXED_QUESTIONS.slice(0, 6));
+  it("takes at most two of one kind while other kinds are left", () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const drawn = drawSuggestions(POOL, SUGGESTION_COUNT, seeded(seed));
+      const counts = new Map<string, number>();
+      for (const text of drawn)
+        counts.set(kindOf(text), (counts.get(kindOf(text)) ?? 0) + 1);
+      expect(Math.max(...counts.values()), `seed ${seed}`).toBeLessThanOrEqual(
+        2,
+      );
+    }
   });
 
-  it("falls back to the fixed examples before the network loads", () => {
-    expect(suggestedQuestions([])).toEqual([...FIXED_QUESTIONS]);
+  it("changes from draw to draw", () => {
+    const draws = new Set(
+      Array.from({ length: 20 }, (_, i) =>
+        drawSuggestions(POOL, SUGGESTION_COUNT, seeded(i + 1)).join("|"),
+      ),
+    );
+    // Twenty draws of six from 24 questions: repeats are possible, but not
+    // many of them.
+    expect(draws.size).toBeGreaterThan(15);
+    // And every question in the pool turns up sooner or later.
+    const seen = new Set(
+      Array.from({ length: 200 }, (_, i) =>
+        drawSuggestions(POOL, SUGGESTION_COUNT, seeded(i + 1)),
+      ).flat(),
+    );
+    expect(seen.size).toBe(POOL.length);
   });
 
-  it("never suggests a question People search cannot answer", () => {
-    // People search reads profiles, not dates.
-    for (const q of FIXED_QUESTIONS) expect(q).not.toMatch(/contacted/i);
+  it("fills the draw from one kind when the pool has only that kind", () => {
+    const pool = [1, 2, 3, 4, 5, 6, 7].map((n) => question("company", n));
+    const drawn = drawSuggestions(pool, SUGGESTION_COUNT, seeded(3));
+    expect(drawn).toHaveLength(6);
+    expect(new Set(drawn).size).toBe(6);
+  });
+
+  it("shows the whole pool when it is smaller than six, and none for none", () => {
+    const pool = [question("city", 1), question("tag", 1)];
+    expect(drawSuggestions(pool, SUGGESTION_COUNT, seeded(9)).sort()).toEqual(
+      ["city question 1", "tag question 1"].sort(),
+    );
+    expect(drawSuggestions([], SUGGESTION_COUNT, seeded(9))).toEqual([]);
+  });
+
+  it("does not change the pool it draws from", () => {
+    const pool = [...POOL];
+    drawSuggestions(pool, SUGGESTION_COUNT, seeded(4));
+    expect(pool).toEqual(POOL);
   });
 });

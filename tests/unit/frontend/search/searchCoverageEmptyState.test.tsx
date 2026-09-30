@@ -49,6 +49,12 @@ vi.mock("../../../../src/api", async () => {
       isLoading: false,
     }),
     useRefreshSearchIndex: actual.useRefreshSearchIndex,
+    // One question is enough to show "Try asking" under the row.
+    useStarterQuestions: () => ({
+      data: {
+        questions: [{ kind: "city", text: "Who do I know in Lisbon?" }],
+      },
+    }),
   };
 });
 

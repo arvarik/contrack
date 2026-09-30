@@ -37,6 +37,7 @@ import {
 } from "./server/services/search/localEmbeddings.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { initCrossEncoder } from "./server/services/search/crossEncoder.ts";
+import { warmStarterQuestions } from "./server/services/search/starterQuestions.ts";
 import {
   mailLinkOrigin,
   validatePublicUrl,
@@ -228,6 +229,14 @@ async function startServer() {
   startRetroactiveGeocoding();
   startConnectorScheduler();
   startStoredPhotoSweep();
+
+  // ── Ask Contrack starter questions ───────────────────────────────────────
+  // Every account's pool of "Try asking" questions, built one account per
+  // turn of the event loop, so the first open of Ask after a deploy reads
+  // a pool that is ready. A request that comes first builds its own.
+  warmStarterQuestions().catch((err) =>
+    log.warn("Server", `Starter questions failed: ${getErrorMessage(err)}`),
+  );
 
   // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
   startBackupSchedule();

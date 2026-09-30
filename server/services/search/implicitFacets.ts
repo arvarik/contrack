@@ -53,9 +53,10 @@ const MAX_VALUE_WORDS = 6;
 
 /**
  * Words that ask for people or join a question, and carry no constraint.
- * A remainder made only of these needs no model.
+ * A remainder made only of these needs no model. `matchedOn.ts` skips them
+ * too when it looks for the question's words in a profile.
  */
-const FILLER = new Set([
+export const FILLER = new Set([
   "who",
   "whos",
   // The s of "who's", which the word split leaves on its own.
