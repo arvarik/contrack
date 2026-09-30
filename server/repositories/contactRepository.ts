@@ -20,9 +20,6 @@ import { NotFoundError } from "../utils/AppError.ts";
 import crypto from "crypto";
 import type { HydratedContact, ChildRecordsPayload } from "./types.ts";
 
-// Re-export types for consumers
-export type { HydratedContact, ChildRecordsPayload };
-
 // Central registry of contact child relations for OCP extensibility
 export const RELATION_REGISTRY = {
   emails: { table: schema.contactEmails, dbName: "contact_emails" },

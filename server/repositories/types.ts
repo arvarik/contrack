@@ -25,14 +25,6 @@ import type * as schema from "../../src/db/schema.ts";
 
 /** Raw `contacts` row — all columns, before child hydration. */
 export type ContactRow = typeof schema.contacts.$inferSelect;
-/** Raw `contact_phones` row — one per phone-per-contact. */
-export type ContactPhoneRow = typeof schema.contactPhones.$inferSelect;
-/** Raw `contact_education` row — one per school+degree pair. */
-export type ContactEducationRow = typeof schema.contactEducation.$inferSelect;
-/** Raw `contact_experience` row — one per job/role. */
-export type ContactExperienceRow = typeof schema.contactExperience.$inferSelect;
-/** Raw `contact_sources` row — one per import provenance. */
-export type ContactSourceRow = typeof schema.contactSources.$inferSelect;
 // =============================================================================
 // HydratedContact — the fully-joined API response shape
 // =============================================================================

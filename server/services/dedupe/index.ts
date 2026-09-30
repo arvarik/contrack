@@ -6,15 +6,12 @@ export { dedupeService } from "./engine.ts";
 export { dedupeQueue } from "./jobQueue.ts";
 export {
   backfillEmbeddings,
-  backfillOwnerEmbeddings,
   clearOwnerEmbeddings,
   getEmbeddingCount,
   isEmbeddingAvailable,
 } from "./embeddings.ts";
 
 export {
-  storeSuggestion,
-  storeSuggestions,
   getPendingSuggestions,
   getPendingCount,
   getPendingClusterCount,
@@ -22,11 +19,9 @@ export {
   getSuggestionForContact,
   dismissSuggestion,
   markSuggestionMerged,
-  recordMerge,
   getMergeLog,
   undoSoftMerge,
   clearStaleSuggestions,
-  clearAllPendingSuggestions,
 } from "./suggestions.ts";
 
 export * from "./types.ts";

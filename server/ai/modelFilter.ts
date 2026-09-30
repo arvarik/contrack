@@ -351,20 +351,3 @@ export function getLatestDiscoveredModel(
   if (!models || models.length === 0) return undefined;
   return getLatestModelForClass(providerId, modelClass, models);
 }
-
-/**
- * Build a human-readable display name from a raw model ID.
- */
-export function prettyModelName(modelId: string): string {
-  if (!modelId) return "";
-  const cleaned = modelId.replace(/^models\//, "");
-  return cleaned
-    .split(/[-_:/]/)
-    .filter(Boolean)
-    .map((part) => {
-      if (/^gpt/i.test(part)) return part.toUpperCase();
-      if (/^\d/.test(part)) return part;
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
-    .join(" ");
-}

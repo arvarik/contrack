@@ -11,12 +11,7 @@ import {
   imageHost,
   urlDigest,
 } from "../utils/remoteImage.ts";
-import {
-  assertPublicHttpUrl,
-  readBodyCapped,
-  isPrivateAddress,
-  safeFetch,
-} from "../utils/urlSafety.ts";
+import { readBodyCapped, safeFetch } from "../utils/urlSafety.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
 /** The page fetch, redirects included, and the read of its body. */
@@ -156,7 +151,3 @@ export const linkPreviewService = {
     return { title, description, image: image ?? "", url: targetUrl };
   },
 };
-
-// Re-exported for the existing unit tests; the implementations now live in
-// server/utils/urlSafety.ts and are shared with the SearXNG strategy.
-export const _internal = { isPrivateAddress, assertPublicHttpUrl };

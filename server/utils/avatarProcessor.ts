@@ -27,8 +27,6 @@ export const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
   "image/avif": ".avif",
 };
 
-export const RASTER_MIME_ALLOWLIST = Object.keys(AVATAR_MIME_EXTENSIONS);
-
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
 

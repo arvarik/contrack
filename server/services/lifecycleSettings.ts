@@ -151,8 +151,3 @@ export function setBackupIntervalHours(hours: number): void {
 export function setBackupKeep(keep: number): void {
   setSetting(SETTING_KEYS.backupKeep, keep);
 }
-
-// Named aliases for convenience
-export const getTrashRetentionDays = trashRetentionDays;
-export const getBackupIntervalHours = backupIntervalHours;
-export const getBackupKeep = backupKeep;

@@ -74,16 +74,6 @@ export function quantize(vector: ArrayLike<number>, scale: number): Buffer {
   return Buffer.from(bytes.buffer);
 }
 
-/** Bytes back to floats at `scale`. For measurements, not for search. */
-export function dequantize(bytes: Uint8Array, scale: number): Float32Array {
-  const signed = new Int8Array(
-    bytes.buffer,
-    bytes.byteOffset,
-    bytes.byteLength,
-  );
-  return Float32Array.from(signed, (value) => value / scale);
-}
-
 /** A float32 vector stored as a blob, read back as numbers. */
 export function floatsOf(blob: Uint8Array): Float32Array {
   return new Float32Array(

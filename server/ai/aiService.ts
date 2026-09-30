@@ -3,13 +3,12 @@
 // =============================================================================
 // The implementation lives in server/ai/services/, split by domain:
 //
-//   contactParsing.ts    — parseContactRecord, bulkParseContacts
+//   contactParsing.ts    — parseContactRecord
 //   relationshipIntel.ts — generateCatchMeUpBriefing, summarizeEmlEmail,
 //                          generateDailyInsight
 //   mentions.ts          — extractMentions
-//   searchIntel.ts       — parseSearchQuery, expandQueryForEmbedding,
-//                          rerankCandidates, synthesizeSearchResults,
-//                          generateSearchExpansion
+//   searchIntel.ts       — parseSearchQuery, rerankCandidates,
+//                          synthesizeSearchResults
 //
 // This file is the stable import path: every consumer imports from here, so
 // the split moved code without touching a single call site. Add new
@@ -17,30 +16,12 @@
 // =============================================================================
 
 import "../utils/loadEnv.ts";
-import type {
-  ParsedContact,
-  MentionEntity,
-  CompressedContact,
-  SemanticMatchResult,
-  ParsedSearchQuery,
-  QueryPlan,
-} from "./types.ts";
+import type { CompressedContact } from "./types.ts";
 
 // Re-export domain types for consumers
-export type {
-  ParsedContact,
-  MentionEntity,
-  CompressedContact,
-  SemanticMatchResult,
-  ParsedSearchQuery,
-  QueryPlan,
-};
+export type { CompressedContact };
 
-export {
-  parseContactRecord,
-  bulkParseContacts,
-  _internal,
-} from "./services/contactParsing.ts";
+export { parseContactRecord } from "./services/contactParsing.ts";
 
 export {
   generateCatchMeUpBriefing,
@@ -53,8 +34,6 @@ export { extractMentions } from "./services/mentions.ts";
 
 export {
   rerankCandidates,
-  generateSearchExpansion,
   synthesizeSearchResults,
   parseSearchQuery,
-  expandQueryForEmbedding,
 } from "./services/searchIntel.ts";

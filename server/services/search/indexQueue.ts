@@ -56,11 +56,6 @@ export function initSearchIndexQueue(): void {
   }
 }
 
-/** Check whether the queue worker is actively draining. */
-export function isIndexQueueRunning(): boolean {
-  return running;
-}
-
 /**
  * Trigger a debounced drain of the indexing queue.
  */

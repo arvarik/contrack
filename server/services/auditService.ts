@@ -296,8 +296,3 @@ function parseDetails(raw: string | null): Record<string, unknown> | null {
     return null;
   }
 }
-
-/** The client address to record, or null when Express cannot name one. */
-export function auditIp(req: { ip?: string }): string | null {
-  return req.ip ?? null;
-}

@@ -7,25 +7,6 @@
 //   import type { AIGenerateOptions } from "../ai/index.ts";
 // =============================================================================
 
-export type { AIProvider } from "./provider.ts";
-export type {
-  AIGenerateOptions,
-  AIGenerateResult,
-  JsonSchemaNode,
-  ParsedContact,
-  MentionEntity,
-  CompressedContact,
-  SemanticMatchResult,
-  ParsedSearchQuery,
-  QueryPlan,
-  RoutingPolicy,
-  DiagnosticsSnapshot,
-  ModelUsageSnapshot,
-} from "./types.ts";
-
-// Routing utilities available to consumers
-export { ParallelQueue } from "./routing/ParallelQueue.ts";
-
 // ---------------------------------------------------------------------------
 // Shared Provider Instance
 // ---------------------------------------------------------------------------
@@ -111,54 +92,11 @@ export const ai = {
 // Business Function Re-exports
 // ---------------------------------------------------------------------------
 
-export {
-  parseContactRecord,
-  generateCatchMeUpBriefing,
-  extractMentions,
-  summarizeEmlEmail,
-  generateDailyInsight,
-  bulkParseContacts,
-  synthesizeSearchResults,
-  parseSearchQuery,
-  expandQueryForEmbedding,
-} from "./aiService.ts";
-export type { DailyInsight } from "./aiService.ts";
-
+export { synthesizeSearchResults, parseSearchQuery } from "./aiService.ts";
 // ---------------------------------------------------------------------------
 // Capability Routing
 // ---------------------------------------------------------------------------
 
-export {
-  generateFor,
-  providerIdFor,
-  isAnyProviderConfigured,
-} from "./gateway.ts";
-export {
-  resolveCapability,
-  getCapabilityAssignment,
-  getCapabilityAssignments,
-  capabilityAvailability,
-} from "./capabilities.ts";
-export type { AICapability, CapabilityAssignment } from "./capabilities.ts";
-export {
-  getProviderConfigs,
-  getProvider,
-  isProviderAvailable,
-  invalidateProviderCache,
-} from "./providerRegistry.ts";
-export type {
-  ProviderConfig,
-  CustomEndpointConfig,
-} from "./providerRegistry.ts";
-
 // ---------------------------------------------------------------------------
 // The instance switch (AI off for every account)
 // ---------------------------------------------------------------------------
-
-export {
-  isAiOffForInstance,
-  aiOffLockedByEnv,
-  aiAllowedForUser,
-  instanceAiState,
-} from "./instanceSwitch.ts";
-export type { InstanceAiState } from "./instanceSwitch.ts";

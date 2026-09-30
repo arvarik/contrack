@@ -23,9 +23,6 @@ import {
 import type { RoutingPolicy } from "../types.ts";
 import { log } from "../../utils/logger.ts";
 
-// Re-export RoutingPolicy so routing-layer consumers don't need a separate import
-export type { RoutingPolicy } from "../types.ts";
-
 export interface RouteDecision {
   /** The selected model identifier */
   modelId: string;
