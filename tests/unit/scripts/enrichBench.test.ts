@@ -70,15 +70,15 @@ describe("planEnrichment", () => {
   it("gives every row it adds an id that marks it as the script's", () => {
     const p = plan({ id: "c-0042" });
     const ids = [
-      ...p.emailsAdd,
-      ...p.phonesAdd,
-      ...p.addresses,
-      ...p.socialLinks,
-      ...p.education,
-      ...p.experience,
-      ...p.attributes,
-      ...p.interactionsAdd,
-      ...p.actionItems,
+      ...p.add.contact_emails,
+      ...p.add.contact_phones,
+      ...p.add.contact_addresses,
+      ...p.add.contact_social_links,
+      ...p.add.contact_education,
+      ...p.add.contact_experience,
+      ...p.add.contact_attributes,
+      ...p.add.interactions,
+      ...p.add.action_items,
     ].map((row) => row.id);
     expect(ids.length).toBeGreaterThan(5);
     expect(ids.every((id) => id.startsWith("be-"))).toBe(true);
@@ -88,7 +88,7 @@ describe("planEnrichment", () => {
   describe("addresses", () => {
     it("puts a Berlin contact on a Berlin street, pinned in that neighbourhood", () => {
       const p = plan({ location: "Berlin, Germany" });
-      const home = p.addresses[0];
+      const home = p.add.contact_addresses[0];
       expect(home.label).toBe("home");
       expect(home.isPrimary).toBe(1);
       expect(home.address).toMatch(/\d{5} Berlin$/);
@@ -110,7 +110,7 @@ describe("planEnrichment", () => {
 
     it("writes a US address the way the US does", () => {
       const p = plan({ location: "San Francisco, CA, USA" });
-      expect(p.addresses[0].address).toMatch(
+      expect(p.add.contact_addresses[0].address).toMatch(
         /^\d+ .+, San Francisco, CA 941\d\d$/,
       );
     });
@@ -122,7 +122,7 @@ describe("planEnrichment", () => {
         { lat: 0, lng: 0 },
       ]) {
         const p = plan({ location: "Aarhus", ...pin });
-        expect(p.addresses[0].address).toMatch(/\d{4} Aarhus$/);
+        expect(p.add.contact_addresses[0].address).toMatch(/\d{4} Aarhus$/);
         expect(
           metres(lat, lng, p.contact.lat as number, p.contact.lng as number),
         ).toBeLessThan(1300);
@@ -131,24 +131,26 @@ describe("planEnrichment", () => {
 
     it("writes an address for a city it does not know, and leaves the pin where it is", () => {
       const p = plan({ location: "Atlantis", lat: 10, lng: 20 });
-      expect(p.addresses.length).toBeGreaterThan(0);
-      expect(p.addresses[0].address).toContain("Atlantis");
+      expect(p.add.contact_addresses.length).toBeGreaterThan(0);
+      expect(p.add.contact_addresses[0].address).toContain("Atlantis");
       expect(p.contact).not.toHaveProperty("lat");
       expect(p.contact).not.toHaveProperty("lng");
     });
 
     it("writes no address and no pin for a contact with no place at all", () => {
       const p = plan({ location: null, lat: null, lng: null });
-      expect(p.addresses).toEqual([]);
+      expect(p.add.contact_addresses).toEqual([]);
       expect(p.contact.lat).toBeUndefined();
     });
 
     it("never repeats an address for one contact", () => {
       for (let i = 0; i < 60; i++) {
         const p = plan({ id: `c-${i}` });
-        const texts = p.addresses.map((a) => a.address);
+        const texts = p.add.contact_addresses.map((a) => a.address);
         expect(new Set(texts).size).toBe(texts.length);
-        expect(p.addresses.filter((a) => a.isPrimary === 1)).toHaveLength(1);
+        expect(
+          p.add.contact_addresses.filter((a) => a.isPrimary === 1),
+        ).toHaveLength(1);
       }
     });
 
@@ -219,7 +221,7 @@ describe("planEnrichment", () => {
         expect(p.contact, key).not.toHaveProperty(key);
       }
       // It still gets the things it lacks.
-      expect(p.addresses.length).toBeGreaterThan(0);
+      expect(p.add.contact_addresses.length).toBeGreaterThan(0);
     });
   });
 
@@ -282,7 +284,7 @@ describe("planEnrichment", () => {
           phones: [],
           location: "Austin, TX, USA",
         });
-        for (const phone of p.phonesAdd) {
+        for (const phone of p.add.contact_phones) {
           expect(phone.phone).toMatch(/^\+1 \((512|737)\) [2-9]\d\d-\d{4}$/);
           seen.add(phone.phone);
         }
@@ -296,11 +298,11 @@ describe("planEnrichment", () => {
       let withInteractions = 0;
       for (let i = 0; i < 80; i++) {
         const p = plan({ id: `c-${i}` });
-        if (p.interactionsAdd.length === 0) continue;
+        if (p.add.interactions.length === 0) continue;
         withInteractions++;
-        const dates = p.interactionsAdd.map((x) => x.date);
+        const dates = p.add.interactions.map((x) => x.date);
         expect(dates.every((d) => new Date(d) <= NOW)).toBe(true);
-        expect(p.lastContactedAt).toBe([...dates].sort().at(-1));
+        expect(p.contact.lastContactedAt).toBe([...dates].sort().at(-1));
       }
       expect(withInteractions).toBeGreaterThan(40);
     });
@@ -314,13 +316,13 @@ describe("planEnrichment", () => {
       expect(p.interactionRewrites).toHaveLength(1);
       expect(p.interactionRewrites[0].id).toBe("old-1");
       expect(p.interactionRewrites[0].content).toMatch(/^<p>.+<\/p>$/);
-      expect(p.lastContactedAt).not.toBeNull();
+      expect(p.contact.lastContactedAt).toBeDefined();
     });
 
     it("gives every open follow-up a due date and a title", () => {
       const all = Array.from({ length: 200 }, (_, i) =>
         plan({ id: `c-${i}` }),
-      ).flatMap((p) => p.actionItems);
+      ).flatMap((p) => p.add.action_items);
       expect(all.length).toBeGreaterThan(5);
       for (const item of all) {
         expect(item.title.length).toBeGreaterThan(3);
@@ -342,7 +344,7 @@ describe("planEnrichment", () => {
         expect(added, `c-${i}`).toBeDefined();
         expect(added <= stampOf(NOW.toISOString())).toBe(true);
         const dates = [
-          ...p.interactionsAdd.map((x) => x.date),
+          ...p.add.interactions.map((x) => x.date),
           ...(i % 4 === 0 ? [old[0].date] : []),
         ];
         for (const date of dates) expect(added <= stampOf(date)).toBe(true);
@@ -367,9 +369,9 @@ describe("planEnrichment", () => {
       let checked = 0;
       for (let i = 0; i < 300; i++) {
         const p = plan({ id: `c-${i}` });
-        if (p.interactionsAdd.length < 3) continue;
+        if (p.add.interactions.length < 3) continue;
         checked++;
-        const keys = p.interactionsAdd.map(
+        const keys = p.add.interactions.map(
           (x) => `${x.type}|${x.title}|${x.content}`,
         );
         expect(new Set(keys).size, `c-${i}`).toBe(keys.length);
@@ -424,8 +426,12 @@ describe("planEnrichment", () => {
     it("fills most fields for most people, and leaves gaps for some", () => {
       const has = (f: (p: (typeof people)[number]) => boolean) =>
         share(people.filter(f).length);
-      expect(has((p) => p.addresses.length > 0)).toBeGreaterThan(0.95);
-      expect(has((p) => p.addresses.length > 1)).toBeGreaterThan(0.3);
+      expect(has((p) => p.add.contact_addresses.length > 0)).toBeGreaterThan(
+        0.95,
+      );
+      expect(has((p) => p.add.contact_addresses.length > 1)).toBeGreaterThan(
+        0.3,
+      );
       expect(has((p) => typeof p.contact.website === "string")).toBeGreaterThan(
         0.5,
       );
@@ -441,12 +447,20 @@ describe("planEnrichment", () => {
       );
       expect(has((p) => p.contact.isTracked === 1)).toBeGreaterThan(0.2);
       expect(has((p) => p.contact.isTracked === 1)).toBeLessThan(0.4);
-      expect(has((p) => p.socialLinks.length > 0)).toBeGreaterThan(0.7);
-      expect(has((p) => p.education.length > 0)).toBeGreaterThan(0.6);
-      expect(has((p) => p.experience.length > 0)).toBeGreaterThan(0.8);
-      expect(has((p) => p.attributes.length > 0)).toBeGreaterThan(0.3);
-      expect(has((p) => p.interactionsAdd.length === 0)).toBeGreaterThan(0.05);
-      expect(has((p) => p.interactionsAdd.length >= 3)).toBeGreaterThan(0.3);
+      expect(has((p) => p.add.contact_social_links.length > 0)).toBeGreaterThan(
+        0.7,
+      );
+      expect(has((p) => p.add.contact_education.length > 0)).toBeGreaterThan(
+        0.6,
+      );
+      expect(has((p) => p.add.contact_experience.length > 0)).toBeGreaterThan(
+        0.8,
+      );
+      expect(has((p) => p.add.contact_attributes.length > 0)).toBeGreaterThan(
+        0.3,
+      );
+      expect(has((p) => p.add.interactions.length === 0)).toBeGreaterThan(0.05);
+      expect(has((p) => p.add.interactions.length >= 3)).toBeGreaterThan(0.3);
     });
 
     it("writes only valid birthdays, with and without a year", () => {
@@ -460,7 +474,7 @@ describe("planEnrichment", () => {
 
     it("keeps each custom field name and each address to one per contact", () => {
       for (const p of people) {
-        const names = p.attributes.map((a) => a.name);
+        const names = p.add.contact_attributes.map((a) => a.name);
         expect(new Set(names).size).toBe(names.length);
       }
     });
@@ -476,9 +490,11 @@ describe("planEnrichment", () => {
 
     it("gives work history that ends in the current job", () => {
       for (const p of people.slice(0, 120)) {
-        const current = p.experience.filter((e) => e.isCurrent === 1);
+        const current = p.add.contact_experience.filter(
+          (e) => e.isCurrent === 1,
+        );
         expect(current.length).toBeLessThanOrEqual(1);
-        for (const e of p.experience) {
+        for (const e of p.add.contact_experience) {
           if (e.endDate) expect(e.endDate >= e.startDate).toBe(true);
         }
       }

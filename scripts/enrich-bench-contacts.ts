@@ -24,11 +24,14 @@
  * @module scripts/enrich-bench-contacts
  */
 import "../server/utils/loadEnv.ts";
+import type Database from "better-sqlite3";
 import { sqlite } from "../server/db.ts";
 import { scheduleSearchIndex } from "../server/services/search/indexQueue.ts";
 import {
   isGenericAbout,
   planEnrichment,
+  sqliteStamp,
+  type BenchContact,
   type BenchInput,
   type BenchPlan,
 } from "./bench/enrich.ts";
@@ -56,66 +59,8 @@ export interface EnrichSummary {
   rows: Record<string, number>;
 }
 
-/** A date as the database writes one: "2026-09-30 12:00:00". */
-const stamp = (date: Date): string =>
-  date.toISOString().slice(0, 19).replace("T", " ");
-
 /** The marker on every row this script writes. */
 const SOURCE = "bench-enrich";
-
-/** The `contacts` columns a plan may set. Anything else is a bug in the plan. */
-const CONTACT_COLUMNS = new Set([
-  "role",
-  "headline",
-  "about",
-  "company",
-  "website",
-  "birthday",
-  "pronouns",
-  "preferences",
-  "cadenceDays",
-  "isTracked",
-  "updatedAt",
-  "addedAt",
-  "lat",
-  "lng",
-  "geoSource",
-]);
-
-/** The tables whose `be-` rows a run removes before it writes them again. */
-const OWNED_TABLES = [
-  "contact_emails",
-  "contact_phones",
-  "contact_addresses",
-  "contact_social_links",
-  "contact_education",
-  "contact_experience",
-  "contact_interests",
-  "contact_attributes",
-  "interactions",
-  "action_items",
-] as const;
-
-interface ContactRow {
-  id: string;
-  name: string;
-  firstName: string | null;
-  lastName: string | null;
-  company: string | null;
-  role: string | null;
-  headline: string | null;
-  industry: string | null;
-  location: string | null;
-  lat: number | null;
-  lng: number | null;
-  about: string | null;
-  website: string | null;
-  birthday: string | null;
-  pronouns: string | null;
-  preferences: string | null;
-  cadenceDays: number | null;
-  isTracked: number;
-}
 
 function resolveOwner(tag: string, username?: string): string {
   if (username) {
@@ -140,42 +85,6 @@ function resolveOwner(tag: string, username?: string): string {
   return owners[0].id;
 }
 
-function emptyRows(): Record<string, number> {
-  return {
-    contacts: 0,
-    email_labels: 0,
-    contact_emails: 0,
-    phones_cleaned: 0,
-    contact_phones: 0,
-    contact_addresses: 0,
-    contact_social_links: 0,
-    contact_education: 0,
-    contact_experience: 0,
-    contact_interests: 0,
-    contact_attributes: 0,
-    interactions_rewritten: 0,
-    interactions: 0,
-    action_items: 0,
-  };
-}
-
-function count(rows: Record<string, number>, plan: BenchPlan): void {
-  rows.contacts += 1;
-  rows.email_labels += plan.emailLabels.length;
-  rows.contact_emails += plan.emailsAdd.length;
-  rows.phones_cleaned += plan.phoneFixes.length;
-  rows.contact_phones += plan.phonesAdd.length;
-  rows.contact_addresses += plan.addresses.length;
-  rows.contact_social_links += plan.socialLinks.length;
-  rows.contact_education += plan.education.length;
-  rows.contact_experience += plan.experience.length;
-  rows.contact_interests += plan.interests.length;
-  rows.contact_attributes += plan.attributes.length;
-  rows.interactions_rewritten += plan.interactionRewrites.length;
-  rows.interactions += plan.interactionsAdd.length;
-  rows.action_items += plan.actionItems.length;
-}
-
 export async function enrichBenchContacts(
   options: EnrichOptions,
 ): Promise<EnrichSummary> {
@@ -194,7 +103,7 @@ export async function enrichBenchContacts(
           AND EXISTS (SELECT 1 FROM contact_tags t WHERE t.contactId = c.id AND t.tag = ?)
         ORDER BY c.id`,
     )
-    .all(ownerId, tag) as ContactRow[];
+    .all(ownerId, tag) as BenchContact[];
 
   // What the contact had before this script, so a second run reads the same.
   const readInterests = sqlite.prepare(
@@ -210,30 +119,39 @@ export async function enrichBenchContacts(
     "SELECT id, type, date FROM interactions WHERE contactId = ? AND id NOT LIKE 'be-%' ORDER BY date",
   );
 
-  const inputOf = (row: ContactRow): BenchInput => ({
+  const inputOf = (row: BenchContact): BenchInput => ({
     ...row,
     generic: isGenericAbout(row.about),
-    interests: (readInterests.all(row.id) as { interest: string }[]).map(
-      (r) => r.interest,
-    ),
+    interests: readInterests.pluck().all(row.id) as string[],
     emails: readEmails.all(row.id) as BenchInput["emails"],
-    phones: (readPhones.all(row.id) as { phone: string }[]).map((r) => r.phone),
+    phones: readPhones.pluck().all(row.id) as string[],
     interactions: readInteractions.all(row.id) as BenchInput["interactions"],
   });
-
-  const rows = emptyRows();
   const plans = contacts.map((row) => ({
-    row,
+    id: row.id,
     plan: planEnrichment(inputOf(row), { seed, now }),
   }));
-  for (const { plan } of plans) count(rows, plan);
 
+  // Each fix is counted just before the table it changes, as it prints.
+  const rows: Record<string, number> = { contacts: plans.length };
+  const count = (key: string, list: unknown[]) =>
+    (rows[key] = (rows[key] ?? 0) + list.length);
+  for (const { plan } of plans) {
+    count("email_labels", plan.emailLabels);
+    for (const [table, list] of Object.entries(plan.add)) {
+      if (table === "contact_phones") count("phones_cleaned", plan.phoneFixes);
+      if (table === "interactions")
+        count("interactions_rewritten", plan.interactionRewrites);
+      count(table, list);
+    }
+  }
+  const generic = contacts.filter((row) => isGenericAbout(row.about)).length;
   const summary: EnrichSummary = {
     applied: options.apply,
     owner: ownerId,
     contacts: contacts.length,
-    generic: plans.filter(({ row }) => isGenericAbout(row.about)).length,
-    curated: plans.filter(({ row }) => !isGenericAbout(row.about)).length,
+    generic,
+    curated: contacts.length - generic,
     rows,
   };
   if (!options.apply) return summary;
@@ -253,214 +171,120 @@ export async function enrichBenchContacts(
 
 function writePlans(
   ownerId: string,
-  plans: { row: ContactRow; plan: BenchPlan }[],
+  plans: { id: string; plan: BenchPlan }[],
   now: Date,
 ): void {
-  const remove = Object.fromEntries(
-    OWNED_TABLES.map((table) => [
-      table,
-      sqlite.prepare(
-        `DELETE FROM ${table} WHERE contactId = ? AND id LIKE 'be-%'`,
-      ),
-    ]),
-  );
-  const emailTaken = sqlite.prepare(
-    `SELECT 1 FROM contact_emails e JOIN contacts c ON c.id = e.contactId
-      WHERE c.ownerId = ? AND lower(e.email) = lower(?) LIMIT 1`,
-  );
-  const phoneTaken = sqlite.prepare(
-    `SELECT 1 FROM contact_phones p JOIN contacts c ON c.id = p.contactId
-      WHERE c.ownerId = ? AND p.phone = ? LIMIT 1`,
-  );
-  const insert = {
+  const statements = new Map<string, Database.Statement>();
+  /** Run one statement, prepared once for each SQL text. */
+  const run = (sql: string, ...params: unknown[]) => {
+    const statement = statements.get(sql) ?? sqlite.prepare(sql);
+    statements.set(sql, statement);
+    return statement.run(...params);
+  };
+  const taken = {
     email: sqlite.prepare(
-      "INSERT INTO contact_emails (id, contactId, email, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      `SELECT 1 FROM contact_emails e JOIN contacts c ON c.id = e.contactId
+        WHERE c.ownerId = ? AND lower(e.email) = lower(?) LIMIT 1`,
     ),
     phone: sqlite.prepare(
-      "INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ),
-    address: sqlite.prepare(
-      "INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ),
-    social: sqlite.prepare(
-      "INSERT INTO contact_social_links (id, contactId, platform, url, handle, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ),
-    education: sqlite.prepare(
-      "INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startDate, endDate, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ),
-    experience: sqlite.prepare(
-      "INSERT INTO contact_experience (id, contactId, company, role, startDate, endDate, isCurrent, location, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ),
-    interest: sqlite.prepare(
-      "INSERT OR IGNORE INTO contact_interests (id, contactId, interest, isAiGenerated, addedAt) VALUES (?, ?, ?, 0, ?)",
-    ),
-    attribute: sqlite.prepare(
-      "INSERT OR IGNORE INTO contact_attributes (id, contactId, name, value, addedAt) VALUES (?, ?, ?, ?, ?)",
-    ),
-    interaction: sqlite.prepare(
-      "INSERT INTO interactions (id, contactId, type, title, content, date, ownerId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ),
-    action: sqlite.prepare(
-      "INSERT INTO action_items (id, contactId, title, dueAt, completedAt, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      `SELECT 1 FROM contact_phones p JOIN contacts c ON c.id = p.contactId
+        WHERE c.ownerId = ? AND p.phone = ? LIMIT 1`,
     ),
   };
-  const relabel = sqlite.prepare(
-    "UPDATE contact_emails SET label = ? WHERE contactId = ? AND email = ?",
-  );
-  const rephone = sqlite.prepare(
-    "UPDATE contact_phones SET phone = ? WHERE contactId = ? AND phone = ?",
-  );
-  const rewrite = sqlite.prepare(
-    "UPDATE interactions SET title = ?, content = ? WHERE id = ? AND contactId = ?",
-  );
-  // A second statement, because the update trigger re-stamps updatedAt with
-  // the real clock whenever a statement leaves it alone.
-  const restamp = sqlite.prepare(
-    "UPDATE interactions SET updatedAt = ? WHERE id = ? AND contactId = ?",
-  );
 
-  const writeOne = (id: string, plan: BenchPlan) => {
-    for (const table of OWNED_TABLES) remove[table].run(id);
+  const writeOne = (contactId: string, plan: BenchPlan) => {
+    const keys = { contactId, ownerId };
+    for (const table of Object.keys(plan.add))
+      run(
+        `DELETE FROM ${table} WHERE contactId = ? AND id LIKE 'be-%'`,
+        contactId,
+      );
+    for (const fix of plan.emailLabels)
+      run(
+        "UPDATE contact_emails SET label = @label WHERE contactId = @contactId AND email = @email",
+        { ...fix, ...keys },
+      );
+    for (const fix of plan.phoneFixes)
+      run(
+        "UPDATE contact_phones SET phone = @to WHERE contactId = @contactId AND phone = @from",
+        { ...fix, ...keys },
+      );
+    for (const rewrite of plan.interactionRewrites) {
+      const row = {
+        ...rewrite,
+        ...keys,
+        updatedAt: sqliteStamp(new Date(rewrite.date)),
+      };
+      run(
+        "UPDATE interactions SET title = @title, content = @content WHERE id = @id AND contactId = @contactId",
+        row,
+      );
+      // A second statement, because the update trigger re-stamps updatedAt with
+      // the real clock whenever a statement leaves it alone.
+      run(
+        "UPDATE interactions SET updatedAt = @updatedAt WHERE id = @id AND contactId = @contactId",
+        row,
+      );
+    }
+
     // Every stamp is written, never left to the column default, which is the
     // real clock. A second run then writes the same database.
-    const added = (plan.contact.addedAt as string | undefined) ?? stamp(now);
-
-    for (const { email, label } of plan.emailLabels)
-      relabel.run(label, id, email);
-    for (const { from, to } of plan.phoneFixes) rephone.run(to, id, from);
-    for (const r of plan.emailsAdd) {
-      if (emailTaken.get(ownerId, r.email)) continue;
-      insert.email.run(
-        r.id,
-        id,
-        r.email,
-        r.label,
-        r.isPrimary,
-        r.sortOrder,
-        SOURCE,
-        added,
-      );
+    const addedAt = plan.contact.addedAt ?? sqliteStamp(now);
+    const at = sqliteStamp(now);
+    const stamps = (table: string, row: Record<string, unknown>) => {
+      if (table === "interactions")
+        return { ownerId, updatedAt: sqliteStamp(new Date(String(row.date))) };
+      if (table === "action_items")
+        return { ownerId, createdAt: at, updatedAt: at };
+      if (table === "contact_interests") return { isAiGenerated: 0, addedAt };
+      if (table === "contact_attributes") return { addedAt };
+      return { source: SOURCE, addedAt };
+    };
+    for (const [table, list] of Object.entries(plan.add)) {
+      // An interest or a custom field the contact has by hand stays.
+      const verb =
+        table === "contact_interests" || table === "contact_attributes"
+          ? "INSERT OR IGNORE"
+          : "INSERT";
+      for (const row of list) {
+        // An email or a phone the account already has is not added again.
+        if ("email" in row && taken.email.get(ownerId, row.email)) continue;
+        if ("phone" in row && taken.phone.get(ownerId, row.phone)) continue;
+        const values = { ...row, contactId, ...stamps(table, row) };
+        const columns = Object.keys(values);
+        run(
+          `${verb} INTO ${table} (${columns.join(", ")}) VALUES (${columns.map((c) => `@${c}`).join(", ")})`,
+          values,
+        );
+      }
     }
-    for (const r of plan.phonesAdd) {
-      if (phoneTaken.get(ownerId, r.phone)) continue;
-      insert.phone.run(
-        r.id,
-        id,
-        r.phone,
-        r.label,
-        r.isPrimary,
-        r.sortOrder,
-        SOURCE,
-        added,
-      );
-    }
-    for (const r of plan.addresses)
-      insert.address.run(
-        r.id,
-        id,
-        r.address,
-        r.label,
-        r.isPrimary,
-        r.sortOrder,
-        SOURCE,
-        added,
-      );
-    for (const r of plan.socialLinks)
-      insert.social.run(r.id, id, r.platform, r.url, r.handle, SOURCE, added);
-    for (const r of plan.education)
-      insert.education.run(
-        r.id,
-        id,
-        r.school,
-        r.degree,
-        r.fieldOfStudy,
-        r.startDate,
-        r.endDate,
-        SOURCE,
-        added,
-      );
-    for (const r of plan.experience)
-      insert.experience.run(
-        r.id,
-        id,
-        r.company,
-        r.role,
-        r.startDate,
-        r.endDate,
-        r.isCurrent,
-        r.location,
-        SOURCE,
-        added,
-      );
-    for (const r of plan.interests)
-      insert.interest.run(r.id, id, r.interest, added);
-    for (const r of plan.attributes)
-      insert.attribute.run(r.id, id, r.name, r.value, added);
-    for (const r of plan.interactionRewrites) {
-      rewrite.run(r.title, r.content, r.id, id);
-      restamp.run(stamp(new Date(r.date)), r.id, id);
-    }
-    for (const r of plan.interactionsAdd)
-      insert.interaction.run(
-        r.id,
-        id,
-        r.type,
-        r.title,
-        r.content,
-        r.date,
-        ownerId,
-        stamp(new Date(r.date)),
-      );
-    for (const r of plan.actionItems)
-      insert.action.run(
-        r.id,
-        id,
-        r.title,
-        r.dueAt,
-        r.completedAt,
-        ownerId,
-        stamp(now),
-        stamp(now),
-      );
 
     // Saved last, and `updatedAt` after the rest. A trigger on each child
     // table stamps the contact's updatedAt with the real clock, and so does
     // the one that stamps `trackedAt`. A statement that sets `updatedAt`
     // alone fires neither, so the plan's date is the final word.
-    const sets = Object.keys(plan.contact).filter((key) => key !== "updatedAt");
-    for (const key of Object.keys(plan.contact)) {
-      if (!CONTACT_COLUMNS.has(key))
-        throw new Error(
-          `The plan sets "${key}", which is not a column it may set.`,
-        );
-    }
-    if (plan.lastContactedAt) sets.push("lastContactedAt");
-    if (sets.length > 0) {
-      const values = sets.map((key) =>
-        key === "lastContactedAt" ? plan.lastContactedAt : plan.contact[key],
-      );
-      sqlite
-        .prepare(
-          `UPDATE contacts SET ${sets.map((key) => `${key} = ?`).join(", ")} WHERE id = ? AND ownerId = ?`,
-        )
-        .run(...values, id, ownerId);
-    }
-    if (plan.contact.updatedAt) {
-      sqlite
-        .prepare(
-          "UPDATE contacts SET updatedAt = ? WHERE id = ? AND ownerId = ?",
-        )
-        .run(plan.contact.updatedAt, id, ownerId);
-    }
+    const { updatedAt, ...columns } = plan.contact;
+    const sets = Object.keys(columns).map((key) => `${key} = @${key}`);
+    const where = "WHERE id = @contactId AND ownerId = @ownerId";
+    if (sets.length > 0)
+      run(`UPDATE contacts SET ${sets.join(", ")} ${where}`, {
+        ...columns,
+        ...keys,
+      });
+    if (updatedAt)
+      run(`UPDATE contacts SET updatedAt = @updatedAt ${where}`, {
+        updatedAt,
+        ...keys,
+      });
 
-    scheduleSearchIndex(id);
+    scheduleSearchIndex(contactId);
   };
 
   const BATCH = 250;
   for (let start = 0; start < plans.length; start += BATCH) {
     sqlite.transaction(() => {
-      for (const { row, plan } of plans.slice(start, start + BATCH))
-        writeOne(row.id, plan);
+      for (const { id, plan } of plans.slice(start, start + BATCH))
+        writeOne(id, plan);
     })();
   }
 }
@@ -505,9 +329,4 @@ async function main() {
   }
 }
 
-const isDirectRun =
-  process.argv[1] && process.argv[1].endsWith("enrich-bench-contacts.ts");
-
-if (isDirectRun) {
-  void main();
-}
+if (process.argv[1]?.endsWith("enrich-bench-contacts.ts")) void main();
