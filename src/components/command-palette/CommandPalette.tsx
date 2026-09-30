@@ -481,6 +481,9 @@ export const CommandPalette = () => {
 
   const handleSearchInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // The actions menu took the key: ↑ and ↓ move its rows, and must not
+      // also bring back another query under it.
+      if (e.defaultPrevented) return;
       // Backspace on empty input deletes the last facet pill
       if (e.key === "Backspace" && search === "" && hasFilters) {
         e.preventDefault();
@@ -792,11 +795,10 @@ export const CommandPalette = () => {
               <FacetAutocomplete
                 field={parsed.activePrefix.field}
                 partial={parsed.activePrefix.partial}
-                onSelect={(filter) => {
-                  addFilter(filter);
-                  // Clear the partial from input
-                  setSearch(search.replace(/\b\w+:\S*$/, "").trim());
-                }}
+                // `addFilter` also clears the partial from the input. A second
+                // clear here used `\S*`, which stops at a space, so a quoted
+                // partial such as `industry:"Venture Cap` stayed in the box.
+                onSelect={addFilter}
                 onDismiss={() => {
                   // Remove the active prefix from input
                   setSearch(search.replace(/\b\w+:$/, "").trim());

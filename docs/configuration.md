@@ -203,8 +203,9 @@ Face sees the server's address and the model names.
   file that is already there. Then set `MODEL_DOWNLOADS=false`.
 - **Script options.** `npm run models:fetch -- --check` checks the folder and
   downloads nothing. `npm run models:fetch -- <folder>` fills another folder.
-  `HF_ENDPOINT` points the script at a mirror. The script does not read `.env`,
-  so pass the folder when `.env` sets `DATA_DIR` or `MODEL_DIR`.
+  `HF_ENDPOINT` points the script at a mirror. The script reads `.env` in the
+  working directory, as the server does, so it fills the folder that
+  `DATA_DIR` or `MODEL_DIR` names there.
 - **Another model.** A `SEARCH_RERANK_MODEL` or embedding model outside the
   pinned list is not in the image. Set `MODEL_DOWNLOADS=true` to let the server
   download it once, or copy its files into `MODEL_DIR/<model id>/`.

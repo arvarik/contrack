@@ -1,14 +1,16 @@
 /**
  * Shared avatar URL builders for the frontend.
  *
- * Both point at the app's own avatar route, which generates the SVG
- * in-process (see server/services/avatarService).
+ * They point at the app's own avatar route, which generates the SVG
+ * in-process (see server/services/avatarService). The one exception is
+ * `signedOutAccountAvatarUrl`, which draws the monogram in the browser.
  *
  * This used to return an `api.dicebear.com` URL with the contact's name in the
  * query string, so rendering the contact list announced the name of every
  * person the user knows to a third party — and broke entirely offline. Same
  * artwork, same deterministic faces, no request leaving the machine.
  */
+import { monogramSvg } from "../../shared/monogram";
 
 /** Styles the server accepts. A wrong one is a 400, not a blank image. */
 type AvatarStyle = "avataaars" | "bottts" | "lorelei" | "initials";
@@ -76,4 +78,22 @@ export function accountAvatarUrl(
   theme?: AvatarTheme,
 ): string {
   return avatarUrl("initials", username, theme);
+}
+
+/**
+ * The account's mark before the account exists: on the screens that create
+ * one (first-run setup, register, join an invitation).
+ *
+ * `accountAvatarUrl` points at `/api/avatar/initials`, and that route sits
+ * behind the sign-in gate. With no session yet, the `<img>` got a 401 and
+ * showed a broken image in the photo circle. This is the same monogram, drawn
+ * here by `shared/monogram.ts` as a `data:` URL, which the CSP allows for
+ * images, so the circle needs no request at all.
+ */
+export function signedOutAccountAvatarUrl(
+  username: string | null | undefined,
+): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+    monogramSvg(seedOf(username)),
+  )}`;
 }

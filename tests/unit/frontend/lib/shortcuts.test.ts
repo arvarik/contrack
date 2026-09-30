@@ -101,6 +101,19 @@ describe("the shortcuts table", () => {
     expect(track?.description).toBe("Track or untrack this contact");
   });
 
+  it("lists J and K on the Network page, behind the single-key switch", () => {
+    // `useContactListKeyboard` opens the next and the previous contact on
+    // them, and returns early for both while the switch is off.
+    const network = SHORTCUTS.filter((entry) => entry.group === "Network");
+    for (const key of ["J", "K"]) {
+      const row = network.find((entry) => entry.keys.join("+") === key);
+      expect(row, key).toBeDefined();
+      expect(row?.page).toBe("/");
+      expect(row?.bareLetter).toBe(true);
+      expect(row?.alwaysOn).toBeUndefined();
+    }
+  });
+
   it("marks alwaysOn only on bare-letter entries", () => {
     for (const entry of SHORTCUTS) {
       if (entry.alwaysOn) {

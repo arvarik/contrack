@@ -10,7 +10,13 @@
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { Contact } from "../../../../src/types";
 
 vi.mock("@tanstack/react-virtual", async (importOriginal) => {
@@ -54,13 +60,14 @@ vi.mock("../../../../src/api", () => ({
   useDismissSuggestion: stub,
 }));
 
+const startScan = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/contexts/DedupeContext", () => ({
   useDedupe: () => ({
     scan: null,
     clusters: [],
     isScanning: false,
     isStarting: false,
-    startScan: vi.fn(),
+    startScan,
     reset: vi.fn(),
     removeCluster: vi.fn(),
     isQueued: false,
@@ -69,9 +76,20 @@ vi.mock("../../../../src/contexts/DedupeContext", () => ({
   }),
 }));
 
+/** The two AI switches: the account's `aiAssist` and the instance's. */
+const ai = vi.hoisted(() => ({ account: true, instanceOff: false }));
 vi.mock("../../../../src/contexts/PreferencesContext", () => ({
   usePreferences: () => ({
-    preferences: { motion: "full", singleKeyShortcuts: true },
+    preferences: {
+      motion: "full",
+      singleKeyShortcuts: true,
+      aiAssist: ai.account,
+    },
+  }),
+}));
+vi.mock("../../../../src/api/aiSettings", () => ({
+  useInstanceAi: () => ({
+    data: { aiOff: ai.instanceOff, lockedByEnv: false },
   }),
 }));
 
@@ -113,6 +131,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   document.body.replaceChildren();
+  ai.account = true;
+  ai.instanceOff = false;
+  startScan.mockClear();
 });
 
 describe("the Duplicates tabs", () => {
@@ -143,6 +164,33 @@ describe("the Duplicates tabs", () => {
         .getAttribute("aria-checked"),
     ).toBe("false");
   });
+});
+
+describe("the scans with AI off", () => {
+  const smartScan = () => screen.queryByRole("radio", { name: /^Smart scan/ });
+
+  it("offers the three scans while AI is on, and starts the one chosen", () => {
+    mount();
+    const picker = screen.getByRole("radiogroup", { name: "Scan" });
+    expect(within(picker).getAllByRole("radio")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
+    expect(startScan).toHaveBeenCalledWith("deep");
+  });
+
+  for (const off of ["account", "instance"] as const) {
+    it(`offers only the Quick scan, and starts it, while AI is off for the ${off}`, () => {
+      if (off === "account") ai.account = false;
+      else ai.instanceOff = true;
+      mount();
+      expect(smartScan()).toBeNull();
+      expect(quickScan()!.getAttribute("aria-checked")).toBe("true");
+      expect(
+        screen.getByText("Smart scan and Full scan use AI, which is off"),
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
+      expect(startScan).toHaveBeenCalledWith("quick");
+    });
+  }
 });
 
 describe("the Manual merge picker", () => {

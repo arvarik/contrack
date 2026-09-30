@@ -126,6 +126,9 @@ export interface SlimSearchContact {
   trackedAt: string | null;
   tags: { tag: string }[];
   lists?: { id: string; name: string }[];
+  /** For `missing:email` and `missing:phone`, which match everybody without them. */
+  emails?: { email: string }[];
+  phones?: { phone: string }[];
   approximate?: boolean;
   matchType?: "exact" | "approximate";
 }
@@ -149,6 +152,8 @@ const toSearchContacts = (contacts: SlimContacts): SlimSearchContact[] =>
       trackedAt: c.trackedAt,
       tags: c.tags ?? [],
       lists: c.lists ?? [],
+      emails: c.emails,
+      phones: c.phones,
     }));
 
 export const useSlimContactsForSearch = () => {
@@ -172,7 +177,8 @@ export const useContact = (id: string | undefined) => {
   });
 };
 
-const toMapContacts = (contacts: SlimContacts): MapContact[] =>
+/** Exported for the map filter's tests. */
+export const toMapContacts = (contacts: SlimContacts): MapContact[] =>
   contacts
     .filter((c) => !c.isGhost && !c.isArchived && isValidLatLng(c.lat, c.lng))
     .map((c) => ({
@@ -195,6 +201,10 @@ const toMapContacts = (contacts: SlimContacts): MapContact[] =>
       tags: (c.tags || []).map((t) => (typeof t === "string" ? t : t.tag)),
       lists: (c.lists || []).map((l) => ({ id: l.id, name: l.name })),
       geoSource: c.geoSource,
+      // The same arrays as the slim row, not copies: the facets only read them.
+      updatedAt: c.updatedAt,
+      emails: c.emails,
+      phones: c.phones,
     }));
 
 export const useMapContacts = () => {

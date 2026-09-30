@@ -43,6 +43,7 @@ const { computePrimaryScore } =
   await import("../../server/services/dedupe/clustering.ts");
 const { scopeForOwnerId } = await import("../../server/tenancy/scope.ts");
 const { doubleMetaphone } = await import("../../server/utils/nlp/index.ts");
+const { backfillMentionRows } = await import("../../server/db.ts");
 
 const app = makeTestApp();
 let actor: Awaited<ReturnType<typeof createActor>>;
@@ -274,5 +275,100 @@ describe("saving a note that names somebody", () => {
       .prepare("SELECT ownerId FROM contacts WHERE id = ?")
       .get(mentionsOf(id)[0].contactId) as { ownerId: string };
     expect(owner.ownerId).toBe(actor.user.id);
+  });
+});
+
+describe("the mention graph", () => {
+  /** The contacts `interaction_mentions` joins to this note. */
+  const mentionRows = (interactionId: string) =>
+    (
+      sqlite
+        .prepare(
+          "SELECT contactId FROM interaction_mentions WHERE interactionId = ? ORDER BY contactId",
+        )
+        .all(interactionId) as { contactId: string }[]
+    ).map((row) => row.contactId);
+
+  it("puts the note on the timeline of a ghost the model found, and the Inbox counts it", async () => {
+    extracted = [{ name: "Ingrid Solberg", context: "new introduction" }];
+
+    const id = await saveNoteAndWait("Ingrid Solberg introduced herself.");
+    const ghostId = mentionsOf(id)[0].contactId;
+    expect(mentionRows(id)).toEqual([ghostId]);
+
+    const timeline = await asUser(actor)(
+      request(app).get(`/api/contacts/${ghostId}/timeline`),
+    );
+    expect(timeline.status).toBe(200);
+    expect(timeline.body.map((item: { id: string }) => item.id)).toContain(id);
+
+    const dashboard = await asUser(actor)(request(app).get("/api/dashboard"));
+    expect(dashboard.status).toBe(200);
+    expect(dashboard.body.ghosts).toEqual([
+      expect.objectContaining({ id: ghostId, mentionCount: 1 }),
+    ]);
+  });
+
+  it("joins a linked contact to the note too, and never the note's own contact", async () => {
+    const jonathan = addContact("Jonathan Smith", "Northwind Logistics");
+    extracted = [
+      { name: "Jon Smith", context: "had lunch" },
+      { name: "Anchor Person", context: "wrote the note" },
+    ];
+
+    const id = await saveNoteAndWait("Lunch with Jon Smith.");
+
+    const rows = mentionRows(id);
+    expect(rows).toContain(jonathan);
+    expect(rows).not.toContain(anchorId);
+  });
+
+  it("backfills the rows a note saved before the fix lacks, once", async () => {
+    extracted = [{ name: "Ingrid Solberg", context: "new introduction" }];
+    const id = await saveNoteAndWait("Ingrid Solberg introduced herself.");
+    const ghostId = mentionsOf(id)[0].contactId;
+    // A note from before: the JSON names the ghost, and no row joins them.
+    sqlite.prepare("DELETE FROM interaction_mentions").run();
+
+    expect(backfillMentionRows()).toBe(1);
+    expect(mentionRows(id)).toEqual([ghostId]);
+    expect(backfillMentionRows()).toBe(0);
+  });
+
+  it("reads only the objects in a note's mentions, and survives any other element", async () => {
+    extracted = [{ name: "Ingrid Solberg", context: "new introduction" }];
+    const id = await saveNoteAndWait("Ingrid Solberg introduced herself.");
+    const ghostId = mentionsOf(id)[0].contactId;
+    sqlite.prepare("DELETE FROM interaction_mentions").run();
+    // A string element used to reach json_extract as plain text, which
+    // throws "malformed JSON" and would stop the server at boot.
+    sqlite
+      .prepare("UPDATE interactions SET mentions = ? WHERE id = ?")
+      .run(
+        JSON.stringify(["Jon", 42, null, [ghostId], { contactId: ghostId }]),
+        id,
+      );
+
+    expect(backfillMentionRows()).toBe(1);
+    expect(mentionRows(id)).toEqual([ghostId]);
+
+    sqlite
+      .prepare("UPDATE interactions SET mentions = ? WHERE id = ?")
+      .run("not json", id);
+    expect(backfillMentionRows()).toBe(0);
+  });
+
+  it("does not backfill a row for a ghost that merged away", async () => {
+    const keeper = addContact("Ingrid Solberg");
+    extracted = [{ name: "Totally Different", context: "new" }];
+    const id = await saveNoteAndWait("Somebody new.");
+    const ghostId = mentionsOf(id)[0].contactId;
+    sqlite.prepare("DELETE FROM interaction_mentions").run();
+    sqlite
+      .prepare("UPDATE contacts SET canonicalId = ? WHERE id = ?")
+      .run(keeper, ghostId);
+
+    expect(backfillMentionRows()).toBe(0);
+    expect(mentionRows(id)).toEqual([]);
   });
 });

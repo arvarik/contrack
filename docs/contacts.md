@@ -154,8 +154,9 @@ day set in **Week starts on**, in **Settings → Network and contacts**.
 
 The entry takes a title from its type, such as "Quick Note" or "Logged call".
 Until you save, your draft stays on this device for up to 30 days. To log from
-any page, press **Log note** on Pulse, or `Cmd+Shift+I` on a Mac, and choose
-the contact in the **Log an interaction** dialog.
+any page, press **Log note** on Pulse, or `Cmd+Shift+I` (`Ctrl+Alt+I` on
+Windows and Linux), and choose the contact in the **Log an interaction**
+dialog.
 
 - **Open**: press an entry's title to see the full text, its follow-ups,
   **Edit** and **Delete**. **Edit** changes the title and the text only.

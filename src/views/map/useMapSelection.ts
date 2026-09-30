@@ -3,7 +3,7 @@
  *
  * Provides:
  * - A Set of selected contact IDs
- * - Selection via Box (Shift+drag), Lasso (freehand polygon), Cluster, and All in view
+ * - Selection via Box (Shift+drag), Lasso (freehand polygon), and All in view
  * - Selection tests actual MapContact rows, not rendered tiles, so contacts
  *   inside clusters are included
  * - Preserves selection across filter changes and reports hidden count
@@ -13,11 +13,10 @@
  * @module views/map/useMapSelection
  */
 import { useState, useCallback, useEffect, useMemo } from "react";
-import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
 import { isValidLatLng } from "../../../shared/geo";
 import { boundsContain, pointInPolygon, type Point } from "./mapMath";
-import { CONTACTS_SOURCE_ID } from "./ContactMap";
 
 interface UseMapSelectionOptions {
   contacts?: MapContact[];
@@ -101,26 +100,6 @@ export function useMapSelection({
     [activeContacts, addMany],
   );
 
-  const selectCluster = useCallback(
-    async (clusterId: number, map: MapLibreMap | null) => {
-      if (!map) return;
-      const source = map.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
-      if (!source) return;
-
-      try {
-        const leaves = await source.getClusterLeaves(clusterId, Infinity, 0);
-        const leafIds = leaves
-          .map((leaf) => leaf.properties?.id)
-          .filter((id): id is string => typeof id === "string");
-
-        addMany(leafIds);
-      } catch {
-        // Source may have unmounted or zoomed
-      }
-    },
-    [addMany],
-  );
-
   // Clear selection on Escape when no modal or menu is open
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -168,6 +147,5 @@ export function useMapSelection({
     selectInView,
     selectBox,
     selectLasso,
-    selectCluster,
   };
 }

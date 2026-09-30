@@ -20,6 +20,20 @@
  * @module lib/shortcuts
  */
 import { NAMES } from "./names";
+import { IS_APPLE, MOD_KEY, NAV_MODIFIERS } from "./platform";
+
+/**
+ * The keys of a navigation chord on this platform: ⌘ ⇧ and the key on a Mac,
+ * Ctrl Alt and the key on Windows and Linux (`lib/platform` says why).
+ */
+const nav = (key: string): string[] => [...NAV_MODIFIERS, key];
+
+/**
+ * Back and forward. A Mac has ⌘ [ and ⌘ ], which the app binds. Windows and
+ * Linux have the browser's own Alt ← and Alt →, which already work.
+ */
+const BACK_KEYS = IS_APPLE ? ["⌘", "["] : ["Alt", "←"];
+const FORWARD_KEYS = IS_APPLE ? ["⌘", "]"] : ["Alt", "→"];
 
 export interface Shortcut {
   /** The heading the shortcut sits under. Must be in `SHORTCUT_GROUP_ORDER`. */
@@ -135,46 +149,47 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: false,
     page: "/pulse",
   },
-  // Navigation. Cmd+Shift so that no letter typed into a field can reach it.
+  // Navigation. Two modifiers, so that no letter typed into a field can
+  // reach it: Cmd+Shift on a Mac, Ctrl+Alt on Windows and Linux.
   {
     group: "Navigation",
-    keys: ["⌘", "⇧", "H"],
+    keys: nav("H"),
     description: `Go to ${NAMES.network.label}`,
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "⇧", "P"],
+    keys: nav("P"),
     description: `Go to ${NAMES.pulse.label}`,
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "⇧", "M"],
+    keys: nav("M"),
     description: `Go to ${NAMES.map.label}`,
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "⇧", "S"],
+    keys: nav("S"),
     description: `Go to ${NAMES.ask.label}`,
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "⇧", ","],
+    keys: nav(","),
     description: `Go to ${NAMES.settings.label}`,
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "["],
+    keys: BACK_KEYS,
     description: "Back",
     bareLetter: false,
   },
   {
     group: "Navigation",
-    keys: ["⌘", "]"],
+    keys: FORWARD_KEYS,
     description: "Forward",
     bareLetter: false,
   },
@@ -189,13 +204,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     group: "Global",
-    keys: ["⌘", "K"],
+    keys: [MOD_KEY, "K"],
     description: "Open command palette",
     bareLetter: false,
   },
   {
     group: "Global",
-    keys: ["⌘", "⇧", "I"],
+    keys: nav("I"),
     description: "Quick interaction",
     bareLetter: false,
   },
@@ -204,7 +219,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // the platform.
   {
     group: "Global",
-    keys: ["⌘", "Enter"],
+    keys: [MOD_KEY, "Enter"],
     description: "Save the interaction you are writing",
     bareLetter: false,
   },
@@ -244,6 +259,24 @@ export const SHORTCUTS: readonly Shortcut[] = [
     keys: ["↑", "↓"],
     description: "Move through the contact list",
     bareLetter: false,
+    page: "/",
+  },
+  // J and K answer on the page, not in the list: in the list a letter is
+  // type-ahead. They open the next or the previous contact, as the arrows do
+  // from outside the list (`useContactListKeyboard`), and they obey the
+  // single-key switch.
+  {
+    group: NAMES.network.label,
+    keys: ["J"],
+    description: "Open the next contact",
+    bareLetter: true,
+    page: "/",
+  },
+  {
+    group: NAMES.network.label,
+    keys: ["K"],
+    description: "Open the previous contact",
+    bareLetter: true,
     page: "/",
   },
   {
@@ -423,7 +456,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     group: NAMES.duplicates.label,
-    keys: ["⌘", "Z"],
+    keys: [MOD_KEY, "Z"],
     description: "Undo the last skip",
     bareLetter: false,
     page: "/settings/duplicates",

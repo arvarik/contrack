@@ -314,26 +314,6 @@ describe("useSearchHistory", () => {
     expect(result.current.historyIndex).toBe(-1);
   });
 
-  it("getLastQuery returns last query within 30 seconds and null after expiry", () => {
-    vi.useFakeTimers();
-    const { result } = renderHook(() => useSearchHistory(), { wrapper });
-
-    act(() => {
-      result.current.addEntry("? recent question", "ai");
-    });
-
-    expect(result.current.getLastQuery()).toEqual({
-      query: "? recent question",
-      mode: "ai",
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(31_000);
-    });
-
-    expect(result.current.getLastQuery()).toBeNull();
-  });
-
   it("handles note mode entries without adding ? prefix", async () => {
     const noteEntry: HistoryEntry = {
       id: "3",

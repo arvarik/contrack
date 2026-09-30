@@ -1,20 +1,27 @@
 /**
  * useGlobalNavShortcuts — Global keyboard shortcuts for page navigation.
  *
- * All shortcuts use Cmd+Shift+Letter to guarantee zero collision with typing.
+ * Every shortcut holds two modifiers and a letter, so no letter typed into a
+ * field can reach it. A Mac holds Cmd+Shift. Windows and Linux hold Ctrl+Alt,
+ * because the browser keeps Ctrl+Shift+P and Ctrl+Shift+M for itself
+ * (`lib/platform` says why). Both forms work everywhere, and the labels show
+ * the form of the platform the page runs on.
  * Called once in App.tsx inside the Router context.
  *
- * Shortcut map:
- *   Cmd+Shift+H → Network (/)
- *   Cmd+Shift+P → Pulse (/pulse)
- *   Cmd+Shift+M → Map (/map)
- *   Cmd+Shift+S → Ask Contrack (/search)
- *   Cmd+Shift+, → Settings (/settings)
+ * Shortcut map (Mac form, then the Windows and Linux form):
+ *   Cmd+Shift+H, Ctrl+Alt+H → Network (/)
+ *   Cmd+Shift+P, Ctrl+Alt+P → Pulse (/pulse)
+ *   Cmd+Shift+M, Ctrl+Alt+M → Map (/map)
+ *   Cmd+Shift+S, Ctrl+Alt+S → Ask Contrack (/search)
+ *   Cmd+Shift+, Ctrl+Alt+, → Settings (/settings)
+ *   Cmd+[                  → Browser back
+ *   Cmd+]                  → Browser forward
+ *
+ * Back and forward need no Windows or Linux form: there, the browser's own
+ * Alt+Left and Alt+Right go back and forward.
  *
  * The labels come from `lib/names`, the one place a destination is named, so
  * the palette's hints match the sidebar and the page headings.
- *   Cmd+[       → Browser back
- *   Cmd+]       → Browser forward
  *
  * @module src/hooks/useGlobalNavShortcuts
  */
@@ -23,14 +30,18 @@ import { useNavigate } from "react-router-dom";
 import { QueryClientContext } from "@tanstack/react-query";
 import { markPendingNav } from "../lib/pendingNav";
 import { warmPage } from "../views/pages";
+import { chordLabel, isNavChord, NAV_MODIFIERS } from "../lib/platform";
+
+/** The label of a navigation chord on this platform: ⌘⇧H, or Ctrl+Alt+H. */
+const navLabel = (key: string) => chordLabel([...NAV_MODIFIERS, key]);
 
 /** Shortcut definitions — exported for reuse in ZeroStateView KBD hints */
 export const NAV_SHORTCUTS: Record<string, { keys: string }> = {
-  "/": { keys: "⌘⇧H" },
-  "/pulse": { keys: "⌘⇧P" },
-  "/map": { keys: "⌘⇧M" },
-  "/search": { keys: "⌘⇧S" },
-  "/settings": { keys: "⌘⇧," },
+  "/": { keys: navLabel("H") },
+  "/pulse": { keys: navLabel("P") },
+  "/map": { keys: navLabel("M") },
+  "/search": { keys: navLabel("S") },
+  "/settings": { keys: navLabel(",") },
 };
 
 export const useGlobalNavShortcuts = () => {
@@ -48,8 +59,8 @@ export const useGlobalNavShortcuts = () => {
     };
 
     const handler = (e: KeyboardEvent) => {
-      // ── Cmd+Shift+Letter navigation ──
-      if (e.metaKey && e.shiftKey && !e.altKey) {
+      // ── Cmd+Shift+Letter, or Ctrl+Alt+Letter, navigation ──
+      if (isNavChord(e)) {
         const key = e.key.toLowerCase();
 
         switch (key) {

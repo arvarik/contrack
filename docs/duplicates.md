@@ -83,10 +83,10 @@ contacts in the Trash. When it finishes, its results replace the list in
 In a scan, a pair of two contacts at or above your auto-merge sensitivity
 merges by itself. A group of three or more contacts always waits for you.
 
-> **Note:** A scan needs AI to be on. **Scan now** shows an error when **Use AI
-> for this account** is off in **Settings → Privacy and AI**. It does the same
-> when an admin turned AI off for the instance. The automatic checks still
-> run.
+> **Note:** A Smart scan and a Full scan need AI to be on. When **Use AI for
+> this account** is off in **Settings → Privacy and AI**, or an admin turned AI
+> off for the instance, the page offers only **Quick scan**. A Quick scan asks
+> no AI provider, so it runs with AI off. The automatic checks also still run.
 
 ### Work through the results
 

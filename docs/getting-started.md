@@ -184,8 +184,9 @@ account, see [Turn AI off](ai.md#turn-ai-off).
 | `?`           | Show the keyboard shortcuts for the page you are on               |
 | `/`           | Go to the search box on **Network**, **Map** and **Ask Contrack** |
 
-On Windows and Linux, `Cmd+K` is `Ctrl+K`. `Cmd+Shift+I` needs the `Cmd`
-key, so it works on a Mac. See [Keyboard shortcuts](keyboard-shortcuts.md).
+On Windows and Linux, `Cmd+K` is `Ctrl+K`, and `Cmd+Shift+I` is
+`Ctrl+Alt+I`. Contrack shows the keys of your computer. See
+[Keyboard shortcuts](keyboard-shortcuts.md#windows-and-linux).
 
 ## Key ideas
 

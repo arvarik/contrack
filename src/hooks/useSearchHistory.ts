@@ -13,6 +13,9 @@
  * - Terminal-style ↑/↓: `historyIndex` tracks position in the stack. -1 is not
  *   navigating, 0 is the most recent entry. `navigateHistory` returns the query
  *   to fill into the input, or null at the bounds.
+ * - No restore when the palette opens again. It opens with an empty box each
+ *   time, and ↑ brings back the last query. A 30-second restore used to be
+ *   here, and nothing called it.
  *
  * @module src/hooks/useSearchHistory
  */
@@ -31,9 +34,6 @@ export interface SearchHistoryEntry {
   mode: "normal" | "ai" | "action" | "people" | "notes" | "palette";
   timestamp: number;
 }
-
-/** Duration in ms within which reopening the palette restores the last query. */
-const REPOPULATE_WINDOW_MS = 30_000;
 
 const MAX_DISPLAY = 5;
 
@@ -75,12 +75,6 @@ export const useSearchHistory = () => {
   const [historyIndex, setHistoryIndex] = useState(-1);
   // Stash the user's typed text before they started ↑/↓, so ↓ past 0 restores it.
   const stashedInputRef = useRef<string>("");
-  // The last meaningful query, for the 30s re-populate on modal reopen.
-  const lastQueryRef = useRef<{
-    query: string;
-    mode: string;
-    timestamp: number;
-  } | null>(null);
 
   // `entries` in a ref as well, so `addEntry` and `navigateHistory` read the
   // current list without being rebuilt on every keystroke that changes it.
@@ -110,9 +104,6 @@ export const useSearchHistory = () => {
       const targetQuery = isAi ? trimmed.replace(/^\?\s*/, "").trim() : trimmed;
 
       if (targetQuery.length < 1) return;
-
-      const timestamp = Date.now();
-      lastQueryRef.current = { query: trimmed, mode, timestamp };
 
       recordMutation.mutate({
         query: targetQuery,
@@ -170,22 +161,6 @@ export const useSearchHistory = () => {
   /** Top N entries for the zero-state display. */
   const recentDisplay = useMemo(() => entries.slice(0, MAX_DISPLAY), [entries]);
 
-  /**
-   * The last meaningful query, if it was recorded in the past 30 seconds.
-   *
-   * Used to pre-fill the input when the modal is reopened quickly. Returns null
-   * when there is no recent query or the window has expired.
-   */
-  const getLastQuery = useCallback((): {
-    query: string;
-    mode: string;
-  } | null => {
-    const last = lastQueryRef.current;
-    if (!last) return null;
-    if (Date.now() - last.timestamp > REPOPULATE_WINDOW_MS) return null;
-    return { query: last.query, mode: last.mode };
-  }, []);
-
   return {
     entries,
     recentDisplay,
@@ -194,6 +169,5 @@ export const useSearchHistory = () => {
     historyIndex,
     navigateHistory,
     resetNavigation,
-    getLastQuery,
   };
 };

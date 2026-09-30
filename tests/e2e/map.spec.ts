@@ -170,6 +170,45 @@ test.describe("map", () => {
       .toBe(true);
   });
 
+  // An insight bar writes a value with a space in quotes, such as
+  // industry:"Venture Capital". The filter cut it at the space, so the pill
+  // read `"Venture` and the map showed 0 matches.
+  test("filters by an industry with a space from its insight bar", async ({
+    page,
+    instance,
+  }) => {
+    // London, beside the seeded people: the open insights panel covers the
+    // map's right edge, and a pin under it is not in view.
+    const ids: string[] = [];
+    try {
+      for (const name of ["Zelda Fund", "Zora Fund"]) {
+        const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+          name,
+          industry: "Venture Capital",
+          location: "London, UK",
+          lat: 51.5072,
+          lng: -0.1276,
+        });
+        ids.push(id);
+      }
+      await stubBasemap(page);
+      await page.goto("/map");
+
+      const bar = page.getByRole("button", {
+        name: "Filter by industry: Venture Capital (2)",
+      });
+      await bar.click();
+      await expect(
+        page.getByRole("button", { name: /^industry:\s*Venture Capital$/ }),
+      ).toBeVisible();
+      await expect(page.getByText(/^0 of \d+ match$/)).toHaveCount(0);
+      // The two are all the filter leaves, so they are all the bar counts.
+      await expect(bar).toBeVisible();
+    } finally {
+      for (const id of ids) await instance.api("DELETE", `/contacts/${id}`);
+    }
+  });
+
   test("lists the people in a cluster that zooming cannot split", async ({
     page,
     instance,

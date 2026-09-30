@@ -364,3 +364,28 @@ describe("AccountFields with photo", () => {
     ).toBeTruthy();
   });
 });
+
+describe("the photo circle before the account exists", () => {
+  afterEach(() => cleanup());
+
+  // The setup, register and join screens have no session, and the avatar
+  // route sits behind the sign-in gate: an `<img>` of `/api/avatar/initials`
+  // got a 401 there and showed a broken image.
+  it("draws the monogram in the page, with no request to the avatar route", () => {
+    const FormWrapper = () => {
+      const form = useAccountForm();
+      return <AccountFields form={form} />;
+    };
+    const { container } = render(<FormWrapper />);
+
+    fireEvent.change(screen.getByLabelText("Your name"), {
+      target: { value: "Ada Lovelace" },
+    });
+
+    const src = container.querySelector("img")!.getAttribute("src")!;
+    expect(src.startsWith("data:image/svg+xml")).toBe(true);
+    expect(src).not.toContain("/api/avatar/");
+    const svg = decodeURIComponent(src.slice(src.indexOf(",") + 1));
+    expect(svg).toContain(">AL</text>");
+  });
+});

@@ -38,6 +38,7 @@ import { warmSettingsShell } from "../../views/settings/warm";
 import { usePageLinkWarm } from "../../views/pages";
 import { markPendingNavOnClick, usePendingNav } from "../../lib/pendingNav";
 import { RailTooltip } from "../ui/RailTooltip";
+import { NAV_SHORTCUTS } from "../../hooks/useGlobalNavShortcuts";
 
 // ---------------------------------------------------------------------------
 // CorvidPerch — the mark, as the one button that navigates nowhere
@@ -186,7 +187,10 @@ export const Sidebar = () => {
       */}
       <CorvidPerch />
 
-      <RailTooltip label={NAMES.network.label} shortcut="⌘⇧H">
+      <RailTooltip
+        label={NAMES.network.label}
+        shortcut={NAV_SHORTCUTS["/"].keys}
+      >
         <Link
           to={networkTo}
           onClick={markPendingNavOnClick(networkTo)}
@@ -198,7 +202,10 @@ export const Sidebar = () => {
       </RailTooltip>
 
       <div className="relative">
-        <RailTooltip label={pulseTooltip} shortcut="⌘⇧P">
+        <RailTooltip
+          label={pulseTooltip}
+          shortcut={NAV_SHORTCUTS["/pulse"].keys}
+        >
           <Link
             to="/pulse"
             {...warmPulse}
@@ -255,7 +262,10 @@ export const Sidebar = () => {
         )}
       </div>
 
-      <RailTooltip label={NAMES.map.label} shortcut="⌘⇧M">
+      <RailTooltip
+        label={NAMES.map.label}
+        shortcut={NAV_SHORTCUTS["/map"].keys}
+      >
         <Link
           to="/map"
           {...warmMap}
@@ -267,7 +277,10 @@ export const Sidebar = () => {
         </Link>
       </RailTooltip>
 
-      <RailTooltip label={NAMES.ask.label} shortcut="⌘⇧S">
+      <RailTooltip
+        label={NAMES.ask.label}
+        shortcut={NAV_SHORTCUTS["/search"].keys}
+      >
         <Link
           to="/search"
           {...warmAsk}
@@ -308,7 +321,10 @@ export const Sidebar = () => {
           </button>
         </RailTooltip>
 
-        <RailTooltip label={NAMES.settings.label} shortcut="⌘⇧,">
+        <RailTooltip
+          label={NAMES.settings.label}
+          shortcut={NAV_SHORTCUTS["/settings"].keys}
+        >
           <Link
             to="/settings"
             // Pointing at the link starts Settings' code (`warm.ts`), so it

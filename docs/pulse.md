@@ -97,7 +97,7 @@ Interactions from imports and connectors count too. Contrack calculates the scor
 
 ## The Pulse page
 
-Open **Pulse** in the sidebar, or press `Cmd+Shift+P` on a Mac. To open Contrack on Pulse, set **Where Contrack opens** to **Pulse** in **Settings → Network and contacts**.
+Open **Pulse** in the sidebar, or press `Cmd+Shift+P` (`Ctrl+Alt+P` on Windows and Linux). To open Contrack on Pulse, set **Where Contrack opens** to **Pulse** in **Settings → Network and contacts**.
 
 ### The top of the page
 

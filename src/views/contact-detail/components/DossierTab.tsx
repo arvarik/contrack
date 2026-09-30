@@ -11,7 +11,7 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { useId, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Briefcase,
   ChevronDown,
@@ -64,6 +64,12 @@ interface DossierTabProps {
    * no page: the Research card's "Add a city" and the rest.
    */
   onAddDetail?: (anchor: ResearchAnchor) => void;
+  /**
+   * A "Catch me up" request from the palette, a new number each time. The
+   * Briefing card answers it once, then calls `onBriefHandled`.
+   */
+  briefRequest?: number | null;
+  onBriefHandled?: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -131,11 +137,18 @@ const BRIEFING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 function BriefingCard({
   contact,
   generateBriefing,
+  briefRequest,
+  onBriefHandled,
 }: {
   contact: Contact;
   generateBriefing?: BriefingMutation;
+  briefRequest?: number | null;
+  onBriefHandled?: () => void;
 }) {
   const headingId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  /** The request answered last. StrictMode runs a mount effect twice. */
+  const answeredRef = useRef<number | null>(null);
   const aiAllowed = useAiAllowed();
   const [failed, setFailed] = useState(false);
   const pending = generateBriefing?.isPending ?? false;
@@ -159,8 +172,30 @@ function BriefingCard({
     });
   };
 
+  // "Catch me up" from the palette: bring the card into view and give it
+  // focus, so a screen reader reads the briefing next. With no recent
+  // briefing, and AI on, write one: that is what the person asked for.
+  useEffect(() => {
+    if (!briefRequest || answeredRef.current === briefRequest) return;
+    answeredRef.current = briefRequest;
+    const card = sectionRef.current;
+    card?.scrollIntoView?.({ block: "nearest" });
+    card?.focus({ preventScroll: true });
+    if (!hasBriefing) generate();
+    onBriefHandled?.();
+    // Once per request: `generate` and `hasBriefing` are read as they are now.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [briefRequest]);
+
   return (
-    <section aria-labelledby={headingId} className={cn(CARD, "min-w-0")}>
+    // `tabIndex={-1}` lets focus land here for "Catch me up" without adding
+    // a Tab stop. No ring: it is a place, not a control.
+    <section
+      ref={sectionRef}
+      tabIndex={-1}
+      aria-labelledby={headingId}
+      className={cn(CARD, "min-w-0 outline-none")}
+    >
       <h2 id={headingId} className={SECTION_HEADING_SPACED}>
         <Sparkles aria-hidden="true" className="w-4 h-4" /> Briefing
       </h2>
@@ -263,6 +298,8 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
   contact,
   generateBriefing,
   onAddDetail,
+  briefRequest,
+  onBriefHandled,
 }) => {
   // Every section below is conditional, so "nothing to show" needs answering
   // once, here, rather than as a blank space.
@@ -278,7 +315,12 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
   return (
     <div className="flex flex-col gap-6">
       {/* First, and shown whether or not there is a dossier yet. */}
-      <BriefingCard contact={contact} generateBriefing={generateBriefing} />
+      <BriefingCard
+        contact={contact}
+        generateBriefing={generateBriefing}
+        briefRequest={briefRequest}
+        onBriefHandled={onBriefHandled}
+      />
       {hasContent ? (
         <DossierContent contact={contact} onAddDetail={onAddDetail} />
       ) : (

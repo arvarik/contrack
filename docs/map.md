@@ -4,7 +4,8 @@ The **Map** shows your contacts where they live and work. Use it to filter peopl
 
 ![The map with contact pins, number clusters and the Map insights panel open on the right](images/map.png)
 
-Open **Map** in the sidebar, or press `Cmd+Shift+M` on a Mac.
+Open **Map** in the sidebar, or press `Cmd+Shift+M` (`Ctrl+Alt+M` on Windows
+and Linux).
 
 ## Who is on the map
 
@@ -47,7 +48,7 @@ On a phone, a tap on a pin opens the contact. There is no hover card.
 
 Type in **Filter contacts** at the top left, or press `/` to go there. Words match the name, company, role, location, industry and tags. The page address keeps your filter, so you can share the link.
 
-The filter reads these [facets](search.md#facets): `role:`, `company:`, `location:`, `industry:`, `tag:`, `list:`, `score:`, `contacted:`, `tracked:`, `missing:company`, `missing:location` and `near:`. The facets `updated:`, `missing:email` and `missing:phone` do not work on the map.
+The filter reads every [facet](search.md#facets): `role:`, `company:`, `location:`, `industry:`, `tag:`, `list:`, `score:`, `updated:`, `contacted:`, `tracked:`, `missing:` and `near:`. A value with a space goes in double quotes, for example `industry:"Venture Capital"`.
 
 To find the people around a place:
 
@@ -102,7 +103,7 @@ A view has its own link, so you can bookmark it. When you change the filter or t
 
 **Map insights** sums up the people in view. On a wide screen, select the **Map insights** button in the top right corner, or press `I`. On a phone, select **Insights**.
 
-- **Summary** shows the **Top industries**, **Top companies** and **Top tags** of the people in view, five of each, as bars. Select a bar to add it to the filter. **Time zones** lists the time zones that the people in view are in.
+- **Summary** shows the **Top industries**, **Top companies** and **Top tags** of the people in view, five of each, as bars. Select a bar to add it to the filter, for example `industry:"Venture Capital"`. **Time zones** lists the time zones that the people in view are in.
 - **People** lists everyone in view, with the picture, the score ring, the name and the company. Select a person to fly the map to their pin.
 
 With no one in view, the panel says "No one in view". Contrack remembers whether you left the panel open.

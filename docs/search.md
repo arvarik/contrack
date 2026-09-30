@@ -6,11 +6,11 @@ Contrack has three ways to find people: the search box on the Network list, the 
 
 ## Choose where to search
 
-| Where                      | How to open it                                                          | Use it to                                           |
-| -------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
-| The **Network** search box | Select the box, or press `/` on the Network list                        | Narrow the list you are looking at                  |
-| The command palette        | Press `Cmd+K` (`Ctrl+K` on Windows and Linux) on any page               | Jump to a person and act on them                    |
-| **Ask Contrack**           | Select **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` on a Mac | Ask a question in plain words, or search your notes |
+| Where                      | How to open it                                                                                     | Use it to                                           |
+| -------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| The **Network** search box | Select the box, or press `/` on the Network list                                                   | Narrow the list you are looking at                  |
+| The command palette        | Press `Cmd+K` (`Ctrl+K` on Windows and Linux) on any page                                          | Jump to a person and act on them                    |
+| **Ask Contrack**           | Select **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Windows and Linux) | Ask a question in plain words, or search your notes |
 
 All three read the same [facets](#facets), such as `tag:investor` or `tracked:no`.
 
@@ -50,14 +50,14 @@ Press `→` on a result to open its actions. With a pointer, select the double a
 
 ![The palette's action menu for one contact, with a key beside each action](images/palette-actions.png)
 
-| Key     | Action                   | What it does                                                                                        |
-| ------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
-| `Enter` | **View profile**         | Opens the contact                                                                                   |
-| `N`     | **Log note**             | Opens a small composer in the palette. `Cmd+Enter` saves the note                                   |
-| `C`     | **Log call**             | The same, for a call                                                                                |
-| `B`     | **Catch me up**          | Opens the contact. The **Briefing** card on its **Dossier** tab sums up the relationship            |
-| `L`     | **Add to list**          | Shows your lists, with a check on each list the contact is in. `Enter` adds or removes the contact  |
-| `T`     | **Track** or **Untrack** | Tracks the contact at your default cadence, or untracks it, with **Undo**. A ghost has no Track row |
+| Key     | Action                   | What it does                                                                                                                     |
+| ------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter` | **View profile**         | Opens the contact                                                                                                                |
+| `N`     | **Log note**             | Opens a small composer in the palette. `Cmd+Enter` saves the note                                                                |
+| `C`     | **Log call**             | The same, for a call                                                                                                             |
+| `B`     | **Catch me up**          | Opens the contact on its **Dossier** tab, at the **Briefing** card. With AI on, it writes a briefing when there is no recent one |
+| `L`     | **Add to list**          | Shows your lists, with a check on each list the contact is in. `Enter` adds or removes the contact                               |
+| `T`     | **Track** or **Untrack** | Tracks the contact at your default cadence, or untracks it, with **Undo**. A ghost has no Track row                              |
 
 `↑`/`↓` move through the actions. `←` or `Esc` goes back to the results.
 
@@ -112,7 +112,7 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `tracked:`   | `tracked:yes`      | that you track. `tracked:no` keeps everybody else                                                        |
 
 - Text facets ignore case and match any part of the value: `company:acme` finds "Acme Corp".
-- A value that you type cannot hold a space. Type one word of it, or pick the whole value from the list.
+- A value with a space goes in double quotes, for example `industry:"Venture Capital"` or `list:"Board members"`. The facet becomes a pill at the space after the closing quote.
 - A contact must match every facet you add.
 - Only tracked contacts have a real score. Add `tracked:yes` when you filter by `score:`.
 - `near:` needs the Map's place lookup, so it narrows only the Map (see [Filter the map](map.md#filter-the-map)).
@@ -131,7 +131,7 @@ The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). `update
 
 ## Ask Contrack
 
-Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` on a Mac. The switch at the top chooses **People** or **Notes**. `/` puts the cursor in the box, and `Esc` in the box clears the search.
+Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Windows and Linux). The switch at the top chooses **People** or **Notes**. `/` puts the cursor in the box, and `Esc` in the box clears the search.
 
 ### Ask about people
 

@@ -12,6 +12,7 @@ import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { SETTINGS_PAGES } from "../../settings/registry";
 import { openQuickNote } from "../../../lib/appEvents";
+import { chordLabel, NAV_MODIFIERS } from "../../../lib/platform";
 import { PULSE_ROW } from "../lib/pulseStyles";
 
 /** One step: a row on the wash, the whole row the control. */
@@ -90,7 +91,11 @@ export const WelcomeOffice = () => {
                   {/* A phone has no keyboard to press it on. */}
                   <span className="hidden sm:inline">
                     {" "}
-                    (press <kbd className={KBD_SM}>⌘⇧I</kbd>)
+                    (press{" "}
+                    <kbd className={KBD_SM}>
+                      {chordLabel([...NAV_MODIFIERS, "I"])}
+                    </kbd>
+                    )
                   </span>
                 </span>
               </div>

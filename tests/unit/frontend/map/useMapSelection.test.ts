@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { useMapSelection } from "../../../../src/views/map/useMapSelection";
 import type { MapContact } from "../../../../shared/geo";
 
@@ -83,46 +83,6 @@ describe("useMapSelection", () => {
     expect(result.current.selectedIds.has("c1")).toBe(false);
     expect(result.current.selectedIds.has("c2")).toBe(false);
     expect(result.current.selectedCount).toBe(1);
-  });
-
-  it("adds cluster leaves without duplicates", async () => {
-    const { result } = renderHook(() => useMapSelection({ contacts }));
-
-    const getSource = vi.fn().mockReturnValue({
-      getClusterLeaves: vi.fn().mockResolvedValue([
-        { properties: { id: "c1" } },
-        { properties: { id: "c2" } },
-        { properties: { id: "c1" } }, // Duplicate leaf
-      ]),
-    });
-    const mockMap = { getSource } as unknown as Parameters<
-      typeof result.current.selectCluster
-    >[1];
-
-    await act(async () => {
-      await result.current.selectCluster(101, mockMap);
-    });
-
-    expect(result.current.selectedIds.has("c1")).toBe(true);
-    expect(result.current.selectedIds.has("c2")).toBe(true);
-    expect(result.current.selectedCount).toBe(2);
-
-    // Call again with another cluster that shares c2
-    getSource.mockReturnValue({
-      getClusterLeaves: vi
-        .fn()
-        .mockResolvedValue([
-          { properties: { id: "c2" } },
-          { properties: { id: "c3" } },
-        ]),
-    });
-
-    await act(async () => {
-      await result.current.selectCluster(102, mockMap);
-    });
-
-    expect(result.current.selectedIds.size).toBe(3);
-    expect(result.current.selectedCount).toBe(3);
   });
 
   it("clears selection when clear() is called or Escape key is pressed", () => {

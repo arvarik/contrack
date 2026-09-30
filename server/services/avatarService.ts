@@ -26,6 +26,7 @@ import * as bottts from "@dicebear/bottts";
 import { classifyName, type AvatarLook } from "../utils/smartAvatar.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { monogramSvg, type MonogramTheme } from "../../shared/monogram.ts";
 
 export type { AvatarLook } from "../utils/smartAvatar.ts";
 // URL building lives in utils/avatarUrl.ts, which loads no artwork, so the
@@ -246,7 +247,7 @@ const BACKGROUND_COLORS_DARK = [
 ] as const;
 
 /** Which palette an avatar is being drawn for. */
-export type AvatarTheme = "light" | "dark";
+export type AvatarTheme = MonogramTheme;
 
 export function isAvatarTheme(value: unknown): value is AvatarTheme {
   return value === "light" || value === "dark";
@@ -337,7 +338,7 @@ function renderStyle({
     case "bottts":
       return createAvatar(bottts, base).toString();
     case "initials":
-      return plainMonogram(seed, theme);
+      return monogramSvg(seed, theme);
     default:
       // TypeScript proves this is unreachable for well-typed callers, but the
       // style can arrive from a persisted URL or a hand-edited database row.
@@ -372,60 +373,8 @@ export function renderAvatar(options: RenderAvatarOptions): string {
       "Avatar",
       `initials fallback failed: ${getErrorMessage(err)} — using a plain monogram`,
     );
-    return plainMonogram(options.seed, options.theme);
+    // The last resort: `shared/monogram.ts` builds it by hand, with no
+    // library, so this path cannot itself fail.
+    return monogramSvg(options.seed, options.theme);
   }
-}
-
-/**
- * Absolute last resort: a hand-built monogram with no library involved, so
- * this path cannot itself fail.
- */
-function plainMonogram(seed: string, theme?: AvatarTheme): string {
-  const letters =
-    seed
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((word) => Array.from(word)[0] ?? "")
-      .join("")
-      .toUpperCase() || "?";
-  // Escape for XML: a contact name can legitimately contain & or <.
-  const safe = letters.replace(
-    /[<>&"']/g,
-    (c) =>
-      ({
-        "<": "&lt;",
-        ">": "&gt;",
-        "&": "&amp;",
-        '"': "&quot;",
-        "'": "&apos;",
-      })[c]!,
-  );
-  // The two palettes' `surface-container` and `on-surface-variant`. Hard-coded
-  // rather than read from a token, because this SVG is served as an image and
-  // no page stylesheet reaches it.
-  const LIGHT = { bg: "#e8eff1", fg: "#566164" };
-  const DARK = { bg: "#1d2326", fg: "#b2bbbf" };
-
-  // With no theme given the SVG decides for itself. An `<img>` cannot inherit
-  // the page's palette, but it can carry its own media query, and that is the
-  // correct answer for the default `system` theme: no parameter, no cache
-  // split, and right on both.
-  const style =
-    theme === undefined
-      ? `<style>:root{--bg:${LIGHT.bg};--fg:${LIGHT.fg}}` +
-        `@media (prefers-color-scheme:dark){:root{--bg:${DARK.bg};--fg:${DARK.fg}}}</style>`
-      : "";
-  const picked = theme === "dark" ? DARK : LIGHT;
-  const bg = theme === undefined ? "var(--bg)" : picked.bg;
-  const fg = theme === undefined ? "var(--fg)" : picked.fg;
-
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
-    style +
-    `<rect width="100" height="100" fill="${bg}"/>` +
-    `<text x="50" y="50" dy=".35em" text-anchor="middle" ` +
-    `font-family="sans-serif" font-size="42" font-weight="700" fill="${fg}">${safe}</text>` +
-    `</svg>`
-  );
 }

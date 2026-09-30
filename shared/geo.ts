@@ -53,6 +53,14 @@ export interface MapContact {
   tags?: string[];
   lists?: { id: string; name: string }[];
   geoSource?: GeoSource;
+  /**
+   * The map's `updated:`, `missing:email` and `missing:phone` facets read
+   * these three. Without them `updated:` matched nobody and the two
+   * `missing:` facets matched everybody.
+   */
+  updatedAt?: string | null;
+  emails?: { email: string }[];
+  phones?: { phone: string }[];
 }
 
 /**

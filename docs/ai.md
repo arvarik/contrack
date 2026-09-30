@@ -223,8 +223,9 @@ With either switch off:
   model keeps working.
 - The other features in the table do not run. Their controls are hidden, or
   they say that AI is off.
-- **Scan now** on the **Duplicates** page does not run, for any scan type.
-  The automatic checks of new contacts and imports still run.
+- The **Duplicates** page offers only **Quick scan**, which asks no AI
+  provider. A Smart scan and a Full scan do not run. The automatic checks of
+  new contacts and imports still run.
 - Link previews in notes do not load.
 
 ## Costs and usage
