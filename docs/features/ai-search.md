@@ -129,14 +129,14 @@ A local answer, a facet answer, an AI-off answer and a cached answer send the co
 
 On screen, the Ask page and the palette show the final answer only. The instant chunk still streams, and the page keeps it back.
 
-- **While AI works:** after 150 ms, a stage under the search box says "Searching your network…" and "AI is checking who fits your question". After 200 ms more, the corvid in the search box flies out at its flying size and hunts at random over the stage and the page below it. The answer calls it home by the short way (`recallCorvid()`), and it lands back in the search box as the results fade in. A hunt nobody calls lands by itself after about 26 seconds, twice the model's 12 second budget. At the "subtle" and "off" motion levels, and under reduced motion, nothing flies, and the stage holds a 64 px thinking bird. An answer that comes within 150 ms shows no stage. The palette shows "Asking AI…" for the whole wait.
-- **A list AI did not check:** a final chunk with `fallback: true`, because AI is off for the account or AI did not answer. The Ask page says "Not verified by AI" once, over the list, with a question mark that says why. Each card carries an orange question mark in its top right corner, named "Ada Lovelace: not verified by AI". The mark is a toggletip: a button beside the card, never inside it, with a 44 px target. A hover, a click, a tap or a keyboard focus opens it, and Escape or a press elsewhere closes it. The words say it, so the colour is never the only signal.
+- **While AI works:** after 150 ms, a stage under the search box says "Searching your network…" and "AI is checking who fits your question". After 200 ms more, the corvid in the search box flies out at its flying size and hunts at random beside the search column and above it, never over the search box or the results under it (`searchGround()` in `lib/corvidFlight.ts`). It takes off upward into the band over the search box. On a wide window it hunts in the page's margins, left or right of the column, and now and then crosses over the top to the other side. Where no margin is wide enough, as on a tablet or a phone, it flies along the band over the search box. The answer calls it home round the column (`recallCorvid()`): up its side, along the band, and down into the search box from above, as the results fade in. A hunt nobody calls lands by itself after about 26 seconds, twice the model's 12 second budget. At the "subtle" and "off" motion levels, under reduced motion, and in a window with no room round the column, nothing flies, and the stage holds a 64 px thinking bird. An answer that comes within 150 ms shows no stage. The palette shows "Asking AI…" for the whole wait.
+- **A list AI did not check:** a final chunk with `fallback: true`, because AI is off for the account or AI did not answer. The Ask page says "Not verified by AI" once, over the list, with a question mark that says why. With AI on for the account, **Ask AI again** beside it asks the same question once more. The server never caches such a list, so the second ask runs the model again. A list AI checked has no such button: the server answers the same question from its cache for five minutes, unless the contacts changed, so the old Refresh button showed the same list again, and it is gone. Each card carries an orange question mark in its top right corner, named "Ada Lovelace: not verified by AI". The mark is a toggletip: a button beside the card, never inside it, with a 44 px target. A hover, a click, a tap or a keyboard focus opens it, and Escape or a press elsewhere closes it. The words say it, so the colour is never the only signal.
 - **Palette:** the group heading reads "Not verified by AI", and one line under it says why. Each row carries the same orange question mark as a named picture with a title, because an option holds no second control.
 - **Approximate** still wins over the mark. An older server sends no `verified`, and then the chunk's `fallback` decides.
 - **Screen reader:** "Searching your network for “q”…" while AI works. Then "2 matches for “q”.", or "2 matches for “q”. Not verified by AI." for a list AI did not check.
 - **History pane:** a question whose last answer AI did not check says "not verified by AI" in its row.
 
-![The Ask page while AI works: the corvid hunts over the empty results, then flies home with the answer](../screenshots/ask-waiting/ask-waiting-flight.gif)
+![The Ask page while AI works: the corvid hunts beside and above the search column, then flies home round it with the answer](../screenshots/ask-waiting/ask-waiting-flight.gif)
 
 ![A list AI did not check, with a card's question mark open](../screenshots/ask-waiting/ask-unverified-desktop-light.png)
 
@@ -423,6 +423,38 @@ A facet proves its field too. `tag:rare` gives "Tagged rare.", and
 contact's location. `contacted:` proves the last contact. A facet on a
 score, an edit date, a list, a distance, a missing field or tracking adds
 no part.
+
+#### Matched fields
+
+The reason sentence names at most one or two proven fields, and a list the
+model did not check has none. Each match also carries `matchedOn`: the
+fields that answer the question, built by `explainMatch` in
+`server/services/search/matchedOn.ts` with no model call. The Ask page's
+card shows one line per field, the field's name, then the contact's own
+text with the question's words marked:
+
+- "Who is interested in machine learning?" shows **Interests:** Machine
+  Learning for one person and **Role:** Machine Learning Engineer for
+  another, so it is clear at a glance why each one is there.
+- The fields a facet, the plan's filter or the reranker proved come first.
+  A field the reranker cited carries the AI sparkle.
+- Then every other field that holds the question's words, at most three
+  fields in all. A question about what people like ("interested in",
+  "into", "loves") lists interests and tags first. A question about work
+  ("works as") lists the role and the company first.
+- A match nothing else explains shows the passage the search read as close
+  in meaning, marked "(similar meaning)", on the paths that read passages.
+- The question's words are the ones left when the asking words are gone
+  ("who", "is", "interested", "in"). Each also matches its other forms,
+  with the same rules the role filter uses (`roleVariants`), and a few
+  initialisms both ways (ML and machine learning, VC and venture capital).
+  Matching ignores case and accents, as whole words.
+- A long field is cut to one line, with about 20 characters before the
+  first mark, so the mark shows in a phone's two lines.
+
+It runs for every match on every path, the instant list and a list AI did
+not check included, in about 0.2 ms for 30 matches at 5,000 contacts. A
+name, an email or a phone number shows none: the card shows it anyway.
 
 ### Speed and the search lane
 
@@ -813,5 +845,5 @@ When AI is turned off for an account:
 The page leads with the search box: the mode's glyph, the question, Clear, and a square search button with the magnifying glass alone. Enter or the button asks. Notes mode uses the same box (see [Note Search](interaction-search.md#the-page)). The header is the title and the People and Notes switch, with no line of description. Below `lg` a History button sits beside the switch.
 
 - **One status line:** In People mode, while contacts are missing from the index, indexing runs, or a contact failed, one line sits under the search box: a thin progress bar, the words ("12 of 30 contacts indexed", or "Indexing 12 of 30…" while it runs) and quiet text buttons for **Index missing**, **Inspect failed** and **Retry failed**. The line is a region named "Semantic search coverage". It hides at 100 percent with nothing running. The paid-provider confirmation and the failed-contacts dialog open from its buttons.
-- **Try asking:** Before a search, the page shows suggested questions as flat chips. A click fills the box and runs the search. In People mode the first three come from your own network, its most common industry, city and company ("Who works in Music Streaming?", "Who do I know in Sydney?", "Who works at TechNova?"), so a press always finds someone. Fixed examples fill the rest. People search reads profiles, not dates, so no suggestion asks about when you last spoke. Notes mode shows no suggestions.
+- **Try asking:** Before a search, the page shows six suggested questions as flat chips. A click fills the box and runs the search. The six are drawn at random from the account's pool (`GET /api/search/starters`), a new draw on each visit and after Clear, with at most two of one kind while other kinds are left. The pool holds up to 40 questions built from your own network: the industries, cities, companies, roles, interests and tags that two people share, and the industry and city pairs ("Who works in Fintech in Lisbon?"). So a press always finds someone, and the pool never holds more questions than you have contacts. The server builds every account's pool after boot, and again as soon as an import commits. The app fetches it in an idle moment, so the page opens with the questions in hand. A draw stays put while the pool refreshes behind it, so no chip moves under a pointer. A failed load shows no questions. Notes mode shows no suggestions.
 - **No results:** "No one matches" with "Try other words." The status line above already says when the index is incomplete.

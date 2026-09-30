@@ -24,6 +24,8 @@ import {
   drainIndexQueue,
 } from "../services/search/indexQueue.ts";
 import { searchHistoryService } from "../services/searchHistoryService.ts";
+import { starterQuestions } from "../services/search/starterQuestions.ts";
+import type { StarterQuestionsResponse } from "../../shared/starterQuestions.ts";
 import { aiAllowedFor } from "../middleware/aiAllowed.ts";
 import {
   recordHistorySchema,
@@ -328,6 +330,23 @@ router.get(
     const scope = scopeOf(req);
     const coverage = getSearchCoverage(scope);
     res.json(coverage);
+  }),
+);
+
+/**
+ * GET /api/search/starters — the caller's pool of starter questions.
+ *
+ * Built from the caller's own contacts, and never longer than the number of
+ * contacts. The Ask page shows six of them at random under "Try asking".
+ */
+router.get(
+  "/starters",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const body: StarterQuestionsResponse = {
+      questions: starterQuestions(scope),
+    };
+    res.json(body);
   }),
 );
 

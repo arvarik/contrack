@@ -37,6 +37,11 @@ import { cn } from "../../lib/utils";
 
 interface AskSearchBoxProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
+  /**
+   * The box itself. The Ask page's search flight measures it: the bird
+   * keeps out of the column from its top down.
+   */
+  formRef?: React.Ref<HTMLFormElement>;
   value: string;
   onChange: (value: string) => void;
   /** Runs the search, from Enter and from the button. */
@@ -58,6 +63,7 @@ interface AskSearchBoxProps {
 
 export const AskSearchBox = ({
   inputRef,
+  formRef,
   value,
   onChange,
   onSubmit,
@@ -70,6 +76,7 @@ export const AskSearchBox = ({
   label,
 }: AskSearchBoxProps) => (
   <form
+    ref={formRef}
     role="search"
     onSubmit={(event) => {
       event.preventDefault();

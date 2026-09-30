@@ -1,23 +1,14 @@
-import {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-} from "react";
+import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
 import {
   Sparkles,
   AlertTriangle,
   HistoryIcon,
-  RefreshCw,
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch } from "../api";
-import { useContacts } from "../api/contacts";
+import { useSemanticSearch, useStarterQuestions } from "../api";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
@@ -44,7 +35,7 @@ import { InfoTip } from "../components/ui/InfoTip";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { AskSearchBox } from "./search/AskSearchBox";
-import { suggestedQuestions } from "./search/suggestions";
+import { drawSuggestions } from "./search/suggestions";
 import { Segmented } from "../components/ui/Segmented";
 import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
@@ -150,8 +141,10 @@ export const SearchView = () => {
    * been asked in between.
    *
    * The same question with its results already on screen runs again. That
-   * is what pressing Search means, and it is what the Refresh button beside
-   * the results does with one click fewer.
+   * is what pressing Search means. The server answers it from its cache for
+   * five minutes, unless the contacts changed, so the page has no Refresh
+   * button: it showed the same list again. A list AI could not check is
+   * never cached, and "Ask AI again" beside it asks once more.
    */
   const handleSearch = useCallback(
     (searchQuery?: string) => {
@@ -242,10 +235,14 @@ export const SearchView = () => {
     }
   }, [searchParams, setSearchParams, handleSearch, mode]);
 
+  /** Bumped by Clear, so "Try asking" comes back with a new draw. */
+  const [draw, setDraw] = useState(0);
+
   const handleClear = useCallback(() => {
     setQuery("");
     reset();
     setLastAISearchQuery("");
+    setDraw((n) => n + 1);
     inputRef.current?.focus();
   }, [reset, setLastAISearchQuery]);
 
@@ -283,15 +280,24 @@ export const SearchView = () => {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [singleKeys, isWide, askHistoryOpen, setHistoryOpen]);
 
-  // Built from the network, which the Network list has most often loaded
-  // already (the two share one cache). The list waits for the network to
-  // settle, so its chips never move under a pointer when it arrives. A
-  // failed load shows the fixed examples.
-  const { data: contacts, isPending: contactsPending } = useContacts();
-  const suggestions = useMemo(
-    () => suggestedQuestions(Array.isArray(contacts) ? contacts : []),
-    [contacts],
+  // Six questions drawn at random from the account's pool, which the app
+  // fetched in an idle moment, so they are here with the page. A draw stays
+  // put while the pool refreshes behind it, so no chip moves under a
+  // pointer. A new visit, or Clear, draws again. A failed load shows none:
+  // a question that finds nobody is worse than no question.
+  const pool = useStarterQuestions().data?.questions;
+  const [drawn, setDrawn] = useState<{ draw: number; questions: string[] }>(
+    () => ({ draw: 0, questions: pool ? drawSuggestions(pool) : [] }),
   );
+  useEffect(() => {
+    if (!pool) return;
+    setDrawn((current) =>
+      current.draw === draw && current.questions.length > 0
+        ? current
+        : { draw, questions: drawSuggestions(pool) },
+    );
+  }, [pool, draw]);
+  const suggestions = drawn.questions;
 
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {
@@ -348,7 +354,10 @@ export const SearchView = () => {
         The bar's lane is kept while nothing scrolls, so the column does not
         move when the results make the page scroll.
       */}
-      <div className="flex-1 min-w-0 h-full overflow-y-auto scroll-py-2 [scrollbar-gutter:stable]">
+      <div
+        ref={flight.pageRef}
+        className="flex-1 min-w-0 h-full overflow-y-auto scroll-py-2 [scrollbar-gutter:stable]"
+      >
         <div
           className={cn(
             ASK_COLUMN,
@@ -415,6 +424,7 @@ export const SearchView = () => {
                     placeholder is short enough for a 390 px window. */}
                 <AskSearchBox
                   inputRef={inputRef}
+                  formRef={flight.fieldRef}
                   value={query}
                   onChange={setQuery}
                   onSubmit={() => handleSearch()}
@@ -442,7 +452,7 @@ export const SearchView = () => {
 
               {/* Suggested questions, before the first search. A press
                   fills the box and asks. */}
-              {!hasSearched && !isLoading && !contactsPending && (
+              {!hasSearched && !isLoading && suggestions.length > 0 && (
                 <div className="space-y-3">
                   <h2 id={suggestionsId} className={SECTION_HEADING}>
                     Try asking
@@ -485,7 +495,6 @@ export const SearchView = () => {
                 flight.staged ? (
                   <SearchingStage
                     key="searching"
-                    ref={flight.areaRef}
                     still={flight.still}
                     aiAllowed={aiAllowed}
                   />
@@ -519,34 +528,37 @@ export const SearchView = () => {
                             align="end"
                           >
                             {aiAllowed
-                              ? "AI could not check these people this time, so some may not fit. They match your words or their meaning. Refresh to ask AI again"
+                              ? "AI could not check these people this time, so some may not fit. They match your words or their meaning. Ask AI again to check them"
                               : "AI is off for your account, so AI did not check these people. They match your words or their meaning. Turn on AI in Settings, Privacy"}
                           </InfoTip>
                         </div>
                       )}
                       {/*
-                        Re-asks the question these results answer, whatever the
-                        input says by now. Disabled while an answer is streaming,
-                        which is the same rule the Search button follows.
+                        The one list a second ask can change: AI could not
+                        check it, and the server never caches such a list.
+                        It asks the question these results answer, whatever
+                        the input says by now. A list AI checked would come
+                        back the same, so it has no such button.
                       */}
-                      <button
-                        onClick={handleRerun}
-                        disabled={isPending || !answeredQuery}
-                        aria-label="Refresh results"
-                        title="Ask this question again"
-                        // A quiet text button, like the status row's:
-                        // it is a button, not a link.
-                        className={cn(
-                          BTN_QUIET,
-                          "disabled:opacity-50 disabled:cursor-not-allowed",
-                        )}
-                      >
-                        <RefreshCw
-                          className="w-3.5 h-3.5 shrink-0"
-                          aria-hidden="true"
-                        />
-                        Refresh
-                      </button>
+                      {isFallback && aiAllowed && (
+                        <button
+                          type="button"
+                          onClick={handleRerun}
+                          disabled={isPending || !answeredQuery}
+                          // A quiet text button, like the status row's:
+                          // it is a button, not a link.
+                          className={cn(
+                            BTN_QUIET,
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                          )}
+                        >
+                          <RotateCw
+                            className="w-3.5 h-3.5 shrink-0"
+                            aria-hidden="true"
+                          />
+                          Ask AI again
+                        </button>
+                      )}
                     </div>
                   </div>
 

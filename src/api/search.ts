@@ -4,11 +4,13 @@ import type { FacetFilter } from "../../shared/searchFacets";
 import { apiFetch } from "./client";
 /** Search hooks validate streamed results and cancel obsolete requests. */
 import {
+  queryOptions,
   useQuery,
   useMutation,
   useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
+import type { StarterQuestionsResponse } from "../../shared/starterQuestions";
 import {
   useState,
   useCallback,
@@ -269,6 +271,28 @@ export const useSearchCoverage = () => {
     },
   });
 };
+
+/**
+ * The account's pool of starter questions, for "Try asking" on Ask.
+ *
+ * The key sits under `contacts`, so every change that refreshes the contacts
+ * (an import, a merge, a bulk edit) refreshes the pool too. The server keeps
+ * the pool ready, so the request is a read from memory. The app fetches it
+ * in an idle moment after it loads, and the Ask page opens with it in hand.
+ */
+export const starterQuestionsQuery = () =>
+  queryOptions({
+    queryKey: ["contacts", "starters"] as const,
+    queryFn: async ({ signal }): Promise<StarterQuestionsResponse> => {
+      const res = await apiFetch("/search/starters", { signal });
+      if (!res.ok) throw new Error("Failed to load starter questions");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+/** The starter question pool. See {@link starterQuestionsQuery}. */
+export const useStarterQuestions = () => useQuery(starterQuestionsQuery());
 
 /**
  * Hook to explicitly trigger indexing for missing or all contacts.

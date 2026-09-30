@@ -93,11 +93,19 @@ function contactDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function lastContactPart(at: unknown, now: Date): Part {
+/** "3 months ago", or null when no contact is logged. */
+export function lastContactAgo(at: unknown, now: Date): string | null {
   const date = contactDate(at);
-  if (!date) return templated("no contact", "logged");
+  if (!date) return null;
   const distance = formatDistanceStrict(date, now, { roundingMethod: "floor" });
-  return templated("last contact", `${distance} ago`);
+  return `${distance} ago`;
+}
+
+function lastContactPart(at: unknown, now: Date): Part {
+  const ago = lastContactAgo(at, now);
+  return ago
+    ? templated("last contact", ago)
+    : templated("no contact", "logged");
 }
 
 /**

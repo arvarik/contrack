@@ -4,19 +4,23 @@
  * With AI at work the page does not show the local list that streams first:
  * it waits for the answer AI verified. Meanwhile the corvid hunts for it.
  * The bird in the search box takes off, grows to its flying size, and
- * wanders at random over the empty space where the results will appear:
- * the stage, and the page below it down to the bottom of the window.
- * When the answer arrives it is called home by the short way and lands back
- * in the search box, while the results fade in under it.
+ * wanders at random beside the search column and above it: the page's
+ * empty margins to the left and right, and the band over the search box.
+ * It never flies over the search box or the results under it, so the
+ * answer appears in a column the bird is not crossing. When the answer
+ * arrives it is called home round the column and lands back in the search
+ * box from above, while the results fade in under it.
  *
  * The flight is the app's one flying bird (`CorvidFlight`), asked for with
  * `flyCorvid({ kind: "search" })` and ended with `recallCorvid()`. It follows
  * the account's corvid motion level, like every other flight:
  *
- * - "full": the flight. The stage holds only its words, for the bird to
- *   cross.
+ * - "full": the flight. The stage holds only its words.
  * - "subtle" and "off": no flight. A larger bird sits in the middle of the
  *   stage, tilting its head at "subtle" and still at "off".
+ *
+ * A window with no room round the column to hunt in (`canHunt`) gets the
+ * larger bird too, at every level.
  *
  * An answer that comes quickly shows nothing at all: the stage waits
  * {@link STAGE_DELAY_MS}, and the bird waits {@link TAKEOFF_DELAY_MS} more,
@@ -24,7 +28,7 @@
  *
  * @module views/search/SearchingStage
  */
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CorvidThinking } from "../../components/brand/CorvidThinking";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import {
@@ -34,6 +38,12 @@ import {
   recallCorvid,
   type CorvidPerchDetail,
 } from "../../lib/corvid";
+import {
+  canHunt,
+  searchGround,
+  type FlightBox,
+  type FlightPerch,
+} from "../../lib/corvidFlight";
 
 /** How long a search runs before the stage appears, in ms. */
 export const STAGE_DELAY_MS = 150;
@@ -43,14 +53,78 @@ export const TAKEOFF_DELAY_MS = 200;
 interface CorvidSearchFlight {
   /** The search box's bird: the perch the flight leaves and lands on. */
   perchRef: React.RefObject<HTMLSpanElement | null>;
-  /** The stage: the ground the bird hunts over. */
-  areaRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * The search box. From its top down, between its sides, is the column
+   * the bird keeps out of: the box and the results under it.
+   */
+  fieldRef: React.RefObject<HTMLFormElement | null>;
+  /**
+   * The page the bird hunts in: the scroll container beside the nav rail.
+   * Without it, the window.
+   */
+  pageRef: React.RefObject<HTMLDivElement | null>;
   /** The stage is up. */
   staged: boolean;
-  /** No flight at this motion level: the stage holds a larger bird. */
+  /** No flight here: the stage holds a larger bird. */
   still: boolean;
   /** The search box shows the bird: it will fly, it is flying, or it lands. */
   perched: boolean;
+}
+
+const boxOf = (rect: DOMRect): FlightBox => ({
+  left: rect.left,
+  top: rect.top,
+  right: rect.right,
+  bottom: rect.bottom,
+});
+
+interface Hunt {
+  perch: HTMLSpanElement;
+  area: FlightBox;
+  avoid: FlightBox;
+  /** There is room round the column to hunt in. */
+  room: boolean;
+}
+
+/**
+ * The page, the column, and whether there is room to hunt round it, as the
+ * page is laid out now. Null while the search box or its bird has no box to
+ * measure.
+ */
+function measureHunt(
+  perch: HTMLSpanElement | null,
+  field: HTMLElement | null,
+  page: HTMLElement | null,
+): Hunt | null {
+  const fieldRect = field?.getBoundingClientRect();
+  const perchRect = perch?.getBoundingClientRect();
+  if (!perch || !fieldRect || fieldRect.width <= 0) return null;
+  if (!perchRect || perchRect.width <= 0) return null;
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const pageRect = page?.getBoundingClientRect();
+  const area =
+    pageRect && pageRect.width > 0
+      ? boxOf(pageRect)
+      : { left: 0, top: 0, right: viewport.width, bottom: viewport.height };
+  // The column runs from the search box down past the bottom of the page:
+  // the results fill it as they arrive.
+  const avoid = {
+    left: fieldRect.left,
+    top: fieldRect.top,
+    right: fieldRect.right,
+    bottom: Math.max(area.bottom, viewport.height),
+  };
+  const home: FlightPerch = {
+    left: perchRect.left,
+    top: perchRect.top,
+    size: perchRect.width,
+  };
+  return {
+    perch,
+    area,
+    avoid,
+    room: canHunt(searchGround(viewport, area, avoid, home)),
+  };
 }
 
 /** Run the search flight while `searching` is true, and call it home after. */
@@ -58,9 +132,12 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
   const level = useCorvidLevel();
   const perchRef = useRef<HTMLSpanElement | null>(null);
   const departedPerchRef = useRef<Element | null>(null);
-  const areaRef = useRef<HTMLDivElement | null>(null);
+  const fieldRef = useRef<HTMLFormElement | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const [staged, setStaged] = useState(false);
   const [out, setOut] = useState(false);
+  /** Measured, and no room round the column: the bird stays home. */
+  const [grounded, setGrounded] = useState(false);
   const flies = level === "full";
 
   // The stage comes up only for a search that takes a moment.
@@ -72,6 +149,21 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
     const timer = setTimeout(() => setStaged(true), STAGE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [searching]);
+
+  // Is there room to hunt? Measured before the first paint of a search, so
+  // a window too small for a flight never shows the bird in the box first.
+  useLayoutEffect(() => {
+    if (!searching || !flies) {
+      setGrounded(false);
+      return;
+    }
+    const hunt = measureHunt(
+      perchRef.current,
+      fieldRef.current,
+      pageRef.current,
+    );
+    setGrounded(hunt !== null && !hunt.room);
+  }, [searching, flies]);
 
   // The overlay says when the bird leaves this perch and when it is back.
   useEffect(() => {
@@ -99,41 +191,44 @@ export function useCorvidSearchFlight(searching: boolean): CorvidSearchFlight {
     };
   }, []);
 
-  // Off to hunt, once the stage has stood a moment. The ground runs from
-  // the stage down to the bottom of the window, where the results will be.
-  // The flight keeps it inside the room: off the phone's tab bar, and in
-  // from the edges.
+  // Off to hunt, once the stage has stood a moment. The page and the
+  // column are measured again at takeoff: the coverage row under the box
+  // can arrive late and move things.
   useEffect(() => {
-    if (!searching || !staged || !flies) return;
+    if (!searching || !staged || !flies || grounded) return;
     const timer = setTimeout(() => {
-      const perch = perchRef.current;
-      const stage = areaRef.current?.getBoundingClientRect();
-      if (!perch || !stage || stage.width <= 0) return;
+      const hunt = measureHunt(
+        perchRef.current,
+        fieldRef.current,
+        pageRef.current,
+      );
+      if (!hunt) return;
+      if (!hunt.room) {
+        setGrounded(true);
+        return;
+      }
       flyCorvid({
         kind: "search",
-        perch,
-        area: {
-          left: stage.left,
-          top: stage.top,
-          right: stage.right,
-          bottom: Math.max(stage.bottom, window.innerHeight),
-        },
+        perch: hunt.perch,
+        area: hunt.area,
+        avoid: hunt.avoid,
       });
     }, TAKEOFF_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [searching, staged, flies]);
+  }, [searching, staged, flies, grounded]);
 
-  // The answer is here: home, by the short way.
+  // The answer is here: home, by the short way round the column.
   useEffect(() => {
     if (!searching && out) recallCorvid();
   }, [searching, out]);
 
   return {
     perchRef,
-    areaRef,
+    fieldRef,
+    pageRef,
     staged,
-    still: !flies,
-    perched: flies && (searching || out),
+    still: !flies || grounded,
+    perched: flies && !grounded && (searching || out),
   };
 }
 
@@ -145,29 +240,28 @@ interface SearchingStageProps {
 }
 
 /**
- * The ground the bird hunts over, and the words for what is happening. The
- * page's status region says the same, so the words here are not announced.
+ * The words for what is happening, where the answer will appear. The bird
+ * hunts round this, never over it. The page's status region says the same,
+ * so the words here are not announced.
  */
-export const SearchingStage = forwardRef<HTMLDivElement, SearchingStageProps>(
-  function SearchingStage({ still, aiAllowed = true }, ref) {
-    return (
-      <div
-        ref={ref}
-        data-testid="searching-stage"
-        className="fade-enter flex flex-col items-center justify-center gap-2 text-center min-h-60 sm:min-h-72 px-4"
-      >
-        {still && (
-          <CorvidThinking decorative size={64} className="mb-2 text-primary" />
-        )}
-        <p className="text-sm font-semibold text-on-surface">
-          Searching your network…
-        </p>
-        <p className="text-xs text-on-surface-variant">
-          {aiAllowed
-            ? "AI is checking who fits your question"
-            : "Finding people who fit your question"}
-        </p>
-      </div>
-    );
-  },
+export const SearchingStage = ({
+  still,
+  aiAllowed = true,
+}: SearchingStageProps) => (
+  <div
+    data-testid="searching-stage"
+    className="fade-enter flex flex-col items-center justify-center gap-2 text-center min-h-60 sm:min-h-72 px-4"
+  >
+    {still && (
+      <CorvidThinking decorative size={64} className="mb-2 text-primary" />
+    )}
+    <p className="text-sm font-semibold text-on-surface">
+      Searching your network…
+    </p>
+    <p className="text-xs text-on-surface-variant">
+      {aiAllowed
+        ? "AI is checking who fits your question"
+        : "Finding people who fit your question"}
+    </p>
+  </div>
 );

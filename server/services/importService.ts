@@ -41,6 +41,7 @@ import {
 } from "./dedupe/embeddings.ts";
 import { dedupeService } from "./dedupe/index.ts";
 import { getPreferences } from "./userPreferencesService.ts";
+import { scheduleStarterQuestions } from "./search/starterQuestions.ts";
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -465,6 +466,9 @@ export const importService = {
     options: { skipEmbedding?: boolean } = {},
   ): Promise<ImportRecord> {
     live.set(id, { ownerId: scope.ownerId });
+    // The contacts are committed: build the "Try asking" questions from
+    // them now, so Ask has them before the person gets there.
+    if (createdIds.length > 0) scheduleStarterQuestions(scope.ownerId);
     let error: string | null = null;
     try {
       // The JSON path starts the fingerprints before it answers, so it
@@ -551,6 +555,8 @@ export const importService = {
       scope.ownerId,
     );
     live.delete(id);
+    // Merges during the duplicate check change who is left.
+    if (counts.autoMerged > 0) scheduleStarterQuestions(scope.ownerId);
 
     const record = toRecord(read(scope, id)!);
     log.info(

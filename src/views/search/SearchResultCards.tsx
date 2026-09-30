@@ -23,6 +23,7 @@ import {
   isUnverified,
 } from "../../components/command-palette/utils";
 import { InfoTip } from "../../components/ui/InfoTip";
+import { MatchedFields } from "./MatchedFields";
 
 // =============================================================================
 // ResultCard
@@ -109,16 +110,22 @@ export const ResultCard = ({
           </div>
 
           {/*
-          AI reason: a model wrote this line, so it wears the AI colour.
-          Plain render, no nested motion element.
+          Why this person is here: each field that answers the question,
+          named, with the question's words marked (`MatchedFields`). A
+          server without that list sends the one-line reason instead, which
+          wears the AI colour.
         */}
-          {match.aiReason && (
-            <div className="flex items-start gap-1.5 mt-1">
-              <Sparkles className="w-3.5 h-3.5 text-ai shrink-0 mt-0.5" />
-              <span className="text-sm text-ai italic leading-snug">
-                {match.aiReason}
-              </span>
-            </div>
+          {match.matchedOn?.length ? (
+            <MatchedFields fields={match.matchedOn} />
+          ) : (
+            match.aiReason && (
+              <div className="flex items-start gap-1.5 mt-1">
+                <Sparkles className="w-3.5 h-3.5 text-ai shrink-0 mt-0.5" />
+                <span className="text-sm text-ai italic leading-snug">
+                  {match.aiReason}
+                </span>
+              </div>
+            )
           )}
 
           {/* Tags */}

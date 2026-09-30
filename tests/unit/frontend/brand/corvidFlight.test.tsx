@@ -14,7 +14,9 @@
  *    is the logo again.
  * 5. Escape, a route change and an unmount end it at once.
  * 6. A search flight hunts over the ground it is given until `recallCorvid`
- *    calls it home by the short way. A recall ends nothing else.
+ *    calls it home by the short way. Given a column to keep out of, it
+ *    hunts round the column and comes home round it too. A recall ends
+ *    nothing else.
  *
  * Fake timers drive `requestAnimationFrame` and `performance.now` together,
  * so a whole flight can be flown in a test.
@@ -493,7 +495,7 @@ describe("a search flight", () => {
       <CorvidMark size={20} alive />
     </span>
   );
-  /** The empty results under the search box, down to the window's bottom. */
+  /** A ground to hunt over, with no column to keep out of. */
   const GROUND = { left: 296, top: 330, right: 1144, bottom: 900 };
 
   const mountSearch = () => {
@@ -605,6 +607,46 @@ describe("a search flight", () => {
     // A way home would be over by now; the lap is not.
     advance(3_000);
     expect(overlay()).not.toBeNull();
+  });
+
+  it("hunts round a column it must keep out of, and comes home round it when recalled", () => {
+    const perch = mountSearch();
+    // The Ask page on a laptop: the page beside the nav rail, and the
+    // column from the search box's top down.
+    perch.getBoundingClientRect = () => box(432, 132, 20);
+    // One route, the same on every run: this one hunts on the right, so the
+    // way home has the whole column to go round.
+    const random = vi.spyOn(Math, "random").mockImplementation(createRng(3));
+    const PAGE = { left: 64, top: 0, right: 1440, bottom: 900 };
+    const COLUMN = { left: 408, top: 102, right: 1096, bottom: 900 };
+    act(() => {
+      flyCorvid({ kind: "search", perch, area: PAGE, avoid: COLUMN });
+    });
+    /** Out of the column by half a bird beside it, or nearly as much over it. */
+    const clear = () => {
+      const [x, y] = birdAt() as [number, number];
+      // Leaving the search box and landing in it cross the column's edge.
+      if (Math.hypot(x - 443, y - 143) < 110) return true;
+      return (
+        Math.max(COLUMN.left - x, x - COLUMN.right) >= 32 ||
+        COLUMN.top - y >= 25
+      );
+    };
+    advance(1_000);
+    for (let i = 0; i < 40; i++) {
+      advance(200);
+      expect(clear(), `hunting, step ${i}`).toBe(true);
+    }
+    recall();
+    let t = 0;
+    while (overlay() && t < 6_000) {
+      expect(clear(), `home, ${t} ms`).toBe(true);
+      advance(50);
+      t += 50;
+    }
+    expect(overlay()).toBeNull();
+    expect(birdIn(perch).style.visibility).toBe("");
+    random.mockRestore();
   });
 
   it("does nothing when recalled with no bird out", () => {

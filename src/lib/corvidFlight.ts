@@ -44,6 +44,7 @@ import {
   easeIn,
   easeInOut,
   easeOut,
+  pickWeighted,
   sign,
   type Rng,
 } from "./corvidMotion.ts";
@@ -66,7 +67,8 @@ export interface FlightViewport {
   height: number;
 }
 
-interface FlightBox {
+/** A rectangle in viewport px. */
+export interface FlightBox {
   left: number;
   top: number;
   right: number;
@@ -110,7 +112,8 @@ const clampTo = (box: FlightBox, [x, y]: Point): Point => [
  * celebration: a pass along the top, with a flourish. `sortie` is the bird
  * stretching its wings by itself: short, near the perch, and home. `search`
  * is the bird hunting for an answer: a long, calmer wander over the `area`
- * the page gives it, until it is called home.
+ * the page gives it, beside and above the column it must `avoid`, until it
+ * is called home.
  */
 export type FlightKind = "loop" | "swoop" | "sortie" | "search";
 
@@ -134,10 +137,20 @@ interface FlightRequest {
    */
   airborne?: { x: number; y: number; facing: 1 | -1; from?: FlightFrame };
   /**
-   * A `search` flight's hunting ground, in px: the empty space where the
-   * answer will appear. It is kept inside the room. Other kinds ignore it.
+   * A `search` flight's hunting ground, in px. It is kept inside the room.
+   * Without `avoid`, the bird hunts over all of it. With `avoid`, it is the
+   * page the bird may cross, and the bird hunts in the part of it that
+   * `avoid` leaves free. Other kinds ignore it.
    */
   area?: FlightBox;
+  /**
+   * The column the bird must keep out of, in px: the search box and the
+   * results under it, down to the bottom of the page. A `search` flight
+   * hunts beside it and above it, never over it, and so does the way home
+   * from one. Only the takeoff from the search box and the landing back in
+   * it cross its edge.
+   */
+  avoid?: FlightBox;
 }
 
 /** One moment of a flight. */
@@ -202,7 +215,12 @@ const SHRINK_LEAD = 320;
 // ---------------------------------------------------------------------------
 
 /** The waypoints of one flight, the perch first and last when it lands. */
-function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
+function waypoints(
+  req: FlightRequest,
+  start: Point,
+  box: FlightBox,
+  ground: SearchGround | null,
+): Point[] {
   const { rng, kind, viewport } = req;
   const width = box.right - box.left;
   const height = box.bottom - box.top;
@@ -222,6 +240,9 @@ function waypoints(req: FlightRequest, start: Point, box: FlightBox): Point[] {
       [box.right + off * 1.5, box.top + height * (y - 0.04)],
     ];
   }
+
+  // A search with a column to keep out of has a route of its own.
+  if (kind === "search" && ground) return searchRoute(req, ground, start);
 
   // Off the perch: up and away into the room, then the route, then an
   // approach from the ring's open side, so the bird comes in flying toward
@@ -306,6 +327,11 @@ export const SEARCH_HUNT_MS = 26_000;
 /** A hunting bird's speed, against a lap's: slower, looking about. */
 const SEARCH_PACE = 0.62;
 /**
+ * A bird called home round the column, against a lap's: faster. The way
+ * round is longer than the way across, and the answer is already on screen.
+ */
+const HOMEWARD_PACE = 1.3;
+/**
  * The most a hunting bird turns from one waypoint to the next, in degrees.
  * With waypoints {@link huntingRoute} spaces 40 to 75 px apart, its
  * tightest circle is about one and a half spacings across.
@@ -317,23 +343,304 @@ const HUNT_TURN = 40;
  * seeds on a laptop, a small window and a phone.
  */
 const HUNT_SLOWING = 0.42;
+/** The most waypoints one hunt draws, however small its steps. */
+const HUNT_POINTS = 900;
+
+/** How a hunting bird steps and turns over one piece of ground. */
+interface HuntStride {
+  /** Px from one waypoint to the next. */
+  spacing: number;
+  /** The most it turns from one waypoint to the next, in radians. */
+  maxTurn: number;
+  /** The circle its tightest turns draw, as a radius in px. */
+  radius: number;
+  /** How far in from the ground's edges its body's middle keeps, in px. */
+  edge: number;
+}
+
+/** A hunting bird, part way along its route. */
+interface Hunter {
+  at: Point;
+  heading: number;
+  turn: number;
+  points: Point[];
+  /**
+   * How much of the hunt the route has used: px, or ms when `pace` is set.
+   */
+  flown: number;
+  /**
+   * The bird's straight-line speed, in px per ms. When set, each step
+   * counts the time `timeRoute` will give it, slowed through its turn, so a
+   * hunt of tight turns in a thin band lasts as long as a wide one.
+   */
+  pace?: number;
+}
+
+/** Count one step against the hunt. */
+function spend(
+  hunter: Hunter,
+  step: number,
+  turn: number,
+  scale = HUNT_TIME_SCALE,
+): void {
+  if (!hunter.pace) {
+    hunter.flown += step;
+    return;
+  }
+  // `timeRoute` slows the bird through a curve, the same way.
+  const bend = step > 0 ? Math.abs(turn) / step : 0;
+  hunter.flown +=
+    (scale * step) / (hunter.pace * Math.max(0.45, 1 - bend * 60));
+}
 
 /**
- * A search flight's middle: a wander over the area the page gives it.
+ * The time `timeRoute` gives a hunt, against the time its steps alone say:
+ * the spline bends between the steps as well, and the bird slows on each
+ * climb. Measured over forty seeds on a laptop, a small window, a tablet
+ * and a phone: the same within a few percent on all four.
+ */
+const HUNT_TIME_SCALE = 1.4;
+
+const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+/** The stride for a ground: the usual one, or tighter where it is narrow. */
+function strideFor(ground: FlightBox): HuntStride {
+  const width = ground.right - ground.left;
+  const height = ground.bottom - ground.top;
+  const narrow = Math.min(width, height);
+  const maxTurn = (HUNT_TURN * Math.PI) / 180;
+  const chord = 2 * Math.sin(maxTurn / 2);
+  const reach = Math.min(Math.hypot(width, height), 2 * narrow);
+  let spacing = Math.min(Math.max(reach * 0.07, 40), 75);
+  let radius = spacing / chord;
+  const edge = Math.min(20, narrow / 8);
+  // A ground too narrow to turn round in at the usual stride gets tighter
+  // turns, never a wider ground: the space round a search is all there is.
+  const fits = (narrow - 2 * edge) / 2.4;
+  if (radius > fits) {
+    radius = Math.max(fits, HUNT_MIN_RADIUS);
+    spacing = radius * chord;
+  }
+  return { spacing, maxTurn, radius, edge };
+}
+
+/**
+ * Wander over a ground until the route has used `until` of the hunt's
+ * length, the way a bird hunts:
+ *
+ * 1. Its turn drifts from step to step, so it curves one way for a while,
+ *    then the other, and now and then closes a circle.
+ * 2. When the ground's edge is close ahead, it turns for the middle as hard
+ *    as it may, and so never meets the edge.
+ *
+ * No step turns more than the stride allows, well under `relax`'s limit,
+ * so `relax` leaves the route alone and the spline never cusps. Small
+ * steps drift less per step, so a tight stride curves no more per px than
+ * the usual one.
+ */
+function wander(
+  hunter: Hunter,
+  ground: FlightBox,
+  stride: HuntStride,
+  until: number,
+  rng: Rng,
+  lengthwise = false,
+): void {
+  const { spacing, maxTurn, radius } = stride;
+  const width = ground.right - ground.left;
+  const height = ground.bottom - ground.top;
+  const edge = Math.min(stride.edge, width / 4, height / 4);
+  // Where the bird turns for when the edge is close: the ground's middle,
+  // or, `lengthwise`, the nearest point of its long middle line. A bird in
+  // a thin band that turned for the band's one middle point would circle
+  // it for ever. Turning for the line, it flies the band's length.
+  const half = lengthwise ? Math.min(width, height) / 2 : Infinity;
+  const middleOf = ([x, y]: Point): Point => [
+    Math.min(
+      Math.max(x, ground.left + Math.min(half, width / 2)),
+      ground.right - Math.min(half, width / 2),
+    ),
+    Math.min(
+      Math.max(y, ground.top + Math.min(half, height / 2)),
+      ground.bottom - Math.min(half, height / 2),
+    ),
+  ];
+  const onGround = ([x, y]: Point) =>
+    x >= ground.left + edge &&
+    x <= ground.right - edge &&
+    y >= ground.top + edge &&
+    y <= ground.bottom - edge;
+  const toGround = ([x, y]: Point): Point => [
+    Math.min(Math.max(x, ground.left + edge), ground.right - edge),
+    Math.min(Math.max(y, ground.top + edge), ground.bottom - edge),
+  ];
+  // How far ahead the bird looks for the edge: room for a half circle.
+  const ahead = 1.4 * radius + spacing;
+  const drift = Math.min(1, spacing / 40);
+  while (hunter.flown < until && hunter.points.length < HUNT_POINTS) {
+    const look: Point = [
+      hunter.at[0] + Math.cos(hunter.heading) * ahead,
+      hunter.at[1] + Math.sin(hunter.heading) * ahead,
+    ];
+    if (onGround(look)) {
+      hunter.turn = Math.min(
+        Math.max(
+          hunter.turn * 0.7 + between(rng, -0.6, 0.6) * maxTurn * drift,
+          -maxTurn,
+        ),
+        maxTurn,
+      );
+    } else {
+      const middle = middleOf(hunter.at);
+      const toMiddle = wrap(
+        Math.atan2(middle[1] - hunter.at[1], middle[0] - hunter.at[0]) -
+          hunter.heading,
+      );
+      hunter.turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
+    }
+    hunter.heading = wrap(hunter.heading + hunter.turn);
+    hunter.at = toGround([
+      hunter.at[0] + Math.cos(hunter.heading) * spacing,
+      hunter.at[1] + Math.sin(hunter.heading) * spacing,
+    ]);
+    hunter.points.push(hunter.at);
+    spend(hunter, spacing, hunter.turn);
+  }
+}
+
+/**
+ * Fly on to a point, turning toward it no harder than the stride allows,
+ * and land on it exactly once it is ahead and within a step. `free` keeps
+ * each step in the space the bird may cross.
+ */
+function flyTo(
+  hunter: Hunter,
+  target: Point,
+  stride: HuntStride,
+  free: (point: Point) => Point,
+): void {
+  const { spacing, maxTurn } = stride;
+  const start = Math.hypot(target[0] - hunter.at[0], target[1] - hunter.at[1]);
+  // A target inside the tightest circle can be circled for ever. Give up
+  // after the steps a long way round would take, and go straight on.
+  let steps = Math.ceil((start + 4 * stride.radius) / spacing) + 12;
+  while (steps-- > 0 && hunter.points.length < HUNT_POINTS) {
+    const dx = target[0] - hunter.at[0];
+    const dy = target[1] - hunter.at[1];
+    const distance = Math.hypot(dx, dy);
+    if (distance < 0.5) break;
+    const want = wrap(Math.atan2(dy, dx) - hunter.heading);
+    hunter.turn = Math.min(Math.max(want, -maxTurn), maxTurn);
+    hunter.heading = wrap(hunter.heading + hunter.turn);
+    const reaches = Math.abs(want) <= maxTurn && distance <= spacing;
+    const step = reaches ? distance : spacing;
+    hunter.at = reaches
+      ? target
+      : free([
+          hunter.at[0] + Math.cos(hunter.heading) * step,
+          hunter.at[1] + Math.sin(hunter.heading) * step,
+        ]);
+    hunter.points.push(hunter.at);
+    spend(hunter, step, hunter.turn);
+    if (reaches) break;
+  }
+}
+
+/**
+ * Patrol a band too thin to circle in smoothly, such as the band over the
+ * search box on a tablet: about 40 px tall. Circling there needs steps of
+ * a few px and a turn that flips nearly every step, which draws a jittery
+ * sawtooth, not a bird. A patrol instead:
+ *
+ * 1. Flies along the band in long steps, 50 to 90 px, each to a random
+ *    height inside it, and never climbing or falling more than a gentle
+ *    slope, so the bird rises and falls as it goes.
+ * 2. Turns round at each end in a narrow hairpin: out a little past its
+ *    last step, and back at the other half of the band's height. `relax`
+ *    and the spline round the hairpin off, and the rig turns the bird round.
+ * 3. Now and then turns round before the end, so no two patrols match.
+ * 4. At the end of the hunt, turns round once more if it is flying away
+ *    from `homeX`, so the way home is ahead of it.
+ *
+ * The band is horizontal: only the band over the column is ever this thin
+ * and hunted in.
+ */
+function patrol(
+  hunter: Hunter,
+  band: FlightBox,
+  until: number,
+  rng: Rng,
+  homeX: number,
+): void {
+  const height = band.bottom - band.top;
+  const inset = Math.min(Math.max(height * 0.2, 4), 18);
+  const low = band.top + inset;
+  const high = band.bottom - inset;
+  const middle = (band.top + band.bottom) / 2;
+  const endInset = Math.min(24, (band.right - band.left) / 6);
+  const west = band.left + endInset;
+  const east = band.right - endInset;
+  let dir: 1 | -1 = east - hunter.at[0] >= hunter.at[0] - west ? 1 : -1;
+  let sinceTurn = 0;
+
+  const go = (point: Point) => {
+    const [dx, dy] = [point[0] - hunter.at[0], point[1] - hunter.at[1]];
+    const step = Math.hypot(dx, dy);
+    if (step < 1) return;
+    const heading = Math.atan2(dy, dx);
+    hunter.turn = hunter.points.length ? wrap(heading - hunter.heading) : 0;
+    hunter.heading = heading;
+    hunter.at = point;
+    hunter.points.push(point);
+    spend(hunter, step, hunter.turn, PATROL_TIME_SCALE);
+  };
+  /** A height for a step this long: random, and at a gentle slope. */
+  const heightFor = (step: number) =>
+    Math.min(
+      Math.max(between(rng, low, high), hunter.at[1] - PATROL_SLOPE * step),
+      hunter.at[1] + PATROL_SLOPE * step,
+    );
+  const hairpin = () => {
+    const [x, y] = hunter.at;
+    const back =
+      y < middle ? between(rng, middle, high) : between(rng, low, middle);
+    const tipX = x + dir * between(rng, 8, 16);
+    go([Math.min(Math.max(tipX, band.left), band.right), (y + back) / 2]);
+    go([x - dir * between(rng, 30, 50), back]);
+    dir = dir === 1 ? -1 : 1;
+    sinceTurn = 0;
+  };
+
+  while (hunter.flown < until && hunter.points.length < HUNT_POINTS) {
+    const step = between(rng, 50, 90);
+    const x = hunter.at[0] + dir * step;
+    const early = sinceTurn >= 2 && chance(rng, PATROL_EARLY_TURN);
+    const pastEnd = dir > 0 ? x >= east : x <= west;
+    if (early || pastEnd) {
+      if (pastEnd) {
+        const end = dir > 0 ? east : west;
+        go([end, heightFor(Math.abs(end - hunter.at[0]))]);
+      }
+      hairpin();
+      continue;
+    }
+    go([x, heightFor(step)]);
+    sinceTurn += 1;
+  }
+  if (dir * (homeX - hunter.at[0]) < 0 && Math.abs(homeX - hunter.at[0]) > 40)
+    hairpin();
+}
+
+/**
+ * A search flight's middle, with no column to keep out of: a wander over
+ * the area the page gives it.
  *
  * 1. The ground is the area, kept inside the room, and grown to room for a
  *    full turn when it is smaller than that.
- * 2. The bird enters it at a random spot, then flies on in short steps. Its
- *    turn drifts from step to step, so it curves one way for a while, then
- *    the other, and now and then closes a circle, the way a bird hunts.
- * 3. When the ground's edge is close ahead, it turns for the middle as hard
- *    as it may, and so never meets the edge.
- * 4. It stops once the route is about {@link SEARCH_HUNT_MS} long at the
+ * 2. The bird enters it at a random spot, then wanders (`wander`).
+ * 3. It stops once the route is about {@link SEARCH_HUNT_MS} long at the
  *    hunting speed. An answer calls it home long before that.
- * 5. It comes round for home by the same turns, never on the spot.
- *
- * No step turns more than {@link HUNT_TURN}, well under `relax`'s limit, so
- * `relax` leaves the route alone and the spline never cusps.
+ * 4. It comes round for home by the same turns, never on the spot.
  */
 function huntingRoute(
   req: FlightRequest,
@@ -369,79 +676,469 @@ function huntingRoute(
     top = Math.max(box.top, mid - room / 2);
     bottom = Math.min(box.bottom, mid + room / 2);
   }
+  const ground = { left, top, right, bottom };
   const width = right - left;
   const height = bottom - top;
   const middle: Point = [left + width / 2, top + height / 2];
-  const edge = Math.min(inset, width / 4, height / 4);
-  const onGround = ([x, y]: Point) =>
-    x >= left + edge &&
-    x <= right - edge &&
-    y >= top + edge &&
-    y <= bottom - edge;
-  const toGround = ([x, y]: Point): Point => [
-    Math.min(Math.max(x, left + edge), right - edge),
-    Math.min(Math.max(y, top + edge), bottom - edge),
-  ];
-  const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+  const stride: HuntStride = { spacing, maxTurn, radius, edge: inset };
 
-  // The route's length: the hunt's time at a hunting bird's usual speed.
-  const speed =
-    (690 *
-      SEARCH_PACE *
-      HUNT_SLOWING *
-      Math.min(Math.max(viewport.width / 1440, 0.72), 1.1)) /
-    1000;
-  const length = SEARCH_HUNT_MS * speed;
-  // How far ahead the bird looks for the edge: room for a half circle.
-  const ahead = 1.4 * radius + spacing;
-
-  let at: Point = [
+  const at: Point = [
     left + width * between(rng, 0.25, 0.75),
     top + height * between(rng, 0.25, 0.75),
   ];
-  let heading = Math.atan2(at[1] - start[1], at[0] - start[0]);
-  let turn = 0;
-  const points: Point[] = [at];
-  let flown = 0;
-  const stepTo = (): void => {
-    heading = wrap(heading + turn);
-    at = toGround([
-      at[0] + Math.cos(heading) * spacing,
-      at[1] + Math.sin(heading) * spacing,
-    ]);
-    points.push(at);
+  const hunter: Hunter = {
+    at,
+    heading: Math.atan2(at[1] - start[1], at[0] - start[0]),
+    turn: 0,
+    points: [at],
+    flown: 0,
   };
-  while (flown < length && points.length < 600) {
-    const look: Point = [
-      at[0] + Math.cos(heading) * ahead,
-      at[1] + Math.sin(heading) * ahead,
-    ];
-    if (onGround(look)) {
-      turn = Math.min(
-        Math.max(turn * 0.7 + between(rng, -0.6, 0.6) * maxTurn, -maxTurn),
-        maxTurn,
-      );
-    } else {
-      const toMiddle = wrap(
-        Math.atan2(middle[1] - at[1], middle[0] - at[0]) - heading,
-      );
-      turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
-    }
-    stepTo();
-    flown += spacing;
-  }
+  wander(hunter, ground, stride, huntLength(viewport), rng);
   // Round for home, a step at a time, on the side the middle is: a bird
   // by the edge that turned the other way would be pressed against it.
   const toMiddle = wrap(
-    Math.atan2(middle[1] - at[1], middle[0] - at[0]) - heading,
+    Math.atan2(middle[1] - hunter.at[1], middle[0] - hunter.at[0]) -
+      hunter.heading,
   );
-  turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
+  const turn = (toMiddle < 0 ? -1 : 1) * maxTurn;
+  const edge = Math.min(inset, width / 4, height / 4);
   for (let i = 0; i < 9; i++) {
-    const home = wrap(Math.atan2(end[1] - at[1], end[0] - at[0]) - heading);
+    const home = wrap(
+      Math.atan2(end[1] - hunter.at[1], end[0] - hunter.at[0]) - hunter.heading,
+    );
     if (Math.abs(home) <= maxTurn) break;
-    stepTo();
+    hunter.heading = wrap(hunter.heading + turn);
+    hunter.at = [
+      Math.min(
+        Math.max(
+          hunter.at[0] + Math.cos(hunter.heading) * spacing,
+          left + edge,
+        ),
+        right - edge,
+      ),
+      Math.min(
+        Math.max(hunter.at[1] + Math.sin(hunter.heading) * spacing, top + edge),
+        bottom - edge,
+      ),
+    ];
+    hunter.points.push(hunter.at);
   }
-  return points;
+  return hunter.points;
+}
+
+/** How much faster a wide window's bird flies, and a narrow one's slower. */
+const widthPace = (viewport: FlightViewport) =>
+  Math.min(Math.max(viewport.width / 1440, 0.72), 1.1);
+
+/** The route's length: the hunt's time at a hunting bird's usual speed. */
+function huntLength(viewport: FlightViewport): number {
+  const speed = (690 * SEARCH_PACE * HUNT_SLOWING * widthPace(viewport)) / 1000;
+  return SEARCH_HUNT_MS * speed;
+}
+
+// ---------------------------------------------------------------------------
+// The ground round a search
+// ---------------------------------------------------------------------------
+
+/**
+ * How far the body's middle keeps from the column's sides, and from its
+ * top, against the flying size. A wing at the top of its stroke reaches
+ * about 0.72 of the size above the body's middle, 0.63 to either side and
+ * 0.44 below it, so the body and the most of each stroke stay clear.
+ */
+const SIDE_CLEARANCE = 0.6;
+const TOP_CLEARANCE = 0.45;
+/** A little air between the bird and the column, in px. */
+const CLEARANCE_GAP = 4;
+/** The tightest circle a hunting bird turns, as a radius in px. */
+const HUNT_MIN_RADIUS = 12;
+/** The steepest a patrolling bird climbs or falls, as rise over run. */
+const PATROL_SLOPE = 0.4;
+/** How often a patrolling bird turns round before the band's end, per step. */
+const PATROL_EARLY_TURN = 0.1;
+/**
+ * The time `timeRoute` gives a patrol, against the time its steps alone
+ * say. A patrol's long steps bend less between them than a wander's.
+ */
+const PATROL_TIME_SCALE = 1.1;
+/** A zone at least this deep both ways is hunted in when it can be reached. */
+const ROOMY_ZONE = 110;
+/** A top band this tall is hunted in when there is nowhere roomier. */
+const BAND_ZONE = 36;
+/** The thinnest zone a bird passes through, in px. */
+const CORRIDOR = 20;
+/** Without a band over the column, a side zone is reached straight from the perch within this many px. */
+const SIDE_REACH = 100;
+/** Points of a route this close to the perch are the takeoff or the landing. */
+const PERCH_REACH = 110;
+
+/** One piece of the space round the column. */
+interface HuntZone {
+  side: "left" | "right" | "top";
+  /** Where the body's middle may be, in px. */
+  rect: FlightBox;
+  /** The bird hunts here. Otherwise it only passes through. */
+  hunts: boolean;
+}
+
+/** The space round the Ask page's column, for a search flight. */
+export interface SearchGround {
+  /** Every place the body's middle may be, in px. */
+  bounds: FlightBox;
+  /** The column grown by the bird's clearance. No body's middle goes in. */
+  keepOut: FlightBox;
+  /** Left of the column, right of it, and the band over it. */
+  zones: HuntZone[];
+}
+
+const areaOf = (box: FlightBox) =>
+  Math.max(0, box.right - box.left) * Math.max(0, box.bottom - box.top);
+
+/**
+ * The space a search flight may hunt in: the page, less the column and the
+ * bird's clearance round it, as up to three zones.
+ *
+ * 1. Left and right of the column, the full height of the page. A zone at
+ *    least {@link ROOMY_ZONE} px deep both ways is hunted in.
+ * 2. The band over the column, where the page's title is. It joins the two
+ *    sides, so the bird crosses from one to the other over the top. It is
+ *    hunted in only when neither side is roomy, as on a phone.
+ * 3. With no band, the bird can only reach a side zone straight from the
+ *    perch, so only one close to it is hunted in.
+ *
+ * The page's own edges keep the bird off the nav rail, and the room's keep
+ * it off the phone's tab bar. When no zone is hunted in, the bird stays
+ * home: `canHunt`.
+ */
+export function searchGround(
+  viewport: FlightViewport,
+  area: FlightBox,
+  avoid: FlightBox,
+  perch?: FlightPerch | null,
+): SearchGround {
+  const size = flightSize(viewport);
+  const room = flightBox(viewport);
+  const inset = size / 2;
+  const [left, right] = span(
+    Math.max(room.left, area.left + inset),
+    Math.min(room.right, area.right - inset),
+  );
+  const [top, bottom] = span(
+    Math.max(FLIGHT_EDGE, area.top + FLIGHT_EDGE),
+    Math.min(room.bottom, area.bottom - FLIGHT_EDGE),
+  );
+  const bounds = { left, top, right, bottom };
+  const sideGap = size * SIDE_CLEARANCE + CLEARANCE_GAP;
+  const topGap = size * TOP_CLEARANCE + CLEARANCE_GAP;
+  const keepOut = {
+    left: avoid.left - sideGap,
+    top: avoid.top - topGap,
+    right: avoid.right + sideGap,
+    bottom: avoid.bottom + topGap,
+  };
+  const candidates: [HuntZone["side"], FlightBox][] = [
+    ["left", { left, top, right: Math.min(keepOut.left, right), bottom }],
+    ["right", { left: Math.max(keepOut.right, left), top, right, bottom }],
+    ["top", { left, top, right, bottom: Math.min(keepOut.top, bottom) }],
+  ];
+  const zones: HuntZone[] = candidates
+    .filter(
+      ([, rect]) =>
+        rect.right - rect.left >= CORRIDOR &&
+        rect.bottom - rect.top >= CORRIDOR,
+    )
+    .map(([side, rect]) => ({ side, rect, hunts: false }));
+  const band = zones.find((zone) => zone.side === "top");
+  const centre = perch ? perchPoint(perch) : null;
+  const reachable = (zone: HuntZone) =>
+    !!band ||
+    !centre ||
+    (zone.side === "left"
+      ? centre[0] - zone.rect.right <= SIDE_REACH
+      : zone.rect.left - centre[0] <= SIDE_REACH);
+  for (const zone of zones) {
+    const { rect } = zone;
+    zone.hunts =
+      zone.side !== "top" &&
+      Math.min(rect.right - rect.left, rect.bottom - rect.top) >= ROOMY_ZONE &&
+      reachable(zone);
+  }
+  if (band && !zones.some((zone) => zone.hunts)) {
+    const height = band.rect.bottom - band.rect.top;
+    band.hunts =
+      height >= BAND_ZONE && band.rect.right - band.rect.left >= 3 * height;
+  }
+  return { bounds, keepOut, zones };
+}
+
+/** A zone too thin to circle in smoothly: the bird patrols it instead. */
+const patrols = (zone: HuntZone) =>
+  Math.min(zone.rect.right - zone.rect.left, zone.rect.bottom - zone.rect.top) <
+  ROOMY_ZONE;
+
+/** Whether a search flight has anywhere to hunt, or the bird stays home. */
+export function canHunt(ground: SearchGround): boolean {
+  return ground.zones.some((zone) => zone.hunts);
+}
+
+/** The middle of a perch's bird, where its flights start and end. */
+function perchPoint(perch: FlightPerch): Point {
+  const home = bodyCentre(HOME_POSE);
+  return [
+    perch.left + (home[0] / 100) * perch.size,
+    perch.top + (home[1] / 100) * perch.size,
+  ];
+}
+
+/** Whether a point is inside the column, clearance and all. */
+const inKeepOut = (ground: SearchGround, [x, y]: Point) =>
+  x > ground.keepOut.left &&
+  x < ground.keepOut.right &&
+  y > ground.keepOut.top &&
+  y < ground.keepOut.bottom;
+
+/**
+ * The nearest point the body's middle may be: inside the bounds, and out of
+ * the column by its nearest open side.
+ */
+function freePoint(ground: SearchGround, point: Point): Point {
+  const { bounds, keepOut } = ground;
+  const p = clampTo(bounds, point);
+  if (!inKeepOut(ground, p)) return p;
+  const ways: Point[] = [];
+  if (keepOut.left > bounds.left) ways.push([keepOut.left, p[1]]);
+  if (keepOut.right < bounds.right) ways.push([keepOut.right, p[1]]);
+  if (keepOut.top > bounds.top) ways.push([p[0], keepOut.top]);
+  if (keepOut.bottom < bounds.bottom) ways.push([p[0], keepOut.bottom]);
+  let best = p;
+  let bestDistance = Infinity;
+  for (const way of ways) {
+    const distance = Math.hypot(way[0] - p[0], way[1] - p[1]);
+    if (distance < bestDistance) {
+      best = way;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** The band's middle height, or null when there is no band. */
+function bandHeight(ground: SearchGround): number | null {
+  const band = ground.zones.find((zone) => zone.side === "top");
+  return band ? (band.rect.top + band.rect.bottom) / 2 : null;
+}
+
+/**
+ * Where a side zone meets the band: in the band's middle, a tight turn's
+ * width out from the column, so the bird rounds the column's corner in the
+ * band and never across the column.
+ */
+function corner(ground: SearchGround, zone: HuntZone): Point {
+  const band = ground.zones.find((z) => z.side === "top");
+  const y = bandHeight(ground) ?? (zone.rect.top + zone.rect.bottom) / 2;
+  const offset = (band ? strideFor(band.rect).radius : 0) + 6;
+  const x =
+    zone.side === "left"
+      ? Math.max(zone.rect.left, zone.rect.right - offset)
+      : Math.min(zone.rect.right, zone.rect.left + offset);
+  return [x, y];
+}
+
+/** The way from one zone into another: through the band's corners. */
+function crossing(ground: SearchGround, from: HuntZone, to: HuntZone): Point[] {
+  const way: Point[] = [];
+  if (from.side !== "top") way.push(corner(ground, from));
+  if (to.side !== "top") way.push(corner(ground, to));
+  return way;
+}
+
+/** A random spot inside a zone, a stride's edge in from its sides. */
+function spotIn(rng: Rng, zone: HuntZone): Point {
+  const { rect } = zone;
+  const { edge } = strideFor(rect);
+  return [
+    between(rng, rect.left + edge, rect.right - edge),
+    between(rng, rect.top + edge, rect.bottom - edge),
+  ];
+}
+
+/**
+ * A search flight's whole route when the page has a column to keep out of.
+ *
+ * 1. Up out of the search box into the band over it, toward the side the
+ *    first zone is on. Never down, where the results will be.
+ * 2. The first zone is drawn at random, in proportion to its area. The
+ *    bird flies in and wanders there (`wander`) for a random part of the
+ *    hunt.
+ * 3. Then it may cross to another zone, over the top of the column through
+ *    the band's corners, and wander there. It may also stay. The draw is
+ *    fresh each time, so no two hunts visit the zones in the same order.
+ * 4. Once the route is about {@link SEARCH_HUNT_MS} long, it comes home: up
+ *    its side to the band, along the band to a spot over the perch, and
+ *    down into the search box.
+ *
+ * With no band, the bird flies straight out sideways to the one zone the
+ * perch can reach, and back the same way. With nowhere to hunt, it hops up
+ * and back: the page's hook does not ask for a flight like that.
+ */
+function searchRoute(
+  req: FlightRequest,
+  ground: SearchGround,
+  start: Point,
+): Point[] {
+  const { rng, viewport } = req;
+  const free = (point: Point) => freePoint(ground, point);
+  const hunting = ground.zones.filter((zone) => zone.hunts);
+  const bandY = bandHeight(ground);
+  if (!hunting.length) {
+    const hop: Point = [start[0], bandY ?? start[1] - 60];
+    return relax([start, hop, start]);
+  }
+
+  const pick = (current: HuntZone | null): HuntZone =>
+    pickWeighted(
+      rng,
+      hunting.map(
+        (zone) =>
+          [zone, areaOf(zone.rect) * (zone === current ? 0.6 : 1)] as const,
+      ),
+    );
+  let zone = pick(null);
+  const band = ground.zones.find((z) => z.side === "top") ?? null;
+  const bandStride = band ? strideFor(band.rect) : null;
+  const sideOf = (z: HuntZone, at: Point): 1 | -1 =>
+    z.side === "left"
+      ? -1
+      : z.side === "right"
+        ? 1
+        : (z.rect.left + z.rect.right) / 2 >= at[0]
+          ? 1
+          : -1;
+  const { left: roomLeft, right: roomRight } = ground.bounds;
+  const clampX = (x: number) => Math.min(Math.max(x, roomLeft), roomRight);
+
+  // 1. Off the perch: up into the band, or straight out to the side.
+  const side = sideOf(zone, start);
+  const launch: Point =
+    bandY !== null
+      ? [clampX(start[0] + side * between(rng, 30, 60)), bandY]
+      : sideExit(ground, side, start);
+  // The hunt is timed rather than measured: the bird's pace, slowed
+  // through each turn as `timeRoute` will slow it, over its steps.
+  const hunter: Hunter = {
+    at: launch,
+    heading: Math.atan2(launch[1] - start[1], launch[0] - start[0]),
+    turn: 0,
+    points: [],
+    flown: 0,
+    pace: (690 * SEARCH_PACE * widthPace(viewport)) / 1000,
+  };
+  const length = SEARCH_HUNT_MS;
+  const tight = (z: HuntZone) => bandStride ?? strideFor(z.rect);
+
+  // A band too thin to circle in is patrolled. It is only ever hunted in
+  // when neither side is, so it is the whole hunt.
+  if (patrols(zone)) {
+    patrol(hunter, zone.rect, length, rng, start[0]);
+    const home = homeApproach(rng, ground, hunter.at, start);
+    return relax([start, launch, ...hunter.points, home, start]);
+  }
+
+  // 2. Into the first zone, round the column's corner if it is a side.
+  if (zone.side !== "top" && bandY !== null)
+    flyTo(hunter, corner(ground, zone), tight(zone), free);
+  flyTo(hunter, spotIn(rng, zone), strideFor(zone.rect), free);
+
+  // 3. Hunt, and now and then cross to another zone.
+  while (hunter.flown < length && hunter.points.length < HUNT_POINTS) {
+    const dwell = length * between(rng, 0.3, 0.6);
+    wander(
+      hunter,
+      zone.rect,
+      strideFor(zone.rect),
+      hunter.flown + dwell,
+      rng,
+      true,
+    );
+    if (hunter.flown >= length || bandY === null) continue;
+    const next = pick(zone);
+    if (next === zone) continue;
+    const way = crossing(ground, zone, next);
+    way.forEach((point, i) =>
+      flyTo(hunter, point, i === 0 ? strideFor(zone.rect) : tight(next), free),
+    );
+    flyTo(hunter, spotIn(rng, next), strideFor(next.rect), free);
+    zone = next;
+  }
+
+  // 4. Home: up to the band, along it, and down onto the perch. With no
+  // band, back out of the side the way it went.
+  const home = homeApproach(rng, ground, hunter.at, start);
+  if (zone.side !== "top" && bandY !== null)
+    flyTo(hunter, corner(ground, zone), strideFor(zone.rect), free);
+  flyTo(hunter, home, bandStride ?? strideFor(zone.rect), free);
+  const last = hunter.points[hunter.points.length - 1];
+  const route = [start, launch, ...hunter.points];
+  if (!last || Math.hypot(last[0] - home[0], last[1] - home[1]) > 1)
+    route.push(home);
+  route.push(start);
+  return relax(route);
+}
+
+/** Just out of the column's side, level with the perch. */
+function sideExit(ground: SearchGround, side: 1 | -1, perch: Point): Point {
+  return freePoint(ground, [
+    side < 0 ? ground.keepOut.left : ground.keepOut.right,
+    perch[1],
+  ]);
+}
+
+/**
+ * The spot a search flight lands from, on the side the bird comes from: in
+ * the band over the perch, or with no band, just out of the column's side,
+ * level with the perch.
+ */
+function homeApproach(
+  rng: Rng,
+  ground: SearchGround,
+  from: Point,
+  perch: Point,
+): Point {
+  const side = from[0] < perch[0] ? -1 : 1;
+  const bandY = bandHeight(ground);
+  if (bandY === null) return sideExit(ground, side, perch);
+  const x = perch[0] + side * between(rng, 40, 70);
+  return [
+    Math.min(Math.max(x, ground.bounds.left), ground.bounds.right),
+    bandY,
+  ];
+}
+
+/**
+ * The way home from a search flight, when it is asked home early: up its
+ * side of the column to the band, along the band to a spot over the perch,
+ * and down. Never across the column, where the answer has just appeared.
+ */
+function searchHomeWaypoints(
+  req: FlightRequest,
+  ground: SearchGround,
+  from: Point,
+  perch: Point,
+): Point[] {
+  const start = freePoint(ground, from);
+  const home = homeApproach(req.rng, ground, start, perch);
+  const way: Point[] = [from];
+  // Beside the column and below the band: up its side to the band first.
+  const zone = ground.zones.find(
+    (z) =>
+      z.side !== "top" &&
+      start[0] >= z.rect.left &&
+      start[0] <= z.rect.right &&
+      start[1] > ground.keepOut.top,
+  );
+  if (zone && bandHeight(ground) !== null) way.push(corner(ground, zone));
+  way.push(home, perch);
+  return relax(way);
 }
 
 /** The sharpest turn a flight takes at a waypoint, in degrees. */
@@ -833,34 +1530,41 @@ const notFlat = (v: number) =>
 /** Plan one flight. */
 export function planFlight(req: FlightRequest): FlightPlan {
   const { rng, viewport, perch } = req;
-  const box = flightBox(viewport);
+  // A search with a column to keep out of flies round that column, and so
+  // does the way home from one. Its room is the page round the column.
+  const ground =
+    req.area && req.avoid && perch && (req.kind === "search" || req.airborne)
+      ? searchGround(viewport, req.area, req.avoid, perch)
+      : null;
+  const box = ground?.bounds ?? flightBox(viewport);
   const size = flightSize(viewport);
   const lands = perch !== null;
   const airborne = req.airborne ?? null;
 
   // The perch's bird sits in the logo pose, so its body's middle is the
   // logo's, at the perch's scale.
-  const home = bodyCentre(HOME_POSE);
-  const perchCentre: Point | null = perch
-    ? [
-        perch.left + (home[0] / 100) * perch.size,
-        perch.top + (home[1] / 100) * perch.size,
-      ]
-    : null;
+  const perchCentre: Point | null = perch ? perchPoint(perch) : null;
   const perchSize = perch?.size ?? size;
+  const nearPerch = (p: Point) =>
+    !!perchCentre &&
+    Math.hypot(p[0] - perchCentre[0], p[1] - perchCentre[1]) < PERCH_REACH;
 
   const wp =
     airborne && perchCentre
-      ? homeWaypoints(req, [airborne.x, airborne.y], perchCentre, box)
-      : waypoints(req, perchCentre ?? [box.left, box.top], box);
+      ? ground
+        ? searchHomeWaypoints(
+            req,
+            ground,
+            [airborne.x, airborne.y],
+            perchCentre,
+          )
+        : homeWaypoints(req, [airborne.x, airborne.y], perchCentre, box)
+      : waypoints(req, perchCentre ?? [box.left, box.top], box, ground);
   const raw = spline(wp);
   // Keep the route in the room, except where it has to reach the perch, and
   // except a flypast's way in and out, which is off screen on purpose.
   const points = raw.map((p): Point => {
-    if (
-      perchCentre &&
-      Math.hypot(p[0] - perchCentre[0], p[1] - perchCentre[1]) < 110
-    ) {
+    if (nearPerch(p)) {
       return [
         Math.min(Math.max(p[0], 4), viewport.width - 4),
         Math.min(Math.max(p[1], 4), viewport.height - 4),
@@ -880,11 +1584,20 @@ export function planFlight(req: FlightRequest): FlightPlan {
       points[i] = [(a[0] + 2 * b[0] + c[0]) / 4, (a[1] + 2 * b[1] + c[1]) / 4];
     }
   }
+  // Round a column, the curve may cut a corner by a few px. Out with it.
+  // The takeoff from the search box and the landing back in it are the
+  // only part of the route that may cross the column's edge.
+  if (ground) {
+    for (let i = 0; i < points.length; i++) {
+      if (!nearPerch(points[i]!)) points[i] = freePoint(ground, points[i]!);
+    }
+  }
 
   const cruise =
     between(rng, 600, 780) *
-    Math.min(Math.max(viewport.width / 1440, 0.72), 1.1) *
-    (req.kind === "search" ? SEARCH_PACE : 1);
+    widthPace(viewport) *
+    (req.kind === "search" ? SEARCH_PACE : 1) *
+    (ground && airborne ? HOMEWARD_PACE : 1);
   const track = timeRoute(points, cruise, lands, airborne === null);
   const routeMs = track.time[track.time.length - 1]!;
 

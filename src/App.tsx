@@ -68,7 +68,8 @@ import { RouteFallback } from "./components/layout/RouteFallback";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
 import { StartRedirect } from "./components/layout/StartRedirect";
 import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
-import { useUrgentActionItemCount } from "./api";
+import { starterQuestionsQuery, useUrgentActionItemCount } from "./api";
+import { useQueryClient } from "@tanstack/react-query";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
 import { SessionProvider, useRecent } from "./contexts/SessionContext";
@@ -109,6 +110,17 @@ const ResponsiveLayout = () => {
    * browser told to save data is left alone (see `lib/idle.ts`).
    */
   useEffect(() => whenIdle(() => void loadMapView()), []);
+
+  /**
+   * Fetch Ask's "Try asking" questions the same way, so the page opens with
+   * them. The server keeps them ready, so this is one small read.
+   */
+  const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      whenIdle(() => void queryClient.prefetchQuery(starterQuestionsQuery())),
+    [queryClient],
+  );
 
   // Warm Settings the same way: its shell, then its pages (`warm.ts`).
   useWarmSettingsFromApp();

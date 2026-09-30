@@ -24,9 +24,10 @@
  *    perch's own bird is shown again.
  *
  * A second press while it is out asks it home by a short way, and so does
- * `recallCorvid()`: the Ask page's search flight hunts over the empty results
- * until the answer arrives, then comes home. A recall that arrives while the
- * bird is still leaving its ring waits until it is in the air. Escape and a
+ * `recallCorvid()`: the Ask page's search flight hunts beside and above the
+ * search column until the answer arrives, then comes home, round the column
+ * rather than across the answer. A recall that arrives while the bird is
+ * still leaving its ring waits until it is in the air. Escape and a
  * route change land it at once. Nothing here announces: the bird is
  * decoration, and a screen reader that said "Contrack" every time somebody
  * pressed the logo would be worse than saying nothing.
@@ -59,6 +60,7 @@ import {
 } from "../../lib/corvid";
 import {
   planFlight,
+  type FlightBox,
   type FlightFrame,
   type FlightPerch,
   type FlightPlan,
@@ -135,6 +137,11 @@ interface Flight {
   recall: boolean;
   /** Started as a search flight, the only kind a recall may end. */
   searching: boolean;
+  /**
+   * A search flight's page and the column it keeps out of. The way home
+   * keeps out of it too.
+   */
+  ground: { area: FlightBox; avoid: FlightBox } | null;
 }
 
 /** How long before touchdown the landing starts following a ring that moved. */
@@ -227,6 +234,8 @@ export const CorvidFlight = () => {
         facing: at.pose.headFacing >= 0 ? 1 : -1,
         from: at,
       },
+      area: current.ground?.area,
+      avoid: current.ground?.avoid,
     });
     current.start = performance.now();
     current.home = back;
@@ -332,6 +341,7 @@ export const CorvidFlight = () => {
         perch: home,
         rng: Math.random,
         area: detail.area,
+        avoid: detail.avoid,
       });
       const leaving = detail.from ? null : perch;
       const hidden = leaving?.querySelector<SVGGElement>("[data-bird]") ?? null;
@@ -345,6 +355,10 @@ export const CorvidFlight = () => {
         frames: 0,
         recall: false,
         searching: detail.kind === "search",
+        ground:
+          detail.kind === "search" && detail.area && detail.avoid
+            ? { area: detail.area, avoid: detail.avoid }
+            : null,
       };
       if (leaving) {
         window.dispatchEvent(

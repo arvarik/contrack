@@ -190,6 +190,7 @@ const COVERED = [
   "GET /api/search/coverage",
   "GET /api/search/history",
   "GET /api/search/interactions",
+  "GET /api/search/starters",
   "GET /api/tags",
   "GET /api/tags/summary",
   "GET /api/timeline",
@@ -1812,6 +1813,37 @@ describe("GET /api/search/coverage", () => {
         activeCount(actor.user.id),
       );
     }
+  });
+});
+
+describe("GET /api/search/starters", () => {
+  it("builds each account's questions from its own contacts only", async () => {
+    const pool = async (actor: Actor) => {
+      const res = await asUser(actor)(request(app).get("/api/search/starters"));
+      expect(res.status).toBe(200);
+      return (res.body.questions as { text: string }[]).map((q) => q.text);
+    };
+    // B has fewer than ten contacts, so a value one of them holds is a
+    // question, and a value only A holds (Company 5 to 19, Quarrington
+    // Holdings, the actuary) would be one too if the pool read across
+    // accounts. Earlier tests trash some of B's contacts, so the companies
+    // are read from B's active rows.
+    const companies = (
+      sqlite
+        .prepare(
+          `SELECT DISTINCT company FROM contacts
+            WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL
+              AND isGhost = 0 AND COALESCE(isArchived, 0) = 0
+              AND company IS NOT NULL`,
+        )
+        .all(B.user.id) as { company: string }[]
+    ).map((row) => `Who works at ${row.company}?`);
+    expect(companies.length).toBeGreaterThan(0);
+    expect((await pool(B)).sort()).toEqual(companies.sort());
+    // C has no contacts, so nothing to ask about.
+    expect(await pool(C)).toEqual([]);
+    // A has 21, so a value needs two holders, and each of A's is its own.
+    expect(await pool(A)).toEqual([]);
   });
 });
 
@@ -3659,8 +3691,9 @@ describe("all scoped routes are isolated", () => {
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file. 43 since the link
     // preview became scoped: it lists nothing, and its test above proves the
-    // image it saves lands in the caller's own folder.
-    expect(collections).toHaveLength(43);
+    // image it saves lands in the caller's own folder. 44 with Ask's starter
+    // questions.
+    expect(collections).toHaveLength(44);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });
