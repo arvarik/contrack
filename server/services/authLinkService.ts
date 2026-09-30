@@ -162,9 +162,3 @@ export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
 
   return { ...row, usedAt };
 }
-
-export const authLinkService = {
-  create: createAuthLink,
-  redeem: redeemAuthLink,
-  hashToken,
-};

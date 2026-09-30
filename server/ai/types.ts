@@ -115,18 +115,6 @@ export interface RoutingPolicy {
    * then gemini-3.1-flash-lite, then any available model.
    */
   prefer?: ModelClass;
-
-  /**
-   * If set, ONLY these models may be used for this request.
-   * Useful for targeting specific model capabilities.
-   */
-  allowModels?: string[];
-
-  /**
-   * These models must NOT be used for this request.
-   * Useful for background tasks that should avoid expensive models.
-   */
-  denyModels?: string[];
 }
 
 /**

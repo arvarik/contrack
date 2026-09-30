@@ -56,10 +56,6 @@ export class SmartRouter {
   ): RouteDecision {
     const candidates = this.registryFn().filter((m) => {
       if (circuitBreakers.has(m.id)) return false;
-      if (policy.allowModels?.length && !policy.allowModels.includes(m.id)) {
-        return false;
-      }
-      if (policy.denyModels?.includes(m.id)) return false;
       if (requiresGrounding && !m.supportsGrounding) return false;
       return true;
     });

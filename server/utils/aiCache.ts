@@ -139,16 +139,6 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
     maxEntries: 500,
     label: "QueryParse",
   },
-
-  /**
-   * HyDE: Hypothetical-document expansion of a search query, used as the
-   * input text to the local embedding model instead of the bare query.
-   * Like queryParse, this is a pure function of the query — no need to
-   * invalidate on contact mutation (the expansion describes the *kind* of
-   * person, not any specific contact).
-   * Invalidation: Never.
-   */
-  hyde: { ttlMs: 24 * 60 * 60_000, maxEntries: 500, label: "HyDE" },
 };
 
 // =============================================================================
@@ -220,7 +210,7 @@ export function normalizeKey(query: string): string {
  * the existing `startsWith` invalidation can then match, so one owner's edit
  * can drop one owner's entries.
  *
- * `queryParse`, `hyde` and `mentions` do not use it. Their values are pure
+ * `queryParse` and `mentions` do not use it. Their values are pure
  * functions of the text the caller supplied and name no contact, so sharing
  * them across owners saves paid calls and reveals nothing.
  */
@@ -405,7 +395,7 @@ export const aiCache = {
    * `briefing` and `dailyInsight` tiers, which cost every other account on the
    * instance a regeneration through a paid provider.
    *
-   * Only for owner-keyed tiers. `queryParse`, `hyde` and `mentions` hold no
+   * Only for owner-keyed tiers. `queryParse` and `mentions` hold no
    * owner in their keys and nothing about them goes stale when a contact
    * changes.
    */

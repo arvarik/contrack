@@ -430,50 +430,6 @@ export function markSuggestionMerged(
 // =============================================================================
 
 /**
- * Insert a merge audit-log row. Stand-alone variant: opens its own
- * `sqlite.transaction` so the row is committed atomically.
- *
- * Use `recordMergeUnsafe` (below) when the caller is ALREADY inside a
- * transaction — better-sqlite3 disallows nested transactions, and a nested
- * call here would throw "cannot start a transaction within a transaction".
- *
- * @param primaryId    - The surviving contact
- * @param duplicateId  - The contact being merged away
- * @param confidence   - The match confidence that triggered the merge
- * @param reasoning    - Human-readable explanation
- * @param mergedBy     - Who: 'user', 'auto', 'user:suggestion'
- * @param mergeType    - How: 'soft' (canonicalId) or 'hard' (DELETE)
- * @param snapshot     - Optional JSON snapshot of the duplicate before merge
- * @returns The merge log entry ID
- */
-export function recordMerge(
-  scope: Scope,
-  primaryId: string,
-  duplicateId: string,
-  confidence: number,
-  reasoning: string,
-  mergedBy: string,
-  mergeType: "soft" | "hard",
-  snapshot?: string | null,
-): string {
-  let id: string;
-  const txn = sqlite.transaction(() => {
-    id = recordMergeUnsafe(
-      scope,
-      primaryId,
-      duplicateId,
-      confidence,
-      reasoning,
-      mergedBy,
-      mergeType,
-      snapshot,
-    );
-  });
-  txn();
-  return id!;
-}
-
-/**
  * INTERNAL — caller MUST already hold a transaction. Used by
  * `mergeContacts` and `softMergeContacts` so the audit log entry is
  * folded into the SAME transaction as the merge mutations.

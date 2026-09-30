@@ -225,7 +225,7 @@ function applyTrackingRules(
  * Invalidate the caches that depend on one owner's contact data.
  *
  * Deliberately NOT invalidateAll(): the content-addressed tiers (queryParse,
- * hyde, mentions) hash their own input text and are unaffected by contact
+ * mentions) hash their own input text and are unaffected by contact
  * mutations — flushing them on every edit made repeat searches pay full AI
  * cost for nothing.
  *

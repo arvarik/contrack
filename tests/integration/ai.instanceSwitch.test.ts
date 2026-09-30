@@ -30,7 +30,6 @@ import {
   invalidateProviderCache,
 } from "../../server/ai/providerRegistry.ts";
 import { resolveCapability } from "../../server/ai/capabilities.ts";
-import { ai } from "../../server/ai/index.ts";
 import {
   generateFor,
   isAnyProviderConfigured,
@@ -123,17 +122,6 @@ describe("the provider lookup while AI is off", () => {
     await expect(
       embedWithProvider("openai", "text-embedding-3-small", ["hello"]),
     ).rejects.toMatchObject({ code: "AI_OFF_FOR_INSTANCE" });
-  });
-
-  it("refuses the legacy ai.generate, which would fall back to a placeholder Gemini key", async () => {
-    setProviderKey("gemini", "switch-test-gemini-key");
-    setAiOffForInstance(true);
-    const sent = vi.spyOn(globalThis, "fetch");
-
-    await expect(
-      ai.generate({ prompt: "Say OK", responseFormat: "text" }),
-    ).rejects.toMatchObject({ code: "AI_CAPABILITY_UNAVAILABLE" });
-    expect(sent).not.toHaveBeenCalled();
   });
 
   it("embeds with the built-in model, whatever is pinned", () => {

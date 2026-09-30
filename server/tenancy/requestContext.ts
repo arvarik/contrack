@@ -10,12 +10,11 @@
 // One rule matters most. An EventEmitter listener runs in the async context
 // of whoever calls emit(), not the context that subscribed. Every SSE and
 // NDJSON handler therefore captures its Scope in the closure before it
-// subscribes, and never calls currentScope() inside a listener.
+// subscribes, and never calls currentScopeOrNull() inside a listener.
 // =============================================================================
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Request, Response, NextFunction } from "express";
-import { AppError } from "../utils/AppError.ts";
 import type { Principal } from "../middleware/auth.ts";
 import { scopeForUser, type Scope } from "./scope.ts";
 import { primaryAdminId } from "../db.ts";
@@ -34,16 +33,6 @@ export function runWithContext<T>(ctx: RequestContext, fn: () => T): T {
 
 export function getContext(): RequestContext | null {
   return als.getStore() ?? null;
-}
-
-/** The current scope, or a programmer error if there is none. */
-export function currentScope(): Scope {
-  const s = getContext()?.scope;
-  if (!s)
-    throw new AppError("No owner scope on this code path", 500, {
-      code: "NO_SCOPE",
-    });
-  return s;
 }
 
 /** The current scope, or null. Used by inserts that may run unowned. */
