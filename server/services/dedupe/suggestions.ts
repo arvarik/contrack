@@ -545,6 +545,50 @@ export function getMergeLog(scope: Scope, limit: number = 50): MergeLogEntry[] {
   return rows;
 }
 
+/** The child tables a merge moves rows in. Undo writes rows back to these. */
+const CHILD_TABLES = new Set([
+  "contact_emails",
+  "contact_phones",
+  "contact_addresses",
+  "contact_social_links",
+  "contact_education",
+  "contact_experience",
+  "contact_sources",
+  "contact_tags",
+  "contact_interests",
+  "contact_attributes",
+  "interactions",
+  "action_items",
+]);
+
+/** The columns each child table has now, read once from the database. */
+const childColumns = new Map<string, Set<string>>();
+
+function columnsOf(table: string): Set<string> {
+  let columns = childColumns.get(table);
+  if (!columns) {
+    const info = sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
+      name: string;
+    }[];
+    columns = new Set(info.map((column) => column.name));
+    childColumns.set(table, columns);
+  }
+  return columns;
+}
+
+/**
+ * Write a child row from a merge snapshot back onto a contact.
+ *
+ * The snapshot holds the row as `SELECT *` returned it, so this copies the
+ * row's own columns and skips any column the table no longer has. It sets the
+ * contact, and the owner when the table has one.
+ *
+ * @param table - One of the child tables in `CHILD_TABLES`.
+ * @param row - The row from the snapshot.
+ * @param targetContactId - The contact that receives the row.
+ * @param scope - The signed-in account, which owns the restored row.
+ * @param newId - A new row id. The row keeps its old id when this is absent.
+ */
 function restoreChildRow(
   table: string,
   row: Record<string, unknown>,
@@ -552,186 +596,22 @@ function restoreChildRow(
   scope: Scope,
   newId?: string,
 ) {
-  const insertId = newId ?? (row.id as string);
-  switch (table) {
-    case "contact_emails":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_emails (id, contactId, email, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.email ?? "",
-          row.label ?? null,
-          row.isPrimary ?? 0,
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_phones":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.phone ?? "",
-          row.label ?? null,
-          row.isPrimary ?? 0,
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_addresses":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.address ?? "",
-          row.label ?? null,
-          row.isPrimary ?? 0,
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_social_links":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_social_links (id, contactId, platform, url, createdAt) VALUES (?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.platform ?? "",
-          row.url ?? "",
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_education":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startYear, endYear, isCurrent, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.school ?? "",
-          row.degree ?? null,
-          row.fieldOfStudy ?? null,
-          row.startYear ?? null,
-          row.endYear ?? null,
-          row.isCurrent ?? 0,
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_experience":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_experience (id, contactId, company, role, location, description, startYear, endYear, isCurrent, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.company ?? "",
-          row.role ?? null,
-          row.location ?? null,
-          row.description ?? null,
-          row.startYear ?? null,
-          row.endYear ?? null,
-          row.isCurrent ?? 0,
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_sources":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_sources (id, contactId, platform, externalId, createdAt) VALUES (?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.platform ?? "",
-          row.externalId ?? "",
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_tags":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_tags (id, contactId, tag, createdAt) VALUES (?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.tag ?? "",
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_interests":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_interests (id, contactId, interest, createdAt) VALUES (?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.interest ?? "",
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "contact_attributes":
-      sqlite
-        .prepare(
-          "INSERT INTO contact_attributes (id, contactId, name, value, createdAt) VALUES (?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.name ?? "",
-          row.value ?? "",
-          row.createdAt ?? new Date().toISOString(),
-        );
-      break;
-    case "interactions":
-      sqlite
-        .prepare(
-          "INSERT INTO interactions (id, contactId, type, title, summary, date, location, channel, sentiment, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.type ?? "meeting",
-          row.title ?? null,
-          row.summary ?? "",
-          row.date ?? new Date().toISOString(),
-          row.location ?? null,
-          row.channel ?? null,
-          row.sentiment ?? null,
-          scope.ownerId,
-          row.createdAt ?? new Date().toISOString(),
-          row.updatedAt ?? new Date().toISOString(),
-        );
-      break;
-    case "action_items":
-      sqlite
-        .prepare(
-          "INSERT INTO action_items (id, contactId, interactionId, title, dueAt, completedAt, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          insertId,
-          targetContactId,
-          row.interactionId ?? null,
-          row.title ?? "",
-          row.dueAt ?? new Date().toISOString(),
-          row.completedAt ?? null,
-          scope.ownerId,
-          row.createdAt ?? new Date().toISOString(),
-          row.updatedAt ?? new Date().toISOString(),
-        );
-      break;
+  if (!CHILD_TABLES.has(table)) {
+    throw new Error(`Undo cannot restore a row of ${table}`);
   }
+  const columns = columnsOf(table);
+  const values: Record<string, unknown> = {
+    ...row,
+    id: newId ?? row.id,
+    contactId: targetContactId,
+  };
+  if (columns.has("ownerId")) values.ownerId = scope.ownerId;
+  const names = Object.keys(values).filter((name) => columns.has(name));
+  sqlite
+    .prepare(
+      `INSERT INTO ${table} (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`,
+    )
+    .run(...names.map((name) => values[name] ?? null));
 }
 
 function isChildRowModified(
@@ -748,32 +628,24 @@ function isChildRowModified(
       "school",
       "degree",
       "fieldOfStudy",
-      "startYear",
-      "endYear",
-      "isCurrent",
+      "startDate",
+      "endDate",
+      "description",
     ],
     contact_experience: [
       "company",
       "role",
       "location",
       "description",
-      "startYear",
-      "endYear",
+      "startDate",
+      "endDate",
       "isCurrent",
     ],
     contact_sources: ["platform", "externalId"],
     contact_tags: ["tag"],
     contact_interests: ["interest"],
     contact_attributes: ["name", "value"],
-    interactions: [
-      "type",
-      "title",
-      "summary",
-      "date",
-      "location",
-      "channel",
-      "sentiment",
-    ],
+    interactions: ["type", "title", "content", "date"],
   };
   const keys = compareKeys[table] ?? [];
   for (const k of keys) {
