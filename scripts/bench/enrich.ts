@@ -178,7 +178,12 @@ export interface BenchPlan {
   interests: InterestRow[];
   attributes: AttributeRow[];
   interactionsAdd: InteractionRow[];
-  interactionRewrites: { id: string; title: string; content: string }[];
+  interactionRewrites: {
+    id: string;
+    title: string;
+    content: string;
+    date: string;
+  }[];
   actionItems: ActionItemRow[];
   /** The newest interaction, never after now. Null when there are none. */
   lastContactedAt: string | null;
@@ -886,6 +891,7 @@ export function planEnrichment(
     plan.interactionRewrites.push({
       id: existing.id,
       ...talk(existing.type, existing.id),
+      date: existing.date,
     });
   }
   const wanted = dHist.weighted([

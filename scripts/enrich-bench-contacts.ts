@@ -56,6 +56,10 @@ export interface EnrichSummary {
   rows: Record<string, number>;
 }
 
+/** A date as the database writes one: "2026-09-30 12:00:00". */
+const stamp = (date: Date): string =>
+  date.toISOString().slice(0, 19).replace("T", " ");
+
 /** The marker on every row this script writes. */
 const SOURCE = "bench-enrich";
 
@@ -239,7 +243,7 @@ export async function enrichBenchContacts(
   const previousJobs = process.env.DISABLE_BACKGROUND_JOBS;
   process.env.DISABLE_BACKGROUND_JOBS = "true";
   try {
-    writePlans(ownerId, plans);
+    writePlans(ownerId, plans, now);
   } finally {
     if (previousJobs === undefined) delete process.env.DISABLE_BACKGROUND_JOBS;
     else process.env.DISABLE_BACKGROUND_JOBS = previousJobs;
@@ -250,6 +254,7 @@ export async function enrichBenchContacts(
 function writePlans(
   ownerId: string,
   plans: { row: ContactRow; plan: BenchPlan }[],
+  now: Date,
 ): void {
   const remove = Object.fromEntries(
     OWNED_TABLES.map((table) => [
@@ -269,34 +274,34 @@ function writePlans(
   );
   const insert = {
     email: sqlite.prepare(
-      "INSERT INTO contact_emails (id, contactId, email, label, isPrimary, sortOrder, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_emails (id, contactId, email, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     phone: sqlite.prepare(
-      "INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, sortOrder, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     address: sqlite.prepare(
-      "INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     social: sqlite.prepare(
-      "INSERT INTO contact_social_links (id, contactId, platform, url, handle, source) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_social_links (id, contactId, platform, url, handle, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ),
     education: sqlite.prepare(
-      "INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startDate, endDate, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startDate, endDate, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     experience: sqlite.prepare(
-      "INSERT INTO contact_experience (id, contactId, company, role, startDate, endDate, isCurrent, location, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO contact_experience (id, contactId, company, role, startDate, endDate, isCurrent, location, source, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     interest: sqlite.prepare(
-      "INSERT OR IGNORE INTO contact_interests (id, contactId, interest, isAiGenerated) VALUES (?, ?, ?, 0)",
+      "INSERT OR IGNORE INTO contact_interests (id, contactId, interest, isAiGenerated, addedAt) VALUES (?, ?, ?, 0, ?)",
     ),
     attribute: sqlite.prepare(
-      "INSERT OR IGNORE INTO contact_attributes (id, contactId, name, value) VALUES (?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO contact_attributes (id, contactId, name, value, addedAt) VALUES (?, ?, ?, ?, ?)",
     ),
     interaction: sqlite.prepare(
-      "INSERT INTO interactions (id, contactId, type, title, content, date, ownerId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO interactions (id, contactId, type, title, content, date, ownerId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     action: sqlite.prepare(
-      "INSERT INTO action_items (id, contactId, title, dueAt, completedAt, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO action_items (id, contactId, title, dueAt, completedAt, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     ),
   };
   const relabel = sqlite.prepare(
@@ -308,9 +313,17 @@ function writePlans(
   const rewrite = sqlite.prepare(
     "UPDATE interactions SET title = ?, content = ? WHERE id = ? AND contactId = ?",
   );
+  // A second statement, because the update trigger re-stamps updatedAt with
+  // the real clock whenever a statement leaves it alone.
+  const restamp = sqlite.prepare(
+    "UPDATE interactions SET updatedAt = ? WHERE id = ? AND contactId = ?",
+  );
 
   const writeOne = (id: string, plan: BenchPlan) => {
     for (const table of OWNED_TABLES) remove[table].run(id);
+    // Every stamp is written, never left to the column default, which is the
+    // real clock. A second run then writes the same database.
+    const added = (plan.contact.addedAt as string | undefined) ?? stamp(now);
 
     for (const { email, label } of plan.emailLabels)
       relabel.run(label, id, email);
@@ -325,6 +338,7 @@ function writePlans(
         r.isPrimary,
         r.sortOrder,
         SOURCE,
+        added,
       );
     }
     for (const r of plan.phonesAdd) {
@@ -337,6 +351,7 @@ function writePlans(
         r.isPrimary,
         r.sortOrder,
         SOURCE,
+        added,
       );
     }
     for (const r of plan.addresses)
@@ -348,9 +363,10 @@ function writePlans(
         r.isPrimary,
         r.sortOrder,
         SOURCE,
+        added,
       );
     for (const r of plan.socialLinks)
-      insert.social.run(r.id, id, r.platform, r.url, r.handle, SOURCE);
+      insert.social.run(r.id, id, r.platform, r.url, r.handle, SOURCE, added);
     for (const r of plan.education)
       insert.education.run(
         r.id,
@@ -361,6 +377,7 @@ function writePlans(
         r.startDate,
         r.endDate,
         SOURCE,
+        added,
       );
     for (const r of plan.experience)
       insert.experience.run(
@@ -373,12 +390,16 @@ function writePlans(
         r.isCurrent,
         r.location,
         SOURCE,
+        added,
       );
-    for (const r of plan.interests) insert.interest.run(r.id, id, r.interest);
+    for (const r of plan.interests)
+      insert.interest.run(r.id, id, r.interest, added);
     for (const r of plan.attributes)
-      insert.attribute.run(r.id, id, r.name, r.value);
-    for (const r of plan.interactionRewrites)
+      insert.attribute.run(r.id, id, r.name, r.value, added);
+    for (const r of plan.interactionRewrites) {
       rewrite.run(r.title, r.content, r.id, id);
+      restamp.run(stamp(new Date(r.date)), r.id, id);
+    }
     for (const r of plan.interactionsAdd)
       insert.interaction.run(
         r.id,
@@ -388,9 +409,19 @@ function writePlans(
         r.content,
         r.date,
         ownerId,
+        stamp(new Date(r.date)),
       );
     for (const r of plan.actionItems)
-      insert.action.run(r.id, id, r.title, r.dueAt, r.completedAt, ownerId);
+      insert.action.run(
+        r.id,
+        id,
+        r.title,
+        r.dueAt,
+        r.completedAt,
+        ownerId,
+        stamp(now),
+        stamp(now),
+      );
 
     // Saved last, and `updatedAt` after the rest. A trigger on each child
     // table stamps the contact's updatedAt with the real clock, and so does

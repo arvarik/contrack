@@ -335,6 +335,10 @@ describe("enrichBenchContacts", () => {
 
   it("changes nothing on a second run with the same clock", async () => {
     const before = dump([...all(), ...real]);
+    // The database stamps a row with the real time when a column has no value.
+    // Two runs in one second hid that, and two on a slow machine did not, so
+    // the second run waits past the next second on purpose.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     const again = await run();
     expect(dump([...all(), ...real])).toEqual(before);
     expect(again.contacts).toBe(40);
