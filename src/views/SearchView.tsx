@@ -8,7 +8,8 @@ import {
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch, useStarterQuestions } from "../api";
+import { useSemanticSearch } from "../api";
+import { useStarterDraw } from "../hooks/useStarterDraw";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
@@ -34,7 +35,7 @@ import { InfoTip } from "../components/ui/InfoTip";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { AskSearchBox } from "./search/AskSearchBox";
-import { drawSuggestions } from "./search/suggestions";
+import { SUGGESTION_COUNT } from "./search/suggestions";
 import { Segmented } from "../components/ui/Segmented";
 import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
@@ -283,20 +284,9 @@ export const SearchView = () => {
   // fetched in an idle moment, so they are here with the page. A draw stays
   // put while the pool refreshes behind it, so no chip moves under a
   // pointer. A new visit, or Clear, draws again. A failed load shows none:
-  // a question that finds nobody is worse than no question.
-  const pool = useStarterQuestions().data?.questions;
-  const [drawn, setDrawn] = useState<{ draw: number; questions: string[] }>(
-    () => ({ draw: 0, questions: pool ? drawSuggestions(pool) : [] }),
-  );
-  useEffect(() => {
-    if (!pool) return;
-    setDrawn((current) =>
-      current.draw === draw && current.questions.length > 0
-        ? current
-        : { draw, questions: drawSuggestions(pool) },
-    );
-  }, [pool, draw]);
-  const suggestions = drawn.questions;
+  // a question that finds nobody is worse than no question. The palette's AI
+  // mode draws four from the same pool through the same hook.
+  const suggestions = useStarterDraw(SUGGESTION_COUNT, draw);
 
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {

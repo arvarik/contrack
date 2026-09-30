@@ -45,7 +45,6 @@ import { cn } from "../../lib/utils";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
   getMode,
-  EXAMPLE_QUERIES,
   GROUP_HEADING_DEFAULT,
   GROUP_HEADING_PRIMARY,
   GROUP_HEADING_EMERALD,
@@ -54,6 +53,7 @@ import {
   insightPath,
 } from "./utils";
 import { AIShimmerRow, AIResultCard } from "./AiComponents";
+import { AiStarters } from "./AiStarters";
 import { ZeroStateView } from "./ZeroStateView";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
 import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
@@ -858,20 +858,7 @@ export const CommandPalette = () => {
                       <p className="text-xs mb-4">
                         Ask anything about your network in plain English
                       </p>
-                      <div className="space-y-1.5 text-left max-w-xs mx-auto">
-                        {EXAMPLE_QUERIES.map((q) => (
-                          <button
-                            key={q}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setSearch(`? ${q}`);
-                            }}
-                            className="state-layer w-full min-h-[44px] sm:min-h-0 text-left text-xs px-3 py-2 rounded-lg bg-primary/5 text-primary transition-colors"
-                          >
-                            ? {q}
-                          </button>
-                        ))}
-                      </div>
+                      <AiStarters onPick={(q) => setSearch(`? ${q}`)} />
                     </Command.Empty>
                   )}
 

@@ -28,13 +28,6 @@ export function insightPath(insight: ZeroStateInsight): string | null {
   }
 }
 
-export const EXAMPLE_QUERIES = [
-  "Who do I know in London working in FinTech?",
-  "Who likes espresso?",
-  "Who haven't I contacted in over 3 months?",
-  "Who works at a startup as a designer?",
-];
-
 /** cmdk group heading style — reused across all Command.Group instances */
 const GROUP_HEADING =
   "[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em]";

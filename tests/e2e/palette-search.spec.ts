@@ -90,6 +90,53 @@ test("opens the list of stale contacts from the stale data insight", async ({
   await expect(page.getByText("Zed Stale")).toBeVisible();
 });
 
+test("finds a person by a street that only their address names", async ({
+  page,
+  instance,
+}) => {
+  await ownContact(instance, {
+    name: "Zed Resident",
+    addresses: ["14 Quillfeather Crescent, Leeds LS6 1AB"],
+  });
+  const palette = await openPalette(page);
+  await page.keyboard.type("Quillfeather");
+  await expect(person(palette, "Zed Resident")).toBeVisible();
+});
+
+test("shows four of the account's own questions in AI mode, not the old fixed examples", async ({
+  page,
+  instance,
+}) => {
+  const { questions } = await instance.api<{
+    questions: { text: string; kind: string }[];
+  }>("GET", "/search/starters");
+  expect(questions.length).toBeGreaterThanOrEqual(4);
+
+  const palette = await openPalette(page);
+  await page.keyboard.type("?");
+  const group = page.getByRole("group", { name: "Try asking" });
+  await expect(group).toBeVisible();
+  const buttons = group.getByRole("button");
+  await expect(buttons).toHaveCount(4);
+
+  const shown = (await buttons.allTextContents()).map((text) =>
+    text.replace(/^\?\s*/, ""),
+  );
+  expect(new Set(shown).size).toBe(4);
+  for (const text of shown) {
+    expect(questions.map((q) => q.text)).toContain(text);
+  }
+  // The fixed examples this list replaced.
+  await expect(page.getByText("Who likes espresso?")).toHaveCount(0);
+  await expect(
+    page.getByText("Who do I know in London working in FinTech?"),
+  ).toHaveCount(0);
+
+  // A press puts the question after the question mark, as typing it would.
+  await buttons.first().dispatchEvent("mousedown");
+  await expect(palette.getByRole("combobox")).toHaveValue(`? ${shown[0]}`);
+});
+
 test("shows a person the server finds by company", async ({ page }) => {
   const palette = await openPalette(page);
   await page.keyboard.type("Babbage");
