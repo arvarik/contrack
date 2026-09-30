@@ -76,7 +76,7 @@ export interface ContactExperience {
 }
 
 /** A per-import provenance record — which platform did this contact come from. */
-export interface ContactSource {
+interface ContactSource {
   id: string;
   platform: string;
   /** External system's stable ID for this contact (e.g. LinkedIn member URN). */
@@ -88,7 +88,7 @@ export interface ContactSource {
 }
 
 /** A free-form tag. Multiple tags per contact, no schema-enforced taxonomy. */
-export interface ContactTag {
+interface ContactTag {
   id: string;
   tag: string;
 }
@@ -376,7 +376,7 @@ export interface MergeLogEntry {
   duplicateName?: string;
 }
 
-export interface MergeConflict {
+interface MergeConflict {
   type: "scalar_edited" | "record_edited" | "record_deleted" | "task_completed";
   entity: string;
   id?: string;
@@ -572,7 +572,7 @@ export interface InteractionSearchHit {
 }
 
 /** The period a search was limited to, and where it came from. */
-export interface InteractionSearchRange {
+interface InteractionSearchRange {
   /** ISO instant, inclusive. Null when open at this end. */
   from: string | null;
   /** ISO instant, exclusive. Null when open at this end. */

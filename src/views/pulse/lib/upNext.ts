@@ -22,7 +22,7 @@ import type { UpcomingBirthday } from "./birthdays";
 export type UpNextGroup =
   "overdue" | "today" | "thisWeek" | "birthdays" | "catch-up";
 
-export type UpNextItemKind = "action_item" | "birthday" | "catch-up";
+type UpNextItemKind = "action_item" | "birthday" | "catch-up";
 
 /**
  * What a row's ring needs, for a contact the row itself does not carry.

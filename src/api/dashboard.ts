@@ -8,8 +8,6 @@ import type {
   TrackingSummary,
 } from "../../shared/pulse";
 
-export type { CatchUpCard, TrackingSummary };
-
 export interface DashboardPayload {
   overdue: ActionItem[];
   dueToday: ActionItem[];

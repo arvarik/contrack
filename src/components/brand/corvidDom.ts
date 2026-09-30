@@ -32,7 +32,7 @@ const BIRD_STROKES = [
   "tail2",
   "head",
 ] as const;
-export type BirdStroke = (typeof BIRD_STROKES)[number];
+type BirdStroke = (typeof BIRD_STROKES)[number];
 
 export interface BirdElements {
   strokes: Partial<Record<BirdStroke, SVGPathElement>>;

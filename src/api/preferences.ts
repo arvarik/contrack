@@ -13,20 +13,20 @@
 import { apiJson, jsonBody } from "./client";
 
 /** Which palette the app paints. `system` follows the operating system. */
-export type ThemeMode = "light" | "dark" | "system";
+type ThemeMode = "light" | "dark" | "system";
 export type ListDensity = "comfortable" | "compact";
 export type MergePreset = "conservative" | "default" | "aggressive";
-export type TempUnit = "celsius" | "fahrenheit";
-export type StartPage = "network" | "pulse";
-export type ListSort = "name" | "recent";
+type TempUnit = "celsius" | "fahrenheit";
+type StartPage = "network" | "pulse";
+type ListSort = "name" | "recent";
 import type { CadenceDays } from "../../shared/cadence";
-export type WeekStart = "monday" | "sunday";
-export type TextScale = "default" | "large";
+type WeekStart = "monday" | "sunday";
+type TextScale = "default" | "large";
 export type MotionPreference = "system" | "reduced";
 /** How much the corvid moves. `off` is the static mark. */
 export type MascotMotion = "full" | "subtle" | "off";
 
-export interface SearchHistoryEntry {
+interface SearchHistoryEntry {
   query: string;
   mode: "normal" | "ai" | "action";
   /** Epoch milliseconds. */

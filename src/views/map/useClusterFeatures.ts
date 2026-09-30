@@ -27,7 +27,7 @@ export interface ClusterFeature {
   latitude: number;
 }
 
-export interface PointFeature {
+interface PointFeature {
   kind: "point";
   key: string;
   /** The contact id. */

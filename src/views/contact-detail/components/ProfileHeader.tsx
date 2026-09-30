@@ -85,7 +85,7 @@ import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
 
 /** The two forms of the contact page. See ContactProfile. */
-export type ContactLayout = "wide" | "narrow";
+type ContactLayout = "wide" | "narrow";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props

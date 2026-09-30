@@ -38,7 +38,7 @@ import {
 import { NAMES } from "../../lib/names";
 import type { Tone } from "../../lib/styles";
 
-export type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
+type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
 
 interface SettingsGroupMeta {
   id: SettingsGroup;
@@ -53,7 +53,7 @@ export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
   { id: "admin", title: "Administration" },
 ];
 
-export interface SettingsRow {
+interface SettingsRow {
   id: string;
   label: string;
   keywords: string[];

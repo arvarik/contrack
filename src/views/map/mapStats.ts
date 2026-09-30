@@ -16,7 +16,7 @@ export interface TopBucket {
   count: number;
 }
 
-export interface TimeZoneBucket {
+interface TimeZoneBucket {
   label: string;
   count: number;
   offsetMinutes: number;

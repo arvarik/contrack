@@ -46,7 +46,7 @@ export const CORVID_HOME_EVENT = "contrack:corvid-home";
 /** Whatever the bird is doing out there, come home now. */
 export const CORVID_RECALL_EVENT = "contrack:corvid-recall";
 
-export type CorvidFlightKind = FlightKind;
+type CorvidFlightKind = FlightKind;
 
 /** The payload {@link CORVID_FLY_EVENT} carries. */
 export interface CorvidFlyDetail {

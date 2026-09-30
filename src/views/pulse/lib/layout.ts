@@ -15,7 +15,7 @@ export const PULSE_COLUMNS: readonly PulseColumn[] = [
   "intel",
 ] as const;
 
-export const PULSE_CARD_IDS = [
+const PULSE_CARD_IDS = [
   "up-next",
   "completed",
   "keeping-up",

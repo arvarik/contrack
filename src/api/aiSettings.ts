@@ -18,7 +18,7 @@ export interface CapabilityAssignment {
   model?: string;
 }
 
-export interface ProviderStatus {
+interface ProviderStatus {
   id: string;
   label: string;
   kind: string;
@@ -36,7 +36,7 @@ export interface ProviderStatus {
   freeTier?: boolean;
 }
 
-export interface CustomEndpoint {
+interface CustomEndpoint {
   id: string;
   label: string;
   baseUrl: string;

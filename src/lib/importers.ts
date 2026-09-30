@@ -29,27 +29,27 @@ import {
 // Parser output types — the wire shape POSTed to /api/contacts/bulk
 // ===========================================================================
 
-export interface ImportedEmail {
+interface ImportedEmail {
   email: string;
   label?: string;
   isPrimary?: boolean;
 }
-export interface ImportedPhone {
+interface ImportedPhone {
   phone: string;
   label?: string;
   isPrimary?: boolean;
 }
-export interface ImportedAddress {
+interface ImportedAddress {
   address: string;
   label?: string;
   isPrimary?: boolean;
 }
-export interface ImportedSocialLink {
+interface ImportedSocialLink {
   platform: string;
   url: string;
   handle?: string | null;
 }
-export interface ImportedSource {
+interface ImportedSource {
   platform: string;
   externalId?: string | null;
   connectedOn?: string | null;
