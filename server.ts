@@ -10,7 +10,7 @@ import express from "express";
 import path from "path";
 
 import { log } from "./server/utils/logger.ts";
-import { sqlite } from "./server/db.ts";
+import { refreshPlannerStats, sqlite } from "./server/db.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import {
@@ -287,18 +287,10 @@ async function startServer() {
   // Query-planner statistics refresh. SQLite recommends a periodic
   // `PRAGMA optimize` for connections that stay open for days — it re-runs
   // ANALYZE only for tables whose shape drifted, so the common case is a
-  // no-op. Daily matches the other maintenance timers; shutdown runs it too.
+  // no-op. Each drain of the search index runs it as well (see
+  // `refreshPlannerStats`), and shutdown runs it too.
   if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
-    setInterval(
-      () => {
-        try {
-          sqlite.pragma("optimize");
-        } catch (err) {
-          log.warn("Server", `PRAGMA optimize failed: ${getErrorMessage(err)}`);
-        }
-      },
-      24 * 60 * 60 * 1000,
-    ).unref();
+    setInterval(refreshPlannerStats, 24 * 60 * 60 * 1000).unref();
   }
 
   // ── Relationship scoring ────────────────────────────────────────────────

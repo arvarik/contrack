@@ -1926,22 +1926,27 @@ sqlite.exec("ANALYZE");
 sqlite.pragma("optimize");
 
 /**
- * Gather the planner's row counts again.
+ * Bring the planner's row counts up to date after a batch of writes.
  *
- * SQLite plans from the counts of the last ANALYZE, which runs at boot and
- * once a day, so after a large change the counts are the old ones: "2 rows"
- * for a table that holds twenty thousand. Call this when a batch that wrote
- * thousands of rows finishes: a full index backfill, or a drained queue. It
- * costs 20 to 400 ms on 5,000 contacts. A failure is logged and no more: the
- * counts stay as they were, and the next boot gathers them.
+ * SQLite plans from the counts of the last ANALYZE, which the boot above
+ * gathers and a daily timer refreshes. After a server indexed 5,000
+ * contacts, the counts said "2 rows" for a table of 22,000, and a keyword
+ * search took 145 seconds.
+ *
+ * `optimize=0x10002` looks at every table and runs ANALYZE only on a table
+ * whose row count has moved tenfold, under SQLite's own time limit. On a
+ * database of 5,800 contacts it takes 0.02 ms when nothing moved and 3 ms
+ * for one stale table, where a full ANALYZE takes 20 ms. So every drain of
+ * the index queue and every backfill calls it, and SQLite decides what is
+ * stale. A failure is logged and no more: the counts stay as they were.
  */
 export function refreshPlannerStats(): void {
   try {
-    sqlite.exec("ANALYZE");
+    sqlite.pragma("optimize=0x10002");
   } catch (error) {
     log.warn(
       "Database",
-      `ANALYZE after a bulk change failed: ${error instanceof Error ? error.message : String(error)}`,
+      `PRAGMA optimize failed: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

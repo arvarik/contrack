@@ -82,12 +82,6 @@ let initPromise: Promise<void> | null = null;
 const MODEL_ID = EMBEDDING_MODEL_ID;
 const BACKFILL_BATCH_SIZE = 64;
 
-/**
- * From this many contacts embedded in one run, the planner's row counts are
- * gathered again. Below it the tables did not change enough to matter.
- */
-export const BULK_REFRESH_ROWS = 100;
-
 // =============================================================================
 // Initialization (lazy singleton)
 // =============================================================================
@@ -898,8 +892,8 @@ async function runBackfill(): Promise<number> {
   }
 
   // A backfill writes thousands of vectors and passages, so the planner's row
-  // counts from boot are out of date (see `refreshPlannerStats`).
-  if (embedded >= BULK_REFRESH_ROWS) refreshPlannerStats();
+  // counts from boot can be out of date.
+  if (embedded > 0) refreshPlannerStats();
   log.info(
     "LocalEmbeddings",
     `Backfilled ${embedded} search embeddings for ${queues.length} account(s) in ${Date.now() - t0}ms`,
