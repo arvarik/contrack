@@ -169,6 +169,8 @@ The answer lists 30 people at most. When a question made only of facets finds mo
 
 For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
 
+AI never sees a contact's addresses. So with AI on, a street or a postcode in Ask finds nobody. The Network list and the palette find it, and so does Ask with AI off.
+
 ### Verified answers and reasons
 
 An answer holds at most 30 people. Each match is verified: it passed a check. The check is an exact match, a filter, or evidence from AI that Contrack found in the contact's own fields.
