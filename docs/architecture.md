@@ -50,22 +50,22 @@ flowchart LR
 
 ## Repository layout
 
-| Folder                                              | What it holds                                                                                                                                   |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema). |
-| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
-| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                             |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                 |
-| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
-| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
-| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                 |
-| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
-| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
-| `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
-| `scripts/`                                          | Command-line tools: seed data, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                                |
-| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
-| `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
+| Folder                                              | What it holds                                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema).                          |
+| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                                         |
+| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                                             |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                                                      |
+| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                                          |
+| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                                            |
+| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                          |
+| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                          |
+| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                                                    |
+| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                      |
+| `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                                                    |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (fills the synthetic `benchseed` contacts), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks. |
+| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                   |
+| `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                                                 |
 
 ## A request from click to database
 
@@ -316,7 +316,7 @@ contact's own text. Proven fields come first, then fields that hold the
 words, then a passage close in meaning. It runs no model.
 
 The **Try asking** questions come from `search/starterQuestions.ts`: a pool of
-up to 40 questions about values that two of the account's contacts share,
+up to 500 questions about values that two of the account's contacts share,
 kept per account and search revision, and built again after boot and after an
 import.
 
