@@ -7,7 +7,7 @@
 // =============================================================================
 
 /** Common free-email domains that offer zero disambiguation signal. */
-export const FREE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
+const FREE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   "gmail.com",
   "yahoo.com",
   "hotmail.com",
@@ -37,7 +37,7 @@ export function workEmailDomain(
  * not a place: home addresses are private, and research's words can reach a
  * web search.
  */
-export function isPlaceText(text: string | null | undefined): boolean {
+function isPlaceText(text: string | null | undefined): boolean {
   const place = text?.trim();
   return !!place && place.length <= 80 && !/\d/.test(place);
 }

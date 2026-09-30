@@ -28,7 +28,7 @@
  * @module shared/scoreBand
  */
 
-export type ScoreBand = "strong" | "fading" | "at-risk";
+type ScoreBand = "strong" | "fading" | "at-risk";
 
 /** The lowest score in the Strong band. */
 export const STRONG_MIN = 70;
@@ -36,7 +36,7 @@ export const STRONG_MIN = 70;
 /** The lowest score in the Fading band. A score under it is At risk. */
 export const FADING_MIN = 40;
 
-export interface ScoreBandInfo {
+interface ScoreBandInfo {
   band: ScoreBand;
   /** The word shown to a person, in sentence case: "Strong", "At risk". */
   label: string;
@@ -110,7 +110,7 @@ export const NOT_TRACKED_TEXT = "Not tracked";
  * Every reader of the score on the client goes through this, so the ring, the
  * palette, the map and Pulse can never disagree about who has a score.
  */
-export type ScoreView =
+type ScoreView =
   | { kind: "untracked" }
   | { kind: "unscored" }
   | { kind: "scored"; score: number; band: ScoreBandInfo };

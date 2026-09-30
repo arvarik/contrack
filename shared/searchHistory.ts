@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-export const HISTORY_MODES = ["people", "notes", "palette"] as const;
+const HISTORY_MODES = ["people", "notes", "palette"] as const;
 export const historyModeSchema = z.enum(HISTORY_MODES);
 export type HistoryMode = z.infer<typeof historyModeSchema>;
 
-export const historyEntrySchema = z.object({
+const historyEntrySchema = z.object({
   id: z.string(),
   ownerId: z.string(),
   mode: historyModeSchema,
@@ -35,8 +35,6 @@ export const recordHistorySchema = z.object({
 });
 
 export type RecordHistoryInput = z.infer<typeof recordHistorySchema>;
-export const postHistorySchema = recordHistorySchema;
-export const createHistorySchema = recordHistorySchema;
 
 /** PATCH /api/search/history/:id body schema */
 export const patchHistorySchema = z
@@ -44,8 +42,6 @@ export const patchHistorySchema = z
     pinned: z.boolean(),
   })
   .strict();
-
-export type PatchHistoryInput = z.infer<typeof patchHistorySchema>;
 
 /** GET /api/search/history query parameters schema */
 export const listHistoryQuerySchema = z.object({
@@ -60,8 +56,6 @@ export const listHistoryQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
-
-export type ListHistoryQuery = z.infer<typeof listHistoryQuerySchema>;
 
 /**
  * Normalise a query for indexing and history deduplication:

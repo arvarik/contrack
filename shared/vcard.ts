@@ -430,7 +430,7 @@ const NAME_SUFFIXES = new Set([
 ]);
 
 /** The structured name, when the contact has only a display name. */
-export interface SplitName {
+interface SplitName {
   given: string;
   family: string;
   suffix: string;
