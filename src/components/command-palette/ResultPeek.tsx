@@ -16,7 +16,6 @@
  *
  * @module src/components/command-palette/ResultPeek
  */
-import React from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Tag, Clock } from "lucide-react";

@@ -3,7 +3,6 @@
  * Shows a badge when calls are simulated or on Gemini's free tier, the
  * session summary sentence, and a Brain icon watermark.
  */
-import React from "react";
 import { cn } from "../../../lib/utils";
 import { CARD_TINTED, LABEL_PRIMARY } from "../../../lib/styles";
 import { DURATION, EASE } from "../../../lib/motion";

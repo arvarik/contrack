@@ -13,7 +13,7 @@
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  */
-import React, {
+import {
   useState,
   useCallback,
   useDeferredValue,

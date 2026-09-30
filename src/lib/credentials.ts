@@ -62,20 +62,6 @@ export function urlWithoutSecret(
 }
 
 /**
- * The invitation secret in `href`, or null when there is not one.
- */
-export function parseInvitationToken(href: string): string | null {
-  return parseUrlSecret(href, JOIN_PATH, JOIN_TOKEN_PARAM);
-}
-
-/**
- * The same URL with the invitation secret removed.
- */
-export function urlWithoutInvitationToken(href: string): string {
-  return urlWithoutSecret(href, JOIN_PATH, JOIN_TOKEN_PARAM);
-}
-
-/**
  * Break a secret into groups a person can read without losing their place.
  *
  * A 20-character mixed-case password read down a phone line is where

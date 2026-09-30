@@ -217,7 +217,6 @@ const COVERED = [
   "POST /api/contacts/bulk",
   "POST /api/contacts/bulk-delete",
   "POST /api/contacts/merge",
-  "POST /api/contacts/merge-batch",
   "POST /api/contacts/merge-cluster",
   "POST /api/contacts/merge-clusters",
   "POST /api/connectors",
@@ -228,7 +227,6 @@ const COVERED = [
   "POST /api/dedupe/scan",
   "POST /api/dedupe/suggestions/:id/dismiss",
   "POST /api/dedupe/suggestions/:id/merge",
-  "POST /api/dev/seed-duplicates",
   "POST /api/imports/:id/retry",
   "POST /api/lists",
   "POST /api/lists/:id/members",
@@ -2620,14 +2618,6 @@ describe("dedupe scans and merges stop at the account that asked", () => {
     expect(unknown.status).toBe(404);
     expect(single.body.error.code).toBe(unknown.body.error.code);
 
-    const batch = await asUser(B)(
-      request(app)
-        .post("/api/contacts/merge-batch")
-        .send({ merges: [{ primaryId: janeA[0], duplicateId: janeA[1] }] }),
-    );
-    expect(batch.status).toBe(200);
-    expect(batch.body.succeeded).toBe(0);
-
     const cluster = await asUser(B)(
       request(app)
         .post("/api/contacts/merge-cluster")
@@ -2789,17 +2779,6 @@ describe("dedupe scans and merges stop at the account that asked", () => {
     clearOwnerEmbeddings(A.scope);
     expect(count(A.user.id)).toBe(0);
     expect(count(B.user.id)).toBe(before);
-  });
-
-  it("stamps dev-seeded duplicates with the account that asked for them", async () => {
-    const beforeA = rowsOwnedBy("contacts", A.user.id);
-    const beforeC = rowsOwnedBy("contacts", C.user.id);
-
-    const res = await asUser(C)(request(app).post("/api/dev/seed-duplicates"));
-    expect(res.status).toBe(200);
-
-    expect(rowsOwnedBy("contacts", C.user.id)).toBe(beforeC + 4);
-    expect(rowsOwnedBy("contacts", A.user.id)).toBe(beforeA);
   });
 });
 

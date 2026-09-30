@@ -3,7 +3,6 @@
  *
  * @module components/auth/PasskeyButton
  */
-import React from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 
 export const PasskeyButton = ({

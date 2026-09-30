@@ -85,7 +85,6 @@ export const easeInOut: Easing = (t) =>
   0.5 - 0.5 * Math.cos(Math.PI * clamp01(t));
 export const easeOut: Easing = (t) => Math.sin((Math.PI / 2) * clamp01(t));
 export const easeIn: Easing = (t) => 1 - Math.cos((Math.PI / 2) * clamp01(t));
-export const linear: Easing = (t) => clamp01(t);
 /** Overshoots a little and settles: a head that snaps and stops. */
 export const easeOutBack: Easing = (t) => {
   const x = clamp01(t) - 1;

@@ -58,7 +58,7 @@ const SearchView = React.lazy(() =>
   import("./views/SearchView").then((m) => ({ default: m.SearchView })),
 );
 const PulseView = React.lazy(() =>
-  import("./views/pulse").then((m) => ({ default: m.PulseView || m.default })),
+  import("./views/pulse").then((m) => ({ default: m.PulseView })),
 );
 
 import { Sidebar } from "./components/layout/Sidebar";
@@ -73,15 +73,6 @@ import { useUrgentActionItemCount } from "./api";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
 import { SessionProvider, useRecent } from "./contexts/SessionContext";
-
-// Dev-only: lazy import so the showcase is not in the prod bundle
-const ComponentShowcase = import.meta.env.DEV
-  ? React.lazy(() =>
-      import("./views/dev/ComponentShowcase").then((m) => ({
-        default: m.ComponentShowcase,
-      })),
-    )
-  : null;
 
 const ResponsiveLayout = () => {
   const location = useLocation();
@@ -239,8 +230,6 @@ const ResponsiveLayout = () => {
     </nav>
   );
 
-  const isDev = import.meta.env.DEV && location.pathname.startsWith("/dev");
-
   // The Tracked contacts page is a settings page. Its old path, from
   // bookmarks and from links made before it moved, leads there with its
   // hash (`#at-risk`), so the group it named is still where it lands.
@@ -253,8 +242,8 @@ const ResponsiveLayout = () => {
     );
   }
 
-  // Full-page views (cleanup, search, pulse, dev) take the full main area
-  if (isCleanup || isSearch || isPulse || isDev) {
+  // Full-page views (cleanup, search, pulse) take the full main area
+  if (isCleanup || isSearch || isPulse) {
     const pageName = isCleanup
       ? NAMES.settings.label
       : isSearch
@@ -306,22 +295,6 @@ const ResponsiveLayout = () => {
                   </RouteErrorBoundary>
                 }
               />
-              {ComponentShowcase && (
-                <Route
-                  path="/dev"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div className="p-12 text-center text-on-surface-variant animate-pulse">
-                          Loading showcase...
-                        </div>
-                      }
-                    >
-                      <ComponentShowcase />
-                    </Suspense>
-                  }
-                />
-              )}
             </Routes>
           </div>
         </main>

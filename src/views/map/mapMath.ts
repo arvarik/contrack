@@ -67,8 +67,6 @@ export function minZoomFor(width: number, height: number): number {
   return Math.max(0, Math.min(rounded, MAX_MIN_ZOOM));
 }
 
-export { haversineKm } from "../../../shared/geo";
-
 /**
  * True when the bounding box contains the given coordinate point.
  * Supports standard [west, south, east, north] bounds and antimeridian crossing.

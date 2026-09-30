@@ -6,7 +6,6 @@
  *
  * @module views/settings/pages/KeyboardPage
  */
-import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";

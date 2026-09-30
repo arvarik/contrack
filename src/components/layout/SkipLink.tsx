@@ -13,7 +13,6 @@
  * which reads as a navigation that did nothing. Focusing the element
  * directly does the one thing the link promises and nothing else.
  */
-import React from "react";
 import { useLocation } from "react-router-dom";
 
 /**

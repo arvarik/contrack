@@ -26,7 +26,6 @@ import {
   useSetTracked,
 } from "../../../../src/api/contacts";
 import {
-  useMergeBatch,
   useMergeCluster,
   useMergeClusters,
   useMergeContacts,
@@ -117,7 +116,6 @@ describe("the moments the corvid answers", () => {
       unknown,
     ][] = [
       [useMergeContacts as never, { primaryId: "a", duplicateId: "b" }],
-      [useMergeBatch as never, [{ primaryId: "a", duplicateId: "b" }]],
       [useMergeCluster as never, { primaryId: "a", duplicateIds: ["b"] }],
       [useMergeClusters as never, [{ primaryId: "a", duplicateIds: ["b"] }]],
       [useMergeSuggestion as never, { suggestionId: "s", primaryId: "a" }],

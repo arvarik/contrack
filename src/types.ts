@@ -528,12 +528,7 @@ export interface SemanticSearchResult {
 // AI Search Types
 // =============================================================================
 
-export type {
-  AISearchBatch,
-  AISearchJob,
-  AISearchJobStatus,
-  AISearchErrorType,
-} from "../shared/aiSearchContract";
+export type { AISearchBatch, AISearchJob } from "../shared/aiSearchContract";
 
 // =============================================================================
 // Command Palette Zero-State Types

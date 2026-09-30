@@ -21,7 +21,7 @@
  *
  * @module views/contact-detail/components/ChipInput
  */
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles, X } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";

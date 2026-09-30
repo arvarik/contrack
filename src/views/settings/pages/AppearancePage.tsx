@@ -3,7 +3,6 @@
  *
  * Theme, accent colour, text size, motion, the corvid, and list density.
  */
-import React from "react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useListDensity } from "../../../hooks/useListDensity";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";

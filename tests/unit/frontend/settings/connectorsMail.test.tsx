@@ -21,7 +21,6 @@ import type { Correspondent, KindInfo } from "../../../../shared/connectors";
 vi.mock("../../../../src/api/connectors", () => ({
   useConnectorKinds: vi.fn(),
   useConnectors: vi.fn(),
-  useConnector: vi.fn(),
   useCreateConnector: vi.fn(),
   useTestConnector: vi.fn(),
   useUpdateConnector: vi.fn(),

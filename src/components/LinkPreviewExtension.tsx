@@ -5,7 +5,7 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { cn, safeHref } from "../lib/utils";
 import { CARD_INTERACTIVE, LABEL, LABEL_PRIMARY } from "../lib/styles";

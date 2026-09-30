@@ -12,7 +12,7 @@
  * is `TILE`, `CORVID_OPTICAL` and `fitMark` from `src/assets/corvidPaths.ts`,
  * which `scripts/brand/build-icons.ts` also reads to write `public/`.
  */
-import React, { useId } from "react";
+import { useId } from "react";
 import {
   CORVID_EYE,
   CORVID_OPTICAL,

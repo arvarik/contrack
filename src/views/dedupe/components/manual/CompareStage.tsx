@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "motion/react";
 import { ArrowRight, ChevronLeft, Shield, AlertTriangle } from "lucide-react";
 import { ContactCard } from "../shared/ContactCard";

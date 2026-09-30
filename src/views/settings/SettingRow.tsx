@@ -159,5 +159,3 @@ export const SettingRow = ({
     </div>
   );
 };
-
-export default SettingRow;

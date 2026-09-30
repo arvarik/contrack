@@ -20,7 +20,7 @@
  * them. The label keeps one weight in both states, so the selected row's
  * label is as wide as it was.
  */
-import React, { useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -176,5 +176,3 @@ export const SettingsRail = () => {
     </aside>
   );
 };
-
-export default SettingsRail;

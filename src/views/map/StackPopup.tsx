@@ -1,62 +1,29 @@
 /**
- * The cards that open over the map.
- *
- * `ContactPopup` is the hover card over a pin: name, company and the location
- * that placed it. A contact with several addresses is pinned by one of them,
- * and the card says which before anyone navigates. It opens on hover and
- * focus of a pin and closes on leave and blur.
+ * The list that opens over a stack of pins.
  *
  * `StackPopup` lists the people in a cluster that zooming cannot split. The
  * geocoder gives everyone with the same city the same point, so past the
  * cluster zoom their pins would sit on top of each other and only the top one
  * could be clicked. The list gives each of them a button.
  *
- * Both use the app's type and colour tokens. MapLibre's popup frame takes its
+ * It uses the app's type and colour tokens. MapLibre's popup frame takes its
  * colours from `src/index.css`, and the same file stacks a card above the
  * pins, so a card never opens under the next pin over.
  *
- * Neither card names an anchor. MapLibre then picks the side with room, so a
- * pin at the top edge of the map gets its card below it and a pin at the
- * right edge gets it to the left, instead of a card cut off by the edge. The
- * offset is one number, which MapLibre applies in whichever direction the
- * card opens.
+ * It names no anchor. MapLibre then picks the side with room, so a pin at the
+ * top edge of the map gets its card below it and a pin at the right edge gets
+ * it to the left, instead of a card cut off by the edge. The offset is one
+ * number, which MapLibre applies in whichever direction the card opens.
  *
- * @module views/map/ContactPopup
+ * @module views/map/StackPopup
  */
 import { useEffect } from "react";
 import { Popup } from "@vis.gl/react-maplibre";
-import { MapPin } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
 import { contactPinLabel } from "./ContactMarker";
 
 /** Half the 48 px pin plus a gap, so the card clears the ring. */
 const PIN_CLEARANCE = 30;
-
-export const ContactPopup = ({ contact }: { contact: MapContact }) => (
-  <Popup
-    longitude={contact.lng}
-    latitude={contact.lat}
-    offset={PIN_CLEARANCE}
-    closeButton={false}
-    closeOnClick={false}
-    focusAfterOpen={false}
-    maxWidth="260px"
-    className="contact-popup"
-  >
-    <div className="font-body px-1 py-0.5">
-      <p className="text-sm font-extrabold text-on-surface">{contact.name}</p>
-      {contact.company && (
-        <p className="text-xs text-on-surface-variant">{contact.company}</p>
-      )}
-      {contact.location && (
-        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-primary">
-          <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
-          {contact.location}
-        </p>
-      )}
-    </div>
-  </Popup>
-);
 
 export interface ContactStack {
   clusterId: number;

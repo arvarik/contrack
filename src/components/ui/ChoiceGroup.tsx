@@ -34,7 +34,6 @@
  *
  * @module components/ui/ChoiceGroup
  */
-import React from "react";
 import { radioKeys, radioTabIndex } from "../../lib/a11y";
 import { SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";

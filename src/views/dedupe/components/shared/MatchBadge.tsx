@@ -1,4 +1,3 @@
-import React from "react";
 import { AtSign, Mail, Phone, Sparkles, UserPlus, Zap } from "lucide-react";
 import { TONE_WASH } from "../../../../lib/styles";
 

@@ -56,7 +56,7 @@ import type { MapLayer } from "../../api/mapViews";
 import { ClusterMarker } from "./ClusterMarker";
 import { ContactMarker } from "./ContactMarker";
 import { MapHoverCard } from "./MapHoverCard";
-import { STACK_LIMIT, StackPopup, type ContactStack } from "./ContactPopup";
+import { STACK_LIMIT, StackPopup, type ContactStack } from "./StackPopup";
 import { prefersReducedMotion } from "./flyTo";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";

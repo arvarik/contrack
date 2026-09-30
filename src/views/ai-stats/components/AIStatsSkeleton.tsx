@@ -2,7 +2,6 @@
  * AIStatsSkeleton — Loading state for the AI Stats page.
  * Shows pulsing placeholders for the summary bar, KPI cards, and feed rows.
  */
-import React from "react";
 import { CARD_TINTED, CARD_COMPACT, CARD } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 

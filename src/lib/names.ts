@@ -89,8 +89,6 @@ export const NAMES = {
   },
 } as const satisfies Record<string, DestinationName>;
 
-export type DestinationKey = keyof typeof NAMES;
-
 /**
  * The sentence under the Tracked contacts heading, and the body of the empty
  * states of the Keeping up card and the Network list's Tracked filter. One

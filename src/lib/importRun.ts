@@ -251,8 +251,3 @@ export const POLLING = {
   intervalMs: 1500,
   maxMisses: 40,
 };
-
-/** True when the status will not change again on its own. */
-export function isSettled(status: ImportStatus): boolean {
-  return status === "complete" || status === "failed";
-}

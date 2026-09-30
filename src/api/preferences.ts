@@ -19,7 +19,6 @@ export type MergePreset = "conservative" | "default" | "aggressive";
 export type TempUnit = "celsius" | "fahrenheit";
 export type StartPage = "network" | "pulse";
 export type ListSort = "name" | "recent";
-export type { CadenceDays } from "../../shared/cadence";
 import type { CadenceDays } from "../../shared/cadence";
 export type WeekStart = "monday" | "sunday";
 export type TextScale = "default" | "large";

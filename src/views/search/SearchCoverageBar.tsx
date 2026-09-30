@@ -13,7 +13,7 @@
  * Both reach the same two dialogs: the confirmation before a paid provider
  * embeds anything, and the list of the contacts that failed.
  */
-import React, { type RefObject, useCallback, useState } from "react";
+import { type RefObject, useCallback, useState } from "react";
 import {
   Sparkles,
   RefreshCw,

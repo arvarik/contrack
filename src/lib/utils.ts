@@ -38,22 +38,6 @@ export function cn(...inputs: ClassValue[]): string {
 }
 
 /**
- * Escape a string for safe interpolation into an HTML string.
- *
- * Escapes the five characters with special meaning in HTML markup and
- * attribute values: `&`, `<`, `>`, `"`, `'`. Use whenever untrusted data is
- * concatenated into raw HTML.
- */
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/**
  * LinkedIn slug cleanup — strips auto-generated numeric suffixes for display.
  *
  * LinkedIn auto-generates slugs like "alex-sadler-07993773" when a user

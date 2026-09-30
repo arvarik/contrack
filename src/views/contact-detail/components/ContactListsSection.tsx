@@ -1,4 +1,3 @@
-import React from "react";
 import { ListPlus, X, type LucideIcon } from "lucide-react";
 import {
   Star,

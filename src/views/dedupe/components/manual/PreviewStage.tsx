@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "motion/react";
 import { ChevronLeft, Merge, Loader2 } from "lucide-react";
 import { MergePreview } from "../MergePreview";

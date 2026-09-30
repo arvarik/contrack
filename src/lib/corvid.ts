@@ -29,8 +29,6 @@ import type { CorvidReaction } from "./corvidBrain";
 import { between, type Rng } from "./corvidMotion";
 import type { FlightKind } from "./corvidFlight";
 
-export type { CorvidReaction } from "./corvidBrain";
-
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------

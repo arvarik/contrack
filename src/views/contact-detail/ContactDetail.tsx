@@ -1,4 +1,3 @@
-import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { ContactProfile } from "./components/ContactProfile";

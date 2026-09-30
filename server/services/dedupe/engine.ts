@@ -1,5 +1,3 @@
-import crypto from "crypto";
-import { sqlite } from "../../db.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
@@ -587,65 +585,5 @@ export const dedupeService = {
       `[${rid}] Import scan: ${contactIds.length} new contacts against ${corpus.normalized.length} existing in ${Date.now() - t0}ms at threshold ${autoMergeThreshold} — ${autoMerged} auto-merged, ${pending} pending`,
     );
     return { autoMerged, pending, matchedIds };
-  },
-
-  seedDuplicates(scope: Scope) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "seedDuplicates() is a dev-only utility and cannot run in production",
-      );
-    }
-    const ids = [
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-    ];
-
-    // Dev-only seed. Stamped like every other insert so the seeded rows
-    // belong to whoever asked for them.
-    const owner = scope.ownerId;
-    const insertContact = sqlite.prepare(
-      "INSERT INTO contacts (id, name, company, role, themeColor, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
-    );
-    const insertEmail = sqlite.prepare(
-      "INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)",
-    );
-    const insertPhone = sqlite.prepare(
-      "INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)",
-    );
-
-    insertContact.run(
-      ids[0],
-      "Bobby Johnson",
-      "Acme Corp",
-      "VP Sales",
-      "brand",
-      owner,
-    );
-    insertPhone.run(crypto.randomUUID(), ids[0], "(555) 867-5309");
-
-    insertContact.run(
-      ids[1],
-      "Robert A. Johnson",
-      "Acme Corp",
-      "Vice President of Sales",
-      "pink",
-      owner,
-    );
-    insertEmail.run(crypto.randomUUID(), ids[1], "bob.johnson@gmail.com");
-
-    insertContact.run(
-      ids[2],
-      "Robert Johnson",
-      "Acme Corporation",
-      "VP Sales",
-      "emerald",
-      owner,
-    );
-    insertEmail.run(crypto.randomUUID(), ids[2], "bob.johnson@gmail.com");
-
-    insertContact.run(ids[3], "R. Johnson", null, null, "teal", owner);
-    insertPhone.run(crypto.randomUUID(), ids[3], "555-867-5309");
   },
 };

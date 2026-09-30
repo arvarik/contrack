@@ -12,12 +12,7 @@ import {
   shift,
   type VirtualElement,
 } from "@floating-ui/dom";
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { ScoreRingAvatar } from "./ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../shared/scoreBand";
 import type { ContactSlim } from "../api/contacts";

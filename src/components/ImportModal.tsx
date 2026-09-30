@@ -5,7 +5,6 @@
  *
  * @module components/ImportModal
  */
-import React from "react";
 import { Modal } from "./ui/Modal";
 import { ImportPanel } from "./ImportPanel";
 import type { ImportSummary } from "../api/imports";
@@ -31,5 +30,3 @@ export const ImportModal = ({
     </Modal>
   );
 };
-
-export default ImportModal;

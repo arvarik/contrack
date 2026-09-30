@@ -59,8 +59,6 @@ export const WORST_PASSWORDS_SET = new Set<string>(WORST_PASSWORDS);
 
 export const STRENGTH_WORDS = ["", "Short", "OK", "Good", "Strong"] as const;
 
-export type StrengthWord = (typeof STRENGTH_WORDS)[number];
-
 /**
  * Score password strength from 0 (empty) to 4 (strong).
  *

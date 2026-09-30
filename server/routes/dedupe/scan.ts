@@ -194,19 +194,4 @@ export function registerScanRoutes(router: Router) {
       res.json(scan);
     }),
   );
-
-  if (process.env.NODE_ENV !== "production") {
-    router.post(
-      "/dev/seed-duplicates",
-      asyncHandler(async (req, res) => {
-        const rid = req.requestId;
-        dedupeService.seedDuplicates(scopeOf(req));
-        log.info(
-          "API",
-          `[${rid}] POST /api/dev/seed-duplicates → Seeded duplicate pair`,
-        );
-        res.json({ success: true, message: "Seeded 1 duplicate pair" });
-      }),
-    );
-  }
 }

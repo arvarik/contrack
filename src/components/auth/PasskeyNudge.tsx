@@ -6,7 +6,7 @@
  *
  * @module components/auth/PasskeyNudge
  */
-import React, { useState } from "react";
+import { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
 import { registerPasskey, dismissPasskeyNudge } from "../../api/passkeys";

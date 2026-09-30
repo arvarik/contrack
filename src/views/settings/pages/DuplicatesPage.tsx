@@ -33,7 +33,6 @@
  *
  * @module views/settings/pages/DuplicatesPage
  */
-import React from "react";
 import { ArrowRight, Copy, History } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";

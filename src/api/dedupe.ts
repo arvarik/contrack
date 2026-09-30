@@ -9,10 +9,8 @@ import { corvidReact } from "../lib/corvid";
  * - `useStartDedupeScan` — Kicks off a background scan with mode selection
  * - `useDedupeStream` — SSE hook for real-time scan progress
  * - `useMergeContacts` — Merge a single pair
- * - `useMergeBatch` — Bulk merge multiple pairs (list view)
  * - `useMergeCluster` — Merge an entire cluster into one contact
  * - `useMergeClusters` — Bulk merge multiple clusters
- * - `useSeedDuplicates` — Dev-only seed utility
  *
  * @module api/dedupe
  */
@@ -305,40 +303,6 @@ export const useMergeContacts = () => {
   });
 };
 
-export const useMergeBatch = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (
-      merges: { primaryId: string; duplicateId: string }[],
-    ) => {
-      const res = await apiFetch(`/contacts/merge-batch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ merges }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Batch merge failed");
-      }
-      return res.json() as Promise<{
-        results: {
-          primaryId: string;
-          duplicateId: string;
-          success: boolean;
-          error?: string;
-        }[];
-        succeeded: number;
-        total: number;
-      }>;
-    },
-    onSuccess: () => {
-      // Two records made one: the corvid tidies its own feathers.
-      corvidReact("preen");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
-  });
-};
-
 // =============================================================================
 // Cluster merge mutations
 // =============================================================================
@@ -414,26 +378,6 @@ export const useMergeClusters = () => {
     onSuccess: () => {
       // Two records made one: the corvid tidies its own feathers.
       corvidReact("preen");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
-  });
-};
-
-// =============================================================================
-// Dev-only seed
-// =============================================================================
-
-export const useSeedDuplicates = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const res = await apiFetch(`/dev/seed-duplicates`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to seed duplicates");
-      return res.json();
-    },
-    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });

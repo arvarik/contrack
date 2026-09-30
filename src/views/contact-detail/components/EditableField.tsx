@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Check, Loader2, Pencil } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";

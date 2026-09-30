@@ -1075,5 +1075,3 @@ export const ImportPanel = ({
     </div>
   );
 };
-
-export default ImportPanel;

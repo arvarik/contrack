@@ -27,7 +27,6 @@ import type {
 vi.mock("../../../../src/api/connectors", () => ({
   useConnectorKinds: vi.fn(),
   useConnectors: vi.fn(),
-  useConnector: vi.fn(),
   useCreateConnector: vi.fn(),
   useTestConnector: vi.fn(),
   useUpdateConnector: vi.fn(),
@@ -100,11 +99,6 @@ describe("Frontend Connectors Components", () => {
       isError: false,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-    vi.mocked(connectorsApi.useConnector).mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    } as unknown as ReturnType<typeof connectorsApi.useConnector>);
 
     vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
       data: [],

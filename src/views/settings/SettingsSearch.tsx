@@ -156,5 +156,3 @@ export const SettingsSearch = ({
     </div>
   );
 };
-
-export default SettingsSearch;

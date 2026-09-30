@@ -127,5 +127,3 @@ export const NeedsAttention = () => {
     </section>
   );
 };
-
-export default NeedsAttention;

@@ -3,7 +3,6 @@
  * Animates the spinner's rotation based on pull progress, and spins continuously
  * while the refresh is in progress.
  */
-import React from "react";
 import { RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 

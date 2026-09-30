@@ -464,5 +464,3 @@ export const CorvidFlight = () => {
     </div>
   );
 };
-
-export default CorvidFlight;

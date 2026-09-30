@@ -3050,7 +3050,6 @@ Smaller surfaces, documented compactly. Shapes follow the conventions above.
 | `GET /api/contacts/:id/score`               | The contact's relationship-score breakdown (the five signals behind the number). `404` with code `NOT_TRACKED` for an untracked contact |
 | `GET /api/contacts/:id/relationships`       | The contact's @mention relationship graph                                                                                               |
 | `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`, `bg=1`, `theme=light\|dark`, `look=f\|m\|n`)                                    |
-| `POST /api/contacts/merge-batch`            | Merge many independent pairs in one call                                                                                                |
 | `POST /api/contacts/merge-clusters`         | Merge many clusters in one call (auto-merge flow)                                                                                       |
 | `GET /api/dedupe/stream`                    | SSE progress stream for a running scan (query `scanId=`)                                                                                |
 | `GET /api/dedupe/active`                    | The in-progress scan, if any (page-refresh recovery)                                                                                    |

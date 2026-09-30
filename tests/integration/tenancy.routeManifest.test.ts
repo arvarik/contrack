@@ -63,10 +63,7 @@ describe("route manifest", () => {
     const devOnly = ROUTE_MANIFEST.filter((r) => r.devOnly)
       .map(key)
       .sort();
-    expect(devOnly).toEqual([
-      "GET /api/debug/cache-stats",
-      "POST /api/dev/seed-duplicates",
-    ]);
+    expect(devOnly).toEqual(["GET /api/debug/cache-stats"]);
     // GET /api/debug/cache-stats moved into createApp() so it is visible here.
     if (!isProduction) {
       expect(registered.map(key)).toContain("GET /api/debug/cache-stats");

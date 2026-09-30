@@ -7,7 +7,6 @@
  * of the Details tab. One component, so both places add and remove a tag the
  * same way, with the same undo.
  */
-import React from "react";
 import { toast } from "sonner";
 
 import type { Contact, ContactUpdateData } from "../../../types";

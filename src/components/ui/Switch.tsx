@@ -21,7 +21,6 @@
  *
  * @module components/ui/Switch
  */
-import React from "react";
 import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";
 

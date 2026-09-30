@@ -5,7 +5,6 @@
  * buttons. The sort toggle is a flat button with the state layer, as tall as
  * the trough beside it.
  */
-import React from "react";
 import { cn } from "../../../lib/utils";
 import { ArrowUpDown } from "lucide-react";
 import { Segmented } from "../../../components/ui/Segmented";

@@ -40,25 +40,6 @@ export function activateOnKey(handler: () => void) {
 }
 
 /**
- * Props that turn a static element into a keyboard-operable button.
- *
- * Spread this rather than remembering the trio each time:
- * `<div {...buttonLike(open)} className="…">`
- *
- * @param handler what activation should do
- * @param label   accessible name, when the element's text is not enough
- */
-export function buttonLike(handler: () => void, label?: string) {
-  return {
-    role: "button" as const,
-    tabIndex: 0,
-    onClick: handler,
-    onKeyDown: activateOnKey(handler),
-    ...(label ? { "aria-label": label } : {}),
-  };
-}
-
-/**
  * The arrow keys of an option in a radio group. Right and Down move to the
  * next option, Left and Up to the one before, wrapping at the ends, and the
  * option they reach takes focus and is chosen, by its own click.

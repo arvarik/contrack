@@ -15,7 +15,7 @@
  *
  * @module views/settings/ResetToDefaults
  */
-import React, {
+import {
   createContext,
   useCallback,
   useContext,

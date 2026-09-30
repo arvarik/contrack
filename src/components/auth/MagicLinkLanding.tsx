@@ -8,7 +8,7 @@
  * @module components/auth/MagicLinkLanding
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
 import { AuthShell, AuthSubmit } from "./AuthShell";
 import { completeMagicLink } from "../../api/authLinks";

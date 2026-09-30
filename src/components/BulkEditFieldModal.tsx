@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Select } from "./ui/Select";

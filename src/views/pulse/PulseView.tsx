@@ -735,6 +735,3 @@ export const PulseView = () => {
     </Routes>
   );
 };
-
-export { PulseView as DashboardView };
-export default PulseView;
