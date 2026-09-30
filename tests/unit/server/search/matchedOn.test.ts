@@ -269,6 +269,58 @@ describe("explainMatch", () => {
   it("says nothing for a contact with no field to show", () => {
     expect(explainMatch(person({ role: "Chef" }), ml)).toEqual([]);
   });
+
+  describe("an address", () => {
+    const valencia = questionTerms("Valencia");
+    const home = [
+      { address: "3190 Valencia St, San Francisco, CA 94110", label: "home" },
+      { address: "1 Market St, San Francisco", label: "work" },
+    ];
+
+    it("names the address that holds the words, marked, when nothing else does", () => {
+      const entries = explainMatch(person({ addresses: home }), valencia);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ field: "address", how: "words" });
+      expect(entries[0].text).toContain("3190 Valencia St");
+      expect(marked(entries[0])).toEqual(["Valencia"]);
+    });
+
+    it("lists the address after every other field that matched", () => {
+      const entries = explainMatch(
+        person({
+          role: "Valencia Street Baker",
+          about: "Runs a stall on Valencia St on Sundays",
+          addresses: home,
+        }),
+        valencia,
+      );
+      expect(entries.map((m) => m.field)).toEqual(["role", "about", "address"]);
+    });
+
+    it(`gives way to ${MAX_MATCHED} fields that matched better`, () => {
+      const entries = explainMatch(
+        person({
+          role: "Valencia St Baker",
+          headline: "Baker on Valencia St",
+          company: "Valencia St Bakery",
+          addresses: home,
+        }),
+        valencia,
+      );
+      expect(entries).toHaveLength(MAX_MATCHED);
+      expect(entries.map((m) => m.field)).not.toContain("address");
+    });
+
+    it("has no address line for a contact with no address or no match", () => {
+      expect(explainMatch(person({ addresses: [] }), valencia)).toEqual([]);
+      expect(
+        explainMatch(
+          person({ addresses: [{ address: "9 Elm Road, Leeds" }] }),
+          valencia,
+        ),
+      ).toEqual([]);
+    });
+  });
 });
 
 describe("windowed", () => {

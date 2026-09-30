@@ -12,10 +12,13 @@ import type { CompiledFacets } from "./facetSql.ts";
 // The first FTS column is the unindexed contactId. It still consumes a weight.
 // bm25() reads weights by column position, so one weight per column in COLUMNS:
 // contactId, name, company, role, headline, location, about, industry, tags,
-// extras, searchExpansion, ownerTok. Tags and interests weigh 3, as much as a
-// role, and emails and phones keep 1. The last is ownerTok, which is a
-// scoping filter and must not affect ranking.
-export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 3, 1, 0.5, 0";
+// extras, addresses, searchExpansion, ownerTok. Tags and interests weigh 3, as
+// much as a role, and emails and phones keep 1. Addresses weigh 0.5, the
+// least of any text: a street or a postcode finds a contact, but a name, a
+// company, a role, a location or an about text that holds the same word
+// ranks first. The last is ownerTok, which is a scoping filter and must not
+// affect ranking.
+export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 3, 1, 0.5, 0.5, 0";
 
 export interface LexicalMatch {
   contactId: string;

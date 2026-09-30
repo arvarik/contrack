@@ -93,6 +93,28 @@ describe("BM25 weights", () => {
     db.close();
   });
 
+  it("weighs an address least of any text, below every field a person writes about someone", () => {
+    const weights = WEIGHTS.split(",").map((w) => Number(w.trim()));
+    const columns = COLUMNS.split(",").map((c) => c.trim());
+    const weightOf = (column: string) => weights[columns.indexOf(column)];
+
+    expect(columns).toContain("addresses");
+    expect(weightOf("addresses")).toBeGreaterThan(0);
+    for (const column of [
+      "name",
+      "company",
+      "role",
+      "headline",
+      "location",
+      "about",
+      "industry",
+      "tags",
+      "extras",
+    ]) {
+      expect(weightOf("addresses"), column).toBeLessThan(weightOf(column));
+    }
+  });
+
   it("declares one weight per FTS column, none for contactId or ownerTok, and the most for name", () => {
     const weights = WEIGHTS.split(",").map((w) => Number(w.trim()));
     const columns = COLUMNS.split(",").map((c) => c.trim());

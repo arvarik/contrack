@@ -9,17 +9,18 @@ export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) =
 // Version 3 adds `ownerTok`. Version 4 adds interactions_fts, the note index
 // in interactionFtsIndex.ts, which lives under the same gate. Version 5 gives
 // tags and interests their own column, `tags`, and adds the digit forms of
-// each phone number to `extras`. The gate below drops and rebuilds both
-// tables when the stored user_version differs, so the first boot after
-// upgrade re-indexes every active contact and every note. Measured at 233 ms
-// for 50,000 contacts.
+// each phone number to `extras`. Version 6 adds `addresses`, every address a
+// contact has, at the lowest rank (`WEIGHTS` in lexical.ts). The gate below
+// drops and rebuilds both tables when the stored user_version differs, so the
+// first boot after upgrade re-indexes every active contact and every note.
+// Measured at 233 ms for 50,000 contacts.
 /**
  * The FTS schema version, kept in `PRAGMA user_version`.
  *
  * Exported so the admin health panel can report what this database is on
  * without opening it, which is the whole point of the panel.
  */
-export const FTS_SCHEMA_VERSION = 5;
+export const FTS_SCHEMA_VERSION = 6;
 const VERSION = FTS_SCHEMA_VERSION;
 
 /**
@@ -32,7 +33,7 @@ const VERSION = FTS_SCHEMA_VERSION;
  * pushes down only MATCH, rowid and rank.
  */
 export const COLUMNS =
-  "contactId, name, company, role, headline, location, about, industry, tags, extras, searchExpansion, ownerTok";
+  "contactId, name, company, role, headline, location, about, industry, tags, extras, addresses, searchExpansion, ownerTok";
 
 /**
  * Characters people put between the digits of a phone number. SQLite has no
@@ -100,12 +101,15 @@ const OWNER_TOKEN_SQL = (alias: string) =>
   `'o' || replace(${alias}.ownerId, '-', '')`;
 
 // `tags` holds tags and interests. `extras` holds emails, and each phone
-// number followed by its digit forms.
+// number followed by its digit forms. `addresses` holds every address as
+// written, so a street, a postcode or a city named only there finds the
+// contact.
 const VALUES = `c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
   COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
   COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), ''),
   COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
   ${PHONES},
+  COALESCE((SELECT GROUP_CONCAT(address, ' ') FROM contact_addresses WHERE contactId = c.id), ''),
   COALESCE(c.searchExpansion, ''), ${OWNER_TOKEN_SQL("c")}`;
 
 /**
@@ -184,7 +188,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
     if (rebuilt) sqlite.exec("DROP TABLE IF EXISTS contacts_fts");
     sqlite.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
-        contactId UNINDEXED, name, company, role, headline, location, about, industry, tags, extras, searchExpansion,
+        contactId UNINDEXED, name, company, role, headline, location, about, industry, tags, extras, addresses, searchExpansion,
         ownerTok,
         prefix='2 3 4'
       );
@@ -235,6 +239,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
       "interests",
       "emails",
       "phones",
+      "addresses",
       "experience",
       "education",
     ]) {
