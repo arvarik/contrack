@@ -146,6 +146,10 @@ The server offers 15 tools. A read-only tool changes nothing.
 `search_people` and `search_notes` return up to 50 results. `list_contacts`
 and `get_timeline` return up to 100 entries at a time.
 
+With AI off for your account or for the instance, `search_people` answers from
+the local index, as Ask Contrack does. **Enrich new contacts automatically**
+does not research a contact that `create_contact` adds.
+
 ## Resources and prompts
 
 The server also offers two resources, each as JSON:

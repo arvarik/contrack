@@ -20,7 +20,7 @@ Each AI feature runs one kind of task. An admin picks the model for each task
 | Mail summaries                         | Writes a short note for each matched email, when a **Mailbox (IMAP)** or **Google Workspace** connector has **Generate AI summaries** on | Quick tasks                    | Each email's subject and body                                                                                                                  |
 | [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web research, then Quick tasks | The contact's name, role, company, headline, city, industry, website, summary, emails, profile links, jobs, schools, interests and other facts |
 | Duplicate checks                       | **Smart scan** and **Full scan** ask about pairs that look alike but are not certain                                                     | Deep tasks                     | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                           |
-| Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embeddings                     | Nothing with the built-in model. A hosted model gets each contact's profile text                                                               |
+| Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embeddings                     | Nothing with the built-in model. A hosted model gets each contact's profile text, but not for an account with AI off                           |
 
 Research never sends your notes or phone numbers.
 
@@ -32,8 +32,8 @@ by AI**. The command palette, facets and
 [note search](search.md#search-your-notes) run on the server. Duplicate checks
 run, and **Smart scan** and **Full scan** skip their AI step.
 
-The other features in the table need a provider. So does an `.eml` file:
-without a provider, Contrack refuses the file.
+The other features in the table need a provider. Without one, an `.eml` file
+that you attach is saved with no summary.
 
 ## Connect a provider
 
@@ -126,6 +126,8 @@ and duplicate indexes in the background, and results are incomplete until it
 finishes. The **Semantic search coverage** card shows the progress. With a
 hosted model, new and changed contacts wait until you choose **Index missing**
 or **Refresh index**, then **Confirm & refresh**. The provider bills each one.
+A hosted model never gets the contacts of an account with **Use AI for this
+account** off. Ask Contrack finds that account's people by their words only.
 
 ## Research contacts
 
@@ -171,9 +173,9 @@ still bill a request that it already took.
   **Enrich again** open a menu with both depths. One contact needs no
   confirmation.
 - Turn on **Enrich new contacts automatically** on the **Contact enrichment**
-  page, and Contrack researches each new contact at Standard depth. This
-  includes contacts that an MCP client or a **Google Workspace** connector
-  adds, but not a file import. It is off by default.
+  page, and Contrack researches each contact that you add yourself, in the app
+  or through the REST API, at Standard depth. It leaves out the contacts that
+  a file import, a connector sync or an MCP client adds. It is off by default.
 
 ### What research adds
 
@@ -226,6 +228,9 @@ With either switch off:
 - **Scan now** on the **Duplicates** page does not run, for any scan type.
   The automatic checks of new contacts and imports still run.
 - Link previews in notes do not load.
+- An `.eml` file that you attach is saved with no summary.
+- A search that an MCP client runs with your token answers from the local
+  index, as Ask Contrack does.
 
 ## Costs and usage
 
@@ -263,19 +268,10 @@ Limits and busy answers:
 - For web research, the provider searches the web with the contact's details.
   With SearXNG, your SearXNG runs the searches, and Contrack reads the pages.
 - A download of the local search models sends no contact data.
-
-### What the account switch does not stop
-
-**Use AI for this account** does not cover four tasks. While AI is on for the
-instance, they still reach a provider:
-
-- finding the people named in a note that you save
-- summarizing an `.eml` file that you attach
-- a search that an MCP client runs with your token
-- indexing contacts with a hosted embedding model, which an admin picks for
-  everyone
-
-To stop all four, an admin turns off **Use AI on this instance**.
+- With **Use AI for this account** off, nothing goes to a provider for you,
+  even while AI is on for the instance. This includes the notes that you save,
+  the `.eml` files that you attach, the searches that an MCP client runs with
+  your token, and your contacts' text for a hosted embedding model.
 
 ### How Contrack guards prompts and answers
 
@@ -304,8 +300,8 @@ For each contact, Contrack runs up to three searches built from the name,
 company, role and location. It reads up to five result pages from public
 addresses, and the **Deep tasks** model reads them into fields.
 
-> **Note:** SearXNG research also runs when the **Research model** is **Off —
-> never research online**. To stop it, remove the SearXNG address.
+A **Research model** of **Off — never research online** stops SearXNG
+research too.
 
 ## Related
 

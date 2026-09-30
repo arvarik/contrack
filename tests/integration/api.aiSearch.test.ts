@@ -15,6 +15,8 @@ import {
 import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
+import { contactRepo } from "../../server/repositories/contactRepository.ts";
+import { SearxngStrategy } from "../../server/services/aiSearch/strategies/searxng.ts";
 
 const app = makeTestApp();
 
@@ -151,6 +153,62 @@ describe("POST /api/ai-search", () => {
     expect(res.status).toBe(200);
     const batch = jobQueue.getBatch(scope(), res.body.batchId);
     expect(batch?.strategy).toBe("searxng");
+  });
+
+  it("runs no research, SearXNG included, while research is Off — never research online", async () => {
+    setSetting(SETTING_KEYS.aiCustomEndpoints, [
+      {
+        id: "local-ollama",
+        label: "Local Ollama",
+        baseUrl: "http://127.0.0.1:11434/v1",
+      },
+    ]);
+    setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
+    // The setup of the SearXNG test above, plus the admin's choice of Off.
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      deep: {
+        mode: "pinned",
+        providerId: "custom:local-ollama",
+        model: "local-test",
+      },
+      research: { mode: "disabled" },
+    });
+    invalidateProviderCache();
+
+    for (const body of [
+      { contactIds: [contactId] },
+      { contactIds: [contactId], strategy: "searxng" },
+    ]) {
+      const res = await request(app).post("/api/ai-search").send(body);
+      expect(res.status).toBe(503);
+      expect(res.body.error.code).toBe("RESEARCH_OFF");
+    }
+    expect(jobQueue.getActiveBatches(scope())).toEqual([]);
+
+    const single = await request(app)
+      .post(`/api/contacts/${contactId}/enrich`)
+      .send({});
+    expect(single.status).toBe(503);
+    expect(single.body.error.code).toBe("RESEARCH_OFF");
+
+    const capacity = await request(app).get("/api/ai/grounding-capacity");
+    expect(capacity.body).toMatchObject({ hasCapacity: false, provider: null });
+  });
+
+  it("stops a SearXNG batch that started before research was turned off", async () => {
+    setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      research: { mode: "disabled" },
+    });
+    const contact = contactRepo.hydrate(
+      contactRepo.findOwned(scope(), contactId),
+    )!;
+
+    // Without the check, the strategy searches the unreachable address and
+    // fails with SEARXNG_NO_RESULTS instead.
+    await expect(
+      new SearxngStrategy().execute(contact, "prompt"),
+    ).rejects.toMatchObject({ code: "RESEARCH_OFF" });
   });
 
   it("rejects unknown strategy with 400 Bad Request", async () => {

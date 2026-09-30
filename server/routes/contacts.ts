@@ -189,7 +189,14 @@ router.post(
     const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
 
-    const contact = contactService.createContact(scopeOf(req), req.body);
+    // A person adding a contact is the one case "Enrich new contacts
+    // automatically" covers.
+    const contact = contactService.createContact(
+      scopeOf(req),
+      req.body,
+      "manual",
+      { autoEnrich: true },
+    );
     log.info(
       "API",
       `[${rid}] POST /api/contacts → "${req.body.name}" (${contact?.id})`,

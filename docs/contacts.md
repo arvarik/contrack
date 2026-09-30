@@ -165,7 +165,8 @@ the contact in the **Log an interaction** dialog.
 - **Files**: drop files on the **Timeline** tab to attach them, up to 50 MB
   each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
   and `.csv` files, and `.eml` email files. An `.eml` file becomes an email
-  entry with a summary of the thread that AI writes, so it needs AI.
+  entry. With AI on, AI writes a summary of the thread into it. With AI off,
+  the entry holds the file with no summary.
 - **Badges**: **via Calendar**, **via Email** and **via Google** mark entries
   from a connector. **via** and a name marks a note, logged on another
   contact, that mentions this person. Press it to open that contact.

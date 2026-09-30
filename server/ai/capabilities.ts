@@ -125,6 +125,16 @@ export function getCapabilityAssignment(
 }
 
 /**
+ * True when an admin set the research model to "Off — never research online".
+ *
+ * Research through SearXNG resolves no provider, so `resolveCapability`
+ * alone cannot stop it. Every research path asks this as well.
+ */
+export function isResearchOff(): boolean {
+  return getCapabilityAssignment("research").mode === "disabled";
+}
+
+/**
  * Parse an env override of the form "provider:model" or bare "model"
  * (bare uses the default provider).
  */

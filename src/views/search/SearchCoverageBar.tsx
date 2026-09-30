@@ -29,6 +29,7 @@ import {
   type FailedIndexItem,
 } from "../../api";
 import { Modal } from "../../components/ui/Modal";
+import { useAiAllowed } from "../../hooks/useAiAllowed";
 import { BTN_QUIET, TONE_DOT, TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -79,6 +80,7 @@ export function SearchCoverageBar({
 }: SearchCoverageBarProps) {
   const { data: coverage, isLoading } = useSearchCoverage();
   const refreshIndex = useRefreshSearchIndex();
+  const aiAllowed = useAiAllowed();
 
   const [showProviderConfirm, setShowProviderConfirm] = useState(false);
   const [showInspectModal, setShowInspectModal] = useState(false);
@@ -103,6 +105,11 @@ export function SearchCoverageBar({
   if (queuePressed && coverage && !workLeft) setQueuePressed(false);
 
   if (isLoading || !coverage) return null;
+
+  // A hosted embedding model sends each contact to the provider, so it does
+  // not index an account with AI off, and the server refuses to queue one.
+  // Search stays keyword-only, and there is nothing to offer here.
+  const providerBlocked = coverage.provider.isPaid && !aiAllowed;
 
   const isComplete =
     coverage.coverage === 100 &&
@@ -165,6 +172,7 @@ export function SearchCoverageBar({
   );
 
   if (variant === "row") {
+    if (providerBlocked) return null;
     /*
      * Indexing is under way: the worker is running, or contacts wait for the
      * built-in model, which drains its queue on its own between batches. A
@@ -304,6 +312,7 @@ export function SearchCoverageBar({
               {coverage.failed > 0 && ` • ${coverage.failed} failed`}
               {coverage.provider.isPaid &&
                 ` • Provider: ${coverage.provider.providerId}`}
+              {providerBlocked && " • AI is off for your account"}
             </p>
           </div>
         </div>
@@ -319,23 +328,25 @@ export function SearchCoverageBar({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleRefreshClick}
-            disabled={refreshIndex.isPending || coverage.isIndexing}
-            className="btn-primary"
-          >
-            <RefreshCw
-              className={cn(
-                "w-3.5 h-3.5",
-                (refreshIndex.isPending || coverage.isIndexing) &&
-                  "animate-spin",
-              )}
-            />
-            <span>
-              {coverage.missing > 0 ? "Index missing" : "Refresh index"}
-            </span>
-          </button>
+          {!providerBlocked && (
+            <button
+              type="button"
+              onClick={handleRefreshClick}
+              disabled={refreshIndex.isPending || coverage.isIndexing}
+              className="btn-primary"
+            >
+              <RefreshCw
+                className={cn(
+                  "w-3.5 h-3.5",
+                  (refreshIndex.isPending || coverage.isIndexing) &&
+                    "animate-spin",
+                )}
+              />
+              <span>
+                {coverage.missing > 0 ? "Index missing" : "Refresh index"}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

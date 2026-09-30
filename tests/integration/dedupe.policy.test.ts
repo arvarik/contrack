@@ -481,3 +481,69 @@ describe("a value many contacts carry", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// A pair marked as different people
+// ---------------------------------------------------------------------------
+
+describe("a pair marked as different people", () => {
+  /** "Not the same person", as the review screen records it. */
+  function markDifferent(a: string, b: string): void {
+    const [low, high] = a < b ? [a, b] : [b, a];
+    sqlite
+      .prepare(
+        `INSERT INTO dedupe_exclusions (contactIdA, contactIdB, ownerId)
+         VALUES (?, ?, ?)`,
+      )
+      .run(low, high, scope.ownerId);
+  }
+
+  it("is not merged by a scan for a shared email address", async () => {
+    // The control: the same two contacts merge while nothing marks them.
+    const merging = await seed([
+      { name: "Ada Park", emails: ["ada.park@example.com"] },
+      { name: "Ada Park", emails: ["ada.park@example.com"] },
+    ]);
+    await scan();
+    expect(anyMerged(merging)).toBe(true);
+
+    reset();
+    const [a, b] = await seed([
+      { name: "Ada Park", emails: ["ada.park@example.com"] },
+      { name: "Ada Park", emails: ["ada.park@example.com"] },
+    ]);
+    markDifferent(a, b);
+    await scan();
+
+    expect(anyMerged([a, b])).toBe(false);
+    expect(suggestions()).toHaveLength(0);
+  });
+
+  it("is not merged by a scan for a shared phone number", async () => {
+    const merging = await seed([
+      { name: "Ben Okafor", phones: ["+1 415 555 0142"] },
+      { name: "Ben Okafor", phones: ["415-555-0142"] },
+    ]);
+    await scan();
+    expect(anyMerged(merging)).toBe(true);
+
+    reset();
+    const [a, b] = await seed([
+      { name: "Ben Okafor", phones: ["+1 415 555 0142"] },
+      { name: "Ben Okafor", phones: ["415-555-0142"] },
+    ]);
+    markDifferent(a, b);
+    await scan();
+
+    expect(anyMerged([a, b])).toBe(false);
+    expect(suggestions()).toHaveLength(0);
+  });
+
+  it("is not suggested again for a shared name", async () => {
+    const [a, b] = await seed([{ name: "Cho Min" }, { name: "Cho Min" }]);
+    markDifferent(a, b);
+    await scan();
+
+    expect(suggestions()).toHaveLength(0);
+  });
+});

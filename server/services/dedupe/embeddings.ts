@@ -12,6 +12,8 @@
 //
 // Design principles:
 // - Model/provider resolved from the embeddings capability, never hardcoded
+// - A provider model never embeds the contacts of an account with AI off
+//   (mayEmbedContactsFor)
 // - Manual L2 normalization (provider vectors are not always unit length)
 // - Float32Array buffer format for sqlite-vec compatibility
 // - Concurrency guard: only one backfill at a time
@@ -39,6 +41,7 @@ import {
 } from "../search/localEmbeddings.ts";
 import {
   resolveEmbeddings,
+  mayEmbedContactsFor,
   probeDimension,
   getEmbeddingsState,
   setEmbeddingsState,
@@ -390,7 +393,7 @@ function findStaleEmbeddings(scope: Scope): string[] {
  * @returns Number of contacts re-embedded
  */
 export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
-  if (!isEmbeddingAvailable()) return 0;
+  if (!isEmbeddingAvailable() || !mayEmbedContactsFor(scope.ownerId)) return 0;
 
   const staleIds = findStaleEmbeddings(scope);
   if (staleIds.length === 0) {
@@ -517,6 +520,7 @@ export async function backfillOwnerEmbeddings(
     );
     return 0;
   }
+  if (!mayEmbedContactsFor(scope.ownerId)) return 0;
 
   _backfillRunning = true;
   try {
@@ -604,6 +608,7 @@ export async function backfillEmbeddings(
     onProgress?.(0, 0, "Normalizing contacts...");
     const queues: { scope: Scope; items: PendingEmbedding[] }[] = [];
     for (const ownerId of ownersWithContacts()) {
+      if (!mayEmbedContactsFor(ownerId)) continue;
       const scope = scopeForOwnerId(ownerId);
       const items = pendingEmbeddings(scope);
       if (items.length > 0) queues.push({ scope, items });
@@ -631,6 +636,11 @@ export async function backfillEmbeddings(
       remaining = false;
       for (const queue of queues) {
         if (queue.items.length === 0) continue;
+        // The owner can turn AI off while a provider backfill runs.
+        if (!mayEmbedContactsFor(queue.scope.ownerId)) {
+          queue.items = [];
+          continue;
+        }
         const round = queue.items.splice(0, OWNER_ROUND_SIZE);
         done += await runWithContext(
           {
@@ -683,6 +693,7 @@ export async function generateAndStoreEmbedding(
   _inFlightIds.add(contactId);
   try {
     const scope = scopeOfContact(contactId);
+    if (scope && !mayEmbedContactsFor(scope.ownerId)) return false;
     const normalized = scope && normalizeContactById(scope, contactId);
     if (!normalized) {
       log.warn(
@@ -724,6 +735,7 @@ export async function generateAndStoreBulkEmbeddings(
     const items: { id: string; text: string }[] = [];
     for (const id of contactIds) {
       const scope = scopeOfContact(id);
+      if (scope && !mayEmbedContactsFor(scope.ownerId)) continue;
       const normalized = scope && normalizeContactById(scope, id);
       if (normalized) {
         items.push({ id: normalized.id, text: normalized.embeddingText });

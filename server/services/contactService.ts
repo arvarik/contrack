@@ -423,10 +423,21 @@ type SlimContactRow = Pick<
 const RESEARCH_OUTCOMES = new Set(["added", "nothing-new", "no-public-info"]);
 
 export const contactService = {
+  /**
+   * Add one contact.
+   *
+   * @param source - The provenance stamp for the child rows: "manual", or a
+   *   connector's kind.
+   * @param options.autoEnrich - True only when a person added this contact,
+   *   in the app or through the REST API. Then "Enrich new contacts
+   *   automatically" may research it. A Google sync and an MCP client add
+   *   contacts that nobody chose one by one, so they leave it unset.
+   */
   createContact(
     scope: Scope,
     body: NewContactPayload,
     source: string = "manual",
+    options: { autoEnrich?: boolean } = {},
   ) {
     const id = crypto.randomUUID();
     const values = buildInsertValues(scope, body, id, {
@@ -481,11 +492,13 @@ export const contactService = {
       scheduleIncrementalDedupe(id);
     }
 
-    // Auto-enrich person-created contact (never imports). Whether research
-    // can run at all is validateEnrichmentStrategy's question, asked below.
-    // aiAllowedForUser reads both switches: the account's `aiAssist` and the
-    // admin's switch for the whole instance.
+    // Auto-enrich a contact that a person added (never an import, a sync or
+    // an MCP client). Whether research can run at all is
+    // validateEnrichmentStrategy's question, asked below. aiAllowedForUser
+    // reads both switches: the account's `aiAssist` and the admin's switch
+    // for the whole instance.
     if (
+      options.autoEnrich &&
       prefs.autoEnrich &&
       aiAllowedForUser(scope.ownerId) &&
       !body.isGhost &&

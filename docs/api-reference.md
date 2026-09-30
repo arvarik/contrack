@@ -525,14 +525,14 @@ An interaction is one timeline entry: a note, a call, a meeting or an email.
 The app logs `note`, `call`, `meeting` and `email`. Connectors write `meeting`
 and `email`. The server accepts any non-empty `type`.
 
-| Endpoint                              | What it does                                                                                                                                             | Access    |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/contacts/:id/timeline`      | The contact's interactions. Each entry carries its linked `actionItems`.                                                                                 | your data |
-| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                          | your data |
-| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry with an AI summary, and needs AI. Any other file becomes a note. `201`. | your data |
-| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                    | your data |
-| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                   | your data |
-| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` up to 200 (default 50), `since` (a date) and `type`.                                      | your data |
+| Endpoint                              | What it does                                                                                                                                                       | Access    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| `GET /api/contacts/:id/timeline`      | The contact's interactions. Each entry carries its linked `actionItems`.                                                                                           | your data |
+| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                                    | your data |
+| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry, with an AI summary while AI is on for you. Any other file becomes a note. `201`. | your data |
+| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                              | your data |
+| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                             | your data |
+| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` up to 200 (default 50), `since` (a date) and `type`.                                                | your data |
 
 ### Log an interaction
 
@@ -848,7 +848,8 @@ industry and a city together).
 `forceAll: true` drops your index and queues every contact. When a paid
 provider model makes the embeddings, send `allowProvider: true`. Without it the
 route answers `400` with `requiresExplicitConfirmation: true`, the provider,
-the model and `missingCount`, and queues nothing. Success answers
+the model and `missingCount`, and queues nothing. With a paid provider model
+and AI off for you, it answers `403 AI_OFF_FOR_ACCOUNT`. Success answers
 `{ ok, queued, message }`.
 
 ## Contact enrichment

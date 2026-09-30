@@ -175,6 +175,8 @@ the prompt, and remembers what each model accepts.
   pinned.
 - With a hosted model, the search index embeds new and changed contacts only
   after someone confirms on the **Semantic search coverage** card.
+- A hosted model embeds no contact of an account with **Use AI for this
+  account** off, for search or for duplicates.
 
 ### Model files and offline installs
 
