@@ -18,8 +18,11 @@
  *
  * @module src/hooks/useGlobalNavShortcuts
  */
-import { useEffect, useTransition } from "react";
+import { useContext, useEffect, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
+import { QueryClientContext } from "@tanstack/react-query";
+import { markPendingNav } from "../lib/pendingNav";
+import { warmPage } from "../views/pages";
 
 /** Shortcut definitions — exported for reuse in ZeroStateView KBD hints */
 export const NAV_SHORTCUTS: Record<string, { keys: string }> = {
@@ -33,8 +36,17 @@ export const NAV_SHORTCUTS: Record<string, { keys: string }> = {
 export const useGlobalNavShortcuts = () => {
   const navigate = useNavigate();
   const [_, startTransition] = useTransition();
+  const queryClient = useContext(QueryClientContext);
 
   useEffect(() => {
+    // The rail marks the page at once, and its code and first data start
+    // together rather than one after the other (`views/pages`).
+    const go = (path: string) => {
+      warmPage(path, queryClient);
+      markPendingNav(path);
+      startTransition(() => navigate(path));
+    };
+
     const handler = (e: KeyboardEvent) => {
       // ── Cmd+Shift+Letter navigation ──
       if (e.metaKey && e.shiftKey && !e.altKey) {
@@ -43,23 +55,23 @@ export const useGlobalNavShortcuts = () => {
         switch (key) {
           case "h":
             e.preventDefault();
-            startTransition(() => navigate("/"));
+            go("/");
             return;
           case "p":
             e.preventDefault();
-            startTransition(() => navigate("/pulse"));
+            go("/pulse");
             return;
           case "m":
             e.preventDefault();
-            startTransition(() => navigate("/map"));
+            go("/map");
             return;
           case "s":
             e.preventDefault();
-            startTransition(() => navigate("/search"));
+            go("/search");
             return;
           case ",":
             e.preventDefault();
-            startTransition(() => navigate("/settings"));
+            go("/settings");
             return;
         }
       }
@@ -81,5 +93,5 @@ export const useGlobalNavShortcuts = () => {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigate]);
+  }, [navigate, queryClient]);
 };

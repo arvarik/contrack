@@ -59,6 +59,7 @@ function shortRecency(iso: string | null | undefined): string {
 }
 
 import { apiFetch } from "../../api/client";
+import { keepLoadedImage } from "../../lib/keptImages";
 
 // ---------------------------------------------------------------------------
 // ContactListItem — memoized row component
@@ -303,6 +304,7 @@ const ContactListItemInner = ({
               <img
                 src={logoUrl}
                 alt={`${contact.company} logo`}
+                onLoad={keepLoadedImage}
                 onError={handleLogoError}
                 className="w-4 h-4 rounded-full object-scale-down bg-transparent"
               />

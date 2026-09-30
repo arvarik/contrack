@@ -550,6 +550,35 @@ describe("delete", () => {
   });
 });
 
+describe("the entrance", () => {
+  // The contact page is built anew on each return to the Network page. The
+  // tab faded in and every entry slid in again each time, so the page went
+  // on moving for 400 ms after it had drawn.
+  it("draws the tab and the entries already there at once", async () => {
+    const { view } = await mount();
+    expect(view.container.querySelector(".timeline-enter")).toBeNull();
+    expect(entry("call")!.classList.contains("timeline-entry")).toBe(false);
+  });
+
+  it("slides in an entry that arrives after the tab has drawn", async () => {
+    const { rerender } = await mount();
+    rerender({
+      timeline: [
+        ...makeTimeline(),
+        makeItem("new", "Just logged", at(2026, 9, 29)),
+      ],
+    });
+    expect(entry("new")!.classList.contains("timeline-entry")).toBe(true);
+    expect(entry("call")!.classList.contains("timeline-entry")).toBe(false);
+  });
+
+  it("slides in the entries that arrive after the timeline loads", async () => {
+    const { rerender } = await mount({ timeline: [], timelineLoading: true });
+    rerender({ timeline: makeTimeline(), timelineLoading: false });
+    expect(entry("call")!.classList.contains("timeline-entry")).toBe(true);
+  });
+});
+
 describe("the tab", () => {
   it("shows the empty state once every entry is waiting to be deleted", async () => {
     await mount({

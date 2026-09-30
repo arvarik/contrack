@@ -9,6 +9,7 @@
  * Extracted from ContactProfile to keep each section focused and readable.
  */
 import React, { Suspense, useEffect, useState } from "react";
+import { composerChunk } from "../../../components/composerChunk";
 import { useSearchParams } from "react-router-dom";
 import { MessageSquare, UploadCloud } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -36,12 +37,10 @@ import {
  * The import fires on mount rather than on first click. It is a parallel
  * fetch, not a blocking one, so by the time anyone reaches for the keyboard
  * it has almost always landed, without making the first keystroke wait.
+ * Once it has, the composer renders at once on every later contact page
+ * (`composerChunk`), with no placeholder in between.
  */
-const InteractionComposer = React.lazy(() =>
-  import("../../../components/InteractionComposer").then((m) => ({
-    default: m.InteractionComposer,
-  })),
-);
+const InteractionComposer = composerChunk.Component;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -118,10 +117,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   }, [wantedInteraction, timeline, timelineLoading, hidden, setSearchParams]);
 
   return (
-    <div
-      className="flex flex-col gap-6 relative timeline-enter"
-      {...getRootProps()}
-    >
+    <div className="flex flex-col gap-6 relative" {...getRootProps()}>
       {/*
         The drop target's own file input. react-dropzone renders it without a
         name, and it is the one form control on the timeline a screen reader

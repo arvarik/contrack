@@ -992,11 +992,12 @@
   }
 
   /**
-   * timeline-enter — Container-level fade-in for the entire timeline section.
-   * timeline-entry — Per-entry staggered entrance using opacity + translateY.
+   * timeline-entry — an entry that arrives after the timeline has drawn (a
+   * note just logged, or a timeline that has just loaded) slides in, with
+   * a short stagger. Entries already there when it draws carry no class
+   * (`Timeline.tsx`), so a return to the contact draws it in one frame.
    *
-   * Uses CSS animations instead of motion.div so entries only animate on mount,
-   * not when new interactions are added to the list.
+   * A CSS animation, not motion.div, so it runs once, when the entry mounts.
    */
   @keyframes timelineEntryIn {
     from {
@@ -1007,9 +1008,6 @@
       opacity: 1;
       transform: translateY(0);
     }
-  }
-  .timeline-enter {
-    animation: resultCardIn var(--dur-slow) var(--ease) both;
   }
   .timeline-entry {
     animation: timelineEntryIn var(--dur-slow) var(--ease) both;

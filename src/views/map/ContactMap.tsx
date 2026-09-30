@@ -284,7 +284,17 @@ export const ContactMap = ({
     return index;
   }, [contacts]);
 
-  const features = useClusterFeatures(map, CONTACTS_SOURCE_ID);
+  /**
+   * The map as soon as its style has arrived, before it has loaded.
+   *
+   * MapLibre's `load` waits for every basemap tile and font. On a first
+   * visit over a slow link that took seconds, and the pins waited for all of
+   * it. The pins need only the contacts source, which the map holds once the
+   * style is in, so they are read from this map and appear while the
+   * basemap is still painting in.
+   */
+  const [styledMap, setStyledMap] = useState<MapLibreMap | null>(null);
+  const features = useClusterFeatures(map ?? styledMap, CONTACTS_SOURCE_ID);
 
   // Hover & pin card state
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -534,6 +544,7 @@ export const ContactMap = ({
             // is the event that carries them. Collapsing here means the
             // chrome is already right when `onLoad` reveals it.
             collapseAttribution(event.target.getContainer());
+            setStyledMap(event.target);
           }}
           onLoad={(event) => {
             const loaded = event.target;

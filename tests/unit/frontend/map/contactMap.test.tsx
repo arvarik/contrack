@@ -79,8 +79,13 @@ vi.mock("../../../../src/contexts/PreferencesContext", () => ({
 }));
 
 const visible = vi.fn<() => VisibleFeature[]>(() => []);
+/** The map the pins were last read from. */
+const featuresFrom = vi.fn<(map: unknown) => void>();
 vi.mock("../../../../src/views/map/useClusterFeatures", () => ({
-  useClusterFeatures: () => visible(),
+  useClusterFeatures: (map: unknown) => {
+    featuresFrom(map);
+    return visible();
+  },
 }));
 
 // Imported after the mocks, which is what vi.mock hoisting expects.
@@ -123,6 +128,7 @@ const createdWith = () =>
     reuseMaps?: boolean;
     onMoveEnd?: (event: { viewState: Record<string, number> }) => void;
     onLoad: (event: { target: unknown }) => void;
+    onStyleData: (event: { target: unknown }) => void;
   };
 
 /** A MapLibre map as `onLoad` sees it: a container, and the two rotation handlers. */
@@ -415,5 +421,19 @@ describe("the heat layer", () => {
     await screen.findByTestId("map");
     act(() => createdWith().onLoad({ target: loadedMap(8.5) }));
     expect(screen.getAllByRole("button")).toHaveLength(3);
+  });
+});
+
+describe("the pins before the basemap", () => {
+  // MapLibre's load waits for every basemap tile and font, which on a first
+  // visit over a slow link took seconds. The pins need only the contacts
+  // source, and the map has it once its style has arrived.
+  it("reads the pins once the style has data, before the map loads", async () => {
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    await screen.findByTestId("map");
+    expect(featuresFrom).toHaveBeenLastCalledWith(null);
+    const map = loadedMap();
+    act(() => createdWith().onStyleData({ target: map }));
+    expect(featuresFrom).toHaveBeenLastCalledWith(map);
   });
 });

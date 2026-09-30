@@ -294,13 +294,22 @@ interface TimelineEntryProps {
   entry: DatedEntry;
   /** The position on the whole timeline, for the entrance stagger. */
   index: number;
+  /** Slide in: the entry arrived after the timeline had drawn. */
+  arrived: boolean;
   onOpen: (item: Interaction, editing: boolean) => void;
   onAskDelete: (item: Interaction) => void;
   promoteGhost: PromoteGhostMutation;
 }
 
 const TimelineEntry = React.memo(
-  ({ entry, index, onOpen, onAskDelete, promoteGhost }: TimelineEntryProps) => {
+  ({
+    entry,
+    index,
+    arrived,
+    onOpen,
+    onAskDelete,
+    promoteGhost,
+  }: TimelineEntryProps) => {
     const navigate = useNavigate();
     // Each entry animates in with a transform, which makes it a stacking
     // context. An open menu lifts its entry above the next one.
@@ -314,10 +323,15 @@ const TimelineEntry = React.memo(
         id={`interaction-${item.id}`}
         title={formatDay(item.date)}
         className={cn(
-          "group/entry relative flex gap-3 sm:gap-4 timeline-entry",
+          "group/entry relative flex gap-3 sm:gap-4",
+          arrived && "timeline-entry",
           menuOpen && "z-10",
         )}
-        style={{ animationDelay: `${Math.min(index, 6) * 25}ms` }}
+        style={
+          arrived
+            ? { animationDelay: `${Math.min(index, 6) * 25}ms` }
+            : undefined
+        }
       >
         {/* Date column */}
         <div className="w-16 shrink-0 pt-4">
@@ -554,6 +568,14 @@ export const Timeline = ({
   const focusAfterDelete = useRef<string | null>(null);
   const { preferences } = usePreferences();
   const weekStartDay = weekStartsOn(preferences.weekStart);
+  /**
+   * The entries on the timeline when it first drew. They draw with the
+   * page: the contact page is built anew on each return to the Network page,
+   * and a slide-in on each of those kept the page moving for 400 ms after it
+   * had drawn. An entry that arrives later still slides in, which is how a
+   * note just logged, or a timeline that has just loaded, shows itself.
+   */
+  const [firstDrawn] = useState(() => new Set(timeline.map((item) => item.id)));
 
   const groups = useMemo(
     () =>
@@ -621,6 +643,7 @@ export const Timeline = ({
                       key={entry.item.id}
                       entry={entry}
                       index={index++}
+                      arrived={!firstDrawn.has(entry.item.id)}
                       onOpen={open}
                       onAskDelete={askDelete}
                       promoteGhost={promoteGhost}

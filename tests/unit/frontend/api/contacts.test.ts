@@ -5,6 +5,9 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   useContact,
+  useContactNames,
+  useMapContacts,
+  useSlimContactsForSearch,
   useUpdateContact,
   useDeleteContact,
 } from "../../../../src/api/contacts";
@@ -164,5 +167,56 @@ describe("contact query identity and saves", () => {
       { id: "a", name: "Alice" },
       { id: "b", name: "Updated Bob" },
     ]);
+  });
+});
+
+/**
+ * A slim contact whose name counts its reads. Every projection reads each
+ * contact's name once, so the count is how many times it walked the list.
+ */
+function countedContacts(count: number) {
+  const reads = { name: 0 };
+  const contacts = Array.from({ length: count }, (_, i) => {
+    const contact: Record<string, unknown> = {
+      id: `c${i}`,
+      isGhost: false,
+      isArchived: false,
+      isTracked: false,
+      lat: 51.5,
+      lng: -0.12,
+      tags: [],
+      lists: [],
+    };
+    Object.defineProperty(contact, "name", {
+      enumerable: true,
+      get: () => {
+        reads.name += 1;
+        return `Person ${i}`;
+      },
+    });
+    return contact;
+  });
+  return { contacts, reads };
+}
+
+// The three projections share the full contact list. An inline `select` is
+// a new function on each render, so TanStack Query ran it again on every
+// render of the map, the palette and the note dialog, and each run walked
+// all 5,800 people.
+describe("contact list projections", () => {
+  it.each([
+    ["useContactNames", useContactNames],
+    ["useSlimContactsForSearch", useSlimContactsForSearch],
+    ["useMapContacts", useMapContacts],
+  ] as const)("%s walks the list once, not on every render", (_name, hook) => {
+    const { client, wrapper } = setup();
+    const { contacts, reads } = countedContacts(20);
+    client.setQueryData(["contacts"], contacts);
+    const { result, rerender } = renderHook(() => hook(), { wrapper });
+    expect(result.current.data).toHaveLength(20);
+    const afterFirst = reads.name;
+    rerender();
+    rerender();
+    expect(reads.name).toBe(afterFirst);
   });
 });

@@ -71,22 +71,33 @@ export interface ContactSlim {
   lastContactedAt: string | null;
 }
 
+/**
+ * The three projections below are module functions, not inline arrows.
+ * TanStack Query runs `select` again whenever it gets a new function, so an
+ * inline one walked all the contacts on every render of the component that
+ * read it: the map, the palette and the note dialog render on each page
+ * switch. A module function runs once each time the list itself changes.
+ */
+type SlimContacts = Awaited<ReturnType<typeof fetchContactsSlim>>;
+
+const toContactNames = (contacts: SlimContacts): ContactSlim[] =>
+  contacts.map((c) => ({
+    id: c.id,
+    name: c.name,
+    avatarUrl: c.avatarUrl,
+    themeColor: c.themeColor,
+    isGhost: c.isGhost,
+    isTracked: c.isTracked,
+    relationshipScore: c.relationshipScore ?? null,
+    lastContactedAt: c.lastContactedAt,
+  }));
+
 export const useContactNames = () => {
   return useQuery({
     queryKey: ["contacts"],
     queryFn: fetchContactsSlim,
     staleTime: 600_000,
-    select: (contacts): ContactSlim[] =>
-      contacts.map((c) => ({
-        id: c.id,
-        name: c.name,
-        avatarUrl: c.avatarUrl,
-        themeColor: c.themeColor,
-        isGhost: c.isGhost,
-        isTracked: c.isTracked,
-        relationshipScore: c.relationshipScore ?? null,
-        lastContactedAt: c.lastContactedAt,
-      })),
+    select: toContactNames,
   });
 };
 
@@ -119,31 +130,33 @@ export interface SlimSearchContact {
   matchType?: "exact" | "approximate";
 }
 
+const toSearchContacts = (contacts: SlimContacts): SlimSearchContact[] =>
+  contacts
+    .filter((c) => !c.isGhost && !c.isArchived)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role,
+      company: c.company,
+      location: c.location,
+      industry: c.industry,
+      avatarUrl: c.avatarUrl,
+      updatedAt: c.updatedAt,
+      lastContactedAt: c.lastContactedAt,
+      relationshipScore: c.relationshipScore ?? null,
+      isTracked: c.isTracked,
+      cadenceDays: c.cadenceDays,
+      trackedAt: c.trackedAt,
+      tags: c.tags ?? [],
+      lists: c.lists ?? [],
+    }));
+
 export const useSlimContactsForSearch = () => {
   return useQuery({
     queryKey: ["contacts"],
     queryFn: fetchContactsSlim,
     staleTime: 600_000,
-    select: (contacts): SlimSearchContact[] =>
-      contacts
-        .filter((c) => !c.isGhost && !c.isArchived)
-        .map((c) => ({
-          id: c.id,
-          name: c.name,
-          role: c.role,
-          company: c.company,
-          location: c.location,
-          industry: c.industry,
-          avatarUrl: c.avatarUrl,
-          updatedAt: c.updatedAt,
-          lastContactedAt: c.lastContactedAt,
-          relationshipScore: c.relationshipScore ?? null,
-          isTracked: c.isTracked,
-          cadenceDays: c.cadenceDays,
-          trackedAt: c.trackedAt,
-          tags: c.tags ?? [],
-          lists: c.lists ?? [],
-        })),
+    select: toSearchContacts,
   });
 };
 
@@ -159,37 +172,37 @@ export const useContact = (id: string | undefined) => {
   });
 };
 
+const toMapContacts = (contacts: SlimContacts): MapContact[] =>
+  contacts
+    .filter((c) => !c.isGhost && !c.isArchived && isValidLatLng(c.lat, c.lng))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      company: c.company,
+      role: c.role,
+      industry: c.industry,
+      location: c.location,
+      avatarUrl: c.avatarUrl,
+      themeColor: c.themeColor,
+      lat: c.lat as number,
+      lng: c.lng as number,
+      relationshipScore: c.relationshipScore ?? null,
+      lastContactedAt: c.lastContactedAt,
+      isTracked: c.isTracked,
+      nextFollowUpAt: c.nextFollowUpAt,
+      cadenceDays: c.cadenceDays,
+      interactionCount: c.interactionCount ?? 0,
+      tags: (c.tags || []).map((t) => (typeof t === "string" ? t : t.tag)),
+      lists: (c.lists || []).map((l) => ({ id: l.id, name: l.name })),
+      geoSource: c.geoSource,
+    }));
+
 export const useMapContacts = () => {
   return useQuery({
     queryKey: ["contacts"],
     queryFn: fetchContactsSlim,
     staleTime: 600_000,
-    select: (contacts): MapContact[] =>
-      contacts
-        .filter(
-          (c) => !c.isGhost && !c.isArchived && isValidLatLng(c.lat, c.lng),
-        )
-        .map((c) => ({
-          id: c.id,
-          name: c.name,
-          company: c.company,
-          role: c.role,
-          industry: c.industry,
-          location: c.location,
-          avatarUrl: c.avatarUrl,
-          themeColor: c.themeColor,
-          lat: c.lat as number,
-          lng: c.lng as number,
-          relationshipScore: c.relationshipScore ?? null,
-          lastContactedAt: c.lastContactedAt,
-          isTracked: c.isTracked,
-          nextFollowUpAt: c.nextFollowUpAt,
-          cadenceDays: c.cadenceDays,
-          interactionCount: c.interactionCount ?? 0,
-          tags: (c.tags || []).map((t) => (typeof t === "string" ? t : t.tag)),
-          lists: (c.lists || []).map((l) => ({ id: l.id, name: l.name })),
-          geoSource: c.geoSource,
-        })),
+    select: toMapContacts,
   });
 };
 

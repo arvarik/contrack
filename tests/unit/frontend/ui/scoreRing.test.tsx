@@ -14,7 +14,8 @@
 // =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { isImageKept } from "../../../../src/lib/keptImages";
 
 import {
   RING_WIDTH,
@@ -136,6 +137,17 @@ describe("a contact nobody tracks", () => {
     const plain = mount({ contact: person({ isTracked: false }) }).picture;
     expect(plain.style.width).toBe("48px");
     expect(plain.style.height).toBe("48px");
+  });
+});
+
+describe("the picture", () => {
+  // A list built again, on each return to the Network page, found its
+  // pictures gone from memory and drew grey circles for a frame.
+  it("holds a picture once it has loaded", () => {
+    const img = mount().picture.querySelector("img")!;
+    expect(isImageKept(img.src)).toBe(false);
+    fireEvent.load(img);
+    expect(isImageKept(img.src)).toBe(true);
   });
 });
 

@@ -35,6 +35,8 @@ import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 import { NAMES } from "../../lib/names";
 import { warmSettingsShell } from "../../views/settings/warm";
+import { usePageLinkWarm } from "../../views/pages";
+import { markPendingNavOnClick, usePendingNav } from "../../lib/pendingNav";
 import { RailTooltip } from "../ui/RailTooltip";
 
 // ---------------------------------------------------------------------------
@@ -110,16 +112,25 @@ export const Sidebar = () => {
   // updates, so the sidebar no longer re-renders when the user types in the
   // global search bar.
   const { lastContactId } = useRecent();
-  const isMap = location.pathname.startsWith("/map");
-  const isCleanup = location.pathname.startsWith("/settings");
-  const isSearch = location.pathname.startsWith("/search");
-  const isPulse = location.pathname.startsWith("/pulse");
+  // The page a person pressed is marked at once, before it can draw: the
+  // location changes only when the new page is on screen (`pendingNav`).
+  const path = usePendingNav() ?? location.pathname;
+  const isMap = path.startsWith("/map");
+  const isCleanup = path.startsWith("/settings");
+  const isSearch = path.startsWith("/search");
+  const isPulse = path.startsWith("/pulse");
   const isHome =
     !isMap &&
     !isCleanup &&
     !isSearch &&
     !isPulse &&
-    (location.pathname === "/" || location.pathname.startsWith("/contact/"));
+    (path === "/" || path.startsWith("/contact/"));
+
+  // Pointing at, focusing or pressing a link starts its page's code, and
+  // Pulse's data, so they are here when the click lands (`views/pages`).
+  const warmPulse = usePageLinkWarm("/pulse");
+  const warmMap = usePageLinkWarm("/map");
+  const warmAsk = usePageLinkWarm("/search");
 
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;
@@ -146,6 +157,9 @@ export const Sidebar = () => {
   const pulseTooltip = pulseBadges.length
     ? `${NAMES.pulse.label} · ${pulseBadges.join(" · ")}`
     : NAMES.pulse.label;
+
+  const networkTo =
+    lastContactId && !isHome ? `/contact/${lastContactId}` : "/";
 
   return (
     <aside
@@ -174,7 +188,8 @@ export const Sidebar = () => {
 
       <RailTooltip label={NAMES.network.label} shortcut="⌘⇧H">
         <Link
-          to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"}
+          to={networkTo}
+          onClick={markPendingNavOnClick(networkTo)}
           className={navLink(isHome)}
           aria-label={NAMES.network.label}
         >
@@ -186,6 +201,8 @@ export const Sidebar = () => {
         <RailTooltip label={pulseTooltip} shortcut="⌘⇧P">
           <Link
             to="/pulse"
+            {...warmPulse}
+            onClick={markPendingNavOnClick("/pulse")}
             className={navLink(isPulse, "relative")}
             aria-label={pulseLabel}
           >
@@ -221,6 +238,8 @@ export const Sidebar = () => {
         {pendingSuggestions > 0 && (
           <Link
             to="/pulse/duplicates"
+            {...warmPulse}
+            onClick={markPendingNavOnClick("/pulse/duplicates")}
             className={cn(
               "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10",
               "flex items-center justify-center rounded-full",
@@ -237,7 +256,13 @@ export const Sidebar = () => {
       </div>
 
       <RailTooltip label={NAMES.map.label} shortcut="⌘⇧M">
-        <Link to="/map" className={navLink(isMap)} aria-label={NAMES.map.label}>
+        <Link
+          to="/map"
+          {...warmMap}
+          onClick={markPendingNavOnClick("/map")}
+          className={navLink(isMap)}
+          aria-label={NAMES.map.label}
+        >
           <Map className="w-6 h-6" />
         </Link>
       </RailTooltip>
@@ -245,6 +270,8 @@ export const Sidebar = () => {
       <RailTooltip label={NAMES.ask.label} shortcut="⌘⇧S">
         <Link
           to="/search"
+          {...warmAsk}
+          onClick={markPendingNavOnClick("/search")}
           className={navLink(isSearch)}
           aria-label={NAMES.ask.label}
         >
@@ -288,6 +315,7 @@ export const Sidebar = () => {
             // is here when the click lands.
             onPointerEnter={warmSettingsShell}
             onFocus={warmSettingsShell}
+            onClick={markPendingNavOnClick("/settings")}
             className={navLink(isCleanup)}
             aria-label={NAMES.settings.label}
           >

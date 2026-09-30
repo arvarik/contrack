@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { computeMapStats } from "../../../../src/views/map/mapStats";
 import type { MapContact } from "../../../../shared/geo";
 
@@ -162,5 +162,27 @@ describe("computeMapStats", () => {
     expect(gmtMinus4).toBeDefined();
     expect(gmtMinus4?.count).toBe(1);
     expect(gmtMinus4?.offsetMinutes).toBe(-240);
+  });
+
+  // A formatter per contact cost about 130 ms for 5,800 people, on each
+  // open of the map and after each pan.
+  it("builds one time zone formatter per zone, not one per contact", () => {
+    const now = new Date("2026-09-18T12:00:00Z");
+    const contacts: MapContact[] = Array.from({ length: 300 }, (_, i) =>
+      i % 2 === 0
+        ? { ...baseContact, id: `l${i}`, lat: 51.5074, lng: -0.1278 }
+        : { ...baseContact, id: `n${i}`, lat: 40.7128, lng: -74.006 },
+    );
+    const formatter = vi.spyOn(Intl, "DateTimeFormat");
+    try {
+      const stats = computeMapStats(contacts, null, now);
+      expect(stats.timeZones).toEqual([
+        { label: "GMT-4", count: 150, offsetMinutes: -240 },
+        { label: "GMT+1", count: 150, offsetMinutes: 60 },
+      ]);
+      expect(formatter).toHaveBeenCalledTimes(2);
+    } finally {
+      formatter.mockRestore();
+    }
   });
 });

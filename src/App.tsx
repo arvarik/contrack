@@ -2,37 +2,24 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
-  Link,
   useMatch,
   useLocation,
 } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Map,
-  Settings as SettingsIcon,
-  Sparkles,
-  Activity,
-} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
 import { whenIdle } from "./lib/idle";
-import {
-  settingsShell,
-  useWarmSettingsFromApp,
-  warmSettingsShell,
-} from "./views/settings/warm";
+import { useSettlePendingNav } from "./lib/pendingNav";
+import { settingsShell, useWarmSettingsFromApp } from "./views/settings/warm";
 import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
 import { Toaster } from "sonner";
 import { CorvidFlight } from "./components/brand/CorvidFlight";
-import React, { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 
 import { ContactList } from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
 import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { QuickInteractionModal } from "./components/QuickInteractionModal";
-import { cn } from "./lib/utils";
-import { SELECTED_TINT } from "./lib/styles";
 import {
   OPEN_SHORTCUTS_EVENT,
   OPEN_QUICK_NOTE_EVENT,
@@ -42,33 +29,32 @@ import { NAMES } from "./lib/names";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 
 // Route-level code splitting: secondary views load on demand so the initial
-// bundle only carries the ContactList/ContactDetail critical path.
-/** The map's code, in a function so it can be warmed before the map opens. */
-const loadMapView = () => import("./views/map");
-const MapView = React.lazy(() =>
-  loadMapView().then((m) => ({ default: m.MapView })),
-);
+// bundle only carries the ContactList/ContactDetail critical path. Each lazy
+// page renders at once when its code is here, and the app warms that code in
+// idle moments and when a link to it is pointed at (`views/pages.ts`).
+const MapView = mapPage.Component;
+const PulseView = pulsePage.Component;
+const SearchView = askPage.Component;
 /**
  * Settings renders at once when its code is here (`settingsShell` in
  * `views/settings/warm.ts`), and the app warms that code in idle moments.
  */
 const SettingsShell = settingsShell.Component;
-const SearchView = React.lazy(() =>
-  import("./views/SearchView").then((m) => ({ default: m.SearchView })),
-);
-const PulseView = React.lazy(() =>
-  import("./views/pulse").then((m) => ({ default: m.PulseView })),
-);
 
 import { Sidebar } from "./components/layout/Sidebar";
+import { MobileNav } from "./components/layout/MobileNav";
 import { ResizeHandle } from "./components/layout/ResizeHandle";
 import { LEFT_PANE } from "./components/layout/paneWidth";
 import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
-import { RouteFallback } from "./components/layout/RouteFallback";
+import {
+  RouteFallback,
+  type RouteFallbackVariant,
+} from "./components/layout/RouteFallback";
+import { askPage, mapPage, pulsePage, useWarmPages } from "./views/pages";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
 import { StartRedirect } from "./components/layout/StartRedirect";
 import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
-import { starterQuestionsQuery, useUrgentActionItemCount } from "./api";
+import { starterQuestionsQuery } from "./api";
 import { useQueryClient } from "@tanstack/react-query";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
@@ -78,7 +64,7 @@ const ResponsiveLayout = () => {
   const location = useLocation();
   // Narrow context read — see SessionContext for the split rationale. This
   // component no longer re-renders on every AI-search keystroke.
-  const { lastContactId, setLastContactId } = useRecent();
+  const { setLastContactId } = useRecent();
   useGlobalNavShortcuts();
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
@@ -102,14 +88,13 @@ const ResponsiveLayout = () => {
   const isCleanup = location.pathname.startsWith("/settings");
 
   /**
-   * Warm the map's code while the reader is elsewhere.
-   *
-   * MapLibre is the largest chunk in the build and only the map loads it,
-   * so the first visit to the map would otherwise begin with a download. An
-   * idle moment on whichever page opens first pays for it instead. A
-   * browser told to save data is left alone (see `lib/idle.ts`).
+   * Warm the lazy pages' code while the reader is elsewhere: the map first,
+   * the largest chunk in the build, then Pulse and Ask Contrack. The first
+   * visit to each then draws at once instead of starting with a download
+   * and a skeleton. A browser told to save data is left alone (see
+   * `lib/idle.ts`).
    */
-  useEffect(() => whenIdle(() => void loadMapView()), []);
+  useWarmPages();
 
   /**
    * Fetch Ask's "Try asking" questions the same way, so the page opens with
@@ -127,10 +112,10 @@ const ResponsiveLayout = () => {
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
 
-  const { data: badge } = useUrgentActionItemCount();
-  const urgentCount = badge?.count || 0;
-
-  const isNetwork = !isMapActive && !isPulse && !isCleanup && !isSearch;
+  // The sidebar and the tab bar mark the page a person pressed at once,
+  // before it can draw. This clears the mark once it is on screen
+  // (`lib/pendingNav`).
+  useSettlePendingNav();
 
   /**
    * Whether the contact list and the open contact sit side by side.
@@ -142,165 +127,65 @@ const ResponsiveLayout = () => {
    */
   const isWide = useMediaQuery(WIDE_QUERY);
 
-  /**
-   * Mobile tab bar.
-   *
-   * Two things it did not do before: reserve room for the iOS home indicator
-   * (the last row of pixels sat under it, so the labels were clipped on any
-   * notched phone), and give each tab a real 44pt target — the taps landed on
-   * a `px-3 py-1.5` box roughly 32pt tall. Both are fixed by `min-h-[3rem]`
-   * plus `env(safe-area-inset-bottom)` padding.
-   */
-  const mobileNav = (
-    <nav
-      aria-label="Primary"
-      // The map reads this to keep its centre above the bar (`insets.ts`).
-      data-covers-map="bottom"
-      className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
-      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+  // Full-page views (cleanup, search, pulse) take the full main area
+  const isFullPage = isCleanup || isSearch || isPulse;
+  const pageName = isCleanup
+    ? NAMES.settings.label
+    : isSearch
+      ? NAMES.ask.label
+      : NAMES.pulse.label;
+  const fullPage = isFullPage && (
+    <main
+      id={MAIN_CONTENT_ID}
+      tabIndex={-1}
+      aria-label={pageName}
+      className="flex-1 min-w-0 h-full overflow-hidden relative flex outline-none"
     >
-      {[
-        {
-          to:
-            lastContactId && !isContactSelected
-              ? `/contact/${lastContactId}`
-              : "/",
-          icon: LayoutDashboard,
-          label: NAMES.network.label,
-          active: isNetwork,
-          badge: 0,
-        },
-        {
-          to: "/pulse",
-          icon: Activity,
-          label: NAMES.pulse.label,
-          active: isPulse,
-          badge: urgentCount,
-        },
-        {
-          to: "/map",
-          icon: Map,
-          label: NAMES.map.label,
-          active: isMapActive,
-          badge: 0,
-        },
-        {
-          to: "/search",
-          icon: Sparkles,
-          label: NAMES.ask.label,
-          active: isSearch,
-          badge: 0,
-        },
-        {
-          to: "/settings",
-          icon: SettingsIcon,
-          label: NAMES.settings.label,
-          active: isCleanup,
-          badge: 0,
-        },
-      ].map(({ to, icon: Icon, label, active, badge }) => (
-        <Link
-          key={label}
-          to={to}
-          // A touch on the Settings tab starts its code a moment before the
-          // tap lands (`warm.ts`).
-          onPointerDown={to === "/settings" ? warmSettingsShell : undefined}
-          aria-current={active ? "page" : undefined}
-          className={cn(
-            "relative flex flex-1 flex-col items-center justify-center gap-0.5",
-            "min-h-[3rem] px-0.5 py-1 rounded-xl transition-colors",
-            // A press on another tab draws the hover layer's press step.
-            active ? "text-primary" : "state-layer text-on-surface-variant",
-          )}
-        >
-          {/* Active pill sits behind the icon rather than recolouring the
-              whole tab, so the current tab is legible at a glance. It is the
-              selected tint, the same as the sidebar's current link. */}
-          <span
-            className={cn(
-              "flex items-center justify-center w-10 h-6 rounded-lg transition-colors",
-              active && SELECTED_TINT,
-            )}
-          >
-            <Icon className="w-5 h-5" />
-          </span>
-          {/* 11 px bold, tight. "Ask Contrack" is about 69 px wide at this
-              tracking, and a 390 px phone gives each of the five tabs 72 px
-              inside its padding, so the label stays on one line. */}
-          <span className="text-[11px] font-bold tracking-tight whitespace-nowrap">
-            {label}
-          </span>
-          {badge > 0 && (
-            <span className="absolute top-0.5 right-[22%] flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-error" />
-            </span>
-          )}
-        </Link>
-      ))}
-    </nav>
+      <div className="flex-1 min-w-0 h-full overflow-hidden">
+        <Routes>
+          <Route
+            path="/settings/*"
+            element={
+              <RouteErrorBoundary viewName="Settings">
+                <SettingsShell />
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <RouteErrorBoundary viewName="Search">
+                <SearchView />
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/pulse/*"
+            element={
+              <RouteErrorBoundary viewName="Dashboard">
+                <PulseView />
+              </RouteErrorBoundary>
+            }
+          />
+        </Routes>
+      </div>
+    </main>
   );
 
-  // Full-page views (cleanup, search, pulse) take the full main area
-  if (isCleanup || isSearch || isPulse) {
-    const pageName = isCleanup
-      ? NAMES.settings.label
-      : isSearch
-        ? NAMES.ask.label
-        : isPulse
-          ? NAMES.pulse.label
-          : "Component showcase";
-    return (
-      <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
-        <SkipLink />
-        <div className="hidden md:flex shrink-0">
-          <Sidebar />
-        </div>
-        <main
-          id={MAIN_CONTENT_ID}
-          tabIndex={-1}
-          aria-label={pageName}
-          className="flex-1 min-w-0 h-full overflow-hidden relative flex outline-none"
-        >
-          <div className="flex-1 min-w-0 h-full overflow-hidden">
-            <Routes>
-              <Route
-                path="/settings/*"
-                element={
-                  <RouteErrorBoundary viewName="Settings">
-                    <Suspense fallback={<RouteFallback variant="settings" />}>
-                      <SettingsShell />
-                    </Suspense>
-                  </RouteErrorBoundary>
-                }
-              />
-              <Route
-                path="/search"
-                element={
-                  <RouteErrorBoundary viewName="Search">
-                    <Suspense fallback={<RouteFallback variant="search" />}>
-                      <SearchView />
-                    </Suspense>
-                  </RouteErrorBoundary>
-                }
-              />
-              <Route
-                path="/pulse/*"
-                element={
-                  <RouteErrorBoundary viewName="Dashboard">
-                    <Suspense fallback={<RouteFallback variant="pulse" />}>
-                      <PulseView />
-                    </Suspense>
-                  </RouteErrorBoundary>
-                }
-              />
-            </Routes>
-          </div>
-        </main>
-        {mobileNav}
-      </div>
-    );
-  }
+  /**
+   * What the page area shows while the first page's code downloads: the
+   * skeleton of the page the address names. After that first load it is
+   * not shown again (see the boundary below).
+   */
+  const fallbackVariant: RouteFallbackVariant | null = isCleanup
+    ? "settings"
+    : isSearch
+      ? "search"
+      : isPulse
+        ? "pulse"
+        : isMapActive
+          ? "map"
+          : null;
 
   return (
     <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
@@ -318,6 +203,30 @@ const ResponsiveLayout = () => {
       </div>
 
       {/*
+        One page boundary for every route, and it stays mounted.
+
+        Each lazy page used to sit in a Suspense of its own, new on each
+        switch. React shows a new boundary's fallback even inside a
+        transition, and then holds it for 300 ms, so the first visit to
+        Pulse, Ask Contrack or the map flashed a skeleton even when the code
+        took 5 ms. Navigations are transitions (React Router starts one for
+        each), and a transition keeps a boundary's content on screen while
+        the next page suspends. So with one boundary here, the page on screen
+        stays until the next one can draw, and they swap in one frame. The
+        fallback shows only on the first load, when there is no page yet.
+        The sidebar and the tab bar are outside it, and mark the page a
+        person pressed at once (`lib/pendingNav`).
+      */}
+      <Suspense
+        fallback={
+          <div className="flex-1 min-w-0 h-full overflow-hidden">
+            {fallbackVariant && <RouteFallback variant={fallbackVariant} />}
+          </div>
+        }
+      >
+        {fullPage || (
+          <>
+            {/*
         Dynamic Middle/Main Panel mapping to either the List or the Map.
 
         On the map this pane is the main landmark. On the list it is the main
@@ -334,135 +243,134 @@ const ResponsiveLayout = () => {
         paint and on each frame of a drag (`LEFT_PANE` has the bounds, and
         the Settings list shares them).
       */}
-      <section
-        id={
-          isMapActive || (!isWide && !isContactSelected)
-            ? MAIN_CONTENT_ID
-            : undefined
-        }
-        data-pane="list"
-        role={isMapActive || !isWide ? "main" : "complementary"}
-        aria-label={
-          isMapActive
-            ? NAMES.map.label
-            : isWide
-              ? "Contacts"
-              : NAMES.network.label
-        }
-        tabIndex={-1}
-        className={`
+            <section
+              id={
+                isMapActive || (!isWide && !isContactSelected)
+                  ? MAIN_CONTENT_ID
+                  : undefined
+              }
+              data-pane="list"
+              role={isMapActive || !isWide ? "main" : "complementary"}
+              aria-label={
+                isMapActive
+                  ? NAMES.map.label
+                  : isWide
+                    ? "Contacts"
+                    : NAMES.network.label
+              }
+              tabIndex={-1}
+              className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
         ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--pane-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
-      >
-        <Routes>
-          <Route
-            path="/map"
-            element={
-              <RouteErrorBoundary viewName="Map">
-                <Suspense fallback={<RouteFallback variant="map" />}>
-                  <MapView />
-                </Suspense>
-              </RouteErrorBoundary>
-            }
-          />
-          <Route
-            path="/map/contact/:id"
-            element={
-              <RouteErrorBoundary viewName="Map">
-                <Suspense fallback={<RouteFallback variant="map" />}>
-                  <MapView />
-                </Suspense>
-              </RouteErrorBoundary>
-            }
-          />
-          <Route
-            path="*"
-            element={
-              <RouteErrorBoundary viewName="ContactList">
-                <ContactList />
-              </RouteErrorBoundary>
-            }
-          />
-        </Routes>
+            >
+              <Routes>
+                <Route
+                  path="/map"
+                  element={
+                    <RouteErrorBoundary viewName="Map">
+                      <MapView />
+                    </RouteErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/map/contact/:id"
+                  element={
+                    <RouteErrorBoundary viewName="Map">
+                      <MapView />
+                    </RouteErrorBoundary>
+                  }
+                />
+                <Route
+                  path="*"
+                  element={
+                    <RouteErrorBoundary viewName="ContactList">
+                      <ContactList />
+                    </RouteErrorBoundary>
+                  }
+                />
+              </Routes>
 
-        {/* The list's right edge, from `lg`, where the list and the contact
+              {/* The list's right edge, from `lg`, where the list and the contact
             sit side by side. Below it the list fills the row. Inside the
             list's landmark, on its edge. From `lg` the list sits a layer
             over the contact (15 over 10), so the grip past the seam paints
             and takes the pointer, and under the sidebar (20), whose Account
             menu opens across the list. */}
-        {!isMapActive && (
-          <ResizeHandle
-            {...LEFT_PANE}
-            label="Resize the contact list"
-            className="hidden lg:block absolute inset-y-0 right-0"
-          />
-        )}
-      </section>
+              {!isMapActive && (
+                <ResizeHandle
+                  {...LEFT_PANE}
+                  label="Resize the contact list"
+                  className="hidden lg:block absolute inset-y-0 right-0"
+                />
+              )}
+            </section>
 
-      {/* Right Pane: Standard Detail View */}
-      {!isMapActive && (
-        <main
-          id={isWide || isContactSelected ? MAIN_CONTENT_ID : undefined}
-          tabIndex={-1}
-          aria-label="Contact"
-          className={`
+            {/* Right Pane: Standard Detail View */}
+            {!isMapActive && (
+              <main
+                id={isWide || isContactSelected ? MAIN_CONTENT_ID : undefined}
+                tabIndex={-1}
+                aria-label="Contact"
+                className={`
           ${isContactSelected ? "flex" : "hidden lg:flex"}
           flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col outline-none
         `}
-        >
-          <Routes location={location}>
-            <Route path="/" element={<StartRedirect />} />
-            <Route
-              path="/contact/:id"
-              element={
-                <RouteErrorBoundary viewName="ContactDetail">
-                  <ContactDetail />
-                </RouteErrorBoundary>
-              }
-            />
-          </Routes>
-        </main>
-      )}
+              >
+                <Routes location={location}>
+                  <Route path="/" element={<StartRedirect />} />
+                  <Route
+                    path="/contact/:id"
+                    element={
+                      <RouteErrorBoundary viewName="ContactDetail">
+                        <ContactDetail />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                </Routes>
+              </main>
+            )}
 
-      {/* Map Overlay Detail View */}
-      {isMapActive && (
-        <AnimatePresence>
-          {isContactSelected && (
-            // A region inside the page rather than a second main: the map
-            // stays the page's main content while a contact is open over it.
-            <motion.section
-              aria-label="Contact"
-              // The map reads this to centre a pin beside the contact, not
-              // under it (`insets.ts`). The panel sits flush with the map's
-              // right edge, so its width is what it covers.
-              data-covers-map="right"
-              initial={{ x: "100%", opacity: 0.5 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "100%", opacity: 0 }}
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              // z 40 on a phone, under the tab bar's 50, so the bar stays on
-              // top and tappable over the contact, as it does over
-              // /contact/:id. The map page is z 0, so 40 still covers every
-              // pin and bar on it. From md there is no tab bar.
-              className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
-            >
-              <Routes location={location}>
-                <Route
-                  path="/map/contact/:id"
-                  element={
-                    <RouteErrorBoundary viewName="ContactDetail">
-                      <ContactDetail />
-                    </RouteErrorBoundary>
-                  }
-                />
-              </Routes>
-            </motion.section>
-          )}
-        </AnimatePresence>
-      )}
+            {/* Map Overlay Detail View */}
+            {isMapActive && (
+              <AnimatePresence>
+                {isContactSelected && (
+                  // A region inside the page rather than a second main: the map
+                  // stays the page's main content while a contact is open over it.
+                  <motion.section
+                    aria-label="Contact"
+                    // The map reads this to centre a pin beside the contact, not
+                    // under it (`insets.ts`). The panel sits flush with the map's
+                    // right edge, so its width is what it covers.
+                    data-covers-map="right"
+                    initial={{ x: "100%", opacity: 0.5 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: "100%", opacity: 0 }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                    // z 40 on a phone, under the tab bar's 50, so the bar stays on
+                    // top and tappable over the contact, as it does over
+                    // /contact/:id. The map page is z 0, so 40 still covers every
+                    // pin and bar on it. From md there is no tab bar.
+                    className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
+                  >
+                    <Routes location={location}>
+                      <Route
+                        path="/map/contact/:id"
+                        element={
+                          <RouteErrorBoundary viewName="ContactDetail">
+                            <ContactDetail />
+                          </RouteErrorBoundary>
+                        }
+                      />
+                    </Routes>
+                  </motion.section>
+                )}
+              </AnimatePresence>
+            )}
+          </>
+        )}
+      </Suspense>
 
       {/*
         Mobile Nav — always mounted. It used to unmount on the detail view, so
@@ -470,7 +378,7 @@ const ResponsiveLayout = () => {
         with no way to reach Pulse, Map, Ask Contrack, or Settings. The detail view
         already reserves `pb-32` at this width, so the bar has room to sit.
       */}
-      {mobileNav}
+      <MobileNav />
     </div>
   );
 };

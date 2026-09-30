@@ -710,14 +710,10 @@ export const PulseView = () => {
 
   return (
     <Routes>
-      <Route
-        path="duplicates"
-        element={
-          <React.Suspense fallback={null}>
-            <DuplicatesPage />
-          </React.Suspense>
-        }
-      />
+      {/* No Suspense of its own: the app's page boundary keeps Pulse on
+          screen while this page's code arrives, where a blank fallback
+          used to flash (`App.tsx`). */}
+      <Route path="duplicates" element={<DuplicatesPage />} />
       <Route
         path="suggestions"
         element={<Navigate to="/pulse/duplicates" replace />}
