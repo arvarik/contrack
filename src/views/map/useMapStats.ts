@@ -54,6 +54,10 @@ export function useMapStats({
   }, [contacts, visible]);
   const [result, setResult] = useState<UseMapStatsResult>(read);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What the result on screen was read with. The first render reads the
+  // view, so the effect after it does not read the same view again: each
+  // read walks every contact on the map.
+  const readWith = useRef({ read, covers });
 
   useEffect(() => {
     if (timerRef.current) {
@@ -64,7 +68,10 @@ export function useMapStats({
 
     // On map ready, when the contacts change and when a cover opens or
     // closes.
-    update();
+    if (readWith.current.read !== read || readWith.current.covers !== covers) {
+      readWith.current = { read, covers };
+      update();
+    }
     if (!map) return;
 
     const handleMoveEnd = () => {

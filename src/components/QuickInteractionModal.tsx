@@ -44,6 +44,7 @@ import { cn } from "../lib/utils";
 import { Modal } from "./ui/Modal";
 import { IconButton } from "./ui/IconButton";
 import { ComposerPlaceholder } from "./ComposerPlaceholder";
+import { composerChunk } from "./composerChunk";
 import {
   INTERACTION_LABELS,
   type InteractionKind,
@@ -53,13 +54,10 @@ import {
  * The composer carries tiptap and ProseMirror, so it arrives in its own
  * chunk, the same chunk the contact page loads. The dialog is mounted on
  * every page and closed almost all the time, and a closed dialog loads none
- * of it.
+ * of it. Once the chunk is here, the dialog draws the editor at once
+ * (`composerChunk`).
  */
-const InteractionComposer = React.lazy(() =>
-  import("./InteractionComposer").then((m) => ({
-    default: m.InteractionComposer,
-  })),
-);
+const InteractionComposer = composerChunk.Component;
 
 interface QuickInteractionModalProps {
   isOpen: boolean;

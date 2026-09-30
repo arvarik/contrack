@@ -33,6 +33,7 @@ import React from "react";
 import { describeScore, scoreView } from "../../shared/scoreBand";
 import { fallbackAvatarUrl, isGeneratedAvatar } from "../lib/avatar";
 import { cn } from "../lib/utils";
+import { keepLoadedImage } from "../lib/keptImages";
 
 /** The ring's stroke width for each place an avatar appears, in px. */
 export const RING_WIDTH = { list: 2, header: 3.5 } as const;
@@ -135,10 +136,12 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
         style={{ width: picture, height: picture }}
       >
         {/* The name is always printed beside the picture, so the picture
-            itself says nothing more. */}
+            itself says nothing more. A loaded picture is held in memory, so
+            a list built again paints it with its row (`keptImages`). */}
         <img
           src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
           alt=""
+          onLoad={keepLoadedImage}
           className="w-full h-full object-cover shrink-0"
         />
       </div>

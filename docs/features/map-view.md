@@ -319,8 +319,8 @@ dialog are born with other options and are destroyed when they close.
 The map's code is warmed too. MapLibre is the largest chunk in the build,
 and only the map loads it, so the first visit to the map would otherwise
 begin with a download. An idle moment on whichever page opens first fetches
-it instead. A browser that asks to save data is left alone. See
-[Performance](#performance).
+it instead, and so does pointing at a link to the map. A browser that asks to
+save data is left alone. See [Performance](#performance).
 
 ### Attribution
 
@@ -667,21 +667,44 @@ What makes the map fast to open, in the order a visit meets it:
    this split, React and Vite's own preload helper were folded into the map's
    chunk, and every page preloaded a megabyte of MapLibre to get them. The
    groups are in `vite.config.ts`.
-2. **The chunk is warmed while you read something else.** `src/App.tsx`
+2. **The chunk is warmed while you read something else.** `src/views/pages.ts`
    asks for an idle moment after the first page settles and fetches the map's
-   code then, so the first visit to the map does not start with a download.
-   `src/lib/idle.ts` skips the fetch when the browser asks to save data.
-3. **The map opens where you left it.** No flight from the world to your
+   code then, and a pointer on a link to the map fetches it too, so the first
+   visit to the map does not start with a download. `src/lib/idle.ts` skips
+   the idle fetch when the browser asks to save data.
+3. **The page draws at once.** The map page is a `preloadable`
+   (`src/lib/preloadable.tsx`), so its code, once here, renders in the same
+   frame, and the app's one page boundary keeps the last page on screen
+   while the code is still on its way. The map's skeleton showed for 300 ms
+   before, even when the code was already here.
+4. **The counts cost a few milliseconds.** The bottom line and the insights
+   panel count the people in view by time zone. `computeMapStats` built an
+   `Intl.DateTimeFormat` for each contact, about 130 ms for 5,800 people, and
+   `useMapStats` ran it three times as the page opened and again after every
+   pan. It now builds one formatter per zone, and the first render's count is
+   not counted again by the effect after it.
+5. **The pins do not wait for the basemap.** MapLibre's `load` waits for
+   every basemap tile and font. The pins need only the contacts source, which
+   the map holds once its style has arrived, so `ContactMap` reads them from
+   that moment. With a slow tile host (400 ms per request) the pins came 2.5 s
+   after the click before, and 0.6 s after it now.
+6. **The map opens where you left it.** No flight from the world to your
    city on every visit. See
    [The Map Remembers Where You Left It](#the-map-remembers-where-you-left-it).
-4. **The map is kept between visits.** A return to the page reuses the map
+7. **The map is kept between visits.** A return to the page reuses the map
    instance, tiles and all. See
    [The Map Stays Warm Between Visits](#the-map-stays-warm-between-visits).
-5. **The contacts are cached.** `GET /api/contacts/map` is a React Query
-   with a five minute stale time, so a return to the map draws the pins from
-   the cache while the answer refreshes.
-6. **The basemap is cached by the browser.** OpenFreeMap sends long cache
+8. **The contacts are cached.** The map reads the contact list the Network
+   page reads (`useMapContacts`, a projection of the `["contacts"]` query),
+   so it asks for nothing. The projection is a module function, so it runs
+   when the list changes and not on every render of the page.
+9. **The basemap is cached by the browser.** OpenFreeMap sends long cache
    headers on its style, sprite, glyphs and tiles.
+
+Measured on 5,824 contacts with a production build: the first visit draws in
+42 ms with its pins at 128 to 164 ms (the skeleton until 456 ms and the pins
+at 752 ms before), and a return draws its pins at 92 to 96 ms (450 to 503 ms
+before), with no main-thread task of 50 ms or more.
 
 ---
 

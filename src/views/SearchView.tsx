@@ -21,7 +21,6 @@ import {
   SUGGESTION_CHIP,
 } from "../lib/styles";
 import { cn } from "../lib/utils";
-import { tileDelay } from "../lib/motion";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { CorvidThinking } from "../components/brand/CorvidThinking";
@@ -451,7 +450,9 @@ export const SearchView = () => {
               </div>
 
               {/* Suggested questions, before the first search. A press
-                  fills the box and asks. */}
+                  fills the box and asks. They arrive with the page: a
+                  staggered entrance replayed on each visit, so the chips
+                  were still fading in 300 ms after the page had drawn. */}
               {!hasSearched && !isLoading && suggestions.length > 0 && (
                 <div className="space-y-3">
                   <h2 id={suggestionsId} className={SECTION_HEADING}>
@@ -461,12 +462,8 @@ export const SearchView = () => {
                     aria-labelledby={suggestionsId}
                     className="flex flex-wrap gap-2"
                   >
-                    {suggestions.map((q, i) => (
-                      <li
-                        key={q}
-                        className="tile-enter"
-                        style={{ animationDelay: tileDelay(i) }}
-                      >
+                    {suggestions.map((q) => (
+                      <li key={q}>
                         <button
                           type="button"
                           onClick={() => handleExampleClick(q)}

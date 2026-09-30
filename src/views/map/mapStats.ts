@@ -57,6 +57,27 @@ function parseOffsetMinutes(tzPart: string): number {
   return sign * (hours * 60 + mins);
 }
 
+/**
+ * A zone's UTC offset at `now`, as a label such as "GMT-4".
+ *
+ * Building an `Intl.DateTimeFormat` is the slow part: one per contact took
+ * about 130 ms for 5,800 people. The map holds a few dozen zones, so each
+ * call of `computeMapStats` builds one formatter per zone and keeps its
+ * label in `labels`.
+ */
+function offsetLabel(zone: string, now: Date, labels: Map<string, string>) {
+  let label = labels.get(zone);
+  if (label === undefined) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      timeZoneName: "shortOffset",
+    }).formatToParts(now);
+    label = parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
+    labels.set(zone, label);
+  }
+  return label;
+}
+
 function topFive(counts: Map<string, number>): TopBucket[] {
   return Array.from(counts.entries())
     .map(([name, count]) => ({ name, count }))
@@ -118,6 +139,7 @@ export function computeMapStats(
     string,
     { count: number; offsetMinutes: number; label: string }
   >();
+  const offsetLabels = new Map<string, string>();
 
   for (const c of inViewContacts) {
     // Overdue: the follow-up's day is before today, as the contact page's
@@ -154,12 +176,7 @@ export function computeMapStats(
       try {
         const tz = tzlookup(c.lat as number, c.lng as number);
         if (tz) {
-          const parts = new Intl.DateTimeFormat("en-US", {
-            timeZone: tz,
-            timeZoneName: "shortOffset",
-          }).formatToParts(now);
-          const tzPart =
-            parts.find((p) => p.type === "timeZoneName")?.value || "GMT";
+          const tzPart = offsetLabel(tz, now, offsetLabels);
           const current = tzBuckets.get(tzPart);
           if (current) {
             current.count++;

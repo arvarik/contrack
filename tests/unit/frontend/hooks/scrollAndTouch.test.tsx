@@ -13,7 +13,10 @@ import {
 import { useClickOutside } from "../../../../src/hooks/useClickOutside";
 import { useLongPress } from "../../../../src/hooks/useLongPress";
 import { usePullToRefresh } from "../../../../src/hooks/usePullToRefresh";
-import { useScrollRestoration } from "../../../../src/hooks/useScrollRestoration";
+import {
+  savedScroll,
+  useScrollRestoration,
+} from "../../../../src/hooks/useScrollRestoration";
 
 afterEach(() => {
   cleanup();
@@ -44,6 +47,15 @@ describe("scroll and touch", () => {
     expect(el.scrollTop).toBe(0);
     expect(sessionStorage.getItem("contrack_scroll_test")).toBe("400");
   });
+  // A virtual list reads it before its first render, so its first frame
+  // draws the rows at the saved place, not the rows at the top.
+  it("reads a saved position for a view, and 0 for a view never scrolled", () => {
+    sessionStorage.setItem("contrack_scroll_test", "400");
+    expect(savedScroll("test")).toBe(400);
+    expect(savedScroll("never")).toBe(0);
+    sessionStorage.setItem("contrack_scroll_bad", "not a number");
+    expect(savedScroll("bad")).toBe(0);
+  });
   it("works when browser storage throws", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
@@ -53,6 +65,7 @@ describe("scroll and touch", () => {
     });
     const { unmount } = render(<Scroller />);
     fireEvent.scroll(screen.getByTestId("scroller"));
+    expect(savedScroll("test")).toBe(0);
     expect(() => unmount()).not.toThrow();
   });
   it("suppresses the click after a long press but preserves normal taps", () => {

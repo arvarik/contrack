@@ -1,5 +1,9 @@
 import { apiFetch } from "./client";
-import { useQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import type { ActionItem, ZeroStatePayload } from "../types";
 import type {
@@ -81,29 +85,43 @@ export interface DailyInsight {
   generatedAt: string;
 }
 
-export const useDashboard = () => {
-  return useQuery({
-    queryKey: ["dashboard"],
-    queryFn: async ({ signal }): Promise<DashboardPayload> => {
-      const res = await apiFetch(`/dashboard`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch dashboard payload");
-      return res.json();
-    },
-    staleTime: STALE_TIMES.dashboard,
-  });
-};
+const dashboardQuery = queryOptions({
+  queryKey: ["dashboard"],
+  queryFn: async ({ signal }): Promise<DashboardPayload> => {
+    const res = await apiFetch(`/dashboard`, { signal });
+    if (!res.ok) throw new Error("Failed to fetch dashboard payload");
+    return res.json();
+  },
+  staleTime: STALE_TIMES.dashboard,
+});
 
-export const useDashboardActivity = () => {
-  return useQuery({
-    queryKey: ["dashboard", "activity"],
-    queryFn: async ({ signal }): Promise<DashboardActivityResponse> => {
-      const res = await apiFetch(`/dashboard/activity`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch dashboard activity");
-      return res.json();
-    },
-    staleTime: STALE_TIMES.dashboard,
-  });
-};
+const dashboardActivityQuery = queryOptions({
+  queryKey: ["dashboard", "activity"],
+  queryFn: async ({ signal }): Promise<DashboardActivityResponse> => {
+    const res = await apiFetch(`/dashboard/activity`, { signal });
+    if (!res.ok) throw new Error("Failed to fetch dashboard activity");
+    return res.json();
+  },
+  staleTime: STALE_TIMES.dashboard,
+});
+
+export const useDashboard = () => useQuery(dashboardQuery);
+
+export const useDashboardActivity = () => useQuery(dashboardActivityQuery);
+
+/**
+ * Starts the data Pulse draws first, for a link to Pulse a person points at.
+ *
+ * Without it, Pulse's data was asked for only once its page had mounted, so
+ * the first visit drew the page's card skeleton after its code arrived. Data
+ * read a moment ago is not read again (`staleTime`). The daily insight is
+ * left out: it can cost an AI call, and a pointer passing over the link is
+ * not a reason to make one.
+ */
+export function prefetchPulse(queryClient: QueryClient): void {
+  void queryClient.prefetchQuery(dashboardQuery);
+  void queryClient.prefetchQuery(dashboardActivityQuery);
+}
 
 export const useDailyInsight = (options?: { enabled?: boolean }) => {
   return useQuery({

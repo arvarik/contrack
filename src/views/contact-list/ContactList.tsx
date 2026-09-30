@@ -63,7 +63,10 @@ import {
 import { cn } from "../../lib/utils";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
-import { useScrollRestoration } from "../../hooks/useScrollRestoration";
+import {
+  savedScroll,
+  useScrollRestoration,
+} from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -276,10 +279,8 @@ export const ContactList = () => {
 
   // ── UX hooks ────────────────────────────────────────────────────────
   usePageTitle(NAMES.network.title);
-  const scrollRef = useScrollRestoration<HTMLDivElement>(
-    `contact-list:${filters.filterMode}:${filters.searchQuery}`,
-    !isLoading,
-  );
+  const scrollKey = `contact-list:${filters.filterMode}:${filters.searchQuery}`;
+  const scrollRef = useScrollRestoration<HTMLDivElement>(scrollKey, !isLoading);
   const {
     containerRef: pullRef,
     isPulling,
@@ -620,6 +621,11 @@ export const ContactList = () => {
     // scrolls into rows that have not been measured yet.
     estimateSize: () => metrics.rowHeight,
     overscan: 5, // Render 5 items outside viewport for smooth scrolling
+    // The list is built anew on each return to the Network page, and the
+    // scroller is put back where it was before paint. The rows start there
+    // too, or the first frame drew the top rows out of sight and showed an
+    // empty list.
+    initialOffset: () => savedScroll(scrollKey),
   });
 
   React.useLayoutEffect(() => {
