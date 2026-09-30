@@ -299,7 +299,6 @@ function rowId(seed: string, contactId: string, kind: string, index: number) {
 
 /** For a city the tables do not list: a plain address in a plain format. */
 const FALLBACK_COUNTRY: Country = {
-  name: "",
   calling: "",
   numberAfter: false,
   zipFirst: false,

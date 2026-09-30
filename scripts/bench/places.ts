@@ -22,7 +22,6 @@ export interface Neighbourhood {
 
 /** How a country writes an address and a phone number. */
 export interface Country {
-  name: string;
   /** International dialling code, without the plus. */
   calling: string;
   /** Whether the house number follows the street ("Kastanienallee 12"). */
@@ -44,7 +43,6 @@ export interface Country {
 
 export const COUNTRIES: Record<string, Country> = {
   US: {
-    name: "USA",
     calling: "1",
     numberAfter: false,
     zipFirst: false,
@@ -53,7 +51,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+1 (@) N##-####"],
   },
   CA: {
-    name: "Canada",
     calling: "1",
     numberAfter: false,
     zipFirst: false,
@@ -62,7 +59,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+1 (@) N##-####"],
   },
   GB: {
-    name: "UK",
     calling: "44",
     numberAfter: false,
     zipFirst: false,
@@ -71,7 +67,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+44 7### ######"],
   },
   IE: {
-    name: "Ireland",
     calling: "353",
     numberAfter: false,
     zipFirst: false,
@@ -80,7 +75,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+353 83 ### ####", "+353 85 ### ####", "+353 86 ### ####"],
   },
   DE: {
-    name: "Germany",
     calling: "49",
     numberAfter: true,
     zipFirst: true,
@@ -89,7 +83,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+49 151 ########", "+49 160 ########", "+49 170 ########"],
   },
   FR: {
-    name: "France",
     calling: "33",
     numberAfter: false,
     zipFirst: true,
@@ -98,7 +91,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+33 6 ## ## ## ##", "+33 7 ## ## ## ##"],
   },
   NL: {
-    name: "Netherlands",
     calling: "31",
     numberAfter: true,
     zipFirst: true,
@@ -107,7 +99,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+31 6 ########"],
   },
   PT: {
-    name: "Portugal",
     calling: "351",
     numberAfter: true,
     zipFirst: true,
@@ -116,7 +107,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+351 91# ### ###", "+351 93# ### ###"],
   },
   MX: {
-    name: "Mexico",
     calling: "52",
     numberAfter: true,
     zipFirst: true,
@@ -125,7 +115,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+52 55 #### ####"],
   },
   BR: {
-    name: "Brazil",
     calling: "55",
     numberAfter: true,
     zipFirst: false,
@@ -134,7 +123,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+55 11 9#### ####"],
   },
   KE: {
-    name: "Kenya",
     calling: "254",
     numberAfter: false,
     zipFirst: false,
@@ -143,7 +131,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+254 7## ### ###"],
   },
   NG: {
-    name: "Nigeria",
     calling: "234",
     numberAfter: false,
     zipFirst: false,
@@ -152,7 +139,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+234 80# ### ####", "+234 81# ### ####"],
   },
   SG: {
-    name: "Singapore",
     calling: "65",
     numberAfter: false,
     zipFirst: false,
@@ -161,7 +147,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+65 8### ####", "+65 9### ####"],
   },
   KR: {
-    name: "South Korea",
     calling: "82",
     numberAfter: true,
     zipFirst: false,
@@ -170,7 +155,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+82 10 #### ####"],
   },
   JP: {
-    name: "Japan",
     calling: "81",
     numberAfter: false,
     zipFirst: false,
@@ -179,7 +163,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+81 90 #### ####", "+81 80 #### ####"],
   },
   IL: {
-    name: "Israel",
     calling: "972",
     numberAfter: true,
     zipFirst: false,
@@ -188,7 +171,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+972 50 ### ####", "+972 52 ### ####", "+972 54 ### ####"],
   },
   SE: {
-    name: "Sweden",
     calling: "46",
     numberAfter: true,
     zipFirst: true,
@@ -197,7 +179,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+46 70 ### ## ##", "+46 73 ### ## ##"],
   },
   AU: {
-    name: "Australia",
     calling: "61",
     numberAfter: false,
     zipFirst: false,
@@ -206,7 +187,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+61 4## ### ###"],
   },
   CH: {
-    name: "Switzerland",
     calling: "41",
     numberAfter: true,
     zipFirst: true,
@@ -215,7 +195,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+41 76 ### ## ##", "+41 79 ### ## ##"],
   },
   IN: {
-    name: "India",
     calling: "91",
     numberAfter: false,
     zipFirst: false,
@@ -224,7 +203,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+91 98### #####", "+91 99### #####"],
   },
   DK: {
-    name: "Denmark",
     calling: "45",
     numberAfter: true,
     zipFirst: true,
@@ -233,7 +211,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+45 ## ## ## ##"],
   },
   BE: {
-    name: "Belgium",
     calling: "32",
     numberAfter: true,
     zipFirst: true,
@@ -242,7 +219,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+32 4## ## ## ##"],
   },
   GR: {
-    name: "Greece",
     calling: "30",
     numberAfter: true,
     zipFirst: true,
@@ -251,7 +227,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+30 69# ### ####"],
   },
   ES: {
-    name: "Spain",
     calling: "34",
     numberAfter: true,
     zipFirst: true,
@@ -260,7 +235,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+34 6## ### ###", "+34 7## ### ###"],
   },
   NO: {
-    name: "Norway",
     calling: "47",
     numberAfter: true,
     zipFirst: true,
@@ -269,7 +243,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+47 4## ## ###", "+47 9## ## ###"],
   },
   IT: {
-    name: "Italy",
     calling: "39",
     numberAfter: true,
     zipFirst: true,
@@ -278,7 +251,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+39 3## ### ####"],
   },
   SK: {
-    name: "Slovakia",
     calling: "421",
     numberAfter: true,
     zipFirst: true,
@@ -287,7 +259,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+421 9## ### ###"],
   },
   HU: {
-    name: "Hungary",
     calling: "36",
     numberAfter: true,
     zipFirst: true,
@@ -296,7 +267,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+36 20 ### ####", "+36 30 ### ####"],
   },
   PL: {
-    name: "Poland",
     calling: "48",
     numberAfter: true,
     zipFirst: true,
@@ -305,7 +275,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+48 5## ### ###", "+48 6## ### ###"],
   },
   FI: {
-    name: "Finland",
     calling: "358",
     numberAfter: true,
     zipFirst: true,
@@ -314,7 +283,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+358 40 ### ####", "+358 50 ### ####"],
   },
   AT: {
-    name: "Austria",
     calling: "43",
     numberAfter: true,
     zipFirst: true,
@@ -323,7 +291,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+43 66# ### ####"],
   },
   SI: {
-    name: "Slovenia",
     calling: "386",
     numberAfter: true,
     zipFirst: true,
@@ -332,7 +299,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+386 4# ### ###", "+386 5# ### ###"],
   },
   CZ: {
-    name: "Czechia",
     calling: "420",
     numberAfter: true,
     zipFirst: true,
@@ -341,7 +307,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+420 6## ### ###", "+420 7## ### ###"],
   },
   LV: {
-    name: "Latvia",
     calling: "371",
     numberAfter: true,
     zipFirst: false,
@@ -350,7 +315,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+371 2# ### ###"],
   },
   EE: {
-    name: "Estonia",
     calling: "372",
     numberAfter: true,
     zipFirst: true,
@@ -359,7 +323,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+372 5### ####"],
   },
   LT: {
-    name: "Lithuania",
     calling: "370",
     numberAfter: true,
     zipFirst: false,
@@ -368,7 +331,6 @@ export const COUNTRIES: Record<string, Country> = {
     phones: ["+370 6## #####"],
   },
   HR: {
-    name: "Croatia",
     calling: "385",
     numberAfter: true,
     zipFirst: true,
