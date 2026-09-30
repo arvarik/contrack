@@ -454,6 +454,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             onCreated={handleAccountCreated}
             deviceContacts={deviceContacts}
             localOwnerPresent={localOwnerPresent}
+            mailConfigured={mailConfigured}
           />
         );
       case "join":
@@ -465,6 +466,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
               clearInvitation();
               void check();
             }}
+            mailConfigured={mailConfigured}
           />
         );
       case "register":
@@ -472,6 +474,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
           <Register
             onRegistered={handleAccountCreated}
             onCancel={() => setState("signin")}
+            mailConfigured={mailConfigured}
           />
         );
       case "passkey-nudge":

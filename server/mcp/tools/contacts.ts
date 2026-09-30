@@ -163,6 +163,8 @@ export function registerContactTools(
       },
     },
     trackedTool(onError, async (body) => {
+      // No `autoEnrich`: "Enrich new contacts automatically" researches the
+      // contacts a person adds, not the ones an MCP client adds.
       const contact = contactService.createContact(scope, body);
       if (!contact) {
         throw new AppError("Failed to create contact", 500);

@@ -62,6 +62,34 @@ const person = (palette: ReturnType<Page["getByRole"]>, name: string) =>
 const paletteParts = (b: AxeBuilder) =>
   b.include('[role="dialog"]').exclude("[cmdk-list]").exclude("kbd");
 
+test("opens the list of stale contacts from the stale data insight", async ({
+  page,
+  instance,
+}) => {
+  // The insight counts contacts not updated for six months. It once opened
+  // Settings, which lists no contact.
+  const id = await ownContact(instance, { name: "Zed Stale" });
+  const Database = (await import("better-sqlite3")).default;
+  const path = (await import("node:path")).default;
+  const db = new Database(path.join(instance.dataDir, "curator.db"));
+  db.prepare(
+    "UPDATE contacts SET updatedAt = datetime('now', '-7 months') WHERE id = ?",
+  ).run(id);
+  db.close();
+
+  await page.goto("/");
+  await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog");
+  await palette.getByText(/contacts? (has|have) stale data/).click();
+
+  await expect(page).toHaveURL(/\/\?q=updated/);
+  await expect(page.getByRole("textbox", { name: /search/i })).toHaveValue(
+    "updated:>6m",
+  );
+  await expect(page.getByText("Zed Stale")).toBeVisible();
+});
+
 test("shows a person the server finds by company", async ({ page }) => {
   const palette = await openPalette(page);
   await page.keyboard.type("Babbage");

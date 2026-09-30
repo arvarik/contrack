@@ -1,8 +1,8 @@
 // =============================================================================
 // Integration: the instance AI switch
 // =============================================================================
-// An admin can turn AI off for every account, in Settings → AI or with
-// AI_DISABLED in the environment. The switch is checked in one place, the
+// An admin can turn AI off for every account, on the AI providers page or
+// with AI_DISABLED in the environment. The switch is checked in one place, the
 // provider lookup (getProvider), so every generation, provider embedding,
 // model discovery and model test stops there. These tests prove the lookup
 // and the paths that lean on it: capability resolution, the gateway,
@@ -104,8 +104,8 @@ describe("the provider lookup while AI is off", () => {
     expect(resolveCapability("deep")).toBeNull();
     expect(resolveCapability("research")).toBeNull();
     expect(isAnyProviderConfigured()).toBe(false);
-    // Settings → AI still shows the key, so turning AI back on needs nothing
-    // entered again.
+    // The AI providers page still shows the key, so turning AI back on needs
+    // nothing entered again.
     expect(getProviderConfigs().map((config) => config.id)).toEqual(["openai"]);
 
     setAiOffForInstance(false);

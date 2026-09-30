@@ -928,13 +928,16 @@ describe("frontend.pulse", () => {
       expect(screen.queryByText("Meetings")).toBeNull();
     });
 
-    it("is one line with the calendar door when nothing is in two weeks", () => {
+    it("is one line with the calendar door when nothing is coming up", () => {
       render(
         <MemoryRouter>
           <ComingUpCard birthdays={[birthday("c-1", "Ada Lovelace", 3)]} />
         </MemoryRouter>,
       );
-      expect(screen.getByText(/Nothing in the next two weeks\./)).toBeDefined();
+      expect(screen.getByText(/Nothing coming up\./)).toBeDefined();
+      // Birthdays reach fourteen days out and meetings seven, so the card
+      // names no window that only one of them fills.
+      expect(screen.queryByText(/two weeks/)).toBeNull();
       expect(
         screen
           .getByRole("link", { name: "Connect a calendar" })

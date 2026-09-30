@@ -94,9 +94,19 @@ export function buildScoringReasoning(
 }
 
 export function runDeterministicPass(ctx: PassContext): RawPair[] {
-  const { scope, contactMap, seenPairs, rid, normalizedMap } = ctx;
+  const { scope, contactMap, seenPairs, distinctPairs, rid, normalizedMap } =
+    ctx;
   const owner = scope.ownerId;
   const pairs: RawPair[] = [];
+
+  // A pair this pass must leave alone: one an earlier rule already claimed,
+  // or one known to be two people. Known means the person chose "Not the same
+  // person" or "Keep separate", or a note names both. A shared email or phone
+  // is not a reason to merge a pair the person has already kept apart, and a
+  // scan must not auto-merge it. The funnel and the automatic checks read the
+  // same set (`isKnownDistinct`, `isCandidate` in incremental.ts).
+  const skip = (pk: string): boolean =>
+    seenPairs.has(pk) || distinctPairs.has(pk);
 
   if (ctx.allContacts.length < 2) {
     log.debug("DedupeService", `[${rid}] Not enough contacts to dedupe`);
@@ -168,7 +178,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
     const pk = pairKey(m.id1, m.id2);
-    if (seenPairs.has(pk)) continue;
+    if (skip(pk)) continue;
     const nA = normalizedMap.get(m.id1);
     const nB = normalizedMap.get(m.id2);
     if (!nA || !nB) continue;
@@ -216,7 +226,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     for (let i = 0; i < unique.length; i++) {
       for (let j = i + 1; j < unique.length; j++) {
         const pk = pairKey(unique[i], unique[j]);
-        if (seenPairs.has(pk)) continue;
+        if (skip(pk)) continue;
         const nA = normalizedMap.get(unique[i]);
         const nB = normalizedMap.get(unique[j]);
         if (!nA || !nB) continue;
@@ -306,7 +316,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   for (const m of nameDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
     const pk = pairKey(m.id1, m.id2);
-    if (seenPairs.has(pk)) continue;
+    if (skip(pk)) continue;
 
     const nA = normalizedMap.get(m.id1);
     const nB = normalizedMap.get(m.id2);
@@ -383,7 +393,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
         const a = group[i];
         const b = group[j];
         const pk = pairKey(a.id, b.id);
-        if (seenPairs.has(pk)) continue;
+        if (skip(pk)) continue;
 
         if (a.nameNorm === b.nameNorm) continue;
 

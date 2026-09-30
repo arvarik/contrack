@@ -2,7 +2,7 @@
 // Integration: data lifecycle — trash/restore/purge, backups, full export
 // =============================================================================
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import request from "supertest";
 import fs from "fs";
 import path from "path";
@@ -17,6 +17,44 @@ async function createContact(body: Record<string, unknown>): Promise<string> {
   expect(res.status).toBe(201);
   return res.body.id as string;
 }
+
+describe("a delete says how long the trash keeps the contact", () => {
+  afterEach(() => {
+    delete process.env.TRASH_RETENTION_DAYS;
+  });
+
+  it("DELETE answers the retention in force, not a fixed 30 days", async () => {
+    const id = await createContact({ name: "Retention Single" });
+    process.env.TRASH_RETENTION_DAYS = "7";
+
+    const del = await request(app).delete(`/api/contacts/${id}`);
+
+    expect(del.status).toBe(200);
+    expect(del.body.retentionDays).toBe(7);
+  });
+
+  it("bulk delete answers the retention in force", async () => {
+    const a = await createContact({ name: "Retention Bulk A" });
+    const b = await createContact({ name: "Retention Bulk B" });
+    process.env.TRASH_RETENTION_DAYS = "90";
+
+    const del = await request(app)
+      .post("/api/contacts/bulk-delete")
+      .send({ ids: [a, b] });
+
+    expect(del.status).toBe(200);
+    expect(del.body.count).toBe(2);
+    expect(del.body.retentionDays).toBe(90);
+  });
+
+  it("answers 30 days when nobody has set a retention", async () => {
+    const id = await createContact({ name: "Retention Default" });
+
+    const del = await request(app).delete(`/api/contacts/${id}`);
+
+    expect(del.body.retentionDays).toBe(30);
+  });
+});
 
 describe("trash: soft delete → restore", () => {
   it("DELETE moves a contact to trash instead of destroying it", async () => {
@@ -235,5 +273,38 @@ describe("full export", () => {
     expect(lines[0]).toContain("Name,First Name,Last Name,Company");
     expect(res.text).toContain('"Comma, Inc Person"');
     expect(res.text).toContain('"Quotes ""R"" Us, LLC"');
+  });
+
+  it("leaves ghosts and merged-away contacts out of the CSV, like the vCard file", async () => {
+    // A ghost is a name pulled out of a note, not a contact of its own.
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, isGhost)
+         SELECT 'ghost-csv', ownerId, 'Ghost Csv Person', 1 FROM contacts LIMIT 1`,
+      )
+      .run();
+    // After a merge the kept contact holds both, so the other row would be
+    // the same person twice.
+    const kept = await createContact({
+      name: "Kept Csv Person",
+      emails: ["kept@csv.example"],
+    });
+    const mergedAway = await createContact({
+      name: "Merged Csv Person",
+      emails: ["gone@csv.example"],
+    });
+    const merge = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId: kept, duplicateId: mergedAway });
+    expect(merge.status).toBe(200);
+
+    const res = await request(app).get("/api/export/csv");
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain("Ghost Csv Person");
+    expect(res.text).not.toContain("Merged Csv Person");
+    const keptRow = res.text
+      .split("\r\n")
+      .find((line) => line.startsWith("Kept Csv Person,"));
+    expect(keptRow).toContain("gone@csv.example");
   });
 });

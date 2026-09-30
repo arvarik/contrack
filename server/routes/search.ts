@@ -354,7 +354,8 @@ router.get(
  * POST /api/search/refresh-index — Explicitly trigger indexing for missing or all contacts.
  *
  * For paid providers, requires explicit confirmation ({ allowProvider: true }) to prevent
- * unapproved API charges.
+ * unapproved API charges, and answers 403 AI_OFF_FOR_ACCOUNT while the caller
+ * has AI off.
  */
 router.post(
   "/refresh-index",
@@ -368,6 +369,13 @@ router.post(
       .parse(req.body ?? {});
 
     const resolved = resolveEmbeddings();
+    // A hosted model sends each contact to the provider, which the account's
+    // own AI switch forbids. The built-in model still indexes, with AI off.
+    if (resolved.kind === "provider" && !aiAllowedFor(req)) {
+      throw new AppError("AI is off for this account", 403, {
+        code: "AI_OFF_FOR_ACCOUNT",
+      });
+    }
     if (resolved.kind === "provider" && !allowProvider) {
       const coverage = getSearchCoverage(scope);
       return res.status(400).json({

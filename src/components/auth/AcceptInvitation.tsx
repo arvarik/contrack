@@ -28,11 +28,14 @@ export const AcceptInvitation = ({
   token,
   onAccepted,
   onCancel,
+  mailConfigured = false,
 }: {
   token: string;
   onAccepted: () => void;
   /** Give up on the link and go wherever the gate would otherwise send us. */
   onCancel: () => void;
+  /** True when the instance can email links. The email hint says which. */
+  mailConfigured?: boolean;
 }) => {
   const form = useAccountForm();
   const [formError, setFormError] = useState<string | null>(null);
@@ -118,7 +121,7 @@ export const AcceptInvitation = ({
       }
     >
       <div className="space-y-4">
-        <AccountFields form={form} />
+        <AccountFields form={form} mailConfigured={mailConfigured} />
         {formError && <AuthError>{formError}</AuthError>}
       </div>
 

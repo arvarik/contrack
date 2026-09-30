@@ -16,6 +16,7 @@
 
 import crypto from "crypto";
 import { sqlite, claimUnownedData, ensureLocalOwner } from "../db.ts";
+import type { SessionMethod } from "../../shared/devices.ts";
 import { log } from "../utils/logger.ts";
 import { AppError, ConflictError, ValidationError } from "../utils/AppError.ts";
 import { getSetting, setSetting } from "./settingsService.ts";
@@ -798,7 +799,7 @@ function sessionKey(secret: string): string {
  *   plaintext anywhere.
  */
 export interface CreateSessionOptions {
-  method?: string | null;
+  method?: SessionMethod | null;
   remember?: boolean;
 }
 

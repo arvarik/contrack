@@ -129,12 +129,11 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 ### More Capabilities
 
 - **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 15 tools, prompts (`catch_me_up`, `weekly_review`), and resources for Claude Code, Claude Desktop, and Cursor integration
-- **Magic Paste** — Paste unstructured text, AI extracts a structured contact
+- **Add from text** — Paste unstructured text, AI extracts a structured contact
 - **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
 - **Smart Router** — Automatic Gemini model selection (Lite/Flash/Pro) per use case
 - **Batch Enrichment** — AI-powered web research to hydrate contact profiles
 - **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership
-- **Doc2Query** — Write-time search expansion via AI for better recall
 - **Note Search** — "Who discussed hiring last month?" answered from your own notes, locally: the person, the date and the passage, with date phrases read in your time zone
 - **Ghost Detection** — Passive entity extraction from notes creates ghost contacts
 - **@Mentions** — Bi-directional relationship graph via Tiptap rich text
@@ -144,7 +143,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 - **Link Unfurling** — Zero-Chromium OpenGraph extraction via Cheerio
 - **Logo Proxy** — Heuristic company logo discovery with local caching
 - **Themes** — Light, dark, or follow the machine, plus an accent colour that derives a readable palette of its own
-- **Trash & Undo** — Deletes are soft: restore from Settings → Trash within 30 days
+- **Trash & Undo** — Deletes are soft: restore from Settings → Trash until the retention an admin sets runs out, 30 days by default
 - **Export** — vCard, CSV and JSON, each covering only your own contacts. vCard reads back in, so moving out and back in is honest
 - **Automatic Backups** — Scheduled SQLite snapshots with rotation. Every snapshot is reopened, checked and counted against the live database, and the answer shows per file
 - **Accounts** — Optional sign-in with username/password, server-side sessions you can revoke per device, plus personal API tokens for scripts and MCP
@@ -155,7 +154,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ## 🚀 Quick Start
 
-**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → AI** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
+**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → Administration → AI providers** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
 
 ### Option 1: Docker, prebuilt image (fastest)
 
@@ -179,7 +178,7 @@ Authentication is off by default, on the assumption that the container is reache
 git clone https://github.com/arvarik/contrack.git
 cd contrack
 cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → AI
+# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI providers
 docker compose up -d
 ```
 
@@ -192,7 +191,7 @@ git clone https://github.com/arvarik/contrack.git
 cd contrack
 npm install
 cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → AI
+# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI providers
 npm run dev
 ```
 

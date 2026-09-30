@@ -1,9 +1,10 @@
 /**
  * AI Settings API Hooks — capability-based AI configuration.
  *
- * Backs Settings → AI: provider credentials, custom OpenAI-compatible
- * endpoints, per-capability model assignment, and model discovery. Also the
- * instance switch: whether an admin turned AI off for every account.
+ * Backs the AI providers page: provider credentials, custom
+ * OpenAI-compatible endpoints, per-capability model assignment, and model
+ * discovery. Also the instance switch: whether an admin turned AI off for
+ * every account.
  *
  * @module api/aiSettings
  */

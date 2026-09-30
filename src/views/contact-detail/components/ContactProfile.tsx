@@ -39,6 +39,7 @@ import { cn } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
 
 import { usePageTitle } from "../../../hooks/usePageTitle";
+import { useAiAllowed } from "../../../hooks/useAiAllowed";
 
 import {
   useContact,
@@ -225,13 +226,15 @@ export const ContactProfile = ({
   const mainTab: Section = activeTab === "dossier" ? "dossier" : "timeline";
 
   // ── Dropzone (file uploads & .eml ingestion) ──────────────────────────
+  // With AI off, the server saves an .eml with no summary, like any file.
+  const aiAllowed = useAiAllowed();
   const onDrop = useCallback(
     (acceptedFiles: globalThis.File[]) => {
       if (acceptedFiles.length > 0 && id) {
         acceptedFiles.forEach((file) => {
           const isEml = file.name.toLowerCase().endsWith(".eml");
           const toastId = toast.loading(
-            isEml
+            isEml && aiAllowed
               ? `Summarizing email thread with AI...`
               : `Uploading "${file.name}"...`,
           );
@@ -239,10 +242,10 @@ export const ContactProfile = ({
           addAttachment.mutate(
             { contactId: id, file },
             {
-              onSuccess: () => {
+              onSuccess: (interaction) => {
                 toast.dismiss(toastId);
                 toast.success(
-                  isEml
+                  isEml && interaction.content
                     ? `Email imported & summarized!`
                     : `Attached "${file.name}"`,
                 );
@@ -258,7 +261,7 @@ export const ContactProfile = ({
         });
       }
     },
-    [id, addAttachment],
+    [id, addAttachment, aiAllowed],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -292,7 +295,7 @@ export const ContactProfile = ({
   /**
    * Delete and leave, offering undo — the modal that used to sit in front of
    * this said "Permanently delete… This action cannot be undone", which was
-   * false: the mutation is a soft delete into a 30-day Trash, and this handler
+   * false: the mutation is a soft delete into Trash, and this handler
    * already offered an Undo toast underneath the dialog that denied one
    * existed. Same trade as the bulk path; see lib/undoToast.
    */
@@ -300,10 +303,11 @@ export const ContactProfile = ({
     if (!id || !contact) return;
     const name = contact.name;
     deleteContact.mutate(id, {
-      onSuccess: () => {
+      onSuccess: ({ retentionDays }) => {
         toastUndoableDelete({
           count: 1,
           name,
+          retentionDays,
           onUndo: () => {
             restoreContact.mutate(id, {
               onSuccess: () => navigate(`/contact/${id}`),

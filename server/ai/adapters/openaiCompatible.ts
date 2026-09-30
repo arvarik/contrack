@@ -133,7 +133,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
       // means the catalog is empty — the endpoint was saved while it was
       // unreachable, or it serves no chat models.
       throw new AppError(
-        `${this.name}: no model to call. Open Settings → AI, refresh this endpoint's model list, then choose a model for this task.`,
+        `${this.name}: no model to call. Open Settings → Administration → AI providers, refresh this endpoint's model list, then choose a model for this task.`,
         503,
         { code: "AI_NO_MODEL_SELECTED" },
       );

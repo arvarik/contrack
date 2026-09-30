@@ -2,7 +2,7 @@ import { aiCache } from "../utils/aiCache.ts";
 // =============================================================================
 // AI Settings Service — provider credentials, capability assignments, models
 // =============================================================================
-// Backing logic for Settings → AI. Owns:
+// Backing logic for the AI providers page. Owns:
 //   - provider API keys entered through the UI (env keys stay read-only),
 //     stored sealed with the instance secret
 //   - custom OpenAI-compatible endpoints

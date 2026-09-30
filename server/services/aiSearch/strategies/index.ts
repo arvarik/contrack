@@ -1,4 +1,4 @@
-import { resolveCapability } from "../../../ai/capabilities.ts";
+import { isResearchOff, resolveCapability } from "../../../ai/capabilities.ts";
 import { AppError } from "../../../utils/AppError.ts";
 // =============================================================================
 // AI Search — Strategy Registry
@@ -45,6 +45,7 @@ export function getStrategy(name: string = "two-pass"): AISearchStrategy {
 /**
  * Resolve the default strategy name for a given provider: two-pass, or
  * SearXNG when no provider serves research and a SearXNG instance is set.
+ * Research set to "Off — never research online" rules SearXNG out too.
  *
  * OpenAI and Anthropic ran single-pass until 2026-09-26. Two-pass on them was
  * measured the same day, on one contact: GPT-6 Sol with GPT-6 Luna filled 26
@@ -55,12 +56,18 @@ export function getDefaultStrategyForProvider(
 ): string {
   // No grounding-capable provider serves the research capability — fall back
   // to a self-hosted SearXNG instance when one is configured.
-  if (!providerName && getSearxngUrl()) return "searxng";
+  if (!providerName && getSearxngUrl() && !isResearchOff()) return "searxng";
   return "two-pass";
 }
 
 /** Validate configuration locally before accepting an enrichment action. */
 export function validateEnrichmentStrategy(requested?: string): string {
+  if (isResearchOff())
+    throw new AppError(
+      "Contact research is off. An admin can turn it on in Settings → AI.",
+      503,
+      { code: "RESEARCH_OFF" },
+    );
   const research = resolveCapability("research");
   const name =
     requested ?? getDefaultStrategyForProvider(research?.providerId ?? null);

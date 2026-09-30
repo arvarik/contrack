@@ -12,6 +12,7 @@ import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
+import { trashRetentionDays } from "../services/lifecycleSettings.ts";
 import { relationshipService } from "../services/relationshipService.ts";
 import { parseContactRecord } from "../ai/aiService.ts";
 import {
@@ -189,7 +190,14 @@ router.post(
     const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
 
-    const contact = contactService.createContact(scopeOf(req), req.body);
+    // A person adding a contact is the one case "Enrich new contacts
+    // automatically" covers.
+    const contact = contactService.createContact(
+      scopeOf(req),
+      req.body,
+      "manual",
+      { autoEnrich: true },
+    );
     log.info(
       "API",
       `[${rid}] POST /api/contacts → "${req.body.name}" (${contact?.id})`,
@@ -439,7 +447,11 @@ router.post(
       "API",
       `[${rid}] POST /api/contacts/bulk-delete → ${count} deleted`,
     );
-    res.json({ success: true, count });
+    res.json({
+      success: true,
+      count,
+      retentionDays: trashRetentionDays().value,
+    });
   }),
 );
 
@@ -546,7 +558,7 @@ router.delete(
     );
     if (!success) throw new NotFoundError("Contact");
     log.info("API", `[${rid}] DELETE /api/contacts/${String(req.params.id)}`);
-    res.json({ success: true });
+    res.json({ success: true, retentionDays: trashRetentionDays().value });
   }),
 );
 

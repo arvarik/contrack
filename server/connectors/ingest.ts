@@ -663,6 +663,8 @@ export async function ingestStream(
               connectedOn: nowIso,
             },
           ];
+          // No `autoEnrich`: a sync adds contacts that nobody chose one by
+          // one, so "Enrich new contacts automatically" leaves them alone.
           const created = contactService.createContact(
             scope,
             cPayload,

@@ -1,14 +1,16 @@
 /**
- * ComingUpCard: what the next two weeks hold, in the order it arrives.
+ * ComingUpCard: what is coming, in the order it arrives.
  *
  * One dated list. A birthday in days eight to fourteen and a meeting from a
  * connected calendar are both "coming up", so they sit in one list ordered
  * by date, each row with a chip that says when: "Tomorrow", "Thursday", "In
  * 10 days". A birthday in the next seven days is in Up next already, and a
  * fact appears once on this page, so the card starts where the queue ends.
+ * The dashboard sends meetings for the next seven days only, so the card
+ * names no window of its own.
  *
- * With nothing in two weeks the card is one line, and the line offers the
- * one thing that would fill it: a calendar.
+ * With nothing to show the card is one line, and the line offers the one
+ * thing that would fill it: a calendar.
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -91,7 +93,7 @@ export const ComingUpCard = ({
   if (entries.length === 0) {
     return (
       <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
-        Nothing in the next two weeks.{" "}
+        Nothing coming up.{" "}
         <Link
           to="/settings/connectors"
           className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"

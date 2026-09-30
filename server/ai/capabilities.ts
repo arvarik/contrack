@@ -5,7 +5,7 @@
 // providers. This module maps each capability to a concrete provider + model
 // at call time, using (in priority order):
 //
-//   1. An explicit pin from the settings store (Settings → AI).
+//   1. An explicit pin from the settings store (the AI providers page).
 //   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_MODEL).
 //   3. Auto: the legacy AI_PROVIDER first (so existing deployments behave
 //      identically), then a documented preference order over whatever
@@ -125,6 +125,16 @@ export function getCapabilityAssignment(
 }
 
 /**
+ * True when an admin set the research model to "Off — never research online".
+ *
+ * Research through SearXNG resolves no provider, so `resolveCapability`
+ * alone cannot stop it. Every research path asks this as well.
+ */
+export function isResearchOff(): boolean {
+  return getCapabilityAssignment("research").mode === "disabled";
+}
+
+/**
  * Parse an env override of the form "provider:model" or bare "model"
  * (bare uses the default provider).
  */
@@ -160,8 +170,8 @@ export function parseEnvOverride(
  * follows the endpoint's own listing, so the same model is chosen on every
  * call. Quick and deep therefore land on the same model: nothing in the compat
  * catalog says which model is the cheaper one, and inventing a ranking from
- * model names would be a guess the user cannot see. Pin the capabilities in
- * Settings → AI to split them.
+ * model names would be a guess the user cannot see. Pin the capabilities on
+ * the AI providers page to split them.
  *
  * Returns undefined for native providers (they route themselves) and when no
  * chat model is cached, which `resolveCapability` treats as "this provider
@@ -264,7 +274,7 @@ export function resolveCapability(
     if (config.kind === "openai-compatible" && !model) {
       log.warn(
         "AICapabilities",
-        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → AI`,
+        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → Administration → AI providers`,
       );
       continue;
     }

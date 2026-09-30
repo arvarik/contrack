@@ -22,6 +22,8 @@ import { resolveCapability } from "../ai/capabilities.ts";
 import { buildMentionCorpus, resolveMention } from "./mentionResolution.ts";
 import { storeSuggestion } from "./dedupe/suggestions.ts";
 import { SharedWork } from "../ai/workQueue.ts";
+import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
+import { isAnyProviderConfigured } from "../ai/gateway.ts";
 
 // =============================================================================
 // Interaction Payload Types
@@ -98,6 +100,10 @@ import { getErrorMessage } from "../utils/helpers.ts";
  * The match itself is in `mentionResolution.ts`. It used to be
  * `eq(contacts.name, m.name)`, which missed "Jon" for "Jonathan Smith" and
  * made a second ghost every time.
+ *
+ * The note goes to a provider, so both AI switches are read here, when the
+ * job runs: the instance switch and the owner's "Use AI for this account".
+ * A note saved just before the owner turned AI off still stays on the server.
  */
 async function runMentionExtraction(
   scope: Scope,
@@ -105,6 +111,7 @@ async function runMentionExtraction(
   contactId: string,
   content: string,
 ): Promise<void> {
+  if (!aiAllowedForUser(scope.ownerId)) return;
   try {
     const mentions = await extractMentions(content);
     if (!mentions || mentions.length === 0) return;
@@ -514,7 +521,13 @@ export const interactionService = {
     const now = new Date().toISOString();
     let content: string | null = null;
     const isEmail = file.originalname.toLowerCase().endsWith(".eml");
-    if (isEmail) {
+    // The summary sends the email to a provider. With AI off for the account
+    // or the instance, or with no provider, the file is saved with no summary.
+    if (
+      isEmail &&
+      isAnyProviderConfigured() &&
+      aiAllowedForUser(scope.ownerId)
+    ) {
       // The bytes, not a UTF-8 string: each MIME part names its charset.
       const raw = await fs.promises.readFile(file.path);
       content = await summarizeEmlEmail(await emailText(raw));

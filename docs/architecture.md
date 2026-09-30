@@ -410,7 +410,10 @@ search) and `server/services/aiSearch/` (contact research).
 - **Switches.** `AI_DISABLED` or the admin switch turns AI off for the
   instance, and the `aiAssist` preference turns it off for one account.
   `requireAiAllowed` then refuses the AI routes, except Ask Contrack, which
-  answers from local data.
+  answers from local data. The work that runs outside a route reads
+  `aiAllowedForUser` itself: mention detection, `.eml` summaries, connector
+  summaries, auto-enrichment, the MCP search, and hosted embeddings
+  (`mayEmbedContactsFor`).
 
 For the settings a person sees, see [Models for each task](ai.md#models-for-each-task).
 

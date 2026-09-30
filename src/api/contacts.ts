@@ -469,7 +469,7 @@ export const usePurgeTrashedContact = () => {
   });
 };
 
-/** Restore a trashed contact (deletes are soft — 30-day trash window). */
+/** Restore a trashed contact (deletes are soft, and Trash keeps them for its retention). */
 export const useRestoreContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -510,7 +510,7 @@ export const useDeleteContact = () => {
   return useMutation({
     mutationFn: async (
       id: string,
-    ): Promise<{ success: boolean; message: string }> => {
+    ): Promise<{ success: boolean; retentionDays: number }> => {
       const res = await apiFetch(`/contacts/${id}`, {
         method: "DELETE",
       });
@@ -570,7 +570,7 @@ export const useBulkDeleteContacts = () => {
   return useMutation({
     mutationFn: async (
       ids: string[],
-    ): Promise<{ success: boolean; count: number }> => {
+    ): Promise<{ success: boolean; count: number; retentionDays: number }> => {
       const res = await apiFetch("/contacts/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

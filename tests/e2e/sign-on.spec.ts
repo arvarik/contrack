@@ -160,7 +160,10 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(
     page.getByText("This Contrack cannot send email", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("scripts/reset-password.ts")).toBeVisible();
+  // The image ships node and the script. It has no tsx.
+  await expect(
+    page.getByText("node scripts/reset-password.ts <username>"),
+  ).toBeVisible();
   await expectPageAccessible(page, testInfo, "forgot-password-panel");
   await page.getByRole("button", { name: "Back to sign in" }).first().click();
   await expect(

@@ -188,3 +188,29 @@ describe("out and back in", () => {
     expect(jose!.lastName).toBe("García");
   });
 });
+
+describe("a contact merged into another", () => {
+  it("is not exported, because the kept contact already holds both", async () => {
+    const kept = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Kept Merge Person", emails: ["kept@merge.example"] });
+    const mergedAway = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Merged Away Person", emails: ["gone@merge.example"] });
+    const merge = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId: kept.body.id, duplicateId: mergedAway.body.id });
+    expect(merge.status).toBe(200);
+
+    const vcf = await exportVcf();
+    expect(vcf).not.toContain("Merged Away Person");
+    // The kept card carries the merged contact's email instead.
+    const card = parseVCard(vcf, "apple").find(
+      (c) => c.name === "Kept Merge Person",
+    );
+    expect(card?.emails?.map((e) => e.email).sort()).toEqual([
+      "gone@merge.example",
+      "kept@merge.example",
+    ]);
+  });
+});

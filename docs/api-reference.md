@@ -325,7 +325,7 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 | `GET /api/contacts/:id`               | One contact with all its child records. Archived contacts are included. A trashed contact answers `404`.                                                                  | your data            |
 | `PATCH /api/contacts/:id`             | Change scalar fields, such as `company`, `role` or `isTracked`. Child arrays answer `400`: use `PUT`.                                                                     | your data            |
 | `PUT /api/contacts/:id`               | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                | your data            |
-| `DELETE /api/contacts/:id`            | Move a contact to the trash. Restore it with `POST /api/trash/:id/restore`.                                                                                               | your data            |
+| `DELETE /api/contacts/:id`            | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                         | your data            |
 | `GET /api/contacts/archived`          | Archived contacts, most recently changed first.                                                                                                                           | your data            |
 | `GET /api/contacts/map`               | Contacts with coordinates for the map: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed and ghost contacts are left out. | your data            |
 | `PATCH /api/contacts/:id/location`    | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.            | your data            |
@@ -336,7 +336,7 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 | `POST /api/contacts/:id/briefing`     | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                | your data            |
 | `POST /api/contacts/:id/enrich`       | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                   | your data            |
 | `POST /api/contacts/bulk`             | Import many contacts. See [Imports](#imports).                                                                                                                            | your data            |
-| `POST /api/contacts/bulk-delete`      | Move many contacts to the trash: `{ ids }`. Answers `{ success, count }`.                                                                                                 | your data            |
+| `POST /api/contacts/bulk-delete`      | Move many contacts to the trash: `{ ids }`. Answers `{ success, count, retentionDays }`.                                                                                  | your data            |
 | `PUT /api/contacts/bulk-update`       | Set the same scalar fields on many contacts: `{ ids, data }`. Child arrays are refused. Answers `{ success, count }`.                                                     | your data            |
 | `POST /api/contacts/merge`            | Merge two contacts: `{ primaryId, duplicateId }`. Answers `{ success, contact }`.                                                                                         | your data            |
 | `POST /api/contacts/merge-cluster`    | Merge up to 10 contacts into one: `{ primaryId, duplicateIds }`. Answers `{ success, merged, failed, contact }`.                                                          | your data            |
@@ -525,14 +525,14 @@ An interaction is one timeline entry: a note, a call, a meeting or an email.
 The app logs `note`, `call`, `meeting` and `email`. Connectors write `meeting`
 and `email`. The server accepts any non-empty `type`.
 
-| Endpoint                              | What it does                                                                                                                                             | Access    |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/contacts/:id/timeline`      | The contact's interactions. Each entry carries its linked `actionItems`.                                                                                 | your data |
-| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                          | your data |
-| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry with an AI summary, and needs AI. Any other file becomes a note. `201`. | your data |
-| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                    | your data |
-| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                   | your data |
-| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` up to 200 (default 50), `since` (a date) and `type`.                                      | your data |
+| Endpoint                              | What it does                                                                                                                                                       | Access    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| `GET /api/contacts/:id/timeline`      | The contact's interactions. Each entry carries its linked `actionItems`.                                                                                           | your data |
+| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                                    | your data |
+| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry, with an AI summary while AI is on for you. Any other file becomes a note. `201`. | your data |
+| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                              | your data |
+| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                             | your data |
+| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` up to 200 (default 50), `since` (a date) and `type`.                                                | your data |
 
 ### Log an interaction
 
@@ -848,7 +848,8 @@ industry and a city together).
 `forceAll: true` drops your index and queues every contact. When a paid
 provider model makes the embeddings, send `allowProvider: true`. Without it the
 route answers `400` with `requiresExplicitConfirmation: true`, the provider,
-the model and `missingCount`, and queues nothing. Success answers
+the model and `missingCount`, and queues nothing. With a paid provider model
+and AI off for you, it answers `403 AI_OFF_FOR_ACCOUNT`. Success answers
 `{ ok, queued, message }`.
 
 ## Contact enrichment

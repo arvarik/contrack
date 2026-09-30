@@ -1,8 +1,31 @@
+import type { ZeroStateInsight } from "../../types";
+
 export function getMode(search: string): "normal" | "action" | "ai" {
   const trimmed = search.trim();
   if (trimmed.startsWith("?")) return "ai";
   if (trimmed.startsWith(">")) return "action";
   return "normal";
+}
+
+/**
+ * Where a zero-state insight leads, or null when it has nowhere to go.
+ *
+ * A count opens the page that lists what it counts. Stale data opens the
+ * People list already filtered to those contacts, the address the Pulse
+ * inbox row uses. It once opened Settings, which lists no contact at all.
+ * A catch-up or a ghost names one contact, and opens that contact.
+ */
+export function insightPath(insight: ZeroStateInsight): string | null {
+  switch (insight.type) {
+    case "action_items":
+      return "/pulse";
+    case "stale_data":
+      return "/?q=updated:>6m";
+    case "dedupe":
+      return "/pulse/duplicates";
+    default:
+      return insight.contact ? `/contact/${insight.contact.id}` : null;
+  }
 }
 
 export const EXAMPLE_QUERIES = [

@@ -110,15 +110,16 @@ export const ArchivedContactsView = () => {
   // ── Bulk delete ───────────────────────────────────────────────────────
   /**
    * Deleting an archived contact is the same soft delete as anywhere else —
-   * it moves to Trash for 30 days. This used to report "Permanently deleted",
-   * which was simply untrue.
+   * it moves to Trash until the retention runs out. This used to report
+   * "Permanently deleted", which was simply untrue.
    */
   const handleBulkDelete = () => {
     const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
-      onSuccess: ({ count }) => {
+      onSuccess: ({ count, retentionDays }) => {
         toastUndoableDelete({
           count,
+          retentionDays,
           onUndo: () =>
             bulkRestore.mutate(ids, {
               onError: (err) =>

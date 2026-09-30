@@ -17,6 +17,7 @@
 
 import * as cheerio from "cheerio/slim";
 import { generateFor } from "../../../ai/gateway.ts";
+import { isResearchOff } from "../../../ai/capabilities.ts";
 import {
   wrapUntrusted,
   UNTRUSTED_DATA_RULE,
@@ -137,6 +138,13 @@ export class SearxngStrategy implements AISearchStrategy {
   ): Promise<AISearchResult> {
     signal?.throwIfAborted();
     const startMs = Date.now();
+    // Read at each contact, so a batch that started before an admin turned
+    // research off searches no further.
+    if (isResearchOff()) {
+      throw new AppError("Contact research is off", 503, {
+        code: "RESEARCH_OFF",
+      });
+    }
     const baseUrl = getSearxngUrl();
     if (!baseUrl) {
       throw new AppError("No SearXNG instance is configured", 503, {
