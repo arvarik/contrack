@@ -54,8 +54,6 @@ export const SettingsRail = () => {
     switch (pageId) {
       case "duplicates":
         return counts.duplicates;
-      case "enrichment":
-        return counts.neverEnriched;
       case "import":
         return counts.failedImports;
       default:

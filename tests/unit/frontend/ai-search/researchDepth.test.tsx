@@ -449,7 +449,11 @@ describe("the Enrichment page's depth", () => {
     ]);
     expect(tiles[0].textContent).toContain(perContact("standard"));
     expect(tiles[1].textContent).toContain(perContact("deep"));
-    expect(screen.getByText(/The first 5,000 web searches/)).toBeTruthy();
+    // The costs by provider sit behind a question mark, not under the tiles.
+    expect(screen.queryByText(/first 5,000 web searches/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Estimated research costs" }),
+    ).toBeTruthy();
   });
 
   it("starts the batch at the chosen depth, after saying its time and cost", () => {
@@ -477,7 +481,11 @@ describe("the Enrichment page's depth", () => {
     ).getAllByRole("radio");
     expect(tiles[0].textContent).not.toContain(perContact("standard"));
     expect(tiles[1].textContent).not.toContain(perContact("deep"));
-    expect(screen.queryByText(/The first 5,000 web searches/)).toBeNull();
+    // The question mark stays: it compares the providers, so it helps most
+    // to a person whose research does not run on Gemini.
+    expect(
+      screen.getByRole("button", { name: "Estimated research costs" }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
     expect(screen.queryByText(/in all/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
@@ -570,33 +578,6 @@ describe("the Enrichment page's filters", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByText("Rowan Vale")).toBeTruthy();
     expect(screen.getByText("Kestrel Ames")).toBeTruthy();
-  });
-
-  it("shows everyone never researched when the page's Select them asks", () => {
-    contacts.list = people;
-    const { rerenderView } = renderView();
-    fireEvent.click(screen.getByRole("button", { name: /^Tracked/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Filter contacts" }), {
-      target: { value: "Rowan" },
-    });
-    expect(screen.queryByText("Kestrel Ames")).toBeNull();
-    rerenderView({ showNotYet: 1 });
-    expect(
-      (
-        screen.getByRole("textbox", {
-          name: "Filter contacts",
-        }) as HTMLInputElement
-      ).value,
-    ).toBe("");
-    const pressed = (row: string) =>
-      within(screen.getByRole("group", { name: row }))
-        .getAllByRole("button")
-        .filter((pill) => pill.getAttribute("aria-pressed") === "true")
-        .map((pill) => pill.textContent);
-    expect(pressed("Contacts")).toEqual(["All1"]);
-    expect(pressed("Research")).toEqual(["Not yet1"]);
-    expect(screen.getByText("Kestrel Ames")).toBeTruthy();
-    expect(screen.queryByText("Rowan Vale")).toBeNull();
   });
 
   it("keeps the filters in the page address, so Back comes back to the same list", () => {

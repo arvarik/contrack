@@ -609,12 +609,11 @@ depths, each with its time.
 
 Under **Settings → Contact enrichment**:
 
-- **Never-enriched banner:** Displays the count of contacts that have never been researched on the web, with a **Select them** button that selects them for immediate batch enrichment. It also empties the search box and sets the filters to All and Not yet, so the list shows exactly the contacts it selects.
 - **The list:** the rows scroll in a box of their own, so **Start enrichment** stays near. Past 200 contacts the box draws only the rows near its view (`src/components/ui/VirtualRows.tsx`). It drew every contact: on 5,824 contacts the page took 44 s to open and 5 s to leave, and now 112 ms and 100 ms. The count, the filters, **Select all** and the batch still cover every contact. The search box filters a deferred copy of what is typed, so a letter shows in the box before the list catches up.
 - **Filters:** Two rows of pills narrow the list, with one choice in each row. **Contacts** is All, Tracked, Has links, Has email or No data. **Research** is Any, Not yet, 6+ months ago (the last research is more than 183 days old) or Found nothing (the last research found no page). A contact shows when it matches both rows. Each pill counts the contacts it would show beside the other row's choice. A new choice clears the selection, so a contact the list hides is never started. Both choices stay in the page's address, such as `?contacts=tracked&research=stale`, so the browser's Back from a contact returns to the same list. A row whose last research found no page has a **No page** badge. On a phone a row's date is short: "Jan 20" within this year, "Dec 2025" before it. The slim contact list carries the last run's outcome as `researchOutcome` for the filter and the badge.
 - **Open a contact:** Each row ends with a link, "Open" and the contact's name, beside the row's checkbox control. The contact page's Back then says **Contact enrichment** and returns to the filtered list, which is the way to add a detail for a contact research found nothing on.
 - **Batch estimate:** Under **Start enrichment**, the depth, time and cost of the selection, such as "Standard · About 2 min and $0.45 in all".
-- **Research depth:** Standard or Deep, for the next batch, with what each does and its time and cost per contact. The page opens on Standard each time.
+- **Research depth:** Standard or Deep, for the next batch, with what each does and its time and cost per contact. The page opens on Standard each time. A question mark beside the heading opens the cost tip (see "Research depth" below).
 - **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research at Standard depth if AI assist is turned on for the account and grounding quota is available. While the account's batch runs, the new contact joins it.
 - **Grounding meter:** For administrators with Gemini configured, a live meter tracks daily grounding search usage and remaining requests.
 
@@ -647,7 +646,17 @@ Measured on five contacts from real records, with Gemini 3.8 Flash and Gemini 3.
 
 When no first ask cites a page, two more are asked at once, at `medium`, and every answer that cites pages is kept. Deep does not ask at `high` alone: `high` found more when it answered (32 details for one contact where `medium` found 20), but it answered with nothing for two of the five contacts on every try, all three asks for one of them. Beside the `medium` ask, an empty `high` answer costs its tokens, and the `medium` one still stands. A second search after the first, told what it found, was tried and ran no searches: with the first answer's facts in front of it, the model answered from them.
 
-The figures describe research on Gemini, where they were measured. When research runs on another provider, the Enrichment page, its confirmation and the enrich menus say what each depth does and show no time or cost. The note under the tiles says "Costs are Google's 2026 Gemini prices": Gemini 3.8 Flash's token prices double in January 2027, and the figures need measuring again then.
+The figures describe research on Gemini, where they were measured. When research runs on another provider, the Enrichment page, its confirmation and the enrich menus say what each depth does and show no time or cost. Gemini 3.8 Flash's token prices double in January 2027, and the figures need measuring again then.
+
+**The cost tip.** The question mark beside the "Research depth" heading (`src/views/ai-search/DepthCostTip.tsx`, an `InfoTip` with `wide`) opens a bubble titled "Estimated cost per contact, 2026 prices". It gives Standard and Deep for the model research uses on each provider (the `flash` tier) and the prices behind them, and it shows whichever provider research runs on, or none.
+
+| Provider  | Model             | Standard | Deep  | Token prices per 1M | Web search    |
+| --------- | ----------------- | -------- | ----- | ------------------- | ------------- |
+| Google    | Gemini 3.8 Flash  | $0.15    | $0.32 | $0.75 in, $3.75 out | $14 per 1,000 |
+| Anthropic | Claude Sonnet 5.5 | $0.18    | $0.36 | $2 in, $10 out      | $10 per 1,000 |
+| OpenAI    | GPT-6.1 Sol       | $0.18    | $0.36 | $2 in, $10 out      | $10 per 1,000 |
+
+Google's figures are the measured ones above. The Claude and OpenAI figures are estimates: the same searches (8 and 18) and tokens (about 25,000 and 45,000, worked back from the measured cost at a blend of three parts input to one part output), at each provider's list prices. Those tokens are Gemini's, so an estimate can run low or high. Only Google lists free searches, 5,000 a month on Gemini 3, so only its row says so. The Claude web search page and the OpenAI pricing page list none. The prices are in `RESEARCH_PRICES` in `shared/researchDepth.ts`, read from the providers' pages on 2026-09-29, and a test keeps their token prices equal to `server/ai/pricing.ts`.
 
 The Enrichment page describes both depths and their figures. A contact's actions menu has **Enrich contact** (Standard) and **Enrich deeply** (Deep). The dossier's **Enrich contact** and **Enrich again** open both. Automatic enrichment and the command palette's refresh run at Standard.
 

@@ -21,8 +21,10 @@ describe("priceOf", () => {
     for (const id of [
       "gpt-6-luna",
       "gpt-6-sol",
+      "gpt-6.1-sol",
       "gpt-6-astra",
       "claude-sonnet-5",
+      "claude-sonnet-5-5",
       "claude-opus-5-5",
       "gemini-3.5-flash-lite",
     ])

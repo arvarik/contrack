@@ -1,7 +1,6 @@
 /**
  * SettingsCallout — what is waiting on a settings page, and the one step to
- * take about it: "12 possible duplicates, Review them", "30 contacts have
- * never been enriched, Select them".
+ * take about it: "12 possible duplicates, Review them".
  *
  * A card on the primary wash, above the page's settings. From `sm` the
  * action sits at the right of the sentence. On a phone it drops under it,

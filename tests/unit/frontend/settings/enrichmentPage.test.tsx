@@ -19,16 +19,8 @@ vi.mock("../../../../src/api/enrichment", () => ({
 }));
 
 vi.mock("../../../../src/views/ai-search", () => ({
-  AISearchView: ({
-    selectedIds,
-    showNotYet,
-  }: {
-    selectedIds?: Set<string>;
-    showNotYet?: number;
-  }) => (
-    <div data-testid="ai-search-view" data-show-not-yet={showNotYet ?? ""}>
-      Selected: {selectedIds ? Array.from(selectedIds).join(",") : "none"}
-    </div>
+  AISearchView: (props: Record<string, unknown>) => (
+    <div data-testid="ai-search-view" data-props={Object.keys(props).join()} />
   ),
 }));
 
@@ -76,7 +68,7 @@ describe("EnrichmentPage", () => {
       </QueryClientProvider>,
     );
 
-  it("renders never-enriched banner and clicking Select them selects those contacts", () => {
+  it("has no never-enriched banner and no Select them button", () => {
     vi.mocked(api.useContacts).mockReturnValue({
       data: [
         {
@@ -93,34 +85,17 @@ describe("EnrichmentPage", () => {
           isArchived: false,
           isGhost: false,
         },
-        {
-          id: "c3",
-          name: "Charlie",
-          aiHydratedAt: "2026-01-01",
-          isArchived: false,
-          isGhost: false,
-        },
       ],
     } as unknown as ReturnType<typeof api.useContacts>);
 
     renderComponent();
-    expect(
-      screen.getByText("2 contacts have never been enriched"),
-    ).toBeTruthy();
-    const enrichBtn = screen.getByRole("button", { name: /Select them/i });
-    expect(enrichBtn).toBeTruthy();
-
-    const view = screen.getByTestId("ai-search-view");
-    expect(view.dataset.showNotYet).toBe("");
-    fireEvent.click(enrichBtn);
-    expect(screen.getByText("Selected: c1,c2")).toBeTruthy();
-    // The list is asked to show exactly them, whatever filter was on.
-    expect(view.dataset.showNotYet).not.toBe("");
-    expect(
-      screen.getByText(
-        "Select them to research their work, schools and profiles",
-      ),
-    ).toBeTruthy();
+    expect(screen.queryByText(/never been enriched/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Select them/i })).toBeNull();
+    // The page gives the list no selection to start from, and no request to
+    // show the never-researched.
+    expect(screen.getByTestId("ai-search-view").dataset.props).toBe(
+      "hideHeaderDescription",
+    );
   });
 
   it("renders autoEnrich switch and the admin's research count", () => {

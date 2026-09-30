@@ -476,6 +476,26 @@ test.describe("Settings — Tools and Data", () => {
     await expect(deep).not.toContainText("a contact");
     await expect(page.getByText(/web searches each month/)).toHaveCount(0);
 
+    // The question mark compares the three providers, so it shows with no
+    // provider too. Its bubble is open on a press.
+    const tip = page.getByRole("button", { name: "Estimated research costs" });
+    await tip.click();
+    const bubble = page.getByRole("tooltip").filter({
+      hasText: "Estimated cost per contact, 2026 prices",
+    });
+    await expect(bubble).toBeVisible();
+    for (const model of [
+      "Gemini 3.8 Flash",
+      "Claude Sonnet 5.5",
+      "GPT-6.1 Sol",
+    ])
+      await expect(bubble).toContainText(model);
+    await expect(bubble).toContainText(
+      "The first 5,000 searches a month are free",
+    );
+    await page.keyboard.press("Escape");
+    await expect(bubble).toBeHidden();
+
     // The same page when AI settings say research runs on Gemini.
     await page.route("**/api/settings/ai", (route) =>
       route.fulfill({
@@ -500,11 +520,7 @@ test.describe("Settings — Tools and Data", () => {
     await expect(deep).toContainText("a contact");
     await deep.click();
     await expect(deep).toHaveAttribute("aria-checked", "true");
-    await expect(
-      page.getByText("Costs are Google's 2026 Gemini prices", {
-        exact: false,
-      }),
-    ).toBeVisible();
+    await expect(page.getByText(/Costs are Google's/)).toHaveCount(0);
   });
 });
 
