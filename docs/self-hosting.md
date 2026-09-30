@@ -73,7 +73,8 @@ Open `http://localhost:3210`.
 
 - `npm run models:fetch` puts the two search models (about 29 MB) in `models/`
   and checks each file. Without it, the first start downloads them from
-  huggingface.co.
+  huggingface.co. The script reads `.env`, so a `DATA_DIR` or `MODEL_DIR` set
+  there moves the folder for the script and the server together.
 - `npm run dev` runs the server in development mode, with the Vite dev server.
 - To change a setting, run `cp .env.example .env` and edit `.env`. The server
   reads it from the folder you start it in. A variable set in the shell wins.

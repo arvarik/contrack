@@ -80,6 +80,59 @@ describe("useQueryTokenizer", () => {
     expect(result.current.tokenizer.parsed.filters).toEqual([]);
   });
 
+  // The map's insight bars write a value with a space in double quotes. A
+  // value cut at its space locked `"Venture` and left `Capital"` as text.
+  it("locks a quoted value with a space as one pill", () => {
+    function useTest() {
+      const [raw, setRaw] = useState('industry:"Venture Capital" Ada');
+      const tokenizer = useQueryTokenizer(raw, setRaw);
+      return { tokenizer, raw, setRaw };
+    }
+
+    const { result } = renderHook(() => useTest());
+
+    expect(result.current.tokenizer.parsed.filters).toEqual([
+      { field: "industry", value: "Venture Capital" },
+    ]);
+    expect(result.current.tokenizer.parsed.freeText).toBe("Ada");
+  });
+
+  it("keeps an open quote as the facet being typed", () => {
+    function useTest() {
+      const [raw, setRaw] = useState('industry:"Venture Cap');
+      const tokenizer = useQueryTokenizer(raw, setRaw);
+      return { tokenizer, raw, setRaw };
+    }
+
+    const { result } = renderHook(() => useTest());
+
+    expect(result.current.tokenizer.parsed.activePrefix).toEqual({
+      field: "industry",
+      partial: "Venture Cap",
+    });
+    expect(result.current.tokenizer.parsed.filters).toEqual([]);
+    expect(result.current.tokenizer.parsed.freeText).toBe("");
+  });
+
+  it("strips a quoted token from the input when its pill is removed", () => {
+    function useTest() {
+      const [raw, setRaw] = useState('industry:"Venture Capital" tag:vc ');
+      const tokenizer = useQueryTokenizer(raw, setRaw);
+      return { tokenizer, raw, setRaw };
+    }
+
+    const { result } = renderHook(() => useTest());
+
+    act(() => {
+      result.current.tokenizer.removeFilter(0);
+    });
+
+    expect(result.current.tokenizer.parsed.filters).toEqual([
+      { field: "tag", value: "vc" },
+    ]);
+    expect(result.current.raw).not.toContain("Venture");
+  });
+
   it("removes pill and strips filter token from input", () => {
     function useTest() {
       const [raw, setRaw] = useState("near:Paris list:Core ");

@@ -19,8 +19,9 @@
  * ignores the attribute and gets the panel fixed in place, which is what it
  * had before.
  *
- * Placement is measured once, right after the panel opens and before the
- * browser paints it:
+ * Placement is measured right after the panel opens and before the browser
+ * paints it, and again when `measureKey` changes: a panel that loads its
+ * content after it opens grows, and its first box no longer fits.
  *
  * 1. It sits under the trigger with a 4 px gap. Past the bottom of the
  *    window, with room above the trigger, it opens upwards.
@@ -102,6 +103,7 @@ export function usePanelPlacement({
   trigger,
   panel,
   matchWidth = false,
+  measureKey,
   onClose,
 }: {
   open: boolean;
@@ -111,6 +113,11 @@ export function usePanelPlacement({
   panel: RefObject<HTMLElement | null>;
   /** The panel is at least as wide as the trigger: a field's list. */
   matchWidth?: boolean;
+  /**
+   * A value that changes when the panel's content changes its size, such as
+   * "loading" to "ready". A new value measures the panel again.
+   */
+  measureKey?: unknown;
   /** Called when a scroll moves the trigger, or the window resizes. */
   onClose?: () => void;
 }): PanelPlacement {
@@ -170,9 +177,9 @@ export function usePanelPlacement({
       left: Math.round(left),
       minWidth: matchWidth ? Math.round(anchor.width) : undefined,
     });
-    // Once per opening.
+    // Once per opening, and once for each new `measureKey`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, measureKey]);
 
   useEffect(() => {
     if (!open || !onClose) return;

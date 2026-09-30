@@ -13,7 +13,7 @@
  */
 import React, { useCallback, useMemo, useState } from "react";
 import { uploadAccountAvatar } from "../../api/auth";
-import { accountAvatarUrl } from "../../lib/avatar";
+import { signedOutAccountAvatarUrl } from "../../lib/avatar";
 import { AccountPhotoField } from "./AccountPhotoField";
 import { AuthField } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
@@ -244,7 +244,7 @@ export const AccountFields = ({
       <div className="space-y-1.5">
         <AccountPhotoField
           value={form.photo}
-          fallbackUrl={accountAvatarUrl(
+          fallbackUrl={signedOutAccountAvatarUrl(
             form.values.username || form.values.displayName,
           )}
           onChange={form.setPhoto}

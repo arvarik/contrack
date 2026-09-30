@@ -14,6 +14,7 @@ import { useAddInteraction } from "../../api";
 import { BTN_QUIET, ICON_BTN, KBD_SM } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
+import { chordLabel, MOD_KEY } from "../../lib/platform";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,7 +153,9 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
           ) : (
             <>
               Save
-              <kbd className={`${KBD_SM} hidden sm:inline-flex`}>⌘↵</kbd>
+              <kbd className={`${KBD_SM} hidden sm:inline-flex`}>
+                {chordLabel([MOD_KEY, "↵"])}
+              </kbd>
             </>
           )}
         </button>

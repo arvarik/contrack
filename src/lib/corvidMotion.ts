@@ -161,9 +161,14 @@ export function sampleMotion(
 }
 
 /**
- * Tracks written as a list of moments, each setting some fields. A field
- * holds its last value until a later moment changes it, so a choreography
- * reads like the stage directions it is.
+ * Tracks written as a list of moments, each setting some fields, so a
+ * choreography reads like the stage directions it is.
+ *
+ * A moment with nothing to set, `set: {}`, is a hold: every field keeps the
+ * value it has until that moment, and only then moves on to the next one.
+ * Tracks ease from key to key, so a hold needs a key of its own. Without one,
+ * a head turned at 100 ms and turned back at 900 ms swept across the whole
+ * 800 ms, and the snap and the hold of a glance became one slow turn.
  */
 export function choreograph(
   moments: readonly { at: number; ease?: Easing; set: Partial<CorvidPose> }[],
@@ -178,8 +183,11 @@ export function choreograph(
     const keys: Key[] = [{ at: 0, value: neutral(field) }];
     for (const moment of moments) {
       const value = moment.set[field];
-      if (value === undefined) continue;
-      keys.push({ at: moment.at, value, ease: moment.ease });
+      if (value !== undefined) {
+        keys.push({ at: moment.at, value, ease: moment.ease });
+      } else if (Object.keys(moment.set).length === 0) {
+        keys.push({ at: moment.at, value: keys[keys.length - 1]!.value });
+      }
     }
     tracks[field] = keys;
   }

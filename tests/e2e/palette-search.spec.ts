@@ -177,3 +177,27 @@ test("offers the contacted: presets and narrows to recent contacts", async ({
   await expect(person(palette, "Ada Lovelace")).toBeVisible();
   await expect(person(palette, "Edsger Dijkstra")).toHaveCount(0);
 });
+
+// Palette B, "Catch me up", opened the contact with `?brief=1`, and nothing
+// read the flag: the contact opened on its Timeline. The page now opens the
+// Dossier with focus on the Briefing card, and the flag leaves the address.
+test("B on a result opens the contact on its Briefing card", async ({
+  page,
+  seed,
+}) => {
+  const palette = await openPalette(page);
+  // By name: → opens the actions of a person the palette found by name.
+  await page.keyboard.type("Ada Lovelace");
+  await expect(person(palette, "Ada Lovelace")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    palette.getByRole("button", { name: "Back to results" }),
+  ).toBeVisible();
+  await page.keyboard.press("b");
+
+  await expect(page).toHaveURL(
+    new RegExp(`/contact/${seed.byName("Ada Lovelace").id}$`),
+  );
+  await expect(page.getByRole("radio", { name: "Dossier" })).toBeChecked();
+  await expect(page.getByRole("region", { name: "Briefing" })).toBeFocused();
+});

@@ -15,8 +15,14 @@
 // before it is moved into place. A file that is already there with the right
 // hash is not downloaded again. The Docker build runs this, so the image ships
 // the models and a container never reaches Hugging Face.
+//
+// It reads `.env` in the working directory first, as the server does, so a
+// MODEL_DIR, DATA_DIR or HF_ENDPOINT set there applies here too. Before, the
+// script filled `./models` while the server read `DATA_DIR/models` from
+// `.env`, and the server then downloaded the models anyway.
 // =============================================================================
 
+import "../server/utils/loadEnv.ts";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";

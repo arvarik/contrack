@@ -224,6 +224,22 @@ async function runMentionExtraction(
           ),
         )
         .run();
+
+      // The JSON above is what the note draws. The mention graph is
+      // `interaction_mentions`: a person's timeline shows the notes that
+      // mention them through it, and the Pulse Inbox counts a ghost's notes
+      // in it. Without a row, a person the model found showed in the note
+      // and nowhere else. Every id here is the caller's own: a link came
+      // from a scoped read, and a ghost was made for the caller above. The
+      // note's own contact owns the note already, so it gets no row.
+      const insertMention = sqlite.prepare(
+        "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
+      );
+      for (const mention of mappedMentions) {
+        if (mention.contactId !== contactId) {
+          insertMention.run(interactionId, mention.contactId);
+        }
+      }
     })();
   } catch (e: unknown) {
     log.error(

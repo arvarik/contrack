@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
+import { isNavChord } from "./lib/platform";
 import { whenIdle } from "./lib/idle";
 import { useSettlePendingNav } from "./lib/pendingNav";
 import { settingsShell, useWarmSettingsFromApp } from "./views/settings/warm";
@@ -419,10 +420,11 @@ export default function App() {
         return;
       }
 
-      // Cmd+Shift+I → quick interaction modal
+      // Cmd+Shift+I on a Mac, Ctrl+Alt+I on Windows and Linux, where the
+      // browser keeps Ctrl+Shift+I for its developer tools (`lib/platform`).
       // Conflict guard: close Cmd+K if open
       // Either case: with Shift held, a browser may report the key as "I".
-      if (e.key.toLowerCase() === "i" && e.metaKey && e.shiftKey) {
+      if (e.key.toLowerCase() === "i" && isNavChord(e)) {
         e.preventDefault();
         // If Cmd+K is open, close it first
         const cmdkDialog = document.querySelector("[cmdk-dialog]");

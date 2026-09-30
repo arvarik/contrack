@@ -24,8 +24,14 @@
  * beside the contact, so its pane is about 600 px wide. Two columns there
  * left the timeline about 160 px.
  */
-import React, { Suspense, useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import React, {
+  Suspense,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../../../lib/undoToast";
@@ -157,7 +163,32 @@ export const ContactProfile = ({
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
   /** The pencil on the avatar, where focus goes back when the picker closes. */
   const avatarEdit = useRef<HTMLButtonElement>(null);
-  const [activeTab, setActiveTab] = useState<Section>("timeline");
+  /**
+   * Palette B, "Catch me up", opens the contact with `?brief=1`. The page
+   * answers with the Dossier, and the Briefing card at its top scrolls into
+   * view and takes focus (`briefRequest`). The flag leaves the address at
+   * once, so Back or a reload does not ask for a briefing again.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const briefInUrl = searchParams.get("brief") === "1";
+  const [activeTab, setActiveTab] = useState<Section>(
+    briefInUrl ? "dossier" : "timeline",
+  );
+  const [briefRequest, setBriefRequest] = useState<number | null>(null);
+  const spendBriefRequest = useCallback(() => setBriefRequest(null), []);
+  useEffect(() => {
+    if (!briefInUrl) return;
+    setActiveTab("dossier");
+    setBriefRequest(Date.now());
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("brief");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [briefInUrl, setSearchParams]);
   /**
    * A detail the Research card asked for, when research found no page: the
    * field it names opens, in Details or in the header. Narrow, Details is a
@@ -330,6 +361,8 @@ export const ContactProfile = ({
         contact={contact}
         generateBriefing={generateBriefing}
         onAddDetail={addDetail}
+        briefRequest={briefRequest}
+        onBriefHandled={spendBriefRequest}
       />
     </Suspense>
   );

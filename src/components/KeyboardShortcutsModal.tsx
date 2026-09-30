@@ -30,6 +30,8 @@
  *    dimmed, and the footer says so with the way to turn them back on.
  * 4. The footer links to Settings, Keyboard, which lists every shortcut in
  *    the app. Below `sm` the columns stack.
+ * 5. The keys are the platform's: ⌘ ⇧ H on a Mac, Ctrl Alt H on Windows and
+ *    Linux. `lib/shortcuts` builds them from `lib/platform`.
  *
  * Built on the shared `Modal`: `role="dialog"`, the focus trap, Escape, and
  * focus back where it was when it closes.

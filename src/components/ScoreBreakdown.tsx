@@ -13,10 +13,11 @@
  *
  * @module components/ScoreBreakdown
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Info, Loader2 } from "lucide-react";
 import { apiFetch } from "../api/client";
+import { usePanelPlacement } from "../hooks/usePanelPlacement";
 import { cn } from "../lib/utils";
 
 interface ScoreComponent {
@@ -39,9 +40,6 @@ async function fetchScoreBreakdown(
   return res.json();
 }
 
-/** Breathing room kept between the panel and the edge of the window. */
-const VIEWPORT_MARGIN = 16;
-
 /** Colour the bar by how healthy that one signal is, not by the total. */
 function barTone(value: number): string {
   if (value >= 67) return "bg-success";
@@ -49,13 +47,15 @@ function barTone(value: number): string {
   return "bg-error";
 }
 
-const Panel = ({ contactId }: { contactId: string }) => {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["contacts", contactId, "score"],
-    queryFn: () => fetchScoreBreakdown(contactId),
-    staleTime: 60_000,
-  });
-
+const Panel = ({
+  data,
+  isLoading,
+  isError,
+}: {
+  data: ScoreBreakdownData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+}) => {
   if (isLoading) {
     return (
       <p className="flex items-center gap-2 text-xs text-on-surface-variant">
@@ -131,26 +131,36 @@ export const ScoreBreakdown = ({
   children?: React.ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
-  /**
-   * Which way the panel opens, and how tall it may be.
-   *
-   * The badge is often near the bottom of a card or the viewport, and a panel
-   * that always drops downward gets its last two signals clipped by the
-   * window — worse than useless, because clipped content looks like content
-   * that simply ends.
-   *
-   * Both values are *measured*, not guessed. A first attempt compared the
-   * space below against a hard-coded estimate of the panel's height; the
-   * estimate was 50px short and the panel still overflowed. Taking the larger
-   * side and capping the height to what is actually there cannot be wrong by
-   * a constant.
-   */
-  const [panelBox, setPanelBox] = useState<{
-    placement: "below" | "above";
-    maxHeight: number;
-  }>({ placement: "below", maxHeight: 400 });
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  const breakdown = useQuery({
+    queryKey: ["contacts", contactId, "score"],
+    queryFn: () => fetchScoreBreakdown(contactId),
+    staleTime: 60_000,
+    enabled: open,
+  });
+
+  /**
+   * Where the panel opens, measured from the trigger.
+   *
+   * The panel used to hang from the trigger's right edge inside the page.
+   * On the contact header the ring sits at the pane's left edge, so the
+   * panel ran about 150 px past the pane and the pane clipped it. In the
+   * top layer nothing clips it, and it lines up with whichever edge of the
+   * trigger keeps it inside the window. The breakdown loads after the panel
+   * opens and makes it taller, so the answer measures it again.
+   */
+  const placement = usePanelPlacement({
+    open,
+    align: "end",
+    trigger: triggerRef,
+    panel: panelRef,
+    measureKey: breakdown.data ? "ready" : breakdown.isError,
+    onClose: close,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -179,22 +189,7 @@ export const ScoreBreakdown = ({
         type="button"
         aria-expanded={open}
         aria-label={`Relationship score ${score} out of 100, explain`}
-        onClick={() => {
-          // Measured at the moment of opening — the row may have scrolled
-          // since mount, so anything computed earlier is already stale.
-          const rect = triggerRef.current?.getBoundingClientRect();
-          if (rect) {
-            const below = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-            const above = rect.top - VIEWPORT_MARGIN;
-            const openBelow = below >= above;
-            setPanelBox({
-              placement: openBelow ? "below" : "above",
-              // Never negative, and never so small the panel is a sliver.
-              maxHeight: Math.max(160, openBelow ? below : above),
-            });
-          }
-          setOpen((v) => !v);
-        }}
+        onClick={() => setOpen((v) => !v)}
         // 24px minimum on screen for the bare-icon form, and a 44px tap box
         // from `hit-area`. A badge passed as children is larger than that.
         className="hit-area inline-flex items-center justify-center rounded-full min-w-6 min-h-6"
@@ -204,23 +199,24 @@ export const ScoreBreakdown = ({
 
       {open && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-label="How this score was calculated"
-          // Anchored right so it cannot push the viewport wider on a phone,
-          // which a left-anchored panel on a right-aligned badge would.
-          style={{ maxHeight: panelBox.maxHeight }}
+          {...placement.panelProps}
           className={cn(
-            "absolute z-50 right-0 w-72 max-w-[calc(100vw-2rem)]",
-            panelBox.placement === "above"
-              ? "bottom-full mb-2"
-              : "top-full mt-2",
+            placement.panelProps.className,
+            "w-72 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-1rem)]",
             "menu-panel menu-enter",
             "p-4 space-y-3 text-left cursor-default",
             // Scrolls inside rather than spilling out of the window.
             "overflow-y-auto overscroll-contain",
           )}
         >
-          <Panel contactId={contactId} />
+          <Panel
+            data={breakdown.data}
+            isLoading={breakdown.isPending}
+            isError={breakdown.isError}
+          />
           <p className="text-[11px] text-on-surface-variant text-pretty">
             Recalculated hourly, and whenever you log an interaction
           </p>

@@ -7,6 +7,7 @@
 // be downloaded again.
 // =============================================================================
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -154,5 +155,27 @@ describe("fetchModels", () => {
       "Example/tiny-model/onnx/model_quantized.onnx",
     ]);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("npm run models:fetch", () => {
+  // The script read no `.env`, so a MODEL_DIR or DATA_DIR set there did not
+  // reach it, and it filled another folder than the one the server reads.
+  it("reads .env in the working directory, as the server does", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "fetch-models-env-"));
+    const fromEnv = path.join(cwd, "models-from-env");
+    writeFileSync(path.join(cwd, ".env"), `MODEL_DIR=${fromEnv}\n`);
+    const env = { ...process.env };
+    delete env.MODEL_DIR;
+    delete env.DATA_DIR;
+
+    // `--check` downloads nothing: it names the folder and what it lacks.
+    const run = spawnSync(
+      process.execPath,
+      [path.resolve("scripts/fetch-models.ts"), "--check"],
+      { cwd, env, encoding: "utf8" },
+    );
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(`Missing or wrong in ${fromEnv}`);
   });
 });

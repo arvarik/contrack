@@ -13,6 +13,11 @@
  * both switches with `aiAllowedFor` and the service skips every model stage.
  * The AI rate limiters still count the path.
  *
+ * A Quick scan for duplicates (`POST /api/dedupe/scan` with `mode: "quick"`)
+ * is the second exception. It compares emails, phones and names and calls no
+ * model, so it runs with AI off. A Smart or a Full scan embeds contacts and
+ * asks a model, so it stays behind both switches.
+ *
  * Mounted after `attachPrincipal` in `server/app.ts`.
  *
  * @module middleware/aiAllowed
@@ -24,6 +29,19 @@ import { AppError } from "../utils/AppError.ts";
 
 /** AI paths that still answer, from local data, when AI is off. */
 const LOCAL_FIRST_PATTERNS: RegExp[] = [/^\/api\/search\/semantic\/?$/];
+
+const DEDUPE_SCAN_PATH = /^\/api\/dedupe\/scan\/?$/;
+
+/**
+ * True for a scan that runs no model. The mode is in the body, and the JSON
+ * parser in `server/app.ts` reads the body before this middleware runs. The
+ * route defaults a missing mode to `deep`, so only an explicit `quick` passes.
+ */
+function isQuickScan(req: Request, path: string): boolean {
+  if (req.method !== "POST" || !DEDUPE_SCAN_PATH.test(path)) return false;
+  const body = req.body as { mode?: unknown } | undefined;
+  return body?.mode === "quick";
+}
 
 /**
  * False when AI is off for the instance, or the signed-in caller has
@@ -44,7 +62,8 @@ export function requireAiAllowed(
   const path = req.path.toLowerCase();
   if (
     !isAiCostPath(req.path) ||
-    LOCAL_FIRST_PATTERNS.some((pattern) => pattern.test(path))
+    LOCAL_FIRST_PATTERNS.some((pattern) => pattern.test(path)) ||
+    isQuickScan(req, path)
   ) {
     return next();
   }

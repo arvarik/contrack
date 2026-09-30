@@ -1,7 +1,8 @@
 /**
  * QuickInteractionModal: log an interaction without leaving the page.
  *
- * Keyboard: ⌘⇧I opens it, Escape closes it, ⌘ Enter saves.
+ * Keyboard: ⌘⇧I opens it (Ctrl+Alt+I on Windows and Linux), Escape closes
+ * it, ⌘ Enter saves (Ctrl+Enter on Windows and Linux).
  *
  * A thin wrapper. The dialog adds two things to the compact
  * {@link InteractionComposer}: a header, and the "Who?" picker that chooses

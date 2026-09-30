@@ -24,6 +24,9 @@ import {
   easeInOut,
   easeOutBack,
   makeBlink,
+  makeCock,
+  makeGlance,
+  makeLookBack,
   pickWeighted,
   sampleMotion,
   sampleTrack,
@@ -144,6 +147,44 @@ describe("tracks", () => {
     const half = sampleMotion({ ...HOME_POSE }, motion, 100, 0.5);
     expect(half.headAngle).toBe(5);
     expect(half.eye).toBeCloseTo(0.5, 9);
+  });
+});
+
+describe("holds", () => {
+  it("keep every field still at a moment with nothing to set", () => {
+    const tracks = choreograph([
+      { at: 100, set: { headAngle: 10, headX: 1 } },
+      { at: 900, set: {} },
+      { at: 1000, set: { headAngle: 0 } },
+    ]);
+    // Still at 10 for the whole hold, then back in the last 100 ms.
+    expect(sampleTrack(tracks.headAngle!, 500)).toBe(10);
+    expect(sampleTrack(tracks.headAngle!, 900)).toBe(10);
+    expect(sampleTrack(tracks.headAngle!, 1000)).toBe(0);
+    // A field no later moment sets stays where the hold left it.
+    expect(sampleTrack(tracks.headX!, 2000)).toBe(1);
+  });
+
+  // A bird's head moves in snaps and holds. Before a hold had a key of its
+  // own, each turn in these three acts swept across the whole hold, 350 to
+  // 1,900 ms.
+  it("make each head turn in glance, cock and look back a snap", () => {
+    const HEAD = ["headAngle", "headX", "headY", "headFacing"] as const;
+    for (const make of [makeGlance, makeCock, makeLookBack]) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const { name, tracks } = make(createRng(seed));
+        for (const field of HEAD) {
+          const keys = tracks[field] ?? [];
+          for (let i = 1; i < keys.length; i++) {
+            if (keys[i]!.value === keys[i - 1]!.value) continue;
+            expect(
+              keys[i]!.at - keys[i - 1]!.at,
+              `${name} ${field}, seed ${seed}`,
+            ).toBeLessThanOrEqual(170);
+          }
+        }
+      }
+    }
   });
 });
 

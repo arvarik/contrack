@@ -21,10 +21,13 @@ RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci
 
 # Download the two local search models here, at build time, so a container
 # never reaches huggingface.co. The script checks each file's SHA-256 against
-# the pinned list in modelFiles.ts. Only these two files are copied first, so
-# a code change elsewhere reuses this layer instead of downloading again.
+# the pinned list in modelFiles.ts. Only these three files are copied first,
+# so a code change elsewhere reuses this layer instead of downloading again.
+# The script reads `.env` through loadEnv.ts. `.dockerignore` keeps `.env`
+# out of the image, so here that reads nothing.
 COPY scripts/fetch-models.ts ./scripts/
 COPY server/services/search/modelFiles.ts ./server/services/search/
+COPY server/utils/loadEnv.ts ./server/utils/
 RUN node scripts/fetch-models.ts /app/models
 
 # Copy source and build

@@ -22,11 +22,25 @@ const FIELDS: ReadonlySet<string> = new Set(FACET_FIELDS);
 /** The field names as one regular-expression alternation. */
 export const FACET_FIELD_PATTERN = FACET_FIELDS.join("|");
 
+/**
+ * A value with a space goes in double quotes, `industry:"Venture Capital"`,
+ * so one word of the query holds all of it. Text may follow the closing
+ * quote, as in `near:"San Francisco"/50km`.
+ */
+export const QUOTED_VALUE_PATTERN = `"[^"]*"\\S*`;
+
+/** The value without its first pair of double quotes. */
+function unquote(value: string): string {
+  return value.replace(/^"([^"]*)"/, "$1");
+}
+
 /** Parse a raw value string into a structured filter, handling operators for score/updated/contacted and near distance */
 export function parseFilterValue(
   field: FacetField,
-  rawValue: string,
+  quotedValue: string,
 ): FacetFilter | null {
+  // The pill and the server read `Venture Capital`, not the quotes.
+  const rawValue = unquote(quotedValue);
   if (!rawValue) return null;
 
   if (field === "score") {
@@ -81,10 +95,13 @@ export function parseFacetQuery(input: string): {
   filters: FacetFilter[];
 } {
   const filters: FacetFilter[] = [];
-  const words = input.split(/\s+/).filter(Boolean);
+  // A quoted facet value is one word with its spaces in it. Every other word
+  // ends at a space, the quotes of free text included.
+  const words =
+    input.match(new RegExp(`[a-z]+:${QUOTED_VALUE_PATTERN}|\\S+`, "gi")) ?? [];
   const rest: string[] = [];
   for (const word of words) {
-    const match = word.match(/^([a-z]+):(.+)$/i);
+    const match = word.match(/^([a-z]+):([\s\S]+)$/i);
     const field = match?.[1].toLowerCase();
     if (match && field && FIELDS.has(field)) {
       const filter = parseFilterValue(field as FacetField, match[2]);

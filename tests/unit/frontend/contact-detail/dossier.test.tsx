@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import React from "react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   act,
@@ -290,5 +291,65 @@ describe("the briefing card", () => {
     expect(
       screen.getByRole("button", { name: "Generate briefing" }),
     ).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Catch me up" from the palette
+// ---------------------------------------------------------------------------
+// Palette B opens the contact with `?brief=1`. Nothing read the flag, so the
+// contact opened on its Timeline. The page now opens the Dossier and hands
+// the Briefing card a request, which the card answers once.
+
+describe("Catch me up from the palette", () => {
+  const ask = (contact: Contact, mutate = vi.fn()) => {
+    const onBriefHandled = vi.fn();
+    render(
+      <MemoryRouter>
+        <DossierTab
+          contact={contact}
+          generateBriefing={{ mutate, isPending: false }}
+          briefRequest={1}
+          onBriefHandled={onBriefHandled}
+        />
+      </MemoryRouter>,
+    );
+    const card = screen
+      .getByRole("heading", { level: 2, name: "Briefing" })
+      .closest("section");
+    return { mutate, onBriefHandled, card };
+  };
+
+  it("puts focus on the Briefing card and writes a briefing when there is none", () => {
+    const { mutate, onBriefHandled, card } = ask(BLANK);
+    expect(document.activeElement).toBe(card);
+    expect(mutate).toHaveBeenCalledWith("test", expect.any(Object));
+    expect(onBriefHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers a request once, where StrictMode runs the effect twice", () => {
+    const mutate = vi.fn();
+    render(
+      <React.StrictMode>
+        <MemoryRouter>
+          <DossierTab
+            contact={BLANK}
+            generateBriefing={{ mutate, isPending: false }}
+            briefRequest={7}
+          />
+        </MemoryRouter>
+      </React.StrictMode>,
+    );
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a recent briefing and writes no new one", () => {
+    const { mutate, card } = ask({
+      ...BLANK,
+      aiBriefing: JSON.stringify(["Point one"]),
+      aiBriefingAt: new Date().toISOString(),
+    });
+    expect(document.activeElement).toBe(card);
+    expect(mutate).not.toHaveBeenCalled();
   });
 });

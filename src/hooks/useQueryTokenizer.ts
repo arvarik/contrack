@@ -13,7 +13,11 @@
  * @module hooks/useQueryTokenizer
  */
 import { useMemo, useCallback, useState } from "react";
-import { FACET_FIELD_PATTERN, parseFilterValue } from "../../shared/facetQuery";
+import {
+  FACET_FIELD_PATTERN,
+  QUOTED_VALUE_PATTERN,
+  parseFilterValue,
+} from "../../shared/facetQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,23 +36,33 @@ interface ParsedQuery {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /**
- * Regex to match completed facet tokens (followed by whitespace or EOL).
+ * Regex to match completed facet tokens (followed by whitespace).
  * Captures: field name, colon, value, then whitespace.
- * Non-greedy value match stops at whitespace boundary.
+ *
+ * The value is a quoted run, `industry:"Venture Capital"`, or a run of
+ * characters with no space that does not start with a quote. The map's
+ * insight bars write the quoted form for a value with a space. A plain
+ * `\S+` cut it at the space, so the pill read `"Venture` and the map showed
+ * nobody. An open quote with no closing quote is still being typed, so it
+ * never locks.
  */
 const COMPLETED_FACET_REGEX = new RegExp(
-  `\\b(${FACET_FIELD_PATTERN}):(\\S+)\\s`,
+  `\\b(${FACET_FIELD_PATTERN}):(${QUOTED_VALUE_PATTERN}|[^\\s"]\\S*)\\s`,
   "gi",
 );
 
 /**
  * Regex to detect an in-progress facet at the end of input.
- * e.g., "role:" or "role:eng" (no trailing space).
+ * e.g., "role:", "role:eng" or `industry:"Venture Cap` (no trailing space).
  */
 const ACTIVE_PREFIX_REGEX = new RegExp(
-  `\\b(${FACET_FIELD_PATTERN}):(\\S*)$`,
+  `\\b(${FACET_FIELD_PATTERN}):("[^"]*"?\\S*|\\S*)$`,
   "i",
 );
+
+/** The typed value without its quotes, which the autocomplete matches on. */
+const unquotePartial = (partial: string) =>
+  partial.replace(/^"([^"]*)"?/, "$1");
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -109,7 +123,7 @@ export function useQueryTokenizer(
     if (activePrefixMatch) {
       activePrefix = {
         field: activePrefixMatch[1].toLowerCase() as FacetField,
-        partial: activePrefixMatch[2] || "",
+        partial: unquotePartial(activePrefixMatch[2] || ""),
       };
       // Remove the active prefix from freeText
       remaining = remaining.replace(ACTIVE_PREFIX_REGEX, "");

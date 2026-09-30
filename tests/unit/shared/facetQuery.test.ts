@@ -35,9 +35,27 @@ describe("parseFilterValue", () => {
     });
   });
 
-  // Note: Free-text tokenizer uses whitespace boundary for pills,
-  // so multi-word list names use the hyphen form (e.g. list:advisors-board)
-  // or are selected via autocomplete.
+  it("removes one pair of double quotes, so the pill reads the words", () => {
+    expect(parseFilterValue("industry", '"Venture Capital"')).toEqual({
+      field: "industry",
+      value: "Venture Capital",
+    });
+  });
+
+  it("reads a quoted place with a distance after it", () => {
+    expect(parseFilterValue("near", '"San Francisco"/50km')).toEqual({
+      field: "near",
+      value: "San Francisco",
+      km: 50,
+    });
+  });
+
+  it("rejects an empty pair of quotes", () => {
+    expect(parseFilterValue("industry", '""')).toBeNull();
+  });
+
+  // A multi-word list name works in quotes, list:"Advisory board", and the
+  // hyphen form still works for a name typed without them.
   it.each(["investors", "advisors-board"])(
     "parses list facet values directly: %s",
     (value) => {
@@ -103,6 +121,20 @@ describe("parseFacetQuery", () => {
     expect(parseFacetQuery("note:hello Ada")).toEqual({
       freeText: "note:hello Ada",
       filters: [],
+    });
+  });
+
+  it("reads a quoted value with a space as one facet", () => {
+    expect(parseFacetQuery('industry:"Venture Capital" in London')).toEqual({
+      freeText: "in London",
+      filters: [{ field: "industry", value: "Venture Capital" }],
+    });
+  });
+
+  it("keeps the quotes of free text as they were typed", () => {
+    expect(parseFacetQuery('"exact phrase" tag:vc note:"a b"')).toEqual({
+      freeText: '"exact phrase" note:"a b"',
+      filters: [{ field: "tag", value: "vc" }],
     });
   });
 

@@ -58,6 +58,7 @@ import { useAddInteraction, useContactNames } from "../api";
 import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { MOD_KEY } from "../lib/platform";
 import { useAuth } from "./auth/AuthGate";
 import {
   draftKey,
@@ -601,7 +602,7 @@ const Composer = ({
               Save already fill the bar. Phones have no keyboard to press it
               with. */}
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0 text-xs text-on-surface-variant whitespace-nowrap">
-            <kbd className={KBD_SM}>⌘</kbd>
+            <kbd className={KBD_SM}>{MOD_KEY}</kbd>
             <kbd className={KBD_SM}>Enter</kbd>
             <span>to save</span>
           </span>

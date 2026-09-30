@@ -134,6 +134,30 @@ describe("requireAiAllowed middleware", () => {
     ]);
   });
 
+  it("runs a Quick scan for the account with AI off, because it calls no model", async () => {
+    const started = await asUser(userOff)(
+      request(app).post("/api/dedupe/scan").send({ mode: "quick" }),
+    );
+    expect(started.status).toBe(200);
+    expect(started.body.mode).toBe("quick");
+
+    const status = await asUser(userOff)(
+      request(app).get(`/api/dedupe/status?scanId=${started.body.scanId}`),
+    );
+    expect(status.status).toBe(200);
+    expect(status.body.phase).toBe("complete");
+  });
+
+  for (const mode of ["deep", "full"]) {
+    it(`still refuses a ${mode} scan for the account with AI off`, async () => {
+      const res = await asUser(userOff)(
+        request(app).post("/api/dedupe/scan").send({ mode }),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("AI_OFF_FOR_ACCOUNT");
+    });
+  }
+
   it("does not block non-AI endpoints for the account with AI off", async () => {
     const res = await asUser(userOff)(request(app).get("/api/contacts"));
     expect(res.status).toBe(200);
@@ -190,6 +214,16 @@ describe("with AI off for the instance", () => {
       );
     });
   }
+
+  it("still runs a Quick scan, for an account with AI on and one with AI off", async () => {
+    for (const actor of [userOn, userOff]) {
+      const res = await asUser(actor)(
+        request(app).post("/api/dedupe/scan").send({ mode: "quick" }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe("quick");
+    }
+  });
 
   it("names the instance, not the account, when both are off", async () => {
     const res = await asUser(userOff)(request(app).post("/api/ai-search"));

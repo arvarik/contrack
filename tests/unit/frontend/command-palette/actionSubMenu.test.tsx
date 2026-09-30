@@ -50,6 +50,7 @@ function mount(contact = ADA) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const onClose = vi.fn();
+  const onCatchMeUp = vi.fn();
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -58,14 +59,14 @@ function mount(contact = ADA) {
           contactName={contact.name}
           contactAvatarUrl={null}
           onViewProfile={vi.fn()}
-          onCatchMeUp={vi.fn()}
+          onCatchMeUp={onCatchMeUp}
           onBack={vi.fn()}
           onClose={onClose}
         />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onClose };
+  return { onClose, onCatchMeUp };
 }
 
 const lastBody = () =>
@@ -131,5 +132,49 @@ describe("the Track row", () => {
     await Promise.resolve();
     expect(onClose).not.toHaveBeenCalled();
     expect(api.fetch).not.toHaveBeenCalled();
+  });
+});
+
+// → opens this menu while the palette's search box keeps the focus. The menu
+// skipped every key typed in a field, so B typed a "b" into the box, and the
+// typing closed the menu: no letter action worked from the keyboard.
+describe("the keys, with focus in the palette's search box", () => {
+  const pressIn = (
+    field: HTMLElement,
+    key: string,
+    modifiers: KeyboardEventInit = {},
+  ) => {
+    document.body.appendChild(field);
+    field.focus();
+    act(() => {
+      field.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true, ...modifiers }),
+      );
+    });
+  };
+
+  it("answers B from the search box", () => {
+    const { onCatchMeUp } = mount();
+    const box = document.createElement("input");
+    box.setAttribute("cmdk-input", "");
+    pressIn(box, "b");
+    expect(onCatchMeUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a key with a modifier to the box, so ⌘C still copies", () => {
+    const { onCatchMeUp } = mount();
+    const box = document.createElement("input");
+    box.setAttribute("cmdk-input", "");
+    pressIn(box, "b", { metaKey: true });
+    pressIn(box, "b", { ctrlKey: true });
+    pressIn(box, "b", { altKey: true });
+    expect(onCatchMeUp).not.toHaveBeenCalled();
+  });
+
+  it("leaves the keys of any other field alone", () => {
+    const { onCatchMeUp } = mount();
+    pressIn(document.createElement("input"), "b");
+    pressIn(document.createElement("textarea"), "b");
+    expect(onCatchMeUp).not.toHaveBeenCalled();
   });
 });

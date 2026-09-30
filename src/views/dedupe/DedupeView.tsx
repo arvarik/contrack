@@ -46,6 +46,9 @@ import { CorvidMark } from "../../components/brand/CorvidMark";
 import { Segmented } from "../../components/ui/Segmented";
 import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
 import { SETTINGS_CARD } from "../settings/layout";
+import { useAiAllowed } from "../../hooks/useAiAllowed";
+import { useInstanceAi } from "../../api/aiSettings";
+import { MOD_KEY } from "../../lib/platform";
 
 // =============================================================================
 // DedupeView — scan for duplicate contacts, or merge chosen ones by hand
@@ -77,6 +80,9 @@ const SCAN_MODES: readonly Choice<DedupeScanMode>[] = [
   },
 ];
 
+/** The one scan that runs with AI off: it calls no model. */
+const QUICK_ONLY = SCAN_MODES.filter((mode) => mode.value === "quick");
+
 /**
  * The Duplicates page's tool. It renders inside the Settings shell, in the
  * page's box, which draws the header and the Merge activity button. The
@@ -87,6 +93,13 @@ export const DedupeView = () => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
   const [resultView, setResultView] = useState<ResultView>("swipe");
   const [selectedMode, setSelectedMode] = useState<DedupeScanMode>("deep");
+  // A Smart or a Full scan asks a model, so with AI off (for the account or
+  // for the instance) the server refuses them. A Quick scan calls no model,
+  // so it is the one scan on offer then, and it is the one that starts.
+  const accountAi = useAiAllowed();
+  const { data: instanceAi } = useInstanceAi();
+  const aiOn = accountAi && instanceAi?.aiOff !== true;
+  const scanMode: DedupeScanMode = aiOn ? selectedMode : "quick";
 
   const {
     scan,
@@ -262,7 +275,7 @@ export const DedupeView = () => {
   // itself, the same way it does for an import, so nothing about the
   // threshold travels with the request.
   const handleStartScan = () => {
-    startScan(selectedMode);
+    startScan(scanMode);
   };
 
   const handleNewScan = () => {
@@ -335,7 +348,7 @@ export const DedupeView = () => {
                     <button
                       onClick={handleUndoDismiss}
                       className="hit-area state-layer flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-low rounded-lg transition-colors"
-                      title="Undo last dismiss (⌘Z)"
+                      title={`Undo last dismiss (${MOD_KEY}Z)`}
                     >
                       <Undo2 className="w-3.5 h-3.5" />
                       Undo
@@ -419,11 +432,16 @@ export const DedupeView = () => {
               <div className={cn(SETTINGS_CARD, "space-y-4")}>
                 <ChoiceGroup
                   label="Scan"
-                  value={selectedMode}
-                  options={SCAN_MODES}
+                  value={scanMode}
+                  options={aiOn ? SCAN_MODES : QUICK_ONLY}
                   onChange={setSelectedMode}
-                  className="sm:grid-cols-3"
+                  className={aiOn ? "sm:grid-cols-3" : undefined}
                 />
+                {!aiOn && (
+                  <p className="text-xs text-on-surface-variant">
+                    Smart scan and Full scan use AI, which is off
+                  </p>
+                )}
                 <div className="flex justify-end">
                   <button
                     type="button"

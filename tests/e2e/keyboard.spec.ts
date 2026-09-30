@@ -150,6 +150,29 @@ test("arrow keys walk the contact list and mark the current row", async ({
   await expect(current).toContainText("Ada Lovelace");
 });
 
+// Windows and Linux hold Ctrl+Alt where a Mac holds Cmd+Shift, because the
+// browser keeps Ctrl+Shift+I, P and M. Both forms work on every platform, so
+// this runs the same on a Mac and on the Linux CI runner.
+test("Ctrl+Alt goes to a page and opens the Log an interaction dialog", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText("Grace Hopper")).toBeVisible();
+  await startFromBody(page);
+
+  await page.keyboard.press("Control+Alt+KeyP");
+  await expect(page).toHaveURL(/\/pulse$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Pulse" }),
+  ).toBeVisible();
+
+  await page.keyboard.press("Control+Alt+KeyI");
+  const dialog = page.getByRole("dialog", { name: "Log an interaction" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
 test("the search mode is a radiogroup the arrow keys switch", async ({
   page,
 }) => {

@@ -171,9 +171,17 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         return;
       }
 
-      // Typing target check — don't intercept when typing in a textarea/input
+      // A field keeps its own keys. The palette's search box is the
+      // exception: it keeps the focus when → opens this menu, so while the
+      // menu shows, its keys belong to the menu. Before, B typed a "b" into
+      // the box, and the typing closed the menu. A key the menu does not use
+      // still types, and a new search closes the menu.
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      const isField =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+      if (isField && !target.hasAttribute("cmdk-input")) return;
+      // ⌘C in the search box copies. It must not open Log call.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       switch (e.key) {
         case "Escape":

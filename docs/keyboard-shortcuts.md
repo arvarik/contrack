@@ -27,23 +27,34 @@ close the dialog.
   keys, then press the last one.
 - Keys joined by "or", such as `↓` or `J`, are alternatives. Either key does
   the same thing.
-- `⌘` is the Command key and `⇧` is the Shift key.
+- `⌘` is the Command key and `⇧` is the Shift key. For the keys on Windows
+  and Linux, see [Windows and Linux](#windows-and-linux).
 - `⌥` is the Option key. On Windows and Linux it is the `Alt` key.
 - A single-key shortcut never fires while focus is in a text field. There, a
   letter you type is only a letter.
 
 ## Windows and Linux
 
-On Windows and Linux, press `Ctrl` in place of `⌘` for these shortcuts:
+This page shows the keys of a Mac. On Windows and Linux, Contrack shows the
+keys of your computer in the shortcuts dialog, in **Settings → Keyboard** and
+in the hints beside buttons.
 
-- `⌘ K`: Open command palette
-- `⌘ Enter`: Save the interaction you are writing
-- `⌘ Z`: Undo the last skip, on the Duplicates page
+- Press `Ctrl` in place of `⌘`: `Ctrl K` opens the command palette,
+  `Ctrl Enter` saves the interaction you are writing, and `Ctrl Z` undoes the
+  last skip on the Duplicates page.
+- Press `Ctrl Alt` in place of `⌘ ⇧`: `Ctrl Alt H` goes to Network,
+  `Ctrl Alt P` to Pulse, `Ctrl Alt M` to Map, `Ctrl Alt S` to Ask Contrack,
+  `Ctrl Alt ,` to Settings, and `Ctrl Alt I` opens the
+  **Log an interaction** dialog.
+- Press `Alt ←` and `Alt →` to go back and forward. These are the browser's
+  own keys.
 
-The **Navigation** shortcuts and `⌘ ⇧ I` have no `Ctrl` form. They answer
-only to the `⌘` key, which is the Windows key or the Super key on those
-systems, and the system often keeps those combinations for itself. There, use
-the sidebar, the tab bar or the command palette to move between pages.
+The navigation keys do not use `Ctrl ⇧`, because the browser keeps
+`Ctrl ⇧ I` (developer tools), `Ctrl ⇧ P` (a private window in Firefox) and
+`Ctrl ⇧ M` (the profile menu in Chrome) for itself, and a page cannot use
+them. Some keyboard layouts type a character with `Ctrl Alt` (the `AltGr`
+key), for example `ś` or `@`. That character goes into the field, and the
+page stays where it is.
 
 ## Turn off single-key shortcuts
 
@@ -113,9 +124,11 @@ control does. See [The Pulse page](pulse.md#the-pulse-page).
 ## Network
 
 These work on the **Network** page, and in the list beside an open contact.
-`/`, `N` and `V` work when focus is not in a field. `N` opens **New contact**
-and `V` opens **Add from text**. The arrow keys, `Home`, `End`, the letters
-and `Enter` work once the list has focus. The list is one `Tab` stop. See
+`/`, `N`, `V`, `J` and `K` work when focus is not in a field. `N` opens
+**New contact** and `V` opens **Add from text**. `J` and `K` open the next
+and the previous contact in the list. The arrow keys, `Home`, `End`, the
+letters and `Enter` work once the list has focus. There, `J` and `K` are
+letters like the others. The list is one `Tab` stop. See
 [The Network list](contacts.md#the-network-list).
 
 | Keys       | What it does                           | Single key |
@@ -125,6 +138,8 @@ and `Enter` work once the list has focus. The list is one `Tab` stop. See
 | `V`        | Smart paste (AI parse)                 | Yes        |
 | `Esc`      | Exit selection mode                    | No         |
 | `↑` or `↓` | Move through the contact list          | No         |
+| `J`        | Open the next contact                  | Yes        |
+| `K`        | Open the previous contact              | Yes        |
 | `Home`     | First contact                          | No         |
 | `End`      | Last contact                           | No         |
 | `A–Z`      | Jump to the next name with that letter | Always on  |
