@@ -1,171 +1,188 @@
 # Contributing to Contrack
 
-Thank you for your interest in contributing to Contrack! This guide outlines the standards and workflow for participating in the project.
+Contrack is a self-hosted personal CRM. One Node process serves a React app and
+an Express API over one SQLite file. AI is optional, and search runs on local
+models. This page says how to set up, the rules a review checks, and how a
+change ships. The user docs are in [`docs/`](docs/README.md), and
+[Architecture](docs/architecture.md) explains the system.
 
-## Getting Started
+## Set up
 
-1. Fork the repository and clone your fork
-2. Install dependencies with `npm install`
-3. Copy `.env.example` to `.env` and configure your AI provider key (`GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`)
-4. Run `npm run dev` to start the development server
-5. Optionally run `npm run seed` to populate demo data
-
-## Project Structure
-
-```
-contrack/
-├── server/                  # Express backend (TypeScript, run by Node 26)
-│   ├── ai/                  # AI module — provider-agnostic adapter pattern
-│   │   ├── adapters/        #   Concrete LLM adapters (gemini, openai, anthropic, compat)
-│   │   ├── routing/         #   SmartRouter, QuotaTracker, ParallelQueue
-│   │   ├── services/        #   Domain logic (parsing, mentions, search intel…)
-│   │   ├── aiService.ts     #   Stable import path — re-exports services/
-│   │   ├── schemaTranslation.ts  # Shared JSON-schema translator (per-dialect)
-│   │   ├── provider.ts      #   Abstract AIProvider interface
-│   │   └── types.ts         #   Shared type definitions
-│   ├── middleware/          # auth, rate limiting, error handling
-│   ├── routes/              # Express route handlers (thin controllers)
-│   │   └── dedupe/          #   Dedupe-specific routes (scan, merge, suggestions)
-│   ├── services/            # Core business logic
-│   │   ├── dedupe/          #   Multi-pass deduplication engine
-│   │   ├── search/          #   Hybrid retrieval (FTS5 + vector KNN)
-│   │   └── geocoding/       #   Address geocoding (Nominatim)
-│   ├── repositories/        # Data access layer (hydration, query helpers)
-│   ├── utils/               # Shared utilities (NLP, logging, caching)
-│   └── db.ts                # Database init, migrations, virtual tables
-├── src/                     # React 19 frontend
-│   ├── api/                 #   React Query hooks (one file per domain)
-│   ├── hooks/               #   Custom React hooks
-│   │   ├── useInstantSearch.ts    # 0ms client-side search with FTS5 handover
-│   │   ├── useQueryTokenizer.ts   # Faceted filter prefix operator parser
-│   │   ├── useSearchHistory.ts    # Terminal-style search history
-│   │   ├── useGlobalNavShortcuts.ts # Cmd+Shift+* navigation
-│   │   └── ...              #   Other utility hooks
-│   ├── views/               #   Page-level components
-│   ├── components/          #   Shared UI components
-│   │   ├── command-palette/ #   Cmd+K command center
-│   │   │   ├── CommandPalette.tsx  # Main state machine controller
-│   │   │   ├── ActionSubMenu.tsx   # Keyboard-first contact actions
-│   │   │   ├── InlineNoteComposer.tsx # Note/call editor inside palette
-│   │   │   ├── ListPicker.tsx      # List membership toggle
-│   │   │   ├── FacetPills.tsx      # Color-coded filter badges
-│   │   │   ├── FacetAutocomplete.tsx # Prefix operator autocomplete
-│   │   │   ├── ResultPeek.tsx      # Shift-to-peek tooltip
-│   │   │   ├── SynthesisBar.tsx    # AI executive brief streamer
-│   │   │   └── ZeroStateView.tsx   # Intelligence + history display
-│   │   └── ...              #   Other shared components
-│   └── db/schema.ts         #   Drizzle ORM schema definition
-├── tests/                   # Vitest test suites
-│   ├── unit/                #   Pure logic tests (NLP, RRF, search)
-│   └── integration/         #   Tests requiring database setup
-└── drizzle/                 # Auto-generated migration files
-```
-
-## Development Standards
-
-### Code Style
-
-- **TypeScript**: `strict: true` is enforced by `tsconfig.json` (plus `noImplicitOverride` and `noFallthroughCasesInSwitch`), and `@typescript-eslint/no-explicit-any` is an **error** — `any` disables strict checking for everything it touches. For genuinely untypable third-party surfaces, use an inline `eslint-disable-next-line` with a one-line justification. Prefer `Record<string, unknown>` + narrowing over index signatures. Cast better-sqlite3 `.get()`/`.all()` results once at the query site to a narrow row interface (only the selected columns), or use `Pick<ContactRow, ...>` from the Drizzle-inferred types.
-- **React lint**: `react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps` are errors. The `jsx-a11y` recommended set starts as warnings, and a rule becomes an error when its count reaches zero. Eight are errors now. Don't add new violations. Oxlint runs these rules from `.oxlintrc.json`, and it reads `eslint-disable` comments.
-- **TSDoc on Exports**: Every exported function, class, and interface in `src/lib/`, `src/types.ts`, `server/utils/`, and `server/repositories/types.ts` MUST carry a TSDoc block describing purpose, parameters, return value, and edge cases.
-- **React Query**: All frontend data fetching must go through `@tanstack/react-query` hooks. Raw `useEffect` fetch loops are not acceptable.
-- **Styling**: Use Tailwind CSS v4 utility classes. No raw borders — containment is expressed through surface background shifts. Touch-interactive elements must have a 44×44 px minimum hit area (use `<IconButton>` for icon-only buttons).
-- **Logging Discipline**: `log.info` for state changes (model selected, scan started, contact merged), `log.warn` for retries and operational degradation (rate-limit hit, AI fallback fired), `log.error` for caught exceptions and unhandled errors. Never `console.log` from production code.
-
-### Architecture Principles
-
-- **Local-First**: Database is SQLite. Network round-trips to managed DBs are forbidden.
-- **Service Layer**: Routes are thin controllers. Business logic lives in `server/services/`.
-- **AI Adapter Pattern**: The `server/ai/` module uses a provider-agnostic interface. All AI calls go through `aiService.ts`. Every adapter wraps its SDK call in `withTimeout` + `withRetry` + `parseAIJson` from `server/ai/resilience.ts`. When using Gemini, the `SmartRouter` selects the optimal model class (Lite/Flash/Pro); OpenAI and Anthropic adapters use fixed model routing.
-- **Error Discipline**: All operational errors thrown from services/repositories MUST be an `AppError` subclass (`NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`). Plain `throw new Error(...)` in the service layer is a code-review block. All async route handlers must be wrapped in `asyncHandler` from `server/utils/asyncHandler.ts`.
-- **Transactional Integrity**: Multi-step DB mutations (e.g. contact-with-children inserts, dedupe merges) must execute inside `sqlite.transaction(...)` so partial failures roll back atomically.
-- **Defensive Error Handling**: All fire-and-forget async operations must log errors, never silently swallow with empty `.catch(() => {})`.
-- **Vec0 Cleanup**: When deleting contacts, manually clean up `search_embeddings` and `contact_embeddings` (vec0 tables don't support FK cascading).
-
-### Testing
-
-Run the full test suite:
+You need Node.js 26.10 or later (`.nvmrc` pins it) and npm 11.19 or later. You
+need no API key.
 
 ```bash
-npm test              # Unit + integration (500+ tests, no API keys needed)
-npm run test:coverage # ...with a coverage report
-npm run lint          # Oxlint + tsc --noEmit (strict)
-npm run knip          # Files, exports and types in src that nothing uses
-npm run build && npm run test:e2e   # Browser journeys in headless Chromium
+git clone https://github.com/arvarik/contrack.git
+cd contrack
+npm install
+npm run models:fetch   # optional: the two local search models, about 29 MB
+npm run db:seed        # optional: about 30 fictional demo contacts
+npm run dev            # http://localhost:3210, with hot reload
 ```
 
-The browser suite (`tests/e2e/`) drives the production build with Playwright:
-axe scans of every screen, and the keyboard, dialog, search-announcement,
-phone-form and account journeys. It boots its own server per worker on a
-throwaway data directory, so it never touches your database. The first run
-needs `npx playwright install chromium`. A change to a dialog, a live region,
-a form or the auth screens should add or extend a journey there, and
-[docs/accessibility.md](docs/accessibility.md) says how, and what a person
-still checks by hand.
+- Node runs the TypeScript itself. `npm run dev` is `node server.ts`, with
+  Vite as middleware on the same port.
+- Copy `.env.example` to `.env` only to change a default or add a key. The
+  [Configuration reference](docs/configuration.md) lists every variable.
+- Your data is `curator.db` in the project root. Set `DATA_DIR` to a scratch
+  folder for a test instance, and `DISABLE_HMR=true` for a second dev server.
 
-**You never need an API key to develop Contrack.** `npm test` mocks every AI
-call, and the integration suite blanks provider keys so a stray request can't
-escape to a real API.
+## Where things live
 
-#### Contract tests (optional)
+| Path       | What it holds                                                        |
+| ---------- | -------------------------------------------------------------------- |
+| `server/`  | Routes, services, the AI layer, connectors, the MCP server, `db.ts`  |
+| `shared/`  | Code that the server and the app both import                         |
+| `src/`     | The React app: `views/`, `components/`, `api/` hooks, `db/schema.ts` |
+| `scripts/` | Seeds, model fetch, eval recorders, brand icons, docs tools          |
+| `tests/`   | Unit, integration, eval, contract and browser tests                  |
+| `.agent/`  | Notes for coding agents: architecture, style, testing, status        |
 
-`npm run test:contract` calls **real** provider APIs. It exists because mocked
-adapter tests cannot catch a wire-format mismatch — a mock encodes our
-assumption about a provider, so if the assumption is wrong the test passes
-forever while the feature is broken. That is not hypothetical: Anthropic's
-structured output shipped broken for exactly that reason, with a green unit
-test asserting the wrong shape.
+[Repository layout](docs/architecture.md#repository-layout) has the full map.
 
-Every provider block **skips itself when its credential is absent — or when the
-provider rejects it**. A stale `OPENAI_API_KEY` exported in your shell for some
-unrelated tool will not turn this suite red; it skips with the reason. Only a
-genuine adapter fault fails. So this is useful with one key or none:
+## Commands
 
-```bash
-npm run test:contract            # no keys -> everything skips, exit 0
-GEMINI_API_KEY=... npm run test:contract   # runs only the Gemini block
-```
+| Command                         | What it does                                                     |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `npm run dev`                   | Start the dev server on port 3210                                |
+| `npm run build`                 | Build the app into `dist/`                                       |
+| `npm test`                      | Run the unit, integration and eval tests (`test:watch` to watch) |
+| `npm run test:coverage`         | The same, with the coverage floor enforced                       |
+| `npm run test:e2e`              | Run the browser suite against `dist/`                            |
+| `npm run test:contract`         | Call real provider APIs. Each block skips without its key        |
+| `npm run lint`                  | Oxlint, `tsc --noEmit` and the tenant lint                       |
+| `npm run knip`                  | Find files, exports and types that nothing uses                  |
+| `npm run format`                | Format with Prettier. CI runs `format:check`                     |
+| `npm run db:generate`           | Write a Drizzle migration after a schema change                  |
+| `npm run brand:icons`           | Redraw every icon and brand file from the corvid's paths         |
+| `npm run docs:wiki -- <folder>` | Write the docs as a GitHub wiki                                  |
 
-To exercise a self-hosted OpenAI-compatible server:
+A pre-commit hook runs Oxlint and Prettier on the staged files.
 
-```bash
-CONTRACT_COMPAT_URL=http://localhost:11434/v1 \
-CONTRACT_COMPAT_MODEL=llama3.1 \
-  npm run test:contract
-```
+## Make a change
 
-Models can be pinned per provider with `CONTRACT_<PROVIDER>_MODEL` and
-`CONTRACT_<PROVIDER>_EMBED_MODEL` if the defaults are unavailable on your
-account. These tests are not part of CI — they are run before a release and
-whenever an adapter changes.
+1. Branch from `v2.0`. Version 2 pull requests target `v2.0`, and `main` holds
+   the 1.5 line.
+2. Keep one change per pull request.
+3. Add or change tests with the code. A bug fix comes with a test that fails
+   without it.
+4. Update the docs page the change affects, and add a line under
+   `[Unreleased]` in `CHANGELOG.md`.
+5. Run `npm run lint`, `npm run format:check` and `npm test`. After a change to
+   a page, a dialog, a form or sign-in, also run
+   `npm run build && npm run test:e2e`.
 
-### Commit Messages
+## Rules a review checks
 
-Prefix with the area of the codebase:
+These break most often. `.agent/ARCHITECTURE.md` and `.agent/STYLE.md` have
+the full lists.
 
-```
-feat(search): add Doc2Query write-time enrichment
-fix(dedupe): clean up orphan vec0 embeddings on merge
-refactor(ai): extract SmartRouter model selection
-perf(search): move NON_LOCATIONS to module scope
-docs: update API reference in README
-```
+- **Routes are thin.** Validate with zod, wrap the handler in `asyncHandler`,
+  and call a service. A service throws an `AppError` subclass, never a plain
+  `Error`.
+- **Accounts stay apart.** A function that touches owned data takes a `Scope`,
+  and the id and the owner go in the same SQL statement. Another account's row
+  answers `404`. Every route has a row in `server/tenancy/routeManifest.ts`, a
+  scoped route has an isolation test, and an admin route mounts
+  `requireAdmin` itself.
+- **Writes are atomic.** Multi-step writes run in `sqlite.transaction(...)`.
+- **AI goes through the gateway.** Call `generateFor` or `streamFor` in
+  `server/ai/gateway.ts`. Only `server/ai/adapters/` imports a provider SDK.
+- **Outside data is untrusted.** Fetch URLs through `safeFetch`, and resolve
+  stored upload paths with `resolveUploadPath()`.
+- **Imports name their file.** A relative import in `server/`, `shared/` or
+  `scripts/` carries the extension, such as `./geo.ts`.
+- **The app fetches with React Query.** Use the hooks in `src/api/`, never a
+  `useEffect` fetch.
+- **The UI uses the design system.** Use the primitives in
+  `src/components/ui/` and the tokens in `src/lib/styles.ts`: no borders for
+  sections, one focus ring, 44 px touch targets, no text under 11 px,
+  sentence case, and no period at the end of a statement. Tests scan for
+  these. Every key binding is a row in `src/lib/shortcuts.ts`.
+- **Types are strict.** `any` is an error. Narrow `unknown` instead.
+- **Errors are logged.** Use `log.info`, `log.warn` and `log.error`. No
+  `console.log` in app code and no empty `.catch(() => {})`.
 
-## Pull Request Process
+## Tests
 
-1. Ensure your branch is up to date with `main`
-2. Run `npm run lint`, `npm test`, and `npm run build && npm run test:e2e`.
-   All three must pass. If you changed an AI adapter, run
-   `npm run test:contract` with whatever key you have.
-3. Describe **what** changed and **why** in the PR description
-4. If your change modifies the API surface, update [`docs/api-reference.md`](docs/api-reference.md)
-5. If your change modifies the database schema, include the migration file
+`npm test` needs no key and no network, and it never opens your database.
 
-## Reporting Issues
+- **Unit** tests in `tests/unit/` follow the source tree (see its README).
+- **Integration** tests run routes, SQL and triggers on real SQLite.
+- **Eval** tests hold search, duplicate and answer quality to a baseline. A
+  gate fails when a number moves either way. When the move is intended,
+  re-record with `npm run eval:record` (or `:dedupe`, `:answer`) and explain
+  the baseline diff in the pull request.
+- **Browser** tests drive the production build with Playwright. The first run
+  needs `npx playwright install chromium`. See
+  [Accessibility](docs/accessibility.md).
+- **Contract** tests call real providers. Run them before a release and after
+  an adapter change.
 
-When opening an issue, please include:
+The coverage floor is statements 75, branches 62, functions 74 and lines 76,
+with its own floor for `server/`. `.agent/TESTING.md` has the rest.
 
-- Steps to reproduce
-- Expected vs. actual behavior
-- Node.js version and OS
-- Relevant console output or error messages
+## Docs, the database and the brand
+
+- **Docs** are flat pages in `docs/`, listed in `docs/README.md`, with
+  screenshots of fictional data in `docs/images/`. Tests fail on a broken link
+  or anchor, and when `configuration.md`, `api-reference.md` or
+  `keyboard-shortcuts.md` misses a variable, a route or a shortcut.
+- **A schema change** edits `src/db/schema.ts`, runs `npm run db:generate`, and
+  commits the migration in `drizzle/`. The server applies it on start.
+  Virtual tables and triggers live in `server/db.ts`. Bump
+  `FTS_SCHEMA_VERSION` when the full-text columns or triggers change. A new
+  owned table needs `ownerId`, the owner triggers and an index that leads with
+  `ownerId`.
+- **Brand files** in `public/` and `docs/brand/` are generated from
+  `src/assets/corvidPaths.ts` and the rig. Change the source, run
+  `npm run brand:icons`, and commit what it writes. Never edit a generated
+  file.
+
+## Commits and pull requests
+
+- Write the subject as a plain sentence that says what the change does, such
+  as "Search finds nicknames, phone digits and misspelled names".
+- The repository squash-merges, so the pull request title becomes the commit.
+- The description says what changed and why, then lists the test commands
+  with their counts, and what did not run.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pull requests into `main` and `v2.0`, on
+pushes to them, on `v*` tags, and by hand.
+
+- `build-and-test`: lint, the format check, the tests with coverage, and a
+  production build.
+- `browser-a11y`: the Playwright suite. Its report is uploaded on every run.
+- `build-image` and `merge-image`: on a push to `main` or a `v*` tag, one
+  image for linux/amd64 and linux/arm64 at `ghcr.io/arvarik/contrack`. `main`
+  is tagged `latest` and the short SHA, a release its version and
+  `major.minor`.
+- `release`: on a `v*` tag, a GitHub release, unless one exists already.
+
+A manual run can use the `hppc` self-hosted runner when the hosted pool is
+slow. Pull requests from forks never reach it.
+
+## Releases (maintainers)
+
+1. Set the version in `package.json` and move the `[Unreleased]` entries in
+   `CHANGELOG.md` under it.
+2. Merge to `main`, then tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and
+   `git push origin vX.Y.Z`.
+3. Publish the notes before the release job runs, or it writes a commit list:
+   `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file notes.md --verify-tag`.
+
+## Report a problem
+
+Open an issue with the steps, what you expected, what happened, your Node
+version and OS, and the log lines around the error. Every error response has
+a request id that the server log repeats.
+
+For a security problem, post no details in public. Open an issue that asks
+for a private channel, and the maintainer will reply.
+
+## License
+
+Contrack is licensed under the [GNU AGPL v3](LICENSE), and so is every
+contribution.
