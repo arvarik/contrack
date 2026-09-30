@@ -456,7 +456,7 @@ describe("the instance switch", () => {
     const row = sqlite
       .prepare(
         `SELECT action, details FROM audit_log
-          WHERE targetId = 'ai.instanceOff' ORDER BY createdAt DESC LIMIT 1`,
+          WHERE targetId = 'ai.instanceOff' ORDER BY createdAt DESC, rowid DESC LIMIT 1`,
       )
       .get() as { action: string; details: string } | undefined;
     expect(row?.action).toBe("settings.changed");

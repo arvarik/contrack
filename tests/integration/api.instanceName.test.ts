@@ -135,7 +135,7 @@ describe("who may change it", () => {
       .prepare(
         `SELECT targetId, details FROM audit_log
           WHERE action = 'settings.changed' AND targetId = 'instance.name'
-          ORDER BY createdAt DESC LIMIT 1`,
+          ORDER BY createdAt DESC, rowid DESC LIMIT 1`,
       )
       .get() as { targetId: string; details: string | null } | undefined;
 

@@ -127,7 +127,7 @@ describe("ownership stamping with auth on", () => {
   it("stamps an AI invocation recorded during a request", async () => {
     const row = sqlite
       .prepare(
-        "SELECT ownerId FROM ai_invocations WHERE operation = 'mentions' ORDER BY createdAt DESC LIMIT 1",
+        "SELECT ownerId FROM ai_invocations WHERE operation = 'mentions' ORDER BY createdAt DESC, rowid DESC LIMIT 1",
       )
       .get() as { ownerId: string | null } | undefined;
 
