@@ -193,9 +193,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       ? importJson(req, res, next)
       : defaultJson(req, res, next),
   );
-  // Nothing posts forms; uploads travel as multipart through multer, which
-  // carries its own per-route file-size limits.
-  app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+  // Nothing posts forms, so there is no form parser. Uploads travel as
+  // multipart through multer, which carries its own per-route file-size limits.
   if (!options.disableRateLimit) {
     app.use(aiEndpointRateLimit);
   }

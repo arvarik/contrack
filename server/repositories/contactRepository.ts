@@ -842,28 +842,4 @@ export const contactRepo = {
       }
     }
   },
-
-  // -------------------------------------------------------------------------
-  // Granular Finders — for dedupe and other targeted queries
-  // -------------------------------------------------------------------------
-
-  findEmailsByContactId(contactId: string) {
-    return stmts.emails.all(contactId) as Array<{
-      id: string;
-      email: string;
-      label: string | null;
-      isPrimary: number;
-      source: string | null;
-    }>;
-  },
-
-  findPhonesByContactId(contactId: string) {
-    return stmts.phones.all(contactId) as Array<{
-      id: string;
-      phone: string;
-      label: string | null;
-      isPrimary: number;
-      source: string | null;
-    }>;
-  },
 };

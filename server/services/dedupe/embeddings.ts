@@ -147,13 +147,11 @@ function l2Normalize(values: number[]): Float32Array {
  * capability and inherits its count guard: a backend that returns fewer
  * vectors than inputs is an error, not a silently short batch.
  *
- * @param items      - Array of { id, text } to embed
- * @param onProgress - Optional callback for progress reporting
+ * @param items - Array of { id, text } to embed
  * @returns Map of id → normalized Float32Array
  */
 export async function generateBatchEmbeddings(
   items: { id: string; text: string }[],
-  onProgress?: (done: number, total: number) => void,
 ): Promise<Map<string, Float32Array>> {
   const results = new Map<string, Float32Array>();
 
@@ -172,7 +170,6 @@ export async function generateBatchEmbeddings(
         `Failed to embed batch starting at index ${i}: ${getErrorMessage(err)}`,
       );
     }
-    onProgress?.(Math.min(i + batch.length, items.length), items.length);
   }
 
   return results;

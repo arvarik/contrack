@@ -343,11 +343,6 @@ function read(scope: Scope, id: string): ImportTableRow | undefined {
 // ---------------------------------------------------------------------------
 
 export const importService = {
-  /** True while this process is running the import. */
-  isLive(id: string): boolean {
-    return live.has(id);
-  },
-
   /**
    * Record the start of an import, or recognise one already recorded.
    *

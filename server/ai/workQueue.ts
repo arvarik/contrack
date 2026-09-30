@@ -118,25 +118,8 @@ export class GenerationQueue {
     this.searchConcurrency = searchConcurrency;
   }
 
-  run<T>(
-    operation: () => Promise<T>,
-    signalOrOptions?: AbortSignal | QueueRunOptions,
-    legacyOptions?: QueueRunOptions,
-  ): Promise<T> {
-    let signal: AbortSignal | undefined;
-    let options: QueueRunOptions | undefined;
-
-    if (
-      signalOrOptions instanceof AbortSignal ||
-      (signalOrOptions && "aborted" in signalOrOptions)
-    ) {
-      signal = signalOrOptions as AbortSignal;
-      options = legacyOptions;
-    } else if (signalOrOptions) {
-      options = signalOrOptions as QueueRunOptions;
-      signal = options.signal;
-    }
-
+  run<T>(operation: () => Promise<T>, options?: QueueRunOptions): Promise<T> {
+    const signal = options?.signal;
     signal?.throwIfAborted();
 
     if (options?.lane === "search")

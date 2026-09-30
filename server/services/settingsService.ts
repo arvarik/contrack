@@ -78,12 +78,6 @@ export const SETTING_KEYS = {
   embeddingsState: "ai.embeddingsState",
   /** boolean — an admin turned AI off for every account (server/ai/instanceSwitch.ts) */
   aiInstanceOff: "ai.instanceOff",
-  /** boolean — whether anybody may create an account without an invitation */
-  registrationOpen: "auth.registrationOpen",
-  /** boolean — whether sign-in by emailed magic link is enabled */
-  magicLinkSignIn: "auth.magicLinkSignIn",
-  /** string — what this instance calls itself, 1 to 60 characters */
-  instanceName: "instance.name",
   /** number — days before soft-deleted contacts are permanently purged */
   trashRetentionDays: "lifecycle.trashRetentionDays",
   /** number — hours between automated backups, 0 to disable */

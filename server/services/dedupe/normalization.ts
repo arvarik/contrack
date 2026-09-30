@@ -290,19 +290,16 @@ export function normalizeContact(
  * this loads ALL child data in 3 bulk queries and builds lookup maps.
  * For 1,082 contacts, this takes ~20ms instead of ~3,000ms.
  *
- * @param contactFilter - Optional SQL WHERE clause fragment for the contacts query.
- *                         Default: only active, non-ghost, non-archived contacts.
+ * Only active, non-ghost, non-archived contacts are normalized.
+ *
  * @returns Array of NormalizedContact ready for dedupe matching.
  */
-export function normalizeContacts(
-  scope: Scope,
-  contactFilter = "isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL",
-): NormalizedContact[] {
+export function normalizeContacts(scope: Scope): NormalizedContact[] {
   // 1. Load the owner's contacts
   const allContacts = sqlite
     .prepare(
       `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
-     FROM contacts WHERE ownerId = ? AND (${contactFilter})`,
+     FROM contacts WHERE ownerId = ? AND (isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL)`,
     )
     .all(scope.ownerId) as RawContactRow[];
 

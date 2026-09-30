@@ -499,23 +499,6 @@ export const aiCache = {
     }
   },
 
-  /**
-   * Emergency escape hatch: reset batch mode and flush everything.
-   * Use this if a batch operation crashes mid-way and exits without
-   * calling exitBatchMode().
-   */
-  forceClearBatchMode(): void {
-    if (batchRefCount > 0) {
-      log.warn(
-        "AICache",
-        `BATCH_FORCE_CLEAR resetting depth from ${batchRefCount} to 0`,
-      );
-      batchRefCount = 0;
-      pendingInvalidations.clear();
-      aiCache.invalidateAll();
-    }
-  },
-
   // ===========================================================================
   // Diagnostics
   // ===========================================================================

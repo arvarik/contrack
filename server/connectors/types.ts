@@ -65,9 +65,7 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   description: string;
   capabilities: {
     schedule: boolean;
-    upload?: { accept: string[]; maxBytes: number };
     oauth?: boolean;
-    localOnly?: "darwin";
     summaries?: boolean;
   };
   configSchema: z.ZodType<C>;
