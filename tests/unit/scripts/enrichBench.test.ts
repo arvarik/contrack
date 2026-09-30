@@ -322,6 +322,11 @@ describe("planEnrichment", () => {
       ["a school", (p) => p.add.contact_education.length > 0, 0.6],
       ["a job", (p) => p.add.contact_experience.length > 0, 0.8],
       ["a custom field", (p) => p.add.contact_attributes.length > 0, 0.3],
+      // The counts follow their weights: a bound drawn again on every pass
+      // gave 0.18, 0.13 and 0.32 here.
+      ["two custom fields", (p) => p.add.contact_attributes.length > 1, 0.24],
+      ["two earlier jobs", (p) => p.add.contact_experience.length > 2, 0.17],
+      ["two new interests", (p) => p.add.contact_interests.length > 1, 0.38],
       ["no history", (p) => p.add.interactions.length === 0, 0.05],
       ["three notes", (p) => p.add.interactions.length >= 3, 0.3],
       // Added over years, and few in the last month.

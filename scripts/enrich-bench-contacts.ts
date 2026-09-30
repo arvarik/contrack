@@ -55,7 +55,10 @@ export interface EnrichSummary {
   generic: number;
   /** Hand-written contacts, whose words stay. */
   curated: number;
-  /** Rows written or changed, by table. */
+  /**
+   * Rows the plans add or change, by table. An email or a phone the account
+   * already has is counted here and skipped when the rows are written.
+   */
   rows: Record<string, number>;
 }
 
@@ -261,9 +264,10 @@ function writePlans(
 
     // Saved last, and `updatedAt` after the rest. A trigger on each child
     // table stamps the contact's updatedAt with the real clock, and so does
-    // the one that stamps `trackedAt`. A statement that sets `updatedAt`
-    // alone fires neither, so the plan's date is the final word.
-    const { updatedAt, ...columns } = plan.contact;
+    // the one that stamps `trackedAt`, which writes the real clock there too.
+    // A statement that sets `updatedAt` fires neither, so the plan's dates
+    // are the final word.
+    const { updatedAt, trackedAt, ...columns } = plan.contact;
     const sets = Object.keys(columns).map((key) => `${key} = @${key}`);
     const where = "WHERE id = @contactId AND ownerId = @ownerId";
     if (sets.length > 0)
@@ -272,10 +276,10 @@ function writePlans(
         ...keys,
       });
     if (updatedAt)
-      run(`UPDATE contacts SET updatedAt = @updatedAt ${where}`, {
-        updatedAt,
-        ...keys,
-      });
+      run(
+        `UPDATE contacts SET updatedAt = @updatedAt${trackedAt ? ", trackedAt = @trackedAt" : ""} ${where}`,
+        { updatedAt, ...(trackedAt ? { trackedAt } : {}), ...keys },
+      );
 
     scheduleSearchIndex(contactId);
   };

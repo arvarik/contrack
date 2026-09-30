@@ -248,13 +248,23 @@ describe("enrichBenchContacts", () => {
     expect(old[0].date).toBe("2026-03-06T05:47:06.972Z");
   });
 
-  it("spreads when each contact was last edited, and dates the last contact in the past", () => {
+  it("spreads when each contact was last edited, dates the last contact in the past, and dates the tracking it starts", () => {
     // Writing an address or an interaction bumps the contact's updatedAt to
     // the real clock, so a plan's dates only survive if the contact is saved last.
-    const rows = read<{ updatedAt: string; lastContactedAt: string | null }>(
-      `SELECT updatedAt, lastContactedAt FROM contacts WHERE id IN ${TAGGED}`,
+    const rows = read<{
+      updatedAt: string;
+      lastContactedAt: string | null;
+      isTracked: number;
+      trackedAt: string | null;
+    }>(
+      `SELECT updatedAt, lastContactedAt, isTracked, trackedAt FROM contacts WHERE id IN ${TAGGED}`,
     );
     expect(rows.every((r) => r.updatedAt <= sqliteStamp(NOW))).toBe(true);
+    // Nobody was tracked before, and the trigger stamps the real clock, so a
+    // run that starts tracking writes the plan's date after it.
+    const tracked = rows.filter((r) => r.isTracked === 1);
+    expect(tracked.length).toBeGreaterThan(3);
+    expect(tracked.every((r) => r.trackedAt === r.updatedAt)).toBe(true);
     expect(
       rows.filter((r) => r.updatedAt < "2026-03-30").length,
     ).toBeGreaterThan(0);

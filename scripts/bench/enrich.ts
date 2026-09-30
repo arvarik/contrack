@@ -113,7 +113,10 @@ export interface BenchPlan {
       BenchContact,
       "id" | "name" | "firstName" | "lastName" | "industry" | "location"
     > &
-      Record<"geoSource" | "addedAt" | "updatedAt" | "lastContactedAt", string>
+      Record<
+        "geoSource" | "addedAt" | "updatedAt" | "trackedAt" | "lastContactedAt",
+        string
+      >
   >;
   /** Rows to add. A run removes the ones it added before, by their `be-` id. */
   add: BenchRows;
@@ -473,11 +476,13 @@ export function planEnrichment(
     }
   }
 
-  // Interests first, because the text refers to them. The bound is drawn
-  // again on every pass, and the plans depend on that.
+  // Interests first, because the text refers to them. Each loop's count is
+  // drawn once, before it: a bound in the loop's test is drawn again on
+  // every pass, which gave custom fields 40/42/16/2 percent, not 40/30/20/10.
   const dInt = stream("dInt");
   const interests = [...input.interests];
-  for (let i = 0; i < dInt.int(0, 3); i++) {
+  const newInterests = dInt.int(0, 3);
+  for (let i = 0; i < newInterests; i++) {
     const interest = dInt.pick(INTERESTS);
     if (interests.includes(interest)) continue;
     interests.push(interest);
@@ -575,6 +580,10 @@ export function planEnrichment(
     0,
   );
   plan.contact.updatedAt = sqliteStamp(touched > now ? now : touched);
+  // Tracking is an edit, so it happened by the last one. The trigger that
+  // stamps trackedAt reads the real clock, and the runner writes this after.
+  if (plan.contact.isTracked === 1)
+    plan.contact.trackedAt = plan.contact.updatedAt;
 
   // Email labels, then addresses to add.
   const dEmail = stream("dEmail");
@@ -677,8 +686,6 @@ export function planEnrichment(
       handle,
     });
   }
-  // The bounds of the loops below are drawn again on every pass, like the
-  // interests above.
   const dEdu = stream("education");
   const birthday = String(plan.contact.birthday ?? input.birthday ?? "");
   const birthYear = /^\d{4}/.test(birthday)
@@ -686,7 +693,8 @@ export function planEnrichment(
     : dEdu.int(1965, 1999);
   if (dEdu.chance(0.8)) {
     const schools = new Set<string>();
-    for (let i = 0; i < (dEdu.chance(0.3) ? 2 : 1); i++) {
+    const schoolCount = dEdu.chance(0.3) ? 2 : 1;
+    for (let i = 0; i < schoolCount; i++) {
       const school = dEdu.pick(SCHOOLS);
       if (schools.has(school)) continue;
       schools.add(school);
@@ -723,7 +731,8 @@ export function planEnrichment(
       [1, 5],
       [2, 2],
     ] as const;
-    for (let i = 0; i < dWork.weighted(earlierJobs); i++) {
+    const earlier = dWork.weighted(earlierJobs);
+    for (let i = 0; i < earlier; i++) {
       const [y, m] = cursor.split("-").map(Number);
       const endYear = y - (m === 1 ? 1 : 0);
       const endMonth = m === 1 ? 12 : m - 1;
@@ -752,7 +761,8 @@ export function planEnrichment(
     [2, 2],
     [3, 1],
   ] as const;
-  for (let i = 0; i < dAttr.weighted(fieldCount); i++) {
+  const fields = dAttr.weighted(fieldCount);
+  for (let i = 0; i < fields; i++) {
     const name = names.splice(dAttr.int(0, names.length - 1), 1)[0];
     add.contact_attributes.push({
       id: id("attribute", i),
