@@ -72,7 +72,15 @@ test("an expired session returns to sign-in and says why", async ({
   page,
   context,
 }, testInfo) => {
+  // The app fetches Ask's "Try asking" questions in its first idle moment.
+  // A refused background request signs out too, so the fetch must be done
+  // before the cookie goes, or it can beat the click below to the refusal
+  // and take the link away first. On a slow runner it did.
+  const starters = page.waitForResponse((response) =>
+    response.url().endsWith("/api/search/starters"),
+  );
   await completeSetup(page, ADMIN);
+  await starters;
 
   // The cookie goes away underneath an open tab, which is what an expiry
   // looks like from the browser. The next request is refused, and the gate
