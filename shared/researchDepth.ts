@@ -21,7 +21,7 @@
 
 import { z } from "zod";
 
-export const RESEARCH_DEPTHS = ["standard", "deep"] as const;
+const RESEARCH_DEPTHS = ["standard", "deep"] as const;
 
 export const researchDepthSchema = z.enum(RESEARCH_DEPTHS);
 
@@ -31,7 +31,7 @@ export type ResearchDepth = z.infer<typeof researchDepthSchema>;
 export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";
 
 /** What one contact takes at a depth: the time, the searches and the cost. */
-export interface ResearchDepthFigures {
+interface ResearchDepthFigures {
   /** The mean time per contact, in seconds. */
   seconds: number;
   /** The mean web searches per contact. */

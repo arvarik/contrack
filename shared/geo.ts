@@ -62,7 +62,7 @@ export interface MapContact {
  * serialised into MapLibre's worker, and a missing key reads the same on
  * both sides.
  */
-export interface ContactPointProperties {
+interface ContactPointProperties {
   id: string;
   name: string;
   company?: string;
@@ -72,14 +72,14 @@ export interface ContactPointProperties {
   weight: number;
 }
 
-export interface ContactPointFeature {
+interface ContactPointFeature {
   type: "Feature";
   id: string;
   geometry: { type: "Point"; coordinates: [number, number] };
   properties: ContactPointProperties;
 }
 
-export interface ContactFeatureCollection {
+interface ContactFeatureCollection {
   type: "FeatureCollection";
   features: ContactPointFeature[];
 }

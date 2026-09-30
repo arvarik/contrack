@@ -36,7 +36,7 @@ export const MAX_ADDED_ENTRIES = 150;
  * but this check stands between a `javascript:` or `data:` address and an
  * anchor on the page.
  */
-export function isWebUrl(value: string): boolean {
+function isWebUrl(value: string): boolean {
   if (!/^https?:\/\//i.test(value)) return false;
   try {
     const { protocol } = new URL(value);
@@ -52,7 +52,7 @@ const webUrl = z
   .refine(isWebUrl, "Expected an absolute http or https address");
 
 /** One page a run cited. */
-export const researchSourceSchema = z.object({
+const researchSourceSchema = z.object({
   url: webUrl,
   title: z.string().max(300),
   /** When a run first cited it. */
@@ -79,7 +79,7 @@ const researchSourcesSchema = z.preprocess(
  * One fact the search pass reported, as it wrote it:
  * "Past role: Associate, Harbor Point Partners, 2018 to 2020 [finra.org]".
  */
-export const researchFindingSchema = z.object({
+const researchFindingSchema = z.object({
   topic: z.string().max(60),
   text: z.string().max(600),
   /** The site the search pass named for the fact, when it named one. */
@@ -92,7 +92,7 @@ export const researchFindingSchema = z.object({
 });
 
 /** How many entries one run added to one field: education, 2. */
-export const researchAdditionSchema = z.object({
+const researchAdditionSchema = z.object({
   field: z.string().max(40),
   count: z.number().int().positive(),
 });
@@ -108,14 +108,14 @@ export const researchAdditionSchema = z.object({
  * of every call, thinking included. Gemini does not always report the
  * searches of a pass that found nothing, so the count can be low.
  */
-export const researchUsageSchema = z.object({
+const researchUsageSchema = z.object({
   calls: z.number().int().nonnegative(),
   searches: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
 });
 
-export const researchRunSchema = z.object({
+const researchRunSchema = z.object({
   at: z.string().max(40),
   models: z.array(z.string().max(120)).max(4),
   /** Absent on runs recorded before there were two depths. */
@@ -132,7 +132,7 @@ export const researchRunSchema = z.object({
  * One entry a run added to a list field, in the words the merge compares:
  * "education", "University of Example", "BA", "2017".
  */
-export const researchAddedEntrySchema = z.object({
+const researchAddedEntrySchema = z.object({
   field: z.string().max(40),
   /** The school, the employer, the address, the email, the tag or the name. */
   value: z.string().max(300),

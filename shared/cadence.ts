@@ -29,7 +29,7 @@
  * @module shared/cadence
  */
 
-export interface CadenceChoice {
+interface CadenceChoice {
   days: number;
   /** One word, for a menu and for the Track button: "Quarterly". */
   label: string;

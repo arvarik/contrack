@@ -7,7 +7,7 @@
  * @module shared/mcpTools
  */
 
-export interface McpToolDefinition {
+interface McpToolDefinition {
   name: string;
   description: string;
   readOnly: boolean;

@@ -89,7 +89,7 @@ export interface Correspondent {
   ignoredAt: string | null;
 }
 
-export const CONNECTOR_KINDS: Record<
+const CONNECTOR_KINDS: Record<
   ConnectorKind,
   {
     label: string;
