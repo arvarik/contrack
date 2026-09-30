@@ -624,8 +624,8 @@ type TokenState = "active" | "revoked" | "expired";
 /** What a token is doing now, from the two timestamps that can end it. */
 export function tokenState(
   token: Pick<ApiTokenSummary, "revokedAt" | "expiresAt">,
-  now: number = Date.now(),
 ): TokenState {
+  const now = Date.now();
   if (token.revokedAt) return "revoked";
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= now)
     return "expired";

@@ -44,7 +44,6 @@ interface ConnectorCardProps {
   connector: ConnectorSummary;
   onEdit: (connector: ConnectorSummary) => void;
   onShowRuns: (connector: ConnectorSummary) => void;
-  onReconnect?: (connector: ConnectorSummary) => void;
 }
 
 function statusBadgeInfo(status: ConnectorStatus): {
@@ -122,7 +121,6 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
   connector,
   onEdit,
   onShowRuns,
-  onReconnect,
 }) => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteImported, setDeleteImported] = useState(false);
@@ -325,9 +323,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
             </div>
             <button
               type="button"
-              onClick={() =>
-                onReconnect ? onReconnect(connector) : onEdit(connector)
-              }
+              onClick={() => onEdit(connector)}
               className="btn-secondary btn-sm shrink-0"
             >
               Reconnect

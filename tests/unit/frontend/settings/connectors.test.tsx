@@ -737,7 +737,7 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getByText(`Last sync: ${line}`)).toBeTruthy();
     });
 
-    it("Reconnect button falls back to onEdit if onReconnect not provided", () => {
+    it("Reconnect button opens the connector for editing", () => {
       const onEditMock = vi.fn();
       const connector = createMockConnector({
         id: "conn-reauth-2",

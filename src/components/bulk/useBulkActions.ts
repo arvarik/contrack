@@ -367,7 +367,6 @@ export function useBulkActions({
     closeBulkEdit: () => setIsBulkEditOpen(false),
 
     isPending,
-    isBulkDeletePending: bulkDelete.isPending,
     isBulkAddToListPending: bulkAddToList.isPending,
     isBulkEditPending: bulkUpdate.isPending,
 

@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "motion/react";
 import type { Interaction } from "../../../types";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { useHiddenInteractionIds } from "../../../lib/pendingDeletes";
+import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
 import { DROPZONE_INPUT } from "../../../lib/styles";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 import {
@@ -49,9 +49,6 @@ const InteractionComposer = React.lazy(() =>
 
 export interface TimelineTabProps {
   contactId: string;
-  /** True after "Log interaction", until the composer has taken focus. */
-  composerFocusRequested?: boolean;
-  onComposerFocused?: () => void;
   /**
    * True in the narrow contact layout. The composer shows one line until it
    * takes focus.
@@ -75,8 +72,6 @@ export interface TimelineTabProps {
 
 const TimelineTabInner: React.FC<TimelineTabProps> = ({
   contactId,
-  composerFocusRequested = false,
-  onComposerFocused,
   composerCollapsible,
   timeline,
   timelineLoading,
@@ -90,7 +85,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   const [opened, setOpened] = useState<OpenedInteraction | null>(null);
   // An entry in its undo window is gone for the reader, so it does not count
   // against the empty state.
-  const hidden = useHiddenInteractionIds();
+  const hidden = useHiddenPendingIds();
   const hasEntries = timeline.some((item) => !hidden.has(item.id));
 
   // A note search lands here with `?interaction=<id>`: open that note and
@@ -160,8 +155,6 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
       <Suspense fallback={<ComposerPlaceholder />}>
         <InteractionComposer
           contactId={contactId}
-          focusRequested={composerFocusRequested}
-          onFocusHandled={onComposerFocused}
           collapsible={composerCollapsible}
         />
       </Suspense>

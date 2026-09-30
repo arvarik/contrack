@@ -41,17 +41,8 @@ export interface ImportProgress {
  * The caller polls the record to find out.
  */
 export type ImportStreamResult =
-  | {
-      kind: "done";
-      importId: string;
-      status: ImportStatus;
-      summary: ImportSummary | null;
-      count: number;
-      failed: number;
-      /** The server already had this import and did not run it again. */
-      repeated: boolean;
-    }
-  | { kind: "interrupted"; importId: string | null };
+  | { kind: "done"; status: ImportStatus; summary: ImportSummary | null }
+  | { kind: "interrupted" };
 
 const PROGRESS_PHASES: ReadonlySet<string> = new Set([
   "importing",
@@ -93,7 +84,6 @@ export async function readImportStream(
   if (!reader) throw new Error("Import stream unavailable");
   const decoder = new TextDecoder();
   let buffer = "";
-  let importId: string | null = null;
 
   const consume = (line: string): ImportStreamResult | null => {
     if (!line.startsWith("data: ")) return null;
@@ -104,19 +94,14 @@ export async function readImportStream(
       return null;
     }
     if (!isRecord(data)) return null;
-    if (typeof data.importId === "string") importId = data.importId;
     if (data.done === true) {
       return {
         kind: "done",
-        importId: typeof data.importId === "string" ? data.importId : "",
         status:
           typeof data.status === "string"
             ? (data.status as ImportStatus)
             : "complete",
         summary: summaryOf(data.summary),
-        count: typeof data.count === "number" ? data.count : 0,
-        failed: typeof data.failed === "number" ? data.failed : 0,
-        repeated: data.repeated === true,
       };
     }
     if (typeof data.phase === "string" && PROGRESS_PHASES.has(data.phase)) {
@@ -146,7 +131,7 @@ export async function readImportStream(
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
-  return { kind: "interrupted", importId };
+  return { kind: "interrupted" };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,8 +142,6 @@ export async function readImportStream(
 export interface RememberedImport {
   importId: string;
   fileName: string;
-  /** Epoch milliseconds. */
-  startedAt: number;
 }
 
 export const IMPORT_KEY_PREFIX = "contrack:import:";
@@ -214,8 +197,7 @@ export function recallImport(
     !isRecord(parsed) ||
     typeof parsed.importId !== "string" ||
     parsed.importId.length === 0 ||
-    typeof parsed.fileName !== "string" ||
-    typeof parsed.startedAt !== "number"
+    typeof parsed.fileName !== "string"
   ) {
     forgetImport(accountId);
     return null;
@@ -223,7 +205,6 @@ export function recallImport(
   return {
     importId: parsed.importId,
     fileName: parsed.fileName,
-    startedAt: parsed.startedAt,
   };
 }
 

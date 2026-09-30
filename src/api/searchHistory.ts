@@ -72,11 +72,8 @@ let lastRecorded: {
   time: number;
 } | null = null;
 
-export function shouldIgnoreRecord(
-  mode: HistoryMode,
-  query: string,
-  now = Date.now(),
-): boolean {
+export function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
+  const now = Date.now();
   const norm = normalizeQuery(query);
   if (
     lastRecorded &&

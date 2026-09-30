@@ -51,7 +51,6 @@ import { toFeatureCollection, type MapContact } from "../../../shared/geo";
 import { useAuth } from "../../components/auth/AuthGate";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { cn } from "../../lib/utils";
 import type { MapLayer } from "../../api/mapViews";
 import { ClusterMarker } from "./ClusterMarker";
 import { ContactMarker } from "./ContactMarker";
@@ -171,7 +170,6 @@ export interface ContactMapProps {
   onMapReady?: (map: MapLibreMap) => void;
   /** The contacts are still loading. */
   loading?: boolean;
-  className?: string;
   onLogNote?: (id: string) => void;
   onAddToList?: (id: string) => void;
   onFollowUp?: (id: string) => void;
@@ -199,7 +197,6 @@ export const ContactMap = ({
   label = "Contact map",
   onMapReady,
   loading = false,
-  className,
   onLogNote,
   onAddToList,
   onFollowUp,
@@ -477,10 +474,7 @@ export const ContactMap = ({
       role="region"
       aria-label={label}
       data-map-ready={ready ? "true" : "false"}
-      className={cn(
-        "contact-map relative w-full h-full overflow-hidden bg-surface-container-low",
-        className,
-      )}
+      className="contact-map relative w-full h-full overflow-hidden bg-surface-container-low"
     >
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm">

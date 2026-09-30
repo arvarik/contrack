@@ -29,7 +29,6 @@ interface ImapFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   connector?: ConnectorDetail | ConnectorSummary | null;
-  reconnectOnly?: boolean;
 }
 
 export const ImapFormModal: React.FC<ImapFormModalProps> = ({

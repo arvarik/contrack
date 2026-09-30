@@ -20,7 +20,6 @@ export interface AccountPhotoFieldProps {
   onChange: (file: File | null) => void;
   onRemove?: () => void;
   showRemoveCurrent?: boolean;
-  size?: number;
 }
 
 const ACCEPTED_TYPES = {
@@ -33,6 +32,9 @@ const ACCEPTED_TYPES = {
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
+/** The photo's width and height, in CSS pixels. */
+const PHOTO_SIZE = 96;
+
 export const AccountPhotoField = ({
   value,
   currentUrl,
@@ -40,7 +42,6 @@ export const AccountPhotoField = ({
   onChange,
   onRemove,
   showRemoveCurrent = true,
-  size = 96,
 }: AccountPhotoFieldProps) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export const AccountPhotoField = ({
               // the focus ring.
               isDragActive && "ring-2 ring-primary",
             ),
-            style: { width: size, height: size },
+            style: { width: PHOTO_SIZE, height: PHOTO_SIZE },
           })}
         >
           <img

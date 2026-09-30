@@ -79,10 +79,6 @@ interface AuthContextValue {
   authRequired: boolean;
   /** True when this account may reach the administration area. */
   isAdmin: boolean;
-  /** True while the server refuses data until the password changes. */
-  mustChangePassword: boolean;
-  /** An admin has opened this instance to new accounts. */
-  registrationOpen: boolean;
   /** The deprecated environment `API_TOKEN` is still set on the server. */
   legacyTokenConfigured: boolean;
   /**
@@ -97,8 +93,6 @@ interface AuthContextValue {
    * The server owns these because it also owns the CSP that must allow them.
    */
   mapStyles: MapStyleUrls | null;
-  /** This instance has never been secured. */
-  localOwnerPresent: boolean;
   /**
    * `/api/auth/status` has answered at least once.
    *
@@ -118,10 +112,7 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   authRequired: false,
   isAdmin: false,
-  mustChangePassword: false,
-  registrationOpen: false,
   legacyTokenConfigured: false,
-  localOwnerPresent: false,
   instanceName: "",
   mapStyles: null,
   isResolved: false,
@@ -442,10 +433,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     // re-entered.
     authRequired: state === "unreachable" ? false : authRequired,
     isAdmin: user?.role === "admin",
-    mustChangePassword: user?.mustChangePassword === true,
-    registrationOpen,
     legacyTokenConfigured,
-    localOwnerPresent,
     instanceName,
     mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",

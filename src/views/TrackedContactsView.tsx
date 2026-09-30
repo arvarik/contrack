@@ -262,8 +262,8 @@ export function pastDue(
     Contact,
     "isTracked" | "cadenceDays" | "lastContactedAt" | "trackedAt"
   >,
-  now = Date.now(),
 ): string | null {
+  const now = Date.now();
   if (!contact.isTracked || !(contact.cadenceDays > 0)) return null;
   const clock = parseServerTime(contact.lastContactedAt ?? contact.trackedAt);
   if (!clock) return null;

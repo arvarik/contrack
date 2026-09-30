@@ -96,9 +96,8 @@ export const fetchImport = (id: string): Promise<ImportRecord> =>
 export const fetchImportRows = async (
   id: string,
   status: ImportRow["status"] = "failed",
-  limit = 200,
 ): Promise<ImportRow[]> => {
-  const query = new URLSearchParams({ status, limit: String(limit) });
+  const query = new URLSearchParams({ status, limit: "200" });
   const data = await apiJson<{ rows: ImportRow[] }>(
     `${path(id)}/rows?${query.toString()}`,
   );

@@ -17,14 +17,13 @@ import { EDITABLE_INPUT } from "../../../lib/styles";
  * clear pencil still took its width, and left a gap after every name, role
  * and company on a desktop.
  */
-export const EditHint = ({ className }: { className?: string }) => (
+export const EditHint = () => (
   <Pencil
     aria-hidden="true"
     data-edit-hint=""
     className={cn(
       "w-[0.55em] h-[0.55em] min-w-3 min-h-3 max-w-5 max-h-5 shrink-0 opacity-40",
       "hidden pointer-coarse:inline-block group-focus-visible/edit:inline-block",
-      className,
     )}
   />
 );

@@ -8,26 +8,19 @@
  *   <ContextMenu {...contextMenu} onClose={closeContextMenu} />
  *
  * Items follow the ContextMenuItem interface. Separator items have `separator: true`.
- * Danger items have `danger: true` (rendered in rose).
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
-import {
-  MENU_ITEM,
-  MENU_ITEM_DANGER,
-  MENU_PANEL,
-  MENU_SEPARATOR,
-} from "../../lib/styles";
+import { MENU_ITEM, MENU_PANEL, MENU_SEPARATOR } from "../../lib/styles";
 
 export interface ContextMenuItem {
   id: string;
   label: string;
   icon?: React.ReactNode;
   onClick?: () => void;
-  danger?: boolean;
   disabled?: boolean;
   separator?: boolean;
 }
@@ -120,18 +113,11 @@ export const ContextMenu = ({
                 // tall there and 36 px under a pointer (MENU_ITEM).
                 className={cn(
                   MENU_ITEM,
-                  item.danger && MENU_ITEM_DANGER,
                   "disabled:opacity-40 disabled:cursor-not-allowed",
                 )}
               >
                 {item.icon && (
-                  <span
-                    className={
-                      item.danger ? "text-error" : "text-on-surface-variant"
-                    }
-                  >
-                    {item.icon}
-                  </span>
+                  <span className="text-on-surface-variant">{item.icon}</span>
                 )}
                 {item.label}
               </button>

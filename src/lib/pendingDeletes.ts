@@ -90,9 +90,6 @@ export function useHiddenPendingIds(): ReadonlySet<string> {
   return useSyncExternalStore(subscribe, getHiddenIds, getHiddenIds);
 }
 
-/** Alias for backward compatibility with Timeline. */
-export const useHiddenInteractionIds = useHiddenPendingIds;
-
 /** True while `entry` is still the store's entry for `id`. */
 const isCurrent = (id: string, entry: PendingDelete) =>
   entries.get(id) === entry;

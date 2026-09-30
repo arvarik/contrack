@@ -19,20 +19,17 @@ export const SettingsCallout = ({
   title,
   body,
   children,
-  className,
 }: {
   icon: LucideIcon;
   title: React.ReactNode;
   body: React.ReactNode;
   /** The one action: a `.btn-primary btn-sm`. */
   children: React.ReactNode;
-  className?: string;
 }) => (
   <div
     className={cn(
       CARD,
       "p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 bg-primary/10",
-      className,
     )}
   >
     <div className="flex items-center gap-3 min-w-0">

@@ -27,7 +27,6 @@ export interface ViewsMenuProps {
   onOpenSaveModal: () => void;
   onStartRename: (view: MapView) => void;
   onDeleteView: (view: MapView) => void;
-  className?: string;
   isMobile?: boolean;
 }
 
@@ -45,7 +44,6 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   onOpenSaveModal,
   onStartRename,
   onDeleteView,
-  className,
   isMobile = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -98,7 +96,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   const activeView = views.find((v) => v.id === activeViewId);
 
   return (
-    <div className={cn("relative shrink-0", className)} ref={containerRef}>
+    <div className="relative shrink-0" ref={containerRef}>
       <button
         ref={triggerRef}
         type="button"

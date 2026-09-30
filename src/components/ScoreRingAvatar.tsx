@@ -60,7 +60,6 @@ export interface ScoreRingAvatarProps {
    * reader and has no tooltip, so the score is not said twice.
    */
   decorative?: boolean;
-  className?: string;
 }
 
 export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
@@ -68,7 +67,6 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
   size = 48,
   ring = "list",
   decorative = false,
-  className,
 }) => {
   const strokeWidth = RING_WIDTH[ring];
   const radius = size / 2 - strokeWidth;
@@ -86,10 +84,7 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
 
   return (
     <div
-      className={cn(
-        "relative shrink-0 flex items-center justify-center",
-        className,
-      )}
+      className="relative shrink-0 flex items-center justify-center"
       style={{ width: size, height: size }}
       data-score-band={view.kind === "scored" ? view.band.band : view.kind}
       {...(decorative || !words

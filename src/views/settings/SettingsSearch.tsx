@@ -6,7 +6,7 @@
  * Row results link directly to path#rowId, and on a phone the page slides
  * in over the list (`useSlideNavigate`).
  */
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { findRows, type SettingsSearchHit } from "./registry";
 import { useAuth } from "../../components/auth/AuthGate";
@@ -15,25 +15,18 @@ import { cn } from "../../lib/utils";
 import { SlideLink, useSlideNavigate } from "./slide";
 
 export interface SettingsSearchProps {
-  value?: string;
-  onChange?: (val: string) => void;
+  value: string;
+  onChange: (val: string) => void;
   onSelect?: () => void;
-  variant?: "rail" | "landing";
-  className?: string;
+  variant: "rail" | "landing";
 }
 
 export const SettingsSearch = ({
-  value: controlledValue,
-  onChange: controlledOnChange,
+  value: query,
+  onChange: setQuery,
   onSelect,
-  variant = "landing",
-  className,
+  variant,
 }: SettingsSearchProps) => {
-  const [internalQuery, setInternalQuery] = useState("");
-  const isControlled = controlledValue !== undefined;
-  const query = isControlled ? controlledValue : internalQuery;
-  const setQuery = isControlled ? controlledOnChange! : setInternalQuery;
-
   const slide = useSlideNavigate();
   const { isAdmin, authRequired } = useAuth();
 
@@ -81,7 +74,7 @@ export const SettingsSearch = ({
   };
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className="flex flex-col">
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
         <input

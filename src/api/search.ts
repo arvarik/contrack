@@ -361,19 +361,14 @@ export function interactionSearchQueryString(
  * for the same reason `useSearchContacts` keeps it: a list that empties and
  * refills on every keystroke is a list that jumps.
  */
-export const useInteractionSearch = (
-  params: InteractionSearchParams,
-  enabled = true,
-) => {
-  const active =
-    enabled &&
-    Boolean(
-      params.q.trim() ||
-      params.from ||
-      params.to ||
-      params.type ||
-      params.contactId,
-    );
+export const useInteractionSearch = (params: InteractionSearchParams) => {
+  const active = Boolean(
+    params.q.trim() ||
+    params.from ||
+    params.to ||
+    params.type ||
+    params.contactId,
+  );
   return useQuery({
     queryKey: [...INTERACTION_SEARCH_KEY, params],
     queryFn: async ({ signal }): Promise<InteractionSearchResult> => {

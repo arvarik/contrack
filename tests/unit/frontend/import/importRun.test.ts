@@ -50,7 +50,7 @@ const SUMMARY = {
 };
 
 describe("readImportStream", () => {
-  it("returns the done frame, with the id, the status and the summary", async () => {
+  it("returns the done frame, with the status and the summary", async () => {
     const s = stream();
     const progress: ImportProgress[] = [];
     const reading = readImportStream(s.response, (p) => progress.push(p));
@@ -71,18 +71,14 @@ describe("readImportStream", () => {
 
     expect(await reading).toEqual({
       kind: "done",
-      importId: "imp-1",
       status: "complete",
       summary: SUMMARY,
-      count: 3,
-      failed: 0,
-      repeated: false,
     });
     expect(progress.map((p) => p.phase)).toEqual(["importing", "scanning"]);
     expect(progress[1].autoMerged).toBe(1);
   });
 
-  it("reports a body that ended without done as interrupted, with the id it saw", async () => {
+  it("reports a body that ended without done as interrupted", async () => {
     const s = stream();
     const reading = readImportStream(s.response, () => {});
     s.push(frame({ phase: "accepted", importId: "imp-2" }));
@@ -91,14 +87,14 @@ describe("readImportStream", () => {
 
     // This is the case the old reader got wrong: it returned a count of
     // zero here and the modal showed "Import complete" over it.
-    expect(await reading).toEqual({ kind: "interrupted", importId: "imp-2" });
+    expect(await reading).toEqual({ kind: "interrupted" });
   });
 
-  it("reports interrupted with no id when the connection died before the first frame", async () => {
+  it("reports interrupted when the connection died before the first frame", async () => {
     const s = stream();
     const reading = readImportStream(s.response, () => {});
     s.end();
-    expect(await reading).toEqual({ kind: "interrupted", importId: null });
+    expect(await reading).toEqual({ kind: "interrupted" });
   });
 
   it("stops at the done frame rather than waiting for the body to end", async () => {
@@ -120,7 +116,6 @@ describe("readImportStream", () => {
     const result = await reading;
     expect(result.kind).toBe("done");
     if (result.kind === "done") {
-      expect(result.repeated).toBe(true);
       expect(result.status).toBe("imported");
       expect(result.summary).toBeNull();
     }
@@ -154,7 +149,7 @@ describe("readImportStream", () => {
     s.push(frame({ phase: "mystery" }));
     s.end();
 
-    expect(await reading).toEqual({ kind: "interrupted", importId: null });
+    expect(await reading).toEqual({ kind: "interrupted" });
     expect(progress.map((p) => p.phase)).toEqual(["embedding"]);
   });
 
@@ -166,7 +161,7 @@ describe("readImportStream", () => {
 });
 
 describe("the remembered import", () => {
-  const entry = { importId: "imp-9", fileName: "friends.vcf", startedAt: 5 };
+  const entry = { importId: "imp-9", fileName: "friends.vcf" };
 
   it("is keyed by account, and encoded", () => {
     expect(importKey("acct:1")).toBe(`${IMPORT_KEY_PREFIX}acct%3A1`);

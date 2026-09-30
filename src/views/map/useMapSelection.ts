@@ -32,18 +32,6 @@ export function useMapSelection({
 
   const activeContacts = filteredContacts ?? contacts;
 
-  const toggle = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
   const addMany = useCallback((ids: string[]) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -175,7 +163,6 @@ export function useMapSelection({
     visibleSelectedCount,
     hiddenCount,
     announcement,
-    toggle,
     addMany,
     clear,
     selectInView,

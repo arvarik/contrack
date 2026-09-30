@@ -176,29 +176,14 @@ const firstToast = () => {
 // ---------------------------------------------------------------------------
 
 describe("Field", () => {
-  it("names a group by its label and draws one add button when asked", () => {
-    const onAdd = vi.fn();
-    render(
-      <Field label="Email" onAdd={onAdd} addLabel="Add email">
-        <span>ada@example.com</span>
-      </Field>,
-    );
-    const group = screen.getByRole("group", { name: "Email" });
-    const add = within(group).getByRole("button", { name: "Add email" });
-    expect(add.tagName).toBe("BUTTON");
-    expect(add.getAttribute("type")).toBe("button");
-    expect(add.textContent).toBe("Add");
-    fireEvent.click(add);
-    expect(onAdd).toHaveBeenCalledTimes(1);
-  });
-
-  it("draws no add button without onAdd", () => {
+  it("names a group by its label, holds its children and draws no add button", () => {
     render(
       <Field label="Industry">
         <span>Law</span>
       </Field>,
     );
     const group = screen.getByRole("group", { name: "Industry" });
+    expect(within(group).getByText("Law")).toBeTruthy();
     expect(within(group).queryByRole("button")).toBeNull();
   });
 });

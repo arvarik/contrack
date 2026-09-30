@@ -62,7 +62,6 @@ import { motion, AnimatePresence } from "motion/react";
 export interface ImportPanelProps {
   onComplete?: (summary: ImportSummary) => void;
   onClose?: () => void;
-  className?: string;
 }
 
 export type ImportTab = "apple" | "linkedin" | "facebook" | "google";
@@ -132,11 +131,7 @@ export function persistSource(source: ImportTab) {
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export const ImportPanel = ({
-  onComplete,
-  onClose,
-  className,
-}: ImportPanelProps) => {
+export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   const { user } = useAuth();
   const accountId = user?.id ?? null;
   const [activeTab, setActiveTabState] = useState<ImportTab>(readInitialSource);
@@ -327,7 +322,7 @@ export const ImportPanel = ({
           setProgress(p);
         });
       } catch {
-        result = { kind: "interrupted", importId: id };
+        result = { kind: "interrupted" };
       }
 
       if (
@@ -399,11 +394,7 @@ export const ImportPanel = ({
     pendingRef.current = { id, contacts: newContacts };
     setImportId(id);
     setFileName(file.name);
-    rememberImport(accountId, {
-      importId: id,
-      fileName: file.name,
-      startedAt: Date.now(),
-    });
+    rememberImport(accountId, { importId: id, fileName: file.name });
     if (fileInputRef.current) fileInputRef.current.value = "";
     await runImport(id, newContacts);
   };
@@ -565,7 +556,7 @@ export const ImportPanel = ({
   const canTryAgain = !!importId && pendingRef.current?.id === importId;
 
   return (
-    <div className={cn("w-full space-y-6", className)}>
+    <div className="w-full space-y-6">
       <input
         aria-label="Choose a file to import"
         type="file"

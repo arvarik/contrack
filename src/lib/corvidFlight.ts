@@ -155,7 +155,6 @@ export interface FlightFrame {
 }
 
 export interface FlightPlan {
-  kind: FlightKind;
   /** How long it takes, in ms, from the first crouch to the last settle. */
   duration: number;
   /** Whether it ends on the perch. A flypast ends off screen. */
@@ -492,7 +491,8 @@ function turnAt(a: Point, b: Point, c: Point): number {
  * Centripetal, because the uniform kind loops and cusps when two waypoints
  * fall close together, and a random route will do that sooner or later.
  */
-function spline(points: readonly Point[], perSegment = 28): Point[] {
+function spline(points: readonly Point[]): Point[] {
+  const perSegment = 28;
   const out: Point[] = [points[0]!];
   const n = points.length;
   const at = (i: number): Point => {
@@ -723,15 +723,11 @@ function curvature(points: readonly Point[], i: number): number {
 }
 
 /** Where along the track the bird is at `t` ms from departure. */
-function locate(
-  track: Track,
-  t: number,
-): { point: Point; index: number; s: number } {
+function locate(track: Track, t: number): { point: Point; s: number } {
   const { time, points, length } = track;
-  if (t <= 0) return { point: points[0]!, index: 0, s: 0 };
+  if (t <= 0) return { point: points[0]!, s: 0 };
   const last = time.length - 1;
-  if (t >= time[last]!)
-    return { point: points[last]!, index: last, s: length[last]! };
+  if (t >= time[last]!) return { point: points[last]!, s: length[last]! };
   let lo = 0;
   let hi = last;
   while (hi - lo > 1) {
@@ -744,7 +740,6 @@ function locate(
   const b = points[hi]!;
   return {
     point: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k],
-    index: lo,
     s: length[lo]! + (length[hi]! - length[lo]!) * k,
   };
 }
@@ -1152,7 +1147,7 @@ export function planFlight(req: FlightRequest): FlightPlan {
         `${i === 0 ? "M" : "L"}${px.toFixed(1)} ${py.toFixed(1)}`,
     )
     .join(" ");
-  return { kind: req.kind, duration, lands, route, frame, interruptible };
+  return { duration, lands, route, frame, interruptible };
 }
 
 /**

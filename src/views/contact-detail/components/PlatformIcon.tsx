@@ -31,8 +31,6 @@ export const PLATFORM_COLORS: Record<string, string> = {
   twitter: "text-[#1DA1F2]",
   instagram: "text-[#E4405F]",
   youtube: "text-[#FF0000]",
-  website: "text-on-surface-variant",
-  homepage: "text-on-surface-variant",
 };
 
 /**

@@ -46,8 +46,8 @@ const PIN_CLEARANCE = 30;
 export function formatCardLocalTime(
   lat: number | null | undefined,
   lng: number | null | undefined,
-  now = new Date(),
 ): string | null {
+  const now = new Date();
   if (lat == null || lng == null) return null;
   const tz = timeZoneAt(lat, lng);
   if (!tz) return null;

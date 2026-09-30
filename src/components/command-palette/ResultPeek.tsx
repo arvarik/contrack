@@ -28,7 +28,6 @@ import { DURATION, EASE } from "../../lib/motion";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PeekContact {
-  id: string;
   name: string;
   avatarUrl?: string | null;
   role?: string | null;
@@ -37,7 +36,6 @@ export interface PeekContact {
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
   tags?: Array<{ tag: string }>;
-  updatedAt?: string | null;
 }
 
 interface ResultPeekProps {

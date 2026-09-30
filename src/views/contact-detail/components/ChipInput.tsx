@@ -42,7 +42,6 @@ export interface ChipInputProps {
   noun: string;
   /** The add button's visible text after the plus. Default "Add". */
   addText?: string;
-  className?: string;
 }
 
 export const ChipInput = ({
@@ -51,7 +50,6 @@ export const ChipInput = ({
   onRemove,
   noun,
   addText = "Add",
-  className,
 }: ChipInputProps) => {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -105,10 +103,7 @@ export const ChipInput = ({
   };
 
   return (
-    <div
-      ref={container}
-      className={cn("flex flex-wrap items-center gap-1.5", className)}
-    >
+    <div ref={container} className="flex flex-wrap items-center gap-1.5">
       {chips.map((chip, index) => (
         // No overflow clip: it would clip the remove button's tap box.
         // `max-w-full` and `min-w-0` keep a long word inside the card.

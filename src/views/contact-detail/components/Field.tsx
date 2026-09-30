@@ -24,7 +24,6 @@
 import React, { useId } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "../../../lib/utils";
 import { ADD_BUTTON, FIELD_LABEL } from "../../../lib/styles";
 
 /** The text of a value at rest: 14 px, medium weight, full contrast. */
@@ -38,25 +37,19 @@ export interface AddButtonProps {
   label: string;
   onClick: () => void;
   ref?: React.Ref<HTMLButtonElement>;
-  className?: string;
 }
 
 /**
  * "+ Add" under a field. A caller that moves focus back to it after a form
  * closes passes a `ref`.
  */
-export const AddButton = ({
-  label,
-  onClick,
-  ref,
-  className,
-}: AddButtonProps) => (
+export const AddButton = ({ label, onClick, ref }: AddButtonProps) => (
   <button
     ref={ref}
     type="button"
     aria-label={label}
     onClick={onClick}
-    className={cn(ADD_BUTTON, className)}
+    className={ADD_BUTTON}
   >
     <Plus aria-hidden="true" className="w-4 h-4" />
     Add
@@ -67,41 +60,16 @@ export interface FieldProps {
   /** The name above the value, in sentence case: "Email", "Next follow-up". */
   label: string;
   children?: React.ReactNode;
-  /**
-   * Starts adding a value. When it is given, "+ Add" shows under the value.
-   * A field that draws its own add control (a list of rows, or chips) leaves
-   * it out, so the field has one add button and not two.
-   */
-  onAdd?: () => void;
-  /** The add button's accessible name. Defaults to "Add <label>". */
-  addLabel?: string;
-  className?: string;
 }
 
-export const Field = ({
-  label,
-  children,
-  onAdd,
-  addLabel,
-  className,
-}: FieldProps) => {
+export const Field = ({ label, children }: FieldProps) => {
   const labelId = useId();
   return (
-    <div
-      role="group"
-      aria-labelledby={labelId}
-      className={cn("flex flex-col gap-1", className)}
-    >
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1">
       <span id={labelId} className={FIELD_LABEL}>
         {label}
       </span>
       {children}
-      {onAdd && (
-        <AddButton
-          label={addLabel ?? `Add ${label.toLowerCase()}`}
-          onClick={onAdd}
-        />
-      )}
     </div>
   );
 };

@@ -41,7 +41,6 @@ interface SearchCoverageBarProps {
    * its button would fall onto the body.
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
-  className?: string;
 }
 
 /**
@@ -77,7 +76,6 @@ const CoverageMeter = ({
 export function SearchCoverageBar({
   variant = "card",
   returnFocusRef,
-  className,
 }: SearchCoverageBarProps) {
   const { data: coverage, isLoading } = useSearchCoverage();
   const refreshIndex = useRefreshSearchIndex();
@@ -203,10 +201,7 @@ export function SearchCoverageBar({
           <section
             ref={keepFocus}
             aria-label="Semantic search coverage"
-            className={cn(
-              "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant",
-              className,
-            )}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant"
           >
             <div className="flex items-center gap-2 min-w-0">
               <CoverageMeter
@@ -268,7 +263,6 @@ export function SearchCoverageBar({
           : coverage.failed > 0
             ? "bg-error/5 border-error/20"
             : "bg-surface-container-low border-primary/20",
-        className,
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">

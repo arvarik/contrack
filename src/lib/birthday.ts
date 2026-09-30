@@ -212,16 +212,18 @@ export function getUpcomingBirthdayInfo(
   };
 }
 
+/** How many days ahead the birthday badge looks. */
+const BADGE_WINDOW_DAYS = 30;
+
 /**
- * Returns days until upcoming birthday if within maxDays (default 30), or null.
+ * Returns days until upcoming birthday if within 30 days, or null.
  * Used by BirthdayField badge.
  */
 export function getUpcomingBirthdayDays(
   raw: string | null | undefined,
   now: Date = new Date(),
-  maxDays = 30,
 ): number | null {
   const info = getUpcomingBirthdayInfo(raw, now);
   if (!info) return null;
-  return info.daysUntil <= maxDays ? info.daysUntil : null;
+  return info.daysUntil <= BADGE_WINDOW_DAYS ? info.daysUntil : null;
 }

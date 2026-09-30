@@ -100,7 +100,6 @@ export interface AccountForm {
   values: Values;
   photo: File | null;
   setPhoto: (photo: File | null) => void;
-  errors: Errors;
   isValid: boolean;
   isUsernameSuggested: boolean;
   /** The error to show for a field: only after the user has left it. */
@@ -120,12 +119,10 @@ export interface AccountForm {
   };
 }
 
-export function useAccountForm(initial?: Partial<Values>): AccountForm {
-  const [values, setValues] = useState<Values>({ ...EMPTY, ...initial });
+export function useAccountForm(): AccountForm {
+  const [values, setValues] = useState<Values>({ ...EMPTY });
   const [photo, setPhoto] = useState<File | null>(null);
-  const [usernameEdited, setUsernameEdited] = useState(
-    Boolean(initial?.username),
-  );
+  const [usernameEdited, setUsernameEdited] = useState(false);
   // Only fields the user has left show errors, so the form is not a wall of
   // red before they have typed anything.
   const [touched, setTouched] = useState<
@@ -179,7 +176,6 @@ export function useAccountForm(initial?: Partial<Values>): AccountForm {
     values,
     photo,
     setPhoto,
-    errors,
     isValid: Object.keys(errors).length === 0,
     isUsernameSuggested,
     errorFor: (field) => (touched[field] ? errors[field] : undefined),
@@ -224,15 +220,7 @@ export async function createAccountThenPhoto(
  * `autoFocus` is on the first field because each of the three screens is the
  * whole page with one thing to do on it.
  */
-export const AccountFields = ({
-  form,
-  passwordHint,
-  nameHint = "Optional. Shown in the app",
-}: {
-  form: AccountForm;
-  passwordHint?: string;
-  nameHint?: string;
-}) => {
+export const AccountFields = ({ form }: { form: AccountForm }) => {
   const usernameHint = form.isUsernameSuggested
     ? "Suggested from your email. Change it if you like"
     : "Lowercase letters, numbers, dots, dashes, underscores";
@@ -254,7 +242,7 @@ export const AccountFields = ({
       <AuthField
         id="displayName"
         label="Your name"
-        hint={nameHint}
+        hint="Optional. Shown in the app"
         type="text"
         value={form.values.displayName}
         onChange={form.set("displayName")}
@@ -297,10 +285,7 @@ export const AccountFields = ({
       <AuthField
         id="password"
         label="Password"
-        hint={
-          passwordHint ??
-          `At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble`
-        }
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters. A few random words beats a short scramble`}
         type="password"
         value={form.values.password}
         onChange={form.set("password")}

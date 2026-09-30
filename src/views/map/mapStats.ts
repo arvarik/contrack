@@ -17,7 +17,6 @@ export interface TopBucket {
 }
 
 export interface TimeZoneBucket {
-  offset: string;
   label: string;
   count: number;
   offsetMinutes: number;
@@ -178,9 +177,8 @@ export function computeMapStats(
     }
   }
 
-  const timeZones: TimeZoneBucket[] = Array.from(tzBuckets.entries())
-    .map(([offset, data]) => ({
-      offset,
+  const timeZones: TimeZoneBucket[] = Array.from(tzBuckets.values())
+    .map((data) => ({
       label: data.label,
       count: data.count,
       offsetMinutes: data.offsetMinutes,

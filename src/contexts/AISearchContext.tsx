@@ -14,7 +14,6 @@
  * contact") said what the overlay already showed, and hid part of it.
  * - batch: current batch state (live-updated via SSE)
  * - isVisible: whether the overlay is showing
- * - dismiss(): close the overlay entirely
  * - depthFiguresApply: whether the depths' measured time and cost describe
  *   this instance's research, which they do only when Gemini runs it
  *
@@ -63,7 +62,6 @@ interface AISearchContextValue {
   startSearch: (contactIds: string[], options?: StartSearchOptions) => void;
   batch: AISearchBatch | null;
   isVisible: boolean;
-  dismiss: () => void;
   isStarting: boolean;
   /**
    * Why the last start was refused, when the reason was a limit rather than
@@ -234,7 +232,6 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       startSearch,
       batch,
       isVisible,
-      dismiss,
       isStarting,
       limitMessage,
       clearLimit,
@@ -244,7 +241,6 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       startSearch,
       batch,
       isVisible,
-      dismiss,
       isStarting,
       limitMessage,
       clearLimit,

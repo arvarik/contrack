@@ -31,8 +31,6 @@ export interface SwitchProps {
   label: string;
   disabled?: boolean;
   id?: string;
-  /** Extra classes for the track. */
-  className?: string;
 }
 
 export const Switch = ({
@@ -41,7 +39,6 @@ export const Switch = ({
   label,
   disabled = false,
   id,
-  className,
 }: SwitchProps) => (
   <button
     id={id}
@@ -58,7 +55,6 @@ export const Switch = ({
       checked
         ? "bg-primary"
         : "bg-surface-container-highest ring-1 ring-inset ring-outline-variant",
-      className,
     )}
   >
     <span

@@ -57,7 +57,7 @@ import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { formatDay, parseServerTime } from "../../../lib/datetime";
 import {
   startPendingDelete,
-  useHiddenInteractionIds,
+  useHiddenPendingIds,
 } from "../../../lib/pendingDeletes";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -546,7 +546,7 @@ export const Timeline = ({
   updateInteraction,
   promoteGhost,
 }: TimelineProps) => {
-  const hidden = useHiddenInteractionIds();
+  const hidden = useHiddenPendingIds();
   const completeActionItem = useCompleteActionItem();
   const headingPrefix = useId();
   const [confirming, setConfirming] = useState<Interaction | null>(null);

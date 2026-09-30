@@ -225,16 +225,16 @@ export type MotionName =
   | "doze";
 
 /** A blink: shut in a third of it, and one in five is two blinks. */
-export function makeBlink(rng: Rng, slow = false): Motion {
-  const close = slow ? between(rng, 180, 260) : between(rng, 45, 70);
-  const hold = slow ? between(rng, 120, 220) : between(rng, 20, 45);
-  const open = slow ? between(rng, 220, 320) : between(rng, 60, 90);
+export function makeBlink(rng: Rng): Motion {
+  const close = between(rng, 45, 70);
+  const hold = between(rng, 20, 45);
+  const open = between(rng, 60, 90);
   const moments: { at: number; ease?: Easing; set: Partial<CorvidPose> }[] = [
     { at: close, set: { eye: 0 } },
     { at: close + hold, set: { eye: 0 } },
     { at: close + hold + open, set: { eye: 1 } },
   ];
-  if (!slow && chance(rng, 0.2)) {
+  if (chance(rng, 0.2)) {
     const gap = between(rng, 90, 160);
     const start = close + hold + open + gap;
     moments.push(
@@ -464,7 +464,8 @@ export function makeCaw(rng: Rng): Motion {
 }
 
 /** One small hop on the spot, squashing into it and out of it. */
-export function makeHop(rng: Rng, height = between(rng, 3, 4.5)): Motion {
+export function makeHop(rng: Rng): Motion {
+  const height = between(rng, 3, 4.5);
   const moments = [
     { at: 80, ease: easeOut, set: { crouch: 0.7 } },
     { at: 200, ease: easeOut, set: { crouch: -0.4, y: -height, headAngle: 4 } },

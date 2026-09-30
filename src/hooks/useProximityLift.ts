@@ -48,11 +48,10 @@ export function liftAt(d: number): number {
 
 export function useProximityLift(
   containerRef: RefObject<HTMLElement | null>,
-  enabled = true,
 ): void {
   useEffect(() => {
     const root = containerRef.current;
-    if (!root || !enabled) return;
+    if (!root) return;
 
     const selector = `[${PROXIMITY_ROW_ATTR}]`;
     let frame = 0;
@@ -134,5 +133,5 @@ export function useProximityLift(
       cancelAnimationFrame(frame);
       settle();
     };
-  }, [containerRef, enabled]);
+  }, [containerRef]);
 }
