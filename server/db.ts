@@ -195,7 +195,7 @@ log.info("Database", "Drizzle migrations applied successfully");
 // 2z. Identity — users, sessions, and data ownership
 // =============================================================================
 // Declared here rather than as a Drizzle migration for the same reason
-// `app_settings` is (§9g2): this file is the one place guaranteed to run
+// `app_settings` is (§2z-2): this file is the one place guaranteed to run
 // before any query, and the DDL is trivially idempotent. The tables are still
 // mirrored in src/db/schema.ts so the rest of the app gets Drizzle types.
 //
@@ -291,14 +291,11 @@ if (readTenancyVersion() < 1) {
 // =============================================================================
 // 2z-0. Contacts columns the tenancy block indexes
 // =============================================================================
-// §3, §7, §9a and §9b add these columns further down the file. §2z-4 builds
-// composite indexes over them, so on a fresh database they have to exist by
-// then — Drizzle `0000` ships `isArchived` and `relationshipScore` but not
-// `deletedAt`, `canonicalId`, `phoneticHash` or `searchExpansion`.
-//
-// Adding them here turns the later sections into no-ops. Each of those still
-// guards itself, so no code there changed and an older database that already
-// has the columns takes the same path it always did.
+// §2z-4 builds composite indexes over these columns, so on a fresh database
+// they have to exist by then. Drizzle `0000` ships `isArchived` and
+// `relationshipScore` but not `deletedAt`, `canonicalId`, `phoneticHash` or
+// `searchExpansion`. Each column is added once, here, and only when it is
+// missing.
 //
 // `geoSource` is not indexed by anything. It lives in this loop because it is
 // the one place a contacts column is added once, by name, and guarded.
@@ -367,8 +364,10 @@ for (const column of [
 // =============================================================================
 // 2z-2. Identity tables
 // =============================================================================
-// `app_settings` moves up from §9g2 because §2z-4 stores the tenancy schema
-// version in it. `PRAGMA user_version` already holds FTS_SCHEMA_VERSION and is
+// `app_settings` is created here because §2z-4 stores the tenancy schema
+// version in it. It also backs the AI configuration: provider keys entered
+// through the UI, custom OpenAI-compatible endpoints, capability assignments
+// and cached model lists (see server/services/settingsService.ts). `PRAGMA user_version` already holds FTS_SCHEMA_VERSION and is
 // a single 32-bit field, so a second migration cannot share that slot.
 //
 // `api_tokens`, `invitations`, `user_settings` and `audit_log` are created here
@@ -473,10 +472,8 @@ sqlite.exec(`
 // =============================================================================
 // 2z-3. Dedupe tables
 // =============================================================================
-// Identical DDL to §9c, §9d and §9e, moved up because §2z-4 adds `ownerId` to
-// every owned table and three of them are these. The sections below keep their
-// statements and become no-ops; leaving them in place means an operator
-// reading the dedupe section still finds the schema where they expect it.
+// Created here because §2z-4 adds `ownerId` to every owned table and three of
+// them are these.
 // =============================================================================
 
 sqlite.exec(`
@@ -901,8 +898,8 @@ export function readTenancyVersion(): number {
     const parsed = Number(JSON.parse(row.value));
     return Number.isFinite(parsed) ? parsed : 0;
   } catch {
-    // No app_settings table yet, which means a database from before §9g2 or a
-    // fresh one. Either way the tenancy migration has not run.
+    // No app_settings table yet, which means a fresh database. The tenancy
+    // migration has not run.
     return 0;
   }
 }
@@ -1552,44 +1549,23 @@ try {
 // here with explicit DDL. The index is rebuilt on every startup to ensure
 // consistency with the current data.
 //
-// IMPORTANT: searchExpansion column must exist BEFORE FTS rebuild because
-// the FTS backfill query references c.searchExpansion.
+// The FTS backfill query and the FTS triggers name `searchExpansion` and
+// `deletedAt`. §2z-0 has added both by now.
 // =============================================================================
 
-try {
-  sqlite.exec(`ALTER TABLE contacts ADD COLUMN searchExpansion TEXT`);
-  log.info("Database", "Added searchExpansion column to contacts (pre-FTS)");
-} catch {
-  // Column already exists — expected on subsequent runs
-}
-
-// deletedAt must also exist before the FTS triggers below — they reference
-// it to keep trashed contacts out of the search index.
-try {
-  sqlite.exec(`ALTER TABLE contacts ADD COLUMN deletedAt TEXT`);
-  log.info("Database", "Added deletedAt column to contacts (trash, pre-FTS)");
-} catch {
-  // Column already exists — expected on subsequent runs
-}
 sqlite.exec(
   `CREATE INDEX IF NOT EXISTS idx_contacts_deleted ON contacts(deletedAt)`,
 );
 
-// These columns must exist before the search migration on older installations.
-//
-// `relationshipScore` and `scoreDirty` are here rather than in §7 because §4
-// below builds its trigger from the column list and has to see them. §7 keeps
-// its statement and is a no-op.
-for (const column of [
-  "canonicalId TEXT",
-  "isArchived INTEGER DEFAULT 0",
-  "relationshipScore INTEGER DEFAULT 50",
-  "scoreDirty INTEGER NOT NULL DEFAULT 1",
-]) {
-  const name = column.split(" ")[0];
+// `scoreDirty` is here rather than in §2z-0 because §4 below builds its trigger
+// from the column list and has to see it.
+{
   const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
-  if (!columns.some((c) => c.name === name))
-    sqlite.exec(`ALTER TABLE contacts ADD COLUMN ${column}`);
+  if (!columns.some((c) => c.name === "scoreDirty")) {
+    sqlite.exec(
+      `ALTER TABLE contacts ADD COLUMN scoreDirty INTEGER NOT NULL DEFAULT 1`,
+    );
+  }
 }
 installSearchIndex(sqlite);
 
@@ -1745,24 +1721,12 @@ log.info(
 // =============================================================================
 // 6. Action Items Table + Sync Triggers
 // =============================================================================
-// Creates the action_items table via raw DDL (Drizzle schema defines it for
-// type-safety, but since we have no prod migrations, we ensure it exists here).
-// Three triggers keep contacts.nextFollowUpAt in sync as a denormalized cache
-// set to MIN(dueAt) of pending (non-completed) action items.
+// Drizzle `0000` creates the action_items table. This section adds its two
+// indexes. Three triggers keep contacts.nextFollowUpAt in sync as a
+// denormalized cache set to MIN(dueAt) of pending (non-completed) action items.
 // =============================================================================
 
 sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS action_items (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    interactionId TEXT REFERENCES interactions(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    dueAt TEXT NOT NULL,
-    completedAt TEXT,
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
-
   CREATE INDEX IF NOT EXISTS idx_action_items_contact ON action_items(contactId);
   CREATE INDEX IF NOT EXISTS idx_action_items_due ON action_items(dueAt) WHERE completedAt IS NULL;
 `);
@@ -1868,24 +1832,6 @@ sqlite.exec(`
 log.info("Database", "action_items table + sync triggers installed");
 
 // =============================================================================
-// 7. Ensure relationshipScore column exists on contacts
-// =============================================================================
-// A no-op since story S10: the column is added with the pre-FTS block above,
-// because §4 builds its trigger from the column list and has to see it. The
-// statement stays so an operator reading this section still finds the schema
-// where the section numbering says it is.
-// =============================================================================
-
-try {
-  sqlite.exec(
-    `ALTER TABLE contacts ADD COLUMN relationshipScore INTEGER DEFAULT 50`,
-  );
-  log.info("Database", "Added relationshipScore column to contacts");
-} catch {
-  // Column already exists — expected on subsequent runs
-}
-
-// =============================================================================
 // 8. Backfill: Migrate existing nextFollowUpAt → action_items
 // =============================================================================
 // One-time migration: for contacts with nextFollowUpAt set but no action_items
@@ -1928,79 +1874,13 @@ if (orphanedFollowUps.length > 0) {
 // =============================================================================
 // 9. Deduplication Engine Schema
 // =============================================================================
-// Adds columns for soft-merge + phonetic indexing, plus three new tables for
-// the persistent suggestion system. All statements are idempotent.
+// `canonicalId` and `phoneticHash` are added in §2z-0, and the suggestion,
+// exclusion and merge-log tables are created in §2z-3. Only the phonetic
+// index is made here.
 // =============================================================================
 
-// 9a. Soft-merge column: canonicalId points to the primary contact for merged dupes.
-// NULL = active contact. Non-null = this contact has been subsumed.
-try {
-  sqlite.exec(`ALTER TABLE contacts ADD COLUMN canonicalId TEXT`);
-  log.info("Database", "Added canonicalId column to contacts");
-} catch {
-  // Column already exists — expected on subsequent runs
-}
-
-// 9b. Phonetic blocking index: Double Metaphone hash for O(1) phonetic lookups.
-try {
-  sqlite.exec(`ALTER TABLE contacts ADD COLUMN phoneticHash TEXT`);
-  log.info("Database", "Added phoneticHash column to contacts");
-} catch {
-  // Column already exists — expected on subsequent runs
-}
 sqlite.exec(
   `CREATE INDEX IF NOT EXISTS idx_contacts_phonetic ON contacts(phoneticHash)`,
-);
-
-// 9c. Persistent suggestion storage
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS dedupe_suggestions (
-    id TEXT PRIMARY KEY,
-    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    matchType TEXT NOT NULL,
-    confidence REAL NOT NULL,
-    reasoning TEXT NOT NULL,
-    matchedField TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    reviewedAt TEXT,
-    reviewedBy TEXT,
-    UNIQUE(contactIdA, contactIdB)
-  );
-  CREATE INDEX IF NOT EXISTS idx_dedupe_status ON dedupe_suggestions(status);
-  CREATE INDEX IF NOT EXISTS idx_dedupe_confidence ON dedupe_suggestions(confidence DESC);
-`);
-
-// 9d. Never-merge exclusions
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS dedupe_exclusions (
-    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (contactIdA, contactIdB)
-  );
-`);
-
-// 9e. Merge audit log
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS dedupe_merge_log (
-    id TEXT PRIMARY KEY,
-    primaryId TEXT NOT NULL,
-    duplicateId TEXT NOT NULL,
-    mergedBy TEXT NOT NULL,
-    mergeType TEXT NOT NULL,
-    confidence REAL NOT NULL,
-    reasoning TEXT NOT NULL,
-    mergedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    undoneAt TEXT,
-    duplicateSnapshot TEXT
-  );
-`);
-
-log.info(
-  "Database",
-  "Dedupe schema ready (suggestions, exclusions, merge_log)",
 );
 
 // 9f. Contact embedding vector storage (requires sqlite-vec loaded above)
@@ -2411,22 +2291,6 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS dedupe_embedding_meta (
     contactId TEXT PRIMARY KEY,
     embeddedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-`);
-
-// =============================================================================
-// 9g2. App settings (key/value JSON)
-// =============================================================================
-// Backs AI capability configuration: provider keys entered through the UI,
-// custom OpenAI-compatible endpoints, capability assignments, and cached
-// model lists. See server/services/settingsService.ts.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS app_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
   );
 `);
 
