@@ -50,7 +50,7 @@ import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
-import { useSession } from "../contexts/SessionContext";
+import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
@@ -88,7 +88,7 @@ export const SearchView = () => {
     setLastAISearchData,
     lastAISearchPhase,
     setLastAISearchPhase,
-  } = useSession();
+  } = useAISearchSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
   /**

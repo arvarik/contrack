@@ -331,17 +331,6 @@ export interface ActionItem {
 // Dedupe Engine Types
 // =============================================================================
 
-/** @deprecated Pairwise suggestion — kept for backward compat during Phase 3 migration. */
-export interface DedupeSuggestion {
-  id: string;
-  contactA: Contact;
-  contactB: Contact;
-  matchType: "email" | "phone" | "ai";
-  confidence: number;
-  reasoning: string;
-  matchedField?: string;
-}
-
 /**
  * A persisted dedupe suggestion row from /api/dedupe/suggestions.
  * Mirrors the server's DedupeSuggestion (server/services/dedupe/suggestions.ts).
@@ -439,8 +428,7 @@ export interface DedupeCluster {
   requiresConfirmation: boolean;
 }
 
-export type DedupeScanMode =
-  "deterministic" | "ai" | "both" | "quick" | "deep" | "full";
+export type DedupeScanMode = "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
   | "normalizing"
@@ -467,7 +455,6 @@ export interface DedupeScanProgress {
   scoringAutoMerge: number;
   scoringAiQueue: number;
   scoringDiscarded: number;
-  suggestions: DedupeSuggestion[]; // Deprecated — kept for backward compat only
   clustersFound: number;
   totalPairs: number;
   autoMerged: number;

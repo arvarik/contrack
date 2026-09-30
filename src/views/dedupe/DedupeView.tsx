@@ -541,10 +541,7 @@ export const DedupeView = () => {
 
                       {/* Phase pipeline */}
                       <div className="space-y-2">
-                        {/* Every mode runs the exact-match pass. The
-                              rows used to test the old mode names only
-                              (deterministic, ai, both), so the three modes
-                              the picker offers showed neither row. */}
+                        {/* Every mode runs the exact-match pass. */}
                         <PhaseRow
                           icon={<Shield className="w-3.5 h-3.5" />}
                           label="Exact matches"

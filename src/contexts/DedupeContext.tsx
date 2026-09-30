@@ -248,7 +248,6 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               scoringAutoMerge: 0,
               scoringAiQueue: 0,
               scoringDiscarded: 0,
-              suggestions: [],
               clustersFound: 0,
               totalPairs: 0,
               autoMerged: 0,

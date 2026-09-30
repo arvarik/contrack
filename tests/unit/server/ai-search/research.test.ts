@@ -41,7 +41,6 @@ import {
 } from "../../../../server/services/aiSearch/normalize.ts";
 import { resolveRedirects } from "../../../../server/ai/citations.ts";
 import {
-  isLegacyDossier,
   parseResearchRecord,
   sourceForSite,
   type ResearchRecord,
@@ -722,17 +721,5 @@ describe("the research record", () => {
     expect(sourceForSite("Fellows", EARLIER.sources)).toBe(fellowsPage);
     expect(sourceForSite("linkedin.com", EARLIER.sources)).toBeNull();
     expect(sourceForSite(undefined, EARLIER.sources)).toBeNull();
-  });
-
-  it("knows the dossier the old merge wrote", () => {
-    expect(
-      isLegacyDossier(
-        "About.\n\n### Sources\n- [Source 1](<https://vertexaisearch.cloud.google.com/grounding-api-redirect/X>)",
-      ),
-    ).toBe(true);
-    expect(isLegacyDossier("Notes from a call.\n\n[Site](https://a.com)")).toBe(
-      false,
-    );
-    expect(isLegacyDossier(null)).toBe(false);
   });
 });

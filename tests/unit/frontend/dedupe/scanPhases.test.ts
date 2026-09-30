@@ -11,8 +11,7 @@ import {
 describe("runsAiPass", () => {
   it("is true for every mode but Quick, as the server resolves them", () => {
     expect(runsAiPass("quick")).toBe(false);
-    expect(runsAiPass("deterministic")).toBe(false);
-    for (const mode of ["deep", "full", "ai", "both"] as const) {
+    for (const mode of ["deep", "full"] as const) {
       expect(runsAiPass(mode)).toBe(true);
     }
   });

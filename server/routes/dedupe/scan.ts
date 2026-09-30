@@ -51,14 +51,7 @@ export function registerScanRoutes(router: Router) {
       const rid = req.requestId;
       const { mode = "deep", autoMergeThreshold } = req.body;
 
-      const validModes = [
-        "deterministic",
-        "ai",
-        "both",
-        "quick",
-        "deep",
-        "full",
-      ];
+      const validModes = ["quick", "deep", "full"];
       if (!validModes.includes(mode)) {
         throw new AppError(
           `mode must be one of: ${validModes.join(", ")}`,

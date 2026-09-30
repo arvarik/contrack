@@ -1360,7 +1360,7 @@ Trigger a full deduplication scan. Streams progress via SSE.
 }
 ```
 
-Supported modes: `deterministic`, `ai`, `both`, `quick`, `deep`, `full`.
+Supported modes: `quick`, `deep`, `full`. Any other value answers `400`.
 
 The scan merges pairs at or above the account's sensitivity preset
 (`dedupePreset` in `GET /api/auth/preferences`), which is the same threshold

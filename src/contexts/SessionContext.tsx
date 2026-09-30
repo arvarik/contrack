@@ -2,22 +2,15 @@
  * SessionContext — split into TWO narrow contexts so unrelated consumers
  * stop re-rendering on each other's updates.
  *
- * Before (single provider, 5 fields):
- *   typing into the AI search bar updated `lastAISearchQuery` on every
- *   keystroke. That recreated the context value → React broadcast it to
- *   every `useSession()` consumer → `Sidebar` and `App` re-rendered on
- *   every keystroke even though they only read `lastContactId`.
- *
- * After:
+ * One provider would broadcast every keystroke of the AI search bar to every
+ * consumer, so `Sidebar` and `App` would re-render on each one even though
+ * they only read `lastContactId`. Two contexts keep the two apart:
  *   - RecentContext  → `lastContactId` (Sidebar + App)
  *   - AISearchSessionContext → AI-search transcript fields (SearchView only)
  *
  * Provider values are also memoized with `useMemo` so an outer-tree re-render
  * (e.g. parent state change unrelated to either context) does NOT recreate
- * the value reference and re-fire all consumers. The compatibility shim
- * `useSession()` is preserved for the existing call sites that read multiple
- * fields — it now reads from both contexts but does NOT broadcast updates
- * across the boundary.
+ * the value reference and re-fire all consumers.
  */
 import React, {
   createContext,
@@ -112,24 +105,4 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       </AISearchSessionContext.Provider>
     </RecentContext.Provider>
   );
-}
-
-// =============================================================================
-// Compatibility Shim
-// =============================================================================
-// Existing call sites destructure `lastContactId, setLastContactId,
-// lastAISearchQuery, ...` from a single `useSession()`. We keep that API
-// alive but route reads through BOTH inner contexts. Components that only
-// read from one slice should migrate to `useRecent()` / `useAISearchSession()`
-// to gain the re-render isolation; the shim itself will re-render on any
-// change in either slice (same behavior as the old monolithic provider for
-// that one component, but the rest of the app no longer pays the cost).
-
-export function useSession() {
-  const recent = useRecent();
-  const ai = useAISearchSession();
-  return {
-    ...recent,
-    ...ai,
-  };
 }

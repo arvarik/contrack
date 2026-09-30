@@ -3,7 +3,6 @@ import {
   Routes,
   Route,
   Link,
-  Navigate,
   useMatch,
   useLocation,
 } from "react-router-dom";
@@ -229,18 +228,6 @@ const ResponsiveLayout = () => {
       ))}
     </nav>
   );
-
-  // The Tracked contacts page is a settings page. Its old path, from
-  // bookmarks and from links made before it moved, leads there with its
-  // hash (`#at-risk`), so the group it named is still where it lands.
-  if (location.pathname === "/tracked") {
-    return (
-      <Navigate
-        to={{ pathname: "/settings/tracked", hash: location.hash }}
-        replace
-      />
-    );
-  }
 
   // Full-page views (cleanup, search, pulse) take the full main area
   if (isCleanup || isSearch || isPulse) {

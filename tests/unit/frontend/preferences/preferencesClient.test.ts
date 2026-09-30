@@ -11,21 +11,20 @@
 // copy fresh on every call, so one account's history never lands in another
 // account's default.
 //
-// The second is the one-time move out of localStorage. It runs once per
-// browser, reads values written by older versions of this app, and then
-// deletes them. Deleting them is the point: `localStorage` is keyed by origin,
-// so whatever is left is readable by whoever signs in next.
+// The second is the removal of the keys 1.x kept in localStorage. 2.0 does not
+// read them. Deleting them is the point: `localStorage` is keyed by origin, so
+// whatever is left is readable by whoever signs in next.
 // =============================================================================
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   isDefaultValue,
   DEFAULT_PREFERENCES,
 } from "../../../../src/api/preferences";
 import {
+  forgetLegacyKeys,
   LEGACY_KEYS,
-  takeLocalPreferences,
-} from "../../../../src/lib/localPreferenceMigration";
+} from "../../../../src/lib/forgetLegacyKeys";
 import { defaultPreferences } from "../../../../server/services/userPreferencesService.ts";
 
 beforeEach(() => {
@@ -49,121 +48,40 @@ describe("the server's defaults", () => {
   });
 });
 
-describe("takeLocalPreferences", () => {
-  it("finds nothing in a browser that has nothing", () => {
-    expect(takeLocalPreferences([])).toEqual({});
-  });
-
-  it("reads every key an older version could have written", () => {
-    localStorage.setItem(LEGACY_KEYS.listDensity, "compact");
-    localStorage.setItem(LEGACY_KEYS.recentLimit, "7");
-    localStorage.setItem(
-      LEGACY_KEYS.dedupePreset,
-      JSON.stringify({ preset: "conservative" }),
-    );
-    localStorage.setItem(LEGACY_KEYS.tempUnit, "fahrenheit");
-    localStorage.setItem(
-      LEGACY_KEYS.searchHistory,
-      JSON.stringify([{ query: "vcs in sf", mode: "ai", timestamp: 12 }]),
-    );
-
-    expect(takeLocalPreferences([])).toEqual({
-      listDensity: "compact",
-      recentLimit: 7,
-      dedupePreset: "conservative",
-      tempUnit: "fahrenheit",
-      searchHistory: [{ query: "vcs in sf", mode: "ai", timestamp: 12 }],
-    });
-  });
-
-  it("understands the dedupe blob from before the slider was removed", () => {
-    // The old shape held a raw threshold. Dropping it would silently reset
-    // anybody who has not opened the dedupe settings since.
-    for (const [threshold, preset] of [
-      [0.88, "aggressive"],
-      [0.9, "aggressive"],
-      [0.93, "default"],
-      [0.97, "conservative"],
-    ] as const) {
-      localStorage.clear();
-      localStorage.setItem(
-        LEGACY_KEYS.dedupePreset,
-        JSON.stringify({ autoMergeThreshold: threshold }),
-      );
-      expect(takeLocalPreferences([]).dedupePreset, String(threshold)).toBe(
-        preset,
-      );
-    }
-  });
-
-  it("does not overwrite a choice the account already made elsewhere", () => {
-    // The server's value came from a device somebody used deliberately. A
-    // stale local one arriving behind it would read as "my phone reset my
-    // laptop".
-    localStorage.setItem(LEGACY_KEYS.listDensity, "compact");
-    localStorage.setItem(LEGACY_KEYS.tempUnit, "fahrenheit");
-
-    expect(takeLocalPreferences(["listDensity"])).toEqual({
-      tempUnit: "fahrenheit",
-    });
-  });
-
-  it("removes every key, including the ones it did not send", () => {
-    // A key skipped because the account had already chosen is exactly the key
-    // that must not be left lying in a shared browser.
+describe("forgetLegacyKeys", () => {
+  it("removes every key 1.x wrote", () => {
     for (const key of Object.values(LEGACY_KEYS)) {
       localStorage.setItem(key, "compact");
     }
-    takeLocalPreferences(["listDensity", "tempUnit"]);
+    forgetLegacyKeys();
     for (const key of Object.values(LEGACY_KEYS)) {
       expect(localStorage.getItem(key), key).toBeNull();
     }
   });
 
-  it("drops values it cannot make sense of", () => {
-    localStorage.setItem(LEGACY_KEYS.listDensity, "roomy");
-    localStorage.setItem(LEGACY_KEYS.recentLimit, "not a number");
-    localStorage.setItem(LEGACY_KEYS.dedupePreset, "{broken");
-    localStorage.setItem(LEGACY_KEYS.tempUnit, "kelvin");
-    localStorage.setItem(LEGACY_KEYS.searchHistory, '"a string"');
-
-    expect(takeLocalPreferences([])).toEqual({});
+  it("leaves every other key alone", () => {
+    localStorage.setItem("contrack_list_density", "compact");
+    localStorage.setItem("contrack:theme-cache", "kept");
+    forgetLegacyKeys();
+    expect(localStorage.getItem("contrack:theme-cache")).toBe("kept");
   });
 
-  it("clamps a recent limit an older build allowed", () => {
-    localStorage.setItem(LEGACY_KEYS.recentLimit, "99");
-    expect(takeLocalPreferences([]).recentLimit).toBe(10);
-    localStorage.setItem(LEGACY_KEYS.recentLimit, "-4");
-    expect(takeLocalPreferences([]).recentLimit).toBe(0);
+  it("does nothing in a browser that has nothing", () => {
+    expect(() => forgetLegacyKeys()).not.toThrow();
+    expect(localStorage.length).toBe(0);
   });
 
-  it("sends a search history the server will accept", () => {
-    // The server refuses more than twenty entries, a query past 200 characters,
-    // and a mode it does not know. A migration that sent any of those would be
-    // refused as a whole and the history would be lost rather than trimmed.
-    const entries = Array.from({ length: 40 }, (_, i) => ({
-      query: "q".repeat(400) + i,
-      mode: "normal",
-      timestamp: i,
-    }));
-    entries.push({ query: "", mode: "normal", timestamp: 1 });
-    entries.push({ query: "fine", mode: "telepathy", timestamp: 1 });
-    localStorage.setItem(LEGACY_KEYS.searchHistory, JSON.stringify(entries));
-
-    const history = takeLocalPreferences([]).searchHistory!;
-    expect(history).toHaveLength(20);
-    for (const entry of history) {
-      expect(entry.query.length).toBeLessThanOrEqual(200);
-      expect(["normal", "ai", "action"]).toContain(entry.mode);
-      expect(Number.isInteger(entry.timestamp)).toBe(true);
+  it("survives storage that refuses", () => {
+    const spy = vi
+      .spyOn(Storage.prototype, "removeItem")
+      .mockImplementation(() => {
+        throw new Error("storage is unavailable");
+      });
+    try {
+      expect(() => forgetLegacyKeys()).not.toThrow();
+    } finally {
+      spy.mockRestore();
     }
-  });
-
-  it("does not send an empty history, which would count as a choice", () => {
-    // Storing `[]` marks the key as chosen, and the account would then never
-    // migrate a real history from another browser.
-    localStorage.setItem(LEGACY_KEYS.searchHistory, "[]");
-    expect(takeLocalPreferences([])).toEqual({});
   });
 });
 

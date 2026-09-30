@@ -234,13 +234,3 @@ export function sourceForSite(
   }
   return loose;
 }
-
-/**
- * The dossier the enrichment merge wrote until 2026-09-26: a copy of the
- * about, career and education cards, and its sources as "Source 1" links to
- * Google redirects. The dossier tab builds those parts from the fields
- * themselves, and the next enrichment replaces this text with a record.
- */
-export function isLegacyDossier(text: string | null | undefined): boolean {
-  return !!text && /\n### Sources\n- \[Source 1\]\(</.test(text);
-}

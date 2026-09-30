@@ -74,13 +74,13 @@ async function seed(
   return createdIds;
 }
 
-/** A deterministic scan, with auto-merge on at the shipped threshold. */
+/** A quick scan (exact matches only), with auto-merge on at the shipped threshold. */
 async function scan(): Promise<void> {
-  const scan = dedupeQueue.createScan(scope, "deterministic");
+  const scan = dedupeQueue.createScan(scope, "quick");
   await dedupeService.runScan(
     scope,
     scan.scanId,
-    "deterministic",
+    "quick",
     "test",
     DEFAULT_AUTO_MERGE_THRESHOLD,
   );

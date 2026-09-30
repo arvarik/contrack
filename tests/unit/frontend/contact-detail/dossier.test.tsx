@@ -138,25 +138,6 @@ describe("the Research card", () => {
     expect(screen.getByText("Sources")).toBeTruthy();
   });
 
-  it("says the old dossier kept no pages, and does not show its copy of the cards", () => {
-    render(
-      <DossierTab
-        contact={
-          {
-            id: "test",
-            name: "Test",
-            aiHydratedAt: "2026-09-26T22:21:58.046Z",
-            aiBackground:
-              "Copied about.\n\n### Sources\n- [Source 1](<https://vertexaisearch.cloud.google.com/grounding-api-redirect/X>)",
-          } as Contact
-        }
-      />,
-    );
-    expect(screen.getByText(/kept no list of the pages it read/)).toBeTruthy();
-    expect(screen.queryByText("Copied about.")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Source 1" })).toBeNull();
-  });
-
   it("shows notes from elsewhere as they were written, and opens their links outside the app", () => {
     render(
       <DossierTab

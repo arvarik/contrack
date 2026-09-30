@@ -43,21 +43,6 @@ import { getErrorMessage } from "../../utils/helpers.ts";
  */
 export { DEFAULT_AUTO_MERGE_THRESHOLD };
 
-function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
-  switch (mode) {
-    case "quick":
-    case "deterministic":
-      return "quick";
-    case "full":
-      return "full";
-    case "deep":
-    case "ai":
-    case "both":
-    default:
-      return "deep";
-  }
-}
-
 /**
  * Persist the pairs one contact produced.
  *
@@ -198,7 +183,6 @@ export const dedupeService = {
     requestedThreshold?: number,
   ): Promise<void> {
     dedupeQueue.setProcessing(true);
-    const resolved = resolveMode(mode);
     // The account's preset unless the caller named a number. The same
     // resolution the import and the single-contact check make, so a preset
     // chosen in Settings governs every path that merges.
@@ -224,21 +208,21 @@ export const dedupeService = {
         return;
       }
 
-      if (resolved !== "quick" && isEmbeddingAvailable()) {
+      if (mode !== "quick" && isEmbeddingAvailable()) {
         const existingCount = getEmbeddingCount(scope);
-        const needsBackfill = resolved === "full" || existingCount === 0;
+        const needsBackfill = mode === "full" || existingCount === 0;
 
         if (needsBackfill) {
           dedupeQueue.update(scanId, {
             phase: "normalizing",
             phaseName:
-              resolved === "full"
+              mode === "full"
                 ? "Re-embedding all contacts…"
                 : "Generating contact embeddings…",
           });
 
           try {
-            if (resolved === "full") {
+            if (mode === "full") {
               clearOwnerEmbeddings(scope);
               log.info(
                 "DedupeService",
@@ -296,7 +280,7 @@ export const dedupeService = {
             embeddingsReady = getEmbeddingCount(scope) > 0;
           }
         }
-      } else if (resolved !== "quick") {
+      } else if (mode !== "quick") {
         log.warn(
           "DedupeService",
           `[${rid}] Gemini API unavailable — skipping embedding-based blocking`,
@@ -319,7 +303,7 @@ export const dedupeService = {
         contactsScanned: ctx.allContacts.length,
       });
 
-      if (resolved !== "quick") {
+      if (mode !== "quick") {
         const funnelResults = await runFunnelPass(ctx, scanId, embeddingsReady);
         allPairs.push(...funnelResults);
 

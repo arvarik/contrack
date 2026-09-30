@@ -30,7 +30,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -46,7 +45,7 @@ import {
   type PreferencesResponse,
 } from "../api/preferences";
 import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
-import { takeLocalPreferences } from "../lib/localPreferenceMigration";
+import { forgetLegacyKeys } from "../lib/forgetLegacyKeys";
 
 const QUERY_KEY = ["preferences"] as const;
 
@@ -253,18 +252,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     [resetMutate],
   );
 
-  // ── The one-time move out of localStorage ────────────────────────────────
-  // Runs once, after the account's own answer arrives, and only for keys the
-  // account has not chosen on some other device. Then the local keys are
-  // removed, which is what closes the leak between two accounts on one
-  // browser: whatever is left behind cannot be read by the next person.
-  const migrated = useRef(false);
+  // ── The keys 1.x left behind ─────────────────────────────────────────────
+  // 2.0 does not read them. Removing them closes the leak between two
+  // accounts on one browser: whatever is left cannot be read by the next
+  // person.
   useEffect(() => {
-    if (!isSuccess || !data || migrated.current) return;
-    migrated.current = true;
-    const local = takeLocalPreferences(data.stored);
-    if (Object.keys(local).length > 0) mutate(local);
-  }, [isSuccess, data, mutate]);
+    forgetLegacyKeys();
+  }, []);
 
   // ── Painting it ──────────────────────────────────────────────────────────
   // `mode` is derived, not stored. Keeping it in `useState` and setting it from
