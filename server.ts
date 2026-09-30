@@ -105,12 +105,12 @@ if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
       `AI providers from env: ${keyed.join(", ")} (default: ${(process.env.AI_PROVIDER ?? "gemini").toLowerCase()})`,
     );
   } else {
-    // Keys stored through Settings → AI and custom endpoints live in the
-    // database, so "no env key" is not "no AI" — say what to do, not that
+    // Keys stored through the AI providers page and custom endpoints live in
+    // the database, so "no env key" is not "no AI" — say what to do, not that
     // something is wrong.
     log.info(
       "Server",
-      "No AI provider key in the environment. Connect one in Settings → AI (API key or OpenAI-compatible endpoint) — until then AI features degrade gracefully and local semantic search still works.",
+      "No AI provider key in the environment. Connect one in Settings → Administration → AI providers (API key or OpenAI-compatible endpoint) — until then AI features degrade gracefully and local semantic search still works.",
     );
   }
 }
@@ -270,8 +270,9 @@ async function startServer() {
   }
 
   // ── AI model catalogs ───────────────────────────────────────────────────
-  // Populate the per-provider model lists that Settings → AI offers, so the
-  // dropdowns are filled on first open rather than after a manual refresh.
+  // Populate the per-provider model lists that the AI providers page offers,
+  // so the dropdowns are filled on first open rather than after a manual
+  // refresh.
   // Only providers whose cache is missing or older than the TTL are fetched,
   // and every failure is swallowed — discovery is never on a critical path.
   const refreshModelCatalogs = () =>

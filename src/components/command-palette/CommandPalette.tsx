@@ -51,6 +51,7 @@ import {
   GROUP_HEADING_EMERALD,
   ITEM_CURRENT,
   MATCH_BADGE,
+  insightPath,
 } from "./utils";
 import { AIShimmerRow, AIResultCard } from "./AiComponents";
 import { ZeroStateView } from "./ZeroStateView";
@@ -454,15 +455,11 @@ export const CommandPalette = () => {
 
   const handleSelectInsight = useCallback(
     (insight: ZeroStateInsight) => {
-      if (insight.type === "action_items") {
-        navigate("/pulse");
-      } else if (insight.type === "stale_data") {
-        navigate("/settings");
-      } else if (insight.type === "dedupe") {
-        navigate("/pulse/duplicates");
-      } else if (insight.contact) {
-        recordVisit(insight.contact.id);
-        navigate(`/contact/${insight.contact.id}`);
+      const path = insightPath(insight);
+      if (path) {
+        // A row that names a contact counts as a visit to it.
+        if (insight.contact) recordVisit(insight.contact.id);
+        navigate(path);
       }
       handleClose();
     },

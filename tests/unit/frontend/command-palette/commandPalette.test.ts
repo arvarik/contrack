@@ -5,8 +5,10 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   getMode,
+  insightPath,
   stripModePrefix,
 } from "../../../../src/components/command-palette/utils";
+import type { ZeroStateInsight } from "../../../../src/types";
 import { useSearchHistory } from "../../../../src/hooks/useSearchHistory";
 import { resetLastRecorded } from "../../../../src/api/searchHistory";
 import type { HistoryEntry } from "../../../../shared/searchHistory";
@@ -427,5 +429,36 @@ describe("ZeroStateView", () => {
     // Selecting the notes entry passes "quarterly sync" and "notes"
     fireEvent.click(screen.getByText("quarterly sync"));
     expect(onSelectHistory).toHaveBeenCalledWith("quarterly sync", "notes");
+  });
+});
+
+describe("insightPath", () => {
+  const insight = (
+    type: ZeroStateInsight["type"],
+    extra: Partial<ZeroStateInsight> = {},
+  ): ZeroStateInsight => ({ type, label: "", ...extra });
+
+  it("opens the contacts that are stale as a filtered list, not Settings", () => {
+    // The same address as the stale row on Pulse.
+    expect(insightPath(insight("stale_data", { count: 4 }))).toBe(
+      "/?q=updated:>6m",
+    );
+  });
+
+  it("sends the other counted insights to the page that lists them", () => {
+    expect(insightPath(insight("action_items", { count: 2 }))).toBe("/pulse");
+    expect(insightPath(insight("dedupe", { count: 1 }))).toBe(
+      "/pulse/duplicates",
+    );
+  });
+
+  it("opens the contact that a catch-up or a ghost names", () => {
+    const contact = { id: "c-9", name: "Ada Lovelace", avatarUrl: null };
+    expect(insightPath(insight("catch_up", { contact }))).toBe("/contact/c-9");
+    expect(insightPath(insight("ghost", { contact }))).toBe("/contact/c-9");
+  });
+
+  it("has nowhere to go for an insight with no contact", () => {
+    expect(insightPath(insight("ghost"))).toBeNull();
   });
 });

@@ -2,12 +2,13 @@
  * undoToast — the one place that describes a deletion to the user.
  *
  * Deleting a contact in Contrack is a soft delete: the row gets a `deletedAt`
- * stamp and sits in Trash for 30 days. The UI did not say so. The bulk-delete
- * dialog claimed "Permanently delete N contacts… This cannot be undone", and
- * the archived view's success toast said "Permanently deleted" — both plainly
- * false, and false in the expensive direction. Telling someone a reversible
- * action is irreversible makes them hedge: they archive things they meant to
- * delete, and the list they came to tidy stays untidy.
+ * stamp and sits in Trash for the retention an admin sets, 30 days unless they
+ * change it. The UI did not say so. The bulk-delete dialog claimed
+ * "Permanently delete N contacts… This cannot be undone", and the archived
+ * view's success toast said "Permanently deleted" — both plainly false, and
+ * false in the expensive direction. Telling someone a reversible action is
+ * irreversible makes them hedge: they archive things they meant to delete, and
+ * the list they came to tidy stays untidy.
  *
  * A confirmation dialog is also the wrong control here. It taxes every correct
  * deletion — the overwhelming majority — to guard against a rare mistake that
@@ -33,6 +34,11 @@ interface UndoableDeleteOptions {
   count: number;
   /** Used instead of a count when exactly one contact is named. */
   name?: string;
+  /**
+   * How long Trash keeps them. The server answers it with the delete, because
+   * an admin sets it and a member cannot read that setting.
+   */
+  retentionDays: number;
   /** Put them back. */
   onUndo: () => void;
 }
@@ -46,12 +52,14 @@ interface UndoableDeleteOptions {
 export function toastUndoableDelete({
   count,
   name,
+  retentionDays,
   onUndo,
 }: UndoableDeleteOptions): void {
   const subject = name ?? `${count} contact${count === 1 ? "" : "s"}`;
+  const kept = `${retentionDays} ${retentionDays === 1 ? "day" : "days"}`;
 
   toast.success(`${subject} moved to Trash`, {
-    description: "Restorable for 30 days",
+    description: `Restorable for ${kept}`,
     duration: UNDO_DURATION_MS,
     action: {
       label: "Undo",

@@ -22,6 +22,7 @@
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { SessionMethod } from "../../shared/devices";
 import type { MapStyleUrls } from "../../shared/geo";
 import {
   ApiError,
@@ -124,7 +125,7 @@ export interface SessionSummary {
   lastSeenAt: string;
   userAgent: string | null;
   current: boolean;
-  method?: string | null;
+  method?: SessionMethod | null;
 }
 
 /**

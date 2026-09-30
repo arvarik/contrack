@@ -78,7 +78,7 @@ export const ForgotPassword = ({
           <p>
             If you run the server,{" "}
             <code className="px-1.5 py-0.5 rounded bg-surface-container font-mono text-xs text-on-surface">
-              npx tsx scripts/reset-password.ts &lt;username&gt;
+              node scripts/reset-password.ts &lt;username&gt;
             </code>{" "}
             prints a temporary password
           </p>

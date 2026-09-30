@@ -261,7 +261,7 @@ export const ContactProfile = ({
   /**
    * Delete and leave, offering undo — the modal that used to sit in front of
    * this said "Permanently delete… This action cannot be undone", which was
-   * false: the mutation is a soft delete into a 30-day Trash, and this handler
+   * false: the mutation is a soft delete into Trash, and this handler
    * already offered an Undo toast underneath the dialog that denied one
    * existed. Same trade as the bulk path; see lib/undoToast.
    */
@@ -269,10 +269,11 @@ export const ContactProfile = ({
     if (!id || !contact) return;
     const name = contact.name;
     deleteContact.mutate(id, {
-      onSuccess: () => {
+      onSuccess: ({ retentionDays }) => {
         toastUndoableDelete({
           count: 1,
           name,
+          retentionDays,
           onUndo: () => {
             restoreContact.mutate(id, {
               onSuccess: () => navigate(`/contact/${id}`),

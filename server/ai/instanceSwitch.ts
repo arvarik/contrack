@@ -8,7 +8,8 @@
 // Two things turn AI off for the instance:
 //   - AI_DISABLED=true (or 1) in the server's environment. It wins: while it
 //     is set, Settings cannot turn AI back on.
-//   - the `ai.instanceOff` app setting, which an admin sets in Settings → AI.
+//   - the `ai.instanceOff` app setting, which an admin sets on the AI
+//     providers page.
 //
 // While it is off, `getProvider` in providerRegistry.ts resolves no provider,
 // so no generation, provider embedding, model discovery or model test can

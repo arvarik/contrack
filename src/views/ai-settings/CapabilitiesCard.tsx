@@ -93,7 +93,7 @@ const GROUPS: CapabilityGroup[] = [
         icon: <Zap className="w-4 h-4 text-warning" />,
         summary: "High volume, low complexity. Favours cheap, fast models",
         detail:
-          "Magic Paste contact parsing, @mention extraction, search understanding and result verification, daily insights, and search expansion",
+          "Add from text, people named in notes, search understanding and result verification, briefings, the daily insight, mail summaries, and extraction from research results",
       },
       {
         key: "deep",
@@ -101,7 +101,7 @@ const GROUPS: CapabilityGroup[] = [
         icon: <BrainCircuit className="w-4 h-4 text-primary" />,
         summary: "Lower volume, harder reasoning. Favours stronger models",
         detail:
-          "Email (.eml) summarisation, duplicate adjudication, and structured extraction from research results",
+          "Email (.eml) summarisation, duplicate adjudication, and, when SearXNG does the web search, extraction from research results",
       },
     ],
   },

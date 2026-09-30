@@ -2,10 +2,11 @@
 // =============================================================================
 // Unit: the instance AI switch on the two settings pages that show it
 // =============================================================================
-// Settings → AI (admin) carries "Use AI on this instance". AI_DISABLED on the
-// server holds it off, so then it cannot be pressed and says why. The Privacy
-// page's "Use AI for this account" cannot turn AI on while an admin has it
-// off for the instance, so it shows off, cannot be pressed, and says why.
+// The AI providers page (admin) carries "Use AI on this instance". AI_DISABLED
+// on the server holds it off, so then it cannot be pressed and says why. The
+// Privacy page's "Use AI for this account" cannot turn AI on while an admin
+// has it off for the instance, so it shows off, cannot be pressed, and says
+// why.
 // =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -84,7 +85,7 @@ function instance(aiOff: boolean, lockedByEnv = false) {
   } as unknown as ReturnType<typeof aiSettingsApi.useInstanceAi>);
 }
 
-/** Settings → AI with no providers and this instance switch. */
+/** The AI providers page with no providers and this instance switch. */
 function settings(aiOff: boolean, lockedByEnv = false) {
   vi.mocked(aiSettingsApi.useAISettings).mockReturnValue({
     data: {
@@ -135,7 +136,7 @@ describe("the Privacy page", () => {
   });
 });
 
-describe("Settings → AI", () => {
+describe("the AI providers page", () => {
   it("turns AI off for the instance from its switch", () => {
     settings(false);
     inRouter(<AISettingsView />);

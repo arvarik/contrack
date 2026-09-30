@@ -12,6 +12,7 @@ import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
+import { trashRetentionDays } from "../services/lifecycleSettings.ts";
 import { relationshipService } from "../services/relationshipService.ts";
 import { parseContactRecord } from "../ai/aiService.ts";
 import {
@@ -439,7 +440,11 @@ router.post(
       "API",
       `[${rid}] POST /api/contacts/bulk-delete → ${count} deleted`,
     );
-    res.json({ success: true, count });
+    res.json({
+      success: true,
+      count,
+      retentionDays: trashRetentionDays().value,
+    });
   }),
 );
 
@@ -546,7 +551,7 @@ router.delete(
     );
     if (!success) throw new NotFoundError("Contact");
     log.info("API", `[${rid}] DELETE /api/contacts/${String(req.params.id)}`);
-    res.json({ success: true });
+    res.json({ success: true, retentionDays: trashRetentionDays().value });
   }),
 );
 

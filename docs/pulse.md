@@ -179,7 +179,7 @@ The **Completed** line says "Nothing completed yet", or for example "3 completed
 
 With nothing to do, the card says "Nothing to clean up".
 
-**Coming up** lists the birthdays eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34". A meeting row shows its title, its time and the people in it. With nothing to show, the card says "Nothing in the next two weeks." and offers **Connect a calendar**.
+**Coming up** lists the birthdays eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34". A meeting row shows its title, its time and the people in it. With nothing to show, the card says "Nothing coming up." and offers **Connect a calendar**.
 
 **Composition** is a ring chart of your network by **Industry**, **Role** or **Location**. It shows the six largest groups and **Other**. Each group opens the Network list filtered to it. **See all** or **Other** opens **Network composition** with every group.
 
