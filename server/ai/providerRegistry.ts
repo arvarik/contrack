@@ -192,11 +192,6 @@ export function getCachedModels(providerId: string): ModelInfo[] {
   return cache?.[providerId]?.models ?? [];
 }
 
-/** True when the provider has usable credentials right now. */
-export function isProviderAvailable(id: string): boolean {
-  return getProviderConfig(id) !== null;
-}
-
 function instantiate(config: ProviderConfig): AIProvider {
   switch (config.kind) {
     case "gemini":

@@ -32,8 +32,6 @@ import { CADENCE_DAYS } from "../../shared/cadence.ts";
 
 /** Which palette the app paints. `system` follows the operating system. */
 export const THEME_MODES = ["light", "dark", "system"] as const;
-export type ThemeMode = (typeof THEME_MODES)[number];
-
 /** The built-in accent. Every derived token is computed from this one value. */
 export const DEFAULT_ACCENT = "#006a91";
 
@@ -48,24 +46,6 @@ const searchHistoryEntrySchema = z.object({
   timestamp: z.number().int().nonnegative(),
 });
 
-export type SearchHistoryEntry = z.infer<typeof searchHistoryEntrySchema>;
-
-/**
- * Every preference, and what each value may be.
- *
- * One schema per preference, used twice: to validate a PATCH, and to parse a
- * stored row back — a row written by an older version can hold a value this
- * one no longer accepts. A preference that is not here cannot be stored, which
- * is what stops this table growing keys nobody reads.
- *
- * NO `.default()` ANYWHERE. A defaulted field inside `.partial()` still fills
- * itself in when the key is absent, so a PATCH naming one preference would
- * arrive at the route naming all seven and mark every one of them chosen. The
- * defaults live in their own object below, where they cannot leak into a
- * request body.
- */
-export { CADENCE_DAYS, type CadenceDays } from "../../shared/cadence.ts";
-
 export const PULSE_COLUMNS = ["focus", "network", "intel"] as const;
 export type PulseColumn = (typeof PULSE_COLUMNS)[number];
 
@@ -79,7 +59,6 @@ export const PULSE_CARD_IDS = [
   "inbox",
   "coming-up",
 ] as const;
-export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
 export const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(
   PULSE_CARD_IDS,
 );
@@ -107,6 +86,20 @@ export const pulseLayoutSchema = z
     ),
   }));
 
+/**
+ * Every preference, and what each value may be.
+ *
+ * One schema per preference, used twice: to validate a PATCH, and to parse a
+ * stored row back — a row written by an older version can hold a value this
+ * one no longer accepts. A preference that is not here cannot be stored, which
+ * is what stops this table growing keys nobody reads.
+ *
+ * NO `.default()` ANYWHERE. A defaulted field inside `.partial()` still fills
+ * itself in when the key is absent, so a PATCH naming one preference would
+ * arrive at the route naming all seven and mark every one of them chosen. The
+ * defaults live in their own object below, where they cannot leak into a
+ * request body.
+ */
 export const preferenceSchemas = {
   theme: z.enum(THEME_MODES),
   accent: z

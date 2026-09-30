@@ -225,7 +225,7 @@ function applyTrackingRules(
  * Invalidate the caches that depend on one owner's contact data.
  *
  * Deliberately NOT invalidateAll(): the content-addressed tiers (queryParse,
- * hyde, mentions) hash their own input text and are unaffected by contact
+ * mentions) hash their own input text and are unaffected by contact
  * mutations — flushing them on every edit made repeat searches pay full AI
  * cost for nothing.
  *
@@ -833,7 +833,7 @@ export const contactService = {
 
     // Fire-and-forget: recompute search embedding if searchable fields changed
     // NOTE: FTS5 is already updated by the contacts_au trigger, but the
-    // vector embedding + Doc2Query expansion must be refreshed explicitly.
+    // vector embedding must be refreshed explicitly.
     if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
       scheduleSearchIndex(id);
     }

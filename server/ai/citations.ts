@@ -106,27 +106,3 @@ export async function resolveRedirects(
   signal?.throwIfAborted();
   return pages;
 }
-
-/**
- * Replace each Gemini grounding redirect with the page it points to, and
- * merge sources that land on the same page (see `resolveRedirects`).
- *
- * @param citations - Sources as `toCitations` returns them.
- * @param options - As for `resolveRedirects`.
- * @returns The sources with real addresses, deduplicated, in the same order.
- */
-export async function resolveCitations(
-  citations: Array<{ title: string; uri: string }>,
-  options: Parameters<typeof resolveRedirects>[1] = {},
-): Promise<Array<{ title: string; uri: string }>> {
-  const pages = await resolveRedirects(
-    citations.map((citation) => citation.uri),
-    options,
-  );
-  return toCitations(
-    citations.map((citation) => ({
-      url: pages.get(citation.uri) ?? citation.uri,
-      title: citation.title,
-    })),
-  );
-}

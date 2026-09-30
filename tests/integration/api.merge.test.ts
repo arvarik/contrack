@@ -197,22 +197,6 @@ describe("merge → audit log → undo", () => {
     expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
   });
 
-  it("legacy hard merges without snapshot return 409 HARD_MERGE_IRREVERSIBLE", async () => {
-    const fakeId = "legacy-test-entry-" + Date.now();
-    sqlite
-      .prepare(
-        `INSERT INTO dedupe_merge_log (id, ownerId, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot, mergedAt)
-         VALUES (?, ?, 'fake-p', 'fake-d', 'user', 'hard', 1.0, 'Legacy test', NULL, CURRENT_TIMESTAMP)`,
-      )
-      .run(fakeId, localOwnerId());
-
-    const undo = await request(app).post(
-      `/api/dedupe/merge-log/${fakeId}/undo`,
-    );
-    expect(undo.status).toBe(409);
-    expect(undo.body.error.code).toBe("HARD_MERGE_IRREVERSIBLE");
-  });
-
   it("rejects self-merge and missing ids", async () => {
     const id = await createContact({ name: "Self Merge" });
 
@@ -503,4 +487,205 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
     expect(mine.map((t) => t.id).sort()).toEqual([a, b].sort());
     expect(nextFollowUpOf(primaryId)).toBe("2027-02-01");
   });
+});
+
+// -----------------------------------------------------------------------------
+// Undo after the survivor changed a child row
+//
+// A merge moves the duplicate's child rows onto the survivor. If the survivor
+// then deletes or edits one, undo must put the original back on the duplicate.
+// That path writes the row again, so it must name columns the tables have.
+// -----------------------------------------------------------------------------
+
+interface ChildRow {
+  table: string;
+  values: Record<string, unknown>;
+}
+
+/** One row for every kind of child row a merge moves. */
+const CHILD_ROWS: ChildRow[] = [
+  {
+    table: "contact_emails",
+    values: { email: "restore.email@test.com", label: "work" },
+  },
+  {
+    table: "contact_phones",
+    values: { phone: "+1 555 0101", label: "mobile" },
+  },
+  {
+    table: "contact_addresses",
+    values: { address: "1 Restore Way, Portland", label: "home" },
+  },
+  {
+    table: "contact_social_links",
+    values: { platform: "linkedin", url: "https://linkedin.com/in/restore" },
+  },
+  {
+    table: "contact_education",
+    values: {
+      school: "Restore University",
+      degree: "BS",
+      startDate: "2010",
+      endDate: "2014",
+    },
+  },
+  {
+    table: "contact_experience",
+    values: {
+      company: "Restore Inc",
+      role: "Engineer",
+      startDate: "2015",
+      endDate: "2020",
+      isCurrent: 0,
+    },
+  },
+  {
+    table: "contact_sources",
+    values: { platform: "google", externalId: "people/restore" },
+  },
+  { table: "contact_tags", values: { tag: "restore-tag" } },
+  { table: "contact_interests", values: { interest: "restore-climbing" } },
+  {
+    table: "contact_attributes",
+    values: { name: "restore-attribute", value: "restore-value" },
+  },
+  {
+    table: "interactions",
+    values: {
+      type: "note",
+      title: "Restore note",
+      content: "Original note",
+      date: "2026-01-02T10:00:00.000Z",
+    },
+  },
+];
+
+function insertChildRow(
+  table: string,
+  contactId: string,
+  values: Record<string, unknown>,
+): string {
+  const id = crypto.randomUUID();
+  const row: Record<string, unknown> = { id, contactId, ...values };
+  if (table === "interactions") row.ownerId = localOwnerId();
+  const columns = Object.keys(row);
+  sqlite
+    .prepare(
+      `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+    )
+    .run(...columns.map((c) => row[c]));
+  return id;
+}
+
+function rowById(table: string, id: string): Record<string, unknown> {
+  return sqlite
+    .prepare(`SELECT * FROM ${table} WHERE id = ?`)
+    .get(id) as Record<string, unknown>;
+}
+
+async function mergeThenFindLogId(
+  primaryId: string,
+  duplicateId: string,
+): Promise<string> {
+  const merged = await request(app)
+    .post("/api/contacts/merge")
+    .send({ primaryId, duplicateId });
+  expect(merged.status).toBe(200);
+  const log = await request(app).get("/api/dedupe/merge-log");
+  const entry = log.body.entries.find(
+    (e: { primaryId: string; duplicateId: string }) =>
+      e.primaryId === primaryId && e.duplicateId === duplicateId,
+  );
+  expect(entry).toBeTruthy();
+  return entry.id as string;
+}
+
+describe("undo after the survivor changed a child row", () => {
+  it("puts back every kind of child row that the survivor deleted", async () => {
+    const primaryId = await createContact({ name: "Deleted Rows Primary" });
+    const duplicateId = await createContact({ name: "Deleted Rows Duplicate" });
+    const ids = CHILD_ROWS.map((r) =>
+      insertChildRow(r.table, duplicateId, r.values),
+    );
+    const logId = await mergeThenFindLogId(primaryId, duplicateId);
+
+    // The merge moved each row to the survivor. The survivor deletes them all.
+    CHILD_ROWS.forEach((r, i) => {
+      expect(rowById(r.table, ids[i]).contactId).toBe(primaryId);
+      sqlite.prepare(`DELETE FROM ${r.table} WHERE id = ?`).run(ids[i]);
+    });
+
+    const undo = await request(app).post(`/api/dedupe/merge-log/${logId}/undo`);
+    expect(undo.status).toBe(200);
+    expect(
+      undo.body.conflicts.map((c: { entity: string }) => c.entity).sort(),
+    ).toEqual(CHILD_ROWS.map((r) => r.table).sort());
+
+    CHILD_ROWS.forEach((r, i) => {
+      expect(rowById(r.table, ids[i])).toMatchObject({
+        ...r.values,
+        contactId: duplicateId,
+      });
+    });
+  });
+
+  it.each([
+    {
+      kind: "an email label",
+      table: "contact_emails",
+      column: "label",
+      original: "work",
+      edited: "home",
+    },
+    {
+      kind: "the end of a school year",
+      table: "contact_education",
+      column: "endDate",
+      original: "2014",
+      edited: "2016",
+    },
+    {
+      kind: "the text of a note",
+      table: "interactions",
+      column: "content",
+      original: "Original note",
+      edited: "Edited note",
+    },
+  ])(
+    "keeps the survivor's edit of $kind and gives the duplicate the original",
+    async ({ table, column, original, edited }) => {
+      const primaryId = await createContact({ name: `Edit ${column} Primary` });
+      const duplicateId = await createContact({
+        name: `Edit ${column} Duplicate`,
+      });
+      const source = CHILD_ROWS.find((r) => r.table === table) as ChildRow;
+      const id = insertChildRow(table, duplicateId, source.values);
+      const logId = await mergeThenFindLogId(primaryId, duplicateId);
+
+      sqlite
+        .prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`)
+        .run(edited, id);
+
+      const undo = await request(app).post(
+        `/api/dedupe/merge-log/${logId}/undo`,
+      );
+      expect(undo.status).toBe(200);
+      expect(undo.body.conflicts).toEqual([
+        expect.objectContaining({ type: "record_edited", entity: table, id }),
+      ]);
+
+      // The survivor keeps the row it edited.
+      expect(rowById(table, id)).toMatchObject({
+        contactId: primaryId,
+        [column]: edited,
+      });
+      // The duplicate gets a copy that holds the original value.
+      const copies = sqlite
+        .prepare(`SELECT * FROM ${table} WHERE contactId = ?`)
+        .all(duplicateId) as Record<string, unknown>[];
+      expect(copies).toHaveLength(1);
+      expect(copies[0]).toMatchObject({ [column]: original });
+      expect(copies[0].id).not.toBe(id);
+    },
+  );
 });

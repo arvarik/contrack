@@ -409,11 +409,6 @@ class AISearchJobQueue extends EventEmitter {
       .map((b) => b.batch);
   }
 
-  /** Whether this account has a batch in flight. */
-  hasActiveBatch(scope: Scope): boolean {
-    return this.getActiveBatches(scope).length > 0;
-  }
-
   /** Whether the instance is running a batch, for anybody. */
   isProcessing(): boolean {
     return this.processing;

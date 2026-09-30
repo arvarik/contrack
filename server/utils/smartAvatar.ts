@@ -262,10 +262,3 @@ export function classifyName(fullName: string): AvatarLook {
 
   return (words[0] && lookFromGivenName(words[0])) || "neutral";
 }
-
-/**
- * The look for a contact: their pronouns when they have any, else their name.
- */
-export function avatarLook(name: string, pronouns?: string | null): AvatarLook {
-  return lookFromPronouns(pronouns) ?? classifyName(name);
-}

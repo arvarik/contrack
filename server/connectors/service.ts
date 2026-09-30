@@ -52,7 +52,7 @@ interface RawRunRow {
   id: string;
   connectorId: string;
   ownerId: string;
-  trigger: "schedule" | "manual" | "upload";
+  trigger: "schedule" | "manual";
   status: "running" | "ok" | "error";
   startedAt: string;
   finishedAt: string | null;
@@ -434,7 +434,7 @@ export async function deleteConnector(
 export async function runNow(
   scope: Scope,
   id: string,
-  trigger: "schedule" | "manual" | "upload" = "manual",
+  trigger: "schedule" | "manual" = "manual",
   explicitSignal?: AbortSignal,
 ): Promise<{
   runId: string;
@@ -782,24 +782,8 @@ export function listRuns(
 export function listCorrespondents(
   scope: Scope,
   limit: number = 50,
-  includeIgnored: boolean = false,
 ): Correspondent[] {
-  const sql = includeIgnored
-    ? `SELECT
-         cl.connectorId,
-         c.name AS connectorName,
-         cl.kind,
-         cl.externalId,
-         cl.localId,
-         cl.seenCount,
-         cl.lastSeenAt,
-         cl.ignoredAt
-       FROM connector_links cl
-       JOIN connectors c ON c.id = cl.connectorId
-       WHERE cl.ownerId = ? AND cl.kind = 'correspondent'
-       ORDER BY cl.seenCount DESC, cl.lastSeenAt DESC
-       LIMIT ?`
-    : `SELECT
+  const sql = `SELECT
          cl.connectorId,
          c.name AS connectorName,
          cl.kind,

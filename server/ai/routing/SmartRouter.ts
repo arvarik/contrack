@@ -23,9 +23,6 @@ import {
 import type { RoutingPolicy } from "../types.ts";
 import { log } from "../../utils/logger.ts";
 
-// Re-export RoutingPolicy so routing-layer consumers don't need a separate import
-export type { RoutingPolicy } from "../types.ts";
-
 export interface RouteDecision {
   /** The selected model identifier */
   modelId: string;
@@ -59,10 +56,6 @@ export class SmartRouter {
   ): RouteDecision {
     const candidates = this.registryFn().filter((m) => {
       if (circuitBreakers.has(m.id)) return false;
-      if (policy.allowModels?.length && !policy.allowModels.includes(m.id)) {
-        return false;
-      }
-      if (policy.denyModels?.includes(m.id)) return false;
       if (requiresGrounding && !m.supportsGrounding) return false;
       return true;
     });

@@ -55,11 +55,6 @@ export class UnionFind {
     }
   }
 
-  /** Check if `a` and `b` are in the same set. */
-  connected(a: string, b: string): boolean {
-    return this.find(a) === this.find(b);
-  }
-
   /**
    * Return all clusters with 2+ members.
    * Singletons (elements that were never union'd) are excluded.

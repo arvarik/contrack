@@ -26,7 +26,6 @@ import {
 } from "../../../../server/ai/routing/registry.ts";
 import { QuotaTracker } from "../../../../server/ai/routing/QuotaTracker.ts";
 import { SmartRouter } from "../../../../server/ai/routing/SmartRouter.ts";
-import { ParallelQueue } from "../../../../server/ai/routing/ParallelQueue.ts";
 
 // =============================================================================
 // 1. Registry
@@ -374,53 +373,5 @@ describe("SmartRouter", () => {
         noPauses,
       ).modelId,
     ).toBe("stable");
-  });
-});
-
-// =============================================================================
-// 4. ParallelQueue
-// =============================================================================
-
-describe("ParallelQueue", () => {
-  it("processes all items with correct results in order", async () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = await ParallelQueue.process(items, 3, async (n) => n * 2);
-
-    expect(results).toEqual([2, 4, 6, 8, 10]);
-  });
-
-  it("respects concurrency limit", async () => {
-    let maxConcurrent = 0;
-    let currentConcurrent = 0;
-
-    const items = Array.from({ length: 10 }, (_, i) => i);
-    await ParallelQueue.process(items, 3, async (n) => {
-      currentConcurrent++;
-      maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-
-      // Simulate async work
-      await new Promise((r) => setTimeout(r, 10));
-
-      currentConcurrent--;
-      return n;
-    });
-
-    expect(maxConcurrent).toBeLessThanOrEqual(3);
-    expect(maxConcurrent).toBeGreaterThan(1); // Should actually parallelize
-  });
-
-  it("isolates per-item errors without crashing the batch", async () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = await ParallelQueue.process(items, 3, async (n) => {
-      if (n === 3) throw new Error("item 3 failed");
-      return n * 10;
-    });
-
-    expect(results[0]).toBe(10);
-    expect(results[1]).toBe(20);
-    expect(results[2]).toBeInstanceOf(Error);
-    expect((results[2] as Error).message).toBe("item 3 failed");
-    expect(results[3]).toBe(40);
-    expect(results[4]).toBe(50);
   });
 });

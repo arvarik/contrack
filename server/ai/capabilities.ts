@@ -12,8 +12,8 @@
 //      providers have credentials.
 //
 // Capabilities:
-//   quick      — Magic Paste, mentions, query planning/HyDE, verification,
-//                daily insight, search expansion  (internal class: lite)
+//   quick      — Magic Paste, mentions, query planning, verification,
+//                daily insight  (internal class: lite)
 //   deep       — briefings, email summaries, dedupe adjudication, extraction
 //                (internal class: flash)
 //   research   — grounded web research for AI Search  (internal class: flash)

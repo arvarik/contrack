@@ -6,12 +6,6 @@
 // =============================================================================
 
 /**
- * Union of supported AI provider identifiers.
- * Used by the singleton factory to resolve the correct adapter.
- */
-export type AIProviderName = "gemini" | "openai" | "anthropic";
-
-/**
  * Options passed to any AIProvider's `generate` method.
  * Contains the prompt, desired response format, and an optional JSON schema
  * expressed in standard JSON Schema vocabulary (no provider-specific enums).
@@ -121,18 +115,6 @@ export interface RoutingPolicy {
    * then gemini-3.1-flash-lite, then any available model.
    */
   prefer?: ModelClass;
-
-  /**
-   * If set, ONLY these models may be used for this request.
-   * Useful for targeting specific model capabilities.
-   */
-  allowModels?: string[];
-
-  /**
-   * These models must NOT be used for this request.
-   * Useful for background tasks that should avoid expensive models.
-   */
-  denyModels?: string[];
 }
 
 /**
@@ -413,20 +395,4 @@ export interface QueryPlan {
 
   /** Short, human-readable description of the parse. Used in logs and debug UI. */
   rationale: string;
-}
-
-/**
- * @deprecated Replaced by `QueryPlan`. Kept transiently to ease migration —
- * new code should consume `QueryPlan` directly.
- */
-export interface ParsedSearchQuery {
-  location?: string;
-  company?: string;
-  industry?: string;
-  role?: string;
-  traits?: string[];
-  temporal?: {
-    type: "lastContact" | "neverContacted";
-    daysAgo?: number;
-  };
 }

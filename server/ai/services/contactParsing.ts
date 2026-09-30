@@ -7,9 +7,7 @@ import { AppError } from "../../utils/AppError.ts";
 // =============================================================================
 
 import type { ParsedContact } from "../types.ts";
-import { ParallelQueue } from "../routing/ParallelQueue.ts";
 import { log } from "../../utils/logger.ts";
-import { getErrorMessage } from "../../utils/helpers.ts";
 import { recordInvocation } from "../../services/aiStatsService.ts";
 import {
   wrapUntrusted,
@@ -269,77 +267,3 @@ ${UNTRUSTED_DATA_RULE}`;
   });
   return clean;
 }
-
-/**
- * Parse multiple unstructured contact texts in parallel. Uses ParallelQueue
- * to cap concurrency and delegates each item to `parseContactRecord` for DRY
- * prompt/schema reuse.
- *
- * Two workers at most. A provider that is rate limited answers 429, and the
- * adapter's retry moves the item to another model, so there is no need to
- * guess the key's limits here.
- *
- * Individual failures are isolated — one bad text never crashes the batch.
- * Failed items return `null` in the result array.
- *
- * @param texts       - Array of unstructured text strings to parse
- * @param concurrency - Workers to run, 1 or 2 (default 2)
- * @returns           - Array of parsed contacts (or null for failed items),
- *                      in the same order as the input array
- */
-export async function bulkParseContacts(
-  texts: string[],
-  concurrency?: number,
-): Promise<(ParsedContact | null)[]> {
-  if (isMockMode()) {
-    throw new AppError(
-      "AI provider not configured. Cannot run bulk parser.",
-      503,
-    );
-  }
-
-  if (texts.length === 0) return [];
-
-  const effectiveConcurrency = Math.max(1, Math.min(concurrency ?? 2, 2));
-
-  log.info(
-    "AIService",
-    `bulkParseContacts: ${texts.length} items | concurrency: ${effectiveConcurrency}`,
-  );
-  const startMs = Date.now();
-
-  const results = await ParallelQueue.process(
-    texts,
-    effectiveConcurrency,
-    async (text, index) => {
-      try {
-        return await parseContactRecord(text);
-      } catch (error: unknown) {
-        log.warn(
-          "AIService",
-          `bulkParseContacts: item ${index + 1}/${texts.length} failed: ${getErrorMessage(error)}`,
-        );
-        throw error; // ParallelQueue captures as Error in results array
-      }
-    },
-  );
-
-  const successes = results.filter((r) => !(r instanceof Error)).length;
-  const failures = results.length - successes;
-
-  log.info(
-    "AIService",
-    `bulkParseContacts: ${successes}/${texts.length} succeeded, ${failures} failed in ${Date.now() - startMs}ms`,
-  );
-  recordInvocation({
-    operation: "bulkParse",
-    latencyMs: Date.now() - startMs,
-    cached: false,
-    description: `Bulk Parse: ${texts.length} contacts (${successes} ok, ${failures} failed)`,
-  });
-
-  return results.map((r) => (r instanceof Error ? null : r));
-}
-
-/** Exposed for unit tests — not part of the module's public surface. */
-export const _internal = { normalizeParsedContact, cleanUrl, cleanText };

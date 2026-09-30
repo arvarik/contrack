@@ -133,16 +133,6 @@ export class RequestCoalescer {
     });
   }
 
-  /** Number of operations currently in flight. */
-  inFlightCount(): number {
-    return this.inFlight.size;
-  }
-
-  /** Number of callers currently waiting for a given key. */
-  callersCount(key: string): number {
-    return this.inFlight.get(key)?.callers.size ?? 0;
-  }
-
   /** Check if a key is currently in flight. */
   has(key: string): boolean {
     return this.inFlight.has(key);

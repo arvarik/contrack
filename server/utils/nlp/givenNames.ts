@@ -105,8 +105,3 @@ export function lookupGivenName(name: string): GivenNameGender | null {
   }
   return null;
 }
-
-/** How many names the table holds. For the build script and the tests. */
-export function givenNameCount(): number {
-  return load().starts.length;
-}

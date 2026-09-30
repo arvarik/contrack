@@ -15,32 +15,11 @@ const DEFAULT_DEBOUNCE_MS = 250;
 let running = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-/** Ensure the persistent search index queue table exists. */
-export function ensureSearchIndexQueueTable(): void {
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS search_index_queue (
-      contactId TEXT PRIMARY KEY,
-      ownerId TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      attempts INTEGER NOT NULL DEFAULT 0,
-      lastError TEXT,
-      queuedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-      nextAttemptAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-      contactUpdatedAt TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_search_index_queue_status_next
-      ON search_index_queue (status, nextAttemptAt);
-    CREATE INDEX IF NOT EXISTS idx_search_index_queue_owner
-      ON search_index_queue (ownerId, status);
-  `);
-}
-
 /**
  * Recover any jobs left in 'processing' state (e.g. from an ungraceful shutdown)
  * and kick off the queue if background jobs are enabled.
  */
 export function initSearchIndexQueue(): void {
-  ensureSearchIndexQueueTable();
   try {
     sqlite
       .prepare(
@@ -54,11 +33,6 @@ export function initSearchIndexQueue(): void {
   if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
     triggerIndexDrain(1000);
   }
-}
-
-/** Check whether the queue worker is actively draining. */
-export function isIndexQueueRunning(): boolean {
-  return running;
 }
 
 /**
@@ -126,8 +100,6 @@ export async function drainIndexQueue(
       deferredProvider: 0,
     };
   }
-
-  ensureSearchIndexQueueTable();
 
   const resolved = resolveEmbeddings();
   const isProvider = resolved.kind !== "builtin";
@@ -315,8 +287,6 @@ export async function drainIndexQueue(
  * contact timestamp so newer edits supersede older attempts.
  */
 export function scheduleSearchIndex(id: string): void {
-  ensureSearchIndexQueueTable();
-
   sqlite
     .prepare(
       // Three callers, and each has already proved the caller owns this
@@ -355,8 +325,6 @@ export function enqueueMissingContactsForOwner(
   ownerId: string,
   forceAll = false,
 ): number {
-  ensureSearchIndexQueueTable();
-
   if (forceAll) {
     sqlite
       .prepare("DELETE FROM search_passages WHERE ownerId = ?")
@@ -437,8 +405,6 @@ export interface SearchCoverage {
  * Report account-level semantic search coverage and queue health.
  */
 export function getSearchCoverage(scope: Scope): SearchCoverage {
-  ensureSearchIndexQueueTable();
-
   const total = (
     sqlite
       .prepare(
@@ -523,7 +489,6 @@ export function getSearchCoverage(scope: Scope): SearchCoverage {
 
 /** Remove a contact from the indexing queue (e.g. on soft or hard delete). */
 export function removeFromIndexQueue(contactId: string): void {
-  ensureSearchIndexQueueTable();
   sqlite
     .prepare("DELETE FROM search_index_queue WHERE contactId = ?")
     .run(contactId);
@@ -531,7 +496,6 @@ export function removeFromIndexQueue(contactId: string): void {
 
 /** Clean up queue entries when an owner is purged. */
 export function purgeOwnerFromIndexQueue(ownerId: string): void {
-  ensureSearchIndexQueueTable();
   sqlite
     .prepare("DELETE FROM search_index_queue WHERE ownerId = ?")
     .run(ownerId);
