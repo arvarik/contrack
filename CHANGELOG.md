@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The search models ship with the Docker image, and nothing downloads them at boot.** `scripts/fetch-models.ts` (`npm run models:fetch`) downloads `Xenova/all-MiniLM-L6-v2` and `Xenova/ms-marco-TinyBERT-L-2-v2`, pinned to one upstream commit, and checks each file's SHA-256 against `PINNED_MODELS` (`server/services/search/modelFiles.ts`). The Docker build runs it into `/app/models`. `MODEL_DIR` (default `DATA_DIR/models`) is where the server reads model files before anything else, and `MODEL_DOWNLOADS=false` (the image's default) stops it from downloading at all. A container started with no network loads both models. A model that is not on disk fails with a log line that names the folder and the fix. `--check` checks a folder and downloads nothing, and `HF_ENDPOINT` names a mirror. The README and the AI search doc said search worked offline, which was not true on a first boot.
 - **An instance-wide AI switch.** Settings → Administration → AI providers → "Use AI on this instance", or `AI_DISABLED=true`, which the switch cannot override. While it is off, `getProvider()` returns null, so no generation, provider embedding, model discovery, daily model-list refresh, auto-enrichment or email summary reaches a provider. The AI routes answer `403 AI_OFF_FOR_INSTANCE`, and Ask Contrack answers from local data. Stored keys stay. Embeddings move to the built-in model, and both vector indexes rebuild. `PUT /api/settings/ai/instance` (admin, audited, `409 AI_LOCKED_BY_ENV`) and `GET /api/ai/instance` are new, and the Privacy page shows the account switch off and disabled while the instance switch is off.
+- **`npm run knip` finds code that nothing uses.** It reads `knip.jsonc`, checks `src` for unused files, exports and types, and counts the server, `shared`, `scripts` and the tests as users. It reports nothing today. `src/db/schema.ts` is left out of the check, because Drizzle reads that file's exports as the schema.
 
 ### Changed
 
@@ -33,6 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Connector email summaries obey both AI switches.** A Gmail or IMAP sync downloads no message body and sends nothing to a provider when AI is off for the owner's account or for the instance. The Privacy page already promised that.
 - **Weather sends rounded coordinates.** The browser sends Open-Meteo the contact's latitude and longitude to 2 decimals, about 1.1 km, not the exact point.
 - **The legacy `ai.generate` refuses when no provider is available.** With AI off it would otherwise have sent the request to Google with a placeholder key.
+
+### Removed
+
+- **`POST /api/contacts/merge-batch` and `POST /api/dev/seed-duplicates`.** The first merged many pairs in one call, and the second made four duplicate contacts in development. Nothing in the app called either. `useMergeBatch`, `useSeedDuplicates` and the engine's `seedDuplicates` go with them, and so do their rows in the route manifest and the tenancy tests.
+- **The dedupe scan modes `deterministic`, `ai` and `both`.** `POST /api/dedupe/scan` takes `quick`, `deep` or `full`, and any other mode answers `400`. The three old names ran as `quick`, `deep` and `deep`, and the picker never offered them.
+- **The redirects from old paths.** `/settings/dedupe`, `/settings/ai-search`, `/settings/ai-stats`, `/settings/ai-config`, `/settings/admin/instance` and `/tracked` no longer redirect. An old bookmark opens the Settings list.
+- **The move of 1.x settings out of `localStorage`.** A browser that ran 1.x starts from the defaults. The five keys it left (`contrack_list_density`, `contrack_recent_limit`, `contrack_dedupe_settings`, `contrack_temp_unit` and `contrack:search:history`) are still deleted on load, so a search history left in a shared browser cannot be read by the next person.
+- **The old enrichment dossier.** The Research card no longer recognises the text that enrichment wrote before the research record, and the merge engine no longer clears it. A contact that still holds it shows it under Research notes.
+- **The component showcase at `/dev`.** It was a development page that drew the design system, 798 lines, and it was never in a production build.
+- **The unused Drizzle relations.** `src/db/schema.ts` drops its 28 `relations()` objects and an `OWNED_TABLES` copy. No code calls the relational query API, and `server/db.ts` has its own list. Every table stays: each is in the migration snapshot, and `npm run db:generate` reports no schema change.
+- **Three color tokens and a font token that nothing used.** `--color-secondary-container`, `--color-on-secondary-container`, `--color-on-primary-container` and `--font-label` leave the stylesheet, both palettes, the accent derivation and the contrast test.
+- **Props, options and result keys that no caller set or read.** Eighteen `className` props, plus options on `Modal`, `Select`, `Switch`, `VirtualRows`, `ContextMenu`, `SecretReveal`, `Donut`, `SettingRow`, `SettingsSearch`, `ConnectorCard`, the three connector modals, `TimelineTab`, `useLoadingShown`, `useProximityLift` and `useMapFilter`. Twenty optional parameters that no call passed now take their default inline.
+- **`ContactPopup`, `EngineInfoCard`, `Field`'s add button, and a few helpers.** `MapHoverCard` replaced `ContactPopup`, and the file is now `StackPopup.tsx`. `useConnector`, `buttonLike`, `escapeHtml`, `isSettled` and the two invitation-token wrappers go too.
+- **The `export` keyword on 313 declarations that only their own file uses.** The code stays. Exports that a test imports stay exported.
 
 ### Added
 
