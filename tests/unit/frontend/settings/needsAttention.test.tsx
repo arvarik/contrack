@@ -80,7 +80,7 @@ describe("NeedsAttention", () => {
     expect(link.getAttribute("href")).toBe("/settings/duplicates");
   });
 
-  it("renders enrich contacts link when contacts have never been enriched", () => {
+  it("has no enrich link, however many contacts were never enriched", () => {
     vi.mocked(api.useDedupeCount).mockReturnValue({
       data: 0,
     } as unknown as ReturnType<typeof api.useDedupeCount>);
@@ -88,22 +88,16 @@ describe("NeedsAttention", () => {
       data: [
         { id: "c1", aiHydratedAt: null, isArchived: false, isGhost: false },
         { id: "c2", aiHydratedAt: null, isArchived: false, isGhost: false },
-        {
-          id: "c3",
-          aiHydratedAt: "2026-01-01",
-          isArchived: false,
-          isGhost: false,
-        },
       ],
     } as unknown as ReturnType<typeof api.useContacts>);
     vi.mocked(importsApi.useImports).mockReturnValue({
       data: [],
     } as unknown as ReturnType<typeof importsApi.useImports>);
 
-    renderComponent();
-    expect(screen.getByText("Enrich 2 contacts")).toBeTruthy();
-    const link = screen.getByRole("link", { name: /Enrich 2 contacts/i });
-    expect(link.getAttribute("href")).toBe("/settings/enrichment");
+    const { container } = renderComponent();
+    expect(screen.queryByText(/Enrich \d+ contact/)).toBeNull();
+    // Nothing else waits, so the strip is not drawn at all.
+    expect(container.firstChild).toBeNull();
   });
 
   it("renders retry failed imports link for recent failures", () => {
@@ -130,7 +124,7 @@ describe("NeedsAttention", () => {
     expect(link.getAttribute("href")).toBe("/settings/import");
   });
 
-  it("renders up to 3 links when all have counts", () => {
+  it("renders both links when both have counts", () => {
     vi.mocked(api.useDedupeCount).mockReturnValue({
       data: 12,
     } as unknown as ReturnType<typeof api.useDedupeCount>);
@@ -152,7 +146,8 @@ describe("NeedsAttention", () => {
 
     renderComponent();
     expect(screen.getByText("Review 12 possible duplicates")).toBeTruthy();
-    expect(screen.getByText("Enrich 1 contact")).toBeTruthy();
     expect(screen.getByText("Retry 1 failed import")).toBeTruthy();
+    expect(screen.queryByText(/Enrich \d+ contact/)).toBeNull();
+    expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 });

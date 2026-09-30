@@ -1,12 +1,12 @@
 /**
  * NeedsAttention — Landing page strip highlighting items requiring user attention.
  *
- * Displays up to three action links:
+ * Displays up to two action links:
  * - "Review N possible duplicates" -> /settings/duplicates
- * - "Enrich N contacts" -> /settings/enrichment
  * - "Retry N failed imports" in the last 30 days -> /settings/import
  *
- * Completely omitted when all three counts are zero.
+ * Completely omitted when both counts are zero. The contacts never enriched
+ * are not counted here: that list is on the Contact enrichment page.
  *
  * Each item is a tile that opens one page as a whole, so it lifts on hover
  * (`lift`, "Elevation" in `.agent/STYLE.md`) and takes the hover layer on
@@ -16,8 +16,8 @@
  * @module views/settings/NeedsAttention
  */
 import React, { useMemo } from "react";
-import { ChevronRight, Copy, Sparkles, UploadCloud } from "lucide-react";
-import { useDedupeCount, useContacts } from "../../api";
+import { ChevronRight, Copy, UploadCloud } from "lucide-react";
+import { useDedupeCount } from "../../api";
 import { useImports } from "../../api/imports";
 import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
@@ -28,24 +28,16 @@ import { SlideLink } from "./slide";
 const FAILED_IMPORT_WINDOW_MS = 30 * 86_400_000;
 
 /**
- * The three things Settings can ask a person to do: possible duplicates to
- * review, contacts never enriched, and imports that failed in the last 30
- * days. The landing strip and the rail's count pills share them.
+ * The two things Settings can ask a person to do: possible duplicates to
+ * review, and imports that failed in the last 30 days. The landing strip and
+ * the rail's count pills share them.
  */
 export function useAttentionCounts() {
   const { data: dedupeData } = useDedupeCount();
-  const { data: contacts = [] } = useContacts();
   const { data: imports = [] } = useImports();
 
   const duplicates =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
-
-  const neverEnriched = useMemo(
-    () =>
-      contacts.filter((c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost)
-        .length,
-    [contacts],
-  );
 
   const failedImports = useMemo(() => {
     const since = Date.now() - FAILED_IMPORT_WINDOW_MS;
@@ -56,14 +48,14 @@ export function useAttentionCounts() {
     ).length;
   }, [imports]);
 
-  return { duplicates, neverEnriched, failedImports };
+  return { duplicates, failedImports };
 }
 
 const plural = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
 
 export const NeedsAttention = () => {
-  const { duplicates, neverEnriched, failedImports } = useAttentionCounts();
+  const { duplicates, failedImports } = useAttentionCounts();
 
   const items: {
     path: string;
@@ -76,14 +68,6 @@ export const NeedsAttention = () => {
       path: "/settings/duplicates",
       label: `Review ${plural(duplicates, "possible duplicate", "possible duplicates")}`,
       icon: Copy,
-    });
-  }
-
-  if (neverEnriched > 0) {
-    items.push({
-      path: "/settings/enrichment",
-      label: `Enrich ${plural(neverEnriched, "contact", "contacts")}`,
-      icon: Sparkles,
     });
   }
 

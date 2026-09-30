@@ -58,6 +58,7 @@ export const InfoTip = ({
   className,
   align = "start",
   tone = "muted",
+  wide = false,
 }: {
   /** Accessible name for the trigger, e.g. "About the Briefing cache". */
   label: string;
@@ -76,6 +77,11 @@ export const InfoTip = ({
    * label says it in words, so the colour is never the only signal.
    */
   tone?: "muted" | "warning";
+  /**
+   * A panel of 288 px, not 224, for a few short lines that would otherwise
+   * wrap to a column, such as a price for each of three providers.
+   */
+  wide?: boolean;
 }) => {
   const [openedBy, setOpenedBy] = useState<OpenedBy>(null);
   const open = openedBy !== null;
@@ -188,7 +194,8 @@ export const InfoTip = ({
         className={cn(
           // Placement must not animate. The reduced-motion rule sets a
           // short transition duration on every element, including top/left.
-          "absolute left-0 top-full z-50 w-56 max-w-[calc(100vw-2rem)] transition-none",
+          "absolute left-0 top-full z-50 max-w-[calc(100vw-2rem)] transition-none",
+          wide ? "w-72" : "w-56",
           // Join the panel to its trigger across the 8 px visual gap. The
           // button's hit area alone leaves a gap on a diagonal pointer move.
           "before:absolute before:inset-x-0 before:h-2 before:content-[''] data-[side=bottom]:before:bottom-full data-[side=top]:before:top-full",

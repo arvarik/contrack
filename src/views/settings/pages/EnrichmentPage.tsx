@@ -1,70 +1,29 @@
 /**
  * EnrichmentPage — Research contacts on the web to fill in missing details.
  *
- * Wraps AISearchView with the never-enriched count strip, automatic enrichment
- * switch, and admin grounding meter.
+ * Wraps AISearchView with the automatic enrichment switch and the admin
+ * grounding meter.
  *
  * @module views/settings/pages/EnrichmentPage
  */
-import { useMemo, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
 import { AISearchView } from "../../ai-search";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
-import { useContacts } from "../../../api";
 import { useGroundingCapacity } from "../../../api/enrichment";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
-import { SettingsCallout } from "../SettingsCallout";
 import { cn } from "../../../lib/utils";
 
 export const EnrichmentPage = () => {
-  const { data: contacts = [] } = useContacts();
   const { preferences, setPreference } = usePreferences();
   const { isAdmin } = useAuth();
   const { data: groundingCapacity } = useGroundingCapacity();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showNotYet, setShowNotYet] = useState<number>();
-
-  // Filter contacts that have never been enriched
-  const neverEnrichedContacts = useMemo(
-    () =>
-      contacts.filter((c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost),
-    [contacts],
-  );
-
-  // Selects them, and has the list show exactly them: a filter or a search
-  // left on from before would hide some of the contacts selected.
-  const handleEnrichThem = () => {
-    setSelectedIds(new Set(neverEnrichedContacts.map((c) => c.id)));
-    setShowNotYet(Date.now());
-  };
 
   return (
     // One box for the whole page, the enrichment list included, so every
     // card starts under the page title.
     <div className={cn(SETTINGS_PAGE, "space-y-6")}>
-      {/* Never-enriched count banner */}
-      {neverEnrichedContacts.length > 0 && (
-        <SettingsCallout
-          icon={Sparkles}
-          title={`${neverEnrichedContacts.length} ${
-            neverEnrichedContacts.length === 1 ? "contact has" : "contacts have"
-          } never been enriched`}
-          body="Select them to research their work, schools and profiles"
-        >
-          <button
-            type="button"
-            onClick={handleEnrichThem}
-            className="btn-primary btn-sm"
-          >
-            Select them
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </SettingsCallout>
-      )}
-
       <div className={SETTINGS_CARD}>
         <SettingRow
           id="auto-enrich"
@@ -94,12 +53,7 @@ export const EnrichmentPage = () => {
         )}
       </div>
 
-      <AISearchView
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
-        showNotYet={showNotYet}
-        hideHeaderDescription
-      />
+      <AISearchView hideHeaderDescription />
     </div>
   );
 };

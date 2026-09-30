@@ -36,6 +36,7 @@ const PRICES: Record<string, Price> = {
   // OpenAI
   "gpt-6-astra": { input: 10.0, output: 50.0 },
   "gpt-6-sol": { input: 2.0, output: 10.0 },
+  "gpt-6.1-sol": { input: 2.0, output: 10.0 },
   "gpt-6-luna": { input: 0.1, output: 0.5 },
   "gpt-5.6-sol": { input: 4.0, output: 20.0 },
   "gpt-5.6-terra": { input: 2.0, output: 12.0 },
@@ -53,6 +54,7 @@ const PRICES: Record<string, Price> = {
   "claude-opus-4-7": { input: 5.0, output: 25.0 },
   "claude-opus-4-6": { input: 5.0, output: 25.0 },
   "claude-opus-4-5": { input: 5.0, output: 25.0 },
+  "claude-sonnet-5-5": { input: 2.0, output: 10.0 },
   "claude-sonnet-5": { input: 2.0, output: 10.0 },
   "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
   "claude-sonnet-4-5": { input: 3.0, output: 15.0 },

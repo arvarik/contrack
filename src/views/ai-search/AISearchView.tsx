@@ -13,13 +13,7 @@
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  */
-import {
-  useState,
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-} from "react";
+import { useState, useCallback, useDeferredValue, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
   CircleDashed,
@@ -38,6 +32,7 @@ import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
 import { AISearchConfirmModal } from "./components/AISearchConfirmModal";
+import { DepthCostTip } from "./DepthCostTip";
 import { CARD, SECTION_HEADING, SEARCH_INPUT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -46,7 +41,6 @@ import { FilterRow, type FilterPill } from "../../components/ui/FilterRow";
 import { VirtualRows } from "../../components/ui/VirtualRows";
 import {
   batchEstimate,
-  COST_NOTE,
   DEPTH_ORDER,
   DEPTH_WORDS,
   perContact,
@@ -105,22 +99,11 @@ const RESEARCH_FILTERS: readonly FilterPill<ResearchFilter>[] = [
 ];
 
 interface AISearchViewProps {
-  selectedIds?: Set<string>;
-  onSelectionChange?: (ids: Set<string>) => void;
   hideHeaderDescription?: boolean;
-  /**
-   * A new value shows everyone never researched: the search box empties,
-   * and the filters go to All and Not yet. The page's "Select them" sends
-   * one with its selection, so no one it selects is hidden from the list.
-   */
-  showNotYet?: number;
 }
 
 export function AISearchView({
-  selectedIds: controlledSelectedIds,
-  onSelectionChange: setControlledSelectedIds,
   hideHeaderDescription = false,
-  showNotYet,
 }: AISearchViewProps = {}) {
   const { data: contacts = [], isLoading } = useContacts();
   const {
@@ -140,11 +123,7 @@ export function AISearchView({
   // The list follows a deferred copy of the box, so a letter shows in the
   // box at once and the list and its counts catch up a moment later.
   const deferredQuery = useDeferredValue(searchQuery);
-  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const selectedIds = controlledSelectedIds ?? internalSelectedIds;
-  const setSelectedIds = setControlledSelectedIds ?? setInternalSelectedIds;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   // The two choices live in the page's address, so Back from a contact
   // opened from the list comes back to the same list. The search box stays
@@ -171,21 +150,6 @@ export function AISearchView({
   // Standard each time the page opens: a costlier run is a choice made for
   // this batch, not one that sticks.
   const [depth, setDepth] = useState<ResearchDepth>("standard");
-
-  // Not chooseContactFilter and chooseResearchFilter, which clear the
-  // selection: the selection that came with the request stays.
-  useEffect(() => {
-    if (showNotYet === undefined) return;
-    setSearchQuery("");
-    setParams(
-      (prev) =>
-        paramsWithFilters(prev, { contacts: "all", research: "not_yet" }),
-      { replace: true },
-    );
-    // A new request only. `setParams` changes with the address, and a
-    // filter chosen after the request stands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showNotYet]);
 
   // Archived and ghost contacts are never researched; the search box
   // narrows the rest before either row of filters does.
@@ -338,13 +302,16 @@ export function AISearchView({
               aria-labelledby="research-depth-heading"
               className={cn(CARD, "space-y-3")}
             >
-              <h3
-                id="research-depth-heading"
-                className={cn(SECTION_HEADING, "flex items-center gap-2")}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Research depth
-              </h3>
+              <div className="flex items-center gap-1">
+                <h3
+                  id="research-depth-heading"
+                  className={cn(SECTION_HEADING, "flex items-center gap-2")}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Research depth
+                </h3>
+                <DepthCostTip />
+              </div>
               <ChoiceGroup
                 label="Research depth"
                 value={depth}
@@ -352,11 +319,6 @@ export function AISearchView({
                 onChange={setDepth}
                 className="sm:grid-cols-2"
               />
-              {depthFiguresApply && (
-                <p className="text-xs text-on-surface-variant text-pretty">
-                  {COST_NOTE}
-                </p>
-              )}
             </section>
 
             <div className={cn(CARD, "p-0 overflow-hidden")}>
