@@ -64,7 +64,7 @@ export function getDefaultStrategyForProvider(
 export function validateEnrichmentStrategy(requested?: string): string {
   if (isResearchOff())
     throw new AppError(
-      "Contact research is off. An admin can turn it on in Settings → AI.",
+      "Contact research is off. An admin can turn it on in Settings → Administration → AI providers.",
       503,
       { code: "RESEARCH_OFF" },
     );
