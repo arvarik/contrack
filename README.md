@@ -220,28 +220,32 @@ The first start downloads the two search models (28 MB) from Hugging Face. To ke
 
 ## 📚 Documentation
 
-Full documentation lives in the [`docs/`](docs/) directory:
+Full documentation lives in the [`docs/`](docs/README.md) directory:
 
-| Guide                                      | Description                                            |
-| ------------------------------------------ | ------------------------------------------------------ |
-| [Getting Started](docs/getting-started.md) | Installation, first boot, scripts, keyboard shortcuts  |
-| [Configuration](docs/configuration.md)     | Environment variables, AI provider setup, model choice |
-| [Architecture](docs/architecture.md)       | System overview, data flow, schema, caching            |
-| [API Reference](docs/api-reference.md)     | Complete REST API with curl and JavaScript examples    |
-| [CI & Release](docs/ci-and-release.md)     | Pipeline, published images, release procedure          |
+| Guide                                                  | Description                                               |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)             | Installation, first steps, the main screens               |
+| [Self-Hosting](docs/self-hosting.md)                   | Docker, remote access, backups, upgrades, troubleshooting |
+| [Configuration](docs/configuration.md)                 | Environment variables, AI provider setup, model choice    |
+| [Architecture](docs/architecture.md)                   | System overview, data flow, schema, search and AI         |
+| [API Reference](docs/api-reference.md)                 | Complete REST API with curl examples                      |
+| [CI & Release](CONTRIBUTING.md#continuous-integration) | Pipeline, published images, release procedure             |
 
 ### Feature Guides
 
-| Feature                             | Guide                                                                      |
-| ----------------------------------- | -------------------------------------------------------------------------- |
-| Contact Management                  | [docs/features/contact-management.md](docs/features/contact-management.md) |
-| Command Palette                     | [docs/features/command-palette.md](docs/features/command-palette.md)       |
-| Ask Contrack and contact enrichment | [docs/features/ai-search.md](docs/features/ai-search.md)                   |
-| Note Search                         | [docs/features/interaction-search.md](docs/features/interaction-search.md) |
-| Deduplication                       | [docs/features/deduplication.md](docs/features/deduplication.md)           |
-| Pulse                               | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md)       |
-| Map View                            | [docs/features/map-view.md](docs/features/map-view.md)                     |
-| Lists                               | [docs/features/lists.md](docs/features/lists.md)                           |
+| Feature            | Guide                                                                    |
+| ------------------ | ------------------------------------------------------------------------ |
+| Contact Management | [docs/contacts.md](docs/contacts.md)                                     |
+| Command Palette    | [docs/search.md#command-palette](docs/search.md#command-palette)         |
+| Ask Contrack       | [docs/search.md#ask-contrack](docs/search.md#ask-contrack)               |
+| Contact enrichment | [docs/ai.md#research-contacts](docs/ai.md#research-contacts)             |
+| Note Search        | [docs/search.md#search-your-notes](docs/search.md#search-your-notes)     |
+| Deduplication      | [docs/duplicates.md](docs/duplicates.md)                                 |
+| Pulse              | [docs/pulse.md](docs/pulse.md)                                           |
+| Map View           | [docs/map.md](docs/map.md)                                               |
+| Lists              | [docs/contacts.md#lists](docs/contacts.md#lists)                         |
+| Connectors         | [docs/import-and-sync.md#connectors](docs/import-and-sync.md#connectors) |
+| MCP Server         | [docs/mcp.md](docs/mcp.md)                                               |
 
 ---
 

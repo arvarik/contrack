@@ -1,325 +1,200 @@
 # Accessibility
 
-Contrack is keyboard-first, and every screen is meant to work with a screen
-reader, at a phone's width, and in both palettes. This page says what that
-promise is made of, which parts a machine checks on every pull request, and
-which parts a person still has to check.
+Contrack works with a keyboard alone, with a screen reader, on a phone, and in
+the light and the dark theme. The first half of this page says what Contrack
+supports. The second half is for contributors: what the suite checks on every
+pull request, and what a person still checks by hand.
 
-## What CI checks
+## What Contrack supports
 
-`browser-a11y` in `.github/workflows/ci.yml` builds the production bundle,
-boots it the way a release runs (`NODE_ENV=production`, `dist/` served, the
-CSP on), and drives it in headless Chromium with Playwright. Every worker gets
-a server of its own on a free port with a throwaway `DATA_DIR`, so a run never
-touches a developer's database and two workers never share state.
+### Keyboard
 
-| Spec                                     | What it walks                                                                                                                                                               |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens                           |
-| `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup                        |
-| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                                                |
-| `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open                                      |
-| `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent                         |
-| `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors                            |
-| `tests/e2e/metrics.spec.ts`              | A 390 px phone: every visible control has a 44 by 44 pixel hit box and no visible text is under 11 pixels, on Network, a contact, Pulse, Ask Contrack, Settings and the map |
-| `tests/e2e/account-transitions.spec.ts`  | A gated instance: setup, sign out, wrong password, sign in, an expired session, and the forced password change                                                              |
+Every page works with no pointer. See
+[Keyboard shortcuts](keyboard-shortcuts.md) for the keys.
 
-The fixtures under `tests/e2e/fixtures/` are the vocabulary the specs share:
-`test` for the worker's open, seeded instance, `gatedTest` for a fresh gated
-one per test, `expectPageAccessible`, `expectPageStructured`, `expectVisibleFocus`,
-`expectFocusStaysWithin`, and `answerPeopleSearch` for a scripted People
-search. `map.ts` answers every OpenFreeMap request with an empty style, so a
-map scan draws no tiles and needs no network.
+- The first `Tab` on a page shows **Skip to main content**. It moves focus to
+  the contact's name on a contact page, to the current row on the Network
+  page, and to the main part of every other page.
+- A ring marks the control that has keyboard focus, in both themes. A click
+  does not show it, but a text field shows it on any focus.
+- The Network list and its letter rail are one `Tab` stop each. The arrow
+  keys, `Home`, `End` and the letters move inside them.
+- Opening a contact moves focus to its name. On a phone, **Back** puts focus
+  on the row you opened.
+- A dialog keeps focus inside while it is open. `Esc` closes it, and focus
+  returns to the control that opened it. A menu takes the arrow keys, `Home`,
+  `End` and a letter, and `Esc` returns focus to its button.
 
-### Running it locally
+### Screen readers
+
+- Each page has one main landmark and one level-one heading. On a wide
+  screen, the Network list is a landmark named "Contacts" beside the contact,
+  named "Contact".
+- Every control has a name. Help text opens from a button, with a key, a
+  click or a tap, not on hover alone.
+- Search progress and results are spoken without moving focus, such as "12
+  matches for …". A list that AI did not check ends with "Not verified by
+  AI." The Network search, a bulk bar's count and a moved email, phone or
+  address are spoken too, such as "Moved to position 2 of 3".
+- An error interrupts, a field's error is read with the field, and a score is
+  said in words, such as "Score 72, strong".
+- The map is a region named "Contact map". Each pin is a button named for the
+  person and the company, and each cluster says how many people it holds.
+
+### Motion, text and themes
+
+- **Motion**, in **Settings → Appearance**: **System** follows the reduce
+  motion setting of your device, and **Reduced** keeps animation to a minimum
+  for your account.
+- **Corvid motion**: **Full**, **Subtle** or **Off**, for the bird in the
+  sidebar. Reduced motion holds the bird still whatever you choose. The bird
+  is never announced, never takes a click, and `Esc` lands it.
+- **Text size**: **Large** makes all text one step larger.
+- **Theme**: **Light**, **Dark** or **System**. Every **Accent colour** you
+  can pick is adjusted to meet WCAG 2.2 AA contrast in both themes.
+
+### Phones
+
+Every control has a touch target of at least 44 by 44 pixels, and no text is
+smaller than 11 pixels. Form fields are 16 pixels or larger, so the browser
+does not zoom in when a field takes focus. Dialogs rise from the bottom of the
+screen, and the tab bar marks the current page.
+
+## How it is checked
+
+This half is for contributors.
+
+### What CI runs
+
+The **Browser accessibility** job in `.github/workflows/ci.yml` builds the
+production bundle and runs `npx playwright test` in headless Chromium. Each
+worker starts its own production server (`NODE_ENV=production`, `dist/`, the
+CSP on) on a free port, with a new temporary `DATA_DIR`. The suite runs with
+reduced motion, the `en-US` locale and the `America/Los_Angeles` time zone.
+The report is uploaded on every run.
+
+| Spec                           | What it holds                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens |
+| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget        |
+| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone         |
+| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                          |
+| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                  |
+| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                       |
+| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                |
+| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                  |
+
+Most other specs, such as Pulse, the map and Settings, also scan the screens
+they reach. In the unit suite, `tests/unit/frontend/style/stylesFloor.test.ts`
+fails on text under 11 px and on a focus ring drawn by a component.
+`themeContrast.test.ts` beside it checks both palettes and every accent
+against WCAG AA.
+
+### Run it locally
 
 ```bash
-npm run build          # the suite serves dist/, the same files a release ships
-npm run test:e2e       # all journeys, headless
-npm run test:e2e:ui    # Playwright's UI mode: pick a test, watch it, time-travel
+npm run build                    # the suite serves dist/
+npx playwright install chromium  # first run only
+npm run test:e2e                 # every journey, headless
+npm run test:e2e:ui              # pick a test and watch it
 npx playwright test -g "skip link" --headed
 ```
 
 A failure writes `playwright-report/`. Open it with
-`npx playwright show-report`. Each axe scan is attached as JSON, a failing
-test carries its screenshot, and the server's own log is attached under
-`server.log`, which is the first place to look when a page never became
-ready.
+`npx playwright show-report`. It holds each axe scan as JSON, the screenshot
+of a failed test, and the server's log as `server.log`. Specs that take docs
+screenshots save them in `test-results/docs-screenshots/`, or in
+`docs/screenshots/` when `DOCS_SCREENSHOTS=1` is set.
 
-The first run needs Chromium: `npx playwright install chromium`.
+### The rules the suite holds
 
-Two specs save screenshots for the docs, `phone-pages.spec.ts` and
-`account-photo.spec.ts`. A normal run saves them under
-`test-results/docs-screenshots/`, which git ignores, so the committed images
-stay as they are. To refresh the images under `docs/screenshots/`, run the
-suite with `DOCS_SCREENSHOTS=1`:
-
-```bash
-DOCS_SCREENSHOTS=1 npx playwright test tests/e2e/phone-pages.spec.ts tests/e2e/account-photo.spec.ts
-```
-
-## The contracts the suite holds up
-
-### Status messages
-
-WCAG 2.2 SC 4.1.3. A change a sighted person notices without looking for it
-has to reach a screen reader without moving focus.
-
-- **Results and progress take `role="status"`.** The search page keeps one
-  polite region, `LiveStatus` in `src/components/ui/`, named "Search status".
-  It is in the DOM before it has anything to say, because a region that
-  appears with text already in it is announced by some screen readers and
-  skipped by others. The value it mounts with is not spoken, so the results
-  restored on Back to the page are read from the page, not announced twice.
-- **The wording is in `src/lib/searchAnnouncements.ts`** and tested as
-  sentences. A People search speaks twice: that it started, and what it
-  found. The page keeps back the list AI has not checked yet, so nothing is
-  said about that list. A list AI did not check ends "Not verified by AI."
-  A Notes search speaks twice. Nothing speaks on a keystroke.
-- **Errors take `role="alert"`** on the visible error itself, which is the
-  pattern the auth screens and inline field errors already use. The status
-  region says nothing for an error, so a failure is heard once.
-- **A field's error is attached to the field.** `aria-invalid` plus
-  `aria-describedby` pointing at the message, so a screen reader hears what is
-  wrong on the field, not somewhere else on the page.
-
-### Dialogs
-
-Every dialog owes a keyboard user five things, and the shared `Modal`
-primitive supplies them: `role="dialog"` with a name, focus moved inside on
-open, Tab kept inside, Escape to close, and focus returned to the control
-that opened it. The keyboard shortcuts overlay is built on the primitive for
-that reason, and the contact card that opens over search results carries the
-same five by hand because it fills the viewport rather than sitting in a
-card.
-
-### Landmarks and headings
-
-A screen reader user moves through a page by its landmarks and its headings,
-so both follow rules, and `expectPageStructured` scans them with axe's
-`landmark-one-main`, `page-has-heading-one`, `region` and `heading-order` on
-Network, a contact, Pulse, Map, Ask Contrack and Settings. The map answers for
-all four rules now that MapLibre draws it. The scan waits for the "Contact
-map" region and a named pin first, so it reads the map that is on screen and
-not an empty container.
-
-- **One `main` per route, with a name.** The full-page views (Pulse, Ask
-  Contrack, Settings) render inside `<main aria-label="…">`. On a wide screen
-  the contact list is a complementary landmark named "Contacts" beside the
-  contact's main. Below `lg` the list and the contact take turns on screen,
-  so whichever is showing is the main. The list pane changes its `role`
-  rather than its element, because swapping the element would remount the
-  list and lose its search and scroll. The map is the main on `/map`, and a
-  contact opened over it is a region named "Contact".
-- **The map is a region named "Contact map"**, and everything on it is a real
-  button. A pin is named `"<name>, <company>"` and a cluster is named
-  `"<n> contacts, zoom in"`, so a screen reader user hears who is there and what
-  a click does. Focus on a pin opens the same card that hover opens. A cluster
-  that zooming cannot split opens a list of its people, each one a button, so
-  a pin under another pin is still reachable. Escape closes a contact opened
-  over the map, unless a field being edited or a dialog answers the key first.
-- **One `h1` per route.** "Network" on the Network page, the contact's name on
-  a contact page, "Map" (visually hidden), "Pulse", "Ask Contrack" and the
-  Settings page title. Beside an open contact the list's title steps down to
-  an `h2`. Inside a page, sections are `h2` and cards inside them `h3`.
-- **Every destination has one name**, in `src/lib/names.ts`. The sidebar, the
-  tab bar, the command palette, the shortcuts dialog, document titles and the
-  page headings read it, so a place is never "Ask AI" in one spot and "AI
-  Search" in the next.
-- **A control is named by `aria-label` or its text, not by `title`.** A
-  `title` gives a pointer a tooltip and a touch screen nothing.
-- **An explanation is a toggletip, not a `title`.** `InfoTip` in
-  `src/components/ui/` is a button with a 44 px target. A mouse resting on
-  it, a keyboard focus, a click and a tap open it. Escape and a press
-  elsewhere close it, and Escape moves no focus. Only a mouse hovers and
-  only a keyboard focus opens it: a tap also fires a focus, and a panel that
-  opened on that focus was closed by the click after it. The panel stays in
-  the page while it is closed, and the button's `aria-describedby` points
-  at it, so a screen reader hears the explanation on focus. The orange
-  question mark on an Ask result that AI did not check is one.
-
-### Focus
-
-One `:focus-visible` rule in `src/index.css` draws the ring for every
-control: 2 px in the primary colour, outside a control so it survives a
-filled button, and inset on a text field, where it reads as the field's
-border. No component draws a ring of its own, and
-`tests/unit/frontend/style/stylesFloor.test.ts` fails on a `focus:ring-*` class. A
-composite field, such as the Ask search box with its icon and buttons, draws
-the same ring on its box with `.focus-frame`, while a button inside the box
-keeps its own. The suite asserts an indicator is present after a real Tab
-press, in both palettes, and never asserts one after a click, because a
-pointer user is not meant to see it. A text field is the exception browsers
-make: it shows its ring on any focus.
-
-The first Tab stop on every page is "Skip to main content" (WCAG 2.4.1). Its
-target follows the route: the contact's name on a contact page, the list's
-current row on the Network page, and the main landmark everywhere else.
-
-- **The contact list is one Tab stop.** A roving `tabindex`
-  (`src/views/contact-list/useRovingList.ts`) keeps one row in the Tab order.
-  Up and Down move between rows, Home and End jump to the ends, a letter jumps
-  to the next name that starts with it, and Enter opens the row. The letter
-  rail beside a long list is one Tab stop too, with the arrow keys inside it,
-  and draws only the letters that have contacts.
-- **Opening a contact moves focus to its name**, the `h1`, which takes focus
-  with `tabIndex={-1}` and wears no ring. It does not on a fresh page load,
-  where the first Tab belongs to the skip link, nor while someone is typing
-  or inside a dialog.
-- **Back on a phone returns focus to the row the contact was opened from.**
-  The list leaves the screen while a contact is open, so the element that had
-  focus is gone when it comes back. The list focuses the last opened contact's
-  row instead of letting focus fall to the document.
-
-### The Tab budget
-
-A new control in front of the content costs every keyboard user a Tab press
-on every page. `keyboard.spec.ts` holds the count, from the top of the page on
-a desktop:
-
-| Page          | Reaches                   | Within | Made of                                                                     |
-| ------------- | ------------------------- | ------ | --------------------------------------------------------------------------- |
-| A contact     | the contact's name (`h1`) | 17     | skip link, 7 sidebar stops, 6 list controls, the list, the avatar, the name |
-| Network (`/`) | the first row of the list | 15     | skip link, 7 sidebar stops, 6 list controls, the list                       |
-
-The list and the letter rail are one stop each however many people they hold.
-Before this rule the first control in a contact was stop 42. A change that
-needs a new stop in front of the content raises the budget in the spec and
-says why in the pull request.
-
-Both budgets went up by one when the corvid mark on top of the sidebar became
-a button. It is the seventh sidebar stop. It navigates nowhere: it sends the
-bird on a lap of the window and leaves focus exactly where it was, so a
-keyboard user who lands on it by accident loses nothing but one Tab press.
-
-### Phones
-
-Fields render at 16 pixels or more below the `sm` breakpoint, because iOS
-Safari zooms the viewport when a smaller field takes focus. Dialogs become
-bottom sheets.
-
-Every control has a hit box of at least 44 by 44 pixels, and no text is under
-11 pixels. A control that looks smaller carries the `hit-area` utility, which
-grows its tap box without changing how it looks. `metrics.spec.ts` measures
-both floors on six screens, the map among them, and its pins and clusters are
-48 pixels across. `tests/unit/frontend/style/stylesFloor.test.ts` fails on
-`text-[9px]` and `text-[10px]` anywhere in `src/`. See `.agent/STYLE.md` for
-the rules.
+- **Status**: results and progress go to a polite region, `LiveStatus` in
+  `src/components/ui/`, that is in the page before it speaks. The search words
+  are in `src/lib/searchAnnouncements.ts`. An error takes `role="alert"`, and
+  a field's error sets `aria-invalid` and `aria-describedby`.
+- **Dialogs**: build on `Modal` in `src/components/ui/`. It names the dialog,
+  moves focus in, keeps `Tab` inside, closes on `Esc` and returns focus.
+- **Structure**: one named `main` per route, one `h1`, headings in order, and
+  nothing outside a landmark. Destination names come from `src/lib/names.ts`.
+- **Names and focus**: name a control by its text or `aria-label`, never by
+  `title` alone, and put an explanation in `InfoTip`. One `:focus-visible`
+  rule in `src/index.css` draws every ring, and `.focus-frame` draws it on a
+  composite field.
+- **Tab budget**: from the top of the page, a contact's name is within 20
+  presses of `Tab`, and the first Network row within 17. A new stop in front
+  of the content raises the budget in `keyboard.spec.ts`, with the reason in
+  the pull request.
+- **Phones**: 44 px targets, with `hit-area` for a small control, and 16 px
+  fields below `sm`. See `.agent/STYLE.md`.
 
 ## What a person still checks
 
-Automation asserts the markup a screen reader reads from and the focus a
-keyboard user lands on. It cannot hear a screen reader, and the timing and
-phrasing of an announcement is decided by the screen reader and the browser
-together, outside anything the DOM exposes. Before a release, and after any
-change to a live region, a dialog, or the auth screens, one person does the
-pass below. Record the date and the pair used in the release notes.
+Automation checks the markup a screen reader reads and the focus a keyboard
+user lands on. It cannot hear a screen reader. Before a release, and after a
+change to a live region, a dialog or the sign-in screens, one person does this
+pass. Record the date and the screen reader and browser in the release notes.
 
-### Keyboard only, no pointer
+### Keyboard only
 
-Unplug the mouse, or do not touch it.
-
-1. Load `/`. Press Tab once. "Skip to main content" appears in the top-left.
-   Press Enter: focus is on the first contact in the list, not the sidebar.
-   Press Down and Up, then a letter: focus moves through the list without
-   opening anyone. Press Enter: the contact opens and focus is on its name.
-2. Tab through the sidebar. Every stop shows a ring you can see at arm's
-   length, in light and in dark.
-3. Press `/`, type a name, press Escape. The list filters and then clears.
-4. Press `n`. Fill the form with Tab and Enter only. Escape closes it.
-5. Press `?`. Tab a few times: focus never leaves the overlay. Escape returns
-   focus to the shortcuts button.
-6. On `/search`, ask a question. Open a result with Enter. Tab around inside
-   the card, Escape, and confirm focus is back on the result you opened.
-7. Sign out and sign back in with Tab and Enter only.
+1. Load `/` and press `Tab`, then `Enter` on **Skip to main content**. Focus
+   is on the list's current row. `↓`, `↑` and a letter move focus without
+   opening anyone, and `Enter` opens the contact with focus on its name.
+2. Tab through the sidebar. Every stop shows a ring, in light and in dark.
+3. Press `/`, type a name and press `Esc`: the list filters, then clears.
+   Press `N`, fill the form with `Tab` and `Enter`, and close it with `Esc`.
+4. Open the shortcuts dialog from the sidebar's **Keyboard shortcuts**
+   button. Focus stays inside on `Tab`, and `Esc` puts it back on the button.
+5. On **Ask Contrack**, open a result with `Enter`, `Tab` inside the card,
+   and press `Esc`. Focus is back on the result.
+6. Sign out and sign in again with `Tab` and `Enter` only.
 
 ### Screen reader
 
-Two pairs cover most readers: VoiceOver with Safari on macOS, and NVDA with
-Firefox or Chrome on Windows. Do the search page on both.
+Use VoiceOver with Safari on macOS and NVDA with Firefox or Chrome on
+Windows. Do steps 1 to 4 with both.
 
-1. On `/search`, ask a question. You hear, in order, "Searching your network
+1. On **Ask Contrack**, ask a question. You hear "Searching your network
    for …", then "N matches for …" or "No matches for …". Nothing is read
-   twice, and nothing is read while typing.
-2. Switch to Notes with the arrow keys. Type a word. You hear "N notes for …".
-   Choose "Last 30 days". You hear the new count once.
-3. Break the search (stop the server, or turn off the network) and ask
-   again. You hear "Search failed" as an interruption, and nothing from the
-   status region.
-4. Navigate away and back. The results are on screen and nothing is
-   announced.
-5. Open the keyboard shortcuts overlay. The reader says "Keyboard Shortcuts,
-   dialog". Escape, and the reader says where focus landed.
-6. Open a contact from the list. The reader announces the name as heading
-   level 1. The landmarks list shows "Contacts" and "Contact" on a wide
-   screen, and one main on a phone.
-7. On the sign-in screen, submit a wrong password. The reader interrupts with
-   "Incorrect username or password".
-8. On the setup screen, leave the email invalid and Tab away. The field is
-   announced as invalid, with the message.
+   twice, and nothing is read while you type.
+2. Switch to **Notes** with the arrow keys and type a word. You hear "N notes
+   for …". Choose **Last 30 days**, and you hear the new count once.
+3. Stop the server and ask again. You hear "Search failed" as an
+   interruption, and nothing from the status region.
+4. Leave the page and come back. The results show, and nothing is read.
+5. Open the shortcuts dialog. You hear "Keyboard shortcuts, dialog".
+6. Open a contact. You hear its name as heading level 1. The landmarks list
+   shows "Contacts" and "Contact" on a wide screen, and one main on a phone.
+7. Submit a wrong password on the sign-in screen. You hear "Incorrect
+   username or password." On the setup screen, type an email that is not
+   valid and press `Tab`. You hear that the field is not valid, and why.
 
-### Zoom and motion
+### Zoom, motion and a phone
 
-1. At 200% browser zoom, `/`, `/search` and `/settings` show nothing cut off
-   and need no horizontal scrolling.
-2. With "reduce motion" on in the OS, dialogs and result cards appear without
-   animation.
-3. With "reduce motion" on in the OS, the corvid on top of the sidebar does
-   not blink, look about or fly when you click it, whatever "Corvid motion"
-   on the Appearance page is set to, and neither does the bird beside that
-   row.
+1. At 200% browser zoom, `/`, `/search` and `/settings` cut nothing off and
+   need no sideways scrolling.
+2. With reduce motion on in the operating system, dialogs and result cards
+   appear with no animation, and the corvid holds still.
+3. On a phone, or in device mode at 412 px wide, the five tabs are easy to
+   hit. **New contact** rises from the bottom, no field zooms the page, and
+   **Save contact** stays above the keyboard. The account row at the top of
+   **Settings** signs out. With VoiceOver on, **Back** from a contact puts
+   focus on the row you opened.
 
-### The corvid
+## Add a journey
 
-The mark in the sidebar is alive. The bird sits in its ring, the C, and
-blinks, looks about, preens and stretches now and then; the ring itself
-never moves. It answers the app: a nod when a follow-up is done, a hop for
-a new contact. Settings > Appearance > "Corvid motion" sets how much, and
-the bird beside that row shows what each choice does:
+Write the spec against `test` from `tests/e2e/fixtures/test.ts` for an open
+instance, or against `gatedTest` when the journey starts before sign-in. Go
+to a page with `page.goto("/…")`, because each worker sets `baseURL`. Find
+elements by role and name, and assert what the next screen says, not the URL.
+Scan every screen the journey reaches with `expectPageAccessible`, a new page
+with `expectPageStructured` too, and an open dialog with
+`b.include('[role="dialog"]')`. Script a People search with
+`answerPeopleSearch` from `fixtures/search.ts`, and answer the basemap with
+`stubBasemap` from `fixtures/map.ts`.
 
-| Choice | What it does                                                                                      |
-| ------ | ------------------------------------------------------------------------------------------------- |
-| Full   | The bird lives in its ring, and leaves it to fly a lap of the window on a click, then comes back. |
-| Subtle | The bird lives in its ring. A click is a flutter of its wings; it never leaves the ring.          |
-| Off    | Nothing moves.                                                                                    |
+## Related
 
-Two things override the choice, and the row says so when either is on:
-"reduce motion" in the operating system, and the "Motion" row directly above
-it set to Reduced. Either one means the bird holds still on Full.
-
-Nothing the bird does is announced, and nothing it does can get in the way.
-Every drawing is `aria-hidden`. The sidebar's button carries the name
-"Contrack" and the tooltip "Let the corvid fly"; the Appearance row's is
-"Try the corvid". The flight is a fixed layer that ignores pointer events
-and sits under every dialog, panel and menu, so a bird passing over a button
-never swallows the click. Escape lands it at once, and changing page lands
-it too. A flight the bird takes by itself is short, stays near its ring, and
-never starts while a dialog is open or a field has focus. Big acts on the
-perch wait while you type.
-
-### A phone
-
-On a real phone or the browser's device mode at 412 pixels wide:
-
-1. The tab bar's five targets are easy to hit and the current one is marked.
-2. Open "Add Contact". The sheet rises from the bottom, the page does not
-   zoom when a field takes focus, and "Save Contact" is reachable above the
-   keyboard.
-3. The account row at the top of Settings shows who is signed in and signs
-   out.
-4. Open a contact from the list, then tap Back. With VoiceOver on, focus is
-   on the row you opened, not at the top of the page.
-
-## Adding a journey
-
-Write the spec against `test` from `tests/e2e/fixtures/test.ts` for anything
-that works on an open instance, and against `gatedTest` when the journey
-starts before sign-in. Navigate with `page.goto("/…")`; `baseURL` is set per
-worker. Locate by role and name, never by class. Assert what the next screen
-says, not the URL, unless the URL is the point. Scan every screen the journey
-reaches with `expectPageAccessible`, a new page with `expectPageStructured`
-as well, and scan an open dialog with
-`b.include('[role="dialog"]')` so the scan covers the dialog and not the
-page behind it. When a People search is on the path, script it with
-`answerPeopleSearch`, which answers at the network edge and leaves everything
-from the request body to the last render real.
+- [Keyboard shortcuts](keyboard-shortcuts.md)
+- [Getting started](getting-started.md#find-your-way-around)
+- [Architecture](architecture.md)
+- [Contributing](../CONTRIBUTING.md)

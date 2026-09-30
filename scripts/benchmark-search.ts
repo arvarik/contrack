@@ -7,8 +7,7 @@
 //
 //   node scripts/benchmark-search.ts
 //       10,000 simple rows: the cost of a contact edit and of one keyword
-//       search against the FTS index. The numbers docs/search-hardening.md
-//       quotes.
+//       search against the FTS index.
 //
 //   node scripts/benchmark-search.ts --contacts 5000
 //       The search-gate corpus (300 contacts) plus generated contacts up to

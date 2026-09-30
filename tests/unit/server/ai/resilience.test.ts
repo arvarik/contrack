@@ -264,7 +264,7 @@ describe("withRetry", () => {
     const err = await captured;
     expect(err).toBeInstanceOf(ServiceUnavailableError);
     expect(err).toMatchObject({ statusCode: 503, code: "SERVICE_UNAVAILABLE" });
-    // At most one application retry (docs/ai-hardening.md): two calls in all.
+    // At most one application retry: two calls in all.
     expect(op).toHaveBeenCalledTimes(2);
   });
 
