@@ -122,6 +122,31 @@ and `contrack-lockup-dark.svg` for a dark one. Each has a PNG at 240 px tall.
 - The words are outlines, not text, so the lockup looks the same on every
   machine.
 
+## The animated lockup
+
+![The animated lockup on a light ground](contrack-lockup-animated.svg)
+
+The lockup with the bird alive. It heads the repository's README:
+`contrack-lockup-animated.svg` on a light page and
+`contrack-lockup-animated-dark.svg` on a dark one. The box, the ring, the
+strokes and the name are the static lockup's. Only the bird moves.
+
+- **The motion is the app's own.** In a loop of about 25 seconds the bird
+  blinks, looks about, preens, cocks its head, caws without a sound, looks
+  back and stretches a wing. `scripts/brand/animatedLockup.ts` makes each act
+  with its maker in `src/lib/corvidMotion.ts`, from one fixed seed, and the
+  rig draws every frame. No pose is drawn by hand.
+- **At rest it is the logo.** The loop starts and ends on the logo, so it
+  repeats with no jump. In every still moment, each stroke is the logo's own
+  path data.
+- **It moves inside an `<img>`.** A README image runs no script, so each
+  stroke and the eye are animated with SMIL `<animate>`, which every current
+  browser plays. The script samples the loop at 60 frames a second and keeps
+  a frame only where a straight line between its neighbours would miss it by
+  more than a quarter unit. Each file is about 100 KB.
+- **It honours reduced motion.** With `prefers-reduced-motion: reduce`, the
+  file shows the still bird in place of the moving one.
+
 ## The app icon
 
 ![The app icon](corvid-app-icon-1024.png)
@@ -180,17 +205,18 @@ and one weight scaled to every size is what made the tab's bird hard to read.
 
 The kit, in this folder:
 
-| File                           | For                                                   |
-| ------------------------------ | ----------------------------------------------------- |
-| `corvid-mark*.svg`, `.png`     | The logo, in four versions                            |
-| `corvid-app-icon.svg`          | The app icon's master                                 |
-| `corvid-app-icon-1024.png`     | App stores and press kits                             |
-| `contrack-lockup*.svg`, `.png` | The mark and the name                                 |
-| `social-preview.png`           | The repository's card, 1280 × 640                     |
-| `corvid-optical-sizes.png`     | The four masters, for this guide                      |
-| `corvid-mark-variants.png`     | The four versions on their grounds, for this guide    |
-| `corvid-poses.svg`, `.png`     | The model sheet: the bird in every pose its rig takes |
-| `corvid-source.jpg`            | The drawing the paths were traced from                |
+| File                            | For                                                   |
+| ------------------------------- | ----------------------------------------------------- |
+| `corvid-mark*.svg`, `.png`      | The logo, in four versions                            |
+| `corvid-app-icon.svg`           | The app icon's master                                 |
+| `corvid-app-icon-1024.png`      | App stores and press kits                             |
+| `contrack-lockup*.svg`, `.png`  | The mark and the name                                 |
+| `contrack-lockup-animated*.svg` | The lockup with the bird alive, for the README        |
+| `social-preview.png`            | The repository's card, 1280 × 640                     |
+| `corvid-optical-sizes.png`      | The four masters, for this guide                      |
+| `corvid-mark-variants.png`      | The four versions on their grounds, for this guide    |
+| `corvid-poses.svg`, `.png`      | The model sheet: the bird in every pose its rig takes |
+| `corvid-source.jpg`             | The drawing the paths were traced from                |
 
 **The repository's card is set by hand.** GitHub has no API for it. Upload
 `social-preview.png` in the repository's Settings, General, Social preview.

@@ -1,8 +1,8 @@
 <div align="center">
   <h1>
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/contrack-lockup-dark.svg" />
-      <img src="docs/brand/contrack-lockup.svg" alt="Contrack" width="400" />
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/contrack-lockup-animated-dark.svg" />
+      <img src="docs/brand/contrack-lockup-animated.svg" alt="Contrack" width="400" />
     </picture>
   </h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
