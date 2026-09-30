@@ -1,8 +1,12 @@
 import { PASSAGE_VERSION } from "./passageIndex.ts";
 import { getEmbeddingsState } from "../../ai/embeddings.ts";
-import { sqlite } from "../../db.ts";
+import { refreshPlannerStats, sqlite } from "../../db.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
-import { embedContact, isSearchBackfillRunning } from "./localEmbeddings.ts";
+import {
+  BULK_REFRESH_ROWS,
+  embedContact,
+  isSearchBackfillRunning,
+} from "./localEmbeddings.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -268,6 +272,10 @@ export async function drainIndexQueue(
     }
   } finally {
     running = false;
+
+    // A drain that indexed a bulk change leaves the planner's row counts
+    // behind it (see `refreshPlannerStats`).
+    if (result.succeeded >= BULK_REFRESH_ROWS) refreshPlannerStats();
 
     // Check if more retries or items are pending
     const remaining = (

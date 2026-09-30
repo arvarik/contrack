@@ -1925,6 +1925,27 @@ sqlite.exec(`
 sqlite.exec("ANALYZE");
 sqlite.pragma("optimize");
 
+/**
+ * Gather the planner's row counts again.
+ *
+ * SQLite plans from the counts of the last ANALYZE, which runs at boot and
+ * once a day, so after a large change the counts are the old ones: "2 rows"
+ * for a table that holds twenty thousand. Call this when a batch that wrote
+ * thousands of rows finishes: a full index backfill, or a drained queue. It
+ * costs 20 to 400 ms on 5,000 contacts. A failure is logged and no more: the
+ * counts stay as they were, and the next boot gathers them.
+ */
+export function refreshPlannerStats(): void {
+  try {
+    sqlite.exec("ANALYZE");
+  } catch (error) {
+    log.warn(
+      "Database",
+      `ANALYZE after a bulk change failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 // =============================================================================
 // 10. Phonetic Hash Backfill
 // =============================================================================

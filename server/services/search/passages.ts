@@ -176,7 +176,14 @@ export function passageSnapshot(contactId: string): PassageSnapshot | null {
   };
 }
 
-/** Keyword passage retrieval applies ownership, visibility and hard filters before its limit. */
+/**
+ * Keyword passage retrieval applies ownership, visibility and hard filters
+ * before its limit.
+ *
+ * `CROSS JOIN` keeps the full-text match first, with the passage and its
+ * contact looked up from each hit. With stale row counts SQLite scanned
+ * `contacts` first instead (see `findPassageNeighbors`).
+ */
 export function findPassages(
   scope: Scope,
   query: string,
@@ -189,7 +196,8 @@ export function findPassages(
     .prepare(
       `
     SELECT p.* FROM search_passages_fts f
-    JOIN search_passages p ON p.rowid = f.rowid JOIN contacts c ON c.id = p.contactId
+    CROSS JOIN search_passages p ON p.rowid = f.rowid
+    CROSS JOIN contacts c ON c.id = p.contactId
     WHERE search_passages_fts MATCH ? AND c.ownerId = ? AND p.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
       ${ids ? "AND c.id IN (SELECT value FROM json_each(?))" : ""}
       ${facets ? `AND (${facets.sql})` : ""}

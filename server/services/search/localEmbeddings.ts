@@ -24,6 +24,7 @@ import {
 // =============================================================================
 
 import {
+  refreshPlannerStats,
   sqlite,
   vecElementFor,
   vecTableDdl,
@@ -80,6 +81,12 @@ let initPromise: Promise<void> | null = null;
 
 const MODEL_ID = EMBEDDING_MODEL_ID;
 const BACKFILL_BATCH_SIZE = 64;
+
+/**
+ * From this many contacts embedded in one run, the planner's row counts are
+ * gathered again. Below it the tables did not change enough to matter.
+ */
+export const BULK_REFRESH_ROWS = 100;
 
 // =============================================================================
 // Initialization (lazy singleton)
@@ -473,7 +480,17 @@ export function getSearchEmbeddingCount(scope: Scope): number {
   return row.c;
 }
 
-/** Read passage vectors in the same space as contact vectors and the query. */
+/**
+ * Read passage vectors in the same space as contact vectors and the query.
+ *
+ * `CROSS JOIN` fixes the order of the join: the nearest-neighbour search is
+ * the outer loop and runs once, and each of its rows looks up its passage.
+ * Left to choose, SQLite plans from the row counts at the last ANALYZE. After
+ * a bulk index those say "2 passages" for a table of twenty thousand, and it
+ * put `search_passages` first, which ran this search once for every passage:
+ * 145 seconds instead of 60 milliseconds (`refreshPlannerStats` keeps the
+ * counts fresh too, but a plan that cannot go wrong does not need them).
+ */
 export function findPassageNeighbors(
   scope: Scope,
   query: Float32Array,
@@ -496,7 +513,7 @@ export function findPassageNeighbors(
       SELECT passageId, distance FROM search_passage_vectors
       WHERE embedding MATCH vec_int8(?) AND ownerId = ? AND ${VEC_ACTIVE_MATCH}
         ${filter} AND k = 300 ORDER BY distance
-    ) n JOIN search_passages p ON p.id = n.passageId
+    ) n CROSS JOIN search_passages p ON p.id = n.passageId
     WHERE p.ownerId = ? ORDER BY n.distance, p.id
   `,
     )
@@ -880,6 +897,9 @@ async function runBackfill(): Promise<number> {
     }
   }
 
+  // A backfill writes thousands of vectors and passages, so the planner's row
+  // counts from boot are out of date (see `refreshPlannerStats`).
+  if (embedded >= BULK_REFRESH_ROWS) refreshPlannerStats();
   log.info(
     "LocalEmbeddings",
     `Backfilled ${embedded} search embeddings for ${queues.length} account(s) in ${Date.now() - t0}ms`,
