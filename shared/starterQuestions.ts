@@ -7,9 +7,19 @@
  * @module shared/starterQuestions
  */
 
-/** What a question asks about: the contact field its value comes from. */
+/**
+ * What a question asks about: the contact field its value comes from, or
+ * `general` for a question that names no value (`shared/generalQuestions.ts`).
+ */
 export type StarterKind =
-  "industry" | "city" | "company" | "interest" | "role" | "pair" | "tag";
+  | "industry"
+  | "city"
+  | "company"
+  | "interest"
+  | "role"
+  | "pair"
+  | "tag"
+  | "general";
 
 export interface StarterQuestion {
   /** The question, ready to ask. */

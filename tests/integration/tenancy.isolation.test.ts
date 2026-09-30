@@ -1817,12 +1817,18 @@ describe("GET /api/search/coverage", () => {
 });
 
 describe("GET /api/search/starters", () => {
+  const pool = async (actor: Actor) => {
+    const res = await asUser(actor)(request(app).get("/api/search/starters"));
+    expect(res.status).toBe(200);
+    return res.body.questions as { text: string; kind: string }[];
+  };
+  /** The questions built from values the account's contacts hold. */
+  const valuesOf = async (actor: Actor) =>
+    (await pool(actor)).filter((q) => q.kind !== "general").map((q) => q.text);
+  const generalOf = async (actor: Actor) =>
+    (await pool(actor)).filter((q) => q.kind === "general").map((q) => q.text);
+
   it("builds each account's questions from its own contacts only", async () => {
-    const pool = async (actor: Actor) => {
-      const res = await asUser(actor)(request(app).get("/api/search/starters"));
-      expect(res.status).toBe(200);
-      return (res.body.questions as { text: string }[]).map((q) => q.text);
-    };
     // B has fewer than ten contacts, so a value one of them holds is a
     // question, and a value only A holds (Company 5 to 19, Quarrington
     // Holdings, the actuary) would be one too if the pool read across
@@ -1839,11 +1845,52 @@ describe("GET /api/search/starters", () => {
         .all(B.user.id) as { company: string }[]
     ).map((row) => `Who works at ${row.company}?`);
     expect(companies.length).toBeGreaterThan(0);
-    expect((await pool(B)).sort()).toEqual(companies.sort());
+    expect((await valuesOf(B)).sort()).toEqual(companies.sort());
     // C has no contacts, so nothing to ask about.
     expect(await pool(C)).toEqual([]);
     // A has 21, so a value needs two holders, and each of A's is its own.
-    expect(await pool(A)).toEqual([]);
+    expect(await valuesOf(A)).toEqual([]);
+  });
+
+  it("offers a general question only to an account whose own contacts it finds", async () => {
+    // The seeded contacts may already be tracked, so set the state: nobody is
+    // tracked, then one of B's contacts is. What was there is put back.
+    const trackedIds = (
+      sqlite
+        .prepare(
+          "SELECT id FROM contacts WHERE ownerId IN (?, ?) AND isTracked = 1",
+        )
+        .all(A.user.id, B.user.id) as { id: string }[]
+    ).map((row) => row.id);
+    const setTracked = (ids: string[], value: 0 | 1) => {
+      const update = sqlite.prepare(
+        "UPDATE contacts SET isTracked = ? WHERE id = ?",
+      );
+      for (const id of ids) update.run(value, id);
+    };
+    const [row] = sqlite
+      .prepare(
+        `SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NULL
+           AND canonicalId IS NULL AND isGhost = 0 LIMIT 1`,
+      )
+      .all(B.user.id) as { id: string }[];
+
+    setTracked(trackedIds, 0);
+    try {
+      expect(await generalOf(A)).not.toContain("Who do I track?");
+      expect(await generalOf(B)).not.toContain("Who do I track?");
+
+      // One of B's contacts is tracked. Nobody of A's is, and the question
+      // must not come from B's row.
+      setTracked([row!.id], 1);
+      expect(await generalOf(B)).toContain("Who do I track?");
+      expect(await generalOf(A)).not.toContain("Who do I track?");
+      // An account with no contacts gets no general question at all.
+      expect(await generalOf(C)).toEqual([]);
+    } finally {
+      setTracked([row!.id], 0);
+      setTracked(trackedIds, 1);
+    }
   });
 });
 

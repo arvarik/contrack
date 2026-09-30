@@ -790,10 +790,11 @@ describe("the page", () => {
     const first = await chips();
     expect(first).toHaveLength(6);
     for (const text of first) expect(POOL.map((q) => q.text)).toContain(text);
-    // At most two of one kind while other kinds are left.
-    expect(
-      first.filter((text) => text?.startsWith("Who works in")),
-    ).toHaveLength(2);
+    // The draw picks kinds first: five kinds and six places, so every kind
+    // is in it, and the sixth question comes from a kind with more.
+    const kindOf = (text: string | null) =>
+      POOL.find((q) => q.text === text)?.kind;
+    expect(new Set(first.map(kindOf)).size).toBe(5);
 
     ask(QUESTION);
     await screen.findByText("Ada Lovelace");
