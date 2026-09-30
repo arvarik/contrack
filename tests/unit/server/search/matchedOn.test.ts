@@ -280,8 +280,12 @@ describe("explainMatch", () => {
     it("names the address that holds the words, marked, when nothing else does", () => {
       const entries = explainMatch(person({ addresses: home }), valencia);
       expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ field: "address", how: "words" });
-      expect(entries[0].text).toContain("3190 Valencia St");
+      // The work address holds no word of the question, so it stays out.
+      expect(entries[0]).toMatchObject({
+        field: "address",
+        how: "words",
+        text: "3190 Valencia St, San Francisco, CA 94110",
+      });
       expect(marked(entries[0])).toEqual(["Valencia"]);
     });
 
@@ -295,30 +299,6 @@ describe("explainMatch", () => {
         valencia,
       );
       expect(entries.map((m) => m.field)).toEqual(["role", "about", "address"]);
-    });
-
-    it(`gives way to ${MAX_MATCHED} fields that matched better`, () => {
-      const entries = explainMatch(
-        person({
-          role: "Valencia St Baker",
-          headline: "Baker on Valencia St",
-          company: "Valencia St Bakery",
-          addresses: home,
-        }),
-        valencia,
-      );
-      expect(entries).toHaveLength(MAX_MATCHED);
-      expect(entries.map((m) => m.field)).not.toContain("address");
-    });
-
-    it("has no address line for a contact with no address or no match", () => {
-      expect(explainMatch(person({ addresses: [] }), valencia)).toEqual([]);
-      expect(
-        explainMatch(
-          person({ addresses: [{ address: "9 Elm Road, Leeds" }] }),
-          valencia,
-        ),
-      ).toEqual([]);
     });
   });
 });

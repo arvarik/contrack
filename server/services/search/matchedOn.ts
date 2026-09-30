@@ -448,9 +448,13 @@ function fieldText(
       return joinItems(schools.filter(Boolean), terms, onlyMarked);
     }
     case "address":
-      return value
-        ? plain(value)
-        : joinItems(strings(contact.addresses, "address"), terms, onlyMarked);
+      // No filter, reranker or passage proves an address, so there is never
+      // a value to quote.
+      return joinItems(
+        strings(contact.addresses, "address"),
+        terms,
+        onlyMarked,
+      );
     case "lastContact": {
       const ago = lastContactAgo(contact.lastContactedAt, now);
       return { text: ago ?? "None logged", marks: [] };
