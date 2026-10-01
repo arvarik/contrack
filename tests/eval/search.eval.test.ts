@@ -89,10 +89,7 @@ vi.mock(
 
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
-import {
-  rerankModel,
-  setPairScorer,
-} from "../../server/services/search/crossEncoder.ts";
+import { rerankModel, setReranker } from "../../server/ai/reranker.ts";
 import {
   CHANNELS,
   EVAL_DIMENSION,
@@ -100,7 +97,7 @@ import {
   loadFixture,
   loadRerankScores,
   measure,
-  replayScorer,
+  replayReranker,
   seedCorpus,
   seedVectors,
   type Baseline,
@@ -148,7 +145,7 @@ beforeAll(async () => {
   // turn a timing into a ranking change.
   rerankScores = loadRerankScores();
   process.env.SEARCH_RERANK_BUDGET_MS = "60000";
-  setPairScorer(replayScorer(rerankScores, missingPairs));
+  setReranker(replayReranker(rerankScores, missingPairs));
 
   seededContacts = (
     sqlite
@@ -165,7 +162,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(() => {
-  setPairScorer(null);
+  setReranker(null);
   delete process.env.SEARCH_RERANK_BUDGET_MS;
 });
 

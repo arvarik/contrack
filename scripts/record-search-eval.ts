@@ -63,13 +63,13 @@ async function main(): Promise<void> {
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
   const localEmbeddings =
     await import("../server/services/search/localEmbeddings.ts");
-  const crossEncoder =
-    await import("../server/services/search/crossEncoder.ts");
+  const embedder = await import("../server/ai/embedder.ts");
+  const reranker = await import("../server/ai/reranker.ts");
   const {
     seedCorpus,
     seedVectors,
     measure,
-    recordingScorer,
+    recordingReranker,
     CHANNELS,
     EVAL_DIMENSION,
     RERANK_SCORES_PATH,
@@ -85,8 +85,13 @@ async function main(): Promise<void> {
   const { idByKey } = await seedCorpus(scope, contacts);
   console.log("corpus seeded");
 
-  await localEmbeddings.initLocalEmbeddings();
-  if (!localEmbeddings.isLocalEmbeddingReady()) {
+  await embedder.initBuiltinEmbedder();
+  if (embedder.currentEmbedder() !== embedder.builtinEmbedder) {
+    throw new Error(
+      "The fixture records the built-in embedding model. Unset AI_EMBEDDINGS_MODEL and record again.",
+    );
+  }
+  if (!embedder.builtinEmbedder.ready()) {
     throw new Error(
       "The local embedding model did not load. The fixture cannot be recorded without it.",
     );
@@ -136,28 +141,27 @@ async function main(): Promise<void> {
   // The cross-encoder runs on the worker, and every pair it scores while the
   // baseline is measured is recorded. The budget is lifted: the recording
   // must hold every pair, whatever this machine's speed.
-  if (!(await crossEncoder.initCrossEncoder())) {
+  const model = reranker.rerankModel();
+  if (!model || !(await reranker.initCrossEncoder(model))) {
     throw new Error(
-      `The cross-encoder ${crossEncoder.rerankModel()} did not load. The fixture cannot be recorded without it.`,
+      `The cross-encoder ${model} did not load. The fixture cannot be recorded without it.`,
     );
   }
   process.env.SEARCH_RERANK_BUDGET_MS = "60000";
   const scores: Record<string, Record<string, number>> = {};
-  crossEncoder.setPairScorer(
-    recordingScorer(crossEncoder.scoreOnWorker, scores),
-  );
+  reranker.setReranker(recordingReranker(reranker.crossEncoder(model), scores));
 
   // Measured with the models loaded, which is the same arithmetic the gate
   // runs with the recordings: the gate's `embedText` returns the rows
-  // written above and its scorer the scores written below, so both sides see
-  // identical inputs.
+  // written above and its reranker the scores written below, so both sides
+  // see identical inputs.
   const measurement = await measure(scope, queries, idByKey);
   const pairs = Object.values(scores).reduce(
     (sum, byDoc) => sum + Object.keys(byDoc).length,
     0,
   );
   write(RERANK_SCORES_PATH, {
-    model: crossEncoder.rerankModel(),
+    model,
     recordedAt: new Date().toISOString(),
     pairs,
     scores,

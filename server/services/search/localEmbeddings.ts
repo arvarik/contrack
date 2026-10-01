@@ -6,21 +6,17 @@ import {
   type SearchPassage,
 } from "./passages.ts";
 // =============================================================================
-// Local Embedding Service — Zero-Latency Semantic Search Embeddings
+// The search vector store
 // =============================================================================
-// Uses @huggingface/transformers (Transformers.js) to run the all-MiniLM-L6-v2
-// embedding model directly in-process. This eliminates the Gemini embedding API
-// dependency for search queries, providing:
+// Ask Contrack's vectors: one int8 vector per contact in `search_embeddings`
+// and one per passage in `search_passage_vectors` (`vectorScale.ts`), both
+// partitioned by owner. This file writes them, finds their neighbours, keeps
+// them in step with the embeddings capability, and backfills them.
 //
-// - ~3-5ms query embedding (vs ~150ms+ cloud API)
-// - 100% offline capability
-// - Zero rate-limit risk
-// - ~2s backfill for 960 contacts (vs 30s+ with Gemini)
-//
-// The model produces 384-dimensional L2-normalized vectors, stored as int8 in
-// a separate `search_embeddings` vec0 table (`vectorScale.ts`). The dedupe
-// engine continues using Gemini's 768-dim embeddings for higher-accuracy
-// similarity.
+// It runs no model. Every vector comes from the embedder
+// (`server/ai/embedder.ts`): the built-in model on the CPU worker unless a
+// provider model is pinned. `embedText` embeds a question and `embedBatch`
+// embeds documents, the contact and passage texts.
 // =============================================================================
 
 import {
@@ -43,218 +39,44 @@ import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
-import { getErrorMessage } from "../../utils/helpers.ts";
-import { isWorkerActive, runOnWorker } from "../../workers/cpuHost.ts";
-import { unflatten } from "../../workers/protocol.ts";
 import {
   resolveEmbeddings,
-  embedWithProvider,
-  mayEmbedContactsFor,
   probeDimension,
   getEmbeddingsState,
   setEmbeddingsState,
-  BUILTIN_DIMENSION,
 } from "../../ai/embeddings.ts";
-// Type-only import — fully erased at compile time, so the runtime module
-// graph still loads @huggingface/transformers lazily via dynamic import.
-import type { FeatureExtractionPipeline } from "@huggingface/transformers";
-import {
-  EMBEDDING_MODEL_ID,
-  configureModelLibrary,
-  describeModelLoadError,
-} from "./modelFiles.ts";
+import { currentEmbedder, mayEmbedContactsFor } from "../../ai/embedder.ts";
 import type { CompiledFacets } from "./facetSql.ts";
 
-// =============================================================================
-// Types & State
-// =============================================================================
-
-/**
- * The pipeline on THIS thread, used only when the worker could not start.
- *
- * Normally null for the life of the process: the model lives on the CPU
- * worker and this thread never loads it.
- */
-let fallbackExtractor: FeatureExtractionPipeline | null = null;
-let modelReady = false;
-let initPromise: Promise<void> | null = null;
-
-const MODEL_ID = EMBEDDING_MODEL_ID;
 const BACKFILL_BATCH_SIZE = 64;
 
 // =============================================================================
-// Initialization (lazy singleton)
+// Embedding
 // =============================================================================
 
 /**
- * Load the local embedding model. Called once on server startup.
- * Uses dynamic import for @huggingface/transformers to avoid
- * blocking the module graph during build.
- */
-export async function initLocalEmbeddings(): Promise<void> {
-  if (modelReady) return;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      const t0 = Date.now();
-      // One text through the real path, which loads the model wherever the
-      // model lives: on the worker normally, on this thread when the worker
-      // could not start. Doing it at boot rather than on the first search
-      // keeps the two-and-a-half second cold load off somebody's query.
-      const [probe] = await embedTexts(["contrack"]);
-      if (!probe || probe.length !== BUILTIN_DIMENSION) {
-        throw new Error(
-          `The embedding model returned ${probe?.length ?? 0} dimensions, expected ${BUILTIN_DIMENSION}`,
-        );
-      }
-      modelReady = true;
-      log.info(
-        "LocalEmbeddings",
-        `Model ${MODEL_ID} ready in ${Date.now() - t0}ms (${BUILTIN_DIMENSION}-dim, q8, ` +
-          `${isWorkerActive() ? "CPU worker" : "in process"})`,
-      );
-    } catch (err: unknown) {
-      log.warn(
-        "LocalEmbeddings",
-        `Failed to load local embedding model: ${describeModelLoadError(getErrorMessage(err), MODEL_ID)}`,
-      );
-      modelReady = false;
-    }
-  })();
-
-  try {
-    await initPromise;
-  } finally {
-    initPromise = null;
-  }
-}
-
-/** Check if the local embedding model is ready. */
-export function isLocalEmbeddingReady(): boolean {
-  return modelReady;
-}
-
-// =============================================================================
-// Embedding Generation
-// =============================================================================
-
-/**
- * Embed a single text string into a 384-dim Float32Array.
- * Returns null if the model isn't ready.
- * Typical latency: ~3-5ms on CPU.
+ * Embed one search question with the current embedder.
+ * Null when the embedder answers with no vector.
  */
 export async function embedText(
   text: string,
   signal?: AbortSignal,
 ): Promise<Float32Array | null> {
-  const [vector] = await embedTexts([text], signal);
+  const [vector] = await currentEmbedder().embed([text], "query", signal);
   return vector ?? null;
 }
 
-/**
- * Embed one or more texts using the configured embeddings capability.
- *
- * Routes to the pinned provider model when the embeddings capability is
- * configured, otherwise to the bundled local model. Returns an empty array
- * when no backend is available (search degrades to FTS-only).
- */
-async function embedTexts(
-  texts: string[],
-  signal?: AbortSignal,
-): Promise<Float32Array[]> {
-  signal?.throwIfAborted();
-  if (texts.length === 0) return [];
-  const resolved = resolveEmbeddings();
-
-  if (resolved.kind === "provider" && resolved.providerId && resolved.model) {
-    const vectors = await embedWithProvider(
-      resolved.providerId,
-      resolved.model,
-      texts,
-    );
-    return vectors.map((v) => new Float32Array(v));
-  }
-
-  // No `modelReady` gate. This function is what decides whether the model
-  // works: `initLocalEmbeddings` calls it once at boot with a probe text and
-  // sets the flag from the answer. Gating on the flag here would mean the
-  // probe could never succeed.
-  //
-  // The model runs on the CPU worker. Running it here held the event loop for
-  // 3.1 of the 3.3 seconds a 2,000-contact backfill took, in bursts of up to
-  // 129 ms, and on a shared instance that is every other account's requests
-  // waiting behind one account's index being built.
-  //
-  // The query path goes the same way, even though one text is only 0.8 ms.
-  // Measured, the round trip costs 0.44 ms against 0.39 ms in process, and
-  // routing everything through one place means one copy of the model in
-  // memory rather than two.
-  const vectors = await runOnWorker(
-    { kind: "embed", texts, batchSize: BACKFILL_BATCH_SIZE },
-    () => embedTextsInProcess(texts),
-    (result) => {
-      if (result.kind !== "embed") throw new AppError("Wrong worker result");
-      // Copied out of the transferred buffer. `subarray` is a view, and the
-      // caller keeps these vectors past the life of the message.
-      return unflatten(result).map((v) => new Float32Array(v));
-    },
-    undefined,
-    signal,
-  );
-
-  for (const vec of vectors) {
-    // Guards against a silent local-model swap by a contributor.
-    if (vec.length !== BUILTIN_DIMENSION) {
-      throw new AppError(
-        `Expected ${BUILTIN_DIMENSION}-dim vector from the built-in model, got ${vec.length}`,
-      );
-    }
-  }
-  return vectors;
+/** Embed contact and passage texts with the current embedder, in one call. */
+export function embedBatch(texts: string[]): Promise<Float32Array[]> {
+  return currentEmbedder().embed(texts, "document");
 }
 
 /**
- * The model, on this thread.
- *
- * Only reached when the worker could not start. It keeps a second copy of the
- * model in memory, which is the price of the product still working on a Node
- * build where `worker_threads` is unavailable.
- */
-async function embedTextsInProcess(texts: string[]): Promise<Float32Array[]> {
-  if (!fallbackExtractor) {
-    const { pipeline, env: hfEnv } = await import("@huggingface/transformers");
-    configureModelLibrary(hfEnv);
-    fallbackExtractor = await pipeline("feature-extraction", MODEL_ID, {
-      dtype: "q8",
-      session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
-    });
-  }
-  const output = await fallbackExtractor(texts, {
-    pooling: "mean",
-    normalize: true,
-  });
-  return (output.tolist() as number[][]).map((v) => new Float32Array(v));
-}
-
-/**
- * Embed multiple texts in a single batch. More efficient than
- * calling embedText() in a loop.
- */
-export async function embedBatch(
-  texts: string[],
-): Promise<(Float32Array | null)[]> {
-  return embedTexts(texts);
-}
-
-/**
- * True when *some* embedding backend is usable: either the local model has
- * loaded or a provider model is configured for the embeddings capability.
+ * True when the current embedder can answer: the built-in model has loaded,
+ * or a provider model is configured for the embeddings capability.
  */
 export function isSearchEmbeddingReady(): boolean {
-  const resolved = resolveEmbeddings();
-  if (resolved.kind === "provider") return true;
-  return modelReady;
+  return currentEmbedder().ready();
 }
 
 /**
@@ -534,13 +356,13 @@ async function embedPassageSnapshots(
     const batch = await embedBatch(texts);
     if (
       batch.length !== texts.length ||
-      batch.some((vector) => !vector || !vector.every(Number.isFinite))
+      batch.some((vector) => !vector.every(Number.isFinite))
     ) {
       throw new AppError(
         "Embedding backend returned incomplete passage vectors",
       );
     }
-    vectors.push(...(batch as Float32Array[]));
+    vectors.push(...batch);
   }
   let offset = 0;
   return snapshots.map((snapshot) => {
@@ -767,10 +589,7 @@ async function embedSearchRound(
       );
     }
 
-    const scale = writeScale([
-      ...vectors.filter((vec): vec is Float32Array => !!vec),
-      ...passageVectors.flat(),
-    ]);
+    const scale = writeScale([...vectors, ...passageVectors.flat()]);
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
@@ -950,7 +769,7 @@ export async function embedContact(
   const generation = getEmbeddingsState()?.generation;
   const snapshot = passageSnapshot(contactId);
   if (!snapshot) return { status: "skipped", reason: "inactive_or_deleted" };
-  const vec = await embedText(text);
+  const [vec] = await embedBatch([text]);
   const [passageVectors] = await embedPassageSnapshots([snapshot]);
   if (!vec) {
     throw new Error(

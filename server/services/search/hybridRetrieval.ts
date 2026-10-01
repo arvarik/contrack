@@ -20,7 +20,7 @@ import {
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
 import { roleVariants } from "../../ai/queryConstraints.ts";
-import { resolveEmbeddings } from "../../ai/embeddings.ts";
+import { currentEmbedder } from "../../ai/embedder.ts";
 import { withTimeout } from "../../ai/resilience.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";
@@ -376,7 +376,7 @@ function ftsRetrieval(
  * The vector of a question, or null when nothing here can embed it.
  *
  * The vector channel's own gates: an embedding backend is ready, the owner
- * has vectors to search, and with AI off only the built-in model may embed.
+ * has vectors to search, and with AI off only a local model may embed.
  * Ask computes it once, and the semantic cache, the local list and the model
  * stage all read the same vector. A failure is logged and counts as none.
  */
@@ -388,12 +388,15 @@ export async function embedQuery(
 ): Promise<Float32Array | null> {
   if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0)
     return null;
-  if (!aiAllowed && resolveEmbeddings().kind === "provider") return null;
+  const { local } = currentEmbedder();
+  if (!aiAllowed && !local) return null;
   try {
     // A backfill can hold the worker queue. A query must not wait behind
     // it before the planner's own budget even starts. Cancel queued local
-    // work after 100 ms and keep the keyword channel available.
-    return resolveEmbeddings().kind === "builtin"
+    // work after 100 ms and keep the keyword channel available. A local
+    // model always runs on that worker: the main thread never loads
+    // onnxruntime (`cpuWorker.ts`).
+    return local
       ? await withTimeout((budget) => embedText(text, budget), 100, signal)
       : await embedText(text, signal);
   } catch (err: unknown) {
@@ -420,8 +423,8 @@ async function vectorRetrieval(
     return { items: [], vector: null };
   }
   // A provider's embedding model is a model call. With AI off for the
-  // account only the built-in model may embed the query.
-  if (!aiAllowed && !queryVector && resolveEmbeddings().kind === "provider")
+  // account only a local model may embed the query.
+  if (!aiAllowed && !queryVector && !currentEmbedder().local)
     return { items: [], vector: null };
 
   try {

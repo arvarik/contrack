@@ -31,12 +31,12 @@ import {
   ensureDedupeEmbeddingStore,
 } from "./server/services/dedupe/embeddings.ts";
 import {
-  initLocalEmbeddings,
   backfillSearchEmbeddings,
   ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
+import { initBuiltinEmbedder } from "./server/ai/embedder.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
-import { initCrossEncoder } from "./server/services/search/crossEncoder.ts";
+import { initCrossEncoder } from "./server/ai/reranker.ts";
 import { warmStarterQuestions } from "./server/services/search/starterQuestions.ts";
 import {
   mailLinkOrigin,
@@ -316,7 +316,7 @@ async function startServer() {
   // ── Local embedding model for Ask Contrack v3 ───────────────────────────
   // Load the Transformers.js model, then backfill search embeddings.
   // Non-blocking — the server is fully usable while this runs.
-  initLocalEmbeddings()
+  initBuiltinEmbedder()
     .then(() => {
       // The search cross-encoder loads on the same worker, once, so no
       // person's first question pays for it. Its job takes its turn beside

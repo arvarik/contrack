@@ -82,7 +82,8 @@ import {
   semanticEntryCount,
 } from "../../server/services/search/semanticCache.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
-import { setPairScorer } from "../../server/services/search/crossEncoder.ts";
+import { setReranker } from "../../server/ai/reranker.ts";
+import { builtinEmbedder, setEmbedder } from "../../server/ai/embedder.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, localOwnerId, resetAccounts } from "./tenancy/helpers.ts";
 
@@ -186,7 +187,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  setPairScorer(null);
+  setReranker(null);
+  setEmbedder(null);
 });
 
 describe("the setup", () => {
@@ -220,6 +222,13 @@ describe("L1 and L2 answer a repeated question", () => {
     expect(modelCalls()).toBe(calls);
   });
 
+  it("leaves L2 to the built-in model, the one its threshold was measured on", async () => {
+    setEmbedder({ ...builtinEmbedder, id: "test/other-model" });
+    await seedLocal();
+    await ask(ASKED);
+    expect((await ask(REWORDED)).cached).toBeFalsy();
+  });
+
   it("keeps only answers a model or the database verified", async () => {
     await seedLocal();
     vi.mocked(generateFor).mockRejectedValue(new Error("Provider unavailable"));
@@ -249,12 +258,17 @@ describe("a contact edit", () => {
     const scoring = new Promise<void>((resolve) => {
       started = resolve;
     });
-    setPairScorer(async ({ docs }) => {
-      started();
-      await new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      return docs.map((_, index) => -index);
+    setReranker({
+      id: "held",
+      local: true,
+      ready: () => true,
+      async score(_query, docs) {
+        started();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return docs.map((_, index) => -index);
+      },
     });
     const pending = searchService.semanticSearch(
       scope(),

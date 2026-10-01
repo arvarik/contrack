@@ -1,10 +1,10 @@
 // =============================================================================
-// The local cross-encoder stage
+// The rerank stage and the cross-encoder
 // =============================================================================
-// `rerankLocal` reorders the top of the local list by cross-encoder score,
-// inside a time budget. Past the budget the list keeps its fused order and
-// the late scores are dropped. The worker is replaced here: scores come from
-// a scorer the test controls, through the same seam the search gate uses to
+// `rerankLocal` reorders the top of the local list by reranker score, inside
+// a time budget. Past the budget the list keeps its fused order and the late
+// scores are dropped. The worker is replaced here: scores come from a
+// reranker the test controls, through the same seam the search gate uses to
 // replay recorded scores, or from a mocked worker host.
 // =============================================================================
 
@@ -32,32 +32,45 @@ vi.mock("../../../../server/workers/cpuHost.ts", () => ({
 
 import {
   DEFAULT_RERANK_BUDGET_MS,
-  DEFAULT_RERANK_MODEL,
   RERANK_CANDIDATES,
-  initCrossEncoder,
-  isCrossEncoderReady,
   profileText,
   rerankBudgetMs,
   rerankLocal,
+} from "../../../../server/services/search/rerank.ts";
+import {
+  DEFAULT_RERANK_MODEL,
+  crossEncoder,
+  currentReranker,
+  initCrossEncoder,
   rerankModel,
-  scoreOnWorker,
-  setPairScorer,
-  type PairRequest,
-} from "../../../../server/services/search/crossEncoder.ts";
+  rerankerFor,
+  setReranker,
+  type Reranker,
+} from "../../../../server/ai/reranker.ts";
 
 const people = (...names: string[]) => names.map((name) => ({ name }));
 const names = (list: { name: unknown }[]) => list.map((p) => p.name);
 
-/** A scorer that gives each document the score its name maps to. */
+/** A local reranker whose `score` is `score`. */
+const fake = (score: Reranker["score"]): Reranker => ({
+  id: "fake",
+  local: true,
+  ready: () => true,
+  score,
+});
+
+/** A reranker that gives each document the score its name maps to. */
 function scoresByName(scores: Record<string, number>, delayMs = 0) {
-  const calls: PairRequest[] = [];
+  const calls: { query: string; docs: string[] }[] = [];
   const signals: AbortSignal[] = [];
-  setPairScorer(async (request, signal) => {
-    calls.push(request);
-    signals.push(signal);
-    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
-    return request.docs.map((doc) => scores[doc.split(" | ")[0]] ?? 0);
-  });
+  setReranker(
+    fake(async (query, docs, signal) => {
+      calls.push({ query, docs });
+      signals.push(signal);
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return docs.map((doc) => scores[doc.split(" | ")[0]] ?? 0);
+    }),
+  );
   return { calls, signals };
 }
 
@@ -71,7 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  setPairScorer(null);
+  setReranker(null);
   vi.restoreAllMocks();
 });
 
@@ -103,14 +116,13 @@ describe("reordering inside the budget", () => {
     expect(names(list)).toEqual(["Grace", "Ada", "Alan", "Edsger"]);
   });
 
-  it("scores the default number of candidates with the configured model", async () => {
+  it("scores the default number of candidates", async () => {
     const { calls } = scoresByName({});
     const many = Array.from({ length: RERANK_CANDIDATES + 5 }, (_, i) => ({
       name: `Person ${i}`,
     }));
     await rerankLocal("q", many);
     expect(calls[0].docs).toHaveLength(RERANK_CANDIDATES);
-    expect(calls[0].model).toBe(DEFAULT_RERANK_MODEL);
     expect(calls[0].query).toBe("q");
   });
 });
@@ -158,21 +170,17 @@ describe("when the stage cannot run", () => {
     process.env.SEARCH_RERANK_MODEL = "off";
     const { calls } = scoresByName({ Grace: 3 });
     expect(rerankModel()).toBeNull();
-    expect(isCrossEncoderReady()).toBe(false);
+    // Off wins over a replacement too.
+    expect(currentReranker()).toBeNull();
     const list = await rerankLocal("q", people("Ada", "Grace"));
     expect(names(list)).toEqual(["Ada", "Grace"]);
     expect(calls).toHaveLength(0);
   });
 
-  it("reads another model from SEARCH_RERANK_MODEL", () => {
-    process.env.SEARCH_RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2";
-    expect(rerankModel()).toBe("Xenova/ms-marco-MiniLM-L-6-v2");
-  });
-
   it("is skipped until a model has loaded", async () => {
-    expect(isCrossEncoderReady("Xenova/not-loaded")).toBe(false);
+    expect(crossEncoder("Xenova/not-loaded").ready()).toBe(false);
     const list = await rerankLocal("q", people("Ada", "Grace"), 25, {
-      model: "Xenova/not-loaded",
+      reranker: crossEncoder("Xenova/not-loaded"),
     });
     expect(names(list)).toEqual(["Ada", "Grace"]);
     expect(host.jobs).toHaveLength(0);
@@ -180,20 +188,22 @@ describe("when the stage cannot run", () => {
 
   it("keeps the fused order when scoring fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    setPairScorer(async () => {
-      throw new Error("session lost");
-    });
+    setReranker(
+      fake(async () => {
+        throw new Error("session lost");
+      }),
+    );
     const list = await rerankLocal("q", people("Ada", "Grace"));
     expect(names(list)).toEqual(["Ada", "Grace"]);
   });
 
   it("keeps the fused order when the scores do not fit the list", async () => {
-    setPairScorer(async () => [1]);
+    setReranker(fake(async () => [1]));
     expect(names(await rerankLocal("q", people("Ada", "Grace")))).toEqual([
       "Ada",
       "Grace",
     ]);
-    setPairScorer(async () => [1, Number.NaN]);
+    setReranker(fake(async () => [1, Number.NaN]));
     expect(names(await rerankLocal("q", people("Ada", "Grace")))).toEqual([
       "Ada",
       "Grace",
@@ -205,6 +215,39 @@ describe("when the stage cannot run", () => {
     await rerankLocal("q", people("Ada"));
     expect(calls).toHaveLength(0);
   });
+
+  it("runs a reranker that is not local only where AI is allowed", async () => {
+    const hosted = {
+      ...fake(async (_query, docs) => docs.map((_, index) => index)),
+      local: false,
+    };
+    const list = people("Ada", "Grace");
+    const off = await rerankLocal("q", list, 25, { reranker: hosted });
+    expect(names(off)).toEqual(["Ada", "Grace"]);
+    const on = await rerankLocal("q", list, 25, {
+      reranker: hosted,
+      aiAllowed: true,
+    });
+    expect(names(on)).toEqual(["Grace", "Ada"]);
+  });
+});
+
+describe("which reranker runs", () => {
+  it("is the cross-encoder SEARCH_RERANK_MODEL names, or the default", () => {
+    expect(currentReranker()).toBe(crossEncoder(DEFAULT_RERANK_MODEL));
+    expect(currentReranker()).toMatchObject({ local: true });
+    process.env.SEARCH_RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2";
+    expect(currentReranker()?.id).toBe("Xenova/ms-marco-MiniLM-L-6-v2");
+  });
+
+  it("uses a replacement for every model name until it is cleared", () => {
+    const replacement = fake(async () => []);
+    setReranker(replacement);
+    expect(currentReranker()).toBe(replacement);
+    expect(rerankerFor("Xenova/any")).toBe(replacement);
+    setReranker(null);
+    expect(rerankerFor("Xenova/any")).toBe(crossEncoder("Xenova/any"));
+  });
 });
 
 describe("the worker", () => {
@@ -214,8 +257,9 @@ describe("the worker", () => {
       scores: [0.5, -1],
       modelLoaded: true,
     });
-    const scores = await scoreOnWorker(
-      { model: "m", query: "q", docs: ["a", "b"] },
+    const scores = await crossEncoder("m").score(
+      "q",
+      ["a", "b"],
       new AbortController().signal,
     );
     expect(scores).toEqual([0.5, -1]);
@@ -230,7 +274,7 @@ describe("the worker", () => {
 
   it("cancels the job once the scores are too late", async () => {
     const late = new AbortController();
-    void scoreOnWorker({ model: "m", query: "q", docs: ["a"] }, late.signal);
+    void crossEncoder("m").score("q", ["a"], late.signal);
     late.abort();
     expect(host.cancelled).toEqual([host.jobs[0].id]);
   });
@@ -242,9 +286,9 @@ describe("the worker", () => {
       modelLoaded: true,
     });
     const model = "Xenova/boot-model";
-    expect(isCrossEncoderReady(model)).toBe(false);
+    expect(crossEncoder(model).ready()).toBe(false);
     expect(await initCrossEncoder(model)).toBe(true);
-    expect(isCrossEncoderReady(model)).toBe(true);
+    expect(crossEncoder(model).ready()).toBe(true);
     // Loaded once. A second call sends nothing.
     expect(await initCrossEncoder(model)).toBe(true);
     expect(host.jobs).toHaveLength(1);
@@ -256,7 +300,7 @@ describe("the worker", () => {
       throw new Error("no network");
     };
     expect(await initCrossEncoder("Xenova/missing")).toBe(false);
-    expect(isCrossEncoderReady("Xenova/missing")).toBe(false);
+    expect(crossEncoder("Xenova/missing").ready()).toBe(false);
   });
 
   it("stays off when the worker is not running", async () => {

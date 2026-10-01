@@ -34,12 +34,9 @@ const { log } = await import("../server/utils/logger.ts");
 log._fmt = () => {};
 const { sqlite, ensureLocalOwner } = await import("../server/db.ts");
 const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
-const {
-  initLocalEmbeddings,
-  ensureEmbeddingStore,
-  embedText,
-  findSearchNeighbors,
-} = await import("../server/services/search/localEmbeddings.ts");
+const { ensureEmbeddingStore, embedText, findSearchNeighbors } =
+  await import("../server/services/search/localEmbeddings.ts");
+const { initBuiltinEmbedder } = await import("../server/ai/embedder.ts");
 const { localRetrieval } =
   await import("../server/services/search/hybridRetrieval.ts");
 const { searchService } = await import("../server/services/searchService.ts");
@@ -81,7 +78,7 @@ try {
   const ownerId = ensureLocalOwner();
   const scope = scopeForOwnerId(ownerId);
   seedPassageCorpus(sqlite, ownerId, count);
-  await initLocalEmbeddings();
+  await initBuiltinEmbedder();
   const indexingStart = performance.now();
   await ensureEmbeddingStore();
   const indexingMs = performance.now() - indexingStart;
