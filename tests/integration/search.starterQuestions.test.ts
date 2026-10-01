@@ -107,7 +107,9 @@ describe("the starter question pool", () => {
 
   it("asks about the values two people share, each kind in turn", () => {
     // A general question takes its turn after every kind built from the
-    // network's values. The pool stops at twelve, one for each person.
+    // network's values. The pool stops at twelve, one for each person, and
+    // then takes the general question that finds some of them and not all:
+    // the six fillers have no location.
     expect(buildStarterQuestions(scope())).toEqual([
       { kind: "industry", text: "Who works in Fintech?" },
       { kind: "city", text: "Who do I know in Lisbon?" },
@@ -121,6 +123,7 @@ describe("the starter question pool", () => {
       { kind: "city", text: "Who do I know in Austin?" },
       { kind: "role", text: "Who works as a Product Designer?" },
       { kind: "general", text: "Who am I not tracking yet?" },
+      { kind: "general", text: "Who is missing a location?" },
     ]);
   });
 
@@ -164,6 +167,40 @@ describe("the starter question pool", () => {
     const medium = buildStarterQuestions(scope());
     expect(medium.length).toBeGreaterThan(40);
     expect(medium.length).toBeLessThanOrEqual(120);
+  });
+
+  it("offers a small network the general questions that split it, past the cap", async () => {
+    // Three people, so three questions about values. One is tracked and one
+    // has an email. Nobody has a phone or a logged note, so the questions
+    // about those find everyone, and keep their turn after the cut.
+    await seed([
+      { ...NETWORK[0]!, emails: ["ana@example.com"] },
+      ...NETWORK.slice(1, 3),
+    ]);
+    sqlite
+      .prepare(
+        "UPDATE contacts SET isTracked = 1 WHERE name = ? AND ownerId = ?",
+      )
+      .run(NETWORK[1]!.name, localOwnerId());
+    const pool = buildStarterQuestions(scope());
+    expect(pool.filter((q) => q.kind !== "general")).toHaveLength(3);
+    expect(texts(pool.filter((q) => q.kind === "general")).sort()).toEqual([
+      "Who am I not tracking yet?",
+      "Who do I track?",
+      "Who is missing an email address?",
+    ]);
+
+    // With no note logged, the last contact question finds all three and
+    // stays out. A call with one of them makes it split the network, with no
+    // new search revision, and the served pool follows at once.
+    const contacted = "Who haven't I contacted in over 3 months?";
+    expect(texts(starterQuestions(scope()))).not.toContain(contacted);
+    sqlite
+      .prepare(
+        "UPDATE contacts SET lastContactedAt = datetime('now') WHERE name = ? AND ownerId = ?",
+      )
+      .run(NETWORK[0]!.name, localOwnerId());
+    expect(texts(starterQuestions(scope()))).toContain(contacted);
   });
 
   it("finds the people each question names, with no model", async () => {

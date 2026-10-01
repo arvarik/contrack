@@ -20,6 +20,12 @@
     ],
     "phones": [
       "+44 161 496 0321"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Ashburton Road West, Trafford Park, Manchester M17 1RY"
+      }
     ]
   },
   {
@@ -46,6 +52,12 @@
     ],
     "phones": [
       "+353 1 555 0147"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "22 Pembroke Road, Dublin 4, D04 X7N2"
+      }
     ]
   },
   {
@@ -126,6 +138,12 @@
     "interests": [
       "brass band",
       "allotment"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "112 Attercliffe Road, Sheffield S4 7WZ"
+      }
     ]
   },
   {
@@ -229,6 +247,12 @@
     ],
     "phones": [
       "+1 (415) 555-0142"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "8 Cotham Hill, Bristol BS6 6LA"
+      }
     ]
   },
   {
@@ -355,6 +379,12 @@
     "interests": [
       "cycling",
       "opera"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Calle Betis 12, 41010 Sevilla"
+      }
     ]
   },
   {
@@ -375,6 +405,12 @@
     "interests": [
       "rock climbing",
       "fado"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Rua da Rosa 54, 1200-385 Lisboa"
+      }
     ]
   },
   {
@@ -455,6 +491,16 @@
     "interests": [
       "bouldering",
       "electronic music"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Wiener Straße 34, 10999 Berlin"
+      },
+      {
+        "label": "work",
+        "address": "Friedrichstraße 68, 10117 Berlin"
+      }
     ]
   },
   {
@@ -555,6 +601,16 @@
     "interests": [
       "open water swimming",
       "cinema"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "27 rue des Martyrs, 75009 Paris"
+      },
+      {
+        "label": "work",
+        "address": "12 rue Jacob, 75006 Paris"
+      }
     ]
   },
   {
@@ -595,6 +651,16 @@
     "interests": [
       "cold water swimming",
       "knitting"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Tapionaukio 4, 02100 Espoo"
+      },
+      {
+        "label": "work",
+        "address": "Fredrikinkatu 61, 00120 Helsinki"
+      }
     ]
   },
   {
@@ -658,6 +724,12 @@
     ],
     "emails": [
       "rob.castellanos@fleetwise.io"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Sueca 22, 46006 València"
+      }
     ]
   },
   {
@@ -681,6 +753,12 @@
     ],
     "emails": [
       "margaret.ellington@crestwoodcapital.com"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "18 Elgin Crescent, London W11 2JA"
+      }
     ]
   },
   {
@@ -721,6 +799,12 @@
     "interests": [
       "thermal baths",
       "violin"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Bartók Béla út 32, 1111 Budapest"
+      }
     ]
   },
   {
@@ -781,6 +865,12 @@
     "interests": [
       "squash",
       "barbecue"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "27 Burton Road, Didsbury, Manchester M20 2LW"
+      }
     ]
   },
   {
@@ -841,6 +931,12 @@
     "interests": [
       "hiking",
       "drawing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Strandgaten 18, 5013 Bergen"
+      }
     ]
   },
   {
@@ -861,6 +957,12 @@
     "interests": [
       "badminton",
       "street food"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "8 Marina View, Singapore 018960"
+      }
     ]
   },
   {
@@ -921,6 +1023,12 @@
     "interests": [
       "cycling",
       "cooking"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "45 quai des Chartrons, 33000 Bordeaux"
+      }
     ]
   },
   {
@@ -941,6 +1049,12 @@
     "interests": [
       "mountain biking",
       "history"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "ul. Floriańska 15, 31-019 Kraków"
+      }
     ]
   },
   {
@@ -1047,6 +1161,12 @@
     ],
     "phones": [
       "+33 4 72 00 15 15"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "8 quai Saint-Antoine, 69002 Lyon"
+      }
     ]
   },
   {
@@ -1065,6 +1185,12 @@
     ],
     "interests": [
       "sailing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Avenida da Liberdade 75, 1250-096 Lisboa"
+      }
     ]
   },
   {
@@ -1173,6 +1299,12 @@
     ],
     "interests": [
       "hiking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Raiņa bulvāris 77, Rīga, LV-1050"
+      }
     ]
   },
   {
@@ -1284,6 +1416,12 @@
     "interests": [
       "tennis",
       "woodworking"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "25 Shop Street, Galway H91 E9P4"
+      }
     ]
   },
   {
@@ -1303,6 +1441,12 @@
     "interests": [
       "sailing",
       "piano"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Ilica 7, 10000 Zagreb"
+      }
     ]
   },
   {
@@ -1341,6 +1485,12 @@
     "interests": [
       "cinema",
       "jazz"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "25 Division Street, Sheffield S1 4GF"
+      }
     ]
   },
   {
@@ -1379,6 +1529,16 @@
     "interests": [
       "hillwalking",
       "knitting"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Tkalčićeva 135, 10000 Zagreb"
+      },
+      {
+        "label": "work",
+        "address": "Ilica 131, 10000 Zagreb"
+      }
     ]
   },
   {
@@ -1398,6 +1558,12 @@
     "interests": [
       "botany",
       "ice hockey"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Calwer Straße 122, 70173 Stuttgart"
+      }
     ]
   },
   {
@@ -1607,6 +1773,12 @@
     "interests": [
       "cross country skiing",
       "bouldering"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "ul. Karmelicka 114, 31-128 Kraków"
+      }
     ]
   },
   {
@@ -1759,6 +1931,16 @@
     "interests": [
       "guitar",
       "tennis"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "ul. Karmelicka 45, 31-128 Kraków"
+      },
+      {
+        "label": "work",
+        "address": "ul. Grodzka 66, 31-006 Kraków"
+      }
     ]
   },
   {
@@ -1930,6 +2112,16 @@
     "interests": [
       "orienteering",
       "opera"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Obchodná 43, 811 06 Bratislava"
+      },
+      {
+        "label": "work",
+        "address": "Panská 2, 811 01 Bratislava"
+      }
     ]
   },
   {
@@ -1987,6 +2179,16 @@
     "interests": [
       "astronomy",
       "fishing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "10 Kirkstall Road, Leeds LS4 2AZ"
+      },
+      {
+        "label": "work",
+        "address": "111 Briggate, Leeds LS1 6HD"
+      }
     ]
   },
   {
@@ -2006,6 +2208,16 @@
     "interests": [
       "hiking",
       "fishing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Calle Sierpes 132, 41004 Sevilla"
+      },
+      {
+        "label": "work",
+        "address": "Calle Feria 50, 41003 Sevilla"
+      }
     ]
   },
   {
@@ -2025,6 +2237,12 @@
     "interests": [
       "ice hockey",
       "woodworking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "212 Changi Road, Singapore 419730"
+      }
     ]
   },
   {
@@ -2101,6 +2319,12 @@
     "interests": [
       "mountain biking",
       "badminton"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Panská 64, 811 01 Bratislava"
+      }
     ]
   },
   {
@@ -2158,6 +2382,12 @@
     "interests": [
       "sailing",
       "archery"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Pilies g. 45, LT-01123 Vilnius"
+      }
     ]
   },
   {
@@ -2177,6 +2407,16 @@
     "interests": [
       "running",
       "kayaking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "114 Division Street, Sheffield S1 4GF"
+      },
+      {
+        "label": "work",
+        "address": "5 Ecclesall Road, Sheffield S11 8HW"
+      }
     ]
   },
   {
@@ -2215,6 +2455,12 @@
     "interests": [
       "pottery",
       "golf"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Vodičkova 88, 110 00 Praha 1"
+      }
     ]
   },
   {
@@ -2272,6 +2518,12 @@
     "interests": [
       "squash",
       "cycling"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Čopova ulica 42, 1000 Ljubljana"
+      }
     ]
   },
   {
@@ -2329,6 +2581,12 @@
     "interests": [
       "squash",
       "hiking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Anichstraße 101, 6020 Innsbruck"
+      }
     ]
   },
   {
@@ -2367,6 +2625,12 @@
     "interests": [
       "orienteering",
       "scuba diving"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Avenida da Liberdade 118, 1250-096 Lisboa"
+      }
     ]
   },
   {
@@ -2386,6 +2650,12 @@
     "interests": [
       "kayaking",
       "botany"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "2 Leith Walk, Edinburgh EH6 5BX"
+      }
     ]
   },
   {
@@ -2424,6 +2694,12 @@
     "interests": [
       "pottery",
       "chess"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "120 Fleet Street, London EC4A 2BE"
+      }
     ]
   },
   {
@@ -2443,6 +2719,12 @@
     "interests": [
       "violin",
       "gardening"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Obchodná 51, 811 06 Bratislava"
+      }
     ]
   },
   {
@@ -2462,6 +2744,12 @@
     "interests": [
       "bouldering",
       "pottery"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Calle Ledesma 23, 48001 Bilbao"
+      }
     ]
   },
   {
@@ -2481,6 +2769,12 @@
     "interests": [
       "cookery",
       "model railways"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Čopova ulica 57, 1000 Ljubljana"
+      }
     ]
   },
   {
@@ -2500,6 +2794,16 @@
     "interests": [
       "chess",
       "birdwatching"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "63 Clerkenwell Road, London EC1M 5RN"
+      },
+      {
+        "label": "work",
+        "address": "120 Upper Street, London N1 2XG"
+      }
     ]
   },
   {
@@ -2519,6 +2823,16 @@
     "interests": [
       "birdwatching",
       "fishing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Jægergårdsgade 88, 8000 Aarhus C"
+      },
+      {
+        "label": "work",
+        "address": "Søndergade 19, 8000 Aarhus C"
+      }
     ]
   },
   {
@@ -2557,6 +2871,16 @@
     "interests": [
       "ice hockey",
       "calligraphy"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Andrássy út 23, 1061 Budapest"
+      },
+      {
+        "label": "work",
+        "address": "Király utca 136, 1075 Budapest"
+      }
     ]
   },
   {
@@ -2576,6 +2900,16 @@
     "interests": [
       "hiking",
       "bridge"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Korenmarkt 133, 9000 Gent"
+      },
+      {
+        "label": "work",
+        "address": "Veldstraat 112, 9000 Gent"
+      }
     ]
   },
   {
@@ -2595,6 +2929,16 @@
     "interests": [
       "golf",
       "running"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Leopoldstraße 119, 80802 München"
+      },
+      {
+        "label": "work",
+        "address": "Sendlinger Straße 49, 80331 München"
+      }
     ]
   },
   {
@@ -2614,6 +2958,12 @@
     "interests": [
       "yoga",
       "tennis"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Jægergårdsgade 31, 8000 Aarhus C"
+      }
     ]
   },
   {
@@ -2690,6 +3040,12 @@
     "interests": [
       "yoga",
       "cycling"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Nygårdsgaten 63, 5015 Bergen"
+      }
     ]
   },
   {
@@ -2728,6 +3084,12 @@
     "interests": [
       "badminton",
       "yoga"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "63 Great Western Road, Glasgow G12 8HN"
+      }
     ]
   },
   {
@@ -2785,6 +3147,16 @@
     "interests": [
       "tennis",
       "surfing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Corso Buenos Aires 16, 20124 Milano"
+      },
+      {
+        "label": "work",
+        "address": "Via Torino 122, 20123 Milano"
+      }
     ]
   },
   {
@@ -2804,6 +3176,16 @@
     "interests": [
       "botany",
       "knitting"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "ul. Karmelicka 33, 31-128 Kraków"
+      },
+      {
+        "label": "work",
+        "address": "ul. Grodzka 67, 31-006 Kraków"
+      }
     ]
   },
   {
@@ -2823,6 +3205,16 @@
     "interests": [
       "botany",
       "birdwatching"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Russafa 22, 46004 València"
+      },
+      {
+        "label": "work",
+        "address": "Carrer de Colón 122, 46004 València"
+      }
     ]
   },
   {
@@ -2861,6 +3253,12 @@
     "interests": [
       "gardening",
       "running"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Avenida da Liberdade 128, 1250-096 Lisboa"
+      }
     ]
   },
   {
@@ -2956,6 +3354,12 @@
     "interests": [
       "painting",
       "chess"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Søndergade 40, 8000 Aarhus C"
+      }
     ]
   },
   {
@@ -3051,6 +3455,12 @@
     "interests": [
       "yoga",
       "piano"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Mannerheimintie 29, 00100 Helsinki"
+      }
     ]
   },
   {
@@ -3108,6 +3518,12 @@
     "interests": [
       "hiking",
       "board games"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Vodičkova 75, 110 00 Praha 1"
+      }
     ]
   },
   {
@@ -3146,6 +3562,12 @@
     "interests": [
       "golf",
       "model railways"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Colón 124, 46004 València"
+      }
     ]
   },
   {
@@ -3203,6 +3625,12 @@
     "interests": [
       "model railways",
       "piano"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "ul. Grodzka 114, 31-006 Kraków"
+      }
     ]
   },
   {
@@ -3241,6 +3669,12 @@
     "interests": [
       "badminton",
       "violin"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Praterstraße 12, 1020 Wien"
+      }
     ]
   },
   {
@@ -3298,6 +3732,12 @@
     "interests": [
       "orienteering",
       "running"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "104 rue Oberkampf, 75011 Paris"
+      }
     ]
   },
   {
@@ -3355,6 +3795,12 @@
     "interests": [
       "cookery",
       "knitting"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "41 Upper Street, London N1 2XG"
+      }
     ]
   },
   {
@@ -3431,6 +3877,12 @@
     "interests": [
       "painting",
       "surfing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "14 Danube Street, Edinburgh EH4 1NN"
+      }
     ]
   },
   {
@@ -3488,6 +3940,12 @@
     "interests": [
       "pottery",
       "cinema"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Kastanienallee 87, 10435 Berlin"
+      }
     ]
   },
   {
@@ -3526,6 +3984,12 @@
     "interests": [
       "surfing",
       "photography"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "79 rue de Rivoli, 75004 Paris"
+      }
     ]
   },
   {
@@ -3564,6 +4028,12 @@
     "interests": [
       "piano",
       "surfing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Königstraße 139, 70173 Stuttgart"
+      }
     ]
   },
   {
@@ -3602,6 +4072,16 @@
     "interests": [
       "sailing",
       "bouldering"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Verdi 126, 08012 Barcelona"
+      },
+      {
+        "label": "work",
+        "address": "Carrer de Mallorca 96, 08008 Barcelona"
+      }
     ]
   },
   {
@@ -3697,6 +4177,16 @@
     "interests": [
       "orienteering",
       "kayaking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Jægergårdsgade 91, 8000 Aarhus C"
+      },
+      {
+        "label": "work",
+        "address": "Søndergade 131, 8000 Aarhus C"
+      }
     ]
   },
   {
@@ -3735,6 +4225,12 @@
     "interests": [
       "gardening",
       "cookery"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Russafa 93, 46004 València"
+      }
     ]
   },
   {
@@ -3773,6 +4269,16 @@
     "interests": [
       "opera",
       "photography"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Museumstraße 85, 6020 Innsbruck"
+      },
+      {
+        "label": "work",
+        "address": "Anichstraße 80, 6020 Innsbruck"
+      }
     ]
   },
   {
@@ -3792,6 +4298,12 @@
     "interests": [
       "scuba diving",
       "chess"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Ilica 11, 10000 Zagreb"
+      }
     ]
   },
   {
@@ -3830,6 +4342,12 @@
     "interests": [
       "chess",
       "board games"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Leopoldstraße 54, 80802 München"
+      }
     ]
   },
   {
@@ -3906,6 +4424,12 @@
     "interests": [
       "gardening",
       "darts"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "20 Botanic Avenue, Belfast BT7 1JL"
+      }
     ]
   },
   {
@@ -3925,6 +4449,12 @@
     "interests": [
       "golf",
       "cookery"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Kungsportsavenyen 46, 411 36 Göteborg"
+      }
     ]
   },
   {
@@ -4077,6 +4607,16 @@
     "interests": [
       "archery",
       "knitting"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Götgatan 82, 116 46 Stockholm"
+      },
+      {
+        "label": "work",
+        "address": "Drottninggatan 92, 111 51 Stockholm"
+      }
     ]
   },
   {
@@ -4191,6 +4731,12 @@
     "interests": [
       "hiking",
       "painting"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Rua de Ferreira Borges 95, 4050-253 Porto"
+      }
     ]
   },
   {
@@ -4210,6 +4756,12 @@
     "interests": [
       "botany",
       "photography"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "132 Oliver Plunkett Street, Cork T12 X2C4"
+      }
     ]
   },
   {
@@ -4267,6 +4819,12 @@
     "interests": [
       "yoga",
       "board games"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "19 George Street, Edinburgh EH2 2PF"
+      }
     ]
   },
   {
@@ -4362,6 +4920,12 @@
     "interests": [
       "chess",
       "model railways"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "9 Seville Place, Dublin 1, D01 F2X5"
+      }
     ]
   },
   {
@@ -4381,6 +4945,16 @@
     "interests": [
       "baking",
       "running"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "129 Park Street, Bristol BS1 5JA"
+      },
+      {
+        "label": "work",
+        "address": "57 Gloucester Road, Bristol BS7 8AE"
+      }
     ]
   },
   {
@@ -4438,6 +5012,16 @@
     "interests": [
       "baking",
       "opera"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "4 Park Street, Bristol BS1 5JA"
+      },
+      {
+        "label": "work",
+        "address": "25 Gloucester Road, Bristol BS7 8AE"
+      }
     ]
   },
   {
@@ -4495,6 +5079,12 @@
     "interests": [
       "running",
       "surfing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Linnégatan 92, 413 04 Göteborg"
+      }
     ]
   },
   {
@@ -4552,6 +5142,12 @@
     "interests": [
       "hiking",
       "painting"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Nygårdsgaten 43, 5015 Bergen"
+      }
     ]
   },
   {
@@ -4609,6 +5205,16 @@
     "interests": [
       "yoga",
       "birdwatching"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Via XX Settembre 22, 16121 Genova"
+      },
+      {
+        "label": "work",
+        "address": "Via Garibaldi 90, 16124 Genova"
+      }
     ]
   },
   {
@@ -4647,6 +5253,12 @@
     "interests": [
       "archery",
       "hiking"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Veldstraat 133, 9000 Gent"
+      }
     ]
   },
   {
@@ -4913,6 +5525,12 @@
     "interests": [
       "darts",
       "fishing"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Nygårdsgaten 54, 5015 Bergen"
+      }
     ]
   },
   {
@@ -4932,6 +5550,12 @@
     "interests": [
       "badminton",
       "kayaking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Viru 139, 10140 Tallinn"
+      }
     ]
   },
   {
@@ -4970,6 +5594,12 @@
     "interests": [
       "birdwatching",
       "painting"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Narva mnt 118, 10117 Tallinn"
+      }
     ]
   },
   {
@@ -4989,6 +5619,12 @@
     "interests": [
       "jazz",
       "gardening"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Corso Buenos Aires 38, 20124 Milano"
+      }
     ]
   },
   {
@@ -5141,6 +5777,12 @@
     "interests": [
       "gardening",
       "orienteering"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "Via Roma 83, 10123 Torino"
+      }
     ]
   },
   {
@@ -5312,6 +5954,12 @@
     "interests": [
       "gardening",
       "ice hockey"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "101 Briggate, Leeds LS1 6HD"
+      }
     ]
   },
   {
@@ -5331,6 +5979,12 @@
     "interests": [
       "golf",
       "kayaking"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Meent 6, 3011 JH Rotterdam"
+      }
     ]
   },
   {
@@ -5388,6 +6042,16 @@
     "interests": [
       "botany",
       "cinema"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Mallorca 84, 08008 Barcelona"
+      },
+      {
+        "label": "work",
+        "address": "Carrer de Verdi 76, 08012 Barcelona"
+      }
     ]
   },
   {
@@ -5464,6 +6128,12 @@
     "interests": [
       "birdwatching",
       "kayaking"
+    ],
+    "addresses": [
+      {
+        "label": "work",
+        "address": "119 Gloucester Road, Bristol BS7 8AE"
+      }
     ]
   },
   {
@@ -5654,6 +6324,12 @@
     "interests": [
       "squash",
       "darts"
+    ],
+    "addresses": [
+      {
+        "label": "home",
+        "address": "Carrer de Mallorca 90, 08008 Barcelona"
+      }
     ]
   },
   {

@@ -306,6 +306,42 @@ describe("a contact edit", () => {
   });
 });
 
+describe("a note", () => {
+  it("makes both tiers miss when it is added, edited or deleted", async () => {
+    const ids = await seedLocal();
+    const contact = ids.get("Cy Marsh");
+    let note = "";
+    // A note moves no searched column, so the search revision stays and only
+    // the notes stamp can tell. A miss on the same words is an L1 miss and
+    // an L2 miss: L2 would serve the question's own entry.
+    for (const [change, status] of [
+      [
+        async () => {
+          const res = await request(app)
+            .post(`/api/contacts/${contact}/interactions`)
+            .send({ type: "call", title: "Catch up", content: "<p>Hi</p>" });
+          note = res.body.id;
+          return res;
+        },
+        201,
+      ],
+      [
+        () =>
+          request(app)
+            .patch(`/api/interactions/${note}`)
+            .send({ title: "Caught up" }),
+        200,
+      ],
+      [() => request(app).delete(`/api/interactions/${note}`), 200],
+    ] as const) {
+      await ask(ASKED);
+      expect((await ask(ASKED)).cached).toBe(true);
+      expect((await change()).status).toBe(status);
+      expect((await ask(ASKED)).cached).toBeFalsy();
+    }
+  });
+});
+
 describe("a merge", () => {
   async function merge(ids: Map<string, string>) {
     const res = await request(app)

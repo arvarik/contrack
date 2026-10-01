@@ -245,7 +245,7 @@ describe("the boot migration from float", () => {
 
 describe("the neighbours of real vectors", () => {
   it("keeps the float KNN's nearest contacts, up to rounding", () => {
-    // The search gate's MiniLM vectors: 300 contacts and 70 questions.
+    // The search gate's MiniLM vectors: 300 contacts and 79 questions.
     const fixture = loadFixture();
     const ids = fixture.contacts.map((_, i) => `real-${i}`);
     sqlite.transaction(() => ids.forEach((id) => contact(id)))();
@@ -273,8 +273,9 @@ describe("the neighbours of real vectors", () => {
       recall += found.filter((id) => exact.includes(id)).length / 10;
       if (found[0] === exact[0]) sameFirst++;
     }
-    // Measured when this was written: recall@10 0.984 and the same nearest
-    // contact for 70 of 70. What int8 loses is near ties at the tenth place.
+    // Measured with 79 questions (2026-09-30): recall@10 0.986 and the same
+    // nearest contact for 79 of 79. What int8 loses is near ties at the tenth
+    // place.
     // With bytes up to ±127, sqlite-vec's 16-bit square overflowed for two
     // large components of opposite sign, and recall@10 was 0.967.
     expect(recall / fixture.queryVectors.length).toBeGreaterThanOrEqual(0.98);

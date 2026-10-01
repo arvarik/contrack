@@ -44,6 +44,7 @@ import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
+  aiResultsHeading,
   getMode,
   GROUP_HEADING_DEFAULT,
   GROUP_HEADING_PRIMARY,
@@ -204,6 +205,8 @@ export const CommandPalette = () => {
     [mode, semanticSearch.data],
   );
   const aiFallback: boolean = mode === "ai" && !!semanticSearch.data?.fallback;
+  // A question of facets alone can hold thousands, and the list stops at 30.
+  const aiTotal = semanticSearch.data?.total ?? aiResults.length;
   // The question `aiResults` answer, stamped on the results by the hook. The
   // synthesis brief reads this rather than the debounced input, which is a
   // different string for the whole of the debounce window.
@@ -897,9 +900,11 @@ export const CommandPalette = () => {
                     !isAiLoading &&
                     aiResults.length > 0 && (
                       <Command.Group
-                        heading={
-                          aiFallback ? "Not verified by AI" : "AI query results"
-                        }
+                        heading={aiResultsHeading(
+                          aiFallback,
+                          aiResults.length,
+                          aiTotal,
+                        )}
                         className={GROUP_HEADING_PRIMARY}
                       >
                         {aiFallback && (

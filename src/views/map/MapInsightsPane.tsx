@@ -28,6 +28,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
+import { formatFacet } from "../../../shared/facetQuery";
+import type { FacetField } from "../../../shared/searchFacets";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
 import {
   SIDE_PANEL_SCROLLER,
@@ -168,12 +170,6 @@ const InsightsContent = ({
   );
 };
 
-/** A group's facet as a query token, quoted when it has a space. */
-const facet = (field: string, value: string) => {
-  const clean = value.trim();
-  return `${field}:${clean.includes(" ") ? `"${clean}"` : clean}`;
-};
-
 const Summary = ({
   stats,
   onApplyFacet,
@@ -237,7 +233,7 @@ const Bars = ({
 }: {
   title: string;
   icon: LucideIcon;
-  field: string;
+  field: FacetField;
   items: TopBucket[];
   onApplyFacet: (facetQuery: string) => void;
 }) => {
@@ -254,7 +250,9 @@ const Bars = ({
           <li key={item.name}>
             <button
               type="button"
-              onClick={() => onApplyFacet(facet(field, item.name))}
+              onClick={() =>
+                onApplyFacet(formatFacet({ field, value: item.name.trim() }))
+              }
               aria-label={`Filter by ${field}: ${item.name} (${item.count})`}
               className="hit-area state-layer w-full rounded-lg px-2 py-1.5 text-left cursor-pointer"
             >

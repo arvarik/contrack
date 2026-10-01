@@ -143,7 +143,7 @@ Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Wi
 
 ![Ask Contrack in People mode, with verified matches and the fields that match under each name](images/ask.png)
 
-Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it.
+Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. A small network gets one question for each contact, and beside them every general question that finds some of its people and not all, such as who is missing an email address. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it.
 
 Questions that work well:
 
@@ -165,11 +165,13 @@ Contrack answers these questions on your server, with no AI call, and every matc
 - a place, a company or an industry from your contacts, with nothing else asked: "people in Lisbon", "who works at Northwind Logistics", "who works in fintech"
 - one of the seven general questions, written exactly as **Try asking** writes it, such as "Who do I track?" or "Who is missing an email address?". Each is the same list as its facet: `tracked:yes`, `missing:email`
 
-The answer lists 30 people at most. When a question made only of facets finds more, the count says so, for example "30 of 1,501 matches", and a general question shows **See all in Network**, which opens the whole list there.
+The answer lists 30 people at most. When a question made only of facets finds more, the count says so, for example "30 of 1,501 matches". **See all in Network** opens the whole list there, unless the question asks for a distance with `near:`, which the Network list cannot read.
+
+Chips under the count narrow a long answer. Each chip is a facet that splits the list, with the number of people it keeps: tracking, the most common industries, cities, companies and tags, and a contact in the last 30 days. A press asks the question again with that facet added, for example "Who do I track? industry:Fintech".
 
 For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
 
-AI never sees a contact's addresses. So with AI on, a street or a postcode in Ask finds nobody. The Network list and the palette find it, and so does Ask with AI off.
+AI checks a contact's addresses too. A street or a postcode in a question, such as "Who lives on Kastanienallee?", finds the people whose address names it, and the reason names that address.
 
 ### Verified answers and reasons
 

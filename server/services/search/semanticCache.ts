@@ -8,8 +8,8 @@
 // stage already computed. A new question reuses an answer when all of these
 // hold:
 //
-// - the same account and the same search revision, so no contact has changed
-//   since, and no merge has happened;
+// - the same account, the same search revision and the same notes revision,
+//   so no contact or note has changed since, and no merge has happened;
 // - the same facets and the same answer source (provider and model);
 // - the same entity key: the set of capitalized words, numbers, quoted
 //   phrases and email addresses in the question;
@@ -26,8 +26,10 @@
 // The revision is the only invalidation a contact edit needs. The
 // search_revision triggers bump it on every change to a searched column, a
 // tag, an interest, an email or a phone, and on every merge, so an answer
-// from before an edit never matches a question after it. A flush of every
-// AI cache tier (a change of AI settings) empties this tier too.
+// from before an edit never matches a question after it. A note moves no
+// searched column, so the notes revision (`notesRevision` in
+// searchService.ts) follows notes. A flush of every AI cache tier (a change of AI settings)
+// empties this tier too.
 // =============================================================================
 
 import type { Scope } from "../../tenancy/scope.ts";
@@ -37,6 +39,8 @@ import { aiCache } from "../../utils/aiCache.ts";
 export interface SemanticKey {
   /** The owner's search revision when the answer was computed. */
   revision: number;
+  /** The owner's notes revision when the answer was computed. */
+  notes: number;
   /** The serialized facets the answer applied (`facetKey`). */
   facets: string;
   /** The provider and model that verified the answer. */
@@ -226,6 +230,7 @@ export function getSemanticAnswer<T>(scope: Scope, key: SemanticKey): T | null {
   for (const entry of entries) {
     if (
       entry.revision !== key.revision ||
+      entry.notes !== key.notes ||
       entry.facets !== key.facets ||
       entry.answeredBy !== key.answeredBy ||
       entry.entities !== key.entities ||

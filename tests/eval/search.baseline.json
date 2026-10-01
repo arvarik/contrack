@@ -1,34 +1,42 @@
 {
-  "recordedAt": "2026-09-27T16:34:50.288Z",
+  "recordedAt": "2026-10-01T01:36:42.319Z",
   "model": "Xenova/all-MiniLM-L6-v2",
   "corpus": {
     "contacts": 300,
-    "queries": 70
+    "queries": 79
   },
   "channels": {
     "sidebar": {
-      "recallAt10": 0.6571,
-      "mrr": 0.6571
+      "recallAt10": 0.6835,
+      "mrr": 0.6835
     },
     "lexical": {
       "recallAt10": 1,
-      "mrr": 0.9357
+      "mrr": 0.943
     },
     "fused": {
       "recallAt10": 1,
-      "mrr": 0.9488
+      "mrr": 0.9483
     },
     "hybrid": {
       "recallAt10": 1,
-      "mrr": 0.9821
+      "mrr": 0.9842
     },
     "reranked": {
       "recallAt10": 1,
-      "mrr": 1
+      "mrr": 0.9937
     }
   },
   "byKind": {
     "sidebar": {
+      "address": {
+        "recallAt10": 0.75,
+        "mrr": 0.75
+      },
+      "address-collision": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "company-role": {
         "recallAt10": 0,
         "mrr": 0
@@ -71,6 +79,14 @@
       }
     },
     "lexical": {
+      "address": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "address-collision": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "company-role": {
         "recallAt10": 1,
         "mrr": 0.55
@@ -113,6 +129,14 @@
       }
     },
     "fused": {
+      "address": {
+        "recallAt10": 1,
+        "mrr": 0.875
+      },
+      "address-collision": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "company-role": {
         "recallAt10": 1,
         "mrr": 0.8333
@@ -155,9 +179,17 @@
       }
     },
     "hybrid": {
+      "address": {
+        "recallAt10": 1,
+        "mrr": 0.875
+      },
+      "address-collision": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "company-role": {
         "recallAt10": 1,
-        "mrr": 0.95
+        "mrr": 1
       },
       "email": {
         "recallAt10": 1,
@@ -197,6 +229,14 @@
       }
     },
     "reranked": {
+      "address": {
+        "recallAt10": 1,
+        "mrr": 0.875
+      },
+      "address-collision": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
       "company-role": {
         "recallAt10": 1,
         "mrr": 1

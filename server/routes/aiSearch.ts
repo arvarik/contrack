@@ -10,6 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { validateBody } from "../utils/validators.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { startStream } from "../utils/stream.ts";
 import { jobQueue } from "../services/aiSearch/index.ts";
 import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
@@ -152,10 +153,7 @@ aiSearchRouter.get("/ai-search/stream", (req, res) => {
   const batch = jobQueue.getBatch(scope, batchId);
   if (!batch)
     throw new AppError("Batch not found. The server may have restarted.", 404);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
+  startStream(res, "text/event-stream");
   const send = (updated: AISearchBatch) => {
     if (res.destroyed || res.writableEnded) return;
     if (

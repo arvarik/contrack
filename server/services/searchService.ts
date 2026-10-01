@@ -1,5 +1,10 @@
 import { facetNeedle, type FacetFilter } from "../../shared/searchFacets.ts";
-import { parseFacetQuery } from "../../shared/facetQuery.ts";
+import {
+  formatFacetQuery,
+  parseFacetQuery,
+  type RefineOption,
+} from "../../shared/facetQuery.ts";
+import { refineOptions } from "./search/refine.ts";
 import { sqlite } from "../db.ts";
 import { selectPassages, currentPassage } from "./search/passages.ts";
 import { findPassageNeighbors } from "./search/localEmbeddings.ts";
@@ -293,6 +298,19 @@ function facetEvidence(
 }
 
 /**
+ * The facets as the Network list's query, `/?q=<this>`, or undefined when
+ * the query would read back as another set. A `near:` reads back without the
+ * point the server found for its place, and the list reads no `near:`. A
+ * value the query syntax cannot hold reads back as another filter.
+ */
+function networkQuery(filters: FacetFilter[]): string | undefined {
+  const query = formatFacetQuery(filters);
+  return facetKey(parseFacetQuery(query).filters) === facetKey(filters)
+    ? query
+    : undefined;
+}
+
+/**
  * The answer to a question that is only facets: the matching contacts in
  * name order, proved by the database, with no model call.
  */
@@ -326,6 +344,11 @@ function facetAnswer(
         ).n;
   return {
     total,
+    facets: networkQuery(filters),
+    // A cut list offers the facets that split it.
+    ...(total > ids.length
+      ? { refine: refineOptions(scope, filters, total) }
+      : {}),
     matches: withMatchedOn(
       [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
         (contact) => ({
@@ -340,6 +363,12 @@ function facetAnswer(
     fallback: false,
   };
 }
+
+/** A contact's addresses as text, in their order. */
+const addressesOf = (contact: HydratedMatch): string[] =>
+  (Array.isArray(contact.addresses) ? contact.addresses : [])
+    .map((entry: { address?: unknown }) => entry?.address)
+    .filter((address): address is string => typeof address === "string");
 
 /**
  * Build compressed contact profiles for the LLM reranker.
@@ -391,6 +420,10 @@ function buildCompressedCandidates(
       .filter((v) => typeof v === "string")
       .join(", ")
       .slice(0, 400);
+    // A street or a postcode is only ever in an address, so the model sees
+    // them to check a question about a place.
+    const addresses = addressesOf(match);
+    if (addresses.length) entry.addresses = addresses.join(" | ").slice(0, 400);
     const passages = selected.get(match.id);
     if (passages?.length) {
       entry.passages = passages.map(({ id, field, context, text }) => ({
@@ -459,6 +492,13 @@ function rerankEvidence(
     }
     case "name":
       return null;
+    case "addresses": {
+      // The whole address the quote is from, as the contact has it.
+      const address = addressesOf(contact).find((text) =>
+        text.toLowerCase().includes(value.toLowerCase()),
+      );
+      return address ? { field: "address", value: address } : null;
+    }
     case "interests":
       return {
         field:
@@ -512,6 +552,22 @@ export function databaseProof(plan: QueryPlan): "filters" | "temporal" | null {
   return null;
 }
 
+/**
+ * The owner's notes revision, which every note insert, edit and delete
+ * bumps (`installSearchIndex` in ftsIndex.ts).
+ *
+ * A note moves its contact's last contact and the passages a search reads,
+ * and neither moves the search revision. So an answer to "founders I have
+ * not talked to in 3 months" kept a person for five minutes after a call
+ * with them was logged.
+ */
+function notesRevision(scope: Scope): number {
+  const row = sqlite
+    .prepare("SELECT revision FROM notes_revision WHERE ownerId = ?")
+    .get(scope.ownerId) as { revision: number } | undefined;
+  return row?.revision ?? 0;
+}
+
 export function searchRevision(scope: Scope): number {
   const row = sqlite
     .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
@@ -526,6 +582,10 @@ interface SearchResult {
   cached?: boolean;
   /** For a question of facets alone: every contact they hold. */
   total?: number;
+  /** For a question of facets alone: the same list as a Network query. */
+  facets?: string;
+  /** For a question of facets alone, cut at 30: facets that split it. */
+  refine?: RefineOption[];
 }
 interface SearchChunk extends SearchResult {
   phase: "instant" | "complete";
@@ -704,6 +764,7 @@ async function runSearch(
   const aiAllowed = options.aiAllowed !== false;
   const models = aiAllowed && !isMockMode();
   const revision = searchRevision(scope);
+  const notes = notesRevision(scope);
   const capability = models ? resolveCapability("quick") : null;
   // Facets typed into the question count with the ones the request carries.
   const typed = parseFacetQuery(query);
@@ -734,7 +795,7 @@ async function runSearch(
     rerank?.model && isCrossEncoderReady(rerank.model)
       ? `${rerank.model}@${rerank.count}`
       : "fused";
-  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
+  const cacheKey = `${revision}:${notes}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -932,6 +993,7 @@ async function runSearch(
     if (vector && searchRevision(scope) === revision) {
       semanticKey = {
         revision,
+        notes,
         facets: facetKey(allFilters),
         answeredBy,
         entities: entityKey(text),
@@ -952,7 +1014,7 @@ async function runSearch(
   // The model stage starts now, and the local list is built while the
   // planner's request is on the network. The list then costs the answer
   // nothing.
-  const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
+  const coalesceKey = `${scope.ownerId}:search:${revision}:${notes}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
 
   const answer = searchCoalescer.coalesce(
     coalesceKey,

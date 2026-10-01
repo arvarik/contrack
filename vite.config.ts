@@ -13,8 +13,8 @@ export default defineConfig({
     },
   },
   server: {
-    // DISABLE_HMR=true turns hot reload off. A second dev server needs it:
-    // the first one holds the reload socket's port, 24678.
+    // DISABLE_HMR=true turns hot reload off. The reload socket shares the
+    // app's own port (`serveClient`), so a second dev server works either way.
     hmr: process.env.DISABLE_HMR !== "true",
   },
   // MapLibre's worker is an ES module (`maplibreWorker.ts` bundles it with

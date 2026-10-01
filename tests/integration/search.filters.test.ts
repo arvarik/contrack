@@ -46,6 +46,8 @@ import {
   hasContentWords,
 } from "../../server/services/search/implicitFacets.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
+import { formatFacetQuery } from "../../shared/facetQuery.ts";
+import type { FacetFilter } from "../../shared/searchFacets.ts";
 import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 
@@ -297,7 +299,11 @@ describe("Ask takes facets from the request and the question", () => {
       [["Rhea Quill", true, "Tagged rare."]],
     );
     expect(result.total).toBe(1);
-    // A facet that holds 150 people shows the first 30 and counts them all.
+    expect(result.facets).toBe("tag:rare");
+    // A list that fits has nothing to narrow.
+    expect(result.refine).toBeUndefined();
+    // A facet that holds 150 people shows the first 30 and counts them all,
+    // and names the query that opens all of them in the Network list.
     const guild = await searchService.semanticSearch(
       scope(),
       'company:"Engineering Guild"',
@@ -305,6 +311,186 @@ describe("Ask takes facets from the request and the question", () => {
     );
     expect(guild.matches).toHaveLength(30);
     expect(guild.total).toBe(ENGINEERS);
+    expect(guild.facets).toBe('company:"Engineering Guild"');
+    // Every engineer is in Madrid, so nothing splits them.
+    expect(guild.refine).toEqual([]);
+    // The Network list reads no near:, so a list with one names no query.
+    const near = await searchService.semanticSearch(
+      scope(),
+      "tracked:no",
+      "filters-near",
+      undefined,
+      {
+        filters: [
+          {
+            field: "near",
+            value: "Lisbon",
+            km: 25,
+            point: { lat: 38.72, lng: -9.14, km: 25 },
+          },
+        ],
+      },
+    );
+    expect(names(near.matches)).toEqual(["Rhea Quill", "Tomas Silva"]);
+    expect(near.facets).toBeUndefined();
+  });
+
+  it("offers facets that split a cut list, each with the count its press finds", async () => {
+    script(null);
+    // The 150 engineers have no email, and neither do some of the others.
+    const asked = "missing:email";
+    const answer = await searchService.semanticSearch(scope(), asked, "refine");
+    expect(answer.total).toBe(ENGINEERS + 5);
+    // The other industries, cities and tags hold one person each.
+    const options = answer.refine ?? [];
+    expect(options).toEqual([
+      { facet: "location:Madrid", label: "Madrid", count: ENGINEERS },
+      {
+        facet: 'company:"Engineering Guild"',
+        label: "Engineering Guild",
+        count: ENGINEERS,
+      },
+    ]);
+    for (const option of options) {
+      const narrowed = await searchService.semanticSearch(
+        scope(),
+        `${asked} ${option.facet}`,
+        "refine-press",
+      );
+      expect(narrowed.total, option.facet).toBe(option.count);
+      expect(option.count).toBeLessThan(answer.total!);
+    }
+    // A value the question asks for keeps everyone, so it is not offered
+    // again, and here nothing else splits the engineers.
+    const inMadrid = await searchService.semanticSearch(
+      scope(),
+      "missing:email location:Madrid",
+      "refine-located",
+    );
+    expect(inMadrid.total).toBe(ENGINEERS);
+    expect(inMadrid.refine).toEqual([]);
+  });
+
+  it("offers each kind's first facet before any second, six at most, from the account's own people", async () => {
+    script(null);
+    const { contactService } =
+      await import("../../server/services/contactService.ts");
+    // 40 people tagged orbit. The ranges give each facet its count. The
+    // seven at Fjord Labs are the seven contacted lately.
+    const among = (i: number, from: number, to: number) => i >= from && i < to;
+    const orbit = await contactService.bulkCreateContacts(
+      scope(),
+      Array.from({ length: 40 }, (_, i) => ({
+        name: `Orbit ${String(i).padStart(2, "0")}`,
+        isTracked: i < 10,
+        industry: among(i, 0, 20)
+          ? "Robotics"
+          : among(i, 20, 32)
+            ? "Biotech"
+            : undefined,
+        location: i < 18 ? "Oslo, Norway" : undefined,
+        company: i >= 33 ? "Fjord Labs" : undefined,
+        tags: [
+          "orbit",
+          ...(i < 9 ? ["mentor"] : among(i, 9, 14) ? ["speaker"] : []),
+        ],
+      })),
+    );
+    // 35 people tagged pine, all in Spain. One holds the tag beta three
+    // times, and still counts once.
+    const cities = ["Madrid", "Seville", "Valencia", "Bilbao"];
+    const pine = await contactService.bulkCreateContacts(
+      scope(),
+      Array.from({ length: 35 }, (_, i) => ({
+        name: `Pine ${String(i).padStart(2, "0")}`,
+        location: `${cities[i < 12 ? 0 : i < 22 ? 1 : i < 30 ? 2 : 3]}, Spain`,
+        tags: [
+          "pine",
+          ...(i < 4 ? ["alpha"] : i === 4 ? ["beta", "beta", "beta"] : []),
+          ...(i === 5 || i === 6 ? ["beta"] : []),
+        ],
+      })),
+    );
+    const contacted = sqlite.prepare(
+      "UPDATE contacts SET lastContactedAt = ? WHERE id = ? AND ownerId = ?",
+    );
+    for (const id of orbit.createdIds.slice(33))
+      contacted.run(new Date().toISOString(), id, localOwnerId());
+    // Another account's people share the tag, and an industry more common
+    // than any of the account's own.
+    const other = "00000000-0000-0000-0000-0000000000b7";
+    sqlite
+      .prepare(
+        "INSERT INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, ?)",
+      )
+      .run(other, "orbit@example.com", "orbitother", "hash");
+    await contactService.bulkCreateContacts(
+      scopeForOwnerId(other),
+      Array.from({ length: 60 }, (_, i) => ({
+        name: `Quarry ${i}`,
+        isTracked: true,
+        industry: "Quarrying",
+        tags: ["orbit"],
+      })),
+    );
+    try {
+      const all = await searchService.semanticSearch(
+        scope(),
+        "tag:orbit",
+        "refine-kinds",
+      );
+      expect(all.total).toBe(40);
+      // Biotech and speaker are second in their kinds, so the cap cuts them.
+      expect(all.refine).toEqual([
+        { facet: "tracked:yes", label: "Tracked", count: 10 },
+        { facet: "industry:Robotics", label: "Robotics", count: 20 },
+        { facet: "location:Oslo", label: "Oslo", count: 18 },
+        { facet: 'company:"Fjord Labs"', label: "Fjord Labs", count: 7 },
+        { facet: "tag:mentor", label: "mentor", count: 9 },
+        {
+          facet: "contacted:<30d",
+          label: "Contacted in 30 days",
+          count: 7,
+        },
+      ]);
+      // Leave out the people contacted lately, and no company and no recent
+      // contact splits the rest. The second industry and the second tag take
+      // the free places, each beside its kind. The tag the question asks for
+      // keeps everyone, so it is not one of the two tags.
+      const quiet = await searchService.semanticSearch(
+        scope(),
+        "tag:orbit contacted:>30d",
+        "refine-quiet",
+      );
+      expect(quiet.total).toBe(33);
+      expect(quiet.refine?.map((o) => o.label)).toEqual([
+        "Tracked",
+        "Robotics",
+        "Biotech",
+        "Oslo",
+        "mentor",
+        "speaker",
+      ]);
+      // A narrower value of a field the question asks for is offered: a city
+      // for a country. Each kind still offers two at most.
+      const spain = await searchService.semanticSearch(
+        scope(),
+        "tag:pine location:Spain",
+        "refine-spain",
+      );
+      expect(spain.total).toBe(35);
+      expect(spain.refine).toEqual([
+        { facet: "location:Madrid", label: "Madrid", count: 12 },
+        { facet: "location:Seville", label: "Seville", count: 10 },
+        { facet: "tag:alpha", label: "alpha", count: 4 },
+        { facet: "tag:beta", label: "beta", count: 3 },
+      ]);
+    } finally {
+      const drop = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
+      for (const id of [...orbit.createdIds, ...pine.createdIds]) drop.run(id);
+      sqlite.prepare("DELETE FROM contacts WHERE ownerId = ?").run(other);
+      sqlite.prepare("DELETE FROM users WHERE id = ?").run(other);
+    }
   });
 
   it("combines the request's facets with the typed ones, over HTTP", async () => {
@@ -379,6 +565,7 @@ describe("implicit facets", () => {
       expect(result.fallback).toBe(false);
       expect(names(result.matches)).toEqual(expected);
       expect(result.matches.every((m) => m.verified)).toBe(true);
+      expect(result.facets).toBe(formatFacetQuery(facets as FacetFilter[]));
     },
   );
 

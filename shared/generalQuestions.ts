@@ -26,8 +26,6 @@ import type { FacetFilter } from "./searchFacets.ts";
 export interface GeneralQuestion {
   /** The question as the page shows it. */
   readonly text: string;
-  /** Its facets as a person types them, for a link to the Network list. */
-  readonly facets: string;
   /** The facets that answer it. The search applies them together. */
   readonly filters: readonly FacetFilter[];
 }
@@ -43,11 +41,7 @@ export const GENERAL_QUESTIONS: readonly GeneralQuestion[] = (
     ["Who is missing a phone number?", "missing:phone"],
     ["Who is missing a location?", "missing:location"],
   ] as const
-).map(([text, facets]) => ({
-  text,
-  facets,
-  filters: parseFacetQuery(facets).filters,
-}));
+).map(([text, facets]) => ({ text, filters: parseFacetQuery(facets).filters }));
 
 /**
  * A question as a person might type it, reduced to its letters and digits:

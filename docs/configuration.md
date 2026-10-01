@@ -83,7 +83,7 @@ not need them.
 
 | Variable                      | What it does                                                                                                 | Default |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------- |
-| `DISABLE_HMR`                 | `true` turns off Vite hot reload. A second dev server needs it, because the first one holds the reload port  | `false` |
+| `DISABLE_HMR`                 | `true` turns off Vite hot reload. Each dev server keeps its reload socket on its own port                    | `false` |
 | `VITEST`                      | Vitest sets it, never a person. Under it, the server refuses to open `./curator.db` unless `DATA_DIR` is set | None    |
 | `IMPORT_SETTLE_MS`            | How long an import that does not stream waits before its duplicate check, in milliseconds. Tests shorten it  | `3000`  |
 | `AI_GATEWAY_TIMEOUT_OVERRIDE` | Replaces the time limit of every AI call, in milliseconds. Tests and evals use it                            | None    |

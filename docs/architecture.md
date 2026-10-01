@@ -55,7 +55,7 @@ flowchart LR
 | `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema). |
 | `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
 | `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                             |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                |
 | `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                 |
 | `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
 | `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
@@ -63,7 +63,7 @@ flowchart LR
 | `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
 | `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
 | `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich`, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                   |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.  |
 | `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
 | `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
 
@@ -76,7 +76,12 @@ This is the path of one edit, from a click to a saved row.
    module in `src/api/` calls `fetch` directly.
 2. The browser sends the session cookie. A script sends a personal token.
 3. `server/app.ts` runs the middleware in this order:
-   1. A request id (`X-Request-Id`) and the security headers.
+   1. A request id (`X-Request-Id`) and the security headers, then
+      compression (`server/middleware/compression.ts`): brotli or gzip, as
+      the request's `Accept-Encoding` allows. It comes before everything
+      that can answer, so it covers the static files and `dist/` too.
+      Streams, byte ranges, photos and fonts, and bodies under 1 KB go out
+      as they are.
    2. The JSON parser: 1 MB, or 50 MB for `POST /api/contacts/bulk`.
    3. The AI rate limit for each client address.
    4. `GET /healthz`, which sits outside the credential gate.
@@ -360,7 +365,7 @@ from its committed baseline, up or down.
 
 | Test                               | What it measures                                                                                                                                                                                                                   |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/eval/search.eval.test.ts`   | Recall at 10 and mean reciprocal rank for 70 questions over 300 contacts, for five rankings: the sidebar search, keyword, fused, the local answer, and the local answer with the cross-encoder. Record with `npm run eval:record`. |
+| `tests/eval/search.eval.test.ts`   | Recall at 10 and mean reciprocal rank for 79 questions over 300 contacts, for five rankings: the sidebar search, keyword, fused, the local answer, and the local answer with the cross-encoder. Record with `npm run eval:record`. |
 | `tests/eval/answer.eval.test.ts`   | The whole Ask pipeline with recorded model answers: filters, results, empty answers, prompt-injection cases and grounded briefs. Record with `npm run eval:record:answer`, or run live with `npm run eval:answer:live`.            |
 | `tests/eval/passages.eval.test.ts` | Questions whose answer sits late in a long field, through the passage index.                                                                                                                                                       |
 | `tests/eval/dedupe.eval.test.ts`   | Precision and recall of the duplicate passes with AI off, on a labelled corpus with hard negatives. Record with `npm run eval:record:dedupe`.                                                                                      |

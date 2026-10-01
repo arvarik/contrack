@@ -53,6 +53,7 @@ import {
 } from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
 import { guardUploads } from "./middleware/uploads.ts";
+import { compressResponses } from "./middleware/compression.ts";
 import {
   NO_STORE_PREFIXES,
   UPLOAD_CACHE_CONTROL,
@@ -158,6 +159,15 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
     next();
   });
+
+  // Brotli or gzip, before every middleware that can answer: the rate limits
+  // (429), the health check, the auth gate (401), the uploads, the routers,
+  // the error handler, and the Vite or dist handlers that server.ts adds
+  // after this function returns. A response that starts before this line
+  // goes out uncompressed. The two middlewares above only set headers, and
+  // the filter reads the headers when the response starts, so their place
+  // relative to this one does not matter. The rules are in compression.ts.
+  app.use(compressResponses);
 
   // Claim rows written while nobody was signed in. Idempotent, and a no-op
   // after the first boot because every row already has an owner. Lives here

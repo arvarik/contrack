@@ -11,7 +11,8 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 - **Server.** Express 5. `server.ts` boots the process. `server/app.ts`
   (`createApp`, `finalizeApp`) builds the app for the server and for the
   integration tests. In development Vite 8 runs as middleware inside the same
-  process. In production the server serves `dist/`. One port, 3210.
+  process, with its reload socket on the same port (`server/serveClient.ts`).
+  In production the server serves `dist/`. One port, 3210.
 - **Client.** React 19, React Router 7, React Query 5, Tailwind CSS 4,
   Motion 13, Tiptap 3, cmdk, MapLibre GL 6 through `@vis.gl/react-maplibre`.
 - **Data.** SQLite in WAL mode through better-sqlite3 and Drizzle ORM. FTS5

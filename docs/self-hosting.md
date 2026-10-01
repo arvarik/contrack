@@ -192,6 +192,14 @@ server {
 Contrack keeps idle connections open for 65 seconds. Keep the proxy's
 keep-alive to Contrack shorter than that.
 
+Contrack compresses its answers with brotli or gzip, so the proxy needs no
+compression setting. Ask Contrack's results and the progress of an import, a
+duplicate scan or contact research arrive as streams, one line at a time.
+Contrack sends those uncompressed and with `X-Accel-Buffering: no`, so each
+line shows as soon as it is written, also behind nginx's default buffering. If
+you turn on compression in the proxy anyway, leave out `text/event-stream` and
+`application/x-ndjson`.
+
 ## Backups and restore
 
 By default, Contrack takes a snapshot of the whole database every 24 hours,

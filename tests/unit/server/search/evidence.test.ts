@@ -183,6 +183,57 @@ describe("AI search evidence", () => {
       await rerankCandidates("finance engineers", [contact], plan),
     ).toEqual([]);
   });
+  it("finds a street in an address, for the place rule and as the evidence", async () => {
+    const plan: QueryPlan = {
+      must: { locationMatchers: ["Kastanienallee"] },
+      should: {},
+      confidence: "high",
+      rationale: "",
+    };
+    reply([
+      {
+        contact_id: "c1",
+        verified_field: "addresses",
+        verified_value: "Kastanienallee 12",
+      },
+      {
+        contact_id: "c2",
+        verified_field: "location",
+        verified_value: "Berlin",
+      },
+    ]);
+    // Both live in Berlin, and only the first address names the street.
+    const results = await rerankCandidates(
+      "Who lives on Kastanienallee?",
+      [
+        {
+          ...contact,
+          location: "Berlin, Germany",
+          addresses:
+            "Kastanienallee 12, 10435 Berlin | Torstraße 3, 10119 Berlin",
+        },
+        {
+          ...contact,
+          id: "b",
+          name: "Bea",
+          location: "Berlin, Germany",
+          addresses: "Oranienstraße 5, 10999 Berlin",
+        },
+      ],
+      plan,
+    );
+    expect(results).toEqual([
+      {
+        contact_id: "a",
+        verified_field: "addresses",
+        verified_value: "Kastanienallee 12",
+      },
+    ]);
+    const { systemPrompt, prompt } = vi.mocked(generateFor).mock.calls[0][1];
+    expect(systemPrompt).toContain("contact.location or contact.addresses");
+    expect(prompt).toContain("Kastanienallee 12, 10435 Berlin");
+  });
+
   it("removes duplicate and invented IDs", async () => {
     reply([match, match, { ...match, contact_id: "invented" }]);
     expect(await rerankCandidates("engineers", [contact])).toEqual([match]);

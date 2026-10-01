@@ -14,6 +14,7 @@ import { searchInteractions } from "../services/interactionSearchService.ts";
 import { parseInteractionSearchQuery } from "../utils/validators.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { startStream } from "../utils/stream.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { scopeOf } from "../tenancy/scope.ts";
@@ -141,11 +142,7 @@ router.post(
 
     if (wantsStream) {
       // Two-phase streaming response
-      res.setHeader("Content-Type", "application/x-ndjson");
-      res.setHeader("Transfer-Encoding", "chunked");
-      res.setHeader("Cache-Control", "no-store");
-      res.setHeader("X-Accel-Buffering", "no");
-      res.flushHeaders();
+      startStream(res, "application/x-ndjson");
 
       // Create an AbortController bound to request closure
       const controller = new AbortController();
@@ -273,11 +270,7 @@ router.post(
     res.on("close", onClose);
 
     // Stream the response
-    res.setHeader("Content-Type", "application/x-ndjson");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
+    startStream(res, "application/x-ndjson");
 
     // Send start signal
     res.write(JSON.stringify({ phase: "start" }) + "\n");

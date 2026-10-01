@@ -234,6 +234,43 @@ export function installSearchIndex(sqlite: Database.Database): void {
           ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
       END;
     `);
+    // A note moves no searched column, so notes keep a revision of their own.
+    // The Ask cache keys on both (searchService.ts). A trigger bumps it on
+    // every insert, edit and delete, where the newest note time would miss a
+    // delete, and an edit in the same second as the change before it.
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS notes_revision (
+        ownerId TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL
+      );
+      DROP TRIGGER IF EXISTS notes_revision_INSERT;
+      DROP TRIGGER IF EXISTS notes_revision_UPDATE;
+      DROP TRIGGER IF EXISTS notes_revision_DELETE;
+
+      CREATE TRIGGER notes_revision_INSERT AFTER INSERT ON interactions
+      WHEN new.ownerId IS NOT NULL
+      BEGIN
+        INSERT INTO notes_revision (ownerId, revision) VALUES (new.ownerId, 1)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = notes_revision.revision + 1;
+      END;
+
+      CREATE TRIGGER notes_revision_DELETE AFTER DELETE ON interactions
+      WHEN old.ownerId IS NOT NULL
+      BEGIN
+        INSERT INTO notes_revision (ownerId, revision) VALUES (old.ownerId, 1)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = notes_revision.revision + 1;
+      END;
+
+      CREATE TRIGGER notes_revision_UPDATE AFTER UPDATE ON interactions
+      BEGIN
+        INSERT INTO notes_revision (ownerId, revision)
+          SELECT new.ownerId, 1 WHERE new.ownerId IS NOT NULL
+          ON CONFLICT(ownerId) DO UPDATE SET revision = notes_revision.revision + 1;
+        INSERT INTO notes_revision (ownerId, revision)
+          SELECT old.ownerId, 1 WHERE old.ownerId IS NOT NULL AND (new.ownerId IS NULL OR old.ownerId != new.ownerId)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = notes_revision.revision + 1;
+      END;
+    `);
     for (const table of [
       "tags",
       "interests",

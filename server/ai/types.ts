@@ -270,6 +270,8 @@ export interface CompressedContact {
   industry?: string;
   preferences?: string;
   interests?: string;
+  /** Every address the contact has, joined by " | ". */
+  addresses?: string;
   passages?: { id: string; field: string; context: string; text: string }[];
 }
 
@@ -284,6 +286,7 @@ export type EvidenceField =
   | "industry"
   | "preferences"
   | "interests"
+  | "addresses"
   | "passage";
 
 /**

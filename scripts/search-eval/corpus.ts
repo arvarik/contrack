@@ -1,10 +1,10 @@
 // =============================================================================
 // The search evaluation corpus
 // =============================================================================
-// Three hundred contacts and seventy queries, written once and committed as
-// JSON. This file is the source the JSON is generated from: it is here so a
-// reader can see why each contact exists, which the generated file cannot
-// show.
+// Three hundred contacts and seventy-nine queries, written once and
+// committed as JSON. This file is the source the JSON is generated from: it
+// is here so a reader can see why each contact exists, which the generated
+// file cannot show.
 //
 // Two kinds of contact:
 //
@@ -17,6 +17,10 @@
 //    not filler: a good half of them are near misses, because a query that
 //    only has to beat noise measures nothing. Somebody shares each target's
 //    company, somebody shares the first name, somebody shares the city.
+//
+// About a third of both kinds have a home or a work address, or both, in the
+// format of their city. The streets are real; the house numbers and the ends
+// of the postcodes are not.
 //
 // Nothing here is a real person. The names are assembled from parts.
 // =============================================================================
@@ -39,6 +43,14 @@ export interface EvalContact {
   emails?: string[];
   /** Phone numbers as people write them, on the targets the phone queries dial. */
   phones?: string[];
+  /** A home address, a work address or both, on about a third of the contacts. */
+  addresses?: EvalAddress[];
+}
+
+/** One address as a person writes it, with the label the contact page shows. */
+export interface EvalAddress {
+  label: "home" | "work";
+  address: string;
 }
 
 export type QueryKind =
@@ -51,7 +63,9 @@ export type QueryKind =
   | "phone"
   | "email"
   | "hyphenated"
-  | "prefix";
+  | "prefix"
+  | "address"
+  | "address-collision";
 
 export interface EvalQuery {
   id: string;
@@ -736,6 +750,311 @@ const CONTACT_POINTS: Record<string, { emails?: string[]; phones?: string[] }> =
   };
 
 // ---------------------------------------------------------------------------
+// Addresses
+// ---------------------------------------------------------------------------
+// Addresses are the lightest column of the keyword index, 0.5 against a
+// name's 10 (`WEIGHTS` in `search/lexical.ts`). Two things are measured: a
+// street, a postcode or a town that only an address names still finds its
+// contact, and a word that an address shares with somebody's name, company,
+// role, location or note does not outrank them.
+//
+// Each is written the way its city writes it: the house number first in
+// Britain, Ireland and France and after the street elsewhere, the postcode
+// where the country puts it, and the town's own name, "Lisboa", "Wien",
+// "Sevilla". Three older queries hold a word of an address collision:
+// "Seville" (q30), "fleet" (q32) and "Changi" (q42). Apart from those, an
+// address meets an older query only where its contact already has the word
+// in another field, such as the city in the location.
+
+/**
+ * Hand-written addresses. Eighteen of the fifty-one targets, about the share
+ * the generated ones give everybody else, and the five distractors that the
+ * address collisions need.
+ */
+const ADDRESSES: Record<string, EvalAddress[]> = {
+  // The answers to the address queries. No other contact has their words.
+  "imogen-halvorsen": [
+    { label: "home", address: "Strandgaten 18, 5013 Bergen" },
+  ],
+  "christopher-nwosu": [
+    {
+      label: "home",
+      address: "27 Burton Road, Didsbury, Manchester M20 2LW",
+    },
+  ],
+  // Lives in Espoo, works in Helsinki. `location` says Helsinki.
+  "hanna-virtanen": [
+    { label: "home", address: "Tapionaukio 4, 02100 Espoo" },
+    { label: "work", address: "Fredrikinkatu 61, 00120 Helsinki" },
+  ],
+  "mateusz-wojcik": [
+    { label: "home", address: "ul. Floriańska 15, 31-019 Kraków" },
+  ],
+
+  // Distractors whose address carries a word a target carries in a heavier
+  // field: a name (10), a company (5), a role (3), a location (2) and a
+  // note (1).
+  // Diego Ferreira, and a street in his own city.
+  "noise-104": [
+    { label: "work", address: "Rua de Ferreira Borges 95, 4050-253 Porto" },
+  ],
+  // Danube Rail Works, and a street in Edinburgh.
+  "noise-064": [
+    { label: "home", address: "14 Danube Street, Edinburgh EH4 1NN" },
+  ],
+  // A fleet manager, and a street in London.
+  "noise-011": [
+    { label: "work", address: "120 Fleet Street, London EC4A 2BE" },
+  ],
+  // Five people in Seville, and a street in Dublin. Their own addresses
+  // say "Sevilla", as Seville writes it.
+  "noise-113": [
+    { label: "home", address: "9 Seville Place, Dublin 1, D01 F2X5" },
+  ],
+  // Ravi Krishnan's note about the lounge in Changi, and a street in his
+  // own city.
+  "near-ravi-krishnan": [
+    { label: "home", address: "212 Changi Road, Singapore 419730" },
+  ],
+
+  // The other targets with an address, a few from every kind of query.
+  "jonathan-smith": [
+    {
+      label: "work",
+      address: "Ashburton Road West, Trafford Park, Manchester M17 1RY",
+    },
+  ],
+  "katherine-oconnell": [
+    { label: "home", address: "22 Pembroke Road, Dublin 4, D04 X7N2" },
+  ],
+  "geoffrey-thwaite": [
+    { label: "work", address: "112 Attercliffe Road, Sheffield S4 7WZ" },
+  ],
+  "marcus-delgado": [
+    { label: "home", address: "8 Cotham Hill, Bristol BS6 6LA" },
+  ],
+  "renata-costa": [
+    { label: "home", address: "Rua da Rosa 54, 1200-385 Lisboa" },
+  ],
+  "oliver-brandt": [
+    { label: "home", address: "Calle Betis 12, 41010 Sevilla" },
+  ],
+  "samuel-adeyemi": [
+    { label: "home", address: "Wiener Straße 34, 10999 Berlin" },
+    { label: "work", address: "Friedrichstraße 68, 10117 Berlin" },
+  ],
+  "amara-diallo": [
+    { label: "home", address: "27 rue des Martyrs, 75009 Paris" },
+    { label: "work", address: "12 rue Jacob, 75006 Paris" },
+  ],
+  "robert-castellanos": [
+    { label: "home", address: "Carrer de Sueca 22, 46006 València" },
+  ],
+  "margaret-ellington": [
+    { label: "home", address: "18 Elgin Crescent, London W11 2JA" },
+  ],
+  "elizabeth-varga": [
+    { label: "home", address: "Bartók Béla út 32, 1111 Budapest" },
+  ],
+  "ravi-krishnan": [
+    { label: "work", address: "8 Marina View, Singapore 018960" },
+  ],
+  "clementine-roux": [
+    { label: "work", address: "45 quai des Chartrons, 33000 Bordeaux" },
+  ],
+  "anne-marie-dubois-laurent": [
+    { label: "work", address: "8 quai Saint-Antoine, 69002 Lyon" },
+  ],
+};
+
+/**
+ * Two streets in each distractor city, for the generated addresses. `{n}` is
+ * the house number. Nairobi's streets go unnumbered, as they mostly are.
+ */
+const STREETS: Record<string, [string, string]> = {
+  Aarhus: [
+    "Søndergade {n}, 8000 Aarhus C",
+    "Jægergårdsgade {n}, 8000 Aarhus C",
+  ],
+  Antwerp: ["Meir {n}, 2000 Antwerpen", "Nationalestraat {n}, 2000 Antwerpen"],
+  Athens: ["Ermou {n}, 105 63 Athina", "Patission {n}, 104 34 Athina"],
+  Barcelona: [
+    "Carrer de Mallorca {n}, 08008 Barcelona",
+    "Carrer de Verdi {n}, 08012 Barcelona",
+  ],
+  Basel: ["Freie Strasse {n}, 4001 Basel", "Steinenvorstadt {n}, 4051 Basel"],
+  Belfast: [
+    "{n} Botanic Avenue, Belfast BT7 1JL",
+    "{n} Lisburn Road, Belfast BT9 6AA",
+  ],
+  Bergen: [
+    "Torgallmenningen {n}, 5014 Bergen",
+    "Nygårdsgaten {n}, 5015 Bergen",
+  ],
+  Berlin: [
+    "Oranienstraße {n}, 10999 Berlin",
+    "Kastanienallee {n}, 10435 Berlin",
+  ],
+  Bilbao: [
+    "Calle Ercilla {n}, 48009 Bilbao",
+    "Calle Ledesma {n}, 48001 Bilbao",
+  ],
+  Bologna: [
+    "Via Santo Stefano {n}, 40125 Bologna",
+    "Strada Maggiore {n}, 40125 Bologna",
+  ],
+  Bordeaux: [
+    "{n} rue Sainte-Catherine, 33000 Bordeaux",
+    "{n} cours Victor Hugo, 33000 Bordeaux",
+  ],
+  Bratislava: [
+    "Obchodná {n}, 811 06 Bratislava",
+    "Panská {n}, 811 01 Bratislava",
+  ],
+  Bristol: [
+    "{n} Gloucester Road, Bristol BS7 8AE",
+    "{n} Park Street, Bristol BS1 5JA",
+  ],
+  Budapest: [
+    "Andrássy út {n}, 1061 Budapest",
+    "Király utca {n}, 1075 Budapest",
+  ],
+  Cardiff: [
+    "{n} Queen Street, Cardiff CF10 2BU",
+    "{n} Cathedral Road, Cardiff CF11 9LJ",
+  ],
+  Cork: [
+    "{n} Oliver Plunkett Street, Cork T12 X2C4",
+    "{n} MacCurtain Street, Cork T23 W9F1",
+  ],
+  Dublin: [
+    "{n} Camden Street, Dublin 2, D02 HX65",
+    "{n} Baggot Street, Dublin 4, D04 V6P3",
+  ],
+  Edinburgh: [
+    "{n} Leith Walk, Edinburgh EH6 5BX",
+    "{n} George Street, Edinburgh EH2 2PF",
+  ],
+  Galway: [
+    "{n} Shop Street, Galway H91 E9P4",
+    "{n} Dominick Street, Galway H91 T2W7",
+  ],
+  Genoa: [
+    "Via Garibaldi {n}, 16124 Genova",
+    "Via XX Settembre {n}, 16121 Genova",
+  ],
+  Ghent: ["Veldstraat {n}, 9000 Gent", "Korenmarkt {n}, 9000 Gent"],
+  Glasgow: [
+    "{n} Sauchiehall Street, Glasgow G2 3JD",
+    "{n} Great Western Road, Glasgow G12 8HN",
+  ],
+  Gothenburg: [
+    "Kungsportsavenyen {n}, 411 36 Göteborg",
+    "Linnégatan {n}, 413 04 Göteborg",
+  ],
+  Helsinki: [
+    "Mannerheimintie {n}, 00100 Helsinki",
+    "Fredrikinkatu {n}, 00120 Helsinki",
+  ],
+  Innsbruck: [
+    "Museumstraße {n}, 6020 Innsbruck",
+    "Anichstraße {n}, 6020 Innsbruck",
+  ],
+  Krakow: [
+    "ul. Grodzka {n}, 31-006 Kraków",
+    "ul. Karmelicka {n}, 31-128 Kraków",
+  ],
+  Leeds: ["{n} Briggate, Leeds LS1 6HD", "{n} Kirkstall Road, Leeds LS4 2AZ"],
+  Lisbon: [
+    "Rua Augusta {n}, 1100-053 Lisboa",
+    "Avenida da Liberdade {n}, 1250-096 Lisboa",
+  ],
+  Ljubljana: [
+    "Čopova ulica {n}, 1000 Ljubljana",
+    "Trubarjeva cesta {n}, 1000 Ljubljana",
+  ],
+  London: [
+    "{n} Upper Street, London N1 2XG",
+    "{n} Clerkenwell Road, London EC1M 5RN",
+  ],
+  Lyon: [
+    "{n} rue de la République, 69002 Lyon",
+    "{n} rue Mercière, 69002 Lyon",
+  ],
+  Malmo: [
+    "Södra Förstadsgatan {n}, 211 43 Malmö",
+    "Davidshallsgatan {n}, 211 45 Malmö",
+  ],
+  Manchester: [
+    "{n} Deansgate, Manchester M3 4LQ",
+    "{n} Oldham Street, Manchester M1 1JN",
+  ],
+  Milan: [
+    "Corso Buenos Aires {n}, 20124 Milano",
+    "Via Torino {n}, 20123 Milano",
+  ],
+  Munich: [
+    "Leopoldstraße {n}, 80802 München",
+    "Sendlinger Straße {n}, 80331 München",
+  ],
+  Nairobi: ["Ngong Road, Kilimani, Nairobi", "Kimathi Street, Nairobi"],
+  Naples: ["Via Toledo {n}, 80134 Napoli", "Via Chiaia {n}, 80132 Napoli"],
+  Oslo: ["Bogstadveien {n}, 0355 Oslo", "Thorvald Meyers gate {n}, 0555 Oslo"],
+  Paris: ["{n} rue de Rivoli, 75004 Paris", "{n} rue Oberkampf, 75011 Paris"],
+  Porto: [
+    "Rua de Santa Catarina {n}, 4000-447 Porto",
+    "Avenida dos Aliados {n}, 4000-064 Porto",
+  ],
+  Prague: ["Vodičkova {n}, 110 00 Praha 1", "Karlova {n}, 110 00 Praha 1"],
+  // Boulevards, not streets: "iela" begins with the "ie" of q61's address.
+  Riga: [
+    "Brīvības bulvāris {n}, Rīga, LV-1050",
+    "Raiņa bulvāris {n}, Rīga, LV-1050",
+  ],
+  Rotterdam: [
+    "Witte de Withstraat {n}, 3012 BP Rotterdam",
+    "Meent {n}, 3011 JH Rotterdam",
+  ],
+  Seville: [
+    "Calle Sierpes {n}, 41004 Sevilla",
+    "Calle Feria {n}, 41003 Sevilla",
+  ],
+  Sheffield: [
+    "{n} Division Street, Sheffield S1 4GF",
+    "{n} Ecclesall Road, Sheffield S11 8HW",
+  ],
+  Singapore: [
+    "{n} Orchard Road, Singapore 238879",
+    "{n} Cecil Street, Singapore 069533",
+  ],
+  Stockholm: [
+    "Drottninggatan {n}, 111 51 Stockholm",
+    "Götgatan {n}, 116 46 Stockholm",
+  ],
+  Stuttgart: [
+    "Königstraße {n}, 70173 Stuttgart",
+    "Calwer Straße {n}, 70173 Stuttgart",
+  ],
+  Tallinn: ["Viru {n}, 10140 Tallinn", "Narva mnt {n}, 10117 Tallinn"],
+  Turin: ["Via Roma {n}, 10123 Torino", "Via Po {n}, 10124 Torino"],
+  Valencia: [
+    "Carrer de Colón {n}, 46004 València",
+    "Carrer de Russafa {n}, 46004 València",
+  ],
+  Vienna: ["Mariahilfer Straße {n}, 1060 Wien", "Praterstraße {n}, 1020 Wien"],
+  Vilnius: [
+    "Gedimino pr. {n}, LT-01103 Vilnius",
+    "Pilies g. {n}, LT-01123 Vilnius",
+  ],
+  Warsaw: [
+    "ul. Nowy Świat {n}, 00-373 Warszawa",
+    "ul. Marszałkowska {n}, 00-624 Warszawa",
+  ],
+  Zagreb: ["Ilica {n}, 10000 Zagreb", "Tkalčićeva {n}, 10000 Zagreb"],
+  Zurich: ["Bahnhofstrasse {n}, 8001 Zürich", "Langstrasse {n}, 8004 Zürich"],
+};
+
+// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
@@ -963,6 +1282,40 @@ const QUERIES: [id: string, kind: QueryKind, q: string, expect: string][] = [
   ["q68", "prefix", "Thwa", "geoffrey-thwaite"],
   ["q69", "prefix", "Krzy", "krzysztof-nowak"],
   ["q70", "prefix", "Siob", "siobhan-murphy"],
+
+  // An address, and nothing else. A street, a postcode and a town that only
+  // one contact's address names: without the address column, keyword search
+  // found nobody for these three.
+  ["q71", "address", "Strandgaten", "imogen-halvorsen"],
+  ["q72", "address", "M20 2LW", "christopher-nwosu"],
+  ["q73", "address", "Espoo", "hanna-virtanen"],
+  // An address pasted with its country and without its accents. Nobody's
+  // record says "Poland", so no contact holds every word, and six contacts
+  // in Krakow hold one. BM25 decides, and the street and the house number
+  // put Mateusz first in the keyword list. This is the query that sees an
+  // address weight of 0: a column at 0 still matches, but adds nothing. The
+  // fused list puts him second, behind a contact whose headline says
+  // "Krakow" too, because the vectors read the city and not the address.
+  ["q74", "address", "Florianska 15, Krakow, Poland", "mateusz-wojcik"],
+
+  // A word that one contact's address shares with another contact's name,
+  // company, role, location or note. The address weighs least, so the other
+  // field ranks first: the person named Ferreira before the office on Rua de
+  // Ferreira Borges, the five people in Seville before the house on Seville
+  // Place. Each fails once the address weight passes its field's: Changi
+  // (a note, 1) first, then Seville (a location, 2), Danube (a company, 5),
+  // Fleet (a role, a headline, a tag and an email domain) and Ferreira (a
+  // name, 10).
+  ["q75", "address-collision", "Ferreira", "diego-ferreira"],
+  ["q76", "address-collision", "Danube", "elizabeth-varga"],
+  ["q77", "address-collision", "Fleet", "robert-castellanos"],
+  [
+    "q78",
+    "address-collision",
+    "Seville",
+    "xiomara-reyes,oliver-brandt,near-imogen-halvorsen,noise-087,noise-116",
+  ],
+  ["q79", "address-collision", "Changi", "ravi-krishnan"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -1447,6 +1800,38 @@ function buildDistractors(
   return out;
 }
 
+/**
+ * Give about a third of the distractors an address in their own city: one in
+ * four gets one, home or work, and one in ten gets both.
+ *
+ * A stream of its own, so the names, companies and cities above are the ones
+ * they were before any contact had an address. Every contact takes the same
+ * five draws whether or not it gets an address, so a change to one contact
+ * never moves the addresses of the contacts after it. A contact with a
+ * hand-written address keeps it.
+ */
+function assignAddresses(contacts: EvalContact[]): void {
+  const rand = mulberry32(0xadd2e55);
+  for (const contact of contacts) {
+    const roll = rand();
+    const swap = rand();
+    const label = rand() < 0.6 ? "home" : "work";
+    const numbers = [rand(), rand()].map((r) =>
+      String(1 + Math.floor(r * 140)),
+    );
+    const streets = STREETS[contact.location];
+    if (contact.addresses || !streets || roll >= 0.34) continue;
+    const [first, second] = swap < 0.5 ? streets : [streets[1], streets[0]];
+    contact.addresses =
+      roll < 0.1
+        ? [
+            { label: "home", address: first.replace("{n}", numbers[0]) },
+            { label: "work", address: second.replace("{n}", numbers[1]) },
+          ]
+        : [{ label, address: first.replace("{n}", numbers[0]) }];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Assembly
 // ---------------------------------------------------------------------------
@@ -1485,19 +1870,24 @@ export function buildCorpus(): {
         tags: tags.split(","),
         interests: interests.split(","),
         ...CONTACT_POINTS[key],
+        addresses: ADDRESSES[key],
       };
     },
   );
 
   const collisions = buildCollisions(targets);
-  const contacts = [
-    ...targets,
+  const others = [
     ...collisions,
     ...buildDistractors(
       CORPUS_SIZE - targets.length - collisions.length,
       targets,
     ),
   ];
+  for (const contact of others) {
+    if (ADDRESSES[contact.key]) contact.addresses = ADDRESSES[contact.key];
+  }
+  assignAddresses(others);
+  const contacts = [...targets, ...others];
 
   const queries: EvalQuery[] = QUERIES.map(([id, kind, q, expect]) => ({
     id,
@@ -1507,13 +1897,20 @@ export function buildCorpus(): {
   }));
 
   // A query naming a contact that is not in the corpus would score zero for
-  // ever and read as a ranking problem. Fail here instead.
+  // ever and read as a ranking problem. Fail here instead. So would an
+  // address written for a contact that is not there: it never reaches the
+  // index.
   const keys = new Set(contacts.map((c) => c.key));
   for (const query of queries) {
     for (const key of query.expect) {
       if (!keys.has(key)) {
         throw new Error(`Query ${query.id} expects unknown contact "${key}"`);
       }
+    }
+  }
+  for (const key of Object.keys(ADDRESSES)) {
+    if (!keys.has(key)) {
+      throw new Error(`An address is written for unknown contact "${key}"`);
     }
   }
   if (contacts.length !== CORPUS_SIZE) {

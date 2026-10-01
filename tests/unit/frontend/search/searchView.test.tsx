@@ -808,8 +808,59 @@ describe("the page", () => {
     random.mockRestore();
   });
 
-  it("counts every match of a question of facets, and links a general question to the rest", async () => {
-    stubFetch((s) => {
+  it("counts every match of a question of facets, links the rest, and saves the count", async () => {
+    // The server names the Network query only when the list can read it.
+    const sent = stubFetch((s) => {
+      const asked = String(s.body?.query);
+      if (s.url.endsWith("/search/semantic"))
+        return new Response(
+          line({
+            phase: "complete",
+            matches: MATCHES,
+            fallback: false,
+            total: asked === "tag:rare" ? MATCHES.length : 1501,
+            ...(asked.startsWith("tag:") ? { facets: asked } : {}),
+          }),
+        );
+    });
+    renderView();
+    const seeAll = () =>
+      screen.queryByRole("link", { name: "See all in Network" });
+
+    ask("tag:investor");
+    expect(await screen.findByText("3 of 1,501 matches")).toBeTruthy();
+    expect(seeAll()?.getAttribute("href")).toBe("/?q=tag%3Ainvestor");
+    await waitFor(() =>
+      expect(
+        sent.find((s) => s.url.includes("/search/history") && s.body)?.body,
+      ).toMatchObject({ query: "tag:investor", resultCount: 1501 }),
+    );
+
+    // The history records an answer once it has landed.
+    ask("near:Paris");
+    await waitFor(() =>
+      expect(
+        sent.some(
+          (s) =>
+            s.url.includes("/search/history") && s.body?.query === "near:Paris",
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByText("3 of 1,501 matches")).toBeTruthy();
+    expect(seeAll()).toBeNull();
+
+    // A list that holds every match has nothing more to open.
+    ask("tag:rare");
+    expect(await screen.findByText("3 matches")).toBeTruthy();
+    expect(seeAll()).toBeNull();
+  });
+
+  it("offers the facets that narrow a long list, and a press asks again with one added", async () => {
+    const refine = [
+      { facet: "industry:Fintech", label: "Fintech", count: 412 },
+      { facet: 'location:"New York"', label: "New York", count: 1203 },
+    ];
+    const sent = stubFetch((s) => {
       if (s.url.endsWith("/search/semantic"))
         return new Response(
           line({
@@ -817,21 +868,32 @@ describe("the page", () => {
             matches: MATCHES,
             fallback: false,
             total: 1501,
+            // The narrowed answer is short, so it offers nothing more.
+            ...(s.body?.query === "Who do I track?" ? { refine } : {}),
           }),
         );
     });
     renderView();
 
-    ask("tag:investor");
-    expect(await screen.findByText("3 of 1,501 matches")).toBeTruthy();
-    // Only a general question has its facets to hand.
-    const seeAll = () =>
-      screen.queryByRole("link", { name: "See all in Network" });
-    expect(seeAll()).toBeNull();
-
     ask("Who do I track?");
+    const group = await screen.findByRole("group", { name: "Narrow the list" });
+    const chips = within(group).getAllByRole("button");
+    expect(chips.map((chip) => chip.getAttribute("aria-label"))).toEqual([
+      "Narrow to Fintech, 412 people",
+      "Narrow to New York, 1,203 people",
+    ]);
+    expect(chips[1]!.textContent).toBe("New York1,203");
+
+    fireEvent.click(chips[1]!);
+    const narrowed = 'Who do I track? location:"New York"';
+    expect(input().value).toBe(narrowed);
     await waitFor(() =>
-      expect(seeAll()?.getAttribute("href")).toBe("/?q=tracked%3Ayes"),
+      expect(semantic(sent).at(-1)?.body).toEqual({ query: narrowed }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("group", { name: "Narrow the list" }),
+      ).toBeNull(),
     );
   });
 
