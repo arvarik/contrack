@@ -490,7 +490,7 @@ export function getSearchCoverage(scope: Scope): SearchCoverage {
       kind: resolved.kind,
       providerId: resolved.providerId ?? null,
       model: resolved.model ?? null,
-      isPaid: resolved.kind === "provider",
+      isPaid: !currentEmbedder().local,
     },
     failedItems,
   };

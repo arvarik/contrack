@@ -215,6 +215,21 @@ describe("when the stage cannot run", () => {
     await rerankLocal("q", people("Ada"));
     expect(calls).toHaveLength(0);
   });
+
+  it("runs a reranker that is not local only where AI is allowed", async () => {
+    const hosted = {
+      ...fake(async (_query, docs) => docs.map((_, index) => index)),
+      local: false,
+    };
+    const list = people("Ada", "Grace");
+    const off = await rerankLocal("q", list, 25, { reranker: hosted });
+    expect(names(off)).toEqual(["Ada", "Grace"]);
+    const on = await rerankLocal("q", list, 25, {
+      reranker: hosted,
+      aiAllowed: true,
+    });
+    expect(names(on)).toEqual(["Grace", "Ada"]);
+  });
 });
 
 describe("which reranker runs", () => {

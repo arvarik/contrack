@@ -34,6 +34,11 @@ import { AppError } from "../utils/AppError.ts";
 /** Dimension of the bundled local model. */
 export const BUILTIN_DIMENSION = 384;
 export const BUILTIN_MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+/**
+ * The bundled model's signature, which both vector stores record. A change
+ * here rebuilds both stores and re-embeds every contact.
+ */
+export const BUILTIN_SIGNATURE = `builtin/${BUILTIN_MODEL_ID}`;
 
 export interface ResolvedEmbeddings {
   kind: "builtin" | "provider";
@@ -67,7 +72,7 @@ const BUILTIN: ResolvedEmbeddings = {
   kind: "builtin",
   model: BUILTIN_MODEL_ID,
   dimension: BUILTIN_DIMENSION,
-  signature: `builtin/${BUILTIN_MODEL_ID}`,
+  signature: BUILTIN_SIGNATURE,
 };
 
 /**

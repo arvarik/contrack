@@ -920,6 +920,7 @@ async function runSearch(
     const ordered = reorder
       ? await rerankLocal(text, fused, rerankBudgetMs(), {
           ...reorder,
+          aiAllowed,
           documents: fused.map((contact) => {
             const passage = relevant.get(contact.id)?.[0];
             return passage

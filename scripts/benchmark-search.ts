@@ -339,8 +339,13 @@ async function seedCorpus() {
   await embedder.initBuiltinEmbedder();
   let embedded = 0;
   let embedMs = 0;
-  // The A/B mode embeds each contact once itself, for both tables.
-  if (embedder.builtinEmbedder.ready() && !vectorAbMode)
+  // The A/B mode embeds each contact once itself, for both tables. The
+  // vectors are the built-in model's, so a pinned provider model skips them.
+  if (
+    embedder.currentEmbedder() === embedder.builtinEmbedder &&
+    embedder.builtinEmbedder.ready() &&
+    !vectorAbMode
+  )
     [embedded, embedMs] = await timed(() =>
       localEmbeddings.backfillSearchEmbeddings(),
     );

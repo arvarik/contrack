@@ -121,6 +121,12 @@ export interface RerankOptions {
   count?: number;
   /** Query-selected evidence, in candidate order. */
   documents?: string[];
+  /**
+   * True when the account allows AI. A reranker that is not local sends the
+   * question and the profiles out, so it runs only then. A local one runs
+   * either way.
+   */
+  aiAllowed?: boolean;
 }
 
 /**
@@ -128,9 +134,9 @@ export interface RerankOptions {
  *
  * The top `RERANK_CANDIDATES` are scored and sorted, highest first, with the
  * list's own order as the tie break. The rest follow unchanged. When the
- * stage is off, not loaded, late or failing, the list comes back as it was.
- * The caller decides the query kind, and whether a reranker that is not
- * local may read the question: only a question comes here.
+ * stage is off, not loaded, late or failing, the list comes back as it was,
+ * and so it does for a reranker that is not local unless `aiAllowed` is
+ * true. The caller decides the query kind: only a question comes here.
  */
 export async function rerankLocal<T extends ProfileFields>(
   query: string,
@@ -141,7 +147,13 @@ export async function rerankLocal<T extends ProfileFields>(
   const reranker =
     options.reranker === undefined ? currentReranker() : options.reranker;
   const top = candidates.slice(0, options.count ?? RERANK_CANDIDATES);
-  if (!reranker?.ready() || top.length < 2 || budgetMs <= 0) return candidates;
+  if (
+    !reranker?.ready() ||
+    (!reranker.local && options.aiAllowed !== true) ||
+    top.length < 2 ||
+    budgetMs <= 0
+  )
+    return candidates;
 
   const t0 = performance.now();
   const late = new AbortController();

@@ -31,7 +31,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("../../../../server/ai/embeddings.ts", () => ({
   BUILTIN_DIMENSION: 384,
-  BUILTIN_MODEL_ID: "Xenova/all-MiniLM-L6-v2",
+  BUILTIN_SIGNATURE: "builtin/Xenova/all-MiniLM-L6-v2",
   resolveEmbeddings: () => state.resolved,
   embedWithProvider: vi.fn(
     async (_id: string, _model: string, texts: string[]) =>
@@ -101,7 +101,6 @@ describe("the built-in model", () => {
     expect(currentEmbedder()).toBe(builtinEmbedder);
     expect(builtinEmbedder).toMatchObject({
       id: BUILTIN.signature,
-      dimension: 384,
       local: true,
     });
   });
@@ -133,12 +132,11 @@ describe("the built-in model", () => {
 });
 
 describe("a provider model", () => {
-  it("is what the capability names: its signature, its width, not local", async () => {
+  it("is what the capability names: its signature, and not local", async () => {
     state.resolved = PROVIDER;
     const embedder = currentEmbedder();
     expect(embedder).toMatchObject({
       id: PROVIDER.signature,
-      dimension: 768,
       local: false,
     });
     expect(embedder.ready()).toBe(true);

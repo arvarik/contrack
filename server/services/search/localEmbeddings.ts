@@ -356,13 +356,13 @@ async function embedPassageSnapshots(
     const batch = await embedBatch(texts);
     if (
       batch.length !== texts.length ||
-      batch.some((vector) => !vector || !vector.every(Number.isFinite))
+      batch.some((vector) => !vector.every(Number.isFinite))
     ) {
       throw new AppError(
         "Embedding backend returned incomplete passage vectors",
       );
     }
-    vectors.push(...(batch as Float32Array[]));
+    vectors.push(...batch);
   }
   let offset = 0;
   return snapshots.map((snapshot) => {
@@ -589,10 +589,7 @@ async function embedSearchRound(
       );
     }
 
-    const scale = writeScale([
-      ...vectors.filter((vec): vec is Float32Array => !!vec),
-      ...passageVectors.flat(),
-    ]);
+    const scale = writeScale([...vectors, ...passageVectors.flat()]);
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];

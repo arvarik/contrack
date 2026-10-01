@@ -86,6 +86,11 @@ async function main(): Promise<void> {
   console.log("corpus seeded");
 
   await embedder.initBuiltinEmbedder();
+  if (embedder.currentEmbedder() !== embedder.builtinEmbedder) {
+    throw new Error(
+      "The fixture records the built-in embedding model. Unset AI_EMBEDDINGS_MODEL and record again.",
+    );
+  }
   if (!embedder.builtinEmbedder.ready()) {
     throw new Error(
       "The local embedding model did not load. The fixture cannot be recorded without it.",

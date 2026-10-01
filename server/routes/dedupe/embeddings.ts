@@ -25,7 +25,7 @@ export function registerEmbeddingRoutes(router: Router) {
 
       if (!isEmbeddingAvailable()) {
         throw new AppError(
-          "Gemini API key not configured — cannot generate embeddings",
+          "No embedding model is ready — cannot generate embeddings",
           503,
         );
       }

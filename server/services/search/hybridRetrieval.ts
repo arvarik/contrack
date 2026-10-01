@@ -393,7 +393,9 @@ export async function embedQuery(
   try {
     // A backfill can hold the worker queue. A query must not wait behind
     // it before the planner's own budget even starts. Cancel queued local
-    // work after 100 ms and keep the keyword channel available.
+    // work after 100 ms and keep the keyword channel available. A local
+    // model always runs on that worker: the main thread never loads
+    // onnxruntime (`cpuWorker.ts`).
     return local
       ? await withTimeout((budget) => embedText(text, budget), 100, signal)
       : await embedText(text, signal);

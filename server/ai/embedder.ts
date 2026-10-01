@@ -13,15 +13,19 @@
 // `currentEmbedder()` picks one from the embeddings capability
 // (`resolveEmbeddings` in `embeddings.ts`) on every call, so a change in
 // Settings or to the instance switch reaches the next text. A caller reads
-// three facts from it: `id`, which the vector stores record they were built
-// with, `local`, which says whether text leaves this server, and `ready()`.
+// `local`, which says whether text leaves this server, and `ready()`.
+//
+// The vector stores do not read the embedder. They record the capability's
+// signature, and an adapter's `id` is that same string. So a change to a
+// model's vectors needs a new signature in `embeddings.ts` (`BUILTIN_SIGNATURE`
+// or `providerEmbeddings`). Then both stores rebuild at the next boot or
+// settings change. A new `id` alone rebuilds nothing.
 //
 // Every call says what its texts are for, a question or a document. Some
 // models embed the two differently: Gemini's task types, the e5 and nomic
 // prefixes. Neither adapter here reads it, so their vectors are the ones they
 // were before this interface existed. An adapter that starts to read it
-// changes its vectors, so it must change its `id` too, and both stores
-// rebuild.
+// changes its vectors, so it needs that new signature.
 // =============================================================================
 
 // Type-only import — erased at compile time, so @huggingface/transformers
@@ -36,7 +40,7 @@ import {
 } from "../services/search/modelFiles.ts";
 import {
   BUILTIN_DIMENSION,
-  BUILTIN_MODEL_ID,
+  BUILTIN_SIGNATURE,
   embedWithProvider,
   resolveEmbeddings,
 } from "./embeddings.ts";
@@ -51,12 +55,10 @@ export type EmbedUse = "query" | "document";
 /** A model that turns text into vectors. */
 export interface Embedder {
   /**
-   * The model as the vector stores record it, `builtin/<model>` or
-   * `<provider>/<model>`. The same string as the capability's signature.
+   * The model, `builtin/<model>` or `<provider>/<model>`. The same string as
+   * the capability's signature, which is what the vector stores record.
    */
   readonly id: string;
-  /** The vector width, or null while a provider model is not probed yet. */
-  readonly dimension: number | null;
   /**
    * True when the model runs on this server, so no text leaves it and nothing
    * is billed. The privacy and cost rules read this, never the model's name.
@@ -94,8 +96,7 @@ let initPromise: Promise<void> | null = null;
 
 /** The bundled model. It embeds a question and a document the same way. */
 export const builtinEmbedder: Embedder = {
-  id: `builtin/${BUILTIN_MODEL_ID}`,
-  dimension: BUILTIN_DIMENSION,
+  id: BUILTIN_SIGNATURE,
   local: true,
   ready: () => modelReady,
   embed: (texts, _use, signal) => embedBuiltin(texts, signal),
@@ -241,11 +242,9 @@ function providerEmbedder(
   providerId: string,
   model: string,
   id: string,
-  dimension: number | null,
 ): Embedder {
   return {
     id,
-    dimension,
     local: false,
     ready: () => true,
     async embed(texts, _use, signal) {
@@ -268,7 +267,8 @@ let replacement: Embedder | null = null;
  * Use `embedder` instead of the configured one. Null goes back.
  *
  * Tests and scripts only. The vector stores keep the configured model's
- * record, so a replacement must write vectors as wide as the stores are.
+ * signature and width, so a replacement must write vectors as wide as the
+ * stores are.
  */
 export function setEmbedder(embedder: Embedder | null): void {
   replacement = embedder;
@@ -279,12 +279,7 @@ export function currentEmbedder(): Embedder {
   if (replacement) return replacement;
   const resolved = resolveEmbeddings();
   return resolved.kind === "provider" && resolved.providerId && resolved.model
-    ? providerEmbedder(
-        resolved.providerId,
-        resolved.model,
-        resolved.signature,
-        resolved.dimension,
-      )
+    ? providerEmbedder(resolved.providerId, resolved.model, resolved.signature)
     : builtinEmbedder;
 }
 

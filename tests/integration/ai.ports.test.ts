@@ -36,10 +36,9 @@ const calls: { use: EmbedUse; texts: string[] }[] = [];
 /** What the two backfills asked for. */
 let indexed: typeof calls = [];
 
-/** An embedder as wide as a new database's stores, that records calls. */
+/** An embedder that records calls, as wide as a new database's stores. */
 const recording = (local: boolean): Embedder => ({
   id: local ? "test/local" : "test/hosted",
-  dimension: 384,
   local,
   ready: () => true,
   async embed(texts, use) {
