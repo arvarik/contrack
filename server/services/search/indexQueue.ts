@@ -2,6 +2,7 @@ import { PASSAGE_VERSION } from "./passageIndex.ts";
 import { getEmbeddingsState } from "../../ai/embeddings.ts";
 import { refreshPlannerStats, sqlite } from "../../db.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
+import { currentEmbedder } from "../../ai/embedder.ts";
 import { embedContact, isSearchBackfillRunning } from "./localEmbeddings.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
@@ -101,8 +102,7 @@ export async function drainIndexQueue(
     };
   }
 
-  const resolved = resolveEmbeddings();
-  const isProvider = resolved.kind !== "builtin";
+  const isProvider = !currentEmbedder().local;
 
   // Keep paid provider refreshes explicit: if configured with a provider,
   // do not automatically drain in the background without explicit permission.

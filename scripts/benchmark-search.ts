@@ -333,21 +333,24 @@ async function seedCorpus() {
     });
   })();
 
-  await localEmbeddings.initLocalEmbeddings();
+  const embedder = await load<typeof import("../server/ai/embedder.ts")>(
+    "server/ai/embedder.ts",
+  );
+  await embedder.initBuiltinEmbedder();
   let embedded = 0;
   let embedMs = 0;
   // The A/B mode embeds each contact once itself, for both tables.
-  if (localEmbeddings.isLocalEmbeddingReady() && !vectorAbMode)
+  if (embedder.builtinEmbedder.ready() && !vectorAbMode)
     [embedded, embedMs] = await timed(() =>
       localEmbeddings.backfillSearchEmbeddings(),
     );
   // The server loads the cross-encoder at boot. With background jobs off,
   // the benchmark loads it here, so the instant chunk includes it.
-  const crossEncoder = await load<
-    typeof import("../server/services/search/crossEncoder.ts")
-  >("server/services/search/crossEncoder.ts");
-  const reranker = (await crossEncoder.initCrossEncoder())
-    ? crossEncoder.rerankModel()
+  const rerankers = await load<typeof import("../server/ai/reranker.ts")>(
+    "server/ai/reranker.ts",
+  );
+  const reranker = (await rerankers.initCrossEncoder())
+    ? rerankers.rerankModel()
     : null;
 
   return {
@@ -388,9 +391,12 @@ async function modules() {
     harness: await load<typeof import("../tests/eval/harness.ts")>(
       "tests/eval/harness.ts",
     ),
-    crossEncoder: await load<
-      typeof import("../server/services/search/crossEncoder.ts")
-    >("server/services/search/crossEncoder.ts"),
+    rerank: await load<typeof import("../server/services/search/rerank.ts")>(
+      "server/services/search/rerank.ts",
+    ),
+    rerankers: await load<typeof import("../server/ai/reranker.ts")>(
+      "server/ai/reranker.ts",
+    ),
     contacts: await load<
       typeof import("../server/repositories/contactRepository.ts")
     >("server/repositories/contactRepository.ts"),
@@ -835,9 +841,11 @@ async function rerankSweep(seeded: Seeded) {
    * recall@10 and MRR of the local answer for every golden query, and for
    * the questions whose answer is the local list, where the stage runs.
    */
-  const quality = async (
-    crossEncoder: false | { model: string; count: number },
-  ) => {
+  const quality = async (rerank: false | { model: string; count: number }) => {
+    const crossEncoder = rerank && {
+      reranker: m.rerankers.crossEncoder(rerank.model),
+      count: rerank.count,
+    };
     const every: { ranked: string[]; expected: Set<string> }[] = [];
     const listed: typeof every = [];
     for (const query of corpus.queries) {
@@ -882,7 +890,7 @@ async function rerankSweep(seeded: Seeded) {
   }[] = [];
   try {
     for (const model of RERANK_MODELS) {
-      if (!(await m.crossEncoder.initCrossEncoder(model)))
+      if (!(await m.rerankers.initCrossEncoder(model)))
         throw new Error(`${model} did not load`);
       for (const count of RERANK_COUNTS) {
         const times: number[] = [];
@@ -901,8 +909,8 @@ async function rerankSweep(seeded: Seeded) {
           docs += Math.min(candidates.length, count);
           for (let run = 0; run <= runs; run++) {
             const [, stageMs] = await timed(() =>
-              m.crossEncoder.rerankLocal(query.q, candidates, 60_000, {
-                model,
+              m.rerank.rerankLocal(query.q, candidates, 60_000, {
+                reranker: m.rerankers.crossEncoder(model),
                 count,
               }),
             );

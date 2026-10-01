@@ -98,6 +98,7 @@ async function main(): Promise<void> {
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
   const localEmbeddings =
     await import("../server/services/search/localEmbeddings.ts");
+  const embedder = await import("../server/ai/embedder.ts");
   const {
     seedAnswerCorpus,
     measureAnswerPipeline,
@@ -134,8 +135,8 @@ async function main(): Promise<void> {
 
   // Vector embeddings
   console.log("Initializing vector embeddings model...");
-  await localEmbeddings.initLocalEmbeddings();
-  if (!localEmbeddings.isLocalEmbeddingReady()) {
+  await embedder.initBuiltinEmbedder();
+  if (!embedder.builtinEmbedder.ready()) {
     throw new Error("Local embedding model failed to initialize.");
   }
   // The model's floats for the text the backfill embeds, written through the

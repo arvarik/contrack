@@ -24,7 +24,7 @@ import {
   modelOnDisk,
   type ModelLibraryEnv,
 } from "../../../../server/services/search/modelFiles.ts";
-import { DEFAULT_RERANK_MODEL } from "../../../../server/services/search/crossEncoder.ts";
+import { DEFAULT_RERANK_MODEL } from "../../../../server/ai/reranker.ts";
 import { BUILTIN_MODEL_ID } from "../../../../server/ai/embeddings.ts";
 
 function libraryEnv(): ModelLibraryEnv {

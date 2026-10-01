@@ -52,7 +52,7 @@ export interface EmbedJob {
  * The query and one document go through the model together, so the score
  * reads both at once. That is what makes a cross-encoder more exact than two
  * vectors compared afterwards, and also why it is too slow for more than the
- * top of a list. `server/services/search/crossEncoder.ts` sends these.
+ * top of a list. `server/ai/reranker.ts` sends these.
  */
 export interface RerankJob {
   kind: "rerank";

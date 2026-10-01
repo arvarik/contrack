@@ -19,6 +19,7 @@ import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { resolveEmbeddings } from "../ai/embeddings.ts";
+import { currentEmbedder } from "../ai/embedder.ts";
 import {
   getSearchCoverage,
   enqueueMissingContactsForOwner,
@@ -361,15 +362,16 @@ router.post(
       })
       .parse(req.body ?? {});
 
-    const resolved = resolveEmbeddings();
     // A hosted model sends each contact to the provider, which the account's
-    // own AI switch forbids. The built-in model still indexes, with AI off.
-    if (resolved.kind === "provider" && !aiAllowedFor(req)) {
+    // own AI switch forbids. A local model still indexes, with AI off.
+    const { local } = currentEmbedder();
+    if (!local && !aiAllowedFor(req)) {
       throw new AppError("AI is off for this account", 403, {
         code: "AI_OFF_FOR_ACCOUNT",
       });
     }
-    if (resolved.kind === "provider" && !allowProvider) {
+    if (!local && !allowProvider) {
+      const resolved = resolveEmbeddings();
       const coverage = getSearchCoverage(scope);
       return res.status(400).json({
         error: "Paid provider refreshes must be explicitly confirmed.",

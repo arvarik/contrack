@@ -22,7 +22,7 @@ import { searchService } from "../../server/services/searchService.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { hybridRetrieval } from "../../server/services/search/hybridRetrieval.ts";
 import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
-import type { PairScorer } from "../../server/services/search/crossEncoder.ts";
+import type { Reranker } from "../../server/ai/reranker.ts";
 import type { Scope } from "../../server/tenancy/scope.ts";
 import { seedWithStableIds, splitVectors, type SeededIds } from "./seeding.ts";
 import type {
@@ -204,44 +204,49 @@ export function loadRerankScores(): RerankScores {
 }
 
 /**
- * A scorer that answers from the recorded scores.
+ * A reranker that answers from the recorded scores, as the recorded model.
  *
  * A pair the recorder never saw is a failure, collected in `missing`: the
  * profile text or the candidates changed, and the fixture must be recorded
  * again. It still answers, with nothing reordered, so the rest of the gate
- * runs and the failure names every missing pair at once.
+ * runs and the failure names every missing pair at once. The gate checks the
+ * recorded model against the configured one on its own.
  */
-export function replayScorer(
+export function replayReranker(
   recorded: RerankScores,
   missing: string[],
-): PairScorer {
-  return async ({ model, query, docs }) => {
-    if (model !== recorded.model) {
-      missing.push(`model ${model}, recorded ${recorded.model}`);
-      throw new Error("re-record the cross-encoder scores");
-    }
-    const byDoc = recorded.scores[query] ?? {};
-    const scores = docs.map((doc) => byDoc[docKey(doc)]);
-    if (scores.some((score) => score === undefined)) {
-      missing.push(
-        `"${query}": ${scores.filter((x) => x === undefined).length} pair(s)`,
-      );
-      throw new Error("re-record the cross-encoder scores");
-    }
-    return scores as number[];
+): Reranker {
+  return {
+    id: recorded.model,
+    local: true,
+    ready: () => true,
+    async score(query, docs) {
+      const byDoc = recorded.scores[query] ?? {};
+      const scores = docs.map((doc) => byDoc[docKey(doc)]);
+      if (scores.some((score) => score === undefined)) {
+        missing.push(
+          `"${query}": ${scores.filter((x) => x === undefined).length} pair(s)`,
+        );
+        throw new Error("re-record the cross-encoder scores");
+      }
+      return scores as number[];
+    },
   };
 }
 
-/** A scorer that records what `score` returns, for the recorder. */
-export function recordingScorer(
-  score: PairScorer,
+/** A reranker that records what `reranker` returns, for the recorder. */
+export function recordingReranker(
+  reranker: Reranker,
   into: Record<string, Record<string, number>>,
-): PairScorer {
-  return async (request, signal) => {
-    const scores = await score(request, signal);
-    const byDoc = (into[request.query] ??= {});
-    request.docs.forEach((doc, i) => (byDoc[docKey(doc)] = scores[i]));
-    return scores;
+): Reranker {
+  return {
+    ...reranker,
+    async score(query, docs, signal) {
+      const scores = await reranker.score(query, docs, signal);
+      const byDoc = (into[query] ??= {});
+      docs.forEach((doc, i) => (byDoc[docKey(doc)] = scores[i]));
+      return scores;
+    },
   };
 }
 

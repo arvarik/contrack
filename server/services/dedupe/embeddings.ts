@@ -36,16 +36,12 @@ import {
 } from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
-  embedBatch,
-  isSearchEmbeddingReady,
-} from "../search/localEmbeddings.ts";
-import {
   resolveEmbeddings,
-  mayEmbedContactsFor,
   probeDimension,
   getEmbeddingsState,
   setEmbeddingsState,
 } from "../../ai/embeddings.ts";
+import { currentEmbedder, mayEmbedContactsFor } from "../../ai/embedder.ts";
 
 // =============================================================================
 // Constants
@@ -53,9 +49,9 @@ import {
 
 const EMBED_BATCH_SIZE = 64;
 
-/** True when some embedding backend (local model or provider) is usable. */
+/** True when the current embedder, the local model or a provider's, can answer. */
 export function isEmbeddingAvailable(): boolean {
-  return isSearchEmbeddingReady();
+  return currentEmbedder().ready();
 }
 
 /**
@@ -146,9 +142,10 @@ function l2Normalize(values: number[]): Float32Array {
 /**
  * Generate embeddings for a batch of text strings.
  *
- * Routed through the shared embedding path, so it honors the embeddings
- * capability and inherits its count guard: a backend that returns fewer
- * vectors than inputs is an error, not a silently short batch.
+ * Through the embedder search uses, so it honors the embeddings capability
+ * and the embedder's count guard: a backend that returns fewer vectors than
+ * inputs is an error, not a silently short batch. A duplicate check compares
+ * one contact's text with another's, so both are documents.
  *
  * @param items - Array of { id, text } to embed
  * @returns Map of id → normalized Float32Array
@@ -161,7 +158,10 @@ export async function generateBatchEmbeddings(
   for (let i = 0; i < items.length; i += EMBED_BATCH_SIZE) {
     const batch = items.slice(i, i + EMBED_BATCH_SIZE);
     try {
-      const vectors = await embedBatch(batch.map((b) => b.text));
+      const vectors = await currentEmbedder().embed(
+        batch.map((b) => b.text),
+        "document",
+      );
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
         if (vec) results.set(batch[j].id, l2Normalize(Array.from(vec)));
@@ -185,7 +185,7 @@ export async function generateBatchEmbeddings(
 export async function generateSingleEmbedding(
   text: string,
 ): Promise<Float32Array> {
-  const [vector] = await embedBatch([text]);
+  const [vector] = await currentEmbedder().embed([text], "document");
   if (!vector) throw new Error("No embedding returned for contact text");
   return l2Normalize(Array.from(vector));
 }
@@ -516,7 +516,7 @@ export async function backfillOwnerEmbeddings(
   if (!isEmbeddingAvailable()) {
     log.warn(
       "DedupeEmbeddings",
-      "Gemini API key not configured — skipping embedding backfill",
+      "No embedding model is ready — skipping embedding backfill",
     );
     return 0;
   }
@@ -598,7 +598,7 @@ export async function backfillEmbeddings(
   if (!isEmbeddingAvailable()) {
     log.warn(
       "DedupeEmbeddings",
-      "Gemini API key not configured — skipping embedding backfill",
+      "No embedding model is ready — skipping embedding backfill",
     );
     return 0;
   }

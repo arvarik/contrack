@@ -38,7 +38,7 @@ import {
   setSemanticAnswer,
   type SemanticKey,
 } from "./search/semanticCache.ts";
-import { resolveEmbeddings } from "../ai/embeddings.ts";
+import { builtinEmbedder, currentEmbedder } from "../ai/embedder.ts";
 import { buildReason, type ReasonEvidence } from "./search/reasons.ts";
 import {
   explainMatch,
@@ -58,14 +58,13 @@ import {
   hasContentWords,
 } from "./search/implicitFacets.ts";
 import {
-  isCrossEncoderReady,
   RERANK_CANDIDATES,
   rerankBudgetMs,
   rerankLocal,
   profileText,
-  rerankModel,
   type RerankOptions,
-} from "./search/crossEncoder.ts";
+} from "./search/rerank.ts";
+import { currentReranker } from "../ai/reranker.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
@@ -137,8 +136,8 @@ export interface SemanticSearchOptions {
   /** The fusion constant. `RRF_K` when unset. The benchmark's k sweep sets it. */
   rrfK?: number;
   /**
-   * False skips the local cross-encoder. The search gate measures the local
-   * list both ways, and the benchmark names a model and a candidate count.
+   * False skips the reranker. The search gate measures the local list both
+   * ways, and the benchmark names a reranker and a candidate count.
    */
   crossEncoder?: boolean | RerankOptions;
 }
@@ -779,21 +778,22 @@ async function runSearch(
     ? `${capability?.providerId}:${capability?.model}`
     : "local";
   const facetPart = facetKey(filters);
-  // The cross-encoder orders the local list once its model has loaded, so a
-  // list cached before that must not answer after it.
+  // The reranker orders the local list once its model has loaded, so a list
+  // cached before that must not answer after it. One that is not local sends
+  // the question and the profiles out, so it runs only where AI is allowed.
   const rerank =
     options.crossEncoder === false
       ? null
       : {
-          model: rerankModel(),
+          reranker: currentReranker(),
           count: RERANK_CANDIDATES,
           ...(typeof options.crossEncoder === "object"
             ? options.crossEncoder
             : {}),
         };
   const reorderBy =
-    rerank?.model && isCrossEncoderReady(rerank.model)
-      ? `${rerank.model}@${rerank.count}`
+    rerank?.reranker?.ready() && (rerank.reranker.local || aiAllowed)
+      ? `${rerank.reranker.id}@${rerank.count}`
       : "fused";
   const cacheKey = `${revision}:${notes}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
@@ -982,10 +982,10 @@ async function runSearch(
   const queryVector = embedQuery(scope, text, aiAllowed, signal);
 
   // L2 answers a question asked in other words, with no model call. Its
-  // 0.97 threshold was measured on the built-in model, so a provider's
-  // embedding model leaves it off, and that vector is not waited for here.
-  // The built-in model takes about a millisecond.
-  if (resolveEmbeddings().kind === "builtin") {
+  // 0.97 threshold was measured on the built-in model, so any other embedder
+  // leaves it off, and that vector is not waited for here. The built-in
+  // model takes about a millisecond.
+  if (currentEmbedder().id === builtinEmbedder.id) {
     const vector = await queryVector;
     signal?.throwIfAborted();
     // Embedding yields to other requests. An edit during that wait makes

@@ -2,7 +2,8 @@
 // AI Layer — Embeddings Capability
 // =============================================================================
 // Resolves the embeddings capability to a concrete backend and owns the
-// vector-dimension lifecycle.
+// vector-dimension lifecycle. The vectors themselves come from the embedder
+// (`embedder.ts`), which picks its adapter from `resolveEmbeddings`.
 //
 // Two backends:
 //   - "builtin"  → local Transformers.js model (Xenova/all-MiniLM-L6-v2,
@@ -20,7 +21,7 @@
 
 import { getProvider } from "./providerRegistry.ts";
 import { getCapabilityAssignment, parseEnvOverride } from "./capabilities.ts";
-import { aiAllowedForUser, isAiOffForInstance } from "./instanceSwitch.ts";
+import { isAiOffForInstance } from "./instanceSwitch.ts";
 import {
   getSetting,
   setSetting,
@@ -103,22 +104,6 @@ export function resolveEmbeddings(): ResolvedEmbeddings {
 
   // 3. Auto — the built-in local model. No key, no network, no cost.
   return { ...BUILTIN };
-}
-
-/**
- * True when Contrack may embed this account's contacts now.
- *
- * The built-in model runs on this server, so it embeds every account. A
- * provider model sends each contact's text to the provider, so it embeds only
- * the contacts of an account that allows AI: the admin picks the model for
- * everyone, and "Use AI for this account" still says no for one person. That
- * account keeps keyword search, and its questions are not embedded either
- * (`embedQuery`).
- *
- * @param ownerId - The account that owns the contacts.
- */
-export function mayEmbedContactsFor(ownerId: string): boolean {
-  return resolveEmbeddings().kind === "builtin" || aiAllowedForUser(ownerId);
 }
 
 /** Shape a provider-backed embeddings resolution, with its cached dimension. */
