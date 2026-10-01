@@ -1,17 +1,21 @@
 /**
- * The plan for one synthetic benchmark contact: what to add, fix and keep.
+ * The plan for one synthetic benchmark contact: what to add and what to keep.
  *
  * `planEnrichment` is pure. The same contact, seed and clock give the same
  * plan, so the script can run again and change nothing, and a test can read
- * the answer. The script (`scripts/enrich-bench-contacts.ts`) writes the plan.
+ * the answer. The runner (`run.ts`) writes the plan.
  *
  * Nothing here is real. Streets and neighbourhoods are real places, with
  * invented house numbers, and every person is made up. See `places.ts`.
  *
- * @module scripts/bench/enrich
+ * @module scripts/bench/plan
  */
 import { createHash } from "node:crypto";
 import { allFakers } from "@faker-js/faker";
+import {
+  defaultAvatarUrl,
+  isDefaultAvatarFor,
+} from "../../server/utils/avatarUrl.ts";
 import {
   CITIES,
   COUNTRIES,
@@ -53,19 +57,23 @@ export interface BenchContact {
   birthday: string | null;
   pronouns: string | null;
   preferences: string | null;
+  avatarUrl: string | null;
   cadenceDays: number | null;
   isTracked: number;
 }
 
 /** What the script needs to know about one contact before it plans. */
 export interface BenchInput extends BenchContact {
-  /** True for a contact the first seed wrote from templates. False for a hand-written one. */
-  generic: boolean;
   interests: string[];
-  emails: { email: string; label: string | null; isPrimary: number }[];
+  emails: string[];
   phones: string[];
-  /** Interactions it already has. The first seed wrote Latin filler for them. */
-  interactions: { id: string; type: string; date: string }[];
+  /** Notes it already has. Their dates bound the history, and no new note repeats one. */
+  interactions: {
+    type: string;
+    title: string | null;
+    content: string | null;
+    date: string;
+  }[];
 }
 
 export interface PlanOptions {
@@ -103,32 +111,22 @@ export interface BenchRows {
   action_items: (Row<"title" | "dueAt"> & { completedAt: string | null })[];
 }
 
+/** The columns of `contacts` a plan may set. */
+type ContactColumns = Omit<
+  BenchContact,
+  "id" | "name" | "firstName" | "lastName" | "industry" | "location"
+> &
+  Record<"geoSource" | "trackedAt" | "lastContactedAt", string>;
+
 export interface BenchPlan {
   /**
    * Columns of `contacts` to set. A key that is absent stays as it is. The
    * name, the industry and the location are who the contact is, and stay.
+   * Every plan dates the contact.
    */
-  contact: Partial<
-    Omit<
-      BenchContact,
-      "id" | "name" | "firstName" | "lastName" | "industry" | "location"
-    > &
-      Record<
-        "geoSource" | "addedAt" | "updatedAt" | "trackedAt" | "lastContactedAt",
-        string
-      >
-  >;
+  contact: Partial<ContactColumns> & Record<"addedAt" | "updatedAt", string>;
   /** Rows to add. A run removes the ones it added before, by their `be-` id. */
   add: BenchRows;
-  /** Changes to rows the contact already has. */
-  emailLabels: { email: string; label: string }[];
-  phoneFixes: { from: string; to: string }[];
-  interactionRewrites: Row<"title" | "content" | "date">[];
-}
-
-/** The first seed's template: "X works on … Previously at … Enjoys …". */
-export function isGenericAbout(about: string | null | undefined): boolean {
-  return /\bworks on\b.*\bPreviously at\b.*\bEnjoys\b/s.test(about ?? "");
 }
 
 /** A date as the database writes one: "2026-09-30 12:00:00". */
@@ -137,7 +135,7 @@ export const sqliteStamp = (date: Date): string =>
 
 // ─── Randomness ────────────────────────────────────────────────────────────
 
-function hash32(text: string): number {
+export function hash32(text: string): number {
   return createHash("sha1").update(text).digest().readUInt32BE(0);
 }
 
@@ -153,7 +151,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface Dice {
+export interface Dice {
   next: () => number;
   chance: (p: number) => boolean;
   int: (min: number, max: number) => number;
@@ -161,7 +159,7 @@ interface Dice {
   weighted: <T>(entries: readonly (readonly [T, number])[]) => T;
 }
 
-function dice(seed: string): Dice {
+export function dice(seed: string): Dice {
   const next = mulberry32(hash32(seed));
   const int = (min: number, max: number) =>
     min + Math.floor(next() * (max - min + 1));
@@ -182,14 +180,14 @@ function dice(seed: string): Dice {
   };
 }
 
-/** Fill a pattern: `#` a digit, `N` a digit 2 to 9, `A` a letter, `@` the area code. */
-function fillPattern(pattern: string, d: Dice, area = ""): string {
+/** Fill a pattern: `#` a digit, `N` a digit 2 to 9, `A` a letter, `@` the value given. */
+function fillPattern(pattern: string, d: Dice, value = ""): string {
   return [...pattern]
     .map((ch) => {
       if (ch === "#") return String(d.int(0, 9));
       if (ch === "N") return String(d.int(2, 9));
       if (ch === "A") return String.fromCharCode(65 + d.int(0, 25));
-      if (ch === "@") return area;
+      if (ch === "@") return value;
       return ch;
     })
     .join("");
@@ -197,11 +195,24 @@ function fillPattern(pattern: string, d: Dice, area = ""): string {
 
 // ─── Small helpers ─────────────────────────────────────────────────────────
 
+/** Letters that no accent folds away, written in the letters of English. */
+const PLAIN: Record<string, string> = {
+  ø: "o",
+  æ: "ae",
+  ł: "l",
+  đ: "d",
+  ß: "ss",
+  œ: "oe",
+  þ: "th",
+  ı: "i",
+};
+
 const slug = (text: string): string =>
   text
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    .replace(/[øæłđßœþı]/g, (ch) => PLAIN[ch])
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
@@ -224,7 +235,7 @@ const PERSONAL_DOMAINS = new Set([
 
 /** "personal" for an address at a mail provider, "work" for any other. */
 const labelFor = (email: string) =>
-  PERSONAL_DOMAINS.has(email.split("@")[1]?.toLowerCase() ?? "")
+  PERSONAL_DOMAINS.has(email.slice(email.indexOf("@") + 1).toLowerCase())
     ? "personal"
     : "work";
 
@@ -239,6 +250,11 @@ function rowId(seed: string, contactId: string, kind: string, index: number) {
   return `be-${digest.slice(0, 20)}`;
 }
 
+/** An invented company name in an industry: "Halcyon Robotics". */
+export function companyName(d: Dice, nouns: readonly string[]): string {
+  return `${d.pick(COMPANY_FIRST)} ${d.pick(nouns)}`;
+}
+
 // ─── Places ────────────────────────────────────────────────────────────────
 
 /** For a city the tables do not list: a plain address in a plain format. */
@@ -246,36 +262,8 @@ const FALLBACK_COUNTRY: Country = {
   calling: "",
   numberAfter: false,
   zipFirst: false,
-  zipTail: "",
   zip: "#####",
   phones: ["+## ## ### ####"],
-};
-
-/** The faker locale whose street names fit a town's country. Else English. */
-const STREET_LOCALE: Record<string, keyof typeof allFakers> = {
-  DK: "da",
-  NG: "en_NG",
-  BE: "nl_BE",
-  ES: "es",
-  CH: "de_CH",
-  GB: "en_GB",
-  NO: "nb_NO",
-  IT: "it",
-  FR: "fr",
-  SK: "sk",
-  HU: "hu",
-  PL: "pl",
-  IE: "en_IE",
-  SE: "sv",
-  FI: "fi",
-  AT: "de_AT",
-  SI: "sl_SI",
-  CZ: "cs_CZ",
-  LV: "lv",
-  HR: "hr",
-  DE: "de",
-  NL: "nl",
-  PT: "pt_PT",
 };
 
 interface Place {
@@ -294,6 +282,13 @@ function placeOf(input: BenchInput): Place | null {
     city,
     country: city ? COUNTRIES[city.country] : FALLBACK_COUNTRY,
   };
+}
+
+/** A postcode that starts with a place's prefix, in its country's format. */
+function postcode(prefix: string, country: Country, d: Dice): string {
+  return country.zip.includes("@")
+    ? fillPattern(country.zip, d, prefix)
+    : prefix + fillPattern(country.zip.slice(prefix.length), d);
 }
 
 /** A point within `radiusM` metres of a centre, most of them near it. */
@@ -358,7 +353,7 @@ function spotIn(
     let spot: Spot;
     if (hoods && hoods.length > 0) {
       const hood = d.pick(hoods);
-      const zip = hood.zip + fillPattern(place.country.zipTail, d);
+      const zip = postcode(hood.zip, place.country, d);
       const pin = jitter(hood.lat, hood.lng, 350, d);
       const number = houseNumber(code, d);
       spot = {
@@ -367,7 +362,7 @@ function spotIn(
         area: hood.name,
       };
     } else {
-      const faker = allFakers[STREET_LOCALE[code ?? ""] ?? "en"];
+      const faker = allFakers[place.country.locale ?? "en"];
       faker.seed(hash32(`${salt}:${attempt}`));
       const street = faker.location.street();
       // The table's centre, never the contact's own pin: a run moves the pin,
@@ -376,7 +371,7 @@ function spotIn(
       const centre = place.city?.centre;
       const pin = centre ? jitter(centre[0], centre[1], 1800, d) : null;
       const number = houseNumber(code, d);
-      const zip = fillPattern(place.country.zip, d);
+      const zip = postcode(place.city?.zip ?? "", place.country, d);
       spot = {
         address: formatAddress(place, number, street, zip),
         pin,
@@ -390,12 +385,8 @@ function spotIn(
 
 // ─── Text ──────────────────────────────────────────────────────────────────
 
-function companyName(d: Dice, nouns: readonly string[]): string {
-  return `${d.pick(COMPANY_FIRST)} ${d.pick(nouns)}`;
-}
-
 function fillTemplate(text: string, values: Record<string, string>): string {
-  return text.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
+  return text.replace(/\{(\w+)\}/g, (_, key: string) => values[key]);
 }
 
 // ─── The plan ──────────────────────────────────────────────────────────────
@@ -412,7 +403,7 @@ export function planEnrichment(
   const id = (kind: string, index: number) =>
     rowId(seed, input.id, kind, index);
   const industry = industryFor(input.industry);
-  const first = input.firstName || input.name.split(" ")[0] || "They";
+  const first = input.firstName || input.name.split(" ")[0];
   const lastName = input.lastName || input.name.split(" ").slice(1).join(" ");
   const place = placeOf(input);
 
@@ -429,13 +420,7 @@ export function planEnrichment(
     interactions: [],
     action_items: [],
   };
-  const plan: BenchPlan = {
-    contact: {},
-    add,
-    emailLabels: [],
-    phoneFixes: [],
-    interactionRewrites: [],
-  };
+  const contact: Partial<ContactColumns> = {};
 
   // Addresses, and the pin that follows the primary one.
   const dAddr = stream("dAddr");
@@ -468,9 +453,9 @@ export function planEnrichment(
       if (isPrimary === 1) {
         area = spot.area;
         if (spot.pin) {
-          plan.contact.lat = spot.pin.lat;
-          plan.contact.lng = spot.pin.lng;
-          plan.contact.geoSource = "geocoder";
+          contact.lat = spot.pin.lat;
+          contact.lng = spot.pin.lng;
+          contact.geoSource = "geocoder";
         }
       }
     }
@@ -489,12 +474,14 @@ export function planEnrichment(
     add.contact_interests.push({ id: id("interest", i), interest });
   }
 
-  // Words: a role, a headline and an about that fit the industry.
+  // Words: a role, a headline and an about that fit the industry, and the
+  // role and company the contact already has.
   const dText = stream("dText");
   const focus = [...industry.focus];
   const focus1 = focus.splice(dText.int(0, focus.length - 1), 1)[0];
   const focus2 = focus.splice(dText.int(0, focus.length - 1), 1)[0];
-  const role = dText.pick(industry.roles);
+  const drawnRole = dText.pick(industry.roles);
+  const role = input.role || drawnRole;
   const company = input.company || companyName(dText, industry.nouns);
   const previous = companyName(dText, industry.nouns);
   const interest1 = interests[0] ?? dText.pick(INTERESTS);
@@ -519,16 +506,16 @@ export function planEnrichment(
   ];
   const headline = dText.pick(headlines);
   const about = dText.pick(abouts);
-  // A generated contact gets new words. A hand-written one keeps its own.
-  if (input.generic || !input.role) plan.contact.role = role;
-  if (input.generic || !input.headline) plan.contact.headline = headline;
-  if (input.generic || !input.about) plan.contact.about = about;
-  if (!input.company) plan.contact.company = company;
+  // Words the contact has stay. Only an empty field is filled.
+  if (!input.role) contact.role = role;
+  if (!input.headline) contact.headline = headline;
+  if (!input.about) contact.about = about;
+  if (!input.company) contact.company = company;
 
   // Other fields on the contact, each filled only when it is empty.
   const dWeb = stream("web");
   if (!input.website && dWeb.chance(0.6)) {
-    plan.contact.website = dWeb.chance(0.7)
+    contact.website = dWeb.chance(0.7)
       ? `https://www.${slug(company)}.example`
       : `https://${letters(first)}${letters(lastName)}.example`;
   }
@@ -536,13 +523,22 @@ export function planEnrichment(
   if (!input.birthday && dBirth.chance(0.65)) {
     const month = String(dBirth.int(1, 12)).padStart(2, "0");
     const day = String(dBirth.int(1, 28)).padStart(2, "0");
-    plan.contact.birthday = dBirth.chance(0.75)
+    contact.birthday = dBirth.chance(0.75)
       ? `${dBirth.int(1958, 2001)}-${month}-${day}`
       : `${month}-${day}`;
   }
   const dPronoun = stream("pronoun");
   if (!input.pronouns && dPronoun.chance(0.28))
-    plan.contact.pronouns = dPronoun.pick(PRONOUNS);
+    contact.pronouns = dPronoun.pick(PRONOUNS);
+  // The default face follows the pronouns, as an edit in the app redraws it.
+  // Left to the server's boot, the redraw would stamp updatedAt with the
+  // real clock.
+  const face = defaultAvatarUrl(input.name, contact.pronouns ?? input.pronouns);
+  if (
+    isDefaultAvatarFor(input.avatarUrl, input.name) &&
+    face !== input.avatarUrl
+  )
+    contact.avatarUrl = face;
   const dPrefs = stream("prefs");
   if (!input.preferences && dPrefs.chance(0.7)) {
     const extras = [
@@ -552,7 +548,7 @@ export function planEnrichment(
       " Agenda a day ahead helps.",
       " Loves a plan B.",
     ];
-    plan.contact.preferences = `Prefers ${dPrefs.pick(CHANNELS)}. Best ${dPrefs.pick(BEST_TIMES)}.${dPrefs.pick(extras)}`;
+    contact.preferences = `Prefers ${dPrefs.pick(CHANNELS)}. Best ${dPrefs.pick(BEST_TIMES)}.${dPrefs.pick(extras)}`;
   }
   const dCadence = stream("cadence");
   const cadence = dCadence.weighted([
@@ -564,10 +560,11 @@ export function planEnrichment(
     [180, 10],
     [365, 8],
   ] as const);
-  if (cadence !== input.cadenceDays) plan.contact.cadenceDays = cadence;
+  if (cadence !== input.cadenceDays) contact.cadenceDays = cadence;
   const dTrack = stream("track");
-  if (input.isTracked === 0 && dTrack.chance(0.3)) plan.contact.isTracked = 1;
-  // A spread of ages, so "stale data" has something to count.
+  if (input.isTracked === 0 && dTrack.chance(0.3)) contact.isTracked = 1;
+  // A spread of ages, so "stale data" has something to count. It is dated
+  // below, once the plan knows when the contact was added.
   const dTouch = stream("touch");
   const touched = daysAgo(
     now,
@@ -579,18 +576,9 @@ export function planEnrichment(
     dTouch.int(0, 59),
     0,
   );
-  plan.contact.updatedAt = sqliteStamp(touched > now ? now : touched);
-  // Tracking is an edit, so it happened by the last one. The trigger that
-  // stamps trackedAt reads the real clock, and the runner writes this after.
-  if (plan.contact.isTracked === 1)
-    plan.contact.trackedAt = plan.contact.updatedAt;
 
-  // Email labels, then addresses to add.
+  // An email, or a second one of the other kind.
   const dEmail = stream("dEmail");
-  for (const { email, label } of input.emails) {
-    const right = labelFor(email);
-    if (label !== right) plan.emailLabels.push({ email, label: right });
-  }
   const handles = [
     `${letters(first)}.${letters(lastName)}`,
     `${letters(first).slice(0, 1)}${letters(lastName)}`,
@@ -612,27 +600,12 @@ export function planEnrichment(
     addEmail(dEmail.chance(0.5) ? personalMail() : workMail(), 1, 0);
   } else if (input.emails.length > 0 && dEmail.chance(0.35)) {
     const other =
-      labelFor(input.emails[0].email) === "personal"
-        ? workMail()
-        : personalMail();
+      labelFor(input.emails[0]) === "personal" ? workMail() : personalMail();
     addEmail(other, 0, input.emails.length);
   }
 
-  // Phones: clean the backslashes, give a foreign-format number a local one,
-  // then add. The first seed wrote a US number for every contact.
+  // A phone number in the contact's country, from its city's area codes.
   const dPhone = stream("dPhone");
-  const home = place?.country;
-  input.phones.forEach((phone, index) => {
-    const cleaned = phone.replace(/\\/g, "");
-    const foreign =
-      home !== undefined &&
-      home !== FALLBACK_COUNTRY &&
-      home.calling !== "1" &&
-      /^\+1\b/.test(cleaned);
-    const r = stream(`phonefix:${index}`);
-    const to = foreign ? fillPattern(r.pick(home.phones), r) : cleaned;
-    if (to !== phone) plan.phoneFixes.push({ from: phone, to });
-  });
   const areaCodes = place?.city?.area;
   const pattern = dPhone.pick(place?.country.phones ?? FALLBACK_COUNTRY.phones);
   const number = () =>
@@ -687,7 +660,7 @@ export function planEnrichment(
     });
   }
   const dEdu = stream("education");
-  const birthday = String(plan.contact.birthday ?? input.birthday ?? "");
+  const birthday = String(contact.birthday ?? input.birthday ?? "");
   const birthYear = /^\d{4}/.test(birthday)
     ? Number(birthday.slice(0, 4))
     : dEdu.int(1965, 1999);
@@ -718,7 +691,7 @@ export function planEnrichment(
     const current: ExperienceRow = {
       id: id("experience", 0),
       company,
-      role: input.generic ? role : input.role || role,
+      role,
       startDate: `${startYear}-${String(dWork.int(1, 12)).padStart(2, "0")}`,
       endDate: null,
       isCurrent: 1,
@@ -771,7 +744,7 @@ export function planEnrichment(
     });
   }
 
-  // Interactions: rewrite the ones it has, and add until it has a believable history.
+  // Notes, added until the contact has a believable history.
   const dHist = stream("dHist");
   const types = [
     ["meeting", 0.3],
@@ -779,34 +752,29 @@ export function planEnrichment(
     ["email", 0.3],
     ["note", 0.2],
   ] as const;
-  const used = new Set<string>();
+  const said = new Set(
+    input.interactions.map((x) => `${x.type}|${x.title}|${x.content}`),
+  );
   const talk = (type: string, key: string) => {
-    const topics = INTERACTION_TOPICS[type] ?? INTERACTION_TOPICS.note;
+    const topics = INTERACTION_TOPICS[type];
     const values = { focus: focus1, topic: interest1 };
-    let said = { title: "", content: "" };
+    let note = { title: "", content: "" };
     // Try again when this contact already has the same note, up to a point.
     for (let attempt = 0; attempt < 8; attempt++) {
       const r = dice(`${seed}:${input.id}:${key}:${attempt}`);
-      said = {
+      note = {
         title: fillTemplate(r.pick(topics.title), values),
         content: `<p>${fillTemplate(r.pick(topics.body), values)}</p>`,
       };
-      const signature = `${type}|${said.title}|${said.content}`;
-      if (!used.has(signature)) {
-        used.add(signature);
+      const signature = `${type}|${note.title}|${note.content}`;
+      if (!said.has(signature)) {
+        said.add(signature);
         break;
       }
     }
-    return said;
+    return note;
   };
   const dates: string[] = input.interactions.map((x) => x.date);
-  for (const existing of input.interactions) {
-    plan.interactionRewrites.push({
-      id: existing.id,
-      ...talk(existing.type, existing.id),
-      date: existing.date,
-    });
-  }
   const wanted = dHist.weighted([
     [0, 22],
     [1, 16],
@@ -839,7 +807,7 @@ export function planEnrichment(
   const newest = validDates.at(-1);
   // The newest interaction, never after now.
   if (newest)
-    plan.contact.lastContactedAt = (newest > now ? now : newest).toISOString();
+    contact.lastContactedAt = (newest > now ? now : newest).toISOString();
 
   // When the contact was added: years ago for most, and always before the
   // first thing that happened with them.
@@ -850,7 +818,13 @@ export function planEnrichment(
     added = new Date(earliest.getTime() - dAdded.int(1, 60) * 86_400_000);
   }
   added.setUTCHours(dAdded.int(6, 20), dAdded.int(0, 59), dAdded.int(0, 59), 0);
-  plan.contact.addedAt = sqliteStamp(added > now ? now : added);
+  const addedAt = sqliteStamp(added);
+  // The last edit, never before the contact was added nor after now.
+  const editedAt = sqliteStamp(touched > now ? now : touched);
+  const updatedAt = editedAt < addedAt ? addedAt : editedAt;
+  // Tracking is an edit, so it happened by the last one. The trigger that
+  // stamps trackedAt reads the real clock, and the runner writes this after.
+  if (contact.isTracked === 1) contact.trackedAt = updatedAt;
 
   // One open follow-up for some, and a finished one for a few.
   const dTask = stream("dTask");
@@ -868,5 +842,5 @@ export function planEnrichment(
     });
   }
 
-  return plan;
+  return { contact: { ...contact, addedAt, updatedAt }, add };
 }

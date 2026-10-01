@@ -2,13 +2,15 @@
  * Where the synthetic benchmark contacts live: real neighbourhoods and real
  * main streets, so a pin lands on land and an address reads like one.
  *
- * The streets and neighbourhoods are real. The house numbers, the postcodes'
- * last characters and every phone number are invented. A contact's pin is
- * placed near the neighbourhood's centre, so it is "in the right part of the
- * city", never a claim that somebody lives at a real door.
+ * The streets, the neighbourhoods and the postcode prefixes are real. The
+ * house numbers, the rest of each postcode and every phone number are
+ * invented. A contact's pin is placed near the neighbourhood's centre, so it
+ * is "in the right part of the city", never a claim that somebody lives at a
+ * real door.
  *
  * @module scripts/bench/places
  */
+import type { allFakers } from "@faker-js/faker";
 
 /** One neighbourhood: where its centre is, and a main street in it. */
 export interface Neighbourhood {
@@ -28,10 +30,14 @@ export interface Country {
   numberAfter: boolean;
   /** Whether the postcode comes before the city ("10435 Berlin"). */
   zipFirst: boolean;
-  /** Characters to add to a neighbourhood's postcode prefix. `#` is a digit, `A` a letter. */
-  zipTail: string;
-  /** Postcode pattern for a town with no neighbourhood. */
+  /**
+   * The postcode format. `#` is a digit and `A` a letter. A place's prefix
+   * takes the place of as many characters at the start, or of the `@` in a
+   * format whose first part varies in length ("G1 #AA", "CF10 #AA").
+   */
   zip: string;
+  /** The faker locale for names and streets, in Latin letters. Else English. */
+  locale?: keyof typeof allFakers;
   /**
    * Mobile number patterns. `#` is a digit, `N` a digit from 2 to 9, `@` the
    * city's area code. The digits are random, not the reserved fictional
@@ -46,87 +52,86 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "1",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
     zip: "#####",
+    locale: "en_US",
     phones: ["+1 (@) N##-####"],
   },
   CA: {
     calling: "1",
     numberAfter: false,
     zipFirst: false,
-    zipTail: " #A#",
     zip: "A#A #A#",
+    locale: "en_CA",
     phones: ["+1 (@) N##-####"],
   },
   GB: {
     calling: "44",
     numberAfter: false,
     zipFirst: false,
-    zipTail: " #AA",
-    zip: "A## #AA",
+    zip: "@ #AA",
+    locale: "en_GB",
     phones: ["+44 7### ######"],
   },
   IE: {
     calling: "353",
     numberAfter: false,
     zipFirst: false,
-    zipTail: " AA##",
     zip: "A## AA##",
+    locale: "en_IE",
     phones: ["+353 83 ### ####", "+353 85 ### ####", "+353 86 ### ####"],
   },
   DE: {
     calling: "49",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "de",
     phones: ["+49 151 ########", "+49 160 ########", "+49 170 ########"],
   },
   FR: {
     calling: "33",
     numberAfter: false,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "fr",
     phones: ["+33 6 ## ## ## ##", "+33 7 ## ## ## ##"],
   },
   NL: {
     calling: "31",
     numberAfter: true,
     zipFirst: true,
-    zipTail: " AA",
     zip: "#### AA",
+    locale: "nl",
     phones: ["+31 6 ########"],
   },
   PT: {
     calling: "351",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "-###",
     zip: "####-###",
+    locale: "pt_PT",
     phones: ["+351 91# ### ###", "+351 93# ### ###"],
   },
   MX: {
     calling: "52",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "es_MX",
     phones: ["+52 55 #### ####"],
   },
   BR: {
     calling: "55",
     numberAfter: true,
     zipFirst: false,
-    zipTail: "-###",
     zip: "#####-###",
+    locale: "pt_BR",
     phones: ["+55 11 9#### ####"],
   },
   KE: {
     calling: "254",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
     zip: "00###",
     phones: ["+254 7## ### ###"],
   },
@@ -134,15 +139,14 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "234",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
-    zip: "9#####",
+    zip: "######",
+    locale: "en_NG",
     phones: ["+234 80# ### ####", "+234 81# ### ####"],
   },
   SG: {
     calling: "65",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "###",
     zip: "######",
     phones: ["+65 8### ####", "+65 9### ####"],
   },
@@ -150,7 +154,6 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "82",
     numberAfter: true,
     zipFirst: false,
-    zipTail: "",
     zip: "#####",
     phones: ["+82 10 #### ####"],
   },
@@ -158,7 +161,6 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "81",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
     zip: "###-####",
     phones: ["+81 90 #### ####", "+81 80 #### ####"],
   },
@@ -166,7 +168,6 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "972",
     numberAfter: true,
     zipFirst: false,
-    zipTail: "###",
     zip: "#######",
     phones: ["+972 50 ### ####", "+972 52 ### ####", "+972 54 ### ####"],
   },
@@ -174,55 +175,54 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "46",
     numberAfter: true,
     zipFirst: true,
-    zipTail: " ##",
     zip: "### ##",
+    locale: "sv",
     phones: ["+46 70 ### ## ##", "+46 73 ### ## ##"],
   },
   AU: {
     calling: "61",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
     zip: "####",
+    locale: "en_AU",
     phones: ["+61 4## ### ###"],
   },
   CH: {
     calling: "41",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "de_CH",
     phones: ["+41 76 ### ## ##", "+41 79 ### ## ##"],
   },
   IN: {
     calling: "91",
     numberAfter: false,
     zipFirst: false,
-    zipTail: "",
     zip: "######",
+    locale: "en_IN",
     phones: ["+91 98### #####", "+91 99### #####"],
   },
   DK: {
     calling: "45",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "da",
     phones: ["+45 ## ## ## ##"],
   },
   BE: {
     calling: "32",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "nl_BE",
     phones: ["+32 4## ## ## ##"],
   },
   GR: {
     calling: "30",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "### ##",
     phones: ["+30 69# ### ####"],
   },
@@ -230,95 +230,94 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "34",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "es",
     phones: ["+34 6## ### ###", "+34 7## ### ###"],
   },
   NO: {
     calling: "47",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "nb_NO",
     phones: ["+47 4## ## ###", "+47 9## ## ###"],
   },
   IT: {
     calling: "39",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "it",
     phones: ["+39 3## ### ####"],
   },
   SK: {
     calling: "421",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "### ##",
+    locale: "sk",
     phones: ["+421 9## ### ###"],
   },
   HU: {
     calling: "36",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "hu",
     phones: ["+36 20 ### ####", "+36 30 ### ####"],
   },
   PL: {
     calling: "48",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "##-###",
+    locale: "pl",
     phones: ["+48 5## ### ###", "+48 6## ### ###"],
   },
   FI: {
     calling: "358",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "fi",
     phones: ["+358 40 ### ####", "+358 50 ### ####"],
   },
   AT: {
     calling: "43",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "de_AT",
     phones: ["+43 66# ### ####"],
   },
   SI: {
     calling: "386",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "####",
+    locale: "sl_SI",
     phones: ["+386 4# ### ###", "+386 5# ### ###"],
   },
   CZ: {
     calling: "420",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "### ##",
+    locale: "cs_CZ",
     phones: ["+420 6## ### ###", "+420 7## ### ###"],
   },
   LV: {
     calling: "371",
     numberAfter: true,
     zipFirst: false,
-    zipTail: "",
     zip: "LV-####",
+    locale: "lv",
     phones: ["+371 2# ### ###"],
   },
   EE: {
     calling: "372",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
     phones: ["+372 5### ####"],
   },
@@ -326,7 +325,6 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "370",
     numberAfter: true,
     zipFirst: false,
-    zipTail: "",
     zip: "LT-#####",
     phones: ["+370 6## #####"],
   },
@@ -334,8 +332,8 @@ export const COUNTRIES: Record<string, Country> = {
     calling: "385",
     numberAfter: true,
     zipFirst: true,
-    zipTail: "",
     zip: "#####",
+    locale: "hr",
     phones: ["+385 9# ### ####"],
   },
 };
@@ -352,6 +350,8 @@ export interface City {
   neighbourhoods?: Neighbourhood[];
   /** The middle of a town that has no neighbourhoods, as [lat, lng]. */
   centre?: [number, number];
+  /** The first characters every postcode near the town's centre shares. */
+  zip?: string;
 }
 
 const n = (
@@ -636,67 +636,76 @@ export const CITIES: Record<string, City> = {
     ],
   },
 
-  // ── Towns: a country and a centre. Pins stand within a kilometre of it.
-  aarhus: { country: "DK", centre: [56.1629, 10.2039] },
-  abuja: { country: "NG", centre: [9.0765, 7.3986] },
-  antwerp: { country: "BE", centre: [51.2194, 4.4025] },
-  athens: { country: "GR", centre: [37.9838, 23.7275] },
-  barcelona: { country: "ES", centre: [41.3874, 2.1686] },
-  basel: { country: "CH", centre: [47.5596, 7.5886] },
-  belfast: { country: "GB", centre: [54.5973, -5.9301] },
-  bergen: { country: "NO", centre: [60.3913, 5.3221] },
-  bilbao: { country: "ES", centre: [43.263, -2.935] },
-  bologna: { country: "IT", centre: [44.4949, 11.3426] },
-  bordeaux: { country: "FR", centre: [44.8378, -0.5792] },
-  bratislava: { country: "SK", centre: [48.1486, 17.1077] },
-  bristol: { country: "GB", centre: [51.4545, -2.5879] },
-  budapest: { country: "HU", centre: [47.4979, 19.0402] },
-  cardiff: { country: "GB", centre: [51.4816, -3.1791] },
-  cork: { country: "IE", centre: [51.8985, -8.4756] },
-  edinburgh: { country: "GB", centre: [55.9533, -3.1883] },
-  galway: { country: "IE", centre: [53.2707, -9.0568] },
-  gdansk: { country: "PL", centre: [54.352, 18.6466] },
-  genoa: { country: "IT", centre: [44.4056, 8.9463] },
-  ghent: { country: "BE", centre: [51.0543, 3.7174] },
-  glasgow: { country: "GB", centre: [55.8642, -4.2518] },
-  gothenburg: { country: "SE", centre: [57.7089, 11.9746] },
-  helsinki: { country: "FI", centre: [60.1699, 24.9384] },
-  innsbruck: { country: "AT", centre: [47.2692, 11.4041] },
-  krakow: { country: "PL", centre: [50.0647, 19.945] },
-  lagos: { country: "NG", centre: [6.5244, 3.3792] },
-  leeds: { country: "GB", centre: [53.8008, -1.5491] },
-  limerick: { country: "IE", centre: [52.6638, -8.6267] },
-  ljubljana: { country: "SI", centre: [46.0569, 14.5058] },
-  lyon: { country: "FR", centre: [45.764, 4.8357] },
-  malmo: { country: "SE", centre: [55.605, 13.0038] },
-  manchester: { country: "GB", centre: [53.4808, -2.2426] },
-  milan: { country: "IT", centre: [45.4642, 9.19] },
-  munich: { country: "DE", centre: [48.1351, 11.582] },
-  naples: { country: "IT", centre: [40.8518, 14.2681] },
-  oslo: { country: "NO", centre: [59.9139, 10.7522] },
-  porto: { country: "PT", centre: [41.1579, -8.6291] },
-  prague: { country: "CZ", centre: [50.0755, 14.4378] },
-  riga: { country: "LV", centre: [56.9496, 24.1052] },
-  rotterdam: { country: "NL", centre: [51.9244, 4.4777] },
-  sapporo: { country: "JP", centre: [43.0618, 141.3545] },
-  seville: { country: "ES", centre: [37.3891, -5.9845] },
-  sheffield: { country: "GB", centre: [53.3811, -1.4701] },
-  sligo: { country: "IE", centre: [54.2766, -8.4761] },
-  stuttgart: { country: "DE", centre: [48.7758, 9.1829] },
-  tallinn: { country: "EE", centre: [59.437, 24.7536] },
-  turin: { country: "IT", centre: [45.0703, 7.6869] },
-  umea: { country: "SE", centre: [63.8258, 20.263] },
-  valencia: { country: "ES", centre: [39.4699, -0.3763] },
-  vienna: { country: "AT", centre: [48.2082, 16.3738] },
-  vilnius: { country: "LT", centre: [54.6872, 25.2797] },
-  warsaw: { country: "PL", centre: [52.2297, 21.0122] },
-  zagreb: { country: "HR", centre: [45.815, 15.9819] },
+  // ── Towns: a country, a postcode prefix and a centre. Every pin stands
+  // within 1.8 km of the centre. Every street postcode in that circle starts
+  // with the prefix, checked in September 2026 against postal directories.
+  // In the UK and Ireland the prefix is the outward code or the Eircode
+  // routing key at the centre itself, and the edge of the circle can be in
+  // the next district.
+  aarhus: { country: "DK", zip: "8", centre: [56.1629, 10.2039] },
+  abuja: { country: "NG", zip: "900", centre: [9.0765, 7.3986] },
+  antwerp: { country: "BE", zip: "2", centre: [51.2194, 4.4025] },
+  athens: { country: "GR", zip: "1", centre: [37.9838, 23.7275] },
+  barcelona: { country: "ES", zip: "080", centre: [41.3874, 2.1686] },
+  basel: { country: "CH", zip: "40", centre: [47.5596, 7.5886] },
+  belfast: { country: "GB", zip: "BT1", centre: [54.5973, -5.9301] },
+  bergen: { country: "NO", zip: "5", centre: [60.3913, 5.3221] },
+  bilbao: { country: "ES", zip: "480", centre: [43.263, -2.935] },
+  bologna: { country: "IT", zip: "401", centre: [44.4949, 11.3426] },
+  bordeaux: { country: "FR", zip: "33", centre: [44.8378, -0.5792] },
+  bratislava: { country: "SK", zip: "8", centre: [48.1486, 17.1077] },
+  bristol: { country: "GB", zip: "BS1", centre: [51.4545, -2.5879] },
+  budapest: { country: "HU", zip: "1", centre: [47.4979, 19.0402] },
+  cardiff: { country: "GB", zip: "CF10", centre: [51.4816, -3.1791] },
+  cork: { country: "IE", zip: "T12", centre: [51.8985, -8.4756] },
+  edinburgh: { country: "GB", zip: "EH1", centre: [55.9533, -3.1883] },
+  galway: { country: "IE", zip: "H91", centre: [53.2707, -9.0568] },
+  gdansk: { country: "PL", zip: "80", centre: [54.352, 18.6466] },
+  genoa: { country: "IT", zip: "161", centre: [44.4056, 8.9463] },
+  ghent: { country: "BE", zip: "90", centre: [51.0543, 3.7174] },
+  glasgow: { country: "GB", zip: "G1", centre: [55.8642, -4.2518] },
+  gothenburg: { country: "SE", zip: "41", centre: [57.7089, 11.9746] },
+  helsinki: { country: "FI", zip: "00", centre: [60.1699, 24.9384] },
+  innsbruck: { country: "AT", zip: "60", centre: [47.2692, 11.4041] },
+  krakow: { country: "PL", zip: "3", centre: [50.0647, 19.945] },
+  lagos: { country: "NG", zip: "10", centre: [6.5244, 3.3792] },
+  leeds: { country: "GB", zip: "LS1", centre: [53.8008, -1.5491] },
+  limerick: { country: "IE", zip: "V94", centre: [52.6638, -8.6267] },
+  ljubljana: { country: "SI", zip: "1", centre: [46.0569, 14.5058] },
+  lyon: { country: "FR", zip: "6900", centre: [45.764, 4.8357] },
+  malmo: { country: "SE", zip: "21", centre: [55.605, 13.0038] },
+  manchester: { country: "GB", zip: "M2", centre: [53.4808, -2.2426] },
+  milan: { country: "IT", zip: "201", centre: [45.4642, 9.19] },
+  munich: { country: "DE", zip: "8", centre: [48.1351, 11.582] },
+  naples: { country: "IT", zip: "801", centre: [40.8518, 14.2681] },
+  oslo: { country: "NO", zip: "0", centre: [59.9139, 10.7522] },
+  porto: { country: "PT", zip: "4", centre: [41.1579, -8.6291] },
+  prague: { country: "CZ", zip: "1", centre: [50.0755, 14.4378] },
+  riga: { country: "LV", zip: "LV-10", centre: [56.9496, 24.1052] },
+  rotterdam: { country: "NL", zip: "30", centre: [51.9244, 4.4777] },
+  sapporo: { country: "JP", zip: "0", centre: [43.0618, 141.3545] },
+  seville: { country: "ES", zip: "410", centre: [37.3891, -5.9845] },
+  sheffield: { country: "GB", zip: "S1", centre: [53.3811, -1.4701] },
+  sligo: { country: "IE", zip: "F91", centre: [54.2766, -8.4761] },
+  stuttgart: { country: "DE", zip: "70", centre: [48.7758, 9.1829] },
+  tallinn: { country: "EE", zip: "1", centre: [59.437, 24.7536] },
+  turin: { country: "IT", zip: "101", centre: [45.0703, 7.6869] },
+  umea: { country: "SE", zip: "90", centre: [63.8258, 20.263] },
+  valencia: { country: "ES", zip: "460", centre: [39.4699, -0.3763] },
+  vienna: { country: "AT", zip: "1", centre: [48.2082, 16.3738] },
+  vilnius: { country: "LT", zip: "LT-", centre: [54.6872, 25.2797] },
+  warsaw: { country: "PL", zip: "0", centre: [52.2297, 21.0122] },
+  zagreb: { country: "HR", zip: "10", centre: [45.815, 15.9819] },
 };
 
 /** "Sao Paulo, Brazil" and "São Paulo" both read as "sao paulo". */
 export function cityKey(location: string | null | undefined): string | null {
   if (!location) return null;
-  const first = location.split(",")[0] ?? "";
-  const key = first.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+  const key = location
+    .split(",")[0]
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
   return key || null;
 }

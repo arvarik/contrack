@@ -369,6 +369,22 @@ export function industryFor(name: string | null | undefined): Industry {
   return (name && INDUSTRIES[name]) || GENERAL;
 }
 
+/** How a person knows somebody. A new contact gets one to three. */
+export const TAGS = [
+  "advisor",
+  "alumni",
+  "angel",
+  "conference",
+  "customer",
+  "founder",
+  "friend",
+  "investor",
+  "mentor",
+  "partner",
+  "press",
+  "recruiter",
+];
+
 /** Two halves of an invented company name. */
 export const COMPANY_FIRST = [
   "Halcyon",
@@ -690,13 +706,6 @@ export const INTERACTION_TOPICS: Record<
       "Dislikes long email threads. A short message or a call works better.",
       "Between jobs and open to advice on {focus}. Offer a couple of introductions.",
       "Loves {topic}. Start there before getting to {focus}.",
-    ],
-  },
-  coffee: {
-    title: ["Coffee", "Catch up over coffee", "Morning coffee"],
-    body: [
-      "Coffee near their office. Talked about {focus} and how the year is going.",
-      "Short coffee before their next meeting. Mostly about {focus}.",
     ],
   },
 };

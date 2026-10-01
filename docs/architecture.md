@@ -63,7 +63,7 @@ flowchart LR
 | `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
 | `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
 | `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich`, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                   |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.  |
 | `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
 | `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
 
