@@ -59,7 +59,7 @@ export const NO_MATCHING_PAGES = "NO MATCHING PAGES";
  * the list named them (2026-09-26).
  */
 export const PRIVATE_TOPICS =
-  "relatives, health, religion, politics, sexuality, home addresses and home purchases";
+  "relatives, health, religion, politics, sexuality and home purchases";
 
 /** The topics a fact line may name, in the order the prompt lists them. */
 export const FINDING_TOPICS = [
@@ -68,6 +68,7 @@ export const FINDING_TOPICS = [
   "Education",
   "Location",
   "Hometown",
+  "Address",
   "Profile",
   "Website",
   "Email",
@@ -87,8 +88,9 @@ export const FINDING_TOPICS = [
 /**
  * Where the person is, for research: the records' location, else an address
  * that names a place and not a street (`placeFromAddresses`). A city a
- * person typed on the contact page reaches research this way, and a home
- * street address never does.
+ * person typed on the contact page reaches research this way. A street
+ * address goes to research as an Address fact instead: a web search with a
+ * street in it finds only the few pages that name the street.
  */
 export function researchPlace(
   contact: Pick<HydratedContact, "location" | "addresses">,
@@ -104,6 +106,8 @@ function knownFacts(contact: HydratedContact): string {
   if (contact.headline) known.push(`Headline: ${contact.headline}`);
   const place = researchPlace(contact);
   if (place) known.push(`Location: ${place}`);
+  for (const { address } of contact.addresses ?? [])
+    if (address && address !== place) known.push(`Address: ${address}`);
   if (contact.industry) known.push(`Industry: ${contact.industry}`);
   if (contact.website) known.push(`Website: ${contact.website}`);
   if (contact.about) known.push(`Bio: ${contact.about.slice(0, 800)}`);
@@ -354,6 +358,7 @@ Topics:
 - Education: the degree, the field, the school and the years
 - Location: the city they live or work in now
 - Hometown: where they grew up, as a school roster or a local news story gives it
+- Address: a home or office street address a page states, as the page writes it
 - Profile: a profile page of their own, as its full address: LinkedIn, GitHub, X, Google Scholar, a personal site
 - Website, Email, Phone
 - Publication, Talk, Patent, Award, Board role, Volunteer role
@@ -516,7 +521,7 @@ Rules:${current}
 - tags: three to eight short lower-case tags about the person's work, like "restructuring" or "quant research".
 - attributes: notable facts that fit no field above, like awards (only prizes, honours, fellowships and scholarships a fact names, never an accomplishment at work), licences, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licences", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
 - Leave out ${PRIVATE_TOPICS}, even when a fact names them.
-- addresses: an office address only when a fact states one.
+- addresses: each home or office address an Address fact states, as it is written, labelled "home" or "work".
 Return null or an empty list for anything the facts do not state.
 
 ${UNTRUSTED_DATA_RULE}

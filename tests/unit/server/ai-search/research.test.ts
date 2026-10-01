@@ -134,6 +134,11 @@ describe("the search prompt", () => {
     ])
       expect(prompt).toContain(`Leave out ${PRIVATE_TOPICS}`);
     expect(PRIVATE_TOPICS).toMatch(/politics/);
+    // An address, home or office, is research's to report when a page states it.
+    expect(PRIVATE_TOPICS).not.toMatch(/address/);
+    expect(
+      buildExtractionPrompt(contact(), "- Address: 1 Main St [example.org]"),
+    ).toContain("each home or office address an Address fact states");
   });
 
   it("sends a second round elsewhere: what is known, what was read, what is missing", () => {
@@ -202,7 +207,7 @@ describe("what the prompt knows about the person", () => {
     );
   });
 
-  it("reads a city from the addresses, and never a street", () => {
+  it("reads a city from the addresses for its place, and sends a street as an Address", () => {
     const at = (address: string) =>
       contact({
         addresses: [
@@ -215,14 +220,23 @@ describe("what the prompt knows about the person", () => {
     expect(suggestedSearches(at("San Francisco, CA"))).toContain(
       '"Rowan Vale" San Francisco, CA',
     );
-    // A house number or a postcode: a street, which is private.
-    for (const street of ["12 Harbor Street, Springfield", "Springfield 02110"])
-      expect(buildSearchPrompt(at(street))).not.toContain(street);
+    // A house number or a postcode: a street. It is a known fact, never the
+    // place: a web search with a street in it finds almost nothing.
+    for (const street of [
+      "12 Harbor Street, Springfield",
+      "Springfield 02110",
+    ]) {
+      expect(buildSearchPrompt(at(street))).toContain(`Address: ${street}`);
+      expect(buildSearchPrompt(at(street))).not.toContain(
+        `Location: ${street}`,
+      );
+      expect(suggestedSearches(at(street)).join("\n")).not.toContain(street);
+    }
     expect(missingTopics(at("12 Harbor Street, Springfield"))).toContain(
       "location",
     );
     // A city added after a street address: the Research card's Add a city
-    // appends it, and the street stays private.
+    // appends it, and the city is the place.
     const both = contact({
       addresses: [
         ...at("12 Harbor Street, Springfield").addresses,
@@ -236,7 +250,7 @@ describe("what the prompt knows about the person", () => {
       ] as HydratedContact["addresses"],
     });
     expect(buildSearchPrompt(both)).toContain("Location: Austin, TX");
-    expect(buildSearchPrompt(both)).not.toContain("Harbor Street");
+    expect(suggestedSearches(both).join("\n")).not.toContain("Harbor Street");
     // The records' own location comes first.
     expect(
       buildSearchPrompt(

@@ -34,8 +34,8 @@ export function workEmailDomain(
 /**
  * Whether an address names a place, such as "San Francisco, CA", and not a
  * street. An address with a digit in it, a house number or a postcode, is
- * not a place: home addresses are private, and research's words can reach a
- * web search.
+ * not a place: research's place words go into web searches, and a street
+ * in a search finds only the few pages that name it.
  */
 function isPlaceText(text: string | null | undefined): boolean {
   const place = text?.trim();

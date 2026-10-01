@@ -18,7 +18,7 @@ Each AI feature runs one kind of task. An admin picks the model for each task
 | People named in notes                  | Finds the people a saved note names, and links each one to a contact or a new [ghost](contacts.md#ghosts)                                | Quick tasks                    | The note text                                                                                                                                  |
 | Email file summary                     | Summarizes an `.eml` file that you attach to a contact's timeline                                                                        | Deep tasks                     | The email's text                                                                                                                               |
 | Mail summaries                         | Writes a short note for each matched email, when a **Mailbox (IMAP)** or **Google Workspace** connector has **Generate AI summaries** on | Quick tasks                    | Each email's subject and body                                                                                                                  |
-| [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web research, then Quick tasks | The contact's name, role, company, headline, city, industry, website, summary, emails, profile links, jobs, schools, interests and other facts |
+| [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web research, then Quick tasks | The contact's name, role, company, headline, city, addresses, industry, website, summary, emails, profiles, jobs, schools, interests and facts |
 | Duplicate checks                       | **Smart scan** and **Full scan** ask about pairs that look alike but are not certain                                                     | Deep tasks                     | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                           |
 | Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embeddings                     | Nothing with the built-in model. A hosted model gets each contact's profile text, but not for an account with AI off                           |
 
@@ -182,9 +182,10 @@ still bill a request that it already took.
 Research fills only empty fields and adds new list entries. It never changes a
 value that you already have, and it does not add back an entry that you
 removed. It adds an email or a phone number only when the person or their
-employer published it. It leaves out relatives, health, religion, politics,
-sexuality, home addresses and home purchases. When you edit the contact while
-research runs, Contrack drops the result.
+employer published it, and a home or office address when a page states one.
+It leaves out relatives, health, religion, politics, sexuality and home
+purchases. When you edit the contact while research runs, Contrack drops the
+result.
 
 The **Research** card on the **Dossier** tab lists each run, each fact beside
 its page, and every page under **Sources**. Check a fact against its page.
