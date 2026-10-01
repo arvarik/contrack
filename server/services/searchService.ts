@@ -512,6 +512,22 @@ export function databaseProof(plan: QueryPlan): "filters" | "temporal" | null {
   return null;
 }
 
+/**
+ * The owner's notes revision, which every note insert, edit and delete
+ * bumps (`installSearchIndex` in ftsIndex.ts).
+ *
+ * A note moves its contact's last contact and the passages a search reads,
+ * and neither moves the search revision. So an answer to "founders I have
+ * not talked to in 3 months" kept a person for five minutes after a call
+ * with them was logged.
+ */
+function notesRevision(scope: Scope): number {
+  const row = sqlite
+    .prepare("SELECT revision FROM notes_revision WHERE ownerId = ?")
+    .get(scope.ownerId) as { revision: number } | undefined;
+  return row?.revision ?? 0;
+}
+
 export function searchRevision(scope: Scope): number {
   const row = sqlite
     .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
@@ -704,6 +720,7 @@ async function runSearch(
   const aiAllowed = options.aiAllowed !== false;
   const models = aiAllowed && !isMockMode();
   const revision = searchRevision(scope);
+  const notes = notesRevision(scope);
   const capability = models ? resolveCapability("quick") : null;
   // Facets typed into the question count with the ones the request carries.
   const typed = parseFacetQuery(query);
@@ -734,7 +751,7 @@ async function runSearch(
     rerank?.model && isCrossEncoderReady(rerank.model)
       ? `${rerank.model}@${rerank.count}`
       : "fused";
-  const cacheKey = `${revision}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
+  const cacheKey = `${revision}:${notes}:${Math.floor(Date.now() / 300_000)}:${answeredBy}:${options.rrfK ?? ""}:${reorderBy}:${facetPart}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -932,6 +949,7 @@ async function runSearch(
     if (vector && searchRevision(scope) === revision) {
       semanticKey = {
         revision,
+        notes,
         facets: facetKey(allFilters),
         answeredBy,
         entities: entityKey(text),
@@ -952,7 +970,7 @@ async function runSearch(
   // The model stage starts now, and the local list is built while the
   // planner's request is on the network. The list then costs the answer
   // nothing.
-  const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
+  const coalesceKey = `${scope.ownerId}:search:${revision}:${notes}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
 
   const answer = searchCoalescer.coalesce(
     coalesceKey,
