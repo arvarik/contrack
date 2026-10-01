@@ -1817,12 +1817,18 @@ describe("GET /api/search/coverage", () => {
 });
 
 describe("GET /api/search/starters", () => {
+  const pool = async (actor: Actor) => {
+    const res = await asUser(actor)(request(app).get("/api/search/starters"));
+    expect(res.status).toBe(200);
+    return res.body.questions as { text: string; kind: string }[];
+  };
+  /** The questions built from values the account's contacts hold. */
+  const valuesOf = async (actor: Actor) =>
+    (await pool(actor)).filter((q) => q.kind !== "general").map((q) => q.text);
+  const generalOf = async (actor: Actor) =>
+    (await pool(actor)).filter((q) => q.kind === "general").map((q) => q.text);
+
   it("builds each account's questions from its own contacts only", async () => {
-    const pool = async (actor: Actor) => {
-      const res = await asUser(actor)(request(app).get("/api/search/starters"));
-      expect(res.status).toBe(200);
-      return (res.body.questions as { text: string }[]).map((q) => q.text);
-    };
     // B has fewer than ten contacts, so a value one of them holds is a
     // question, and a value only A holds (Company 5 to 19, Quarrington
     // Holdings, the actuary) would be one too if the pool read across
@@ -1839,11 +1845,38 @@ describe("GET /api/search/starters", () => {
         .all(B.user.id) as { company: string }[]
     ).map((row) => `Who works at ${row.company}?`);
     expect(companies.length).toBeGreaterThan(0);
-    expect((await pool(B)).sort()).toEqual(companies.sort());
+    expect((await valuesOf(B)).sort()).toEqual(companies.sort());
     // C has no contacts, so nothing to ask about.
     expect(await pool(C)).toEqual([]);
     // A has 21, so a value needs two holders, and each of A's is its own.
-    expect(await pool(A)).toEqual([]);
+    expect(await valuesOf(A)).toEqual([]);
+  });
+
+  it("offers a general question only to an account whose own contacts it finds", async () => {
+    // Nobody of A's is tracked and one of B's is, so "Who do I track?" can
+    // reach A only from B's row. The rows are put back after.
+    const rows = sqlite
+      .prepare(
+        `SELECT id, ownerId, isTracked FROM contacts WHERE ownerId IN (?, ?)
+           AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
+           AND COALESCE(isArchived, 0) = 0`,
+      )
+      .all(A.user.id, B.user.id) as {
+      id: string;
+      ownerId: string;
+      isTracked: number;
+    }[];
+    const track = sqlite.prepare(
+      "UPDATE contacts SET isTracked = ? WHERE id = ?",
+    );
+    const bRow = rows.find((row) => row.ownerId === B.user.id)!;
+    for (const row of rows) track.run(row === bRow ? 1 : 0, row.id);
+    try {
+      expect(await generalOf(B)).toContain("Who do I track?");
+      expect(await generalOf(A)).not.toContain("Who do I track?");
+    } finally {
+      for (const row of rows) track.run(row.isTracked, row.id);
+    }
   });
 });
 

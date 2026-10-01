@@ -790,10 +790,11 @@ describe("the page", () => {
     const first = await chips();
     expect(first).toHaveLength(6);
     for (const text of first) expect(POOL.map((q) => q.text)).toContain(text);
-    // At most two of one kind while other kinds are left.
-    expect(
-      first.filter((text) => text?.startsWith("Who works in")),
-    ).toHaveLength(2);
+    // The draw picks kinds first: five kinds and six places, so every kind
+    // is in it, and the sixth question comes from a kind with more.
+    const kindOf = (text: string | null) =>
+      POOL.find((q) => q.text === text)?.kind;
+    expect(new Set(first.map(kindOf)).size).toBe(5);
 
     ask(QUESTION);
     await screen.findByText("Ada Lovelace");
@@ -805,6 +806,33 @@ describe("the page", () => {
     expect(second).toHaveLength(6);
     expect(second).not.toEqual(first);
     random.mockRestore();
+  });
+
+  it("counts every match of a question of facets, and links a general question to the rest", async () => {
+    stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic"))
+        return new Response(
+          line({
+            phase: "complete",
+            matches: MATCHES,
+            fallback: false,
+            total: 1501,
+          }),
+        );
+    });
+    renderView();
+
+    ask("tag:investor");
+    expect(await screen.findByText("3 of 1,501 matches")).toBeTruthy();
+    // Only a general question has its facets to hand.
+    const seeAll = () =>
+      screen.queryByRole("link", { name: "See all in Network" });
+    expect(seeAll()).toBeNull();
+
+    ask("Who do I track?");
+    await waitFor(() =>
+      expect(seeAll()?.getAttribute("href")).toBe("/?q=tracked%3Ayes"),
+    );
   });
 
   it("shows no Try asking for an account with nothing to ask about", async () => {

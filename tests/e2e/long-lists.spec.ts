@@ -30,11 +30,15 @@ const TRACKED = 5;
 
 const name = (i: number) => `Long List ${String(i).padStart(3, "0")}`;
 
+/**
+ * Whole days before now, to the minute.
+ *
+ * The list says "spoke 3 days ago" by rounding the time since. A fixed hour
+ * of the day, 10:00 UTC, made "3 days ago" 3.5 days after 22:00 UTC, so the
+ * test read "4 days ago" for two hours of every day.
+ */
 function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setUTCHours(10, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString();
+  return new Date(Date.now() - days * 86_400_000 - 60_000).toISOString();
 }
 
 let instance: ContrackInstance;

@@ -63,7 +63,7 @@ flowchart LR
 | `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
 | `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
 | `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
-| `scripts/`                                          | Command-line tools: seed data, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                                |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich`, `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                   |
 | `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
 | `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
 
@@ -183,14 +183,14 @@ the migrations do not hold. To change the schema, edit `schema.ts` and run
 
 | Virtual table            | Kind | What it holds                                                                                                                                                                                     |
 | ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contacts_fts`           | FTS5 | One row for each visible contact: name, company, role, headline, location, about, industry, tags and interests, emails and phone digits, and an owner token. Prefix indexes of 2 to 4 characters. |
+| `contacts_fts`           | FTS5 | One row for every visible contact: name, company, role, headline, location, about, industry, tags, interests, emails, phone digits, addresses and the owner token. Prefixes of 2 to 4 characters. |
 | `interactions_fts`       | FTS5 | The title and the plain text of each note, with an owner token. The tokenizer stems and folds accents.                                                                                            |
 | `search_passages_fts`    | FTS5 | The text of each search passage, with an owner token.                                                                                                                                             |
 | `search_embeddings`      | vec0 | One int8 vector for each contact, partitioned by `ownerId`. 384 dimensions with the built-in model.                                                                                               |
 | `search_passage_vectors` | vec0 | One int8 vector for each passage, partitioned by `ownerId`.                                                                                                                                       |
 | `contact_embeddings`     | vec0 | One vector for each contact, for duplicate detection. Its width follows the embeddings model.                                                                                                     |
 
-`PRAGMA user_version` holds the full-text schema version, 5. A new version
+`PRAGMA user_version` holds the full-text schema version, 6. A new version
 rebuilds both FTS tables once at boot. A new embeddings model rebuilds the
 vector tables and embeds every contact again.
 
@@ -316,15 +316,22 @@ contact's own text. Proven fields come first, then fields that hold the
 words, then a passage close in meaning. It runs no model.
 
 The **Try asking** questions come from `search/starterQuestions.ts`: a pool of
-up to 40 questions about values that two of the account's contacts share,
+up to 500 questions about values that two of the account's contacts share,
+and seven general questions from `shared/generalQuestions.ts`. The pool is
 kept per account and search revision, and built again after boot and after an
-import.
+import. A general question is in the pool only when its facets find a
+contact, and `implicitFacets.ts` reads the same question as those facets, so
+the search answers it with no model. The page draws six with `suggestions.ts`
+and the palette's AI mode draws four, both through `useStarterDraw`. A draw
+takes one question from each kind before it takes a second from any.
 
 ### Indexes and local models
 
 - **Contacts.** `contacts_fts` ranks with BM25 weights (`WEIGHTS` in
   `lexical.ts`): name 10, company 5, role 3, tags 3, headline 2, location 2,
-  about 1, industry 1, extras 1, search expansion 0.5. A phone number is
+  about 1, industry 1, extras 1, addresses 0.5, search expansion 0.5. An
+  address is the least of the text, so a street finds a contact while a name,
+  a company or a role that holds the same word ranks first. A phone number is
   indexed with all its digits, its last 10 and its last 7, so a number with or
   without a country code finds its contact.
 - **Passages.** `passages.ts` cuts the about text, preferences, jobs and
@@ -431,7 +438,7 @@ For the settings a person sees, see [Models for each task](ai.md#models-for-each
 | Purge trashed contacts after the retention period, 30 days by default                                                                                                                                         | At start, then daily                                           |
 | Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs), and checkpoint the WAL | At start, then daily                                           |
 | Refresh the model lists of the AI providers                                                                                                                                                                   | At start, then daily                                           |
-| Run `PRAGMA optimize`                                                                                                                                                                                         | Daily, and at shutdown                                         |
+| Run `PRAGMA optimize`                                                                                                                                                                                         | Daily, at shutdown, and after each search index drain          |
 | Score the contacts marked dirty                                                                                                                                                                               | At start, then hourly                                          |
 | Score every tracked contact and take the weekly snapshot                                                                                                                                                      | Daily. The snapshot is also taken at start when it is missing. |
 | Load the local models, rebuild the vector tables when the model changed, and fill missing vectors for search and duplicates                                                                                   | At start                                                       |

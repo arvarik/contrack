@@ -269,6 +269,38 @@ describe("explainMatch", () => {
   it("says nothing for a contact with no field to show", () => {
     expect(explainMatch(person({ role: "Chef" }), ml)).toEqual([]);
   });
+
+  describe("an address", () => {
+    const valencia = questionTerms("Valencia");
+    const home = [
+      { address: "3190 Valencia St, San Francisco, CA 94110", label: "home" },
+      { address: "1 Market St, San Francisco", label: "work" },
+    ];
+
+    it("names the address that holds the words, marked, when nothing else does", () => {
+      const entries = explainMatch(person({ addresses: home }), valencia);
+      expect(entries).toHaveLength(1);
+      // The work address holds no word of the question, so it stays out.
+      expect(entries[0]).toMatchObject({
+        field: "address",
+        how: "words",
+        text: "3190 Valencia St, San Francisco, CA 94110",
+      });
+      expect(marked(entries[0])).toEqual(["Valencia"]);
+    });
+
+    it("lists the address after every other field that matched", () => {
+      const entries = explainMatch(
+        person({
+          role: "Valencia Street Baker",
+          about: "Runs a stall on Valencia St on Sundays",
+          addresses: home,
+        }),
+        valencia,
+      );
+      expect(entries.map((m) => m.field)).toEqual(["role", "about", "address"]);
+    });
+  });
 });
 
 describe("windowed", () => {

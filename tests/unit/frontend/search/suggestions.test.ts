@@ -87,6 +87,32 @@ describe("drawSuggestions", () => {
     expect(drawSuggestions([], SUGGESTION_COUNT, seeded(9))).toEqual([]);
   });
 
+  it("gives each kind a turn before a second from any, and every kind its chance", () => {
+    // Eight kinds and six places. Seven general questions among 500 others
+    // would almost never be drawn by a shuffle of the whole pool.
+    const kinds: StarterKind[] = [
+      "industry",
+      "city",
+      "company",
+      "interest",
+      "role",
+      "pair",
+      "tag",
+      "general",
+    ];
+    const pool = kinds.flatMap((kind) =>
+      [1, 2, 3, 4, 5].map((n) => question(kind, n)),
+    );
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 50; seed++) {
+      const drawn = drawSuggestions(pool, SUGGESTION_COUNT, seeded(seed));
+      expect(new Set(drawn.map(kindOf)).size, `seed ${seed}`).toBe(6);
+      for (const text of drawn) seen.add(kindOf(text)!);
+    }
+    // Which six kinds changes from draw to draw.
+    expect(seen.size).toBe(kinds.length);
+  });
+
   it("does not change the pool it draws from", () => {
     const pool = [...POOL];
     drawSuggestions(pool, SUGGESTION_COUNT, seeded(4));

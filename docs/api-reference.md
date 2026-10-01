@@ -738,6 +738,8 @@ The stream sends one JSON object per line:
 - `instant` is the local list: keyword and vector search, fused, at most 30.
   Nothing verified it.
 - `complete` is the final answer, and the last line. It replaces `instant`.
+  For a question made only of facets it also holds `total`, how many
+  contacts the facets find. The list stops at 30.
 - `error` takes the place of `complete` when the search fails:
   `{"phase":"error","error":"Search failed. Please try again.","requestId":"..."}`.
 
@@ -756,8 +758,8 @@ contact with these fields added:
 entry is `{ field, text, marks, how }`:
 
 - `field` is `role`, `headline`, `company`, `industry`, `location`,
-  `interest`, `tag`, `about`, `preferences`, `experience`, `education` or
-  `lastContact`.
+  `interest`, `tag`, `about`, `preferences`, `experience`, `education`,
+  `address` or `lastContact`.
 - `text` is the contact's own text for the field, cut to one line. A list
   field joins its matching items.
 - `marks` holds `[start, end)` offsets into `text` where the question's words
@@ -827,12 +829,14 @@ cached brief sends no `delta` lines.
 
 `GET /api/search/starters` answers `{ questions }`, each `{ text, kind }`, such
 as `{ "text": "Who do I know in Lisbon?", "kind": "city" }`. The kinds are
-`industry`, `city`, `company`, `role`, `interest`, `tag` and `pair` (an
-industry and a city together).
+`industry`, `city`, `company`, `role`, `interest`, `tag`, `pair` (an
+industry and a city together) and `general`.
 
 - Each question names a value that two of your active contacts share, or one
-  contact in an account of under ten.
-- The pool holds at most 40 questions, and never more than you have
+  contact in an account of under ten. A `general` question names no value.
+  There are seven, such as `Who do I track?`, and each is in the pool only
+  when its facets find a contact. The search reads each as its facets.
+- The pool holds at most 500 questions, and never more than you have
   contacts. With no contacts it is `[]`.
 - The server keeps the pool per account and search revision, and builds it
   again after an import.

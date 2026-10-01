@@ -24,6 +24,7 @@ export type MatchedField =
   | "preferences"
   | "experience"
   | "education"
+  | "address"
   | "lastContact";
 
 /**
@@ -59,5 +60,6 @@ export const MATCHED_FIELD_LABEL: Record<MatchedField, string> = {
   preferences: "Preferences",
   experience: "Experience",
   education: "Education",
+  address: "Address",
   lastContact: "Last contact",
 };

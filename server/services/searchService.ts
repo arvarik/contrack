@@ -302,16 +302,30 @@ function facetAnswer(
   filters: FacetFilter[],
   terms: QuestionTerms,
 ): SearchResult {
+  const matching = `${ACTIVE_CONTACT_SQL} AND (${facets.sql})`;
+  const params = [scope.ownerId, ...facets.params];
   const ids = (
     sqlite
       .prepare(
-        `SELECT c.id FROM contacts c
-         WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND (${facets.sql})
+        `SELECT c.id FROM contacts c WHERE c.ownerId = ? AND ${matching}
          ORDER BY c.name COLLATE NOCASE, c.id LIMIT ?`,
       )
-      .all(scope.ownerId, ...facets.params, PHASE1_LIMIT) as { id: string }[]
+      .all(...params, PHASE1_LIMIT) as { id: string }[]
   ).map((row) => row.id);
+  // "Who do I track?" can hold thousands, and the list shows the first few.
+  // A full list is counted, so the page can say how many there are.
+  const total =
+    ids.length < PHASE1_LIMIT
+      ? ids.length
+      : (
+          sqlite
+            .prepare(
+              `SELECT COUNT(*) AS n FROM contacts c WHERE c.ownerId = ? AND ${matching}`,
+            )
+            .get(...params) as { n: number }
+        ).n;
   return {
+    total,
     matches: withMatchedOn(
       [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
         (contact) => ({
@@ -510,6 +524,8 @@ interface SearchResult {
   /** The model did not verify this list. */
   fallback: boolean;
   cached?: boolean;
+  /** For a question of facets alone: every contact they hold. */
+  total?: number;
 }
 interface SearchChunk extends SearchResult {
   phase: "instant" | "complete";
@@ -739,7 +755,11 @@ async function runSearch(
   // Set once the question's vector exists, on the model path only.
   let semanticKey: SemanticKey | null = null;
   const final = (result: SearchResult, kind: string, path: string) => {
-    setCachedSearch(scope, cacheKey, result);
+    // A facet answer is one database read, and it reads columns the revision
+    // does not follow: tracking, the last contact, the date of an edit. Kept,
+    // "Who haven't I contacted in over 3 months?" listed a person for five
+    // minutes after a call with them was logged.
+    if (path !== "facets") setCachedSearch(scope, cacheKey, result);
     // L2 keeps only answers someone verified, with the question's vector.
     if (semanticKey && !result.fallback)
       setSemanticAnswer(scope, semanticKey, result);

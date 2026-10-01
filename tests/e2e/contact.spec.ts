@@ -302,7 +302,7 @@ test.describe("the Network header and start panel", () => {
     ).toBeVisible();
   });
 
-  test("the Tracked chip keeps the list to tracked people, and Manage opens the page", async ({
+  test("the Tracked chip keeps the list to tracked people, and adds no Manage button", async ({
     page,
     seed,
   }) => {
@@ -318,11 +318,9 @@ test.describe("the Network header and start panel", () => {
     await expect(listRow(page, seed, "Linus Torvalds")).toBeHidden();
     await expect(listRow(page, seed, "Margaret Hamilton")).toBeHidden();
 
-    await page.getByRole("link", { name: "Manage" }).click();
-    await expect(page).toHaveURL(/\/tracked$/);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
-    ).toBeVisible();
+    // The chip is the whole control. The page that groups and tracks in bulk
+    // is reached from Settings and from the Keeping up card, not from here.
+    await expect(page.getByRole("link", { name: "Manage" })).toHaveCount(0);
   });
 
   test("the header holds three icon buttons, and + opens the New menu", async ({

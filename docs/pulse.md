@@ -47,7 +47,7 @@ On a contact page, press `T` to track or untrack the contact. The key tracks at 
 
 **Track** changes only the selected contacts that are not tracked yet. It keeps the cadence of the others. The toast names the count, for example "Tracking 12 contacts", and offers **Undo**. When you undo an **Untrack**, the contacts come back at your default cadence.
 
-The **Tracked** chip on the Network list shows only the people you track, with their count. While the chip is on, **Manage** at the end of the chips opens the [Tracked contacts](#tracked-contacts) page.
+The **Tracked** chip on the Network list shows only the people you track, with their count. To group them and change tracking in bulk, open the [Tracked contacts](#tracked-contacts) page.
 
 ### Tracking settings
 

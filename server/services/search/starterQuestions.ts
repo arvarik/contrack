@@ -3,8 +3,11 @@
 // =============================================================================
 // Each account has a hidden pool of questions built from its own contacts:
 // the industries, cities, companies, roles, interests and tags that two
-// people or more share, and the industry and city pairs. The Ask page
-// shows six of them at random, so the list changes from visit to visit.
+// people or more share, and the industry and city pairs, and beside them
+// seven questions any network can ask: how long since you spoke, who you
+// track, whose details are old or missing (`shared/generalQuestions.ts`).
+// The Ask page shows six of them at random, so the list changes from visit
+// to visit.
 //
 // Every question names a value some contact holds, in words the search
 // answers without a model: "Who works at X?", "Who do I know in X?" and
@@ -17,6 +20,8 @@
 //
 // Building a pool is a few grouped reads. The pool is kept per owner and
 // search revision, so an edit to a searched column builds it again. The
+// general questions are checked against the contacts on every request, and a
+// change in which of them find somebody builds it again too. The
 // server builds every owner's pool in the background after boot, and an
 // import schedules its owner's pool as soon as the contacts commit. So the
 // first open of Ask after a deploy or an import reads a pool that is ready.
@@ -24,6 +29,8 @@
 
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
+import { compileFacets } from "./facetSql.ts";
+import { GENERAL_QUESTIONS } from "../../../shared/generalQuestions.ts";
 import { foldName } from "../../utils/nlp/givenNames.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -33,8 +40,17 @@ import type {
   StarterQuestion,
 } from "../../../shared/starterQuestions.ts";
 
-/** The most questions a pool holds. */
-export const POOL_LIMIT = 40;
+/**
+ * The most questions a pool holds.
+ *
+ * The page shows six of them at random, so the pool is a large hidden list:
+ * at 40 it was the same forty questions in another order, and a network of a
+ * few thousand people was asked about its six biggest companies and nothing
+ * else. 500 questions are about 22 KB of JSON, which the app fetches once in
+ * an idle moment, and a build is the same few grouped reads however long the
+ * list. The pool still holds no more questions than the account has contacts.
+ */
+export const POOL_LIMIT = 500;
 /**
  * From this many contacts, a value must be shared by two people to become a
  * question. Below it, one person is enough, or a small network has no pool.
@@ -64,10 +80,20 @@ const KIND_ORDER: readonly StarterKind[] = [
   "role",
   "pair",
   "tag",
+  // Last: a question about a network's own values says more than one every
+  // network can ask. In a pool of 500 all seven are in, whatever the order.
+  "general",
 ];
 
 interface Pool {
   revision: number;
+  /**
+   * The general questions this pool offers, as one string. Whether one finds
+   * anybody depends on who is tracked, when each person was last contacted
+   * and who has an email, none of which is a searched column, so none moves
+   * `revision`. The list is read again on every request and compared.
+   */
+  general: string;
   questions: StarterQuestion[];
 }
 
@@ -210,7 +236,10 @@ const cityOf = (location: string): string => tidy(location.split(",")[0] ?? "");
  * Build one owner's pool from its contacts, in the order the kinds take
  * turns, cut to {@link POOL_LIMIT} and to the number of contacts.
  */
-export function buildStarterQuestions(scope: Scope): StarterQuestion[] {
+export function buildStarterQuestions(
+  scope: Scope,
+  general: readonly string[] = generalQuestions(scope),
+): StarterQuestion[] {
   const owner = scope.ownerId;
   const people = (stmts.active.get(owner) as { n: number }).n;
   if (people === 0) return [];
@@ -293,6 +322,7 @@ export function buildStarterQuestions(scope: Scope): StarterQuestion[] {
     role: roles.map((t) => `Who works as ${article(t.value)} ${t.value}?`),
     pair: pairs.map((t) => `Who works in ${t.value} in ${t.city}?`),
     tag: tags.map((t) => `Who is tagged ${t.value}?`),
+    general: [...general],
   };
 
   // Take turns: the best of each kind, then the second best, and so on, so
@@ -312,15 +342,44 @@ export function buildStarterQuestions(scope: Scope): StarterQuestion[] {
   return questions;
 }
 
+/**
+ * The general questions whose facets find somebody in this account.
+ *
+ * The facets are compiled the way the search compiles them, so a question is
+ * offered exactly when pressing it would show a list. One indexed read each,
+ * stopping at the first contact.
+ */
+function generalQuestions(scope: Scope): string[] {
+  return GENERAL_QUESTIONS.filter((question) => {
+    const facets = compileFacets(scope, [...question.filters]);
+    return (
+      sqlite
+        .prepare(
+          // The owner is the first parameter and the facets follow it.
+          `SELECT 1 FROM contacts c WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
+            AND (${facets.sql}) LIMIT 1`,
+        )
+        .get(scope.ownerId, ...facets.params) !== undefined
+    );
+  }).map((question) => question.text);
+}
+
 function revisionOf(ownerId: string): number {
   const row = stmts.revision.get(ownerId) as { revision: number } | undefined;
   return row?.revision ?? 0;
 }
 
 /** Build and keep one owner's pool at the revision read before the build. */
-function rebuild(scope: Scope): Pool {
+function rebuild(
+  scope: Scope,
+  general: readonly string[] = generalQuestions(scope),
+): Pool {
   const revision = revisionOf(scope.ownerId);
-  const pool = { revision, questions: buildStarterQuestions(scope) };
+  const pool: Pool = {
+    revision,
+    general: general.join("\n"),
+    questions: buildStarterQuestions(scope, general),
+  };
   pools.delete(scope.ownerId);
   pools.set(scope.ownerId, pool);
   if (pools.size > MAX_OWNERS) pools.delete(pools.keys().next().value!);
@@ -339,8 +398,13 @@ function rebuild(scope: Scope): Pool {
 export function starterQuestions(scope: Scope): StarterQuestion[] {
   const pool = pools.get(scope.ownerId);
   const revision = revisionOf(scope.ownerId);
+  // Seven existence reads, each stopping at its first contact. A pool that
+  // offers a general question nobody matches any more is rebuilt before it is
+  // answered: a press on a question must find somebody.
+  const general = generalQuestions(scope);
   if (
     pool &&
+    pool.general === general.join("\n") &&
     revision - pool.revision <= STALE_EDITS &&
     revision >= pool.revision
   ) {
@@ -349,7 +413,7 @@ export function starterQuestions(scope: Scope): StarterQuestion[] {
     if (pool.revision !== revision) scheduleStarterQuestions(scope.ownerId);
     return pool.questions;
   }
-  return rebuild(scope).questions;
+  return rebuild(scope, general).questions;
 }
 
 /**

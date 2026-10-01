@@ -331,6 +331,7 @@ export interface MatchedContact {
   tags?: unknown;
   experience?: unknown;
   education?: unknown;
+  addresses?: unknown;
 }
 
 /** A proven field and what proved it. */
@@ -446,6 +447,14 @@ function fieldText(
         : [];
       return joinItems(schools.filter(Boolean), terms, onlyMarked);
     }
+    case "address":
+      // No filter, reranker or passage proves an address, so there is never
+      // a value to quote.
+      return joinItems(
+        strings(contact.addresses, "address"),
+        terms,
+        onlyMarked,
+      );
     case "lastContact": {
       const ago = lastContactAgo(contact.lastContactedAt, now);
       return { text: ago ?? "None logged", marks: [] };
@@ -466,6 +475,9 @@ const WORK_ORDER: readonly MatchedField[] = [
   "education",
   "about",
   "preferences",
+  // Last: an address is the least telling text a contact has, and the index
+  // ranks it last too.
+  "address",
 ];
 const LIKING_ORDER: readonly MatchedField[] = [
   "interest",
@@ -479,6 +491,7 @@ const LIKING_ORDER: readonly MatchedField[] = [
   "experience",
   "location",
   "education",
+  "address",
 ];
 
 /** The field a reason's evidence names, as a matched field. */

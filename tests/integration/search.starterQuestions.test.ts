@@ -20,7 +20,6 @@ import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import {
-  POOL_LIMIT,
   article,
   buildStarterQuestions,
   resetStarterQuestions,
@@ -107,8 +106,9 @@ describe("the starter question pool", () => {
   beforeEach(() => seed(NETWORK));
 
   it("asks about the values two people share, each kind in turn", () => {
-    const pool = buildStarterQuestions(scope());
-    expect(pool).toEqual([
+    // A general question takes its turn after every kind built from the
+    // network's values. The pool stops at twelve, one for each person.
+    expect(buildStarterQuestions(scope())).toEqual([
       { kind: "industry", text: "Who works in Fintech?" },
       { kind: "city", text: "Who do I know in Lisbon?" },
       { kind: "company", text: "Who works at Northwind Logistics?" },
@@ -116,9 +116,11 @@ describe("the starter question pool", () => {
       { kind: "role", text: "Who works as a CTO?" },
       { kind: "pair", text: "Who works in Fintech in Lisbon?" },
       { kind: "tag", text: "Who is tagged investor?" },
+      { kind: "general", text: "Who haven't I contacted in over 3 months?" },
       { kind: "industry", text: "Who works in Climate Tech?" },
       { kind: "city", text: "Who do I know in Austin?" },
       { kind: "role", text: "Who works as a Product Designer?" },
+      { kind: "general", text: "Who am I not tracking yet?" },
     ]);
   });
 
@@ -146,7 +148,9 @@ describe("the starter question pool", () => {
     await seed(NETWORK.slice(0, 0));
     expect(buildStarterQuestions(scope())).toEqual([]);
 
-    // A large, varied network fills the pool to its limit and no further.
+    // A varied network of a hundred people, well past the ten from which a
+    // value must be shared by two. The pool holds every such value, far more
+    // than the six the page draws, and never more than there are people.
     await seed(
       Array.from({ length: 120 }, (_, i) => ({
         name: `Person ${i}`,
@@ -157,7 +161,9 @@ describe("the starter question pool", () => {
         interests: [`Hobby ${String.fromCharCode(65 + (i % 8))}`],
       })),
     );
-    expect(buildStarterQuestions(scope())).toHaveLength(POOL_LIMIT);
+    const medium = buildStarterQuestions(scope());
+    expect(medium.length).toBeGreaterThan(40);
+    expect(medium.length).toBeLessThanOrEqual(120);
   });
 
   it("finds the people each question names, with no model", async () => {
@@ -195,7 +201,7 @@ describe("the starter question pool", () => {
         }
       }).map((person) => person.name);
     };
-    for (const q of pool) {
+    for (const q of pool.filter((entry) => entry.kind !== "general")) {
       const result = await searchService.semanticSearch(
         scope(),
         q.text,
@@ -265,6 +271,111 @@ describe("the starter question pool", () => {
     const res = await request(app).get("/api/search/starters");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ questions: buildStarterQuestions(scope()) });
+  });
+});
+
+describe("the general questions in the pool", () => {
+  // Twelve people, so a value must be shared by two, and every general
+  // question has a different set of people to find.
+  const PEOPLE = Array.from({ length: 12 }, (_, i) => ({
+    name: `Person ${String(i).padStart(2, "0")}`,
+    location: i < 9 ? `City ${i % 3}, Somewhere` : undefined,
+    emails: i < 8 ? [`person${i}@example.com`] : [],
+    phones: i < 6 ? [`+1 415 555 01${String(i).padStart(2, "0")}`] : [],
+  }));
+  const named = (from: number, to: number) =>
+    PEOPLE.slice(from, to).map((person) => person.name);
+
+  /** Who each question must find, by the numbers in PEOPLE. */
+  const EXPECTED: Record<string, string[]> = {
+    // Contacted 10 days ago (0 to 4), 200 days ago (5 and 6), or never.
+    "Who haven't I contacted in over 3 months?": named(5, 12),
+    "Who do I track?": named(0, 3),
+    "Who am I not tracking yet?": named(3, 12),
+    // Edited 300 days ago.
+    "Whose details haven't been updated in over 6 months?": named(10, 12),
+    "Who is missing an email address?": named(8, 12),
+    "Who is missing a phone number?": named(6, 12),
+    "Who is missing a location?": named(9, 12),
+  };
+
+  beforeEach(async () => {
+    await seed(PEOPLE);
+    const set = (from: number, to: number, assignment: string) =>
+      sqlite
+        .prepare(
+          `UPDATE contacts SET ${assignment} WHERE ownerId = ?
+             AND name IN (SELECT value FROM json_each(?))`,
+        )
+        .run(localOwnerId(), JSON.stringify(named(from, to)));
+    set(0, 3, "isTracked = 1");
+    set(0, 5, "lastContactedAt = datetime('now', '-10 days')");
+    set(5, 7, "lastContactedAt = datetime('now', '-200 days')");
+    // Last: every other change stamps updatedAt with the clock.
+    set(10, 12, "updatedAt = datetime('now', '-300 days')");
+    resetStarterQuestions();
+  });
+
+  it("offers all seven, and each finds exactly its people through the real search with no model", async () => {
+    const offered = buildStarterQuestions(scope())
+      .filter((q) => q.kind === "general")
+      .map((q) => q.text);
+    expect(offered.sort()).toEqual(Object.keys(EXPECTED).sort());
+    for (const text of offered) {
+      const result = await searchService.semanticSearch(
+        scope(),
+        text,
+        "general-test",
+        undefined,
+        { aiAllowed: false },
+      );
+      const found = result.matches.map((match) => match.name).sort();
+      expect(found, text).toEqual([...EXPECTED[text]!].sort());
+    }
+  });
+
+  it("follows tracking and the last contact without waiting for a search revision", async () => {
+    // Neither is a searched column, so neither moves the revision the pool
+    // and the Ask cache are kept by. A pool that waited would offer "Who do
+    // I track?" after the last person was untracked, and a press on it would
+    // find nobody. An answer that waited would list a person after a call.
+    const revision = () =>
+      sqlite
+        .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
+        .get(localOwnerId());
+    const found = async (question: string) =>
+      (
+        await searchService.semanticSearch(
+          scope(),
+          question,
+          "general-follow",
+          undefined,
+          { aiAllowed: false },
+        )
+      ).matches.map((match) => match.name);
+    const stale = "Who haven't I contacted in over 3 months?";
+    const cached = starterQuestions(scope());
+    expect(await found(stale)).toContain(PEOPLE[5]!.name);
+    const before = revision();
+    sqlite
+      .prepare("UPDATE contacts SET isTracked = 0 WHERE ownerId = ?")
+      .run(localOwnerId());
+    sqlite
+      .prepare(
+        "UPDATE contacts SET lastContactedAt = datetime('now') WHERE name = ? AND ownerId = ?",
+      )
+      .run(PEOPLE[5]!.name, localOwnerId());
+    expect(revision()).toEqual(before);
+    expect(texts(starterQuestions(scope()))).not.toContain("Who do I track?");
+    expect(texts(cached)).toContain("Who do I track?");
+    expect(await found(stale)).not.toContain(PEOPLE[5]!.name);
+
+    sqlite
+      .prepare(
+        "UPDATE contacts SET isTracked = 1 WHERE name = ? AND ownerId = ?",
+      )
+      .run(PEOPLE[0]!.name, localOwnerId());
+    expect(texts(starterQuestions(scope()))).toContain("Who do I track?");
   });
 });
 

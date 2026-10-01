@@ -196,7 +196,7 @@ describe("api.mail", () => {
     // Audit log records mail.settings.changed
     const auditRow = sqlite
       .prepare(
-        "SELECT action, targetType, targetId FROM audit_log WHERE action = 'mail.settings.changed' ORDER BY createdAt DESC LIMIT 1",
+        "SELECT action, targetType, targetId FROM audit_log WHERE action = 'mail.settings.changed' ORDER BY createdAt DESC, rowid DESC LIMIT 1",
       )
       .get() as { action: string; targetType: string; targetId: string };
     expect(auditRow).toMatchObject({
@@ -280,7 +280,7 @@ describe("api.mail", () => {
     // Audit log recorded
     const audit = sqlite
       .prepare(
-        "SELECT action, details FROM audit_log WHERE action = 'mail.test.sent' ORDER BY createdAt DESC LIMIT 1",
+        "SELECT action, details FROM audit_log WHERE action = 'mail.test.sent' ORDER BY createdAt DESC, rowid DESC LIMIT 1",
       )
       .get() as { action: string; details: string };
     expect(audit).toBeDefined();

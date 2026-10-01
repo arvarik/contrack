@@ -16,7 +16,7 @@ All three read the same [facets](#facets), such as `tag:investor` or `tracked:no
 
 ## Search the Network list
 
-Type in the search box at the top of the **Network** list. It matches names, companies, roles, locations, industries, tags, email addresses and phone numbers. The best name matches come first, and the list shows the count, for example "12 matches".
+Type in the search box at the top of the **Network** list. It matches names, companies, roles, locations, industries, tags, email addresses, phone numbers and street addresses. The best name matches come first, and an address ranks below every other field, so a street name finds a person without burying the people whose name or company matches, and the list shows the count, for example "12 matches".
 
 The box reads facets too, except `near:`. The page address keeps your search, so the address `/?q=tracked:no` opens the list already filtered. See [The Network list](contacts.md#the-network-list).
 
@@ -32,9 +32,11 @@ The first character you type sets the mode:
 | `?` and a question | **? AI query** | Ask Contrack answers inside the palette |
 | `>` and a command  | **> Actions**  | You log an interaction in one line      |
 
+With `?` and nothing after it, the palette shows four questions drawn from the same pool as **Try asking** on the Ask Contrack page. Select one to ask it.
+
 ### Find a contact
 
-Type part of a name, company, role, place, industry or tag. The first results come from your browser at once, marked "instant". A moment later, the server's keyword search replaces them. The server search also reads the headline, the about text, interests, email addresses and phone numbers, and it finds:
+Type part of a name, company, role, place, industry or tag. The first results come from your browser at once, marked "instant". A moment later, the server's keyword search replaces them. The server search also reads the headline, the about text, interests, email addresses, phone numbers and every address a contact has, at the lowest rank, and it finds:
 
 - misspelled and sound-alike names, marked **Approximate**
 - nicknames, so "Bob Castellanos" finds Robert Castellanos
@@ -141,7 +143,7 @@ Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Wi
 
 ![Ask Contrack in People mode, with verified matches and the fields that match under each name](images/ask.png)
 
-Before a search, **Try asking** shows six questions drawn from a pool built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. Every question finds someone. A new set shows each time you open the page and after you clear the box. Select one to ask it.
+Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it.
 
 Questions that work well:
 
@@ -161,8 +163,13 @@ Contrack answers these questions on your server, with no AI call, and every matc
 - a name, an email address, a phone number, or a phrase in quotes
 - a question made only of facets, such as `tag:investor contacted:>90d`
 - a place, a company or an industry from your contacts, with nothing else asked: "people in Lisbon", "who works at Northwind Logistics", "who works in fintech"
+- one of the seven general questions, written exactly as **Try asking** writes it, such as "Who do I track?" or "Who is missing an email address?". Each is the same list as its facet: `tracked:yes`, `missing:email`
+
+The answer lists 30 people at most. When a question made only of facets finds more, the count says so, for example "30 of 1,501 matches", and a general question shows **See all in Network**, which opens the whole list there.
 
 For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
+
+AI never sees a contact's addresses. So with AI on, a street or a postcode in Ask finds nobody. The Network list and the palette find it, and so does Ask with AI off.
 
 ### Verified answers and reasons
 

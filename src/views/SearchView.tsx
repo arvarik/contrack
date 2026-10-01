@@ -1,14 +1,16 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
 import {
   Sparkles,
   AlertTriangle,
+  ArrowRight,
   HistoryIcon,
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch, useStarterQuestions } from "../api";
+import { useSemanticSearch } from "../api";
+import { useStarterDraw } from "../hooks/useStarterDraw";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
@@ -34,7 +36,7 @@ import { InfoTip } from "../components/ui/InfoTip";
 import { SearchCoverageBar, HistoryPane } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { AskSearchBox } from "./search/AskSearchBox";
-import { drawSuggestions } from "./search/suggestions";
+import { SUGGESTION_COUNT } from "./search/suggestions";
 import { Segmented } from "../components/ui/Segmented";
 import { Modal } from "../components/ui/Modal";
 import { LiveStatus } from "../components/ui/LiveStatus";
@@ -42,6 +44,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
+import { generalQuestionFor } from "../../shared/generalQuestions";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
 // =============================================================================
@@ -283,20 +286,9 @@ export const SearchView = () => {
   // fetched in an idle moment, so they are here with the page. A draw stays
   // put while the pool refreshes behind it, so no chip moves under a
   // pointer. A new visit, or Clear, draws again. A failed load shows none:
-  // a question that finds nobody is worse than no question.
-  const pool = useStarterQuestions().data?.questions;
-  const [drawn, setDrawn] = useState<{ draw: number; questions: string[] }>(
-    () => ({ draw: 0, questions: pool ? drawSuggestions(pool) : [] }),
-  );
-  useEffect(() => {
-    if (!pool) return;
-    setDrawn((current) =>
-      current.draw === draw && current.questions.length > 0
-        ? current
-        : { draw, questions: drawSuggestions(pool) },
-    );
-  }, [pool, draw]);
-  const suggestions = drawn.questions;
+  // a question that finds nobody is worse than no question. The palette's AI
+  // mode draws four from the same pool through the same hook.
+  const suggestions = useStarterDraw(SUGGESTION_COUNT, draw);
 
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {
@@ -317,8 +309,10 @@ export const SearchView = () => {
   const isLoading = isPending;
   const results = isLoading ? [] : (semanticSearch.data?.matches ?? []);
   const isFallback = semanticSearch.data?.fallback ?? false;
+  const total = semanticSearch.data?.total ?? results.length;
   /** The question the results on screen answer. Never the input. */
   const answeredQuery = semanticSearch.data?.query ?? "";
+  const general = generalQuestionFor(answeredQuery);
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
@@ -333,7 +327,7 @@ export const SearchView = () => {
     isLoading,
     isError: semanticSearch.isError,
     hasSearched,
-    count: results.length,
+    count: total,
     query: answeredQuery || submittedQuery || "",
     fallback: isFallback,
   });
@@ -505,11 +499,26 @@ export const SearchView = () => {
                           would read as a link. */}
                       <span className={SECTION_HEADING}>Search results</span>
                       <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
-                        {results.length} match
-                        {results.length !== 1 ? "es" : ""}
+                        {total > results.length
+                          ? `${results.length} of ${total.toLocaleString()} matches`
+                          : `${results.length} match${results.length !== 1 ? "es" : ""}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* The rest of a general question's list, where it
+                          can be sorted and acted on. */}
+                      {general && total > results.length && (
+                        <Link
+                          to={`/?q=${encodeURIComponent(general.facets)}`}
+                          className={BTN_QUIET}
+                        >
+                          See all in {NAMES.network.label}
+                          <ArrowRight
+                            className="w-3.5 h-3.5"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      )}
                       {/*
                         AI did not check this list. Said once in words for
                         the whole list, with the question mark every

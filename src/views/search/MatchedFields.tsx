@@ -26,6 +26,7 @@ import {
   GraduationCap,
   Heart,
   History,
+  Home,
   IdCard,
   MapPin,
   Sparkles,
@@ -52,6 +53,7 @@ const FIELD_ICON: Record<MatchedField, LucideIcon> = {
   preferences: FileText,
   experience: History,
   education: GraduationCap,
+  address: Home,
   lastContact: Clock,
 };
 

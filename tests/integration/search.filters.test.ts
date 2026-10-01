@@ -296,6 +296,15 @@ describe("Ask takes facets from the request and the question", () => {
     expect(result.matches.map((m) => [m.name, m.verified, m.aiReason])).toEqual(
       [["Rhea Quill", true, "Tagged rare."]],
     );
+    expect(result.total).toBe(1);
+    // A facet that holds 150 people shows the first 30 and counts them all.
+    const guild = await searchService.semanticSearch(
+      scope(),
+      'company:"Engineering Guild"',
+      "filters-total",
+    );
+    expect(guild.matches).toHaveLength(30);
+    expect(guild.total).toBe(ENGINEERS);
   });
 
   it("combines the request's facets with the typed ones, over HTTP", async () => {
@@ -313,14 +322,17 @@ describe("Ask takes facets from the request and the question", () => {
 
   it("keeps answers with different facets apart in the cache", async () => {
     script(null);
-    const ask = (filters: unknown) =>
-      request(app)
-        .post("/api/search/semantic")
-        .send({ query: "contacted:>90d", filters });
-    const all = await ask([]);
-    const listed = await ask([{ field: "list", value: "core-team" }]);
-    expect(names(listed.body.matches)).toEqual(["Priya Raman", "Rhea Quill"]);
-    expect(all.body.matches.length).toBeGreaterThan(2);
+    // A name is answered from the keyword index, and the answer is kept.
+    const ask = async (filters: unknown) =>
+      names(
+        (
+          await request(app)
+            .post("/api/search/semantic")
+            .send({ query: "Priya Raman", filters })
+        ).body.matches,
+      );
+    expect(await ask([])).toEqual(["Priya Raman"]);
+    expect(await ask(rare)).toEqual([]);
   });
 
   it("refuses facets it cannot read", async () => {

@@ -27,6 +27,14 @@ const vector = (n = 0) => {
 };
 /** The owner every row here belongs to. Read late: the account is recreated. */
 const scope = () => scopeForOwnerId(localOwnerId());
+const ids = (query: string) =>
+  lexicalSearch(scope(), query).map((r) => r.contactId);
+const address = (id: string, contactId: string, text: string) =>
+  sqlite
+    .prepare(
+      "INSERT INTO contact_addresses (id, contactId, address) VALUES (?, ?, ?)",
+    )
+    .run(id, contactId, text);
 
 beforeEach(() => sqlite.prepare("DELETE FROM contacts").run());
 afterEach(() => vi.restoreAllMocks());
@@ -117,13 +125,59 @@ describe("search index lifecycle", () => {
     ]);
   });
 
-  it("weights contact names above the same keyword in a company", () => {
+  it("ranks the same word in a name first and in an address last", () => {
     insert("name", "Needle");
-    insert("company", "Someone");
-    sqlite
-      .prepare("UPDATE contacts SET company='Needle' WHERE id='company'")
-      .run();
-    expect(lexicalSearch(scope(), "Needle")[0].contactId).toBe("name");
+    for (const [id, text] of [
+      ["company", "Needle Works"],
+      ["role", "Needle Specialist"],
+      ["location", "Needle, Somewhere"],
+      ["about", "Loves a needle and thread"],
+    ]) {
+      insert(id!, "Someone");
+      sqlite
+        .prepare(`UPDATE contacts SET ${id} = ? WHERE id = ?`)
+        .run(text, id);
+    }
+    insert("address", "Someone");
+    address("a1", "address", "3 Needle Street, Town");
+    const ranked = ids("Needle");
+    expect(ranked).toHaveLength(6);
+    expect(ranked[0]).toBe("name");
+    expect(ranked.at(-1)).toBe("address");
+  });
+
+  it("finds a contact by a street, a postcode or a city only its addresses name, until one goes", () => {
+    // The trigger loop in ftsIndex.ts serves every child table. An edit and
+    // a move are tested with an email above, and a delete is tested here.
+    insert("kreuzberg", "Someone");
+    insert("nobody", "Someone");
+    address("a1", "kreuzberg", "Oranienstraße 12, 10999 Berlin");
+    address("a2", "kreuzberg", "9 Office Lane, Bristol");
+    for (const word of [
+      "Oranienstraße",
+      "Oranien",
+      "10999",
+      "Berlin",
+      "Bristol",
+    ])
+      expect(ids(word), word).toEqual(["kreuzberg"]);
+    sqlite.prepare("DELETE FROM contact_addresses WHERE id = 'a1'").run();
+    expect(ids("Berlin")).toEqual([]);
+    expect(ids("Bristol")).toEqual(["kreuzberg"]);
+  });
+
+  it("rebuilds an index from before addresses, at boot", () => {
+    insert("old", "Someone");
+    address("a1", "old", "4 Legacy Way, Dublin");
+    // The table as version 5 built it. Without a new version the boot keeps
+    // it, and every trigger then names a column it lacks.
+    sqlite.exec(`DROP TABLE contacts_fts;
+      CREATE VIRTUAL TABLE contacts_fts USING fts5(contactId UNINDEXED, name,
+        company, role, headline, location, about, industry, tags, extras,
+        searchExpansion, ownerTok, prefix='2 3 4');`);
+    sqlite.pragma("user_version = 5");
+    installSearchIndex(sqlite);
+    expect(ids("Legacy")).toEqual(["old"]);
   });
 
   it("uses stable contact rowids after migration and repeated installation", () => {

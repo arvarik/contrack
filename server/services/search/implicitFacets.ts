@@ -11,6 +11,8 @@
 //   "around X"                           in the owner's data
 //   "in X"                               an industry facet, when X is an
 //                                        industry in the owner's data
+//   a general question                   the facets in shared/generalQuestions.ts,
+//                                        when the whole query is one of them
 //
 // X must equal a known value, not merely contain one. A place followed by a
 // comma and another place ("Paris, Texas"), by "and" or "or" ("New York and
@@ -26,6 +28,7 @@ import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import type { FacetFilter } from "../../../shared/searchFacets.ts";
 import { foldName } from "../../utils/nlp/givenNames.ts";
+import { generalQuestionFor } from "../../../shared/generalQuestions.ts";
 
 export interface ImplicitFacets {
   /** The facets the question's words hold, in the order they appear. */
@@ -246,6 +249,10 @@ export function findImplicitFacets(
   scope: Scope,
   query: string,
 ): ImplicitFacets {
+  // A question written exactly like one of the general questions is its
+  // facets, and nothing is left over for a model to read.
+  const general = generalQuestionFor(query);
+  if (general) return { filters: [...general.filters], remainder: "" };
   const words = query.match(/[\p{L}\p{N}][\p{L}\p{N}'’.&-]*|,/gu) ?? [];
   if (!words.length) return { filters: [], remainder: query.trim() };
   const values = knownValues(scope);

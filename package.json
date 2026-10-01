@@ -56,6 +56,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "node scripts/seedMock.ts",
+    "db:enrich": "node scripts/enrich-bench-contacts.ts",
     "test": "vitest run --project unit --project integration --project eval",
     "test:watch": "vitest --project unit --project integration --project eval",
     "test:coverage": "vitest run --project unit --project integration --project eval --coverage",

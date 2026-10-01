@@ -1,6 +1,6 @@
 import { PASSAGE_VERSION } from "./passageIndex.ts";
 import { getEmbeddingsState } from "../../ai/embeddings.ts";
-import { sqlite } from "../../db.ts";
+import { refreshPlannerStats, sqlite } from "../../db.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
 import { embedContact, isSearchBackfillRunning } from "./localEmbeddings.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
@@ -268,6 +268,9 @@ export async function drainIndexQueue(
     }
   } finally {
     running = false;
+
+    // The rows this drain wrote can leave the planner's row counts behind.
+    if (result.succeeded > 0) refreshPlannerStats();
 
     // Check if more retries or items are pending
     const remaining = (
