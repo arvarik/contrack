@@ -54,6 +54,7 @@ npm run dev            # http://localhost:3210, with hot reload
 | `npm run knip`                  | Find files, exports and types that nothing uses                  |
 | `npm run format`                | Format with Prettier. CI runs `format:check`                     |
 | `npm run db:generate`           | Write a Drizzle migration after a schema change                  |
+| `npm run db:enrich -- --apply`  | Make a test network of 5,000 people. Stop the server first       |
 | `npm run brand:icons`           | Redraw every icon and brand file from the corvid's paths         |
 | `npm run docs:wiki -- <folder>` | Write the docs as a GitHub wiki                                  |
 
