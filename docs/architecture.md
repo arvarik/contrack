@@ -55,7 +55,7 @@ flowchart LR
 | `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema). |
 | `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
 | `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, the uploads guard and the error handler.                                             |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                |
 | `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                 |
 | `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
 | `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
@@ -76,7 +76,12 @@ This is the path of one edit, from a click to a saved row.
    module in `src/api/` calls `fetch` directly.
 2. The browser sends the session cookie. A script sends a personal token.
 3. `server/app.ts` runs the middleware in this order:
-   1. A request id (`X-Request-Id`) and the security headers.
+   1. A request id (`X-Request-Id`) and the security headers, then
+      compression (`server/middleware/compression.ts`): brotli or gzip, as
+      the request's `Accept-Encoding` allows. It comes before everything
+      that can answer, so it covers the static files and `dist/` too.
+      Streams, byte ranges, photos and fonts, and bodies under 1 KB go out
+      as they are.
    2. The JSON parser: 1 MB, or 50 MB for `POST /api/contacts/bulk`.
    3. The AI rate limit for each client address.
    4. `GET /healthz`, which sits outside the credential gate.
