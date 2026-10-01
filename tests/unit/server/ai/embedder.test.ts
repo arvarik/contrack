@@ -37,6 +37,7 @@ vi.mock("../../../../server/ai/embeddings.ts", () => ({
     async (_id: string, _model: string, texts: string[]) =>
       texts.map((_, i) => [i, 1]),
   ),
+  probeDimension: vi.fn(async () => 1536),
 }));
 vi.mock("../../../../server/ai/instanceSwitch.ts", () => ({
   aiAllowedForUser: () => state.aiAllowed,
@@ -46,7 +47,10 @@ vi.mock("../../../../server/workers/cpuHost.ts", () => ({
   runOnWorker: vi.fn(),
 }));
 
-import { embedWithProvider } from "../../../../server/ai/embeddings.ts";
+import {
+  embedWithProvider,
+  probeDimension,
+} from "../../../../server/ai/embeddings.ts";
 import { runOnWorker } from "../../../../server/workers/cpuHost.ts";
 import {
   builtinEmbedder,
@@ -76,6 +80,7 @@ beforeEach(() => {
   state.aiAllowed = true;
   vi.mocked(runOnWorker).mockReset();
   vi.mocked(embedWithProvider).mockClear();
+  vi.mocked(probeDimension).mockClear();
 });
 
 describe("the built-in model", () => {
@@ -97,12 +102,13 @@ describe("the built-in model", () => {
     expect(embedWithProvider).not.toHaveBeenCalled();
   });
 
-  it("is what the capability names by default, and stays on this server", () => {
+  it("is what the capability names by default, and stays on this server", async () => {
     expect(currentEmbedder()).toBe(builtinEmbedder);
     expect(builtinEmbedder).toMatchObject({
       id: BUILTIN.signature,
       local: true,
     });
+    expect(await builtinEmbedder.dimension()).toBe(384);
   });
 
   it("copies each vector out of the worker's buffer", async () => {
@@ -154,6 +160,16 @@ describe("a provider model", () => {
     expect(await embedder.embed([], "document")).toEqual([]);
     await expect(embedder.embed(["a"], "query", aborted())).rejects.toThrow();
     expect(embedWithProvider).toHaveBeenCalledOnce();
+
+    // The cached width answers. An unknown one is probed once.
+    expect(await embedder.dimension()).toBe(768);
+    expect(probeDimension).not.toHaveBeenCalled();
+    state.resolved = { ...PROVIDER, dimension: null };
+    expect(await currentEmbedder().dimension()).toBe(1536);
+    expect(probeDimension).toHaveBeenCalledWith(
+      "gemini",
+      "gemini-embedding-001",
+    );
   });
 });
 

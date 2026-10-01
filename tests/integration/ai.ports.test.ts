@@ -6,16 +6,22 @@
 // the test sees what each real caller asks for: the search index and the
 // duplicate index embed documents, through the same port, and Ask embeds the
 // question. A model that is not local never reads the question of an account
-// with AI off, whether it embeds it or reranks for it.
+// with AI off, whether it embeds it or reranks for it, and a model pinned
+// during a backfill reads nothing of the round already under way. The stores
+// rebuild for an embedder with a new id.
 // =============================================================================
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { ensureLocalOwner } from "../../server/db.ts";
+import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
-import { resolveEmbeddings } from "../../server/ai/embeddings.ts";
+import {
+  getEmbeddingsState,
+  resolveEmbeddings,
+} from "../../server/ai/embeddings.ts";
+import { setPreferences } from "../../server/services/userPreferencesService.ts";
 import {
   builtinEmbedder,
   currentEmbedder,
@@ -24,9 +30,15 @@ import {
   type EmbedUse,
 } from "../../server/ai/embedder.ts";
 import { setReranker, type Reranker } from "../../server/ai/reranker.ts";
-import { backfillSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
+import {
+  backfillSearchEmbeddings,
+  ensureEmbeddingStore,
+} from "../../server/services/search/vectorIndex.ts";
 import {
   backfillEmbeddings,
+  ensureDedupeEmbeddingStore,
+  generateAndStoreBulkEmbeddings,
+  generateBatchEmbeddings,
   rebuildDedupeEmbeddingTable,
 } from "../../server/services/dedupe/embeddings.ts";
 
@@ -37,10 +49,14 @@ const calls: { use: EmbedUse; texts: string[] }[] = [];
 let indexed: typeof calls = [];
 
 /** An embedder that records calls, as wide as a new database's stores. */
-const recording = (local: boolean): Embedder => ({
-  id: local ? "test/local" : "test/hosted",
+const recording = (
+  local: boolean,
+  id = local ? "test/local" : "test/hosted",
+): Embedder => ({
+  id,
   local,
   ready: () => true,
+  dimension: async () => 384,
   async embed(texts, use) {
     calls.push({ use, texts });
     return texts.map((text) => {
@@ -139,5 +155,65 @@ describe("the reranker", () => {
     setReranker(reranker(true));
     await ask(false);
     expect(asked).toEqual([QUESTION]);
+  });
+});
+
+describe("an embedder pinned during a backfill", () => {
+  /** A hosted model that keeps what it is sent. */
+  const hostedTexts: string[] = [];
+  const hosted: Embedder = {
+    ...recording(false),
+    async embed(texts) {
+      hostedTexts.push(...texts);
+      return texts.map(() => new Float32Array(384));
+    },
+  };
+  /** A local model whose first call pins `hosted`, as an admin would. */
+  const pinsHosted = (): Embedder => ({
+    ...recording(true),
+    async embed(texts, use) {
+      setEmbedder(hosted);
+      return recording(true).embed(texts, use);
+    },
+  });
+
+  it("reads nothing of a round under way, for an account with AI off", async () => {
+    setPreferences(ensureLocalOwner(), { aiAssist: false });
+    const {
+      createdIds: [id],
+    } = await contactService.bulkCreateContacts(scope(), [
+      { name: "Cy Pinned", role: "Founder", about: "Keeps bees in Kreuzberg." },
+    ]);
+    try {
+      hostedTexts.length = 0;
+      setEmbedder(pinsHosted());
+      // The contact and its passage are two calls. Both use the round's model.
+      expect(await backfillSearchEmbeddings()).toBe(0);
+      const items = Array.from({ length: 65 }, (_, i) => ({
+        id: `d${i}`,
+        text: `contact ${i}`,
+      }));
+      // Two dedupe batches of 64 and 1, with the embedder the caller allowed.
+      const allowed = pinsHosted();
+      setEmbedder(allowed);
+      await generateBatchEmbeddings(items, allowed);
+      expect(hostedTexts).toEqual([]);
+      // And the batch that saw the change is not stored.
+      setEmbedder(pinsHosted());
+      expect(await generateAndStoreBulkEmbeddings([id])).toBe(0);
+    } finally {
+      setPreferences(ensureLocalOwner(), { aiAssist: true });
+      sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(id);
+    }
+  });
+});
+
+describe("the stores", () => {
+  it("rebuild for an embedder with a new id, and record it", async () => {
+    setEmbedder(recording(true, "test/next"));
+    expect(await ensureEmbeddingStore()).toBe(2);
+    expect(getEmbeddingsState()?.signature).toBe("test/next");
+    expect(await ensureDedupeEmbeddingStore()).toBe(2);
+    expect(getEmbeddingsState("dedupe")?.signature).toBe("test/next");
   });
 });

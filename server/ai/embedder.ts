@@ -15,17 +15,14 @@
 // Settings or to the instance switch reaches the next text. A caller reads
 // `local`, which says whether text leaves this server, and `ready()`.
 //
-// The vector stores do not read the embedder. They record the capability's
-// signature, and an adapter's `id` is that same string. So a change to a
-// model's vectors needs a new signature in `embeddings.ts` (`BUILTIN_SIGNATURE`
-// or `providerEmbeddings`). Then both stores rebuild at the next boot or
-// settings change. A new `id` alone rebuilds nothing.
+// Both vector stores record the embedder they were built with: its `id` and
+// its width (`dimension()`). A model whose vectors change needs a new `id`,
+// and then both stores rebuild at the next boot or settings change.
 //
 // Every call says what its texts are for, a question or a document. Some
 // models embed the two differently: Gemini's task types, the e5 and nomic
-// prefixes. Neither adapter here reads it, so their vectors are the ones they
-// were before this interface existed. An adapter that starts to read it
-// changes its vectors, so it needs that new signature.
+// prefixes. An adapter that starts to read it changes its vectors, so it
+// needs a new `id` too.
 // =============================================================================
 
 // Type-only import — erased at compile time, so @huggingface/transformers
@@ -42,6 +39,7 @@ import {
   BUILTIN_DIMENSION,
   BUILTIN_SIGNATURE,
   embedWithProvider,
+  probeDimension,
   resolveEmbeddings,
 } from "./embeddings.ts";
 import { aiAllowedForUser } from "./instanceSwitch.ts";
@@ -55,8 +53,8 @@ export type EmbedUse = "query" | "document";
 /** A model that turns text into vectors. */
 export interface Embedder {
   /**
-   * The model, `builtin/<model>` or `<provider>/<model>`. The same string as
-   * the capability's signature, which is what the vector stores record.
+   * The model as the vector stores record it, `builtin/<model>` or
+   * `<provider>/<model>`. A model whose vectors change needs a new one.
    */
   readonly id: string;
   /**
@@ -66,6 +64,12 @@ export interface Embedder {
   readonly local: boolean;
   /** True when `embed` can answer now. */
   ready(): boolean;
+  /**
+   * The vector width, which both stores are built at. A provider model's
+   * width is learned once, from a probe text (`probeDimension`), and is null
+   * while that probe fails.
+   */
+  dimension(): Promise<number | null>;
   /**
    * One vector per text, in order. Throws when the model fails or answers
    * with another count, so no caller can write a short batch.
@@ -99,6 +103,7 @@ export const builtinEmbedder: Embedder = {
   id: BUILTIN_SIGNATURE,
   local: true,
   ready: () => modelReady,
+  dimension: async () => BUILTIN_DIMENSION,
   embed: (texts, _use, signal) => embedBuiltin(texts, signal),
 };
 
@@ -236,17 +241,20 @@ async function embedInProcess(texts: string[]): Promise<Float32Array[]> {
  *
  * Configured is ready: a provider that cannot answer fails the call, and the
  * caller keeps its keyword search. `embedWithProvider` checks the instance
- * switch and refuses a short batch.
+ * switch and refuses a short batch. `known` is the width the capability has
+ * cached, so only the first call ever probes.
  */
 function providerEmbedder(
   providerId: string,
   model: string,
   id: string,
+  known: number | null,
 ): Embedder {
   return {
     id,
     local: false,
     ready: () => true,
+    dimension: async () => known ?? probeDimension(providerId, model),
     async embed(texts, _use, signal) {
       signal?.throwIfAborted();
       if (texts.length === 0) return [];
@@ -266,9 +274,9 @@ let replacement: Embedder | null = null;
 /**
  * Use `embedder` instead of the configured one. Null goes back.
  *
- * Tests and scripts only. The vector stores keep the configured model's
- * signature and width, so a replacement must write vectors as wide as the
- * stores are.
+ * Tests and scripts only. The stores rebuild for it at the next
+ * `ensureEmbeddingStore`, and until then it must write vectors as wide as
+ * they are.
  */
 export function setEmbedder(embedder: Embedder | null): void {
   replacement = embedder;
@@ -279,7 +287,12 @@ export function currentEmbedder(): Embedder {
   if (replacement) return replacement;
   const resolved = resolveEmbeddings();
   return resolved.kind === "provider" && resolved.providerId && resolved.model
-    ? providerEmbedder(resolved.providerId, resolved.model, resolved.signature)
+    ? providerEmbedder(
+        resolved.providerId,
+        resolved.model,
+        resolved.signature,
+        resolved.dimension,
+      )
     : builtinEmbedder;
 }
 
@@ -294,7 +307,13 @@ export function currentEmbedder(): Embedder {
  * (`embedQuery`).
  *
  * @param ownerId - The account that owns the contacts.
+ * @param embedder - The embedder that would embed them. A backfill reads it
+ *   once per round and asks about that one, so every call in the round uses
+ *   the model this check allowed.
  */
-export function mayEmbedContactsFor(ownerId: string): boolean {
-  return currentEmbedder().local || aiAllowedForUser(ownerId);
+export function mayEmbedContactsFor(
+  ownerId: string,
+  embedder = currentEmbedder(),
+): boolean {
+  return embedder.local || aiAllowedForUser(ownerId);
 }

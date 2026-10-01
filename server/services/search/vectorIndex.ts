@@ -39,13 +39,12 @@ import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
+import { getEmbeddingsState, setEmbeddingsState } from "../../ai/embeddings.ts";
 import {
-  resolveEmbeddings,
-  probeDimension,
-  getEmbeddingsState,
-  setEmbeddingsState,
-} from "../../ai/embeddings.ts";
-import { currentEmbedder, mayEmbedContactsFor } from "../../ai/embedder.ts";
+  currentEmbedder,
+  mayEmbedContactsFor,
+  type Embedder,
+} from "../../ai/embedder.ts";
 import type { CompiledFacets } from "./facetSql.ts";
 
 const BACKFILL_BATCH_SIZE = 64;
@@ -346,6 +345,7 @@ export function findPassageNeighbors(
 /** Bounded batches prevent one long profile from occupying a worker request. */
 async function embedPassageSnapshots(
   snapshots: (PassageSnapshot | null)[],
+  embedder: Embedder,
 ): Promise<Float32Array[][]> {
   const passages = snapshots.flatMap((snapshot) => snapshot?.passages ?? []);
   const vectors: Float32Array[] = [];
@@ -353,7 +353,7 @@ async function embedPassageSnapshots(
     const texts = passages
       .slice(i, i + BACKFILL_BATCH_SIZE)
       .map((passage) => `${passage.context.slice(0, 200)} | ${passage.text}`);
-    const batch = await embedBatch(texts);
+    const batch = await embedder.embed(texts, "document");
     if (
       batch.length !== texts.length ||
       batch.some((vector) => !vector.every(Number.isFinite))
@@ -426,51 +426,45 @@ function writePassages(
 // =============================================================================
 
 /**
- * Bring the vector store in line with the configured embeddings capability.
+ * Bring the vector store in line with the current embedder.
  *
  * Called at startup and whenever the embeddings capability changes. When the
- * configured model differs from what the table was built with, the vec0 table
- * is recreated at the new dimension and every contact is re-embedded.
+ * embedder's id or width differs from what the table was built with, the
+ * vec0 table is recreated at the new width and every contact is re-embedded.
  *
  * Returns the number of contacts re-embedded (0 when nothing changed).
  */
 export async function ensureEmbeddingStore(): Promise<number> {
-  const resolved = resolveEmbeddings();
+  const embedder = currentEmbedder();
 
-  // A provider model's dimension is unknown until probed.
-  let dimension = resolved.dimension;
-  if (dimension === null && resolved.providerId && resolved.model) {
-    dimension = await probeDimension(resolved.providerId, resolved.model);
-    if (dimension === null) {
-      log.warn(
-        "LocalEmbeddings",
-        `Could not determine dimension for ${resolved.signature}; keeping the existing vector store`,
-      );
-      return 0;
-    }
-  }
-  if (
-    dimension === null ||
-    resolveEmbeddings().signature !== resolved.signature
-  )
+  // A provider model's width is unknown until probed.
+  const dimension = await embedder.dimension();
+  if (dimension === null) {
+    log.warn(
+      "LocalEmbeddings",
+      `Could not determine dimension for ${embedder.id}; keeping the existing vector store`,
+    );
     return 0;
+  }
+  // The capability changed during the probe. That change reconciles itself.
+  if (currentEmbedder().id !== embedder.id) return 0;
 
   const state = getEmbeddingsState();
   const changed =
     !state ||
-    state.signature !== resolved.signature ||
+    state.signature !== embedder.id ||
     state.dimension !== dimension ||
     state.representationVersion !== PASSAGE_VERSION;
   if (!changed) return backfillSearchEmbeddings();
 
   log.info(
     "LocalEmbeddings",
-    `Embeddings changed (${state?.signature ?? "unversioned"} → ${resolved.signature}); rebuilding vector store`,
+    `Embeddings changed (${state?.signature ?? "unversioned"} → ${embedder.id}); rebuilding vector store`,
   );
   // Missing metadata cannot prove the physical vector width or model identity.
   rebuildSearchEmbeddingTable(dimension);
   setEmbeddingsState({
-    signature: resolved.signature,
+    signature: embedder.id,
     dimension,
     representationVersion: PASSAGE_VERSION,
     generation: randomUUID(),
@@ -543,21 +537,25 @@ function backfillStatements() {
 }
 
 /**
- * Embed one account's round.
+ * Embed one account's round with `embedder`, the one its check allowed.
  *
- * `aborted` is true when the configured embeddings capability changed while a
- * batch was in flight. The vector store is about to be rebuilt at the new
- * dimension, so the whole backfill stops rather than writing rows in two
- * shapes.
+ * `aborted` is true when the current embedder changed during the round. The
+ * vector store is about to be rebuilt for the new one, so the whole backfill
+ * stops rather than writing rows in two shapes. Every call in the round uses
+ * `embedder`, never the new one, so a model pinned during the round reads
+ * nothing of an account it may not embed.
  */
 async function embedSearchRound(
   rows: SearchTextRow[],
   stmts: ReturnType<typeof backfillStatements>,
+  embedder: Embedder,
 ): Promise<{ embedded: number; aborted: boolean }> {
   let embedded = 0;
 
   for (let i = 0; i < rows.length; i += BACKFILL_BATCH_SIZE) {
     const batch = rows.slice(i, i + BACKFILL_BATCH_SIZE);
+    if (currentEmbedder().id !== embedder.id)
+      return { embedded, aborted: true };
 
     // Build text for each contact
     const texts = batch.map((c) => {
@@ -570,13 +568,12 @@ async function embedSearchRound(
       return contactToSearchText(c, tags, interests);
     });
 
-    const signature = resolveEmbeddings().signature;
     const generation = getEmbeddingsState()?.generation;
     const snapshots = batch.map((row) => passageSnapshot(row.id));
-    const vectors = await embedBatch(texts);
-    const passageVectors = await embedPassageSnapshots(snapshots);
+    const vectors = await embedder.embed(texts, "document");
+    const passageVectors = await embedPassageSnapshots(snapshots, embedder);
     if (
-      signature !== resolveEmbeddings().signature ||
+      currentEmbedder().id !== embedder.id ||
       generation !== getEmbeddingsState()?.generation
     ) {
       return { embedded, aborted: true };
@@ -609,7 +606,7 @@ async function embedSearchRound(
           batch[j].id,
           snapshot,
           passageVectors[j],
-          signature,
+          embedder.id,
           scale,
         );
         stmts.queueRemove.run(batch[j].id);
@@ -677,9 +674,11 @@ async function runBackfill(): Promise<number> {
     remaining = false;
     for (const queue of queues) {
       if (queue.done) continue;
-      // Read each round, because the owner can turn AI off while a provider
-      // backfill runs.
-      if (!mayEmbedContactsFor(queue.ownerId)) {
+      // Read each round, because the owner can turn AI off, or an admin can
+      // pin another model, while a backfill runs. The round keeps the
+      // embedder this check allowed.
+      const embedder = currentEmbedder();
+      if (!mayEmbedContactsFor(queue.ownerId, embedder)) {
         queue.done = true;
         continue;
       }
@@ -702,7 +701,7 @@ async function runBackfill(): Promise<number> {
           principal: null,
           scope: scopeForOwnerId(queue.ownerId),
         },
-        () => embedSearchRound(round, stmts),
+        () => embedSearchRound(round, stmts, embedder),
       );
       embedded += result.embedded;
       if (result.aborted) return embedded;
@@ -732,7 +731,9 @@ export interface EmbedContactResult {
 export async function embedContact(
   contactId: string,
 ): Promise<EmbedContactResult> {
-  if (!isSearchEmbeddingReady()) {
+  // One embedder for the whole contact, the one the checks below allowed.
+  const embedder = currentEmbedder();
+  if (!embedder.ready()) {
     return { status: "skipped", reason: "not_ready" };
   }
 
@@ -749,7 +750,7 @@ export async function embedContact(
   if (!row) {
     return { status: "skipped", reason: "inactive_or_deleted" };
   }
-  if (!mayEmbedContactsFor(row.ownerId)) {
+  if (!mayEmbedContactsFor(row.ownerId, embedder)) {
     return { status: "skipped", reason: "ai_off" };
   }
 
@@ -765,12 +766,11 @@ export async function embedContact(
   ).map((t) => t.interest);
 
   const text = contactToSearchText(row, tags, interests);
-  const signature = resolveEmbeddings().signature;
   const generation = getEmbeddingsState()?.generation;
   const snapshot = passageSnapshot(contactId);
   if (!snapshot) return { status: "skipped", reason: "inactive_or_deleted" };
-  const [vec] = await embedBatch([text]);
-  const [passageVectors] = await embedPassageSnapshots([snapshot]);
+  const [vec] = await embedder.embed([text], "document");
+  const [passageVectors] = await embedPassageSnapshots([snapshot], embedder);
   if (!vec) {
     throw new Error(
       `Failed to generate embedding vector for contact ${contactId}`,
@@ -778,7 +778,7 @@ export async function embedContact(
   }
 
   if (
-    signature !== resolveEmbeddings().signature ||
+    currentEmbedder().id !== embedder.id ||
     generation !== getEmbeddingsState()?.generation
   ) {
     return { status: "outdated", reason: "signature_changed" };
@@ -794,7 +794,7 @@ export async function embedContact(
   sqlite.transaction(() => {
     const scale = writeScale([vec, ...passageVectors]);
     _upsertTxn(contactId, quantize(vec, scale));
-    writePassages(contactId, snapshot, passageVectors, signature, scale);
+    writePassages(contactId, snapshot, passageVectors, embedder.id, scale);
   })();
   return { status: "indexed" };
 }
