@@ -155,6 +155,10 @@ Only Google gives free web searches: the first 5,000 each month.
 
 1. Open **Settings → Contact enrichment**.
 2. Choose the **Research depth**. It starts at **Standard** each time.
+   When an admin has set a [SearXNG](#web-research-with-searxng) address,
+   **Search with** also offers the research model's own search, **SearXNG**
+   or **Both**. It starts at the research model each time, and the time and
+   cost show for that choice only.
 3. Narrow the list. The **Contacts** row offers **All**, **Tracked**, **Has
    links**, **Has email** and **No data**. The **Research** row offers **Any**,
    **Not yet**, **6+ months ago** and **Found nothing**. A contact shows when
@@ -304,15 +308,30 @@ contact research when no connected provider offers web search. With a custom
 endpoint and the built-in embedding model, Contrack then needs no cloud AI.
 
 1. Run SearXNG with JSON answers on: add `json` to `search.formats` in its
-   `settings.yml`.
+   `settings.yml`. For a SearXNG that only Contrack calls, turn its bot
+   limiter off (`server.limiter: false`).
 2. In **Settings → Administration → General**, enter the base URL under
    **Self-hosted search (SearXNG)**, such as `http://searxng.local:8080`, and
    choose **Save**. `SEARXNG_URL` sets it from the environment instead.
 3. Connect a model for **Deep tasks**, such as a custom endpoint.
 
-For each contact, Contrack runs up to three searches built from the name,
-company, role and location. It reads up to five result pages from public
-addresses, and the **Deep tasks** model reads them into fields.
+With a provider that searches the web, research still uses the provider,
+unless you choose **SearXNG** or **Both** under **Search with** on the
+**Contact enrichment** page.
+
+For each contact, SearXNG runs the searches that research with a provider
+would start with: three at Standard and six at Deep, all at once. Contrack
+takes the results from each search in turn and reads only the ones whose
+title or snippet names the person: up to five pages in full at Standard and
+ten at Deep, from public addresses, and up to twenty more by their snippet.
+The **Deep tasks** model reads them into facts, each beside its page, and the
+**Quick tasks** model fills the fields. The **Research** card shows those facts
+and pages, as it does for a provider. SearXNG's own searches are not billed.
+
+**Both** runs the research model's search and SearXNG's at once, and keeps the
+facts of both. One is enough: when the model does not search, SearXNG's
+facts stand alone, and when SearXNG finds nothing, the model's do. Research
+records no web page only when one of them searched and matched nobody.
 
 A **Research model** of **Off — never research online** stops SearXNG
 research too.

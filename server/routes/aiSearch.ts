@@ -41,7 +41,14 @@ const aiSearchBodySchema = z.object({
       (ids) => new Set(ids).size === ids.length,
       "Contact IDs must be unique",
     ),
-  strategy: z.enum(["two-pass", "single-pass", "searxng"]).optional(),
+  /**
+   * How to search: the research model's own search ("two-pass", or
+   * "single-pass" on OpenAI and Anthropic), SearXNG alone ("searxng"), or
+   * both ("combined"). The provider's default when absent.
+   */
+  strategy: z
+    .enum(["two-pass", "single-pass", "searxng", "combined"])
+    .optional(),
   /** How thoroughly to research each contact. Default "standard". */
   depth: researchDepthSchema.optional(),
 });
@@ -93,6 +100,7 @@ aiSearchRouter.post(
         check.appendTo,
         contacts,
         depth,
+        strategy,
       );
       if (!joined)
         throw new AppError(

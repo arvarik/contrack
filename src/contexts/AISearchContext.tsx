@@ -16,6 +16,9 @@
  * - isVisible: whether the overlay is showing
  * - depthFiguresApply: whether the depths' measured time and cost describe
  *   this instance's research, which they do only when Gemini runs it
+ * - researchProvider and searxng: the provider that searches the web, and
+ *   whether a SearXNG address is set, for the Enrichment page's "Search
+ *   with" choice
  *
  * The AISearchProgressOverlay is rendered via portal from this provider,
  * so it floats above all content regardless of routing.
@@ -56,6 +59,11 @@ interface StartSearchOptions {
   limitAs?: "page" | "toast";
   /** How thoroughly to research. Standard when absent. */
   depth?: ResearchDepth;
+  /**
+   * How to search: SearXNG alone, or both it and the research model. The
+   * research model's own search when absent.
+   */
+  strategy?: "searxng" | "combined";
 }
 
 interface AISearchContextValue {
@@ -83,6 +91,10 @@ interface AISearchContextValue {
    * for a model the instance does not run.
    */
   depthFiguresApply: boolean;
+  /** The label of the provider that searches the web, such as "Gemini". */
+  researchProvider: string | null;
+  /** Whether an admin set a SearXNG address, so research can search with it. */
+  searxng: boolean;
 }
 
 const AISearchContext = createContext<AISearchContextValue | null>(null);
@@ -137,6 +149,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const { data: aiSettings } = useAISettings();
   const depthFiguresApply =
     aiSettings?.capabilities?.research?.resolved?.providerId === "gemini";
+  const researchProvider =
+    aiSettings?.capabilities?.research?.resolved?.providerLabel ?? null;
+  const searxng = !!aiSettings?.searxng;
 
   // SSE stream hook — updates batch state in real-time
   const handleUpdate = useCallback((updatedBatch: AISearchBatch) => {
@@ -165,10 +180,10 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const startSearch = useCallback(
     (
       contactIds: string[],
-      { limitAs = "page", depth }: StartSearchOptions = {},
+      { limitAs = "page", depth, strategy }: StartSearchOptions = {},
     ) => {
       startMutate(
-        { contactIds, depth },
+        { contactIds, depth, strategy },
         {
           onSuccess: (result) => {
             // A start that joined the running batch keeps the batch on screen:
@@ -236,6 +251,8 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       limitMessage,
       clearLimit,
       depthFiguresApply,
+      researchProvider,
+      searxng,
     }),
     [
       startSearch,
@@ -245,6 +262,8 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       limitMessage,
       clearLimit,
       depthFiguresApply,
+      researchProvider,
+      searxng,
     ],
   );
 

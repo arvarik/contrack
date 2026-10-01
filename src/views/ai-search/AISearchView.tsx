@@ -12,6 +12,11 @@
  * "Start enrichment" before they press it. The page is named "Contact
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
+ *
+ * When an admin has set a SearXNG address and a provider serves research,
+ * "Search with" offers the provider's own search, SearXNG, or both
+ * (`lib/researchSource`). The measured time and cost describe the
+ * provider's search only, so they show for it alone.
  */
 import { useState, useCallback, useDeferredValue, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -55,6 +60,12 @@ import {
   type ResearchFilter,
 } from "../../lib/enrichmentFilters";
 import { NAMES } from "../../lib/names";
+import {
+  SOURCE_ORDER,
+  SOURCE_STRATEGY,
+  sourceWords,
+  type ResearchSource,
+} from "../../lib/researchSource";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 
 /**
@@ -113,11 +124,24 @@ export function AISearchView({
     limitMessage,
     clearLimit,
     depthFiguresApply,
+    researchProvider,
+    searxng,
   } = useAISearch();
-  const choices = useMemo(
-    () => depthChoices(depthFiguresApply),
-    [depthFiguresApply],
-  );
+  // The provider's search each time the page opens, like the depth. The
+  // choice shows only when there are two ways to search.
+  const [source, setSource] = useState<ResearchSource>("provider");
+  const offersSource = searxng && !!researchProvider;
+  const searchWith: ResearchSource = offersSource ? source : "provider";
+  const figures = depthFiguresApply && searchWith === "provider";
+  const choices = useMemo(() => depthChoices(figures), [figures]);
+  const sourceChoices = useMemo(() => {
+    const words = sourceWords(researchProvider ?? "AI");
+    return SOURCE_ORDER.map((value) => ({
+      value,
+      label: words[value].name,
+      hint: words[value].does,
+    }));
+  }, [researchProvider]);
 
   const [searchQuery, setSearchQuery] = useState("");
   // The list follows a deferred copy of the box, so a letter shows in the
@@ -248,7 +272,8 @@ export function AISearchView({
 
   const handleConfirmStart = () => {
     const ids = Array.from(selectedIds);
-    startSearch(ids, { depth });
+    const strategy = SOURCE_STRATEGY[searchWith];
+    startSearch(ids, { depth, ...(strategy && { strategy }) });
     setShowConfirm(false);
     setSelectedIds(new Set());
   };
@@ -319,6 +344,27 @@ export function AISearchView({
                 onChange={setDepth}
                 className="sm:grid-cols-2"
               />
+              {offersSource && (
+                <>
+                  <h3
+                    id="research-source-heading"
+                    className={cn(
+                      SECTION_HEADING,
+                      "flex items-center gap-2 pt-1",
+                    )}
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    Search with
+                  </h3>
+                  <ChoiceGroup
+                    label="Search with"
+                    value={source}
+                    options={sourceChoices}
+                    onChange={setSource}
+                    className="sm:grid-cols-3"
+                  />
+                </>
+              )}
             </section>
 
             <div className={cn(CARD, "p-0 overflow-hidden")}>
@@ -452,7 +498,7 @@ export function AISearchView({
             </button>
             {/* What the batch will take, before the press, at the depth
                 chosen above: the confirmation says it again. */}
-            {selectedIds.size > 0 && depthFiguresApply && (
+            {selectedIds.size > 0 && figures && (
               <p
                 aria-live="polite"
                 className="-mt-2 text-center text-xs text-on-surface-variant tabular-nums"
@@ -472,7 +518,12 @@ export function AISearchView({
         selectedContacts={selectedContacts}
         isStarting={isStarting}
         depth={depth}
-        showEstimate={depthFiguresApply}
+        showEstimate={figures}
+        searchWith={
+          searchWith === "provider"
+            ? undefined
+            : sourceWords(researchProvider ?? "AI")[searchWith]
+        }
       />
     </div>
   );

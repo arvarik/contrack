@@ -30,6 +30,8 @@ const aiSearch = vi.hoisted(() => ({
   limitMessage: null,
   clearLimit: vi.fn(),
   depthFiguresApply: true,
+  researchProvider: "Gemini" as string | null,
+  searxng: false,
 }));
 vi.mock("../../../../src/contexts/AISearchContext", async (original) => ({
   isEnriching: (
@@ -113,6 +115,8 @@ afterEach(() => {
   aiSearch.isStarting = false;
   aiSearch.batch = null;
   aiSearch.depthFiguresApply = true;
+  aiSearch.researchProvider = "Gemini";
+  aiSearch.searxng = false;
   ai.allowed = true;
   contacts.list = [];
 });
@@ -490,6 +494,106 @@ describe("the Enrichment page's depth", () => {
     expect(screen.queryByText(/in all/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
     expect(screen.getByRole("dialog").textContent).not.toContain("in all");
+  });
+});
+
+describe("the Enrichment page's search choice", () => {
+  const people = [
+    { id: "c1", name: "Rowan Vale", isArchived: false, isGhost: false },
+    { id: "c2", name: "Kestrel Ames", isArchived: false, isGhost: false },
+  ];
+  const startWith = (tile: RegExp) => {
+    contacts.list = people;
+    renderView();
+    fireEvent.click(screen.getByRole("radio", { name: tile }));
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
+    return screen.getByRole("dialog");
+  };
+
+  it("offers no choice without a SearXNG address, or without a provider that searches", () => {
+    contacts.list = people;
+    renderView();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Search with" }),
+    ).toBeNull();
+    cleanup();
+    aiSearch.searxng = true;
+    aiSearch.researchProvider = null;
+    renderView();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Search with" }),
+    ).toBeNull();
+  });
+
+  it("offers the provider, SearXNG and both, with the provider chosen", () => {
+    aiSearch.searxng = true;
+    contacts.list = people;
+    renderView();
+    const tiles = within(
+      screen.getByRole("radiogroup", { name: "Search with" }),
+    ).getAllByRole("radio");
+    expect(tiles.map((tile) => tile.textContent)).toEqual([
+      expect.stringMatching(/^Gemini/),
+      expect.stringMatching(/^SearXNG/),
+      expect.stringMatching(/^Both/),
+    ]);
+    expect(tiles.map((tile) => tile.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+  });
+
+  it("starts with SearXNG, without Gemini's figures, and says so before it starts", () => {
+    aiSearch.searxng = true;
+    contacts.list = people;
+    renderView();
+    fireEvent.click(screen.getByRole("radio", { name: /^SearXNG/ }));
+    // Gemini's measured time and cost describe its own search only.
+    const tiles = within(
+      screen.getByRole("radiogroup", { name: "Research depth" }),
+    ).getAllByRole("radio");
+    expect(tiles[0].textContent).not.toContain(perContact("standard"));
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    expect(screen.queryByText(/in all/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).not.toContain("in all");
+    expect(dialog.textContent).toContain("Searches with SearXNG");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Search 2 contacts" }),
+    );
+    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
+      depth: "standard",
+      strategy: "searxng",
+    });
+  });
+
+  it("starts with both as the combined strategy", () => {
+    aiSearch.searxng = true;
+    const dialog = startWith(/^Both/);
+    expect(dialog.textContent).toContain("Searches with Both");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Search 2 contacts" }),
+    );
+    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
+      depth: "standard",
+      strategy: "combined",
+    });
+  });
+
+  it("starts with the provider as before, naming no strategy", () => {
+    aiSearch.searxng = true;
+    const dialog = startWith(/^Gemini/);
+    expect(dialog.textContent).toContain(batchEstimate("standard", 2));
+    expect(dialog.textContent).not.toContain("Searches with");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Search 2 contacts" }),
+    );
+    expect(aiSearch.startSearch.mock.calls[0][1]).toEqual({
+      depth: "standard",
+    });
   });
 });
 

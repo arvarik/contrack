@@ -43,6 +43,12 @@ export const aiSearchBatchSchema = z.object({
         models: z.array(z.string().max(120)).max(4).optional(),
         /** How thoroughly this contact is researched. */
         depth: researchDepthSchema.optional(),
+        /**
+         * How this contact is searched: "two-pass" with the research
+         * model's own search, "searxng", or "combined" for both. A job that
+         * joins a running batch keeps its own.
+         */
+        strategy: z.string().max(40).optional(),
         startedAt: z.string().optional(),
         completedAt: z.string().optional(),
         latencyMs: z.number().nonnegative().optional(),

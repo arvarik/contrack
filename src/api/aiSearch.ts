@@ -25,10 +25,13 @@ export const useStartAISearch = () => {
     mutationFn: async ({
       contactIds,
       depth,
+      strategy,
     }: {
       contactIds: string[];
       /** How thoroughly to research. The server's default is "standard". */
       depth?: ResearchDepth;
+      /** SearXNG alone, or both. The research model's own search when absent. */
+      strategy?: "searxng" | "combined";
     }) => {
       // `apiFetch` throws `ApiError` for any non-2xx, with the message read
       // out of the standard `{ error: { code, message } }` envelope, so the
@@ -39,7 +42,7 @@ export const useStartAISearch = () => {
       const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds, depth }),
+        body: JSON.stringify({ contactIds, depth, strategy }),
       });
       // `appended`: the contacts joined this account's running batch, whose
       // id this is, instead of starting one.

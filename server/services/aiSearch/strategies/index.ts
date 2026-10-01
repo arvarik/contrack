@@ -10,21 +10,22 @@ import { AppError } from "../../../utils/AppError.ts";
 // search and fill a schema in one request, and on OpenAI and Anthropic the
 // split keeps a source beside every fact, which the dossier's Research card
 // shows. 'single-pass' (search and schema in one request, OpenAI and
-// Anthropic only) stays available by name.
+// Anthropic only) stays available by name. With a SearXNG address set, a
+// start may name 'searxng' to search with SearXNG alone, or 'combined' to
+// search with both and keep the facts of both.
 // =============================================================================
 
 import type { AISearchStrategy } from "../types.ts";
 import { TwoPassStrategy } from "./twoPass.ts";
 import { SinglePassStrategy } from "./singlePass.ts";
 import { SearxngStrategy, getSearxngUrl } from "./searxng.ts";
+import { CombinedStrategy } from "./combined.ts";
 
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
   "two-pass": () => new TwoPassStrategy(),
   "single-pass": () => new SinglePassStrategy(),
   searxng: () => new SearxngStrategy(),
-  // Future strategies:
-  // 'consensus':   () => new ConsensusStrategy(),
-  // 'judge':       () => new JudgeStrategy(),
+  combined: () => new CombinedStrategy(),
 };
 
 /**
@@ -76,6 +77,26 @@ export function validateEnrichmentStrategy(requested?: string): string {
     if (!getSearxngUrl() || !resolveCapability("deep"))
       throw new AppError(
         "Configure SearXNG and an AI extraction model in settings.",
+        503,
+      );
+  } else if (name === "combined") {
+    // Both searches, so both have to be there: SearXNG, the research model,
+    // the deep model that reads SearXNG's pages and the quick one that
+    // extracts.
+    if (!getSearxngUrl())
+      throw new AppError(
+        "Searching with both needs a SearXNG address. An admin sets it in Settings → Administration → General.",
+        503,
+        { code: "SEARXNG_NOT_CONFIGURED" },
+      );
+    if (!research)
+      throw new AppError(
+        "AI provider is not configured for contact research. Check AI settings.",
+        503,
+      );
+    if (!resolveCapability("deep") || !resolveCapability("quick"))
+      throw new AppError(
+        "Configure a quick and a deep AI model to search with both.",
         503,
       );
   } else {

@@ -39,6 +39,7 @@ const OP_LABELS: Record<string, string> = {
   hyde: "Query expansion",
   aiSearchGrounding: "Web research",
   aiSearchExtraction: "Research extraction",
+  aiSearchReading: "Research reading",
   aiSearchSinglePass: "Research (single pass)",
 };
 
