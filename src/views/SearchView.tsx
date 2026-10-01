@@ -18,7 +18,6 @@ import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
 import {
   ASK_COLUMN,
   BTN_QUIET,
-  filterPill,
   PAGE_TOP,
   SECTION_HEADING,
   SUGGESTION_CHIP,
@@ -572,12 +571,13 @@ export const SearchView = () => {
                   </div>
 
                   {/* A cut list of facets offers the facets that split it.
-                      A press asks the question again with one added. */}
+                      A press asks the question again with one added, so
+                      each is a suggested question's chip. */}
                   {refine.length > 0 && (
                     <div
                       role="group"
                       aria-label="Narrow the list"
-                      className="flex flex-wrap items-center gap-1.5"
+                      className="flex flex-wrap items-center gap-2"
                     >
                       <span className="text-xs text-on-surface-variant">
                         Narrow
@@ -592,10 +592,13 @@ export const SearchView = () => {
                               `${answeredQuery} ${option.facet}`,
                             )
                           }
-                          className={cn("hit-area", filterPill(false))}
+                          className={cn(
+                            SUGGESTION_CHIP,
+                            "flex items-center gap-1.5",
+                          )}
                         >
                           {option.label}
-                          <span className="font-medium tabular-nums">
+                          <span className="font-semibold tabular-nums">
                             {option.count.toLocaleString()}
                           </span>
                         </button>
