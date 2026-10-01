@@ -25,8 +25,13 @@ import {
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import {
-  aiSearchOutputSchema,
   extractionJsonSchema,
+  isPlaceholderEmployer,
+  nameFromHandle,
+  parseExtraction,
+  researchPlace,
+  searchName,
+  tidyExtraction,
 } from "../promptTemplate.ts";
 import { recordInvocation } from "../../aiStatsService.ts";
 import { safeFetch, readBodyCapped } from "../../../utils/urlSafety.ts";
@@ -48,14 +53,22 @@ interface SearxngResult {
 import { getSearxngUrl } from "../../integrationSettings.ts";
 export { getSearxngUrl };
 
-/** Build the search queries that identify this specific person. */
+/**
+ * Build the search queries that identify this specific person, with the
+ * name and place rules the provider research uses: the name without
+ * credentials, the surname a profile handle spells, no placeholder employer,
+ * and a city, never a street.
+ */
 function buildQueries(contact: HydratedContact): string[] {
   const queries: string[] = [];
-  const name = contact.name;
-  if (contact.company) queries.push(`"${name}" ${contact.company}`);
-  if (contact.role) queries.push(`"${name}" ${contact.role}`);
-  if (contact.location) queries.push(`"${name}" ${contact.location}`);
-  if (queries.length === 0) queries.push(`"${name}"`);
+  const clean = searchName(contact.name);
+  const name = `"${nameFromHandle(clean, contact.socialLinks ?? []) ?? clean}"`;
+  if (contact.company && !isPlaceholderEmployer(contact.company))
+    queries.push(`${name} ${contact.company}`);
+  if (contact.role) queries.push(`${name} ${contact.role}`);
+  const place = researchPlace(contact);
+  if (place) queries.push(`${name} ${place}`);
+  if (queries.length === 0) queries.push(name);
   return queries.slice(0, 3);
 }
 
@@ -249,16 +262,18 @@ ${wrapUntrusted("web research text", researchText, 32_000)}`;
       });
     }
 
-    const validated = aiSearchOutputSchema.safeParse(parsed);
-    if (!validated.success) {
-      throw new AppError("Extraction output failed schema validation", 502, {
-        code: "AI_SCHEMA_MISMATCH",
-        details: { issues: validated.error.issues.slice(0, 5) },
-      });
-    }
+    // Field by field, as the two-pass strategy reads it: a value that fails
+    // its schema is left out, and the rest of the answer is kept. Parsed
+    // whole, one bad value lost every field.
+    const { data: read, dropped } = parseExtraction(parsed);
+    if (dropped.length > 0)
+      log.warn(
+        "SearxngStrategy",
+        `${contact.name}: ${extraction.model} wrote values the schema refused; left out: ${dropped.join(", ")}`,
+      );
 
     return {
-      data: validated.data,
+      data: tidyExtraction(read, contact),
       groundedText: researchText.slice(0, 20_000),
       citations,
       models: ["searxng", extraction.model],

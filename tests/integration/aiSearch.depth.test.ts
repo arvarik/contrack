@@ -34,6 +34,7 @@ import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPa
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { parseResearchRecord } from "../../shared/researchRecord.ts";
+import { NO_MATCHING_PAGES } from "../../server/services/aiSearch/promptTemplate.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -67,6 +68,11 @@ const noPages = (text: string): AIGenerateResult => ({
   ...found(text),
   citations: [],
   searchQueries: [],
+});
+/** The no-match reply, after the searches it names, or after none. */
+const noMatch = (searchQueries: string[] = []): AIGenerateResult => ({
+  ...noPages(NO_MATCHING_PAGES),
+  searchQueries,
 });
 
 /** What each call asked for, in order. */
@@ -203,6 +209,129 @@ describe("Deep", () => {
       /^Before anything else, run these Google searches/,
     );
     expect(calls()[3].prompt).toMatch(/^Run Google searches about one person/);
+  });
+});
+
+describe("the no-match reply", () => {
+  it("records no public information when the reply ran a search", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce(noMatch(['"Test Person" Test Company']))
+      .mockResolvedValueOnce(noMatch())
+      .mockResolvedValueOnce(noMatch());
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.status).toBe(200);
+    expect(response.body.outcome).toBe("no-public-info");
+    // Three asks and no extraction: there is nothing to read.
+    expect(calls().map((call) => call.capability)).toEqual([
+      "research",
+      "research",
+      "research",
+    ]);
+    const run = parseResearchRecord(enrichmentContact(scope(), id).aiResearch)!
+      .runs[0];
+    expect(run).toMatchObject({
+      outcome: "no-public-info",
+      queries: ['"Test Person" Test Company'],
+    });
+  });
+
+  it("records nothing, and says the model did not search, when no reply ran a search", async () => {
+    vi.mocked(generateFor).mockResolvedValue(noMatch());
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.status).toBe(502);
+    expect(response.body.error.code).toBe("AI_NO_SEARCH");
+    expect(response.body.error.message).toContain(
+      "did not report a web search",
+    );
+    expect(generateFor).toHaveBeenCalledTimes(3);
+    const after = enrichmentContact(scope(), id);
+    expect(after.aiHydratedAt).toBeNull();
+    expect(after.aiResearch).toBeNull();
+  });
+
+  it("fails a batch job with the reason, and leaves the contact unresearched", async () => {
+    vi.mocked(generateFor).mockResolvedValue(noMatch());
+    const batch = jobQueue.createBatch(
+      scope(),
+      [{ id, name: "Test Person" }],
+      "two-pass",
+    );
+    await jobQueue.processBatch(batch.id);
+    expect(batch.jobs[0]).toMatchObject({
+      status: "error",
+      errorType: "validation",
+    });
+    expect(batch.jobs[0].error).toContain("did not report a web search");
+    expect(batch.jobs[0].outcome).toBeUndefined();
+    expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
+  });
+
+  it("reports the provider's error when the further asks fail after a no-match with no search", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce(noMatch())
+      .mockRejectedValue(new Error("Network 500"));
+    await expect(
+      new TwoPassStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+      ),
+    ).rejects.toThrow("Network 500");
+  });
+
+  it("keeps a no-match that ran a search when the further asks fail", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce(noMatch(['"Test Person" Test Company']))
+      .mockRejectedValue(new Error("Network 500"));
+    const result = await new TwoPassStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    expect(result.outcome).toBe("no-public-info");
+    expect(result.searchQueries).toEqual(['"Test Person" Test Company']);
+  });
+});
+
+describe("the facts of several asks", () => {
+  it("keeps each fact once, with the copy that names its site", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce(
+        found(
+          [
+            "- Current role: Co-Founder & CEO at Test Company",
+            "- Past role: Analyst, Acme [example.com]",
+          ].join("\n"),
+        ),
+      )
+      .mockResolvedValueOnce(
+        found(
+          [
+            "- Current role: Co-Founder and CEO of Test Company [testcompany.example]",
+            "- Past role: Analyst, Acme",
+            "- Award: Fellow, Example School [fellows.example.org]",
+          ].join("\n"),
+          "https://fellows.example.org/people/test",
+        ),
+      )
+      .mockResolvedValueOnce(extraction("{}"));
+    const result = await new TwoPassStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+      undefined,
+      { depth: "deep" },
+    );
+    expect(result.findings).toEqual([
+      {
+        topic: "Current role",
+        text: "Co-Founder and CEO of Test Company",
+        site: "testcompany.example",
+      },
+      { topic: "Past role", text: "Analyst, Acme", site: "example.com" },
+      {
+        topic: "Award",
+        text: "Fellow, Example School",
+        site: "fellows.example.org",
+      },
+    ]);
   });
 });
 

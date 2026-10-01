@@ -27,8 +27,10 @@ import { AppError } from "../../../utils/AppError.ts";
 // deadline (2026-09-26). Every answer that cites pages is used. If none
 // does, the prompt's own reply for that case, NO MATCHING PAGES, is the plain
 // outcome "no public information": recorded on the contact, not reported as
-// a failure. Any other answer with nothing behind it came from the model's
-// memory, and is refused.
+// a failure. That reply counts only when its ask reports a web search. A
+// no-match with no search behind it says nothing about the web, and it is
+// refused as AI_NO_SEARCH. Any other answer with nothing behind it came from
+// the model's memory, and is refused too.
 // =============================================================================
 
 import { generateFor, type AIGenerateResult } from "../../../ai/gateway.ts";
@@ -45,6 +47,7 @@ import {
   buildSearchPrompt,
   buildShortSearchPrompt,
   extractionJsonSchema,
+  mergeFindings,
   NO_MATCHING_PAGES,
   parseExtraction,
   parseFindings,
@@ -126,6 +129,9 @@ export class TwoPassStrategy implements AISearchStrategy {
     };
     const isNoMatch = (text: string) =>
       text.toUpperCase().includes(NO_MATCHING_PAGES);
+    /** The ask reported a web search, which a no-match reply needs to count. */
+    const searched = (answer: AIGenerateResult) =>
+      (answer.searchQueries?.length ?? 0) > 0;
     const cites = (answer: AIGenerateResult) => sourcesOf(answer).length > 0;
 
     // ── Pass 1: Search ────────────────────────────────────────────────
@@ -188,7 +194,7 @@ export class TwoPassStrategy implements AISearchStrategy {
       // answer's missing sources do not.
       if (
         later.length === 0 &&
-        !answers.some((answer) => isNoMatch(answer.text))
+        !answers.some((answer) => isNoMatch(answer.text) && searched(answer))
       )
         throw (laterRound[0] as PromiseRejectedResult).reason;
       answers = [...answers, ...later];
@@ -198,10 +204,17 @@ export class TwoPassStrategy implements AISearchStrategy {
     if (cited.length === 0) {
       // Anything but the no-match reply, with no page behind it, came from
       // the model's memory, which is what the source rule exists to keep out.
-      const noMatch = answers.find(
+      // The no-match reply counts only from an ask that reports a web search.
+      // On 15 contacts imported from LinkedIn, Gemini 3.8 Flash gave it with
+      // no search for 8 at Standard and 9 at Deep, and other settings of the
+      // same asks found pages for 3 of them (2026-10-01). Recorded as no
+      // public information, it told the person that no page exists and
+      // offered to add a city or an email.
+      const noMatches = answers.filter(
         (answer) =>
           isNoMatch(answer.text) && parseFindings(answer.text).length === 0,
       );
+      const noMatch = noMatches.find(searched);
       if (noMatch) {
         log.info(
           "TwoPassStrategy",
@@ -228,6 +241,12 @@ export class TwoPassStrategy implements AISearchStrategy {
           "The research model returned no answer. No contact fields changed. Try again.",
           502,
           { code: "AI_NO_ANSWER" },
+        );
+      if (noMatches.length > 0)
+        throw new AppError(
+          "The research model did not report a web search for this contact. No contact fields changed. Try again, or choose another research model in AI settings.",
+          502,
+          { code: "AI_NO_SEARCH" },
         );
       throw new AppError(
         "Research did not include source links. No contact fields changed. Try again, or choose another research model in AI settings.",
@@ -258,8 +277,10 @@ export class TwoPassStrategy implements AISearchStrategy {
         })),
       ),
     );
-    const sourced = cited.flatMap((answer) =>
-      attachSources(parseFindings(answer.text), answer.supports, pages),
+    const sourced = mergeFindings(
+      cited.map((answer) =>
+        attachSources(parseFindings(answer.text), answer.supports, pages),
+      ),
     );
     const facts = cited
       .map((answer) => answer.text.trim())

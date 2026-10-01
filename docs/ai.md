@@ -195,6 +195,17 @@ When research finds no page, the card says **No web page matched** and offers
 choose **Enrich again**, or **Deep** after a Standard run. **Enrich again**
 looks in new places and adds only new facts.
 
+Research says no page matched only after the research model reports a web
+search. When the model answers without one, Contrack records nothing and
+shows "The research model did not report a web search for this contact".
+Try again, or choose another **Research model**. A contact never researched
+stays under **Not yet**.
+
+Research searches the name the way pages write it. It leaves out
+credentials such as ", CPA", tries the name without a middle initial, and
+spells a surname from the LinkedIn handle when the name ends in an initial.
+It never searches a placeholder employer such as "Stealth Startup".
+
 ### Limits
 
 - A batch holds up to 100 contacts, and they run one after another. One
