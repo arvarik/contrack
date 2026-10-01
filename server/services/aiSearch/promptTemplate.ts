@@ -53,13 +53,12 @@ import {
 /** What the search pass answers when no page is about this person. */
 export const NO_MATCHING_PAGES = "NO MATCHING PAGES";
 
-/**
- * What research leaves out, in every prompt, even when a page states it. A
- * second round recorded a signed political letter and a home purchase before
- * the list named them (2026-09-26).
- */
-export const PRIVATE_TOPICS =
-  "relatives, health, religion, politics, sexuality and home purchases";
+// No prompt leaves a topic out. Research used to leave out relatives,
+// health, religion, politics, sexuality and home purchases, and to report an
+// email or a phone only when the person or their employer published it. On
+// 15 imported contacts, a prompt without those rules found facts for 6, and
+// one with them for 7 (2026-10-01): they limited what was kept, not what was
+// found. The owner chose to keep everything a page about the person states.
 
 /** The topics a fact line may name, in the order the prompt lists them. */
 export const FINDING_TOPICS = [
@@ -509,7 +508,7 @@ Examples:
 - Profile: https://github.com/example-handle [github.com]
 - Award: Distinguished Fellow, Example Business School [fellows.example.org]
 
-Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address. Report an email address or phone number only when the person or their employer published it for contact. Leave out ${PRIVATE_TOPICS}: they are private.`;
+Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address. Report every email address and phone number that a page about them lists.`;
 }
 
 /**
@@ -594,7 +593,7 @@ function reportLines(contact: HydratedContact): string {
   return `For every result about this person (the same name, and a detail that matches: an employer, a role, a school or a city), write each fact it states, one per line:
 - <Topic>: <fact> [<site>]
 Topics: ${FINDING_TOPICS.join(", ")}.
-Skip results about other people with this name. Leave out ${PRIVATE_TOPICS}.${stale} If no result is about this person, reply with exactly: ${NO_MATCHING_PAGES}`;
+Skip results about other people with this name.${stale} If no result is about this person, reply with exactly: ${NO_MATCHING_PAGES}`;
 }
 
 /**
@@ -659,7 +658,6 @@ Rules:${current}
 - interests: at most six short labels of one to four words, like "Marathon running", from Interest facts and from sports a fact says they played. One label for each activity: races, marathons and coaching in one sport are one interest.
 - tags: three to eight short lower-case tags about the person's work, like "restructuring" or "quant research".
 - attributes: notable facts that fit no field above, like awards (only prizes, honours, fellowships and scholarships a fact names, never an accomplishment at work), licences, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licences", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
-- Leave out ${PRIVATE_TOPICS}, even when a fact names them.
 - addresses: each home or office address an Address fact states, as it is written, labelled "home" or "work".
 Return null or an empty list for anything the facts do not state.
 

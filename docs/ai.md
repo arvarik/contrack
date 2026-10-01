@@ -181,11 +181,10 @@ still bill a request that it already took.
 
 Research fills only empty fields and adds new list entries. It never changes a
 value that you already have, and it does not add back an entry that you
-removed. It adds an email or a phone number only when the person or their
-employer published it, and a home or office address when a page states one.
-It leaves out relatives, health, religion, politics, sexuality and home
-purchases. When you edit the contact while research runs, Contrack drops the
-result.
+removed. It keeps what a page about the person states, with no topic left
+out: every email, phone number and home or office address, and any other fact
+the page gives. When you edit the contact while research runs, Contrack drops
+the result.
 
 The **Research** card on the **Dossier** tab lists each run, each fact beside
 its page, and every page under **Sources**. Check a fact against its page.

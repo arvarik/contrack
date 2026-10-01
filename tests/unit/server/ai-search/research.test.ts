@@ -35,7 +35,6 @@ import {
   otherNameForms,
   parseExtraction,
   parseFindings,
-  PRIVATE_TOPICS,
   searchName,
   suggestedSearches,
   tidyExtraction,
@@ -135,16 +134,24 @@ describe("the search prompt", () => {
     );
   });
 
-  it("leaves private details out, in every prompt", () => {
+  it("leaves no topic out, and keeps every email and phone a page lists", () => {
     for (const prompt of [
       buildSearchPrompt(contact()),
       buildShortSearchPrompt(contact()),
       buildExtractionPrompt(contact(), "- Award: Fellow [example.org]"),
-    ])
-      expect(prompt).toContain(`Leave out ${PRIVATE_TOPICS}`);
-    expect(PRIVATE_TOPICS).toMatch(/politics/);
+    ]) {
+      expect(prompt).not.toMatch(/leave out (?!any topic you found nothing)/i);
+      expect(prompt).not.toMatch(
+        /relatives|health|religion|politics|sexuality|home purchases/i,
+      );
+    }
+    expect(buildSearchPrompt(contact())).toContain(
+      "Report every email address and phone number that a page about them lists.",
+    );
+    expect(buildSearchPrompt(contact())).not.toContain(
+      "published it for contact",
+    );
     // An address, home or office, is research's to report when a page states it.
-    expect(PRIVATE_TOPICS).not.toMatch(/address/);
     expect(buildSearchPrompt(contact())).toContain(
       "- Address: a home or office street address a page states",
     );
