@@ -50,6 +50,10 @@ import {
 // =============================================================================
 
 function classifyError(error: unknown): AISearchErrorType {
+  // A no-match with no web search behind it fails the source rule, like an
+  // answer without source links.
+  if ((error as { code?: string } | null | undefined)?.code === "AI_NO_SEARCH")
+    return "validation";
   const msg = (
     (error as { message?: string } | null | undefined)?.message ?? ""
   ).toLowerCase();

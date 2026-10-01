@@ -181,11 +181,10 @@ still bill a request that it already took.
 
 Research fills only empty fields and adds new list entries. It never changes a
 value that you already have, and it does not add back an entry that you
-removed. It adds an email or a phone number only when the person or their
-employer published it, and a home or office address when a page states one.
-It leaves out relatives, health, religion, politics, sexuality and home
-purchases. When you edit the contact while research runs, Contrack drops the
-result.
+removed. It keeps what a page about the person states, with no topic left
+out: every email, phone number and home or office address, and any other fact
+the page gives. When you edit the contact while research runs, Contrack drops
+the result.
 
 The **Research** card on the **Dossier** tab lists each run, each fact beside
 its page, and every page under **Sources**. Check a fact against its page.
@@ -194,6 +193,17 @@ When research finds no page, the card says **No web page matched** and offers
 **Add a city**, **Add a work email** or **Add a link**. Add a detail, then
 choose **Enrich again**, or **Deep** after a Standard run. **Enrich again**
 looks in new places and adds only new facts.
+
+Research says no page matched only after the research model reports a web
+search. When the model answers without one, Contrack records nothing and
+shows "The research model did not report a web search for this contact".
+Try again, or choose another **Research model**. A contact never researched
+stays under **Not yet**.
+
+Research searches the name the way pages write it. It leaves out
+credentials such as ", CPA", tries the name without a middle initial, and
+spells a surname from the LinkedIn handle when the name ends in an initial.
+It never searches a placeholder employer such as "Stealth Startup".
 
 ### Limits
 

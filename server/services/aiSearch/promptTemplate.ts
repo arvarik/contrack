@@ -40,7 +40,7 @@ import {
   type ResearchFinding,
   type ResearchRecord,
 } from "../../../shared/researchRecord.ts";
-import { researchDate, sameOrg } from "./normalize.ts";
+import { linkedInHandle, researchDate, sameOrg } from "./normalize.ts";
 import {
   placeFromAddresses,
   workEmailDomain,
@@ -53,13 +53,12 @@ import {
 /** What the search pass answers when no page is about this person. */
 export const NO_MATCHING_PAGES = "NO MATCHING PAGES";
 
-/**
- * What research leaves out, in every prompt, even when a page states it. A
- * second round recorded a signed political letter and a home purchase before
- * the list named them (2026-09-26).
- */
-export const PRIVATE_TOPICS =
-  "relatives, health, religion, politics, sexuality and home purchases";
+// No prompt leaves a topic out. Research used to leave out relatives,
+// health, religion, politics, sexuality and home purchases, and to report an
+// email or a phone only when the person or their employer published it. On
+// 15 imported contacts, a prompt without those rules found facts for 6, and
+// one with them for 7 (2026-10-01): they limited what was kept, not what was
+// found. The owner chose to keep everything a page about the person states.
 
 /** The topics a fact line may name, in the order the prompt lists them. */
 export const FINDING_TOPICS = [
@@ -101,6 +100,9 @@ export function researchPlace(
 /** The records' facts, one per line, for both passes. */
 function knownFacts(contact: HydratedContact): string {
   const known: string[] = [`Full name: ${contact.name}`];
+  const forms = otherNameForms(contact);
+  if (forms.length)
+    known.push(`Pages may write the name as: ${forms.join(", ")}`);
   if (contact.company) known.push(`Company: ${contact.company}`);
   if (contact.role) known.push(`Current role: ${contact.role}`);
   if (contact.headline) known.push(`Headline: ${contact.headline}`);
@@ -240,6 +242,119 @@ export function formalName(name: string): string | null {
   return formal && rest.length ? [formal, ...rest].join(" ") : null;
 }
 
+/**
+ * The name as a search writes it: the records' name without credentials,
+ * symbols or a note in brackets.
+ *
+ * LinkedIn names often carry them, as in "Greg Whitlock, CPA" or "Morgan Ellery -
+ * MBA, MS", and a quoted search for the whole text finds only the pages that
+ * copy it exactly. Of 825 names imported from LinkedIn, 47 had credentials
+ * after a comma or a dash, 14 a note in brackets, and 3 a symbol or a second
+ * script (2026-10-01). A name with no Latin letters is kept as written.
+ */
+export function searchName(name: string): string {
+  const cleaned = name
+    .split(/,|\s[-–—|]\s/)[0]
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^\p{Script=Latin}\p{M}\s.'’-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /\p{Script=Latin}/u.test(cleaned) ? cleaned : name.trim();
+}
+
+/** "Casey Moreau" for "Casey J. Moreau": many pages leave out a middle initial. */
+export function nameWithoutMiddleInitial(name: string): string | null {
+  const parts = name.split(" ");
+  if (parts.length < 3) return null;
+  const kept = parts.filter(
+    (part, index) =>
+      index === 0 || index === parts.length - 1 || !/^\p{L}\.?$/u.test(part),
+  );
+  return kept.length < parts.length ? kept.join(" ") : null;
+}
+
+/**
+ * The surname a LinkedIn handle spells when the records cut it to an
+ * initial: "Priya Kapoor" for "Priya K." at linkedin.com/in/priyakapoor.
+ *
+ * A quoted search for "Priya K." finds nothing useful. The handle is the
+ * person's own, so its surname is trusted only when it starts with the
+ * initial the records have. 7 of 825 imported names ended in an initial.
+ *
+ * @param name - The name, as `searchName` writes it.
+ * @param links - The contact's profile links.
+ * @returns The full name, or null when no LinkedIn handle spells one.
+ */
+export function nameFromHandle(
+  name: string,
+  links: readonly { url: string }[],
+): string | null {
+  const parts = name.split(" ");
+  const initial = /^(\p{L})\.?$/u.exec(parts.at(-1) ?? "")?.[1]?.toLowerCase();
+  if (parts.length < 2 || !initial) return null;
+  const given = parts.slice(0, -1);
+  const first = given[0].toLowerCase();
+  for (const link of links) {
+    const words = (linkedInHandle(link.url) ?? "")
+      .split(/[-_.]/)
+      .map((word) => word.replace(/\d+$/, ""))
+      .filter((word) => /^[a-z]+$/.test(word));
+    const surname =
+      words.length >= 2 && words[0] === first
+        ? words.at(-1)
+        : words.length === 1 && words[0].startsWith(first)
+          ? words[0].slice(first.length)
+          : undefined;
+    if (surname && surname.length >= 2 && surname.startsWith(initial))
+      return [...given, surname[0].toUpperCase() + surname.slice(1)].join(" ");
+  }
+  return null;
+}
+
+/**
+ * The name's other forms that pages may use, for the prompt to accept: the
+ * surname from the profile handle, the name without credentials, and the
+ * name without its middle initial. Each differs from the records' name.
+ */
+export function otherNameForms(
+  contact: Pick<HydratedContact, "name" | "socialLinks">,
+): string[] {
+  const clean = searchName(contact.name);
+  const forms = [
+    nameFromHandle(clean, contact.socialLinks ?? []),
+    clean,
+    nameWithoutMiddleInitial(clean),
+  ];
+  return [
+    ...new Set(
+      forms.filter(
+        (form): form is string => !!form && form !== contact.name.trim(),
+      ),
+    ),
+  ];
+}
+
+/**
+ * A company field that names no employer, alone or with others like it:
+ * "Stealth Startup", "Self-employed", "Freelance | Self-Employed". A search
+ * for the name with it finds nothing the name alone would not.
+ */
+const PLACEHOLDER_EMPLOYER =
+  /^(?:stealth(?: (?:startup|mode|company))?|self[- ]?employed|freelancer?|independent(?: (?:consultant|contractor))?|consultant|consulting|confidential|undisclosed|none|n\/a|unemployed|retired|various|open to work)$/i;
+
+/** True when the company field is a placeholder, not an employer. */
+export function isPlaceholderEmployer(
+  company: string | null | undefined,
+): boolean {
+  const parts = (company ?? "")
+    .split(/\s*[|+/,&]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return (
+    parts.length > 0 && parts.every((part) => PLACEHOLDER_EMPLOYER.test(part))
+  );
+}
+
 /** The handle in a profile address: "rowanv95" in linkedin.com/in/rowanv95. */
 function profileHandle(url: string): string | null {
   try {
@@ -252,21 +367,39 @@ function profileHandle(url: string): string | null {
   }
 }
 
-/** The searches to start with, most specific first. */
+/**
+ * The searches to start with, most specific first.
+ *
+ * The name is quoted as `searchName` writes it. When the records cut the
+ * surname to an initial and the LinkedIn handle spells it, the full name
+ * leads. Other forms of the name follow the first search, each with the
+ * same detail. A placeholder employer such as "Stealth Startup" is never
+ * searched.
+ */
 export function suggestedSearches(contact: HydratedContact): string[] {
-  const name = `"${contact.name}"`;
-  const formal = formalName(contact.name);
+  const clean = searchName(contact.name);
+  const primary = nameFromHandle(clean, contact.socialLinks ?? []) ?? clean;
+  const name = `"${primary}"`;
+  const company = isPlaceholderEmployer(contact.company)
+    ? null
+    : contact.company;
+  const detail = company ?? contact.role;
   const searches: string[] = [];
-  if (contact.company) searches.push(`${name} ${contact.company}`);
-  if (formal && contact.company)
-    searches.push(`"${formal}" ${contact.company}`);
+  if (company) searches.push(`${name} ${company}`);
+  if (detail)
+    for (const form of [
+      nameWithoutMiddleInitial(primary),
+      formalName(primary),
+      primary === clean ? null : clean,
+    ])
+      if (form) searches.push(`"${form}" ${detail}`);
   if (contact.role) searches.push(`${name} ${contact.role}`);
   for (const school of (contact.education ?? []).slice(0, 2))
     searches.push(`${name} ${school.school}`);
   for (const job of (contact.experience ?? [])
     .filter((e) => !e.isCurrent)
     .slice(0, 2))
-    if (job.company !== contact.company)
+    if (job.company !== contact.company && !isPlaceholderEmployer(job.company))
       searches.push(`${name} ${job.company}`);
   const place = researchPlace(contact);
   if (place) searches.push(`${name} ${place}`);
@@ -280,6 +413,8 @@ export function suggestedSearches(contact: HydratedContact): string[] {
     const handle = profileHandle(link.url);
     if (handle) searches.push(`"${handle}"`);
   }
+  // Nothing but a name: search the name.
+  if (searches.length === 0) searches.push(name);
   return [...new Set(searches)];
 }
 
@@ -373,7 +508,7 @@ Examples:
 - Profile: https://github.com/example-handle [github.com]
 - Award: Distinguished Fellow, Example Business School [fellows.example.org]
 
-Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address. Report an email address or phone number only when the person or their employer published it for contact. Leave out ${PRIVATE_TOPICS}: they are private.`;
+Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address. Report every email address and phone number that a page about them lists.`;
 }
 
 /**
@@ -436,8 +571,11 @@ Leave out any topic you found nothing for. Do not write "null", "unknown" or "no
 
 /** The person in one line, for the short form: name, role, city, schools, profiles. */
 function personLine(contact: HydratedContact): string {
+  const forms = otherNameForms(contact);
   return [
-    contact.name,
+    forms.length
+      ? `${contact.name} (also written ${forms.join(", ")})`
+      : contact.name,
     [contact.role, contact.company].filter(Boolean).join(" at "),
     researchPlace(contact),
     ...(contact.education ?? []).slice(0, 2).map((school) => school.school),
@@ -455,7 +593,7 @@ function reportLines(contact: HydratedContact): string {
   return `For every result about this person (the same name, and a detail that matches: an employer, a role, a school or a city), write each fact it states, one per line:
 - <Topic>: <fact> [<site>]
 Topics: ${FINDING_TOPICS.join(", ")}.
-Skip results about other people with this name. Leave out ${PRIVATE_TOPICS}.${stale} If no result is about this person, reply with exactly: ${NO_MATCHING_PAGES}`;
+Skip results about other people with this name.${stale} If no result is about this person, reply with exactly: ${NO_MATCHING_PAGES}`;
 }
 
 /**
@@ -520,7 +658,6 @@ Rules:${current}
 - interests: at most six short labels of one to four words, like "Marathon running", from Interest facts and from sports a fact says they played. One label for each activity: races, marathons and coaching in one sport are one interest.
 - tags: three to eight short lower-case tags about the person's work, like "restructuring" or "quant research".
 - attributes: notable facts that fit no field above, like awards (only prizes, honours, fellowships and scholarships a fact names, never an accomplishment at work), licences, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licences", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
-- Leave out ${PRIVATE_TOPICS}, even when a fact names them.
 - addresses: each home or office address an Address fact states, as it is written, labelled "home" or "work".
 Return null or an empty list for anything the facts do not state.
 
@@ -536,12 +673,26 @@ ${wrapUntrusted("web research facts", facts, 32_000)}
 const FINDING_LINE =
   /^\s*(?:[-*•]|\d+[.)])\s+(?:\*\*)?([A-Za-z][A-Za-z /&-]{1,40}?)(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.+?)\s*$/;
 
+/** A citation marker a model writes into a line: "[1]", "[1.1.3]", "[2, 4]". */
+const CITATION_MARKER =
+  /\s*\[\d{1,3}(?:\.\d{1,3})*(?:\s*,\s*\d{1,3}(?:\.\d{1,3})*)*\]/g;
+
+/**
+ * The site brackets that end a line: "[a.com]", "[a.com] [b.org]", "[a.com,
+ * b.org] []". A bracket of digits only, like a year, is part of the fact.
+ */
+const TRAILING_SITES = /(?:\s*\[(?!\d+\])[^[\]]{0,200}\])+\s*[.;]?$/;
+
 /**
  * The fact lines in a search pass answer, for the dossier's Research card.
  *
  * Lines that are not "- Topic: fact" are skipped: a heading, a sentence of
- * preamble or the no-match reply. A trailing "[site]" becomes the finding's
- * site; the rest of the line is the fact.
+ * preamble or the no-match reply. The brackets that end a line name its
+ * site, and the first site named is the finding's; the rest of the line is
+ * the fact. A model wrote "[news.example.com [1.1.1], press.example.org]
+ * []" and "[firm.example] [fellows.example.org]", and those lines kept
+ * the brackets as part of the fact and lost the site (2026-10-01). Citation
+ * markers like "[1.1.1]" are removed first.
  */
 export function parseFindings(text: string): ResearchFinding[] {
   const findings: ResearchFinding[] = [];
@@ -549,11 +700,17 @@ export function parseFindings(text: string): ResearchFinding[] {
   for (const line of text.split("\n")) {
     const match = FINDING_LINE.exec(line);
     if (!match) continue;
-    let fact = match[2].replace(/\*\*/g, "").trim();
+    let fact = match[2]
+      .replace(/\*\*/g, "")
+      .replace(CITATION_MARKER, "")
+      .trim();
     let site: string | undefined;
-    const tail = /\s*\[([^\]]{2,200})\]\s*[.;]?$/.exec(fact);
+    const tail = TRAILING_SITES.exec(fact);
     if (tail) {
-      site = tail[1].trim();
+      site = [...tail[0].matchAll(/\[([^[\]]*)\]/g)]
+        .flatMap((bracket) => bracket[1].split(","))
+        .map((name) => name.trim())
+        .find((name) => name.length >= 2);
       fact = fact.slice(0, tail.index).trim();
     }
     if (!fact || /^(null|none|n\/a|unknown|not found)\.?$/i.test(fact))
@@ -569,6 +726,47 @@ export function parseFindings(text: string): ResearchFinding[] {
     if (findings.length >= 80) break;
   }
   return findings;
+}
+
+/** Words a fact's key leaves out, so "CEO of Acme" and "CEO at Acme" are one fact. */
+const KEY_FILLER = /\b(?:a|an|and|at|for|in|of|on|the|to|with)\b/g;
+
+/** A finding as the merge compares it: topic and text, without case, punctuation or filler. */
+function findingKey(finding: ResearchFinding): string {
+  const text = finding.text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(KEY_FILLER, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${finding.topic.toLowerCase()}|${text}`;
+}
+
+/**
+ * The findings of several answers, with each repeated fact once.
+ *
+ * A deep run's two asks, and the two asks that follow a first one that cited
+ * nothing, report many of the same facts. The Research card listed them all:
+ * one contact's current role came back in seven lines, and 39 of the 437
+ * lines of 13 runs were repeats (2026-10-01). Facts that differ only in
+ * case, punctuation or small words are one fact. It keeps the copy with a
+ * page, else the one with a site, at the place it first appeared.
+ */
+export function mergeFindings(
+  lists: readonly ResearchFinding[][],
+): ResearchFinding[] {
+  const kept = new Map<string, ResearchFinding>();
+  for (const finding of lists.flat()) {
+    const key = findingKey(finding);
+    const held = kept.get(key);
+    if (
+      !held ||
+      (!held.url && !!finding.url) ||
+      (!held.url && !held.site && !!finding.site)
+    )
+      kept.set(key, finding);
+  }
+  return [...kept.values()];
 }
 
 /** Text compared across an answer and its passages. */
@@ -618,6 +816,32 @@ export function attachSources(
 const EMPTY_WORDS = /^(null|none|n\/a|na|unknown|not found|not available|-)$/i;
 
 const shortText = z.string().trim().max(500);
+
+/** The longest value one attribute keeps. */
+export const ATTRIBUTE_VALUE_MAX = 2_000;
+
+/**
+ * A list value cut to `max` characters at the last "; " that fits, or at
+ * `max` when no separator falls in its second half.
+ */
+export function clipList(value: string, max = ATTRIBUTE_VALUE_MAX): string {
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max);
+  const at = cut.lastIndexOf("; ");
+  return (at > max / 2 ? cut.slice(0, at) : cut).trim();
+}
+
+/**
+ * An attribute's value, cut rather than refused when it is long. The value
+ * joins every item of one kind ("Publications", "Awards"), and a deep run's
+ * list went past the 500 characters the field took: the whole entry was
+ * left out, in 2 of 15 deep runs (2026-10-01).
+ */
+const attributeValue = z
+  .string()
+  .trim()
+  .min(1)
+  .transform((value) => clipList(value));
 const optionalText = shortText
   .nullish()
   .transform((value) =>
@@ -725,7 +949,7 @@ const LIST_ITEMS = {
       .transform((value) => value.replace(/\s*\([^)]*\)\s*/g, " ").trim()),
     isAiGenerated: z.boolean().optional(),
   }),
-  attributes: z.object({ name: shortText.min(1), value: shortText.min(1) }),
+  attributes: z.object({ name: shortText.min(1), value: attributeValue }),
   addresses: z.object({ address: shortText.min(1), label: optionalText }),
 };
 
@@ -908,7 +1132,7 @@ export function tidyExtraction(
       (entry) =>
         !known.toLowerCase().includes(entry.split(" (")[0].toLowerCase()),
     );
-    const value = [known, ...added].filter(Boolean).join("; ").slice(0, 500);
+    const value = clipList([known, ...added].filter(Boolean).join("; "));
     attributes =
       index >= 0
         ? attributes.map((attribute, at) =>

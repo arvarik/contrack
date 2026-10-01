@@ -4,7 +4,9 @@
 // The two passes of contact research, and what their answers are read into:
 //
 //   buildSearchPrompt      a first round, and a second that knows the first
+//   searchName             the name a search quotes, and its other forms
 //   parseFindings          "- Topic: fact [site]" lines
+//   mergeFindings          the fact lines of several asks, each fact once
 //   parseExtraction        the schema, one field and one entry at a time
 //   tidyExtraction         the job rules a model follows only sometimes
 //   normalize              one school, degree, employer or label, however
@@ -22,12 +24,18 @@ import {
   buildExtractionPrompt,
   buildSearchPrompt,
   buildShortSearchPrompt,
+  clipList,
   formalName,
+  isPlaceholderEmployer,
+  mergeFindings,
   missingTopics,
+  nameFromHandle,
+  nameWithoutMiddleInitial,
   NO_MATCHING_PAGES,
+  otherNameForms,
   parseExtraction,
   parseFindings,
-  PRIVATE_TOPICS,
+  searchName,
   suggestedSearches,
   tidyExtraction,
 } from "../../../../server/services/aiSearch/promptTemplate.ts";
@@ -126,16 +134,24 @@ describe("the search prompt", () => {
     );
   });
 
-  it("leaves private details out, in every prompt", () => {
+  it("leaves no topic out, and keeps every email and phone a page lists", () => {
     for (const prompt of [
       buildSearchPrompt(contact()),
       buildShortSearchPrompt(contact()),
       buildExtractionPrompt(contact(), "- Award: Fellow [example.org]"),
-    ])
-      expect(prompt).toContain(`Leave out ${PRIVATE_TOPICS}`);
-    expect(PRIVATE_TOPICS).toMatch(/politics/);
+    ]) {
+      expect(prompt).not.toMatch(/leave out (?!any topic you found nothing)/i);
+      expect(prompt).not.toMatch(
+        /relatives|health|religion|politics|sexuality|home purchases/i,
+      );
+    }
+    expect(buildSearchPrompt(contact())).toContain(
+      "Report every email address and phone number that a page about them lists.",
+    );
+    expect(buildSearchPrompt(contact())).not.toContain(
+      "published it for contact",
+    );
     // An address, home or office, is research's to report when a page states it.
-    expect(PRIVATE_TOPICS).not.toMatch(/address/);
     expect(buildSearchPrompt(contact())).toContain(
       "- Address: a home or office street address a page states",
     );
@@ -299,6 +315,144 @@ describe("what the prompt knows about the person", () => {
   });
 });
 
+describe("the name a search quotes", () => {
+  const linkedIn = (handle: string) =>
+    [
+      { platform: "linkedin", url: `https://www.linkedin.com/in/${handle}` },
+    ] as HydratedContact["socialLinks"];
+
+  it("leaves out credentials, symbols and a note in brackets", () => {
+    expect(searchName("Greg Whitlock, CPA")).toBe("Greg Whitlock");
+    expect(searchName("Morgan Ellery - MBA, MS, LSS Black Belt")).toBe(
+      "Morgan Ellery",
+    );
+    expect(searchName("Riley Tanaka, CFA, CFP®, MBA")).toBe("Riley Tanaka");
+    expect(searchName("Avery Quill  林艾")).toBe("Avery Quill");
+    expect(searchName("Robert (Bob) Smith")).toBe("Robert Smith");
+    // A hyphen inside a name, an apostrophe and accents stay.
+    expect(searchName("Mary-Jane O'Neil")).toBe("Mary-Jane O'Neil");
+    expect(searchName("José Núñez")).toBe("José Núñez");
+    // A name with no Latin letters is kept as written.
+    expect(searchName("斯丹福")).toBe("斯丹福");
+  });
+
+  it("drops a middle initial for a second form", () => {
+    expect(nameWithoutMiddleInitial("Casey J. Moreau")).toBe("Casey Moreau");
+    expect(nameWithoutMiddleInitial("Jordan W Hale")).toBe("Jordan Hale");
+    expect(nameWithoutMiddleInitial("Rowan Vale")).toBeNull();
+    expect(nameWithoutMiddleInitial("Ana Maria Ferrand")).toBeNull();
+  });
+
+  it("reads the surname from the LinkedIn handle when the records end in an initial", () => {
+    expect(nameFromHandle("Priya K.", linkedIn("priyakapoor"))).toBe(
+      "Priya Kapoor",
+    );
+    expect(nameFromHandle("Theo V", linkedIn("theo-varga-0a1b2c3"))).toBe(
+      "Theo Varga",
+    );
+    expect(nameFromHandle("Imani S.", linkedIn("imanisato8"))).toBe(
+      "Imani Sato",
+    );
+    // The handle's surname has to start with the initial, and the handle
+    // with the given name.
+    expect(nameFromHandle("Priya Q.", linkedIn("priyakapoor"))).toBeNull();
+    expect(nameFromHandle("Priya K.", linkedIn("pkapoor"))).toBeNull();
+    expect(nameFromHandle("Priya K.", linkedIn("priya-k-123"))).toBeNull();
+    // A full surname needs nothing, and nor does a link that is not LinkedIn.
+    expect(nameFromHandle("Priya Kapoor", linkedIn("priyakapoor"))).toBeNull();
+    expect(
+      nameFromHandle("Priya K.", [{ url: "https://github.com/priyakapoor" }]),
+    ).toBeNull();
+  });
+
+  it("names the other forms pages may use, and none for a plain name", () => {
+    expect(
+      otherNameForms(
+        contact({ name: "Priya K.", socialLinks: linkedIn("priyakapoor") }),
+      ),
+    ).toEqual(["Priya Kapoor"]);
+    expect(otherNameForms(contact({ name: "Greg Whitlock, CPA" }))).toEqual([
+      "Greg Whitlock",
+    ]);
+    expect(otherNameForms(contact({ name: "Casey J. Moreau" }))).toEqual([
+      "Casey Moreau",
+    ]);
+    expect(otherNameForms(contact())).toEqual([]);
+    expect(
+      buildSearchPrompt(contact({ name: "Greg Whitlock, CPA" })),
+    ).toContain(
+      "Full name: Greg Whitlock, CPA\nPages may write the name as: Greg Whitlock",
+    );
+    expect(
+      buildShortSearchPrompt(contact({ name: "Greg Whitlock, CPA" })),
+    ).toContain("Greg Whitlock, CPA (also written Greg Whitlock)");
+    expect(buildSearchPrompt(contact())).not.toContain("Pages may write");
+  });
+
+  it("tells a placeholder employer from a real one", () => {
+    for (const company of [
+      "Stealth Startup",
+      "Stealth",
+      "Self-employed",
+      "Freelance | Self-Employed",
+      "Independent Consultant",
+    ])
+      expect(isPlaceholderEmployer(company)).toBe(true);
+    for (const company of [
+      "FTI Consulting",
+      "Wyzant + Self Employed",
+      "Northwind Partners",
+      null,
+      "",
+    ])
+      expect(isPlaceholderEmployer(company)).toBe(false);
+  });
+
+  it("searches the clean name, the handle's full name first, and never a placeholder employer", () => {
+    // The formal name is read from the clean one, not "Greg Whitlock, CPA".
+    expect(
+      suggestedSearches(contact({ name: "Greg Whitlock, CPA" })).slice(0, 2),
+    ).toEqual([
+      '"Greg Whitlock" Northwind Partners',
+      '"Gregory Whitlock" Northwind Partners',
+    ]);
+    expect(
+      suggestedSearches(
+        contact({ name: "Priya K.", socialLinks: linkedIn("priyakapoor") }),
+      ),
+    ).toEqual([
+      '"Priya Kapoor" Northwind Partners',
+      '"Priya K." Northwind Partners',
+      '"Priya Kapoor" Associate, Restructuring Group',
+      '"priyakapoor"',
+    ]);
+    expect(
+      suggestedSearches(contact({ name: "Casey J. Moreau" })).slice(0, 2),
+    ).toEqual([
+      '"Casey J. Moreau" Northwind Partners',
+      '"Casey Moreau" Northwind Partners',
+    ]);
+    const stealth = suggestedSearches(
+      contact({ company: "Stealth Startup", role: "Co-Founder" }),
+    );
+    expect(stealth).toEqual(['"Rowan Vale" Co-Founder']);
+    expect(
+      suggestedSearches(
+        contact({
+          experience: [
+            { company: "Self-employed", isCurrent: false },
+            { company: "Harbor Point Partners", isCurrent: false },
+          ] as HydratedContact["experience"],
+        }),
+      ).join("\n"),
+    ).not.toContain("Self-employed");
+    // Nothing but a name: the name.
+    expect(suggestedSearches(contact({ company: null, role: null }))).toEqual([
+      '"Rowan Vale"',
+    ]);
+  });
+});
+
 describe("the search budget", () => {
   it("asks the first search for four to six searches", () => {
     expect(buildSearchPrompt(contact())).toContain("Run four to six searches.");
@@ -354,6 +508,91 @@ describe("parseFindings", () => {
 
   it("finds nothing in the no-match reply", () => {
     expect(parseFindings(NO_MATCHING_PAGES)).toEqual([]);
+  });
+
+  it("reads the site when a line ends in citation markers or several brackets", () => {
+    const findings = parseFindings(
+      [
+        "- Current role: Vice President, Support, Northwind [news.example.com [1.1.1], press.example.org] []",
+        "- Past role: Litigation Fellow, Harbor Law Group [harborlaw.example] [fellows.example.org]",
+        "- Award: Fellow, Example Society [2.2.3] [society.example.org]",
+        "- Talk: Keynote, Example Summit, 2019 [1, 4]",
+        "- Board role: Member, Advisory Board []",
+      ].join("\n"),
+    );
+    expect(findings).toEqual([
+      {
+        topic: "Current role",
+        text: "Vice President, Support, Northwind",
+        site: "news.example.com",
+      },
+      {
+        topic: "Past role",
+        text: "Litigation Fellow, Harbor Law Group",
+        site: "harborlaw.example",
+      },
+      {
+        topic: "Award",
+        text: "Fellow, Example Society",
+        site: "society.example.org",
+      },
+      { topic: "Talk", text: "Keynote, Example Summit, 2019" },
+      { topic: "Board role", text: "Member, Advisory Board" },
+    ]);
+    // A year in brackets is part of the fact, not a citation or a site.
+    expect(parseFindings("- Talk: Example Summit [2019] [a.com]")).toEqual([
+      { topic: "Talk", text: "Example Summit [2019]", site: "a.com" },
+    ]);
+  });
+});
+
+describe("mergeFindings", () => {
+  it("keeps one copy of a fact that two asks word slightly apart", () => {
+    const merged = mergeFindings([
+      parseFindings(
+        [
+          "- Current role: Co-Founder & CEO at Northwind",
+          "- Education: BA Economics, University of Example",
+        ].join("\n"),
+      ),
+      parseFindings(
+        [
+          "- Current role: Co-Founder and CEO of Northwind [northwind.example]",
+          "- Education: BA Economics, University of Example",
+          "- Award: Fellow, Example Society",
+        ].join("\n"),
+      ),
+    ]);
+    // The current role keeps its first place, with the copy that names a site.
+    expect(merged).toEqual([
+      {
+        topic: "Current role",
+        text: "Co-Founder and CEO of Northwind",
+        site: "northwind.example",
+      },
+      { topic: "Education", text: "BA Economics, University of Example" },
+      { topic: "Award", text: "Fellow, Example Society" },
+    ]);
+  });
+
+  it("prefers a copy with a page to one with a site only", () => {
+    const merged = mergeFindings([
+      [{ topic: "Award", text: "Fellow", site: "a.com" }],
+      [{ topic: "Award", text: "Fellow", url: "https://b.org/fellows" }],
+      [{ topic: "Award", text: "Fellow", site: "c.net" }],
+    ]);
+    expect(merged).toEqual([
+      { topic: "Award", text: "Fellow", url: "https://b.org/fellows" },
+    ]);
+    // The same text under another topic is another fact.
+    expect(
+      mergeFindings([
+        [
+          { topic: "Past role", text: "Analyst, Acme" },
+          { topic: "Board role", text: "Analyst, Acme" },
+        ],
+      ]),
+    ).toHaveLength(2);
   });
 });
 
@@ -421,6 +660,37 @@ describe("parseExtraction", () => {
     expect(data.website).toBeUndefined();
     expect(data.experience).toBeUndefined();
     expect(dropped.sort()).toEqual(["emails", "experience", "website"]);
+  });
+
+  it("cuts a long list of one kind at a separator, and keeps the entry", () => {
+    const papers = Array.from(
+      { length: 50 },
+      (_, index) =>
+        `Paper number ${index + 1} on percolation thresholds (19${50 + index})`,
+    ).join("; ");
+    expect(papers.length).toBeGreaterThan(2_000);
+    const { data, dropped } = parseExtraction({
+      attributes: [
+        { name: "Publications", value: papers },
+        { name: "Awards", value: "Fellow, Example Society (1984)" },
+      ],
+    });
+    expect(dropped).toEqual([]);
+    const kept = data.attributes?.[0].value ?? "";
+    expect(kept.length).toBeLessThanOrEqual(2_000);
+    expect(kept.length).toBeGreaterThan(1_000);
+    expect(papers.startsWith(kept)).toBe(true);
+    expect(kept.endsWith(")")).toBe(true);
+    expect(data.attributes?.[1]).toEqual({
+      name: "Awards",
+      value: "Fellow, Example Society (1984)",
+    });
+    // A value is cut at the last separator in its second half, else at the
+    // limit.
+    expect(clipList("ab; cdefgh; ij", 12)).toBe("ab; cdefgh");
+    expect(clipList("ab; cdefghijkl", 12)).toBe("ab; cdefghij");
+    expect(clipList("x".repeat(30), 10)).toBe("x".repeat(10));
+    expect(clipList("short", 10)).toBe("short");
   });
 
   it("keeps profiles, not posts", () => {
@@ -572,6 +842,25 @@ describe("tidyExtraction", () => {
           "FINRA CRD 1234567; Acme Securities, LLC (2020-09 to 2022-02); Pinecrest Inc.; Harbor Point Securities",
       },
     ]);
+  });
+
+  it("keeps a long list of registrations whole up to the attribute's limit", () => {
+    const firms = Array.from(
+      { length: 30 },
+      (_, index) => `Example Securities Number ${index + 1}, LLC`,
+    );
+    const { data } = parseExtraction({
+      experience: firms.map((company) => ({
+        company,
+        role: "Registered Representative",
+      })),
+    });
+    const value =
+      tidyExtraction(data, { company: "Northwind Partners" }).attributes?.[0]
+        .value ?? "";
+    // Past 500 characters, and every firm kept whole.
+    expect(value.length).toBeGreaterThan(500);
+    expect(value.split("; ")).toEqual(firms);
   });
 
   it("says a degree's field once", () => {
