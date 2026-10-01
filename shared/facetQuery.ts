@@ -137,3 +137,13 @@ export function formatFacet(filter: FacetFilter): string {
 export function formatFacetQuery(filters: readonly FacetFilter[]): string {
   return filters.map(formatFacet).join(" ");
 }
+
+/** A facet that narrows a long answer, with the number of people it keeps. */
+export interface RefineOption {
+  /** The facet as a person types it. A press adds it to the question. */
+  facet: string;
+  /** What the option says. */
+  label: string;
+  /** How many people the narrowed answer holds. */
+  count: number;
+}

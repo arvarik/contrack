@@ -9,6 +9,7 @@
  */
 
 import type { MatchedOn } from "../shared/matchedOn";
+import type { RefineOption } from "../shared/facetQuery";
 
 // =============================================================================
 // Normalized Child Entity Types
@@ -524,6 +525,8 @@ export interface SemanticSearchResult {
   total?: number;
   /** For a question of facets alone, the same list as a Network query. */
   facets?: string;
+  /** For a question of facets alone, cut at 30: the facets that split it. */
+  refine?: RefineOption[];
 }
 
 // =============================================================================

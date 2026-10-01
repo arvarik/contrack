@@ -851,6 +851,48 @@ describe("the page", () => {
     expect(seeAll()).toBeNull();
   });
 
+  it("offers the facets that narrow a long list, and a press asks again with one added", async () => {
+    const refine = [
+      { facet: "industry:Fintech", label: "Fintech", count: 412 },
+      { facet: 'location:"New York"', label: "New York", count: 1203 },
+    ];
+    const sent = stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic"))
+        return new Response(
+          line({
+            phase: "complete",
+            matches: MATCHES,
+            fallback: false,
+            total: 1501,
+            // The narrowed answer is short, so it offers nothing more.
+            ...(s.body?.query === "Who do I track?" ? { refine } : {}),
+          }),
+        );
+    });
+    renderView();
+
+    ask("Who do I track?");
+    const group = await screen.findByRole("group", { name: "Narrow the list" });
+    const chips = within(group).getAllByRole("button");
+    expect(chips.map((chip) => chip.getAttribute("aria-label"))).toEqual([
+      "Narrow to Fintech, 412 people",
+      "Narrow to New York, 1,203 people",
+    ]);
+    expect(chips[1]!.textContent).toBe("New York1,203");
+
+    fireEvent.click(chips[1]!);
+    const narrowed = 'Who do I track? location:"New York"';
+    expect(input().value).toBe(narrowed);
+    await waitFor(() =>
+      expect(semantic(sent).at(-1)?.body).toEqual({ query: narrowed }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("group", { name: "Narrow the list" }),
+      ).toBeNull(),
+    );
+  });
+
   it("shows no Try asking for an account with nothing to ask about", async () => {
     starterPool = [];
     stubFetch();

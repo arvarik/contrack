@@ -739,7 +739,11 @@ The stream sends one JSON object per line:
   Nothing verified it.
 - `complete` is the final answer, and the last line. It replaces `instant`.
   For a question made only of facets it also holds `total`, how many
-  contacts the facets find. The list stops at 30.
+  contacts the facets find. The list stops at 30. `facets` holds the same
+  question as a Network query, for example `tracked:yes`, when the Network
+  list can read it. When the list stops short of `total`, `refine` holds at
+  most six facets that split it, each as `{ facet, label, count }`. `count`
+  is how many contacts the question finds with `facet` added.
 - `error` takes the place of `complete` when the search fails:
   `{"phase":"error","error":"Search failed. Please try again.","requestId":"..."}`.
 

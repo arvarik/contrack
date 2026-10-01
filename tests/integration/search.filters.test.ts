@@ -300,6 +300,8 @@ describe("Ask takes facets from the request and the question", () => {
     );
     expect(result.total).toBe(1);
     expect(result.facets).toBe("tag:rare");
+    // A list that fits has nothing to narrow.
+    expect(result.refine).toBeUndefined();
     // A facet that holds 150 people shows the first 30 and counts them all,
     // and names the query that opens all of them in the Network list.
     const guild = await searchService.semanticSearch(
@@ -329,6 +331,37 @@ describe("Ask takes facets from the request and the question", () => {
     );
     expect(names(near.matches)).toEqual(["Rhea Quill", "Tomas Silva"]);
     expect(near.facets).toBeUndefined();
+  });
+
+  it("offers facets that split a cut list, each with the count its press finds", async () => {
+    script(null);
+    // The 150 engineers have no email, and neither do some of the others.
+    const asked = "missing:email";
+    const answer = await searchService.semanticSearch(scope(), asked, "refine");
+    expect(answer.total).toBeGreaterThan(ENGINEERS);
+    const options = answer.refine ?? [];
+    expect(options.map((o) => o.label)).toEqual(
+      expect.arrayContaining(["Madrid", "Engineering Guild"]),
+    );
+    expect(options.length).toBeLessThanOrEqual(6);
+    for (const option of options) {
+      const narrowed = await searchService.semanticSearch(
+        scope(),
+        `${asked} ${option.facet}`,
+        "refine-press",
+      );
+      expect(narrowed.total, option.facet).toBe(option.count);
+      expect(option.count).toBeLessThan(answer.total!);
+    }
+    // A field the question filters on already is not offered again.
+    const inMadrid = await searchService.semanticSearch(
+      scope(),
+      "missing:email location:Madrid",
+      "refine-located",
+    );
+    expect(inMadrid.refine?.map((o) => o.facet) ?? []).not.toContainEqual(
+      expect.stringMatching(/^location:/),
+    );
   });
 
   it("combines the request's facets with the typed ones, over HTTP", async () => {

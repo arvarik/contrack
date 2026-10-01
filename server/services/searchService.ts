@@ -1,5 +1,10 @@
 import { facetNeedle, type FacetFilter } from "../../shared/searchFacets.ts";
-import { formatFacetQuery, parseFacetQuery } from "../../shared/facetQuery.ts";
+import {
+  formatFacetQuery,
+  parseFacetQuery,
+  type RefineOption,
+} from "../../shared/facetQuery.ts";
+import { refineOptions } from "./search/refine.ts";
 import { sqlite } from "../db.ts";
 import { selectPassages, currentPassage } from "./search/passages.ts";
 import { findPassageNeighbors } from "./search/localEmbeddings.ts";
@@ -340,6 +345,10 @@ function facetAnswer(
   return {
     total,
     facets: networkQuery(filters),
+    // A cut list offers the facets that split it.
+    ...(total > ids.length
+      ? { refine: refineOptions(scope, filters, total) }
+      : {}),
     matches: withMatchedOn(
       [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
         (contact) => ({
@@ -575,6 +584,8 @@ interface SearchResult {
   total?: number;
   /** For a question of facets alone: the same list as a Network query. */
   facets?: string;
+  /** For a question of facets alone, cut at 30: facets that split it. */
+  refine?: RefineOption[];
 }
 interface SearchChunk extends SearchResult {
   phase: "instant" | "complete";

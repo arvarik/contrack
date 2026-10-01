@@ -18,6 +18,7 @@ import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
 import {
   ASK_COLUMN,
   BTN_QUIET,
+  filterPill,
   PAGE_TOP,
   SECTION_HEADING,
   SUGGESTION_CHIP,
@@ -314,6 +315,7 @@ export const SearchView = () => {
   /** The question the results on screen answer. Never the input. */
   const answeredQuery = semanticSearch.data?.query ?? "";
   const networkQuery = semanticSearch.data?.facets;
+  const refine = semanticSearch.data?.refine ?? [];
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
@@ -568,6 +570,38 @@ export const SearchView = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* A cut list of facets offers the facets that split it.
+                      A press asks the question again with one added. */}
+                  {refine.length > 0 && (
+                    <div
+                      role="group"
+                      aria-label="Narrow the list"
+                      className="flex flex-wrap items-center gap-1.5"
+                    >
+                      <span className="text-xs text-on-surface-variant">
+                        Narrow
+                      </span>
+                      {refine.map((option) => (
+                        <button
+                          key={option.facet}
+                          type="button"
+                          aria-label={`Narrow to ${option.label}, ${option.count.toLocaleString()} people`}
+                          onClick={() =>
+                            handleExampleClick(
+                              `${answeredQuery} ${option.facet}`,
+                            )
+                          }
+                          className={cn("hit-area", filterPill(false))}
+                        >
+                          {option.label}
+                          <span className="font-medium tabular-nums">
+                            {option.count.toLocaleString()}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Synthesis executive brief (Feature 6) */}
                   {aiAllowed && !isFallback && (
