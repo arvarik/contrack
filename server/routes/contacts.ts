@@ -26,6 +26,7 @@ import {
 import { z } from "zod";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { startStream } from "../utils/stream.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { importService, type ImportRecord } from "../services/importService.ts";
@@ -274,11 +275,7 @@ router.post(
       // Phase 3: Run dedupe scan against imported contacts
       // Phase 4: Stream results summary
       // =====================================================================
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
+      startStream(res, "text/event-stream");
 
       const send = (data: Record<string, unknown>) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);

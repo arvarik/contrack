@@ -77,6 +77,15 @@ interface OpenStream {
   close(): void;
 }
 
+/**
+ * What every stream the server starts carries (`startStream`): no buffering
+ * by a proxy, which nginx reads from `X-Accel-Buffering`, and no caching.
+ */
+function expectUnbuffered(headers: http.IncomingHttpHeaders) {
+  expect(headers["x-accel-buffering"]).toBe("no");
+  expect(headers["cache-control"]).toBe("no-store");
+}
+
 /** Start a request and return as soon as the response headers arrive. */
 async function open(
   method: "GET" | "POST",
@@ -223,6 +232,7 @@ describe("NDJSON", () => {
     expect(rerankCandidates).not.toHaveBeenCalled();
     expect(stream.headers["content-type"]).toMatch(/^application\/x-ndjson/);
     expect(stream.headers["content-encoding"]).toBeUndefined();
+    expectUnbuffered(stream.headers);
 
     await vi.waitFor(() => expect(parseSearchQuery).toHaveBeenCalled());
     finish(null);
@@ -250,6 +260,7 @@ describe("NDJSON", () => {
 
     expect(JSON.parse(await stream.until("\n"))).toEqual({ phase: "start" });
     expect(stream.headers["content-encoding"]).toBeUndefined();
+    expectUnbuffered(stream.headers);
 
     await vi.waitFor(() => expect(streamFor).toHaveBeenCalled());
     release();
@@ -281,6 +292,7 @@ describe("event streams", () => {
     ]);
     expect(stream.headers["content-type"]).toMatch(/^text\/event-stream/);
     expect(stream.headers["content-encoding"]).toBeUndefined();
+    expectUnbuffered(stream.headers);
 
     jobQueue.cancelBatch(scope(), batch.id);
     expect(events(await stream.rest())).toMatchObject([
@@ -301,6 +313,7 @@ describe("event streams", () => {
       { scanId: scan.scanId, phase: "starting" },
     ]);
     expect(stream.headers["content-encoding"]).toBeUndefined();
+    expectUnbuffered(stream.headers);
 
     dedupeQueue.update(scan.scanId, {
       phase: "deterministic",
@@ -328,6 +341,7 @@ describe("event streams", () => {
     expect(stream.status).toBe(200);
     expect(stream.headers["content-type"]).toMatch(/^text\/event-stream/);
     expect(stream.headers["content-encoding"]).toBeUndefined();
+    expectUnbuffered(stream.headers);
     expect(frames[0]).toMatchObject({ phase: "accepted" });
     expect(frames.at(-1)).toMatchObject({ done: true, count: 2 });
   });

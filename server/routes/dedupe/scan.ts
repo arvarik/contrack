@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AppError, RateLimitedError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
+import { startStream } from "../../utils/stream.ts";
 import { log } from "../../utils/logger.ts";
 import {
   dedupeService,
@@ -127,10 +128,7 @@ export function registerScanRoutes(router: Router) {
     const scan = dedupeQueue.getScan(scope, scanId);
     if (!scan) throw new AppError("Scan not found.", 404);
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    startStream(res, "text/event-stream");
 
     res.write(`data: ${JSON.stringify(scan)}\n\n`);
 
