@@ -57,7 +57,7 @@ No test needs an API key.
 
 ## 5. Quality gates
 
-- **Search** (`search.eval.test.ts`): 300 contacts and 70 queries. recall@10
+- **Search** (`search.eval.test.ts`): 300 contacts and 79 queries. recall@10
   and MRR per channel against `search.baseline.json`.
 - **Dedupe** (`dedupe.eval.test.ts`): precision and recall on an adversarial
   corpus, with AI off, against `dedupe.baseline.json`.
