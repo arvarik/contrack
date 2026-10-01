@@ -346,8 +346,8 @@ export function buildStarterQuestions(
   // A general question that finds some of the network and not all of it
   // says something about a network of any size, so it is offered past the
   // cap: "Who is missing an email address?" in a network of three. One that
-  // finds everyone, such as the last contact before any note is logged,
-  // keeps its turn.
+  // finds everyone keeps its turn, such as "Who haven't I contacted in over
+  // 3 months?" before any note is logged.
   for (const { text, splits } of general) {
     if (!splits || seen.has(text)) continue;
     seen.add(text);

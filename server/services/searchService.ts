@@ -364,16 +364,16 @@ function facetAnswer(
   };
 }
 
-/**
- * Build compressed contact profiles for the LLM reranker.
- * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
- */
 /** A contact's addresses as text, in their order. */
 const addressesOf = (contact: HydratedMatch): string[] =>
   (Array.isArray(contact.addresses) ? contact.addresses : [])
     .map((entry: { address?: unknown }) => entry?.address)
     .filter((address): address is string => typeof address === "string");
 
+/**
+ * Build compressed contact profiles for the LLM reranker.
+ * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
+ */
 function buildCompressedCandidates(
   matches: HydratedMatch[],
   scope: Scope,
