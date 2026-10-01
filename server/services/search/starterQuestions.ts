@@ -16,12 +16,14 @@
 // left out: the keyword index does not hold education, so "Who studied at
 // X?" found nobody who did without a model.
 //
-// The pool never holds more questions than the account has contacts.
+// The pool holds no more questions than the account has contacts, except a
+// general question that finds some of them and not all, which says something
+// about a network of any size.
 //
 // Building a pool is a few grouped reads. The pool is kept per owner and
 // search revision, so an edit to a searched column builds it again. The
 // general questions are checked against the contacts on every request, and a
-// change in which of them find somebody builds it again too. The
+// change in which of them find somebody, or everybody, builds it again too. The
 // server builds every owner's pool in the background after boot, and an
 // import schedules its owner's pool as soon as the contacts commit. So the
 // first open of Ask after a deploy or an import reads a pool that is ready.
@@ -48,7 +50,8 @@ import type {
  * few thousand people was asked about its six biggest companies and nothing
  * else. 500 questions are about 22 KB of JSON, which the app fetches once in
  * an idle moment, and a build is the same few grouped reads however long the
- * list. The pool still holds no more questions than the account has contacts.
+ * list. The pool still holds no more questions than the account has contacts,
+ * beside the general questions that split the network.
  */
 export const POOL_LIMIT = 500;
 /**
@@ -234,11 +237,12 @@ const cityOf = (location: string): string => tidy(location.split(",")[0] ?? "");
 
 /**
  * Build one owner's pool from its contacts, in the order the kinds take
- * turns, cut to {@link POOL_LIMIT} and to the number of contacts.
+ * turns, cut to {@link POOL_LIMIT} and to the number of contacts, then add
+ * the general questions that split the network.
  */
 export function buildStarterQuestions(
   scope: Scope,
-  general: readonly string[] = generalQuestions(scope),
+  general: readonly General[] = generalQuestions(scope),
 ): StarterQuestion[] {
   const owner = scope.ownerId;
   const people = (stmts.active.get(owner) as { n: number }).n;
@@ -322,7 +326,7 @@ export function buildStarterQuestions(
     role: roles.map((t) => `Who works as ${article(t.value)} ${t.value}?`),
     pair: pairs.map((t) => `Who works in ${t.value} in ${t.city}?`),
     tag: tags.map((t) => `Who is tagged ${t.value}?`),
-    general: [...general],
+    general: general.map((question) => question.text),
   };
 
   // Take turns: the best of each kind, then the second best, and so on, so
@@ -339,30 +343,54 @@ export function buildStarterQuestions(
       questions.push({ text, kind });
     }
   }
+  // A general question that finds some of the network and not all of it
+  // says something about a network of any size, so it is offered past the
+  // cap: "Who is missing an email address?" in a network of three. One that
+  // finds everyone, such as the last contact before any note is logged,
+  // keeps its turn.
+  for (const { text, splits } of general) {
+    if (!splits || seen.has(text)) continue;
+    seen.add(text);
+    questions.push({ text, kind: "general" });
+  }
   return questions;
+}
+
+/** A general question that finds somebody in the account. */
+interface General {
+  text: string;
+  /** It also leaves somebody out: it finds some of the network, not all. */
+  splits: boolean;
 }
 
 /**
  * The general questions whose facets find somebody in this account.
  *
  * The facets are compiled the way the search compiles them, so a question is
- * offered exactly when pressing it would show a list. One indexed read each,
- * stopping at the first contact.
+ * offered exactly when pressing it would show a list. Two indexed reads
+ * each, one for a contact it finds and one for a contact it leaves out, and
+ * each stops at the first contact.
  */
-function generalQuestions(scope: Scope): string[] {
-  return GENERAL_QUESTIONS.filter((question) => {
+function generalQuestions(scope: Scope): General[] {
+  const any = (where: string, params: unknown[]) =>
+    sqlite
+      .prepare(
+        // The owner is the first parameter and the facets follow it.
+        `SELECT 1 FROM contacts c WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
+          AND ${where} LIMIT 1`,
+      )
+      .get(scope.ownerId, ...params) !== undefined;
+  return GENERAL_QUESTIONS.flatMap((question) => {
     const facets = compileFacets(scope, [...question.filters]);
-    return (
-      sqlite
-        .prepare(
-          // The owner is the first parameter and the facets follow it.
-          `SELECT 1 FROM contacts c WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
-            AND (${facets.sql}) LIMIT 1`,
-        )
-        .get(scope.ownerId, ...facets.params) !== undefined
-    );
-  }).map((question) => question.text);
+    if (!any(`(${facets.sql})`, facets.params)) return [];
+    const splits = any(`NOT COALESCE((${facets.sql}), 0)`, facets.params);
+    return [{ text: question.text, splits }];
+  });
 }
+
+/** The general questions as one string, so a change in either is seen. */
+const generalKey = (general: readonly General[]) =>
+  general.map((q) => `${q.text}${q.splits ? "" : " (all)"}`).join("\n");
 
 function revisionOf(ownerId: string): number {
   const row = stmts.revision.get(ownerId) as { revision: number } | undefined;
@@ -372,12 +400,12 @@ function revisionOf(ownerId: string): number {
 /** Build and keep one owner's pool at the revision read before the build. */
 function rebuild(
   scope: Scope,
-  general: readonly string[] = generalQuestions(scope),
+  general: readonly General[] = generalQuestions(scope),
 ): Pool {
   const revision = revisionOf(scope.ownerId);
   const pool: Pool = {
     revision,
-    general: general.join("\n"),
+    general: generalKey(general),
     questions: buildStarterQuestions(scope, general),
   };
   pools.delete(scope.ownerId);
@@ -398,13 +426,13 @@ function rebuild(
 export function starterQuestions(scope: Scope): StarterQuestion[] {
   const pool = pools.get(scope.ownerId);
   const revision = revisionOf(scope.ownerId);
-  // Seven existence reads, each stopping at its first contact. A pool that
-  // offers a general question nobody matches any more is rebuilt before it is
-  // answered: a press on a question must find somebody.
+  // Fourteen existence reads, each stopping at its first contact. A pool
+  // that offers a general question nobody matches any more is rebuilt before
+  // it is answered: a press on a question must find somebody.
   const general = generalQuestions(scope);
   if (
     pool &&
-    pool.general === general.join("\n") &&
+    pool.general === generalKey(general) &&
     revision - pool.revision <= STALE_EDITS &&
     revision >= pool.revision
   ) {

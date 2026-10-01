@@ -836,8 +836,9 @@ industry and a city together) and `general`.
   contact in an account of under ten. A `general` question names no value.
   There are seven, such as `Who do I track?`, and each is in the pool only
   when its facets find a contact. The search reads each as its facets.
-- The pool holds at most 500 questions, and never more than you have
-  contacts. With no contacts it is `[]`.
+- The pool holds at most 500 questions, and no more than you have contacts,
+  except a `general` question that finds some of your contacts and not all,
+  which is in the pool whatever its size. With no contacts it is `[]`.
 - The server keeps the pool per account and search revision, and builds it
   again after an import.
 
