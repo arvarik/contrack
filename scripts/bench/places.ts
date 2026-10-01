@@ -36,7 +36,14 @@ export interface Country {
    * format whose first part varies in length ("G1 #AA", "CF10 #AA").
    */
   zip: string;
-  /** The faker locale for names and streets, in Latin letters. Else English. */
+  /** The letters its postcodes use, when the country leaves some out. */
+  zipLetters?: string;
+  /** Endings its postcodes never have. */
+  zipNever?: readonly string[];
+  /**
+   * The faker locale for names and streets, in Latin letters. A country with
+   * none takes its names from `names.ts`.
+   */
   locale?: keyof typeof allFakers;
   /**
    * Mobile number patterns. `#` is a digit, `N` a digit from 2 to 9, `@` the
@@ -61,6 +68,8 @@ export const COUNTRIES: Record<string, Country> = {
     numberAfter: false,
     zipFirst: false,
     zip: "A#A #A#",
+    // Canada Post never uses D, F, I, O, Q or U.
+    zipLetters: "ABCEGHJKLMNPRSTVWXYZ",
     locale: "en_CA",
     phones: ["+1 (@) N##-####"],
   },
@@ -69,6 +78,8 @@ export const COUNTRIES: Record<string, Country> = {
     numberAfter: false,
     zipFirst: false,
     zip: "@ #AA",
+    // The inward code's letters leave out C, I, K, M, O and V.
+    zipLetters: "ABDEFGHJLNPQRSTUWXYZ",
     locale: "en_GB",
     phones: ["+44 7### ######"],
   },
@@ -77,6 +88,8 @@ export const COUNTRIES: Record<string, Country> = {
     numberAfter: false,
     zipFirst: false,
     zip: "A## AA##",
+    // An Eircode's unique identifier uses these fifteen letters.
+    zipLetters: "ACDEFHKNPRTVWXY",
     locale: "en_IE",
     phones: ["+353 83 ### ####", "+353 85 ### ####", "+353 86 ### ####"],
   },
@@ -101,6 +114,8 @@ export const COUNTRIES: Record<string, Country> = {
     numberAfter: true,
     zipFirst: true,
     zip: "#### AA",
+    // PostNL leaves out SA, SD and SS.
+    zipNever: ["SA", "SD", "SS"],
     locale: "nl",
     phones: ["+31 6 ########"],
   },
@@ -324,7 +339,8 @@ export const COUNTRIES: Record<string, Country> = {
   LT: {
     calling: "370",
     numberAfter: true,
-    zipFirst: false,
+    // "Gedimino pr. 9, LT-01103 Vilnius".
+    zipFirst: true,
     zip: "LT-#####",
     phones: ["+370 6## #####"],
   },
@@ -352,6 +368,8 @@ export interface City {
   centre?: [number, number];
   /** The first characters every postcode near the town's centre shares. */
   zip?: string;
+  /** Real main streets near the centre, for a country faker cannot name one in. */
+  streets?: string[];
 }
 
 const n = (
@@ -645,7 +663,12 @@ export const CITIES: Record<string, City> = {
   aarhus: { country: "DK", zip: "8", centre: [56.1629, 10.2039] },
   abuja: { country: "NG", zip: "900", centre: [9.0765, 7.3986] },
   antwerp: { country: "BE", zip: "2", centre: [51.2194, 4.4025] },
-  athens: { country: "GR", zip: "1", centre: [37.9838, 23.7275] },
+  athens: {
+    country: "GR",
+    zip: "1",
+    centre: [37.9838, 23.7275],
+    streets: ["Ermou", "Stadiou", "Panepistimiou", "Akadimias", "Mitropoleos"],
+  },
   barcelona: { country: "ES", zip: "080", centre: [41.3874, 2.1686] },
   basel: { country: "CH", zip: "40", centre: [47.5596, 7.5886] },
   belfast: { country: "GB", zip: "BT1", centre: [54.5973, -5.9301] },
@@ -683,17 +706,44 @@ export const CITIES: Record<string, City> = {
   prague: { country: "CZ", zip: "1", centre: [50.0755, 14.4378] },
   riga: { country: "LV", zip: "LV-10", centre: [56.9496, 24.1052] },
   rotterdam: { country: "NL", zip: "30", centre: [51.9244, 4.4777] },
-  sapporo: { country: "JP", zip: "0", centre: [43.0618, 141.3545] },
+  sapporo: {
+    country: "JP",
+    zip: "0",
+    centre: [43.0618, 141.3545],
+    streets: ["Ekimae-dori", "Odori", "Kita 3-jo-dori", "Soseigawa-dori"],
+  },
   seville: { country: "ES", zip: "410", centre: [37.3891, -5.9845] },
   sheffield: { country: "GB", zip: "S1", centre: [53.3811, -1.4701] },
   sligo: { country: "IE", zip: "F91", centre: [54.2766, -8.4761] },
   stuttgart: { country: "DE", zip: "70", centre: [48.7758, 9.1829] },
-  tallinn: { country: "EE", zip: "1", centre: [59.437, 24.7536] },
+  tallinn: {
+    country: "EE",
+    zip: "1",
+    centre: [59.437, 24.7536],
+    streets: [
+      "Narva maantee",
+      "Pärnu maantee",
+      "Tartu maantee",
+      "Pikk",
+      "Viru",
+    ],
+  },
   turin: { country: "IT", zip: "101", centre: [45.0703, 7.6869] },
   umea: { country: "SE", zip: "90", centre: [63.8258, 20.263] },
   valencia: { country: "ES", zip: "460", centre: [39.4699, -0.3763] },
   vienna: { country: "AT", zip: "1", centre: [48.2082, 16.3738] },
-  vilnius: { country: "LT", zip: "LT-", centre: [54.6872, 25.2797] },
+  vilnius: {
+    country: "LT",
+    zip: "LT-",
+    centre: [54.6872, 25.2797],
+    streets: [
+      "Gedimino prospektas",
+      "Pilies gatvė",
+      "Vokiečių gatvė",
+      "Didžioji gatvė",
+      "Jogailos gatvė",
+    ],
+  },
   warsaw: { country: "PL", zip: "0", centre: [52.2297, 21.0122] },
   zagreb: { country: "HR", zip: "10", centre: [45.815, 15.9819] },
 };

@@ -620,94 +620,197 @@ export const BEST_TIMES = [
   "outside school hours",
 ];
 
-export const PRONOUNS = ["she/her", "he/him", "they/them"];
+/**
+ * The pronouns a plan gives, from the look the app reads in the first name
+ * (`classifyName`). A name the app cannot call gets they/them, which no name
+ * contradicts, so the face and the pronouns always agree.
+ */
+export const PRONOUNS: Record<"female" | "male" | "neutral", string> = {
+  female: "she/her",
+  male: "he/him",
+  neutral: "they/them",
+};
 
-/** What an interaction was about. `{focus}` and `{topic}` are filled in. */
+/**
+ * What an interaction was about: each title with the bodies that fit it, so
+ * a "Breakfast" never reads as a long walk. `{focus}` and `{topic}` are
+ * filled in.
+ */
 export const INTERACTION_TOPICS: Record<
   string,
-  { title: string[]; body: string[] }
+  readonly { title: string; body: readonly string[] }[]
 > = {
-  call: {
-    title: [
-      "Quick catch-up",
-      "Intro call",
-      "Call about {focus}",
-      "Follow-up call",
-      "Reference call",
-      "Check-in call",
-    ],
-    body: [
-      "Talked through where {focus} stands. Agreed to compare notes again next month.",
-      "Short call. They are hiring for {focus} and asked for two names.",
-      "Walked through their plan for {focus}. Main worry is timing, not budget.",
-      "Left a voicemail first, then connected in the afternoon. Nothing urgent.",
-      "They wanted a second opinion on {focus}. Suggested a smaller first step.",
-      "Caught them between meetings. Promised to send a summary on {focus} by Friday.",
-      "Good call. They are curious how others approach {focus} and asked who to read.",
-      "Brief. Their team is stretched on {focus}, so the next step waits until the quarter ends.",
-    ],
-  },
-  meeting: {
-    title: [
-      "Coffee",
-      "Lunch",
-      "Office visit",
-      "Planning meeting",
-      "Panel prep",
-      "Breakfast",
-      "Walk and talk",
-    ],
-    body: [
-      "Met in person. Spent most of the hour on {focus}. They want an introduction to someone in operations.",
-      "Good conversation about {focus}. Promised to send the deck and two articles.",
-      "Bumped into each other after the talk and moved to a cafe. Wants to do a joint session on {focus}.",
-      "Quiet lunch. They are thinking about a move next year and asked what I would do.",
-      "Visited their office. The team showed a demo of their {focus} work and asked for blunt feedback.",
-      "Long walk. Mostly personal, then {focus} for the last ten minutes. They are more optimistic than in spring.",
-      "Planning session with two of their colleagues. Agreed owners and dates for the {focus} pilot.",
-      "Early breakfast before their flight. Talked about {focus} and who else should be in the room.",
-    ],
-  },
-  email: {
-    title: [
-      "Re: intro",
-      "Sent the deck",
-      "Thanks for yesterday",
-      "Question about {focus}",
-      "Checking in",
-      "Following up",
-    ],
-    body: [
-      "Sent the summary we talked about, with the two links on {focus}. No reply needed.",
-      "They asked a short question about {focus}. Replied the same day.",
-      "Forwarded an introduction. Waiting to hear whether the timing works.",
-      "Checked in after a quiet spell. They are travelling until the end of the month.",
-      "Shared the draft on {focus} and asked for comments by Thursday.",
-      "They replied with a long note on {focus}. Worth a proper answer this weekend.",
-      "Sent congratulations on the announcement. Short reply back, and an offer to meet in the autumn.",
-      "Replied to their thread about {focus}. Copied a colleague who knows the area better.",
-    ],
-  },
-  note: {
-    title: [
-      "Note",
-      "After the event",
-      "Something to remember",
-      "Idea",
-      "Personal",
-      "Before we speak",
-    ],
-    body: [
-      "Mentioned {focus} twice. Worth bringing up next time.",
-      "New role starting soon. Send congratulations and ask how {focus} is going.",
-      "Their birthday is coming up. Likes {topic}, so a book on that would land well.",
-      "Prefers an agenda a day ahead. Keep meetings to thirty minutes.",
-      "Introduced me to someone working on {focus}. Follow up before the end of the month.",
-      "Dislikes long email threads. A short message or a call works better.",
-      "Between jobs and open to advice on {focus}. Offer a couple of introductions.",
-      "Loves {topic}. Start there before getting to {focus}.",
-    ],
-  },
+  call: [
+    {
+      title: "Quick catch-up",
+      body: [
+        "Caught them between meetings. Promised to send a summary on {focus} by Friday.",
+        "Left a voicemail first, then connected in the afternoon. Nothing urgent.",
+      ],
+    },
+    {
+      title: "Intro call",
+      body: [
+        "First call. They are hiring for {focus} and asked for two names.",
+        "Good call. They are curious how others approach {focus} and asked who to read.",
+      ],
+    },
+    {
+      title: "Call about {focus}",
+      body: [
+        "Talked through where {focus} stands. Agreed to compare notes again next month.",
+        "Walked through their plan for {focus}. Main worry is timing, not budget.",
+        "They wanted a second opinion on {focus}. Suggested a smaller first step.",
+      ],
+    },
+    {
+      title: "Follow-up call",
+      body: [
+        "Followed up on {focus}. Their team is stretched, so the next step waits until the quarter ends.",
+        "Picked up where we left off on {focus}. They have a date for the decision now.",
+      ],
+    },
+    {
+      title: "Reference call",
+      body: [
+        "They asked for a reference on someone who worked on {focus}. Gave an honest picture.",
+      ],
+    },
+    {
+      title: "Check-in call",
+      body: [
+        "Checked in after a quiet spell. All well, and {focus} is moving again.",
+        "Short check-in. Nothing new on {focus}, so we agreed to talk next month.",
+      ],
+    },
+  ],
+  meeting: [
+    {
+      title: "Coffee",
+      body: [
+        "Coffee near their office. Spent most of the hour on {focus}. They want an introduction to someone in operations.",
+        "Bumped into each other after the talk and moved to a cafe. Wants to do a joint session on {focus}.",
+      ],
+    },
+    {
+      title: "Lunch",
+      body: [
+        "Quiet lunch. They are thinking about a move next year and asked what I would do.",
+        "Lunch went long. Good conversation about {focus}. Promised to send the deck and two articles.",
+      ],
+    },
+    {
+      title: "Office visit",
+      body: [
+        "Visited their office. The team showed a demo of their {focus} work and asked for blunt feedback.",
+      ],
+    },
+    {
+      title: "Planning meeting",
+      body: [
+        "Planning session with two of their colleagues. Agreed owners and dates for the {focus} pilot.",
+      ],
+    },
+    {
+      title: "Panel prep",
+      body: [
+        "Prepared for the panel on {focus}. Agreed who opens and which questions to skip.",
+      ],
+    },
+    {
+      title: "Breakfast",
+      body: [
+        "Early breakfast before their flight. Talked about {focus} and who else should be in the room.",
+      ],
+    },
+    {
+      title: "Walk and talk",
+      body: [
+        "Long walk. Mostly personal, then {focus} for the last ten minutes. They are more optimistic than in spring.",
+      ],
+    },
+  ],
+  email: [
+    {
+      title: "Re: intro",
+      body: [
+        "Forwarded an introduction. Waiting to hear whether the timing works.",
+        "Replied to their introduction and suggested a call about {focus}.",
+      ],
+    },
+    {
+      title: "Sent the deck",
+      body: [
+        "Sent the deck with the two links on {focus}. No reply needed.",
+        "Shared the draft on {focus} and asked for comments by Thursday.",
+      ],
+    },
+    {
+      title: "Thanks for yesterday",
+      body: [
+        "Thanked them for the time yesterday and sent the summary on {focus}.",
+      ],
+    },
+    {
+      title: "Question about {focus}",
+      body: [
+        "They asked a short question about {focus}. Replied the same day.",
+        "They replied with a long note on {focus}. Worth a proper answer this weekend.",
+      ],
+    },
+    {
+      title: "Checking in",
+      body: [
+        "Checked in after a quiet spell. They are travelling until the end of the month.",
+        "Sent congratulations on the announcement. Short reply back, and an offer to meet in the autumn.",
+      ],
+    },
+    {
+      title: "Following up",
+      body: [
+        "Followed up on their thread about {focus}. Copied a colleague who knows the area better.",
+      ],
+    },
+  ],
+  note: [
+    {
+      title: "Note",
+      body: [
+        "Mentioned {focus} twice. Worth bringing up next time.",
+        "Prefers an agenda a day ahead. Keep meetings to thirty minutes.",
+      ],
+    },
+    {
+      title: "After the event",
+      body: [
+        "Met at the event. Introduced me to someone working on {focus}. Follow up before the end of the month.",
+      ],
+    },
+    {
+      title: "Something to remember",
+      body: [
+        "Their birthday is coming up. Likes {topic}, so a book on that would land well.",
+        "Dislikes long email threads. A short message or a call works better.",
+      ],
+    },
+    {
+      title: "Idea",
+      body: ["Could help with {focus}. Offer a couple of introductions."],
+    },
+    {
+      title: "Personal",
+      body: [
+        "Loves {topic}. Start there before getting to {focus}.",
+        "Between jobs and open to advice on {focus}.",
+      ],
+    },
+    {
+      title: "Before we speak",
+      body: [
+        "New role starting soon. Send congratulations and ask how {focus} is going.",
+      ],
+    },
+  ],
 };
 
 /** Follow-ups a person writes for themselves. */

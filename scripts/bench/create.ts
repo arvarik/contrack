@@ -14,6 +14,7 @@ import { defaultAvatarUrl } from "../../server/utils/avatarUrl.ts";
 import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
 import { CITIES, COUNTRIES } from "./places.ts";
 import { INDUSTRIES, TAGS } from "./profiles.ts";
+import { LOCAL_NAMES, localName } from "./names.ts";
 import { companyName, dice, hash32, type BenchContact } from "./plan.ts";
 
 /** One new contact: its row, as the app's create path writes it, and its tags. */
@@ -58,18 +59,24 @@ export function createNetwork(
   return Array.from({ length: count }, (_, i) => {
     const d = dice(`${seed}:create:${i}`);
     const key = d.weighted(PLACES);
-    const faker = allFakers[COUNTRIES[CITIES[key].country].locale ?? "en"];
+    const { country } = CITIES[key];
+    const local = LOCAL_NAMES[country];
     // A name in the city's own language, and another when it is taken.
     let firstName = "";
     let lastName = "";
     for (let attempt = 0; attempt < 8; attempt++) {
-      faker.seed(hash32(`${seed}:name:${i}:${attempt}`));
-      const sex = faker.person.sexType();
-      firstName = faker.person.firstName(sex);
-      // Some locales join two surnames with no space: "HohošBabić".
-      lastName = faker.person
-        .lastName(sex)
-        .replace(/(\p{Lu}\p{Ll}{3,})(?=\p{Lu})/gu, "$1-");
+      const salt = `${seed}:name:${i}:${attempt}`;
+      if (local) ({ firstName, lastName } = localName(local, dice(salt)));
+      else {
+        const faker = allFakers[COUNTRIES[country].locale ?? "en"];
+        faker.seed(hash32(salt));
+        const sex = faker.person.sexType();
+        firstName = faker.person.firstName(sex);
+        // Some locales join two surnames with no space: "HohošBabić".
+        lastName = faker.person
+          .lastName(sex)
+          .replace(/(\p{Lu}\p{Ll}{3,})(?=\p{Lu})/gu, "$1-");
+      }
       if (!names.has(`${firstName} ${lastName}`)) break;
     }
     const name = `${firstName} ${lastName}`;

@@ -16,6 +16,7 @@ import {
   defaultAvatarUrl,
   isDefaultAvatarFor,
 } from "../../server/utils/avatarUrl.ts";
+import { classifyName } from "../../server/utils/smartAvatar.ts";
 import {
   CITIES,
   COUNTRIES,
@@ -180,13 +181,23 @@ export function dice(seed: string): Dice {
   };
 }
 
-/** Fill a pattern: `#` a digit, `N` a digit 2 to 9, `A` a letter, `@` the value given. */
-function fillPattern(pattern: string, d: Dice, value = ""): string {
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Fill a pattern: `#` a digit, `N` a digit 2 to 9, `A` one of `letters`, `@`
+ * the value given.
+ */
+function fillPattern(
+  pattern: string,
+  d: Dice,
+  value = "",
+  letters = LETTERS,
+): string {
   return [...pattern]
     .map((ch) => {
       if (ch === "#") return String(d.int(0, 9));
       if (ch === "N") return String(d.int(2, 9));
-      if (ch === "A") return String.fromCharCode(65 + d.int(0, 25));
+      if (ch === "A") return letters[d.int(0, letters.length - 1)];
       if (ch === "@") return value;
       return ch;
     })
@@ -284,11 +295,21 @@ function placeOf(input: BenchInput): Place | null {
   };
 }
 
-/** A postcode that starts with a place's prefix, in its country's format. */
+/**
+ * A postcode that starts with a place's prefix, in its country's format and
+ * with the letters it uses. One that ends as the country's never do is drawn
+ * again.
+ */
 function postcode(prefix: string, country: Country, d: Dice): string {
-  return country.zip.includes("@")
-    ? fillPattern(country.zip, d, prefix)
-    : prefix + fillPattern(country.zip.slice(prefix.length), d);
+  const letters = country.zipLetters ?? LETTERS;
+  for (;;) {
+    const zip = country.zip.includes("@")
+      ? fillPattern(country.zip, d, prefix, letters)
+      : prefix + fillPattern(country.zip.slice(prefix.length), d, "", letters);
+    // A whole postcode from the table has nothing to draw again.
+    if (zip === prefix || !country.zipNever?.some((end) => zip.endsWith(end)))
+      return zip;
+  }
 }
 
 /** A point within `radiusM` metres of a centre, most of them near it. */
@@ -362,9 +383,12 @@ function spotIn(
         area: hood.name,
       };
     } else {
+      // A real main street when the table lists the town's, since faker
+      // has no locale to name one in Athens, Sapporo, Tallinn or Vilnius.
+      const streets = place.city?.streets;
       const faker = allFakers[place.country.locale ?? "en"];
       faker.seed(hash32(`${salt}:${attempt}`));
-      const street = faker.location.street();
+      const street = streets ? d.pick(streets) : faker.location.street();
       // The table's centre, never the contact's own pin: a run moves the pin,
       // and a second run would drift from it. A city the table does not know
       // keeps the pin it has.
@@ -529,7 +553,7 @@ export function planEnrichment(
   }
   const dPronoun = stream("pronoun");
   if (!input.pronouns && dPronoun.chance(0.28))
-    contact.pronouns = dPronoun.pick(PRONOUNS);
+    contact.pronouns = PRONOUNS[classifyName(input.name)];
   // The default face follows the pronouns, as an edit in the app redraws it.
   // Left to the server's boot, the redraw would stamp updatedAt with the
   // real clock.
@@ -762,9 +786,10 @@ export function planEnrichment(
     // Try again when this contact already has the same note, up to a point.
     for (let attempt = 0; attempt < 8; attempt++) {
       const r = dice(`${seed}:${input.id}:${key}:${attempt}`);
+      const topic = r.pick(topics);
       note = {
-        title: fillTemplate(r.pick(topics.title), values),
-        content: `<p>${fillTemplate(r.pick(topics.body), values)}</p>`,
+        title: fillTemplate(topic.title, values),
+        content: `<p>${fillTemplate(r.pick(topic.body), values)}</p>`,
       };
       const signature = `${type}|${note.title}|${note.content}`;
       if (!said.has(signature)) {

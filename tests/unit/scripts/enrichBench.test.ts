@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { allFakers } from "@faker-js/faker";
 import {
+  dice,
   planEnrichment,
   sqliteStamp,
   type BenchInput,
@@ -15,8 +16,15 @@ import {
 } from "../../../scripts/bench/plan.ts";
 import { createNetwork } from "../../../scripts/bench/create.ts";
 import { CITIES, COUNTRIES, cityKey } from "../../../scripts/bench/places.ts";
-import { INDUSTRIES, TAGS } from "../../../scripts/bench/profiles.ts";
+import { LOCAL_NAMES, localName } from "../../../scripts/bench/names.ts";
+import {
+  INDUSTRIES,
+  INTERACTION_TOPICS,
+  PRONOUNS,
+  TAGS,
+} from "../../../scripts/bench/profiles.ts";
 import { defaultAvatarUrl } from "../../../server/utils/avatarUrl.ts";
+import { classifyName } from "../../../server/utils/smartAvatar.ts";
 import { parseBirthday } from "../../../src/lib/birthday";
 
 const NOW = new Date("2026-09-30T12:00:00.000Z");
@@ -85,6 +93,22 @@ const FORMATS: [RegExp, string[]][] = [
   [/^[A-Z]{1,2}\d[A-Z\d]? \d[A-Z]{2}$/, ["GB"]],
   [/^[A-Z]\d{2} [A-Z\d]{4}$/, ["IE"]],
 ];
+
+/** A template as a pattern, each blank matching any words. */
+const templatePattern = (template: string) =>
+  new RegExp(
+    `^${template.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{\w+\}/g, ".+")}$`,
+  );
+
+/** Whether a note's title and body belong to one topic. */
+const fromOneTopic = (type: string, title: string, content: string) =>
+  INTERACTION_TOPICS[type].some(
+    (topic) =>
+      templatePattern(topic.title).test(title) &&
+      topic.body.some((body) =>
+        templatePattern(`<p>${body}</p>`).test(content),
+      ),
+  );
 
 describe("planEnrichment", () => {
   it("gives the same plan for the same contact, seed and clock, and another for another seed", () => {
@@ -162,6 +186,48 @@ describe("planEnrichment", () => {
           expect(zip, address).toMatch(format);
         }
       }
+    });
+
+    it("writes a postcode with the letters its country uses, and none it leaves out", () => {
+      // [where, the end of every address there]
+      const rules: [string, RegExp, number][] = [
+        // A UK inward code never has C, I, K, M, O or V.
+        ["London, UK", / \d[ABD-HJLNP-UW-Z]{2}$/, 300],
+        // An Eircode's identifier uses the ten digits and fifteen letters.
+        ["Dublin, Ireland", / [A-Z]\d{2} [\dACDEFHKNPRTVWXY]{4}$/, 300],
+        // Canada Post never uses D, F, I, O, Q or U.
+        ["Toronto, ON, Canada", / [A-Z]\d[A-Z] \d[ABCEGHJ-NPRSTV-Z]\d$/, 300],
+        // PostNL never ends a postcode in SA, SD or SS, which 3 in 676
+        // random pairs do, so this place draws many.
+        [
+          "Amsterdam, Netherlands",
+          /, \d{4} (?!S[ADS])[A-Z]{2} Amsterdam$/,
+          2500,
+        ],
+      ];
+      for (const [location, rule, count] of rules)
+        for (let i = 0; i < count; i++)
+          for (const { address } of plan({ id: `z-${i}`, location }).add
+            .contact_addresses)
+            expect(address, location).toMatch(rule);
+    });
+
+    it("puts a town faker has no streets for on one of its real main streets", () => {
+      for (const town of ["athens", "sapporo", "tallinn", "vilnius"]) {
+        const { streets } = CITIES[town];
+        expect(streets?.length, town).toBeGreaterThan(3);
+        const name = town.charAt(0).toUpperCase() + town.slice(1);
+        for (let i = 0; i < 20; i++)
+          for (const { address } of plan({ id: `r-${i}`, location: name }).add
+            .contact_addresses)
+            expect(
+              streets!.some((street) => address.includes(street)),
+              address,
+            ).toBe(true);
+      }
+      // A Lithuanian postcode comes before the town: "LT-01103 Vilnius".
+      const [vilnius] = plan({ location: "Vilnius" }).add.contact_addresses;
+      expect(vilnius.address).toMatch(/, LT-\d{5} Vilnius$/);
     });
 
     it("draws again when a contact's second address repeats its first", () => {
@@ -327,6 +393,32 @@ describe("planEnrichment", () => {
       ).not.toHaveProperty("avatarUrl");
   });
 
+  it("gives pronouns that follow the name, so the face and the pronouns agree", () => {
+    const planned = createNetwork(400, SEED, "benchseed").map(
+      ({ contact }) => ({
+        name: contact.name,
+        pronouns: planEnrichment(
+          {
+            ...contact,
+            interests: [],
+            emails: [],
+            phones: [],
+            interactions: [],
+          },
+          { seed: SEED, now: NOW },
+        ).contact.pronouns,
+      }),
+    );
+    const given = planned.filter((p) => p.pronouns);
+    expect(given.length).toBeGreaterThan(60);
+    for (const { name, pronouns } of given)
+      expect(pronouns, name).toBe(PRONOUNS[classifyName(name)]);
+    // Each of the three, where a name calls for it.
+    expect(new Set(given.map((p) => p.pronouns))).toEqual(
+      new Set(Object.values(PRONOUNS)),
+    );
+  });
+
   it("writes phone numbers in the contact's country, from the city's area codes", () => {
     const seen = new Set<string>();
     for (let i = 0; i < 40; i++) {
@@ -461,6 +553,14 @@ describe("planEnrichment", () => {
       ...add.action_items.map((x) => x.title),
     ]);
     expect(words.join("\n")).not.toMatch(/undefined|[{}]/);
+    // Each note's title and body come from one topic, so a "Breakfast" never
+    // reads as a long walk.
+    for (const { add } of people)
+      for (const x of add.interactions)
+        expect(
+          fromOneTopic(x.type, x.title!, x.content),
+          `${x.title}: ${x.content}`,
+        ).toBe(true);
 
     const days = people
       .map((p) => p.contact.birthday)
@@ -522,10 +622,24 @@ describe("createNetwork", () => {
       const key = cityKey(contact.location)!;
       const city = CITIES[key];
       keys.add(key);
-      const { locale = "en" } = COUNTRIES[city.country];
-      const names = allFakers[locale].rawDefinitions.person!.first_name!;
-      const firstNames = [names.generic, names.female, names.male].flat();
-      expect(firstNames, contact.name).toContain(contact.firstName);
+      const local = LOCAL_NAMES[city.country];
+      if (local) {
+        // Faker has no Latin-script names there, so the country's own list.
+        const group = local.find((g) =>
+          [...g.female, ...g.male].includes(contact.firstName!),
+        );
+        expect(group, contact.name).toBeDefined();
+        const female = group!.female.includes(contact.firstName!);
+        expect(
+          group!.surnames.map((s) => (typeof s === "string" ? s : s[+female])),
+          contact.name,
+        ).toContain(contact.lastName);
+      } else {
+        const { locale = "en" } = COUNTRIES[city.country];
+        const names = allFakers[locale].rawDefinitions.person!.first_name!;
+        const firstNames = [names.generic, names.female, names.male].flat();
+        expect(firstNames, contact.name).toContain(contact.firstName);
+      }
       expect(contact.name).toBe(`${contact.firstName} ${contact.lastName}`);
       // Two surnames run together get a hyphen: "Hohoš-Babić".
       expect(contact.lastName).not.toMatch(/\p{Lu}\p{Ll}{3,}\p{Lu}/u);
@@ -549,6 +663,29 @@ describe("createNetwork", () => {
     // A run's own tag is never drawn a second time.
     for (const { tags } of createNetwork(60, SEED, "mentor"))
       expect(tags.filter((tag) => tag === "mentor")).toEqual(["mentor"]);
+    // Every country faker has no Latin-script names for has a list, and
+    // the people there take theirs from it.
+    for (const [code, country] of Object.entries(COUNTRIES))
+      expect(!!country.locale !== !!LOCAL_NAMES[code], code).toBe(true);
+    expect(
+      people.filter(
+        (p) => LOCAL_NAMES[CITIES[cityKey(p.contact.location)!].country],
+      ).length,
+    ).toBeGreaterThan(100);
+    // A Greek or a Lithuanian surname takes its female form for a woman.
+    for (const code of ["GR", "LT"]) {
+      const [group] = LOCAL_NAMES[code]!;
+      for (let i = 0; i < 100; i++) {
+        const { firstName, lastName } = localName([group], dice(`n-${i}`));
+        const pair = group.surnames.find(
+          (s) => typeof s !== "string" && s.includes(lastName),
+        );
+        if (pair)
+          expect(lastName, `${firstName} ${lastName}`).toBe(
+            pair[+group.female.includes(firstName)],
+          );
+      }
+    }
     // Faker's Croatian surnames join some pairs with no space. Person 3039 of
     // the default network is one, "DuvnjakČuljak".
     const joined = createNetwork(3040, "contrack-bench", "benchseed")[3039];
