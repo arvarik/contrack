@@ -19,7 +19,7 @@ const {
   rebuildSearchEmbeddingTable,
   searchVectorScale,
   upsertSearchEmbeddings,
-} = await import("../../server/services/search/localEmbeddings.ts");
+} = await import("../../server/services/search/vectorIndex.ts");
 const { VECTOR_SCALE_KEY, floatsOf, quantize, scaleFor } =
   await import("../../server/services/search/vectorScale.ts");
 const { clearSettingsCache, deleteSetting } =

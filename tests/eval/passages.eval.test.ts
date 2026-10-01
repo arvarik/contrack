@@ -71,7 +71,7 @@ vi.mock("../../server/ai/gateway.ts", async (original) => ({
 }));
 
 import { sqlite, ensureLocalOwner } from "../../server/db.ts";
-import { backfillSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import { backfillSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import { aiCache, invalidateSearchCache } from "../../server/utils/aiCache.ts";

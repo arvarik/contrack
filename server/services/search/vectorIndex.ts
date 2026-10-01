@@ -6,7 +6,7 @@ import {
   type SearchPassage,
 } from "./passages.ts";
 // =============================================================================
-// The search vector store
+// The search vector index
 // =============================================================================
 // Ask Contrack's vectors: one int8 vector per contact in `search_embeddings`
 // and one per passage in `search_passage_vectors` (`vectorScale.ts`), both

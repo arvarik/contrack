@@ -253,9 +253,9 @@ async function seedCorpus() {
   const harness = await load<typeof import("../tests/eval/harness.ts")>(
     "tests/eval/harness.ts",
   );
-  const localEmbeddings = await load<
-    typeof import("../server/services/search/localEmbeddings.ts")
-  >("server/services/search/localEmbeddings.ts");
+  const vectorIndex = await load<
+    typeof import("../server/services/search/vectorIndex.ts")
+  >("server/services/search/vectorIndex.ts");
 
   const scope = scopeForOwnerId(ensureLocalOwner());
   const corpus = buildCorpus();
@@ -347,7 +347,7 @@ async function seedCorpus() {
     !vectorAbMode
   )
     [embedded, embedMs] = await timed(() =>
-      localEmbeddings.backfillSearchEmbeddings(),
+      vectorIndex.backfillSearchEmbeddings(),
     );
   // The server loads the cross-encoder at boot. With background jobs off,
   // the benchmark loads it here, so the instant chunk includes it.
@@ -388,8 +388,8 @@ async function modules() {
       "server/services/search/intent.ts",
     ),
     embeddings: await load<
-      typeof import("../server/services/search/localEmbeddings.ts")
-    >("server/services/search/localEmbeddings.ts"),
+      typeof import("../server/services/search/vectorIndex.ts")
+    >("server/services/search/vectorIndex.ts"),
     cache: await load<typeof import("../server/utils/aiCache.ts")>(
       "server/utils/aiCache.ts",
     ),

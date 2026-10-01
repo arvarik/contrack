@@ -31,7 +31,7 @@ import {
 } from "../services/aiSettingsService.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
-import { ensureEmbeddingStore } from "../services/search/localEmbeddings.ts";
+import { ensureEmbeddingStore } from "../services/search/vectorIndex.ts";
 import { ensureDedupeEmbeddingStore } from "../services/dedupe/embeddings.ts";
 import { probeDimension, resolveEmbeddings } from "../ai/embeddings.ts";
 import {

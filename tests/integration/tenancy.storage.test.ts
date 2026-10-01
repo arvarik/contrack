@@ -21,7 +21,7 @@ import {
   vecTableDdl,
 } from "../../server/db.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
-import { rebuildSearchEmbeddingTable } from "../../server/services/search/localEmbeddings.ts";
+import { rebuildSearchEmbeddingTable } from "../../server/services/search/vectorIndex.ts";
 import { rebuildDedupeEmbeddingTable } from "../../server/services/dedupe/embeddings.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 

@@ -24,7 +24,7 @@ import {
   type EmbedUse,
 } from "../../server/ai/embedder.ts";
 import { setReranker, type Reranker } from "../../server/ai/reranker.ts";
-import { backfillSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import { backfillSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
 import {
   backfillEmbeddings,
   rebuildDedupeEmbeddingTable,

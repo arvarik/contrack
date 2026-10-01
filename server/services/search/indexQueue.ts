@@ -3,7 +3,7 @@ import { getEmbeddingsState } from "../../ai/embeddings.ts";
 import { refreshPlannerStats, sqlite } from "../../db.ts";
 import { resolveEmbeddings } from "../../ai/embeddings.ts";
 import { currentEmbedder } from "../../ai/embedder.ts";
-import { embedContact, isSearchBackfillRunning } from "./localEmbeddings.ts";
+import { embedContact, isSearchBackfillRunning } from "./vectorIndex.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";

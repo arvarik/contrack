@@ -18,7 +18,7 @@ import {
   sqlite,
 } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
-import { findPassageNeighbors } from "../../server/services/search/localEmbeddings.ts";
+import { findPassageNeighbors } from "../../server/services/search/vectorIndex.ts";
 import { findPassages } from "../../server/services/search/passages.ts";
 
 const PASSAGES = 3000;

@@ -55,10 +55,10 @@ vi.mock(
 
 const questions = vi.hoisted(() => new Map<string, Float32Array>());
 vi.mock(
-  "../../server/services/search/localEmbeddings.ts",
+  "../../server/services/search/vectorIndex.ts",
   async (importOriginal) => ({
     ...(await importOriginal<
-      typeof import("../../server/services/search/localEmbeddings.ts")
+      typeof import("../../server/services/search/vectorIndex.ts")
     >()),
     isSearchEmbeddingReady: () => true,
     embedText: vi.fn(async (text: string) => questions.get(text) ?? null),
@@ -74,7 +74,7 @@ import { searchService } from "../../server/services/searchService.ts";
 import {
   embedText,
   upsertSearchEmbeddings,
-} from "../../server/services/search/localEmbeddings.ts";
+} from "../../server/services/search/vectorIndex.ts";
 import {
   SEMANTIC_THRESHOLD,
   entityKey,

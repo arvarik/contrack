@@ -96,8 +96,7 @@ async function main(): Promise<void> {
   const { buildSearchEmbeddingInput } =
     await import("../server/services/search/hybridRetrieval.ts");
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
-  const localEmbeddings =
-    await import("../server/services/search/localEmbeddings.ts");
+  const vectorIndex = await import("../server/services/search/vectorIndex.ts");
   const embedder = await import("../server/ai/embedder.ts");
   const {
     seedAnswerCorpus,
@@ -144,18 +143,18 @@ async function main(): Promise<void> {
   // keeps int8 bytes, which are not the model's output, so the fixture takes
   // the floats.
   const texts = contacts.map((c) => {
-    const text = localEmbeddings.currentSearchText(idByKey.get(c.key)!);
+    const text = vectorIndex.currentSearchText(idByKey.get(c.key)!);
     if (!text) throw new Error(`Missing search text for contact "${c.key}"`);
     return text;
   });
-  const contactVectors = (await localEmbeddings.embedBatch(texts)).map(
+  const contactVectors = (await vectorIndex.embedBatch(texts)).map(
     (vector, i) => {
       if (!vector)
         throw new Error(`Missing embedding for "${contacts[i].key}"`);
       return vector;
     },
   );
-  localEmbeddings.upsertSearchEmbeddings(
+  vectorIndex.upsertSearchEmbeddings(
     contacts.map((c, i) => ({
       contactId: idByKey.get(c.key)!,
       embedding: contactVectors[i],
@@ -165,7 +164,7 @@ async function main(): Promise<void> {
 
   const queryVectors: Float32Array[] = [];
   for (const q of queries) {
-    const v = await localEmbeddings.embedText(q.q);
+    const v = await vectorIndex.embedText(q.q);
     if (!v) throw new Error(`Failed to embed query "${q.q}"`);
     queryVectors.push(v);
   }
@@ -199,7 +198,7 @@ async function main(): Promise<void> {
   const recordedResponses = recorder.responses;
   for (const input of embeddingInputs) {
     if (embeddingVectors.has(input)) continue;
-    const vector = await localEmbeddings.embedText(input);
+    const vector = await vectorIndex.embedText(input);
     if (!vector) throw new Error(`Failed to embed pipeline query "${input}"`);
     embeddingVectors.set(input, vector);
   }
