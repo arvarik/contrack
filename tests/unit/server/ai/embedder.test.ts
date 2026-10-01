@@ -29,9 +29,10 @@ const state = vi.hoisted(() => ({
   aiAllowed: true,
 }));
 
-vi.mock("../../../../server/ai/embeddings.ts", () => ({
-  BUILTIN_DIMENSION: 384,
-  BUILTIN_SIGNATURE: "builtin/Xenova/all-MiniLM-L6-v2",
+vi.mock("../../../../server/ai/embeddings.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../../../server/ai/embeddings.ts")
+  >()),
   resolveEmbeddings: () => state.resolved,
   embedWithProvider: vi.fn(
     async (_id: string, _model: string, texts: string[]) =>
@@ -56,6 +57,7 @@ import {
   builtinEmbedder,
   currentEmbedder,
   initBuiltinEmbedder,
+  localEmbedder,
   mayEmbedContactsFor,
 } from "../../../../server/ai/embedder.ts";
 
@@ -95,6 +97,8 @@ describe("the built-in model", () => {
     expect(builtinEmbedder.ready()).toBe(true);
     expect(vi.mocked(runOnWorker).mock.calls[1][0]).toEqual({
       kind: "embed",
+      model: "Xenova/all-MiniLM-L6-v2",
+      pooling: "mean",
       texts: ["contrack"],
       batchSize: 64,
     });
@@ -137,12 +141,36 @@ describe("the built-in model", () => {
   });
 });
 
+describe("another local model", () => {
+  it("sends its id and pooling, and the prefix for each use", async () => {
+    const card = {
+      model: "Xenova/e5-small-v2",
+      dimension: 384,
+      pooling: "mean" as const,
+      prefix: { query: "query: ", document: "passage: " },
+    };
+    const e5 = localEmbedder(card);
+    expect(localEmbedder({ ...card })).toBe(e5);
+    expect(e5).toMatchObject({ id: "builtin/Xenova/e5-small-v2", local: true });
+    expect(e5.ready()).toBe(false);
+    workerAnswers();
+    await e5.embed(["who keeps bees"], "query");
+    await e5.embed(["Ada | Founder"], "document");
+    const job = { kind: "embed", model: card.model, pooling: "mean" };
+    expect(vi.mocked(runOnWorker).mock.calls.map(([sent]) => sent)).toEqual([
+      { ...job, texts: ["query: who keeps bees"], batchSize: 64 },
+      { ...job, texts: ["passage: Ada | Founder"], batchSize: 64 },
+    ]);
+  });
+});
+
 describe("a provider model", () => {
   it("is what the capability names: its signature, and not local", async () => {
     state.resolved = PROVIDER;
     const embedder = currentEmbedder();
+    // Gemini reads the use as a task type, so its vectors and its id are new.
     expect(embedder).toMatchObject({
-      id: PROVIDER.signature,
+      id: `${PROVIDER.signature}+tasks`,
       local: false,
     });
     expect(embedder.ready()).toBe(true);
@@ -152,6 +180,7 @@ describe("a provider model", () => {
       "gemini",
       "gemini-embedding-001",
       ["a", "b"],
+      "document",
     );
     expect(vectors.map((vector) => [...vector])).toEqual([
       [0, 1],
@@ -160,6 +189,15 @@ describe("a provider model", () => {
     expect(await embedder.embed([], "document")).toEqual([]);
     await expect(embedder.embed(["a"], "query", aborted())).rejects.toThrow();
     expect(embedWithProvider).toHaveBeenCalledOnce();
+
+    // Another provider ignores the use, and keeps its signature as its id.
+    state.resolved = {
+      ...PROVIDER,
+      providerId: "openai",
+      signature: "openai/e3",
+    };
+    expect(currentEmbedder().id).toBe("openai/e3");
+    state.resolved = PROVIDER;
 
     // The cached width answers. An unknown one is probed once.
     expect(await embedder.dimension()).toBe(768);

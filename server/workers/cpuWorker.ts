@@ -67,9 +67,6 @@ function send(message: WorkerMessage, transfer?: Transferable[]): void {
 // The model
 // ---------------------------------------------------------------------------
 
-let extractor: FeatureExtractionPipeline | null = null;
-let loading: Promise<void> | null = null;
-
 /**
  * The library, reading the model folder and the cache the way the server
  * does, and downloading only when `MODEL_DOWNLOADS` allows it.
@@ -84,26 +81,29 @@ async function transformers() {
 const SESSION_OPTIONS = { intraOpNumThreads: 2, interOpNumThreads: 1 };
 
 /**
- * Load the model once, on this thread.
+ * Embedding models by model id, each loaded once, on this thread.
  *
- * The main thread no longer loads it at all, so there is one copy in memory
- * rather than two. The cache directory is read the same way the in-process
- * version read it, because it is the same model files.
+ * The main thread does not load them at all, so there is one copy of each in
+ * memory rather than two. The server uses one. The benchmark compares
+ * several in one process, which is why this is a map. A load that failed is
+ * removed, so the next job tries again.
  */
-async function ensureModel(): Promise<FeatureExtractionPipeline> {
-  if (extractor) return extractor;
-  if (!loading) {
-    loading = (async () => {
+const extractors = new Map<string, Promise<FeatureExtractionPipeline>>();
+
+function ensureExtractor(id: string): Promise<FeatureExtractionPipeline> {
+  let loaded = extractors.get(id);
+  if (!loaded) {
+    loaded = (async () => {
       const { pipeline } = await transformers();
-      extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID, {
+      return pipeline("feature-extraction", id, {
         dtype: "q8",
         session_options: SESSION_OPTIONS,
       });
     })();
+    extractors.set(id, loaded);
+    loaded.catch(() => extractors.delete(id));
   }
-  await loading;
-  if (!extractor) throw new Error("The embedding model did not load");
-  return extractor;
+  return loaded;
 }
 
 interface CrossEncoder {
@@ -207,12 +207,13 @@ async function runEmbed(id: number, job: EmbedJob): Promise<void> {
     return;
   }
 
-  const model = await ensureModel();
+  const model = await ensureExtractor(job.model ?? EMBEDDING_MODEL_ID);
+  const pooling = job.pooling ?? "mean";
   let dimension = 0;
   const rows: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
-    const output = await model(batch, { pooling: "mean", normalize: true });
+    const output = await model(batch, { pooling, normalize: true });
     for (const row of output.tolist() as number[][]) {
       if (dimension === 0) dimension = row.length;
       rows.push(row);

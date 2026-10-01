@@ -106,8 +106,16 @@ describe("the embedder", () => {
     expect(builtinEmbedder.id).toBe(resolveEmbeddings().signature);
   });
 
-  it("embeds documents for both indexes", () => {
-    expect(indexed.map((call) => call.use)).not.toContain("query");
+  it("embeds documents for search, and texts to compare for dedupe", () => {
+    const uses = (prefix: string) =>
+      new Set(
+        indexed
+          .filter((call) => call.texts.some((text) => text.startsWith(prefix)))
+          .map((call) => call.use),
+      );
+    expect(uses("Ada Okafor")).toEqual(new Set(["document"]));
+    expect(uses("about |")).toEqual(new Set(["document"]));
+    expect(uses("task: clustering")).toEqual(new Set(["similarity"]));
     const texts = indexed.flatMap((call) => call.texts);
     // Ada's text once per index, and her about passage.
     expect(texts.filter((text) => text.includes("Ada Okafor"))).toHaveLength(2);

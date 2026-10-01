@@ -147,7 +147,7 @@ function l2Normalize(values: number[]): Float32Array {
  * Through the embedder search uses, so it honors the embeddings capability
  * and the embedder's count guard: a backend that returns fewer vectors than
  * inputs is an error, not a silently short batch. A duplicate check compares
- * one contact's text with another's, so both are documents.
+ * one contact's text with another's, so the use is `similarity`.
  *
  * @param items - Array of { id, text } to embed
  * @param embedder - The embedder its caller's checks allowed
@@ -164,7 +164,7 @@ export async function generateBatchEmbeddings(
     try {
       const vectors = await embedder.embed(
         batch.map((b) => b.text),
-        "document",
+        "similarity",
       );
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
@@ -190,7 +190,7 @@ export async function generateSingleEmbedding(
   text: string,
   embedder = currentEmbedder(),
 ): Promise<Float32Array> {
-  const [vector] = await embedder.embed([text], "document");
+  const [vector] = await embedder.embed([text], "similarity");
   if (!vector) throw new Error("No embedding returned for contact text");
   return l2Normalize(Array.from(vector));
 }

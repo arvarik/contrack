@@ -43,6 +43,15 @@
 //       recall@10 and MRR of the local answer with each. Run it with
 //       --contacts 300 for the search gate's corpus alone.
 //
+//   node scripts/benchmark-search.ts --contacts 300 --embedder Xenova/e5-small-v2
+//       Any mode above with another local embedding model in place of the
+//       bundled one, from EMBEDDERS below: both indexes are built with it, and
+//       every question is embedded with it. The model downloads once. At 300
+//       contacts the search gate's ids are fixed, so the quality numbers are
+//       the same on every run and compare across models. At 5,000 they move a
+//       little between runs, because the int8 scale comes from the first
+//       backfill batch.
+//
 // Flags: --json prints one JSON document instead of the report. --runs N sets
 // the timed repetitions per query (default 5, 3 for --live). --rrf-k N sets
 // the fusion constant for the k sweep (default: the code's RRF_K).
@@ -53,6 +62,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { LocalModel } from "../server/ai/embedder.ts";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -67,8 +77,56 @@ const rerankSweepMode = flag("--rerank-sweep");
 const vectorAbMode = flag("--vector-ab");
 const json = flag("--json");
 const verbose = flag("--verbose");
+const embedderModel = option("--embedder");
 const corpusMode =
-  live || rerankSweepMode || vectorAbMode || flag("--contacts");
+  live ||
+  rerankSweepMode ||
+  vectorAbMode ||
+  flag("--contacts") ||
+  flag("--embedder");
+
+/**
+ * Local embedding models to compare with the bundled one (--embedder). The
+ * pooling and the prefixes are the ones each model's card asks for.
+ */
+const EMBEDDERS: LocalModel[] = [
+  {
+    model: "Xenova/bge-small-en-v1.5",
+    dimension: 384,
+    pooling: "cls",
+    prefix: {
+      query: "Represent this sentence for searching relevant passages: ",
+    },
+  },
+  {
+    model: "Xenova/e5-small-v2",
+    dimension: 384,
+    pooling: "mean",
+    prefix: { query: "query: ", document: "passage: " },
+  },
+  { model: "Xenova/gte-small", dimension: 384, pooling: "mean" },
+  {
+    model: "Xenova/multilingual-e5-small",
+    dimension: 384,
+    pooling: "mean",
+    prefix: { query: "query: ", document: "passage: " },
+  },
+  {
+    model: "nomic-ai/nomic-embed-text-v1.5",
+    dimension: 768,
+    pooling: "mean",
+    prefix: { query: "search_query: ", document: "search_document: " },
+  },
+];
+const embedderCard = embedderModel
+  ? EMBEDDERS.find((card) => card.model === embedderModel)
+  : undefined;
+if (embedderModel && !embedderCard)
+  throw new Error(
+    `--embedder names a model the benchmark does not know. Known: ${EMBEDDERS.map((card) => card.model).join(", ")}`,
+  );
+if (embedderModel && vectorAbMode)
+  throw new Error("--vector-ab measures the bundled model's vectors only");
 const contactCount = Number(option("--contacts") ?? 5_000);
 const runs = Number(option("--runs") ?? (live ? 3 : 5));
 const rrfK =
@@ -336,19 +394,19 @@ async function seedCorpus() {
   const embedder = await load<typeof import("../server/ai/embedder.ts")>(
     "server/ai/embedder.ts",
   );
-  await embedder.initBuiltinEmbedder();
+  // Another local model stands in for the bundled one in everything below.
+  const card = embedderCard ?? embedder.BUILTIN_MODEL;
+  const chosen = embedder.localEmbedder(card);
+  if (embedderCard) embedder.setEmbedder(chosen);
+  if (!(await embedder.initLocalEmbedder(card)) && embedderCard)
+    throw new Error(`${card.model} did not load`);
   let embedded = 0;
   let embedMs = 0;
   // The A/B mode embeds each contact once itself, for both tables. The
-  // vectors are the built-in model's, so a pinned provider model skips them.
-  if (
-    embedder.currentEmbedder() === embedder.builtinEmbedder &&
-    embedder.builtinEmbedder.ready() &&
-    !vectorAbMode
-  )
-    [embedded, embedMs] = await timed(() =>
-      vectorIndex.backfillSearchEmbeddings(),
-    );
+  // vectors are a local model's, so a pinned provider model skips them. The
+  // store is built for the chosen model first, at its width.
+  if (embedder.currentEmbedder() === chosen && chosen.ready() && !vectorAbMode)
+    [embedded, embedMs] = await timed(() => vectorIndex.ensureEmbeddingStore());
   // The server loads the cross-encoder at boot. With background jobs off,
   // the benchmark loads it here, so the instant chunk includes it.
   const rerankers = await load<typeof import("../server/ai/reranker.ts")>(
@@ -366,6 +424,7 @@ async function seedCorpus() {
     phones: generated.flatMap((c) => c.phones).slice(0, 10),
     exactNames: corpus.contacts.slice(0, 10).map((c) => c.name),
     embedded,
+    embedder: chosen.id,
     reranker,
     timings: { seedMs: seedMs + generateMs, embedMs },
   };
@@ -562,6 +621,7 @@ async function localBenchmark(seeded: Seeded) {
   return {
     contacts: contactCount,
     vectors: seeded.embedded,
+    embedder: seeded.embedder,
     seedMs: Math.round(seeded.timings.seedMs),
     embedMs: Math.round(seeded.timings.embedMs),
     runs,
@@ -579,7 +639,7 @@ function printLocal(result: Awaited<ReturnType<typeof localBenchmark>>) {
   const lines: string[] = [];
   lines.push(
     `Ask Contrack, ${result.contacts.toLocaleString("en-US")} contacts, ` +
-      `${result.vectors.toLocaleString("en-US")} vectors ` +
+      `${result.vectors.toLocaleString("en-US")} vectors from ${result.embedder} ` +
       `(seeded in ${seconds(result.seedMs)}, embedded in ${seconds(result.embedMs)}), ${result.runs} timed runs per query, RRF k = ${result.rrfK}`,
   );
   lines.push("");
@@ -940,6 +1000,7 @@ async function rerankSweep(seeded: Seeded) {
   return {
     contacts: contactCount,
     vectors: seeded.embedded,
+    embedder: seeded.embedder,
     runs,
     questions: questions.length,
     queries: corpus.queries.length,

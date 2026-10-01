@@ -12,6 +12,7 @@ import type {
   DiagnosticsSnapshot,
 } from "./types.ts";
 import type { ModelClass } from "./routing/registry.ts";
+import type { EmbedUse } from "./embedder.ts";
 
 /**
  * Which capabilities a discovered model can serve.
@@ -151,6 +152,10 @@ export interface AIProvider {
   /**
    * Optional: generate embedding vectors. Only implemented by providers whose
    * models are selectable for the embeddings capability.
+   *
+   * `use` says what the texts are for. An adapter whose models embed by task
+   * reads it (Gemini's task types), and an adapter that does not ignores it.
+   * A dimension probe sends none.
    */
-  embed?(texts: string[], model: string): Promise<number[][]>;
+  embed?(texts: string[], model: string, use?: EmbedUse): Promise<number[][]>;
 }
