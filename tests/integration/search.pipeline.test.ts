@@ -23,6 +23,7 @@ import {
   rerankCandidates,
 } from "../../server/ai/aiService.ts";
 import { streamFor } from "../../server/ai/gateway.ts";
+import { compileQueryPlan } from "../../server/ai/queryConstraints.ts";
 import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";
@@ -246,5 +247,71 @@ describe("Ask Contrack final results", () => {
       ).status,
     ).toBe(400);
     expect(streamFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("a place in an address", () => {
+  // Two people in Berlin, and only Kai's address names the street.
+  beforeEach(() => {
+    const add = sqlite.prepare(
+      "INSERT INTO contacts(id,name,location,ownerId) VALUES (?,?,'Berlin, Germany',?)",
+    );
+    add.run("k", "Kai", localOwnerId());
+    add.run("b", "Bea", localOwnerId());
+    sqlite
+      .prepare(
+        "INSERT INTO contact_addresses(id,contactId,address) VALUES ('k1','k','Kastanienallee 12, 10435 Berlin')",
+      )
+      .run();
+  });
+  const ask = async (query: string) =>
+    (await request(app).post("/api/search/semantic").send({ query })).body
+      .matches as { id: string; aiReason: string; matchedOn: object[] }[];
+
+  it("lets the database prove a street the planner read as a place", async () => {
+    // The plan the planner's matcher compiles to, as production compiles it.
+    const question = "Who lives on Kastanienallee?";
+    vi.mocked(parseSearchQuery).mockResolvedValue(
+      compileQueryPlan(question, {
+        must: { locationMatchers: ["Kastanienallee"] },
+        should: {},
+        confidence: "high",
+        rationale: "",
+      }),
+    );
+    const matches = await ask(question);
+    expect(matches.map((m) => [m.id, m.aiReason])).toEqual([
+      ["k", "Has an address at Kastanienallee 12, 10435 Berlin."],
+    ]);
+    expect(matches[0]!.matchedOn[0]).toMatchObject({
+      field: "address",
+      how: "filter",
+    });
+    expect(rerankCandidates).not.toHaveBeenCalled();
+  });
+
+  it("sends the model the addresses, and quotes the whole one it cites", async () => {
+    vi.mocked(rerankCandidates).mockImplementation(
+      async (_query, candidates) => {
+        expect(candidates.find((c) => c.id === "k")?.addresses).toBe(
+          "Kastanienallee 12, 10435 Berlin",
+        );
+        return [
+          {
+            contact_id: "k",
+            verified_field: "addresses",
+            verified_value: "Kastanienallee 12",
+          },
+        ];
+      },
+    );
+    const matches = await ask("neighbours on the Kastanienallee");
+    expect(matches.map((m) => [m.id, m.aiReason])).toEqual([
+      ["k", "Has an address at Kastanienallee 12, 10435 Berlin."],
+    ]);
+    expect(matches[0]!.matchedOn[0]).toMatchObject({
+      field: "address",
+      how: "ai",
+    });
   });
 });

@@ -243,6 +243,12 @@ function applyHardFilters(
     ? `COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
         COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText`
     : `'' AS tagsText, '' AS interestsText`;
+  // A place can be in an address: a street or a postcode only ever is. The
+  // subquery reads the (contactId, address) index, and only for a place.
+  const hasLocation = !!plan.must.locations?.length || !!locRe;
+  const addressText = hasLocation
+    ? "(SELECT json_group_array(address) FROM contact_addresses WHERE contactId = c.id) AS addressesJson"
+    : "'[]' AS addressesJson";
   // The request's facets narrow the filter too, so its contacts hold both.
   const facetClause = facets ? ` AND (${facets.sql})` : "";
   const rows = sqlite
@@ -257,7 +263,8 @@ function applyHardFilters(
         c.role,
         c.headline,
         c.industry,
-        ${childText}
+        ${childText},
+        ${addressText}
       FROM contacts c
       WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}${facetClause}
     `,
@@ -273,17 +280,27 @@ function applyHardFilters(
     industry: string | null;
     tagsText: string;
     interestsText: string;
+    addressesJson: string;
   }[];
 
   const allowedIds = new Set<string>();
   const allowed: AllowedContact[] = [];
   const evidence = new Map<string, ReasonEvidence[]>();
-  const hasLocation = !!plan.must.locations?.length || !!locRe;
+  const inPlace = (text: string) =>
+    plan.must.locations?.length
+      ? matchesQueryLocations(text, plan.must.locations)
+      : !!locRe && locRe.test(text);
   for (const r of rows) {
-    if (plan.must.locations?.length) {
-      if (!matchesQueryLocations(r.location ?? "", plan.must.locations))
-        continue;
-    } else if (locRe && !(r.location && locRe.test(r.location))) continue;
+    // The location first, then each address, and the proof names the one.
+    let placeProof: ReasonEvidence | undefined;
+    if (hasLocation) {
+      if (r.location && inPlace(r.location)) placeProof = { field: "location" };
+      else {
+        const address = (JSON.parse(r.addressesJson) as string[]).find(inPlace);
+        if (!address) continue;
+        placeProof = { field: "address", value: address };
+      }
+    }
     if (coRe && !(r.company && coRe.test(r.company))) continue;
     // The current role takes precedence over a headline about prior work.
     const currentRole = r.role?.trim() || r.headline;
@@ -313,7 +330,7 @@ function applyHardFilters(
     if (roleRe && currentRole)
       proven.push({ field: "role", value: currentRole });
     if (coRe) proven.push({ field: "company" });
-    if (hasLocation) proven.push({ field: "location" });
+    if (placeProof) proven.push(placeProof);
     if (industryProof) proven.push(industryProof);
     if (temporal) proven.push({ field: "lastContact" });
     evidence.set(r.id, proven);

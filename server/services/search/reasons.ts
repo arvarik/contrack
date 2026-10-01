@@ -23,6 +23,7 @@ export type ReasonField =
   | "preferences"
   | "experience"
   | "education"
+  | "address"
   | "lastContact";
 
 export interface ReasonEvidence {
@@ -176,6 +177,9 @@ export function buildReason(
       case "education":
         if (value)
           parts.push(templated("education record mentions", `“${value}”`));
+        break;
+      case "address":
+        if (value) parts.push(templated("has an address at", value));
         break;
       case "lastContact":
         parts.push(lastContactPart(contact.lastContactedAt, now));

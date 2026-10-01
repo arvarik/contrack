@@ -359,6 +359,12 @@ function facetAnswer(
  * Build compressed contact profiles for the LLM reranker.
  * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
  */
+/** A contact's addresses as text, in their order. */
+const addressesOf = (contact: HydratedMatch): string[] =>
+  (Array.isArray(contact.addresses) ? contact.addresses : [])
+    .map((entry: { address?: unknown }) => entry?.address)
+    .filter((address): address is string => typeof address === "string");
+
 function buildCompressedCandidates(
   matches: HydratedMatch[],
   scope: Scope,
@@ -405,6 +411,10 @@ function buildCompressedCandidates(
       .filter((v) => typeof v === "string")
       .join(", ")
       .slice(0, 400);
+    // A street or a postcode is only ever in an address, so the model sees
+    // them to check a question about a place.
+    const addresses = addressesOf(match);
+    if (addresses.length) entry.addresses = addresses.join(" | ").slice(0, 400);
     const passages = selected.get(match.id);
     if (passages?.length) {
       entry.passages = passages.map(({ id, field, context, text }) => ({
@@ -473,6 +483,13 @@ function rerankEvidence(
     }
     case "name":
       return null;
+    case "addresses": {
+      // The whole address the quote is from, as the contact has it.
+      const address = addressesOf(contact).find((text) =>
+        text.toLowerCase().includes(value.toLowerCase()),
+      );
+      return address ? { field: "address", value: address } : null;
+    }
     case "interests":
       return {
         field:

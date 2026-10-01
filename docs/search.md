@@ -169,7 +169,7 @@ The answer lists 30 people at most. When a question made only of facets finds mo
 
 For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
 
-AI never sees a contact's addresses. So with AI on, a street or a postcode in Ask finds nobody. The Network list and the palette find it, and so does Ask with AI off.
+AI checks a contact's addresses too. A street or a postcode in a question, such as "Who lives on Kastanienallee?", finds the people whose address names it, and the reason names that address.
 
 ### Verified answers and reasons
 
