@@ -1,8 +1,8 @@
 // =============================================================================
 // Search quality gate
 // =============================================================================
-// Three hundred contacts, seventy queries, five rankings, two numbers each,
-// all compared with a committed baseline.
+// Three hundred contacts, seventy-nine queries, five rankings, two numbers
+// each, all compared with a committed baseline.
 //
 // WHEN THIS FAILS. Either a change moved search ranking and the baseline has
 // not caught up, or a change moved search ranking and nobody meant it to. The
@@ -42,6 +42,22 @@
 // reranked answers stay inside the tolerance, which is another way of saying
 // neither changes what a person sees. recall@10 and MRR measure the answer,
 // not the arithmetic that produced it.
+//
+// The address weight, measured the same way (2026-09-30):
+//
+//   the address weight raised from 0.5 to 3        all five
+//   the address weight dropped from 0.5 to 0       all but sidebar
+//   the address text left out of the index         all five, and replay
+//
+// A weight of 0 does not take the column out of the index. FTS5 still
+// matches it and scores it 0, so a street, a postcode or a town that only one
+// address names is still found, and still first. The query that falls is
+// q74, where six contacts share the city and only the address can break the
+// tie. The address collisions fail in turn as the weight rises past the
+// field they share a word with. Of the weights measured, Changi first failed
+// at 1, Seville at 2.5, Danube at 5 and Fleet at 9, and Ferreira still held
+// at 12. From 0.25 to 0.9 nothing moves: the address is the lightest text
+// either way.
 // =============================================================================
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -96,7 +112,7 @@ import {
 /**
  * Smaller than one query.
  *
- * A kind holds four or ten queries, so each one is worth at least 0.1 of its
+ * A kind holds four to ten queries, so each one is worth at least 0.1 of its
  * kind's recall. A tolerance under that means no query can move into or out
  * of the first ten without this failing, while still absorbing the last-digit
  * float drift that a different CPU could produce in the distance arithmetic.

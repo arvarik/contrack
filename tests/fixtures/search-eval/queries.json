@@ -560,5 +560,81 @@
     "expect": [
       "siobhan-murphy"
     ]
+  },
+  {
+    "id": "q71",
+    "kind": "address",
+    "q": "Strandgaten",
+    "expect": [
+      "imogen-halvorsen"
+    ]
+  },
+  {
+    "id": "q72",
+    "kind": "address",
+    "q": "M20 2LW",
+    "expect": [
+      "christopher-nwosu"
+    ]
+  },
+  {
+    "id": "q73",
+    "kind": "address",
+    "q": "Espoo",
+    "expect": [
+      "hanna-virtanen"
+    ]
+  },
+  {
+    "id": "q74",
+    "kind": "address",
+    "q": "Florianska 15, Krakow, Poland",
+    "expect": [
+      "mateusz-wojcik"
+    ]
+  },
+  {
+    "id": "q75",
+    "kind": "address-collision",
+    "q": "Ferreira",
+    "expect": [
+      "diego-ferreira"
+    ]
+  },
+  {
+    "id": "q76",
+    "kind": "address-collision",
+    "q": "Danube",
+    "expect": [
+      "elizabeth-varga"
+    ]
+  },
+  {
+    "id": "q77",
+    "kind": "address-collision",
+    "q": "Fleet",
+    "expect": [
+      "robert-castellanos"
+    ]
+  },
+  {
+    "id": "q78",
+    "kind": "address-collision",
+    "q": "Seville",
+    "expect": [
+      "xiomara-reyes",
+      "oliver-brandt",
+      "near-imogen-halvorsen",
+      "noise-087",
+      "noise-116"
+    ]
+  },
+  {
+    "id": "q79",
+    "kind": "address-collision",
+    "q": "Changi",
+    "expect": [
+      "ravi-krishnan"
+    ]
   }
 ]

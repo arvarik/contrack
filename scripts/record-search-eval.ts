@@ -9,7 +9,7 @@
 // It writes five files and every one of them is committed:
 //
 //   tests/fixtures/search-eval/contacts.json        the 300 contact corpus
-//   tests/fixtures/search-eval/queries.json         the 70 golden queries
+//   tests/fixtures/search-eval/queries.json         the 79 golden queries
 //   tests/fixtures/search-eval/vectors.bin          one recorded vector per row
 //   tests/fixtures/search-eval/rerank-scores.json   the cross-encoder's scores
 //   tests/eval/search.baseline.json                 recall@10 and MRR per channel

@@ -156,6 +156,7 @@ export function seedCorpus(
     interests: c.interests,
     emails: c.emails ?? [],
     phones: c.phones ?? [],
+    addresses: c.addresses ?? [],
   }));
 }
 
