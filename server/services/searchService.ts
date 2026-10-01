@@ -299,11 +299,11 @@ function facetEvidence(
 
 /**
  * The facets as the Network list's query, `/?q=<this>`, or undefined when
- * the list cannot open the same set: it reads no `near:`, and a value the
- * query syntax cannot hold would read back as another filter.
+ * the query would read back as another set. A `near:` reads back without the
+ * point the server found for its place, and the list reads no `near:`. A
+ * value the query syntax cannot hold reads back as another filter.
  */
 function networkQuery(filters: FacetFilter[]): string | undefined {
-  if (filters.some((filter) => filter.field === "near")) return undefined;
   const query = formatFacetQuery(filters);
   return facetKey(parseFacetQuery(query).filters) === facetKey(filters)
     ? query

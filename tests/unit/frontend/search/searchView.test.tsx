@@ -811,16 +811,15 @@ describe("the page", () => {
   it("counts every match of a question of facets, links the rest, and saves the count", async () => {
     // The server names the Network query only when the list can read it.
     const sent = stubFetch((s) => {
+      const asked = String(s.body?.query);
       if (s.url.endsWith("/search/semantic"))
         return new Response(
           line({
             phase: "complete",
             matches: MATCHES,
             fallback: false,
-            total: 1501,
-            ...(s.body?.query === "tag:investor"
-              ? { facets: "tag:investor" }
-              : {}),
+            total: asked === "tag:rare" ? MATCHES.length : 1501,
+            ...(asked.startsWith("tag:") ? { facets: asked } : {}),
           }),
         );
     });
@@ -848,6 +847,11 @@ describe("the page", () => {
       ).toBe(true),
     );
     expect(screen.getByText("3 of 1,501 matches")).toBeTruthy();
+    expect(seeAll()).toBeNull();
+
+    // A list that holds every match has nothing more to open.
+    ask("tag:rare");
+    expect(await screen.findByText("3 matches")).toBeTruthy();
     expect(seeAll()).toBeNull();
   });
 

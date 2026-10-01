@@ -136,6 +136,10 @@ describe("the search prompt", () => {
     expect(PRIVATE_TOPICS).toMatch(/politics/);
     // An address, home or office, is research's to report when a page states it.
     expect(PRIVATE_TOPICS).not.toMatch(/address/);
+    expect(buildSearchPrompt(contact())).toContain(
+      "- Address: a home or office street address a page states",
+    );
+    expect(buildShortSearchPrompt(contact())).toMatch(/Topics: .*\bAddress\b/);
     expect(
       buildExtractionPrompt(contact(), "- Address: 1 Main St [example.org]"),
     ).toContain("each home or office address an Address fact states");
