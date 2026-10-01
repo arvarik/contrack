@@ -388,17 +388,22 @@ export async function embedQuery(
 ): Promise<Float32Array | null> {
   if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0)
     return null;
-  const { local } = currentEmbedder();
-  if (!aiAllowed && !local) return null;
+  // One embedder for the check and the call.
+  const embedder = currentEmbedder();
+  if (!aiAllowed && !embedder.local) return null;
   try {
     // A backfill can hold the worker queue. A query must not wait behind
     // it before the planner's own budget even starts. Cancel queued local
     // work after 100 ms and keep the keyword channel available. A local
     // model always runs on that worker: the main thread never loads
     // onnxruntime (`cpuWorker.ts`).
-    return local
-      ? await withTimeout((budget) => embedText(text, budget), 100, signal)
-      : await embedText(text, signal);
+    return embedder.local
+      ? await withTimeout(
+          (budget) => embedText(text, budget, embedder),
+          100,
+          signal,
+        )
+      : await embedText(text, signal, embedder);
   } catch (err: unknown) {
     signal?.throwIfAborted();
     log.warn(

@@ -155,7 +155,7 @@ export interface AIProvider {
    *
    * `use` says what the texts are for. An adapter whose models embed by task
    * reads it (Gemini's task types), and an adapter that does not ignores it.
-   * A dimension probe sends none.
+   * A call with no use gets the model's default.
    */
   embed?(texts: string[], model: string, use?: EmbedUse): Promise<number[][]>;
 }

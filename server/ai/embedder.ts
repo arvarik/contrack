@@ -134,32 +134,52 @@ const fallbackExtractors = new Map<
   Promise<FeatureExtractionPipeline>
 >();
 
-/** One adapter per local model, so a caller can hold on to it. */
-const localEmbedders = new Map<string, Embedder>();
+/** One adapter per local model, with the card it was made from. */
+const localEmbedders = new Map<string, { card: string; embedder: Embedder }>();
+
+/** A card's settings as one string, to tell two cards for one model apart. */
+function cardKey(local: LocalModel): string {
+  const { query = "", document = "", similarity = "" } = local.prefix ?? {};
+  return JSON.stringify([
+    local.dimension,
+    local.pooling,
+    query,
+    document,
+    similarity,
+  ]);
+}
 
 /**
  * The local model `local` on the CPU worker. Ready once it has loaded
  * (`initLocalEmbedder`). Its id is `builtin/<model>`.
+ *
+ * One card per model: a second card with other settings would share the
+ * first one's id while its vectors differ, so it throws instead.
  */
 export function localEmbedder(local: LocalModel): Embedder {
-  let embedder = localEmbedders.get(local.model);
-  if (!embedder) {
-    embedder = {
-      id: builtinSignature(local.model),
-      local: true,
-      ready: () => readyModels.has(local.model),
-      dimension: async () => local.dimension,
-      embed: (texts, use, signal) => {
-        const prefix = local.prefix?.[use];
-        return embedLocal(
-          local,
-          prefix ? texts.map((text) => prefix + text) : texts,
-          signal,
-        );
-      },
-    };
-    localEmbedders.set(local.model, embedder);
+  const known = localEmbedders.get(local.model);
+  if (known) {
+    if (known.card !== cardKey(local))
+      throw new AppError(
+        `Two local model cards name ${local.model} with different settings`,
+      );
+    return known.embedder;
   }
+  const embedder: Embedder = {
+    id: builtinSignature(local.model),
+    local: true,
+    ready: () => readyModels.has(local.model),
+    dimension: async () => local.dimension,
+    embed: (texts, use, signal) => {
+      const prefix = local.prefix?.[use];
+      return embedLocal(
+        local,
+        prefix ? texts.map((text) => prefix + text) : texts,
+        signal,
+      );
+    },
+  };
+  localEmbedders.set(local.model, { card: cardKey(local), embedder });
   return embedder;
 }
 
@@ -405,4 +425,46 @@ export function mayEmbedContactsFor(
   embedder = currentEmbedder(),
 ): boolean {
   return embedder.local || aiAllowedForUser(ownerId);
+}
+
+/** The code a guarded embedder refuses with. */
+export const EMBEDDING_REFUSED = "EMBEDDING_REFUSED";
+
+/**
+ * `embedder`, refusing every call once `allowed()` says no.
+ *
+ * A run checks `mayEmbedContactsFor` before it starts, and an account can
+ * turn AI off while the run is under way. Wrapped, every call checks again,
+ * so nothing more of that account reaches a model that is not local. A
+ * refused call rejects with `EMBEDDING_REFUSED` (`isRefused`), and the run
+ * stops for that account.
+ */
+export function whileAllowed(
+  embedder: Embedder,
+  allowed: () => boolean,
+): Embedder {
+  return {
+    ...embedder,
+    embed: (texts, use, signal) =>
+      allowed()
+        ? embedder.embed(texts, use, signal)
+        : Promise.reject(
+            new AppError("This account may no longer be embedded", 409, {
+              code: EMBEDDING_REFUSED,
+            }),
+          ),
+  };
+}
+
+/** The embedder a run uses for one account: `embedder`, while it may embed it. */
+export function embedderFor(
+  ownerId: string,
+  embedder = currentEmbedder(),
+): Embedder {
+  return whileAllowed(embedder, () => mayEmbedContactsFor(ownerId, embedder));
+}
+
+/** True when `err` is a guarded embedder's refusal. */
+export function isRefused(err: unknown): boolean {
+  return (err as { code?: unknown } | null)?.code === EMBEDDING_REFUSED;
 }

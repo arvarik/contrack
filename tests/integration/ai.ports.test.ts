@@ -20,6 +20,7 @@ import { aiCache } from "../../server/utils/aiCache.ts";
 import {
   getEmbeddingsState,
   resolveEmbeddings,
+  setEmbeddingsState,
 } from "../../server/ai/embeddings.ts";
 import { setPreferences } from "../../server/services/userPreferencesService.ts";
 import {
@@ -32,14 +33,19 @@ import {
 import { setReranker, type Reranker } from "../../server/ai/reranker.ts";
 import {
   backfillSearchEmbeddings,
+  embedContact,
   ensureEmbeddingStore,
 } from "../../server/services/search/vectorIndex.ts";
 import {
   backfillEmbeddings,
+  backfillOwnerEmbeddings,
   ensureDedupeEmbeddingStore,
   generateAndStoreBulkEmbeddings,
+  generateAndStoreEmbedding,
   generateBatchEmbeddings,
   rebuildDedupeEmbeddingTable,
+  reEmbedStaleContacts,
+  storeEmbedding,
 } from "../../server/services/dedupe/embeddings.ts";
 
 /** A question, the only kind the rerank stage reads. */
@@ -166,7 +172,7 @@ describe("the reranker", () => {
   });
 });
 
-describe("an embedder pinned during a backfill", () => {
+describe("a change during a run", () => {
   /** A hosted model that keeps what it is sent. */
   const hostedTexts: string[] = [];
   const hosted: Embedder = {
@@ -176,52 +182,173 @@ describe("an embedder pinned during a backfill", () => {
       return texts.map(() => new Float32Array(384));
     },
   };
-  /** A local model whose first call pins `hosted`, as an admin would. */
-  const pinsHosted = (): Embedder => ({
-    ...recording(true),
-    async embed(texts, use) {
-      setEmbedder(hosted);
-      return recording(true).embed(texts, use);
-    },
+  /** `base`, whose first call makes `change`, as an admin or an owner would. */
+  const changesOnFirstCall = (change: () => void, base = recording(true)) => {
+    let first = true;
+    return {
+      ...base,
+      async embed(texts: string[], use: EmbedUse) {
+        if (first) change();
+        first = false;
+        return base.embed(texts, use);
+      },
+    } satisfies Embedder;
+  };
+  const pinHosted = () => setEmbedder(hosted);
+  const aiOff = () => setPreferences(ensureLocalOwner(), { aiAssist: false });
+  let ids: string[] = [];
+  const pending = async (count = 1) =>
+    ({ createdIds: ids } = await contactService.bulkCreateContacts(
+      scope(),
+      Array.from({ length: count }, (_, i) => ({
+        name: `Pending ${i}`,
+        about: `Keeps bees, hive ${i}.`,
+      })),
+    )).createdIds;
+
+  afterEach(() => {
+    hostedTexts.length = 0;
+    setPreferences(ensureLocalOwner(), { aiAssist: true });
+    sqlite
+      .prepare(
+        "DELETE FROM contacts WHERE id IN (SELECT value FROM json_each(?))",
+      )
+      .run(JSON.stringify(ids));
   });
 
-  it("reads nothing of a round under way, for an account with AI off", async () => {
-    setPreferences(ensureLocalOwner(), { aiAssist: false });
-    const {
-      createdIds: [id],
-    } = await contactService.bulkCreateContacts(scope(), [
-      { name: "Cy Pinned", role: "Founder", about: "Keeps bees in Kreuzberg." },
-    ]);
-    try {
-      hostedTexts.length = 0;
-      setEmbedder(pinsHosted());
-      // The contact and its passage are two calls. Both use the round's model.
-      expect(await backfillSearchEmbeddings()).toBe(0);
-      const items = Array.from({ length: 65 }, (_, i) => ({
-        id: `d${i}`,
-        text: `contact ${i}`,
-      }));
-      // Two dedupe batches of 64 and 1, with the embedder the caller allowed.
-      const allowed = pinsHosted();
-      setEmbedder(allowed);
-      await generateBatchEmbeddings(items, allowed);
-      expect(hostedTexts).toEqual([]);
-      // And the batch that saw the change is not stored.
-      setEmbedder(pinsHosted());
-      expect(await generateAndStoreBulkEmbeddings([id])).toBe(0);
-    } finally {
-      setPreferences(ensureLocalOwner(), { aiAssist: true });
-      sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(id);
-    }
+  it("a model pinned mid-run reads nothing of an account with AI off", async () => {
+    aiOff();
+    const [id] = await pending();
+    // The contact and its passage are two calls. Both use the run's model.
+    setEmbedder(changesOnFirstCall(pinHosted));
+    expect(await backfillSearchEmbeddings()).toBe(0);
+    setEmbedder(changesOnFirstCall(pinHosted));
+    expect(await embedContact(id)).toMatchObject({ status: "outdated" });
+    // Two dedupe batches of 64 and 1, with the embedder the caller allowed.
+    const allowed = changesOnFirstCall(pinHosted);
+    setEmbedder(allowed);
+    const items = Array.from({ length: 65 }, (_, i) => ({
+      id: `${i}`,
+      text: `t${i}`,
+    }));
+    await generateBatchEmbeddings(items, allowed);
+    expect(hostedTexts).toEqual([]);
   });
+
+  it.each([
+    ["one contact", (id: string) => generateAndStoreEmbedding(id)],
+    ["a bulk import", (id: string) => generateAndStoreBulkEmbeddings([id])],
+    ["an account's backlog", () => backfillOwnerEmbeddings(scope())],
+    ["the boot sweep", () => backfillEmbeddings()],
+    [
+      "a stale contact",
+      (id: string) => {
+        storeEmbedding(id, new Float32Array(384).fill(0.05));
+        sqlite
+          .prepare(
+            "UPDATE dedupe_embedding_meta SET embeddedAt = '2000' WHERE contactId = ?",
+          )
+          .run(id);
+        return reEmbedStaleContacts(scope());
+      },
+    ],
+  ])("dedupe stores nothing from %s once the model changed", async (_, run) => {
+    const [id] = await pending();
+    setEmbedder(changesOnFirstCall(pinHosted));
+    expect(Number(await run(id))).toBe(0);
+    expect(calls).toEqual([{ use: "similarity", texts: [expect.any(String)] }]);
+    expect(hostedTexts).toEqual([]);
+  });
+
+  it("sends nothing more of an account that turns AI off during a run", async () => {
+    const created = await pending(65);
+    const contactTexts = () =>
+      hostedTexts.filter((text) => text.startsWith("Pending"));
+    // Search: the contacts' call turns AI off, so their passages never leave.
+    setEmbedder(changesOnFirstCall(aiOff, hosted));
+    expect(await backfillSearchEmbeddings()).toBe(0);
+    expect(contactTexts()).toHaveLength(64);
+    expect(hostedTexts).toHaveLength(64);
+    setPreferences(ensureLocalOwner(), { aiAssist: true });
+    hostedTexts.length = 0;
+    setEmbedder(changesOnFirstCall(aiOff, hosted));
+    expect(await embedContact(created[0])).toEqual({
+      status: "skipped",
+      reason: "ai_off",
+    });
+    expect(hostedTexts).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "a bulk import",
+      (created: string[]) => generateAndStoreBulkEmbeddings(created),
+    ],
+    ["an account's backlog", () => backfillOwnerEmbeddings(scope())],
+    ["the boot sweep", () => backfillEmbeddings()],
+    [
+      "stale contacts",
+      (created: string[]) => {
+        for (const id of created) storeEmbedding(id, new Float32Array(384));
+        sqlite
+          .prepare("UPDATE dedupe_embedding_meta SET embeddedAt = '2000'")
+          .run();
+        return reEmbedStaleContacts(scope());
+      },
+    ],
+  ])(
+    "dedupe sends %s's first batch of 64, and no more, once AI goes off",
+    async (_, run) => {
+      const created = await pending(65);
+      setEmbedder(changesOnFirstCall(aiOff, hosted));
+      await run(created);
+      expect(hostedTexts).toHaveLength(64);
+    },
+  );
 });
 
 describe("the stores", () => {
-  it("rebuild for an embedder with a new id, and record it", async () => {
+  it("take no vector from an embedder they were not built for", async () => {
+    const {
+      createdIds: [id],
+    } = await contactService.bulkCreateContacts(scope(), [{ name: "Di New" }]);
+    setEmbedder(recording(true));
+    setEmbeddingsState({ signature: "test/other", dimension: 384 });
+    setEmbeddingsState({ signature: "test/other", dimension: 384 }, "dedupe");
+    expect(await backfillSearchEmbeddings()).toBe(0);
+    expect(await embedContact(id)).toMatchObject({ status: "outdated" });
+    expect(await generateAndStoreEmbedding(id)).toBe(false);
+    sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(id);
+  });
+
+  it("keep their record when the model changes during the probe", async () => {
+    setEmbedder({
+      ...recording(true, "test/probing"),
+      dimension: async () => {
+        setEmbedder(recording(true, "test/after"));
+        return 384;
+      },
+    });
+    expect(await ensureEmbeddingStore()).toBe(0);
+    setEmbedder({
+      ...recording(true, "test/probing"),
+      dimension: async () => {
+        setEmbedder(recording(true, "test/after"));
+        return 384;
+      },
+    });
+    expect(await ensureDedupeEmbeddingStore()).toBe(0);
+    expect(getEmbeddingsState()?.signature).toBe("test/other");
+    expect(getEmbeddingsState("dedupe")?.signature).toBe("test/other");
+  });
+
+  it("rebuild for an embedder with a new id, record it, and rebuild only once", async () => {
     setEmbedder(recording(true, "test/next"));
     expect(await ensureEmbeddingStore()).toBe(2);
     expect(getEmbeddingsState()?.signature).toBe("test/next");
     expect(await ensureDedupeEmbeddingStore()).toBe(2);
     expect(getEmbeddingsState("dedupe")?.signature).toBe("test/next");
+    expect(await ensureEmbeddingStore()).toBe(0);
+    expect(await ensureDedupeEmbeddingStore()).toBe(0);
   });
 });
