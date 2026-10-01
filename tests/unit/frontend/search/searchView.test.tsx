@@ -808,8 +808,9 @@ describe("the page", () => {
     random.mockRestore();
   });
 
-  it("counts every match of a question of facets, and links a general question to the rest", async () => {
-    stubFetch((s) => {
+  it("counts every match of a question of facets, links the rest, and saves the count", async () => {
+    // The server names the Network query only when the list can read it.
+    const sent = stubFetch((s) => {
       if (s.url.endsWith("/search/semantic"))
         return new Response(
           line({
@@ -817,22 +818,37 @@ describe("the page", () => {
             matches: MATCHES,
             fallback: false,
             total: 1501,
+            ...(s.body?.query === "tag:investor"
+              ? { facets: "tag:investor" }
+              : {}),
           }),
         );
     });
     renderView();
+    const seeAll = () =>
+      screen.queryByRole("link", { name: "See all in Network" });
 
     ask("tag:investor");
     expect(await screen.findByText("3 of 1,501 matches")).toBeTruthy();
-    // Only a general question has its facets to hand.
-    const seeAll = () =>
-      screen.queryByRole("link", { name: "See all in Network" });
-    expect(seeAll()).toBeNull();
-
-    ask("Who do I track?");
+    expect(seeAll()?.getAttribute("href")).toBe("/?q=tag%3Ainvestor");
     await waitFor(() =>
-      expect(seeAll()?.getAttribute("href")).toBe("/?q=tracked%3Ayes"),
+      expect(
+        sent.find((s) => s.url.includes("/search/history") && s.body)?.body,
+      ).toMatchObject({ query: "tag:investor", resultCount: 1501 }),
     );
+
+    // The history records an answer once it has landed.
+    ask("near:Paris");
+    await waitFor(() =>
+      expect(
+        sent.some(
+          (s) =>
+            s.url.includes("/search/history") && s.body?.query === "near:Paris",
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByText("3 of 1,501 matches")).toBeTruthy();
+    expect(seeAll()).toBeNull();
   });
 
   it("shows no Try asking for an account with nothing to ask about", async () => {

@@ -71,3 +71,18 @@ export const GROUP_HEADING_EMERALD = `${GROUP_HEADING} [&_[cmdk-group-heading]]:
 export function stripModePrefix(query: string): string {
   return query.replace(/^[?>]\s*/, "").trim();
 }
+
+/**
+ * The heading over the palette's AI results. A question of facets alone can
+ * find thousands, and the list stops at 30, so a cut list says how many.
+ */
+export function aiResultsHeading(
+  fallback: boolean,
+  shown: number,
+  total: number,
+): string {
+  const heading = fallback ? "Not verified by AI" : "AI query results";
+  return total > shown
+    ? `${heading} · ${shown} of ${total.toLocaleString()}`
+    : heading;
+}

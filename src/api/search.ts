@@ -139,6 +139,7 @@ export const useSemanticSearch = (externalState?: {
                 chunk.matches as unknown as SemanticSearchResult["matches"],
               fallback: chunk.fallback,
               total: chunk.total,
+              facets: chunk.facets,
             });
             complete = chunk.phase === "complete" || chunk.phase === "enriched";
             setPhase(complete ? "done" : "enriching");
@@ -216,6 +217,7 @@ const searchChunkSchema = z.discriminatedUnion("phase", [
       .max(30),
     fallback: z.boolean(),
     total: z.number().int().nonnegative().optional(),
+    facets: z.string().optional(),
   }),
   z.object({ phase: z.literal("error"), error: z.string() }),
 ]);

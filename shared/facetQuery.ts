@@ -120,3 +120,20 @@ export function parseFacetQuery(input: string): {
   }
   return { freeText: rest.join(" "), filters };
 }
+
+/**
+ * A filter as a person types it, the inverse of `parseFilterValue`:
+ * `industry:"Venture Capital"`, `contacted:>90d`, `near:Paris/50km`. A value
+ * with a space goes in double quotes, so the query reads it as one word.
+ */
+export function formatFacet(filter: FacetFilter): string {
+  const value = /\s/.test(filter.value) ? `"${filter.value}"` : filter.value;
+  return filter.field === "near"
+    ? `near:${value}/${filter.km ?? 25}km`
+    : `${filter.field}:${filter.operator ?? ""}${value}`;
+}
+
+/** Filters as one query, which `parseFacetQuery` reads back to them. */
+export function formatFacetQuery(filters: readonly FacetFilter[]): string {
+  return filters.map(formatFacet).join(" ");
+}

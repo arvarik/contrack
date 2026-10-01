@@ -522,6 +522,8 @@ export interface SemanticSearchResult {
    * stops at 30, and "Who do I track?" can hold thousands.
    */
   total?: number;
+  /** For a question of facets alone, the same list as a Network query. */
+  facets?: string;
 }
 
 // =============================================================================

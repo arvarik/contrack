@@ -46,6 +46,8 @@ import {
   hasContentWords,
 } from "../../server/services/search/implicitFacets.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
+import { formatFacetQuery } from "../../shared/facetQuery.ts";
+import type { FacetFilter } from "../../shared/searchFacets.ts";
 import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 
@@ -297,7 +299,9 @@ describe("Ask takes facets from the request and the question", () => {
       [["Rhea Quill", true, "Tagged rare."]],
     );
     expect(result.total).toBe(1);
-    // A facet that holds 150 people shows the first 30 and counts them all.
+    expect(result.facets).toBe("tag:rare");
+    // A facet that holds 150 people shows the first 30 and counts them all,
+    // and names the query that opens all of them in the Network list.
     const guild = await searchService.semanticSearch(
       scope(),
       'company:"Engineering Guild"',
@@ -305,6 +309,26 @@ describe("Ask takes facets from the request and the question", () => {
     );
     expect(guild.matches).toHaveLength(30);
     expect(guild.total).toBe(ENGINEERS);
+    expect(guild.facets).toBe('company:"Engineering Guild"');
+    // The Network list reads no near:, so a list with one names no query.
+    const near = await searchService.semanticSearch(
+      scope(),
+      "tracked:no",
+      "filters-near",
+      undefined,
+      {
+        filters: [
+          {
+            field: "near",
+            value: "Lisbon",
+            km: 25,
+            point: { lat: 38.72, lng: -9.14, km: 25 },
+          },
+        ],
+      },
+    );
+    expect(names(near.matches)).toEqual(["Rhea Quill", "Tomas Silva"]);
+    expect(near.facets).toBeUndefined();
   });
 
   it("combines the request's facets with the typed ones, over HTTP", async () => {
@@ -379,6 +403,7 @@ describe("implicit facets", () => {
       expect(result.fallback).toBe(false);
       expect(names(result.matches)).toEqual(expected);
       expect(result.matches.every((m) => m.verified)).toBe(true);
+      expect(result.facets).toBe(formatFacetQuery(facets as FacetFilter[]));
     },
   );
 

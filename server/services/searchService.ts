@@ -1,5 +1,5 @@
 import { facetNeedle, type FacetFilter } from "../../shared/searchFacets.ts";
-import { parseFacetQuery } from "../../shared/facetQuery.ts";
+import { formatFacetQuery, parseFacetQuery } from "../../shared/facetQuery.ts";
 import { sqlite } from "../db.ts";
 import { selectPassages, currentPassage } from "./search/passages.ts";
 import { findPassageNeighbors } from "./search/localEmbeddings.ts";
@@ -293,6 +293,19 @@ function facetEvidence(
 }
 
 /**
+ * The facets as the Network list's query, `/?q=<this>`, or undefined when
+ * the list cannot open the same set: it reads no `near:`, and a value the
+ * query syntax cannot hold would read back as another filter.
+ */
+function networkQuery(filters: FacetFilter[]): string | undefined {
+  if (filters.some((filter) => filter.field === "near")) return undefined;
+  const query = formatFacetQuery(filters);
+  return facetKey(parseFacetQuery(query).filters) === facetKey(filters)
+    ? query
+    : undefined;
+}
+
+/**
  * The answer to a question that is only facets: the matching contacts in
  * name order, proved by the database, with no model call.
  */
@@ -326,6 +339,7 @@ function facetAnswer(
         ).n;
   return {
     total,
+    facets: networkQuery(filters),
     matches: withMatchedOn(
       [...hydrateCandidates(scope, ids, PHASE1_LIMIT).values()].map(
         (contact) => ({
@@ -542,6 +556,8 @@ interface SearchResult {
   cached?: boolean;
   /** For a question of facets alone: every contact they hold. */
   total?: number;
+  /** For a question of facets alone: the same list as a Network query. */
+  facets?: string;
 }
 interface SearchChunk extends SearchResult {
   phase: "instant" | "complete";

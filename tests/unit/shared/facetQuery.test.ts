@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatFacetQuery,
   parseFacetQuery,
   parseFilterValue,
 } from "../../../shared/facetQuery.ts";
@@ -142,5 +143,19 @@ describe("parseFacetQuery", () => {
     expect(parseFacetQuery("tag:a tag:a").filters).toEqual([
       { field: "tag", value: "a" },
     ]);
+  });
+});
+
+describe("formatFacetQuery", () => {
+  it("writes filters that parseFacetQuery reads back to the same filters", () => {
+    const query =
+      'industry:"Venture Capital" contacted:>90d contacted:never score:<40 ' +
+      'tracked:yes missing:email near:"San Francisco"/50km tag:investor';
+    const { filters } = parseFacetQuery(query);
+    expect(formatFacetQuery(filters)).toBe(query);
+    expect(parseFacetQuery(formatFacetQuery(filters))).toEqual({
+      freeText: "",
+      filters,
+    });
   });
 });

@@ -4,6 +4,7 @@ import React from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  aiResultsHeading,
   getMode,
   insightPath,
   stripModePrefix,
@@ -12,6 +13,15 @@ import type { ZeroStateInsight } from "../../../../src/types";
 import { useSearchHistory } from "../../../../src/hooks/useSearchHistory";
 import { resetLastRecorded } from "../../../../src/api/searchHistory";
 import type { HistoryEntry } from "../../../../shared/searchHistory";
+
+describe("aiResultsHeading", () => {
+  it("says how many a cut list holds, and nothing more for a whole one", () => {
+    expect(aiResultsHeading(false, 30, 1501)).toBe(
+      "AI query results · 30 of 1,501",
+    );
+    expect(aiResultsHeading(true, 3, 3)).toBe("Not verified by AI");
+  });
+});
 
 describe("getMode", () => {
   it("returns 'normal' for plain search text", () => {

@@ -44,7 +44,6 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
-import { generalQuestionFor } from "../../shared/generalQuestions";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
 // =============================================================================
@@ -206,7 +205,9 @@ export const SearchView = () => {
     recordSearch.mutate({
       query: dataQuery,
       mode: "people",
-      resultCount: semanticSearch.data.matches?.length ?? 0,
+      // Every match a question of facets holds, where the ids stop at 30.
+      resultCount:
+        semanticSearch.data.total ?? semanticSearch.data.matches?.length ?? 0,
       resultIds: (semanticSearch.data.matches ?? [])
         .slice(0, 30)
         .map((m) => m.id),
@@ -312,7 +313,7 @@ export const SearchView = () => {
   const total = semanticSearch.data?.total ?? results.length;
   /** The question the results on screen answer. Never the input. */
   const answeredQuery = semanticSearch.data?.query ?? "";
-  const general = generalQuestionFor(answeredQuery);
+  const networkQuery = semanticSearch.data?.facets;
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
@@ -505,11 +506,11 @@ export const SearchView = () => {
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* The rest of a general question's list, where it
-                          can be sorted and acted on. */}
-                      {general && total > results.length && (
+                      {/* The rest of a list of facets, where it can be
+                          sorted and acted on. */}
+                      {networkQuery && total > results.length && (
                         <Link
-                          to={`/?q=${encodeURIComponent(general.facets)}`}
+                          to={`/?q=${encodeURIComponent(networkQuery)}`}
                           className={BTN_QUIET}
                         >
                           See all in {NAMES.network.label}
