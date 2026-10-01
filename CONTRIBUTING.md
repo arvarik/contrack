@@ -24,8 +24,9 @@ npm run dev            # http://localhost:3210, with hot reload
   Vite as middleware on the same port.
 - Copy `.env.example` to `.env` only to change a default or add a key. The
   [Configuration reference](docs/configuration.md) lists every variable.
-- Your data is `curator.db` in the project root. Set `DATA_DIR` to a scratch
-  folder for a test instance, and `DISABLE_HMR=true` for a second dev server.
+- Your data is `curator.db` in the project root. For a second, test instance,
+  set `DATA_DIR` to a scratch folder and `PORT` to a free port. Each dev server
+  keeps its hot reload on its own port.
 
 ## Where things live
 

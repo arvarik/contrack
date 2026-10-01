@@ -6,13 +6,13 @@
  * production), starts listening, and kicks off background tasks.
  */
 import "./server/utils/loadEnv.ts";
-import express from "express";
-import path from "path";
+import http from "node:http";
 
 import { log } from "./server/utils/logger.ts";
 import { refreshPlannerStats, sqlite } from "./server/db.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
+import { serveClient } from "./server/serveClient.ts";
 import {
   assertNoLegacyAuthToken,
   isAuthRequired,
@@ -174,33 +174,18 @@ async function startServer() {
   // Non-/api/* paths are passed through to Vite/static below.
   app.use(notFoundHandler);
 
-  if (process.env.NODE_ENV !== "production") {
-    // Lazy import: vite is a devDependency and must never enter the
-    // production module graph (the Docker image installs --omit=dev).
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    // SPA fallback for navigation only. This used to answer EVERY method —
-    // a POST to any unknown path returned index.html with a 200, which reads
-    // as success to a script that mistyped an endpoint.
-    app.use((req, res, next) => {
-      if (req.method !== "GET" && req.method !== "HEAD") return next();
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+  // The HTTP server comes first, so Vite can put its reload socket on it.
+  const server = http.createServer(app);
+  await serveClient(app, server, {
+    production: process.env.NODE_ENV === "production",
+  });
 
   // Centralized error handler. Translates AppError / ZodError / SQLite
   // codes into a canonical JSON envelope and strips internal details
   // (stack, cause) before responding in production.
   finalizeApp(app);
 
-  const server = app.listen(PORT, HOST, () => {
+  server.listen(PORT, HOST, () => {
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     log.info("Server", `Contrack CRM running on http://localhost:${PORT}`);
     log.info("Server", `Bound to ${HOST}`);
