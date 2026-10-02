@@ -308,8 +308,9 @@ contact research when no connected provider offers web search. With a custom
 endpoint and the built-in embedding model, Contrack then needs no cloud AI.
 
 1. Run SearXNG with JSON answers on: add `json` to `search.formats` in its
-   `settings.yml`. For a SearXNG that only Contrack calls, turn its bot
-   limiter off (`server.limiter: false`).
+   `settings.yml`. Without it, every search answers 403, and research fails
+   with "SearXNG returned 403 Forbidden". For a SearXNG that only Contrack
+   calls, turn its bot limiter off (`server.limiter: false`).
 2. In **Settings → Administration → General**, enter the base URL under
    **Self-hosted search (SearXNG)**, such as `http://searxng.local:8080`, and
    choose **Save**. `SEARXNG_URL` sets it from the environment instead.

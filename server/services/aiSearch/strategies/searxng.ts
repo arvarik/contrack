@@ -237,12 +237,14 @@ export async function searxngEvidence(
 
     // ── Retrieval (no model) ────────────────────────────────────────────
     const queries = suggestedSearches(contact).slice(0, limits.queries);
+    const errors: unknown[] = [];
     const lists = await Promise.all(
       queries.map(async (query) => {
         try {
           return await searxngSearch(baseUrl, query, signal);
         } catch (err) {
           signal?.throwIfAborted();
+          errors.push(err);
           log.warn(
             "SearxngStrategy",
             `Search failed for "${query}": ${getErrorMessage(err)}`,
@@ -258,6 +260,18 @@ export async function searxngEvidence(
       seen.add(result.url);
       return true;
     });
+    // Every search failed: SearXNG's own answer says why, such as the 403 of
+    // an instance whose settings.yml leaves json out of search.formats.
+    if (errors.length > 0 && errors.length === queries.length)
+      return failed(
+        errors[0] instanceof AppError
+          ? errors[0]
+          : new AppError(
+              `SearXNG did not answer: ${getErrorMessage(errors[0])}`,
+              502,
+              { code: "SEARXNG_ERROR" },
+            ),
+      );
     if (results.length === 0)
       return failed(
         new AppError(
@@ -277,11 +291,14 @@ export async function searxngEvidence(
       pages.map((result) => fetchPageText(result.url!, signal)),
     );
     signal?.throwIfAborted();
+    // The pages read in full come first. Ten pages at Deep can fill the
+    // reading's cap alone, and the cap cuts from the end, so it cuts
+    // snippets before a page.
     const documents = [
-      ...snippets.map((result) => block(result, result.content)),
       ...pages.map((result, index) =>
         block(result, texts[index] ?? result.content),
       ),
+      ...snippets.map((result) => block(result, result.content)),
     ];
     log.info(
       "SearxngStrategy",

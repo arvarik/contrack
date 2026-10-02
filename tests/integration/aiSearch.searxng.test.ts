@@ -309,6 +309,64 @@ describe("SearXNG research", () => {
     expect(generateFor).not.toHaveBeenCalled();
   });
 
+  it("says SearXNG's own error when every search fails, without a model call", async () => {
+    // A SearXNG whose settings.yml leaves json out of search.formats.
+    search.mockImplementation(
+      async () =>
+        new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+    );
+    await expect(
+      new SearxngStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+      ),
+    ).rejects.toMatchObject({
+      code: "SEARXNG_ERROR",
+      message: "SearXNG returned 403 Forbidden",
+    });
+    // A SearXNG that is not running.
+    search.mockImplementation(async () => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(
+      new SearxngStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+      ),
+    ).rejects.toMatchObject({
+      code: "SEARXNG_ERROR",
+      message: "SearXNG did not answer: fetch failed",
+    });
+    expect(generateFor).not.toHaveBeenCalled();
+  });
+
+  it("puts the pages read in full before the snippets, so the reading's cap cuts a snippet first", async () => {
+    answers['"Greg Whitlock" Northwind Partners'] = Array.from(
+      { length: 6 },
+      (_, index) =>
+        result(
+          `https://a.example/${index}`,
+          `Greg Whitlock ${index}`,
+          `Snippet ${index} about Greg Whitlock.`,
+        ),
+    );
+    pages["https://a.example/0"] =
+      "<html><body><p>The page of Greg Whitlock.</p></body></html>";
+    byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
+    await new SearxngStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!.prompt;
+    // Five pages at Standard, then the sixth result by its snippet.
+    expect(reading.indexOf("The page of Greg Whitlock")).toBeLessThan(
+      reading.indexOf("SOURCE: https://a.example/5"),
+    );
+    expect(reading.indexOf("SOURCE: https://a.example/4")).toBeLessThan(
+      reading.indexOf("SOURCE: https://a.example/5"),
+    );
+  });
+
   it("fails when the reading reports no facts and no no-match", async () => {
     firmResults();
     byCapability.deep = reply("I could not tell.", "mock-reader");
