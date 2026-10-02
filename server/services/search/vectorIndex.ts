@@ -39,9 +39,15 @@ import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
-import { getEmbeddingsState, setEmbeddingsState } from "../../ai/embeddings.ts";
+import {
+  getEmbeddingsState,
+  setEmbeddingsState,
+  storeBuiltFor,
+} from "../../ai/embeddings.ts";
 import {
   currentEmbedder,
+  embedderFor,
+  isRefused,
   mayEmbedContactsFor,
   type Embedder,
 } from "../../ai/embedder.ts";
@@ -54,14 +60,15 @@ const BACKFILL_BATCH_SIZE = 64;
 // =============================================================================
 
 /**
- * Embed one search question with the current embedder.
- * Null when the embedder answers with no vector.
+ * Embed one search question, with the current embedder unless the caller
+ * names the one its checks allowed. Null when it answers with no vector.
  */
 export async function embedText(
   text: string,
   signal?: AbortSignal,
+  embedder = currentEmbedder(),
 ): Promise<Float32Array | null> {
-  const [vector] = await currentEmbedder().embed([text], "query", signal);
+  const [vector] = await embedder.embed([text], "query", signal);
   return vector ?? null;
 }
 
@@ -539,11 +546,13 @@ function backfillStatements() {
 /**
  * Embed one account's round with `embedder`, the one its check allowed.
  *
- * `aborted` is true when the current embedder changed during the round. The
- * vector store is about to be rebuilt for the new one, so the whole backfill
- * stops rather than writing rows in two shapes. Every call in the round uses
- * `embedder`, never the new one, so a model pinned during the round reads
- * nothing of an account it may not embed.
+ * `aborted` is true when the current embedder changed during the round, or
+ * the store was built for another one. The vector store is about to be
+ * rebuilt for the new one, so the whole backfill stops rather than writing
+ * rows in two shapes. Every call in the round uses `embedder`, never the new
+ * one, so a model pinned during the round reads nothing of an account it may
+ * not embed. `embedder` refuses once the account may no longer be embedded
+ * (`embedderFor`), and the refusal ends the round.
  */
 async function embedSearchRound(
   rows: SearchTextRow[],
@@ -554,8 +563,6 @@ async function embedSearchRound(
 
   for (let i = 0; i < rows.length; i += BACKFILL_BATCH_SIZE) {
     const batch = rows.slice(i, i + BACKFILL_BATCH_SIZE);
-    if (currentEmbedder().id !== embedder.id)
-      return { embedded, aborted: true };
 
     // Build text for each contact
     const texts = batch.map((c) => {
@@ -574,7 +581,8 @@ async function embedSearchRound(
     const passageVectors = await embedPassageSnapshots(snapshots, embedder);
     if (
       currentEmbedder().id !== embedder.id ||
-      generation !== getEmbeddingsState()?.generation
+      generation !== getEmbeddingsState()?.generation ||
+      !storeBuiltFor(embedder.id)
     ) {
       return { embedded, aborted: true };
     }
@@ -676,12 +684,13 @@ async function runBackfill(): Promise<number> {
       if (queue.done) continue;
       // Read each round, because the owner can turn AI off, or an admin can
       // pin another model, while a backfill runs. The round keeps the
-      // embedder this check allowed.
-      const embedder = currentEmbedder();
-      if (!mayEmbedContactsFor(queue.ownerId, embedder)) {
+      // embedder this check allowed, and asks again before every call.
+      const allowed = currentEmbedder();
+      if (!mayEmbedContactsFor(queue.ownerId, allowed)) {
         queue.done = true;
         continue;
       }
+      const embedder = embedderFor(queue.ownerId, allowed);
       const round = stmts.missing.all(
         queue.ownerId,
         queue.cursor,
@@ -695,14 +704,22 @@ async function runBackfill(): Promise<number> {
       sqlite.transaction(() => {
         for (const row of round) enqueue.run(row.id, queue.ownerId);
       })();
-      const result = await runWithContext(
-        {
-          requestId: `job-search-backfill-${queue.ownerId.slice(0, 8)}`,
-          principal: null,
-          scope: scopeForOwnerId(queue.ownerId),
-        },
-        () => embedSearchRound(round, stmts, embedder),
-      );
+      let result: { embedded: number; aborted: boolean };
+      try {
+        result = await runWithContext(
+          {
+            requestId: `job-search-backfill-${queue.ownerId.slice(0, 8)}`,
+            principal: null,
+            scope: scopeForOwnerId(queue.ownerId),
+          },
+          () => embedSearchRound(round, stmts, embedder),
+        );
+      } catch (err: unknown) {
+        // The account turned AI off during the round: it is done.
+        if (!isRefused(err)) throw err;
+        queue.done = true;
+        continue;
+      }
       embedded += result.embedded;
       if (result.aborted) return embedded;
       remaining = true;
@@ -732,8 +749,8 @@ export async function embedContact(
   contactId: string,
 ): Promise<EmbedContactResult> {
   // One embedder for the whole contact, the one the checks below allowed.
-  const embedder = currentEmbedder();
-  if (!embedder.ready()) {
+  const allowed = currentEmbedder();
+  if (!allowed.ready()) {
     return { status: "skipped", reason: "not_ready" };
   }
 
@@ -750,9 +767,10 @@ export async function embedContact(
   if (!row) {
     return { status: "skipped", reason: "inactive_or_deleted" };
   }
-  if (!mayEmbedContactsFor(row.ownerId, embedder)) {
+  if (!mayEmbedContactsFor(row.ownerId, allowed)) {
     return { status: "skipped", reason: "ai_off" };
   }
+  const embedder = embedderFor(row.ownerId, allowed);
 
   const tags = (
     sqlite
@@ -769,8 +787,16 @@ export async function embedContact(
   const generation = getEmbeddingsState()?.generation;
   const snapshot = passageSnapshot(contactId);
   if (!snapshot) return { status: "skipped", reason: "inactive_or_deleted" };
-  const [vec] = await embedder.embed([text], "document");
-  const [passageVectors] = await embedPassageSnapshots([snapshot], embedder);
+  let vec: Float32Array | undefined;
+  let passageVectors: Float32Array[];
+  try {
+    [vec] = await embedder.embed([text], "document");
+    [passageVectors] = await embedPassageSnapshots([snapshot], embedder);
+  } catch (err: unknown) {
+    // The account turned AI off between the two calls.
+    if (isRefused(err)) return { status: "skipped", reason: "ai_off" };
+    throw err;
+  }
   if (!vec) {
     throw new Error(
       `Failed to generate embedding vector for contact ${contactId}`,
@@ -779,7 +805,8 @@ export async function embedContact(
 
   if (
     currentEmbedder().id !== embedder.id ||
-    generation !== getEmbeddingsState()?.generation
+    generation !== getEmbeddingsState()?.generation ||
+    !storeBuiltFor(embedder.id)
   ) {
     return { status: "outdated", reason: "signature_changed" };
   }

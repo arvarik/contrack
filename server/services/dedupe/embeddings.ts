@@ -35,10 +35,17 @@ import {
   scopeOfContact,
 } from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { getEmbeddingsState, setEmbeddingsState } from "../../ai/embeddings.ts";
+import {
+  getEmbeddingsState,
+  setEmbeddingsState,
+  storeBuiltFor,
+} from "../../ai/embeddings.ts";
 import {
   currentEmbedder,
+  embedderFor,
+  isRefused,
   mayEmbedContactsFor,
+  whileAllowed,
   type Embedder,
 } from "../../ai/embedder.ts";
 
@@ -85,6 +92,8 @@ export async function ensureDedupeEmbeddingStore(): Promise<number> {
     );
     return 0;
   }
+  // The capability changed during the probe. That change reconciles itself.
+  if (currentEmbedder().id !== embedder.id) return 0;
 
   const state = getEmbeddingsState("dedupe");
   const changed =
@@ -105,11 +114,15 @@ export async function ensureDedupeEmbeddingStore(): Promise<number> {
 }
 
 /**
- * True when another embedder took over while `embedder` was embedding. The
- * store is being rebuilt for the new one, so those vectors are not written.
+ * True when `embedder`'s vectors must not be written: another embedder took
+ * over while it was embedding, or the store was built for another one. The
+ * store is being rebuilt for the new one, so it never holds two models.
  */
 function replaced(embedder: Embedder): boolean {
-  return currentEmbedder().id !== embedder.id;
+  return (
+    currentEmbedder().id !== embedder.id ||
+    !storeBuiltFor(embedder.id, "dedupe")
+  );
 }
 
 // =============================================================================
@@ -171,6 +184,8 @@ export async function generateBatchEmbeddings(
         if (vec) results.set(batch[j].id, l2Normalize(Array.from(vec)));
       }
     } catch (err) {
+      // The account turned AI off: nothing more of it is sent.
+      if (isRefused(err)) break;
       // One bad batch shouldn't abandon the rest of the backfill.
       log.error(
         "DedupeEmbeddings",
@@ -398,9 +413,10 @@ function findStaleEmbeddings(scope: Scope): string[] {
  * @returns Number of contacts re-embedded
  */
 export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
-  const embedder = currentEmbedder();
-  if (!embedder.ready() || !mayEmbedContactsFor(scope.ownerId, embedder))
+  const allowed = currentEmbedder();
+  if (!allowed.ready() || !mayEmbedContactsFor(scope.ownerId, allowed))
     return 0;
+  const embedder = embedderFor(scope.ownerId, allowed);
 
   const staleIds = findStaleEmbeddings(scope);
   if (staleIds.length === 0) {
@@ -526,15 +542,16 @@ export async function backfillOwnerEmbeddings(
     return 0;
   }
   // One embedder for the whole backlog, the one these checks allowed.
-  const embedder = currentEmbedder();
-  if (!embedder.ready()) {
+  const allowed = currentEmbedder();
+  if (!allowed.ready()) {
     log.warn(
       "DedupeEmbeddings",
       "No embedding model is ready — skipping embedding backfill",
     );
     return 0;
   }
-  if (!mayEmbedContactsFor(scope.ownerId, embedder)) return 0;
+  if (!mayEmbedContactsFor(scope.ownerId, allowed)) return 0;
+  const embedder = embedderFor(scope.ownerId, allowed);
 
   _backfillRunning = true;
   try {
@@ -575,7 +592,8 @@ async function embedOwnerBacklog(
   onProgress?.(0, items.length, "Generating embeddings...");
   let done = 0;
   for (let i = 0; i < items.length; i += OWNER_ROUND_SIZE) {
-    if (replaced(embedder)) break;
+    if (replaced(embedder) || !mayEmbedContactsFor(scope.ownerId, embedder))
+      break;
     done += await embedAndStore(items.slice(i, i + OWNER_ROUND_SIZE), embedder);
     onProgress?.(
       done,
@@ -653,12 +671,14 @@ export async function backfillEmbeddings(
       for (const queue of queues) {
         if (queue.items.length === 0) continue;
         // The owner can turn AI off, or an admin can pin another model, while
-        // a backfill runs. The round keeps the embedder this check allowed.
-        const embedder = currentEmbedder();
-        if (!mayEmbedContactsFor(queue.scope.ownerId, embedder)) {
+        // a backfill runs. The round keeps the embedder this check allowed,
+        // and asks again before every call.
+        const allowed = currentEmbedder();
+        if (!mayEmbedContactsFor(queue.scope.ownerId, allowed)) {
           queue.items = [];
           continue;
         }
+        const embedder = embedderFor(queue.scope.ownerId, allowed);
         const round = queue.items.splice(0, OWNER_ROUND_SIZE);
         done += await runWithContext(
           {
@@ -703,8 +723,8 @@ export async function generateAndStoreEmbedding(
   contactId: string,
 ): Promise<boolean> {
   // One embedder for the whole call, the one the checks below allowed.
-  const embedder = currentEmbedder();
-  if (!embedder.ready()) return false;
+  const allowed = currentEmbedder();
+  if (!allowed.ready()) return false;
   if (_inFlightIds.has(contactId)) {
     log.debug("DedupeEmbeddings", `Skipping ${contactId} — already in-flight`);
     return false;
@@ -713,9 +733,9 @@ export async function generateAndStoreEmbedding(
   _inFlightIds.add(contactId);
   try {
     const scope = scopeOfContact(contactId);
-    if (scope && !mayEmbedContactsFor(scope.ownerId, embedder)) return false;
+    if (scope && !mayEmbedContactsFor(scope.ownerId, allowed)) return false;
     const normalized = scope && normalizeContactById(scope, contactId);
-    if (!normalized) {
+    if (!scope || !normalized) {
       log.warn(
         "DedupeEmbeddings",
         `Contact ${contactId} not found or has no name — skipping embedding`,
@@ -723,6 +743,7 @@ export async function generateAndStoreEmbedding(
       return false;
     }
 
+    const embedder = embedderFor(scope.ownerId, allowed);
     const embedding = await generateSingleEmbedding(
       normalized.embeddingText,
       embedder,
@@ -735,6 +756,7 @@ export async function generateAndStoreEmbedding(
     );
     return true;
   } catch (err: unknown) {
+    if (isRefused(err)) return false;
     log.warn(
       "DedupeEmbeddings",
       `Failed to embed contact ${contactId}: ${getErrorMessage(err)}`,
@@ -752,22 +774,28 @@ export async function generateAndStoreEmbedding(
 export async function generateAndStoreBulkEmbeddings(
   contactIds: string[],
 ): Promise<number> {
-  const embedder = currentEmbedder();
-  if (!embedder.ready() || contactIds.length === 0) return 0;
+  const allowed = currentEmbedder();
+  if (!allowed.ready() || contactIds.length === 0) return 0;
 
   try {
     // Batch-normalize the specific contacts
     const items: { id: string; text: string }[] = [];
+    const owners = new Set<string>();
     for (const id of contactIds) {
       const scope = scopeOfContact(id);
-      if (scope && !mayEmbedContactsFor(scope.ownerId, embedder)) continue;
+      if (scope && !mayEmbedContactsFor(scope.ownerId, allowed)) continue;
       const normalized = scope && normalizeContactById(scope, id);
-      if (normalized) {
+      if (scope && normalized) {
         items.push({ id: normalized.id, text: normalized.embeddingText });
+        owners.add(scope.ownerId);
       }
     }
 
     if (items.length === 0) return 0;
+    // An import of thousands runs many batches. Every one asks again.
+    const embedder = whileAllowed(allowed, () =>
+      [...owners].every((owner) => mayEmbedContactsFor(owner, allowed)),
+    );
 
     const embeddings = await generateBatchEmbeddings(items, embedder);
     if (replaced(embedder)) return 0;

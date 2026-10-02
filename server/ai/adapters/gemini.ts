@@ -367,7 +367,7 @@ export class GeminiAdapter implements AIProvider {
    * lift dense MRR from 0.858 to 0.899, and on the dedupe corpus
    * SEMANTIC_SIMILARITY lifts the rank of a duplicate's partner from 0.809 to
    * 0.892 MRR, where RETRIEVAL_DOCUMENT lowers it to 0.756. gemini-embedding-2
-   * answers the same with or without one. A probe sends no use.
+   * answers the same with or without one. A call with no use sends none.
    */
   async embed(
     texts: string[],

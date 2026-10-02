@@ -42,6 +42,29 @@ vi.mock("../../../../server/ai/embeddings.ts", async (importOriginal) => ({
 }));
 vi.mock("../../../../server/ai/instanceSwitch.ts", () => ({
   aiAllowedForUser: () => state.aiAllowed,
+  isAiOffForInstance: () => false,
+}));
+// A provider that keeps the use each call sends.
+const provider = vi.hoisted(() => ({
+  uses: [] as unknown[],
+  embed: async (texts: string[], _model: string, use?: string) => {
+    provider.uses.push(use);
+    return texts.map(() => [1, 0]);
+  },
+}));
+vi.mock("../../../../server/ai/providerRegistry.ts", () => ({
+  getProvider: () => provider,
+}));
+// The library the in-process fallback loads.
+const library = vi.hoisted(() => {
+  const extract = vi.fn(async (texts: string[]) => ({
+    tolist: () => texts.map(() => new Array(384).fill(0.1)),
+  }));
+  return { extract, pipeline: vi.fn(async () => extract) };
+});
+vi.mock("@huggingface/transformers", () => ({
+  env: {},
+  pipeline: library.pipeline,
 }));
 vi.mock("../../../../server/workers/cpuHost.ts", () => ({
   isWorkerActive: () => true,
@@ -142,25 +165,46 @@ describe("the built-in model", () => {
 });
 
 describe("another local model", () => {
+  const card = {
+    model: "Xenova/bge-small-en-v1.5",
+    dimension: 384,
+    pooling: "cls" as const,
+    prefix: { query: "Find: " },
+  };
+
   it("sends its id and pooling, and the prefix for each use", async () => {
-    const card = {
-      model: "Xenova/e5-small-v2",
-      dimension: 384,
-      pooling: "mean" as const,
-      prefix: { query: "query: ", document: "passage: " },
-    };
-    const e5 = localEmbedder(card);
-    expect(localEmbedder({ ...card })).toBe(e5);
-    expect(e5).toMatchObject({ id: "builtin/Xenova/e5-small-v2", local: true });
-    expect(e5.ready()).toBe(false);
+    const bge = localEmbedder(card);
+    expect(localEmbedder({ ...card })).toBe(bge);
+    expect(() => localEmbedder({ ...card, pooling: "mean" })).toThrow(
+      "different settings",
+    );
+    expect(bge).toMatchObject({ id: `builtin/${card.model}`, local: true });
+    expect(bge.ready()).toBe(false);
     workerAnswers();
-    await e5.embed(["who keeps bees"], "query");
-    await e5.embed(["Ada | Founder"], "document");
-    const job = { kind: "embed", model: card.model, pooling: "mean" };
+    await bge.embed(["who keeps bees"], "query");
+    await bge.embed(["Ada | Founder"], "document");
+    const job = { kind: "embed", model: card.model, pooling: "cls" };
     expect(vi.mocked(runOnWorker).mock.calls.map(([sent]) => sent)).toEqual([
-      { ...job, texts: ["query: who keeps bees"], batchSize: 64 },
-      { ...job, texts: ["passage: Ada | Founder"], batchSize: 64 },
+      { ...job, texts: ["Find: who keeps bees"], batchSize: 64 },
+      { ...job, texts: ["Ada | Founder"], batchSize: 64 },
     ]);
+  });
+
+  it("reads the same card when the worker never started", async () => {
+    vi.mocked(runOnWorker).mockImplementation(async (_job, inProcess) =>
+      inProcess(),
+    );
+    const [vector] = await localEmbedder(card).embed(["Ada"], "document");
+    expect(library.pipeline).toHaveBeenCalledWith(
+      "feature-extraction",
+      card.model,
+      expect.anything(),
+    );
+    expect(library.extract).toHaveBeenCalledWith(["Ada"], {
+      pooling: "cls",
+      normalize: true,
+    });
+    expect(vector).toHaveLength(384);
   });
 });
 
@@ -198,6 +242,13 @@ describe("a provider model", () => {
     };
     expect(currentEmbedder().id).toBe("openai/e3");
     state.resolved = PROVIDER;
+
+    // The pin test probes with the request the index will make.
+    const actual = await vi.importActual<
+      typeof import("../../../../server/ai/embeddings.ts")
+    >("../../../../server/ai/embeddings.ts");
+    await actual.probeDimension("gemini", "an-unprobed-model");
+    expect(provider.uses).toEqual(["document"]);
 
     // The cached width answers. An unknown one is probed once.
     expect(await embedder.dimension()).toBe(768);

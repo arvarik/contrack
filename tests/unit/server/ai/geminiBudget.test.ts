@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 describe("Gemini embeddings", () => {
-  it("send each use as its task type, and none with a probe", async () => {
+  it("send each use as its task type, and none without a use", async () => {
     sdk.embed.mockResolvedValue({ embeddings: [{ values: [1, 0] }] });
     const adapter = new GeminiAdapter("test-only-key");
     for (const use of ["query", "document", "similarity", undefined] as const)

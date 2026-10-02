@@ -186,9 +186,14 @@ export async function probeDimension(
   if (cache[signature]) return cache[signature];
 
   try {
-    const [vector] = await embedWithProvider(providerId, model, [
-      "dimension probe",
-    ]);
+    // As a document, the way the index sends contacts, so a pin is tested
+    // with the request the index will make, task type and all.
+    const [vector] = await embedWithProvider(
+      providerId,
+      model,
+      ["dimension probe"],
+      "document",
+    );
     if (!vector?.length) return null;
     cache[signature] = vector.length;
     setSetting(DIMENSION_CACHE_KEY, cache);
@@ -232,4 +237,18 @@ export function setEmbeddingsState(
   store: EmbeddingStore = "search",
 ): void {
   setSetting(stateKey(store), state);
+}
+
+/**
+ * True when `store` may take vectors from the embedder `embedderId`: it was
+ * built for that embedder, or it has no record yet. A store whose record
+ * names another embedder is about to be rebuilt, and a vector written now
+ * would sit among another model's vectors, or fail at another width.
+ */
+export function storeBuiltFor(
+  embedderId: string,
+  store: EmbeddingStore = "search",
+): boolean {
+  const state = getEmbeddingsState(store);
+  return !state || state.signature === embedderId;
 }
