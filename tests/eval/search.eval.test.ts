@@ -72,11 +72,11 @@ const recorded = vi.hoisted(() => ({
 // `upsertSearchEmbeddings`, `findSearchNeighbors`, `getSearchEmbeddingCount` —
 // stays real, because the KNN is a thing under test and not a thing to fake.
 vi.mock(
-  "../../server/services/search/localEmbeddings.ts",
+  "../../server/services/search/vectorIndex.ts",
   async (importOriginal) => {
     const actual =
       await importOriginal<
-        typeof import("../../server/services/search/localEmbeddings.ts")
+        typeof import("../../server/services/search/vectorIndex.ts")
       >();
     return {
       ...actual,

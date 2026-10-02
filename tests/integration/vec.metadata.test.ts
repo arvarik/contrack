@@ -33,7 +33,7 @@ const {
   vecTableDdl,
 } = await import("../../server/db.ts");
 const { findSearchNeighbors, getSearchEmbeddingCount, upsertSearchEmbeddings } =
-  await import("../../server/services/search/localEmbeddings.ts");
+  await import("../../server/services/search/vectorIndex.ts");
 const { VECTOR_SCALE_KEY, quantize } =
   await import("../../server/services/search/vectorScale.ts");
 const { setSetting } = await import("../../server/services/settingsService.ts");

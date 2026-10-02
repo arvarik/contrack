@@ -40,7 +40,7 @@ import { compileFacets } from "../../server/services/search/facetSql.ts";
 import {
   findSearchNeighbors,
   upsertSearchEmbedding,
-} from "../../server/services/search/localEmbeddings.ts";
+} from "../../server/services/search/vectorIndex.ts";
 import {
   findImplicitFacets,
   hasContentWords,

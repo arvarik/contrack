@@ -169,6 +169,8 @@ the prompt, and remembers what each model accepts.
 - A hosted model is an embedding model that Gemini, OpenAI or a custom endpoint
   lists. Anthropic has none. Contrack embeds a short text first to learn the
   vector width, and refuses a model that returns nothing.
+- Gemini embeds a question, a contact and a duplicate check each with its own
+  task type, which ranks better than one type for all three.
 - A change rebuilds both indexes and embeds every contact again, in the
   background. Keyword search keeps working meanwhile.
 - While AI is off for the instance, the built-in model serves, whatever is

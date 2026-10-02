@@ -35,7 +35,7 @@ log._fmt = () => {};
 const { sqlite, ensureLocalOwner } = await import("../server/db.ts");
 const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
 const { ensureEmbeddingStore, embedText, findSearchNeighbors } =
-  await import("../server/services/search/localEmbeddings.ts");
+  await import("../server/services/search/vectorIndex.ts");
 const { initBuiltinEmbedder } = await import("../server/ai/embedder.ts");
 const { localRetrieval } =
   await import("../server/services/search/hybridRetrieval.ts");
@@ -195,7 +195,7 @@ try {
         "--record requires --contacts 100 to keep the CI fixture small",
       );
     const { currentSearchText, embedBatch } =
-      await import("../server/services/search/localEmbeddings.ts");
+      await import("../server/services/search/vectorIndex.ts");
     const { passageSnapshot } =
       await import("../server/services/search/passages.ts");
     const { buildSearchEmbeddingInput } =

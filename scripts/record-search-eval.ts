@@ -61,8 +61,7 @@ async function main(): Promise<void> {
   const { buildCorpus } = await import("./search-eval/corpus.ts");
   const { ensureLocalOwner } = await import("../server/db.ts");
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
-  const localEmbeddings =
-    await import("../server/services/search/localEmbeddings.ts");
+  const vectorIndex = await import("../server/services/search/vectorIndex.ts");
   const embedder = await import("../server/ai/embedder.ts");
   const reranker = await import("../server/ai/reranker.ts");
   const {
@@ -102,11 +101,11 @@ async function main(): Promise<void> {
   // model's output, so the fixture takes the floats and the gate quantizes
   // them the way the product does.
   const texts = contacts.map((contact) => {
-    const text = localEmbeddings.currentSearchText(idByKey.get(contact.key)!);
+    const text = vectorIndex.currentSearchText(idByKey.get(contact.key)!);
     if (!text) throw new Error(`No search text for ${contact.key}`);
     return text;
   });
-  const rows: Float32Array[] = (await localEmbeddings.embedBatch(texts)).map(
+  const rows: Float32Array[] = (await vectorIndex.embedBatch(texts)).map(
     (vector, i) => {
       if (!vector) throw new Error(`No vector for ${contacts[i].key}`);
       return vector;
@@ -116,7 +115,7 @@ async function main(): Promise<void> {
   console.log(`embedded ${rows.length} contacts`);
 
   for (const query of queries) {
-    const vector = await localEmbeddings.embedText(query.q);
+    const vector = await vectorIndex.embedText(query.q);
     if (!vector)
       throw new Error(`The model returned no vector for ${query.id}`);
     rows.push(vector);

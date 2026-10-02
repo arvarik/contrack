@@ -33,7 +33,7 @@ import {
 import {
   backfillSearchEmbeddings,
   ensureEmbeddingStore,
-} from "./server/services/search/localEmbeddings.ts";
+} from "./server/services/search/vectorIndex.ts";
 import { initBuiltinEmbedder } from "./server/ai/embedder.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { initCrossEncoder } from "./server/ai/reranker.ts";

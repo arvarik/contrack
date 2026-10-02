@@ -12,7 +12,7 @@ import {
   ensureEmbeddingStore,
   rebuildSearchEmbeddingTable,
   backfillSearchEmbeddings,
-} from "../../server/services/search/localEmbeddings.ts";
+} from "../../server/services/search/vectorIndex.ts";
 import {
   passageSnapshot,
   splitPassage,

@@ -1,6 +1,7 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   generate: vi.fn(),
+  embed: vi.fn(),
   configs: [] as Record<string, unknown>[],
 }));
 vi.mock("@google/genai", () => ({
@@ -8,7 +9,7 @@ vi.mock("@google/genai", () => ({
     constructor(config: Record<string, unknown>) {
       sdk.configs.push(config);
     }
-    models = { generateContent: sdk.generate };
+    models = { generateContent: sdk.generate, embedContent: sdk.embed };
   },
   Type: {
     OBJECT: "OBJECT",
@@ -25,7 +26,23 @@ import {
 } from "../../../../server/ai/adapters/gemini.ts";
 beforeEach(() => {
   sdk.generate.mockReset();
+  sdk.embed.mockReset();
   sdk.configs.length = 0;
+});
+
+describe("Gemini embeddings", () => {
+  it("send each use as its task type, and none with a probe", async () => {
+    sdk.embed.mockResolvedValue({ embeddings: [{ values: [1, 0] }] });
+    const adapter = new GeminiAdapter("test-only-key");
+    for (const use of ["query", "document", "similarity", undefined] as const)
+      await adapter.embed(["a"], "gemini-embedding-001", use);
+    expect(sdk.embed.mock.calls.map(([request]) => request.config)).toEqual([
+      { taskType: "RETRIEVAL_QUERY" },
+      { taskType: "RETRIEVAL_DOCUMENT" },
+      { taskType: "SEMANTIC_SIMILARITY" },
+      undefined,
+    ]);
+  });
 });
 describe("Gemini call budget", () => {
   it("disables nested SDK retries and counts explicit-model grounding calls", async () => {

@@ -383,12 +383,16 @@ search) and `server/services/aiSearch/` (contact research).
   `embeddings` covers the search and duplicate vectors (`server/ai/embeddings.ts`).
 - **Embedder and reranker.** Search and dedupe turn text into vectors through
   one interface, `Embedder` (`server/ai/embedder.ts`), and search reorders its
-  local list through another, `Reranker` (`server/ai/reranker.ts`). The
-  built-in embedder and the cross-encoder run on the CPU worker, and a
-  provider embedder calls `AIProvider.embed`. Each one says whether it is
-  local, and the privacy rules read that: a model that is not local reads
-  nothing of an account with AI off. A new model is a new adapter, and search
-  does not change.
+  local list through another, `Reranker` (`server/ai/reranker.ts`). A local
+  embedding model and the cross-encoder run on the CPU worker, and a provider
+  embedder calls `AIProvider.embed`. Each one says whether it is local, and
+  the privacy rules read that: a model that is not local reads nothing of an
+  account with AI off. Each embedding call says what its texts are for: a
+  question, a document, or a text to compare for duplicates. Both vector
+  stores record the embedder's id and width, so an embedder with a new id
+  rebuilds them. A new model is a new adapter, and search does not change.
+  `scripts/benchmark-search.ts --embedder <model>` compares a local model
+  with the bundled one.
 - **Resolution.** At call time a capability takes a pin from Settings, then an
   environment pin (`AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`,
   `AI_EMBEDDINGS_MODEL`), then Auto: `AI_PROVIDER` first, then a fixed order.

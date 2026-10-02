@@ -31,9 +31,10 @@ import {
 } from "../services/aiSettingsService.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
-import { ensureEmbeddingStore } from "../services/search/localEmbeddings.ts";
+import { ensureEmbeddingStore } from "../services/search/vectorIndex.ts";
 import { ensureDedupeEmbeddingStore } from "../services/dedupe/embeddings.ts";
-import { probeDimension, resolveEmbeddings } from "../ai/embeddings.ts";
+import { probeDimension } from "../ai/embeddings.ts";
+import { currentEmbedder } from "../ai/embedder.ts";
 import {
   aiOffLockedByEnv,
   instanceAiState,
@@ -312,13 +313,12 @@ router.put(
     // With a provider embedding model pinned, the switch changes the model
     // that embeds: the built-in one while AI is off, the provider's while it
     // is on. The vector stores follow at once, rather than at the next boot.
-    const embeddingsBefore = resolveEmbeddings().signature;
+    const embeddingsBefore = currentEmbedder().id;
     setAiOffForInstance(aiOff);
     // The row names the direction, like `removed: true` on a key. An on or
     // off is never secret, and it is what an operator reads the row for.
     auditSettingChange(req, SETTING_KEYS.aiInstanceOff, { aiOff });
-    if (resolveEmbeddings().signature !== embeddingsBefore)
-      rebuildVectorStores();
+    if (currentEmbedder().id !== embeddingsBefore) rebuildVectorStores();
 
     log.info(
       "API",

@@ -4,9 +4,10 @@
 // Search and dedupe turn text into vectors through one interface, `Embedder`,
 // and never ask which model is behind it. Two adapters implement it:
 //
-//   - `builtinEmbedder`, the bundled Xenova/all-MiniLM-L6-v2. It runs on the
-//     CPU worker (`server/workers/cpuHost.ts`), or on this thread when the
-//     worker never started. No key, no network, no cost.
+//   - `localEmbedder(model)`, a Transformers.js model on the CPU worker
+//     (`server/workers/cpuHost.ts`), or on this thread when the worker never
+//     started. No key, no network, no cost. `builtinEmbedder` is the bundled
+//     Xenova/all-MiniLM-L6-v2, and the search benchmark compares others.
 //   - a provider model, through `AIProvider.embed`: Gemini, OpenAI, or an
 //     OpenAI-compatible endpoint such as Ollama.
 //
@@ -15,17 +16,14 @@
 // Settings or to the instance switch reaches the next text. A caller reads
 // `local`, which says whether text leaves this server, and `ready()`.
 //
-// The vector stores do not read the embedder. They record the capability's
-// signature, and an adapter's `id` is that same string. So a change to a
-// model's vectors needs a new signature in `embeddings.ts` (`BUILTIN_SIGNATURE`
-// or `providerEmbeddings`). Then both stores rebuild at the next boot or
-// settings change. A new `id` alone rebuilds nothing.
+// Both vector stores record the embedder they were built with: its `id` and
+// its width (`dimension()`). A model whose vectors change needs a new `id`,
+// and then both stores rebuild at the next boot or settings change.
 //
-// Every call says what its texts are for, a question or a document. Some
-// models embed the two differently: Gemini's task types, the e5 and nomic
-// prefixes. Neither adapter here reads it, so their vectors are the ones they
-// were before this interface existed. An adapter that starts to read it
-// changes its vectors, so it needs that new signature.
+// Every call says what its texts are for: a question, a document, or a text
+// compared with others of its kind. Some models embed them differently:
+// Gemini's task types, the e5 and nomic prefixes. An adapter that starts to
+// read it changes its vectors, so it needs a new `id` too.
 // =============================================================================
 
 // Type-only import — erased at compile time, so @huggingface/transformers
@@ -34,14 +32,15 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import { isWorkerActive, runOnWorker } from "../workers/cpuHost.ts";
 import { unflatten } from "../workers/protocol.ts";
 import {
-  EMBEDDING_MODEL_ID,
   configureModelLibrary,
   describeModelLoadError,
 } from "../services/search/modelFiles.ts";
 import {
   BUILTIN_DIMENSION,
-  BUILTIN_SIGNATURE,
+  BUILTIN_MODEL_ID,
+  builtinSignature,
   embedWithProvider,
+  probeDimension,
   resolveEmbeddings,
 } from "./embeddings.ts";
 import { aiAllowedForUser } from "./instanceSwitch.ts";
@@ -49,14 +48,17 @@ import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
-/** What a text is for: a question to match, or a document to be found. */
-export type EmbedUse = "query" | "document";
+/**
+ * What a text is for: a question to match, a document to be found, or a text
+ * compared with others of its kind, as a duplicate check compares contacts.
+ */
+export type EmbedUse = "query" | "document" | "similarity";
 
 /** A model that turns text into vectors. */
 export interface Embedder {
   /**
-   * The model, `builtin/<model>` or `<provider>/<model>`. The same string as
-   * the capability's signature, which is what the vector stores record.
+   * The model as the vector stores record it, `builtin/<model>` or
+   * `<provider>/<model>`. A model whose vectors change needs a new one.
    */
   readonly id: string;
   /**
@@ -66,6 +68,12 @@ export interface Embedder {
   readonly local: boolean;
   /** True when `embed` can answer now. */
   ready(): boolean;
+  /**
+   * The vector width, which both stores are built at. A provider model's
+   * width is learned once, from a probe text (`probeDimension`), and is null
+   * while that probe fails.
+   */
+  dimension(): Promise<number | null>;
   /**
    * One vector per text, in order. Throws when the model fails or answers
    * with another count, so no caller can write a short batch.
@@ -78,84 +86,149 @@ export interface Embedder {
 }
 
 // ---------------------------------------------------------------------------
-// The built-in model
+// Local models
 // ---------------------------------------------------------------------------
+
+/** A local embedding model: what the worker loads, and how it reads text. */
+export interface LocalModel {
+  /**
+   * The Transformers.js model id. Its q8 ONNX weights load from the model
+   * folder or the cache, or download once (`modelFiles.ts`).
+   */
+  model: string;
+  /** The vector width. */
+  dimension: number;
+  /** How the token vectors become one vector: their mean, or the first token's. */
+  pooling: "mean" | "cls";
+  /**
+   * Text put before each input, by what it is for. A model such as e5 or bge
+   * was trained with one, and ranks worse without it.
+   */
+  prefix?: Partial<Record<EmbedUse, string>>;
+}
+
+/** The bundled model. It embeds a question and a document the same way. */
+export const BUILTIN_MODEL: LocalModel = {
+  model: BUILTIN_MODEL_ID,
+  dimension: BUILTIN_DIMENSION,
+  pooling: "mean",
+};
 
 /** Texts per forward pass on the worker. */
 const BATCH_SIZE = 64;
 
-/**
- * The pipeline on THIS thread, used only when the worker could not start.
- *
- * Normally null for the life of the process: the model lives on the CPU
- * worker and this thread never loads it.
- */
-let fallbackExtractor: FeatureExtractionPipeline | null = null;
-let modelReady = false;
-let initPromise: Promise<void> | null = null;
+/** The local models that have loaded, by id. */
+const readyModels = new Set<string>();
 
-/** The bundled model. It embeds a question and a document the same way. */
-export const builtinEmbedder: Embedder = {
-  id: BUILTIN_SIGNATURE,
-  local: true,
-  ready: () => modelReady,
-  embed: (texts, _use, signal) => embedBuiltin(texts, signal),
-};
+/** Loads in flight, by id, so that two callers share one. */
+const loading = new Map<string, Promise<boolean>>();
+
+/**
+ * Pipelines on THIS thread, used only when the worker could not start.
+ *
+ * Normally empty for the life of the process: the models live on the CPU
+ * worker and this thread never loads one.
+ */
+const fallbackExtractors = new Map<
+  string,
+  Promise<FeatureExtractionPipeline>
+>();
+
+/** One adapter per local model, so a caller can hold on to it. */
+const localEmbedders = new Map<string, Embedder>();
+
+/**
+ * The local model `local` on the CPU worker. Ready once it has loaded
+ * (`initLocalEmbedder`). Its id is `builtin/<model>`.
+ */
+export function localEmbedder(local: LocalModel): Embedder {
+  let embedder = localEmbedders.get(local.model);
+  if (!embedder) {
+    embedder = {
+      id: builtinSignature(local.model),
+      local: true,
+      ready: () => readyModels.has(local.model),
+      dimension: async () => local.dimension,
+      embed: (texts, use, signal) => {
+        const prefix = local.prefix?.[use];
+        return embedLocal(
+          local,
+          prefix ? texts.map((text) => prefix + text) : texts,
+          signal,
+        );
+      },
+    };
+    localEmbedders.set(local.model, embedder);
+  }
+  return embedder;
+}
+
+/** The bundled model, which search and dedupe use unless a provider's is pinned. */
+export const builtinEmbedder = localEmbedder(BUILTIN_MODEL);
+
+/**
+ * Load a local model with one probe text, once. True when it is ready.
+ *
+ * A failed load can be tried again: the next call loads from the start.
+ */
+export function initLocalEmbedder(local: LocalModel): Promise<boolean> {
+  if (readyModels.has(local.model)) return Promise.resolve(true);
+  let pending = loading.get(local.model);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const t0 = Date.now();
+        // One text through the real path, which loads the model wherever the
+        // models live: on the worker normally, on this thread when the worker
+        // could not start. Doing it at boot rather than on the first search
+        // keeps the two-and-a-half second cold load off somebody's query.
+        const [probe] = await embedLocal(local, ["contrack"]);
+        if (!probe) throw new Error("The embedding model returned no vector");
+        readyModels.add(local.model);
+        log.info(
+          "LocalEmbeddings",
+          `Model ${local.model} ready in ${Date.now() - t0}ms (${local.dimension}-dim, q8, ` +
+            `${isWorkerActive() ? "CPU worker" : "in process"})`,
+        );
+        return true;
+      } catch (err: unknown) {
+        log.warn(
+          "LocalEmbeddings",
+          `Failed to load local embedding model: ${describeModelLoadError(getErrorMessage(err), local.model)}`,
+        );
+        return false;
+      } finally {
+        loading.delete(local.model);
+      }
+    })();
+    loading.set(local.model, pending);
+  }
+  return pending;
+}
 
 /**
  * Load the bundled model. Called once on server startup.
  *
- * It loads the bundled model whatever the capability names. Until this
- * moved here it embedded its probe through the capability, so with a
- * provider model pinned it sent the probe to the provider, failed the width
- * check, and left the bundled model unloaded. Turning AI off for the
- * instance, or choosing the built-in model again, then left search with no
- * vectors until a restart.
+ * It loads the bundled model whatever the capability names. Until #161 it
+ * embedded its probe through the capability, so with a provider model pinned
+ * it sent the probe to the provider, failed the width check, and left the
+ * bundled model unloaded. Turning AI off for the instance, or choosing the
+ * built-in model again, then left search with no vectors until a restart.
  */
-export async function initBuiltinEmbedder(): Promise<void> {
-  if (modelReady) return;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      const t0 = Date.now();
-      // One text through the real path, which loads the model wherever the
-      // model lives: on the worker normally, on this thread when the worker
-      // could not start. Doing it at boot rather than on the first search
-      // keeps the two-and-a-half second cold load off somebody's query.
-      const [probe] = await embedBuiltin(["contrack"]);
-      if (!probe) throw new Error("The embedding model returned no vector");
-      modelReady = true;
-      log.info(
-        "LocalEmbeddings",
-        `Model ${EMBEDDING_MODEL_ID} ready in ${Date.now() - t0}ms (${BUILTIN_DIMENSION}-dim, q8, ` +
-          `${isWorkerActive() ? "CPU worker" : "in process"})`,
-      );
-    } catch (err: unknown) {
-      log.warn(
-        "LocalEmbeddings",
-        `Failed to load local embedding model: ${describeModelLoadError(getErrorMessage(err), EMBEDDING_MODEL_ID)}`,
-      );
-      modelReady = false;
-    }
-  })();
-
-  try {
-    await initPromise;
-  } finally {
-    initPromise = null;
-  }
+export function initBuiltinEmbedder(): Promise<boolean> {
+  return initLocalEmbedder(BUILTIN_MODEL);
 }
 
 /**
- * The bundled model's vectors.
+ * A local model's vectors.
  *
- * No `modelReady` gate. This function is what decides whether the model
- * works: `initBuiltinEmbedder` calls it once at boot with a probe text and
- * sets the flag from the answer. Gating on the flag here would mean the probe
- * could never succeed.
+ * No readiness gate. This function is what decides whether a model works:
+ * `initLocalEmbedder` calls it once with a probe text and marks the model
+ * ready from the answer. Gating on readiness here would mean the probe could
+ * never succeed.
  */
-async function embedBuiltin(
+async function embedLocal(
+  local: LocalModel,
   texts: string[],
   signal?: AbortSignal,
 ): Promise<Float32Array[]> {
@@ -172,8 +245,14 @@ async function embedBuiltin(
   // routing everything through one place means one copy of the model in
   // memory rather than two.
   const vectors = await runOnWorker(
-    { kind: "embed", texts, batchSize: BATCH_SIZE },
-    () => embedInProcess(texts),
+    {
+      kind: "embed",
+      model: local.model,
+      pooling: local.pooling,
+      texts,
+      batchSize: BATCH_SIZE,
+    },
+    () => embedInProcess(local, texts),
     (result) => {
       if (result.kind !== "embed") throw new AppError("Wrong worker result");
       // Copied out of the transferred buffer. `subarray` is a view, and the
@@ -186,14 +265,14 @@ async function embedBuiltin(
 
   if (vectors.length !== texts.length) {
     throw new AppError(
-      `The built-in model returned ${vectors.length} vectors for ${texts.length} texts`,
+      `${local.model} returned ${vectors.length} vectors for ${texts.length} texts`,
     );
   }
   for (const vec of vectors) {
-    // Guards against a silent local-model swap by a contributor.
-    if (vec.length !== BUILTIN_DIMENSION) {
+    // Guards against a model that is not as wide as its card says.
+    if (vec.length !== local.dimension) {
       throw new AppError(
-        `Expected ${BUILTIN_DIMENSION}-dim vector from the built-in model, got ${vec.length}`,
+        `Expected ${local.dimension}-dim vector from ${local.model}, got ${vec.length}`,
       );
     }
   }
@@ -207,21 +286,27 @@ async function embedBuiltin(
  * model in memory, which is the price of the product still working on a Node
  * build where `worker_threads` is unavailable.
  */
-async function embedInProcess(texts: string[]): Promise<Float32Array[]> {
-  if (!fallbackExtractor) {
-    const { pipeline, env: hfEnv } = await import("@huggingface/transformers");
-    configureModelLibrary(hfEnv);
-    fallbackExtractor = await pipeline(
-      "feature-extraction",
-      EMBEDDING_MODEL_ID,
-      {
+async function embedInProcess(
+  local: LocalModel,
+  texts: string[],
+): Promise<Float32Array[]> {
+  let extractor = fallbackExtractors.get(local.model);
+  if (!extractor) {
+    extractor = (async () => {
+      const { pipeline, env } = await import("@huggingface/transformers");
+      configureModelLibrary(env);
+      return pipeline("feature-extraction", local.model, {
         dtype: "q8",
         session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
-      },
-    );
+      });
+    })();
+    fallbackExtractors.set(local.model, extractor);
+    extractor.catch(() => fallbackExtractors.delete(local.model));
   }
-  const output = await fallbackExtractor(texts, {
-    pooling: "mean",
+  const output = await (
+    await extractor
+  )(texts, {
+    pooling: local.pooling,
     normalize: true,
   });
   return (output.tolist() as number[][]).map((v) => new Float32Array(v));
@@ -232,25 +317,37 @@ async function embedInProcess(texts: string[]): Promise<Float32Array[]> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Providers whose `embed` reads the use. Gemini makes each one a task type,
+ * so its vectors are not the ones it gave before uses reached it, and its id
+ * carries `+tasks`: both stores rebuild once for it.
+ */
+const PROVIDERS_WITH_TASK_TYPES = new Set(["gemini"]);
+
+/**
  * A provider's embedding model, through `AIProvider.embed`.
  *
  * Configured is ready: a provider that cannot answer fails the call, and the
  * caller keeps its keyword search. `embedWithProvider` checks the instance
- * switch and refuses a short batch.
+ * switch and refuses a short batch. `known` is the width the capability has
+ * cached, so only the first call ever probes.
  */
 function providerEmbedder(
   providerId: string,
   model: string,
-  id: string,
+  signature: string,
+  known: number | null,
 ): Embedder {
   return {
-    id,
+    id: PROVIDERS_WITH_TASK_TYPES.has(providerId)
+      ? `${signature}+tasks`
+      : signature,
     local: false,
     ready: () => true,
-    async embed(texts, _use, signal) {
+    dimension: async () => known ?? probeDimension(providerId, model),
+    async embed(texts, use, signal) {
       signal?.throwIfAborted();
       if (texts.length === 0) return [];
-      const vectors = await embedWithProvider(providerId, model, texts);
+      const vectors = await embedWithProvider(providerId, model, texts, use);
       return vectors.map((v) => new Float32Array(v));
     },
   };
@@ -266,9 +363,9 @@ let replacement: Embedder | null = null;
 /**
  * Use `embedder` instead of the configured one. Null goes back.
  *
- * Tests and scripts only. The vector stores keep the configured model's
- * signature and width, so a replacement must write vectors as wide as the
- * stores are.
+ * Tests and scripts only. The stores rebuild for it at the next
+ * `ensureEmbeddingStore`, and until then it must write vectors as wide as
+ * they are.
  */
 export function setEmbedder(embedder: Embedder | null): void {
   replacement = embedder;
@@ -279,7 +376,12 @@ export function currentEmbedder(): Embedder {
   if (replacement) return replacement;
   const resolved = resolveEmbeddings();
   return resolved.kind === "provider" && resolved.providerId && resolved.model
-    ? providerEmbedder(resolved.providerId, resolved.model, resolved.signature)
+    ? providerEmbedder(
+        resolved.providerId,
+        resolved.model,
+        resolved.signature,
+        resolved.dimension,
+      )
     : builtinEmbedder;
 }
 
@@ -294,7 +396,13 @@ export function currentEmbedder(): Embedder {
  * (`embedQuery`).
  *
  * @param ownerId - The account that owns the contacts.
+ * @param embedder - The embedder that would embed them. A backfill reads it
+ *   once per round and asks about that one, so every call in the round uses
+ *   the model this check allowed.
  */
-export function mayEmbedContactsFor(ownerId: string): boolean {
-  return currentEmbedder().local || aiAllowedForUser(ownerId);
+export function mayEmbedContactsFor(
+  ownerId: string,
+  embedder = currentEmbedder(),
+): boolean {
+  return embedder.local || aiAllowedForUser(ownerId);
 }

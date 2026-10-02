@@ -16,7 +16,7 @@ import {
   findSearchNeighbors,
   findPassageNeighbors,
   getSearchEmbeddingCount,
-} from "./localEmbeddings.ts";
+} from "./vectorIndex.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
 import { roleVariants } from "../../ai/queryConstraints.ts";

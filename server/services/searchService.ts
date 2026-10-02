@@ -7,7 +7,7 @@ import {
 import { refineOptions } from "./search/refine.ts";
 import { sqlite } from "../db.ts";
 import { selectPassages, currentPassage } from "./search/passages.ts";
-import { findPassageNeighbors } from "./search/localEmbeddings.ts";
+import { findPassageNeighbors } from "./search/vectorIndex.ts";
 import { lexicalSearch, type LexicalMatch } from "./search/lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import { log } from "../utils/logger.ts";

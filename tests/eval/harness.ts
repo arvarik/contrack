@@ -21,7 +21,7 @@ import { fileURLToPath } from "url";
 import { searchService } from "../../server/services/searchService.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { hybridRetrieval } from "../../server/services/search/hybridRetrieval.ts";
-import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import { upsertSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
 import type { Reranker } from "../../server/ai/reranker.ts";
 import type { Scope } from "../../server/tenancy/scope.ts";
 import { seedWithStableIds, splitVectors, type SeededIds } from "./seeding.ts";

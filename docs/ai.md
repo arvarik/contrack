@@ -121,7 +121,9 @@ saved in the app wins (see [AI](configuration.md#ai)).
 
 The built-in model runs on the server, costs nothing and works offline. A
 hosted model can rank better on a large network, but it gets every contact's
-profile text. When you save a different model, Contrack rebuilds the search
+profile text. With Gemini, Contrack says what each text is for, a question, a
+contact or a duplicate check, so the model ranks each one the right way. When
+you save a different model, Contrack rebuilds the search
 and duplicate indexes in the background, and results are incomplete until it
 finishes. The **Semantic search coverage** card shows the progress. With a
 hosted model, new and changed contacts wait until you choose **Index missing**

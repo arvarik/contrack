@@ -87,7 +87,7 @@ import { searchService } from "../../server/services/searchService.ts";
 import {
   backfillSearchEmbeddings,
   embedContact,
-} from "../../server/services/search/localEmbeddings.ts";
+} from "../../server/services/search/vectorIndex.ts";
 import {
   backfillEmbeddings,
   generateAndStoreEmbedding,

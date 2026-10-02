@@ -10,7 +10,7 @@ import {
   embedContact,
   findSearchNeighbors,
   upsertSearchEmbedding,
-} from "../../server/services/search/localEmbeddings.ts";
+} from "../../server/services/search/vectorIndex.ts";
 import * as embeddings from "../../server/ai/embeddings.ts";
 
 const app = makeTestApp();

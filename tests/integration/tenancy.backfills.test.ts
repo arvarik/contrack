@@ -67,7 +67,7 @@ import {
   backfillEmbeddings,
   backfillOwnerEmbeddings,
 } from "../../server/services/dedupe/embeddings.ts";
-import { backfillSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import { backfillSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
 
 /**
  * More than one round each, so "took turns" is a claim the order can carry.

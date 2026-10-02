@@ -41,11 +41,11 @@ const recorded = vi.hoisted(() => ({
 
 // Mock vector embeddings — replay recorded vectors
 vi.mock(
-  "../../server/services/search/localEmbeddings.ts",
+  "../../server/services/search/vectorIndex.ts",
   async (importOriginal) => {
     const actual =
       await importOriginal<
-        typeof import("../../server/services/search/localEmbeddings.ts")
+        typeof import("../../server/services/search/vectorIndex.ts")
       >();
     return {
       ...actual,
@@ -130,7 +130,7 @@ vi.mock("../../server/ai/services/shared.ts", async (importOriginal) => {
 });
 
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
-import { upsertSearchEmbeddings } from "../../server/services/search/localEmbeddings.ts";
+import { upsertSearchEmbeddings } from "../../server/services/search/vectorIndex.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import {
   ANSWER_SCORING_VERSION,

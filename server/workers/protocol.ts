@@ -41,6 +41,16 @@ export type WorkerJob = EmbedJob | RerankJob;
  */
 export interface EmbedJob {
   kind: "embed";
+  /**
+   * The Transformers.js model id, for example `Xenova/all-MiniLM-L6-v2`.
+   * The bundled model when unset.
+   */
+  model?: string;
+  /**
+   * How the token vectors become one vector: their mean, or the first
+   * token's. `mean` when unset. Every vector is L2-normalized either way.
+   */
+  pooling?: "mean" | "cls";
   texts: string[];
   /** Texts per forward pass. Progress is reported once per batch. */
   batchSize: number;

@@ -30,15 +30,20 @@ import {
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError } from "../utils/AppError.ts";
+import type { EmbedUse } from "./embedder.ts";
 
 /** Dimension of the bundled local model. */
 export const BUILTIN_DIMENSION = 384;
 export const BUILTIN_MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+/** The signature of a local model, `builtin/<model id>`. */
+export function builtinSignature(model: string): string {
+  return `builtin/${model}`;
+}
 /**
  * The bundled model's signature, which both vector stores record. A change
  * here rebuilds both stores and re-embeds every contact.
  */
-export const BUILTIN_SIGNATURE = `builtin/${BUILTIN_MODEL_ID}`;
+export const BUILTIN_SIGNATURE = builtinSignature(BUILTIN_MODEL_ID);
 
 export interface ResolvedEmbeddings {
   kind: "builtin" | "provider";
@@ -134,6 +139,7 @@ export async function embedWithProvider(
   providerId: string,
   model: string,
   texts: string[],
+  use?: EmbedUse,
 ): Promise<number[][]> {
   if (isAiOffForInstance()) {
     throw new AppError("An admin turned AI off for this instance", 503, {
@@ -153,7 +159,7 @@ export async function embedWithProvider(
       { code: "EMBEDDINGS_UNSUPPORTED" },
     );
   }
-  const vectors = await provider.embed(texts, model);
+  const vectors = await provider.embed(texts, model, use);
   // A provider that returns fewer vectors than inputs would otherwise be
   // absorbed by callers as "some contacts just didn't embed", leaving the
   // index quietly incomplete. Make it a hard error.

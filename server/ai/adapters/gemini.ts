@@ -42,6 +42,14 @@ import {
 } from "../resilience.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { AppError } from "../../utils/AppError.ts";
+import type { EmbedUse } from "../embedder.ts";
+
+/** The Gemini task type for each embedding use. */
+const GEMINI_TASK_TYPES: Record<EmbedUse, string> = {
+  query: "RETRIEVAL_QUERY",
+  document: "RETRIEVAL_DOCUMENT",
+  similarity: "SEMANTIC_SIMILARITY",
+};
 
 // ---------------------------------------------------------------------------
 // JSON Schema Translation (unchanged from v1.0)
@@ -351,14 +359,28 @@ export class GeminiAdapter implements AIProvider {
     return models;
   }
 
-  /** Embeddings via the Gemini embedding models. */
-  async embed(texts: string[], model: string): Promise<number[][]> {
+  /**
+   * Embeddings via the Gemini embedding models.
+   *
+   * Each use is a task type. Measured on 2026-10-01 with
+   * gemini-embedding-001: on the search gate's corpus the retrieval types
+   * lift dense MRR from 0.858 to 0.899, and on the dedupe corpus
+   * SEMANTIC_SIMILARITY lifts the rank of a duplicate's partner from 0.809 to
+   * 0.892 MRR, where RETRIEVAL_DOCUMENT lowers it to 0.756. gemini-embedding-2
+   * answers the same with or without one. A probe sends no use.
+   */
+  async embed(
+    texts: string[],
+    model: string,
+    use?: EmbedUse,
+  ): Promise<number[][]> {
     const response = await this.client.models.embedContent({
       model,
       // Each text must be its own Content. Passing `contents: texts` reads as
       // ONE content with many parts and yields a single merged vector — which
       // silently under-fills the batch instead of erroring.
       contents: texts.map((text) => ({ parts: [{ text }] })),
+      ...(use ? { config: { taskType: GEMINI_TASK_TYPES[use] } } : {}),
     });
     return (response.embeddings ?? []).map((e) => e.values as number[]);
   }
