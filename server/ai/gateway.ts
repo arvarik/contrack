@@ -39,6 +39,13 @@ export type GatewayOptions = Omit<AIGenerateOptions, "routing"> & {
    * the default two slots.
    */
   lane?: QueueLane;
+  /**
+   * Runs when the call gets its slot, just before it goes to the provider.
+   * Throw to refuse the call. A call can wait in the queue for a while, so a
+   * caller whose permission can change in that time checks it here: contact
+   * research reads the account's AI switch.
+   */
+  beforeSend?: () => void;
 };
 
 /**
@@ -108,6 +115,7 @@ function runQueued(
     request: AIGenerateOptions,
   ) => Promise<AIGenerateResult>,
 ): Promise<AIGenerateResult> {
+  const { beforeSend, ...rest } = options;
   options.signal?.throwIfAborted();
   if (isAiOffForInstance()) throw aiOffError();
   const resolved = resolveCapability(capability);
@@ -138,10 +146,12 @@ function runQueued(
         () => {
           // Asked again when the slot comes up. A job can wait in the queue
           // for a while, and an admin who turns AI off in that time expects
-          // the waiting jobs to stop as well.
+          // the waiting jobs to stop as well. The caller's own check comes
+          // first, so its refusal is the one the caller sees.
+          beforeSend?.();
           if (isAiOffForInstance()) throw aiOffError();
           return call(resolved, {
-            ...options,
+            ...rest,
             signal,
             timeoutMs,
             maxOutputTokens: options.maxOutputTokens ?? 4_096,

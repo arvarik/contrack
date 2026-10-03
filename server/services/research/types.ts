@@ -87,16 +87,17 @@ export interface TechniqueContext {
   /** Counts what the run spends. */
   meter: Meter;
   /**
-   * A model call through the gateway. The AI switches are read first, and a
-   * refusal ends the run.
+   * A model call through the gateway. The AI switches are read first, and
+   * again when the call gets its slot in the AI work queue. A refusal ends
+   * the run. The call stops with the run whatever signal it is given.
    */
   generate(
     capability: ModelCapability,
     options: GatewayOptions,
   ): Promise<AIGenerateResult>;
   /**
-   * The web search the request chose, behind the same switches. Null for a
-   * technique that needs none.
+   * The web search the request chose, behind the same switches, stopping
+   * with the run. Null for a technique that needs none.
    */
   webSearch: WebSearch | null;
 }

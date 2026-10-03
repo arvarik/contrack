@@ -879,8 +879,12 @@ restart loses its progress. Finished contact updates stay.
 
 The batch `status` is `processing`, `complete` or `cancelled`. Each job is
 `queued`, `searching`, `merging`, `success`, `error` or `cancelled`, and a
-finished job has an `outcome`, and names its `technique`, its `webSearch` and
-the same choice as a `strategy`.
+finished job has an `outcome`. Every job names its `technique` and the same
+choice as a `strategy`, and its `webSearch` when its technique uses one.
+
+When an AI switch turns off during a batch, the job that runs fails with the
+switch's message and the `errorType` `auth`. The batch stops there: each job
+not started yet fails with the same reason, and the batch is `complete`.
 
 `POST /api/contacts/:id/enrich` researches one contact and answers
 `{ success, fieldsUpdated, outcome, latencyMs, models, tokenCount }`:
@@ -889,10 +893,16 @@ the same choice as a `strategy`.
 - The run has 240 seconds at Standard and 290 seconds at Deep.
 - It searches the way your **Search with** choice (`researchSource`) says,
   unless the body names a `technique` (`provider-search`, `search-and-read`
-  or `combined`) or a `webSearch` (`searxng`).
+  or `combined`) or a `webSearch` (`searxng`). A `webSearch` named alone
+  runs with your **Search with** technique when it searches the web, and
+  with `search-and-read` when it does not. What the body names is used or
+  refused, never replaced by another search.
 - `400 VALIDATION_ERROR` for a technique or a web search that does not
-  exist. `503` for one that is not set up, such as
+  exist. `400` for a `webSearch` with a technique that uses none, such as
+  `provider-search`. `503` for a choice that is not set up, such as
   `503 SEARXNG_NOT_CONFIGURED`.
+- `403 AI_OFF_FOR_ACCOUNT`, `503 AI_OFF_FOR_INSTANCE` or `503 RESEARCH_OFF`
+  when a switch turns off during the run.
 - `409` when research on the contact is already running, or the contact
   changed. `502 AI_GROUNDING_MISSING` when no search cited a page.
   `502 AI_NO_ANSWER` when no search answered. `503` with no research provider.

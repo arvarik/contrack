@@ -29,6 +29,7 @@ import type {
 import type { AIProvider } from "../../ai/provider.ts";
 import { mergeSearchResult, researchHistory } from "./mergeEngine.ts";
 import {
+  isRefusal,
   research,
   strategyOf,
   toAISearchResult,
@@ -54,6 +55,9 @@ import {
 // =============================================================================
 
 function classifyError(error: unknown): AISearchErrorType {
+  // An AI switch said no: AI is off for the instance or the account, or
+  // research is off.
+  if (isRefusal(error)) return "auth";
   // A no-match with no web search behind it fails the source rule, like an
   // answer without source links.
   if ((error as { code?: string } | null | undefined)?.code === "AI_NO_SEARCH")
@@ -303,6 +307,7 @@ class AISearchJobQueue extends EventEmitter {
         const job = batch.jobs[index];
         const startMs = Date.now();
         let release: (() => void) | undefined;
+        let refused = false;
         try {
           const contact = enrichmentContact(scope, job.contactId);
           release = lockEnrichment(job.contactId);
@@ -348,6 +353,7 @@ class AISearchJobQueue extends EventEmitter {
             job.status = "error";
             job.errorType = classifyError(error);
             job.error = getErrorMessage(error);
+            refused = isRefusal(error);
             log.warn(
               "AISearchQueue",
               `Job ${job.id} failed. The batch does not repeat completed research stages.`,
@@ -358,6 +364,13 @@ class AISearchJobQueue extends EventEmitter {
           job.completedAt = new Date().toISOString();
           job.latencyMs = Date.now() - startMs;
           this.emit(batchId, batch);
+        }
+        // An AI switch said no. It says no for every contact of this account
+        // until somebody turns it back on, so the batch stops here, and the
+        // run lock is free for other accounts at once.
+        if (refused) {
+          this.refuseRest(batch, index, job);
+          break;
         }
       }
     } catch (error) {
@@ -370,6 +383,30 @@ class AISearchJobQueue extends EventEmitter {
       batch.status = controller.signal.aborted ? "cancelled" : "complete";
       this.emit(batchId, batch);
     }
+  }
+
+  /**
+   * Fail the jobs after `index` that have not started, with the refusal
+   * `refused` failed with. They are not researched.
+   */
+  private refuseRest(
+    batch: AISearchBatch,
+    index: number,
+    refused: AISearchJob,
+  ) {
+    const rest = batch.jobs
+      .slice(index + 1)
+      .filter((job) => job.status === "queued");
+    for (const job of rest) {
+      job.status = "error";
+      job.errorType = refused.errorType;
+      job.error = refused.error;
+      job.completedAt = new Date().toISOString();
+    }
+    log.warn(
+      "AISearchQueue",
+      `Batch ${batch.id} stopped: ${refused.error}. ${rest.length} contact(s) not researched.`,
+    );
   }
 
   /** Stop active research and prevent queued contacts from starting. */
