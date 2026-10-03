@@ -3,12 +3,14 @@
  *
  * Provides:
  * - Search & facet filter input powered by `useMapFilter`
- * - Facet pills for locked filters (including `list:`, `near:`)
+ * - Facet pills for locked filters (including `list:`, `near:`), and "Clear
+ *   all" beside them while any filter is on, the overdue filter too
  * - Autocomplete dropdown for facet prefixes (including `list:` and `tag:`)
- * - "Go to" place search mode with `flyTo` zoom 10 and inline error
+ * - "Go to" place search mode with `flyTo` zoom 10, a toast naming the
+ *   place it found, and the server's own words inline when it fails
  * - "Fit all" button, which the page fits (F does the same)
  * - Mobile filter sheet via Modal below `lg` breakpoint
- * - "0 of N match" empty state with "Clear filters" button
+ * - "0 of N match" empty state
  * - "Select" menu (box, lasso, all in view) as an `ActionMenu`, so it reads
  *   and behaves like every other menu in the app
  *
@@ -156,12 +158,17 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           padding,
         });
       }
+      if (res.displayName) toast(`Showing ${res.displayName}`);
       setGotoQuery("");
       setGotoError(null);
       setMode("filter");
       setIsMobileSheetOpen(false);
-    } catch {
-      setGotoError("Nothing found for that place");
+    } catch (error) {
+      // The server says which: nothing found, a busy geocoder, no server.
+      setGotoError(
+        (error instanceof Error && error.message) ||
+          "Nothing found for that place",
+      );
     } finally {
       setGotoLoading(false);
     }
@@ -292,13 +299,24 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Facet Pills */}
-      {mode === "filter" && filter.effectiveFilters.length > 0 && (
-        <div className="w-full">
-          <FacetPills
-            filters={filter.effectiveFilters}
-            onRemove={filter.removeFacet}
-          />
+      {/* Facet Pills, and Clear all while a filter is on: text, pills or
+          the overdue filter on the bottom line */}
+      {mode === "filter" && filter.hasActiveFilter && (
+        <div className="flex items-end gap-2 w-full">
+          <div className="flex-1 min-w-0">
+            <FacetPills
+              filters={filter.effectiveFilters}
+              onRemove={filter.removeFacet}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={filter.clearFilters}
+            aria-label="Clear all filters"
+            className="hit-area shrink-0 px-1 py-0.5 text-xs font-semibold text-primary hover:underline cursor-pointer"
+          >
+            Clear all
+          </button>
         </div>
       )}
 
@@ -314,17 +332,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* 0 of N match empty state */}
+      {/* 0 of N match empty state. Clear all is beside the pills. */}
       {filter.hasActiveFilter && filter.matchCount === 0 && (
-        <div className="flex items-center justify-between text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
-          <span>0 of {filter.totalCount} match</span>
-          <button
-            type="button"
-            onClick={filter.clearFilters}
-            className="text-primary hover:underline font-semibold cursor-pointer ml-2"
-          >
-            Clear filters
-          </button>
+        <div className="text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
+          0 of {filter.totalCount} match
         </div>
       )}
 

@@ -11,6 +11,9 @@ import { isPastDay } from "../../../shared/dates";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
 import { boundsContain } from "./mapMath";
 
+/** Why nobody is on the map: the contacts load, failed to load, or have no place. */
+export type MapEmpty = "loading" | "failed" | "none";
+
 export interface TopBucket {
   name: string;
   count: number;

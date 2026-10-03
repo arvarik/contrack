@@ -44,13 +44,23 @@ test.describe("map features - filters and place search", () => {
     ).toHaveCount(0);
   });
 
-  test("focuses filter input on / shortcut key", async ({ page }) => {
+  test("focuses filter input on / shortcut key, but not while a menu is open", async ({
+    page,
+  }) => {
     await page.goto("/map");
 
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
 
     const filterInput = page.getByRole("textbox", { name: "Filter contacts" });
+
+    // The single keys (/, F, I, L) fired under an open menu. The Views
+    // menu keeps the focus on its button, so only a check for a menu holds.
+    await page.getByRole("button", { name: "Saved views" }).click();
+    await expect(page.getByRole("menu", { name: "Saved views" })).toBeVisible();
+    await page.keyboard.press("/");
+    await expect(filterInput).not.toBeFocused();
+    await page.keyboard.press("Escape");
 
     // Press / on page
     await page.keyboard.press("/");
@@ -169,6 +179,41 @@ test.describe("map features - filters and place search", () => {
         nextFollowUpAt: null,
       });
     }
+  });
+
+  // A failed load read "No one in view", with no message and no retry.
+  test("says when the contacts did not load, and loads them on Retry", async ({
+    page,
+  }) => {
+    let failing = true;
+    await page.route("**/api/contacts?view=slim", (route) =>
+      failing
+        ? route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({
+              error: { code: "INTERNAL", message: "Internal error" },
+            }),
+          })
+        : route.continue(),
+    );
+    await page.goto("/map");
+    const failed = page
+      .getByRole("alert")
+      .filter({ hasText: "Could not load contacts" });
+    await expect(failed).toBeVisible();
+    await expect(page.getByRole("region", { name: "In view" })).toContainText(
+      "Could not load contacts",
+    );
+
+    failing = false;
+    await page.getByRole("button", { name: "Retry" }).click();
+    await expect(
+      page
+        .getByRole("region", { name: "Contact map" })
+        .getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+    await expect(failed).toHaveCount(0);
   });
 
   test("pane toggle with i persists across reload", async ({ page }) => {
@@ -516,12 +561,12 @@ test.describe("map features on phone", () => {
     await expectPageAccessible(page, testInfo, "map-filter-sheet-mobile");
   });
 
-  test("opens mobile insights sheet and is accessible", async ({
+  test("opens mobile insights sheet, is accessible, and closes for a tapped person", async ({
     page,
   }, testInfo) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
+    await expect(map).toHaveAttribute("data-map-ready", "true");
 
     // Click Insights button on mobile toolbar
     const insightsBtn = page.getByRole("button", { name: "Insights" });
@@ -534,5 +579,15 @@ test.describe("map features on phone", () => {
 
     // Check accessibility with insights sheet open
     await expectPageAccessible(page, testInfo, "map-insights-sheet-mobile");
+
+    // A tapped person left the sheet open: the map flew behind it, and the
+    // list shrank under the finger.
+    await sheet.getByRole("radio", { name: "People" }).tap();
+    await sheet
+      .getByRole("list", { name: "People in view" })
+      .getByRole("button")
+      .first()
+      .tap();
+    await expect(sheet).toHaveCount(0);
   });
 });
