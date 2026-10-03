@@ -200,7 +200,9 @@ test.describe("phone pages (390 px)", () => {
 
     // One slim row under the search box says how far indexing has got, with
     // the action that finishes it
-    const row = page.getByRole("region", { name: "Semantic search coverage" });
+    const row = page.getByRole("region", {
+      name: "Search by meaning coverage",
+    });
     await expect(row).toBeVisible();
     await expect(row.getByText("6 of 10 contacts indexed")).toBeVisible();
     await expect(
@@ -222,7 +224,7 @@ test.describe("phone pages (390 px)", () => {
 
     // No coverage card, hero or explanation around it
     await expect(
-      page.getByRole("heading", { name: "Semantic search coverage" }),
+      page.getByRole("heading", { name: "Search by meaning", exact: true }),
     ).toHaveCount(0);
     await expect(page.getByText("Ask anything", { exact: true })).toHaveCount(
       0,

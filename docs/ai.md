@@ -329,10 +329,10 @@ Limits and busy answers:
   picks a hosted embedding model.
 - For web search, the provider searches the web with the contact's details.
   With SearXNG, your SearXNG runs the searches, and Contrack reads the pages.
-  Research reads both AI switches before every model call and every web
-  search, and again when a model call leaves the AI queue. When AI is turned
-  off during a run, the run stops at its next call, and a batch researches no
-  more contacts.
+  Research reads both AI switches and **Allow web search** before every
+  model call and every web search, and again when a model call leaves the AI
+  queue. When AI is turned off during a run, the run stops at its next call,
+  and a batch researches no more contacts.
 - A download of the local search models sends no contact data.
 - With **Use AI for my account** off, nothing goes to a provider for you,
   even while AI is on for the instance. This includes the notes that you save,

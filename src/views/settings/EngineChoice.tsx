@@ -75,7 +75,23 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
   const { preferences, setPreference } = usePreferences();
   const setWebSearch = useSetWebSearch();
 
-  if (!settings) return null;
+  // Tile-shaped placeholders while the settings load, so the page under the
+  // tiles does not jump when they arrive.
+  if (!settings)
+    return (
+      <ul
+        aria-busy="true"
+        aria-label="Loading web search engines"
+        className="grid gap-2 sm:grid-cols-3"
+      >
+        {[0, 1, 2].map((tile) => (
+          <li
+            key={tile}
+            className="h-20 rounded-xl bg-surface-container-low animate-pulse"
+          />
+        ))}
+      </ul>
+    );
   const { webSearch } = settings;
   const provider = webSearchProvider(settings);
   // With one account the account's engine is the instance's.

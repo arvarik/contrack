@@ -72,7 +72,7 @@ test.describe("people", () => {
     // box speaks for the index.
     await expect(page.getByText("Try other words")).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Semantic search coverage" }),
+      page.getByRole("heading", { name: "Search by meaning", exact: true }),
     ).toHaveCount(0);
   });
 
