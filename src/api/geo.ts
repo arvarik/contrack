@@ -6,6 +6,8 @@ interface GeoSearchResult {
   lng: number;
   provider: string;
   cached: boolean;
+  /** The place the geocoder matched, for example "Lisbon, Portugal". */
+  displayName?: string;
 }
 
 export async function searchPlace(

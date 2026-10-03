@@ -190,6 +190,10 @@ interface ContactMapProps {
   loading?: boolean;
   /** A card's button other than Open, which opens the contact. */
   onCardAction?: (action: Exclude<CardAction, "open">, id: string) => void;
+  /** The contact a list row points at, whose pin stands out. */
+  highlightedId?: string | null;
+  /** Show this contact's card, pinned. Each new object asks again. */
+  cardRequest?: { id: string } | null;
   layer?: MapLayer;
   /**
    * Rendered inside the map, after the pins. A caller that needs one marker
