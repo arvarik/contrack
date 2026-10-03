@@ -88,11 +88,17 @@ function refuseWhileOff(): void {
 
 /**
  * The choice with the web search its technique uses, checked against what
- * is set up. Throws 400 for an unknown name, and 503 for the first need that
- * is missing.
+ * is set up. Throws 400 for an unknown name, or for a web search named with
+ * a technique that searches with none, and 503 for the first need that is
+ * missing.
  */
 function checked(technique: string, webSearch?: string): ResearchChoice {
   const chosen = techniqueNamed(technique);
+  if (webSearch && !searchesWeb(chosen))
+    throw new AppError(
+      `The technique "${chosen.name}" searches with no web search. Leave out webSearch, or name a technique that uses one, such as "search-and-read".`,
+      400,
+    );
   const web = searchesWeb(chosen)
     ? webSearchNamed(webSearch ?? DEFAULT_WEB_SEARCH)
     : null;
@@ -107,16 +113,16 @@ function checked(technique: string, webSearch?: string): ResearchChoice {
 }
 
 /**
- * The default when a start names no technique: the research model's own
- * search, or the web search alone when no provider serves research and the
- * web search is set up.
+ * The default when a start names nothing: the research model's own search,
+ * or the web search alone when no provider serves research and the web
+ * search is set up.
  */
-function defaultChoice(webSearch?: string): ResearchChoice {
+function defaultChoice(): ResearchChoice {
   if (
     !resolveCapability("research") &&
-    webSearchNamed(webSearch ?? DEFAULT_WEB_SEARCH).configured()
+    webSearchNamed(DEFAULT_WEB_SEARCH).configured()
   )
-    return { technique: "search-and-read", webSearch };
+    return { technique: "search-and-read" };
   return { technique: "provider-search" };
 }
 
@@ -124,30 +130,37 @@ function defaultChoice(webSearch?: string): ResearchChoice {
  * The technique and web search a start runs with: the ones it names, or
  * else the account's Search with choice, or else the default.
  *
- * A Search with choice of SearXNG or both outlives the setup it needs: an
- * admin can clear the SearXNG address, or the research model, later. The
- * start then searches the default way, as it did before the choice, and does
- * not fail. Research that is off still refuses.
+ * What a start names is used, or the start is refused. A web search named
+ * alone goes with the account's technique when that one searches the web,
+ * and with search-and-read when it does not.
  *
- * @param asked - What the start names. A web search named alone goes with
- *   the technique the start would run anyway.
+ * A Search with choice of SearXNG or both outlives the setup it needs: an
+ * admin can clear the SearXNG address, or the research model, later. A start
+ * that names nothing then searches the default way, as it did before the
+ * choice, and does not fail. Research that is off still refuses.
+ *
+ * @param asked - What the start names.
  * @param source - The account's Search with choice.
- * @throws AppError 503 `RESEARCH_OFF`, 400 for an unknown name, or 503 for
- *   a choice that is not set up.
+ * @throws AppError 503 `RESEARCH_OFF`, 400 for an unknown name or a web
+ *   search the technique cannot use, or 503 for a choice that is not set up.
  */
 export function chooseResearch(
   asked: Partial<ResearchChoice>,
   source: ResearchSource,
 ): ResearchChoice {
   refuseWhileOff();
-  if (asked.technique) return checked(asked.technique, asked.webSearch);
+  const preferred = SOURCE_CHOICE[source];
+  if (asked.technique || asked.webSearch) {
+    const technique =
+      asked.technique ??
+      (searchesWeb(techniqueNamed(preferred.technique))
+        ? preferred.technique
+        : "search-and-read");
+    return checked(technique, asked.webSearch);
+  }
   if (source !== "provider") {
-    const preferred = SOURCE_CHOICE[source];
     try {
-      return checked(
-        preferred.technique,
-        asked.webSearch ?? preferred.webSearch,
-      );
+      return checked(preferred.technique, preferred.webSearch);
     } catch (err) {
       log.info(
         "Research",
@@ -155,6 +168,5 @@ export function chooseResearch(
       );
     }
   }
-  const fallback = defaultChoice(asked.webSearch);
-  return checked(fallback.technique, fallback.webSearch);
+  return checked(defaultChoice().technique);
 }

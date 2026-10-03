@@ -21,7 +21,7 @@
 import type { AISearchResult } from "../aiSearch/types.ts";
 import type { ResearchResult } from "./types.ts";
 
-export { research, RESEARCH_TIMEOUT_MS } from "./research.ts";
+export { isRefusal, research, RESEARCH_TIMEOUT_MS } from "./research.ts";
 export {
   chooseResearch,
   researchChoiceSchema,

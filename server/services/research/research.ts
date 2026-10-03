@@ -12,9 +12,11 @@
 //
 // Every model call and every web search asks the AI switches first: the
 // instance switch, the account's own switch, and research that an admin
-// turned off. A refusal stops the whole run for this contact, the calls in
-// flight too, so nothing more of the contact reaches a model or a search
-// service once a switch says no.
+// turned off. A model call asks again when it gets its slot in the AI work
+// queue. A refusal stops the whole run for this contact, the calls in flight
+// too, so nothing more of the contact reaches a model or a search service
+// once a switch says no. The batch queue then stops the account's batch
+// (`isRefusal`).
 // =============================================================================
 
 import { generateFor } from "../../ai/gateway.ts";
@@ -52,6 +54,21 @@ export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
   standard: 240_000,
   deep: 300_000,
 };
+
+/** The codes a run refuses with when an AI switch says no. */
+const REFUSALS = new Set([
+  "AI_OFF_FOR_INSTANCE",
+  "AI_OFF_FOR_ACCOUNT",
+  "RESEARCH_OFF",
+]);
+
+/**
+ * True when `err` is a switch's refusal. It holds for every contact of the
+ * account until somebody turns the switch back on.
+ */
+export function isRefusal(err: unknown): boolean {
+  return REFUSALS.has((err as { code?: unknown } | null)?.code as string);
+}
 
 /**
  * Why research may not call a model or a web search for this account now,
@@ -114,18 +131,28 @@ export async function research(
       throw refusal;
     }
   };
-  const ctx: TechniqueContext = {
-    meter,
-    generate: async (capability, options) => {
-      ask();
-      return generateFor(capability, options);
-    },
-    webSearch: web && guarded(web, ask),
-  };
 
   return withTimeout(
     async (deadline) => {
       const signal = AbortSignal.any([deadline, refused.signal]);
+      // Every call stops with the run, whatever signal the technique passes:
+      // a narrower one of its own, as combined does, or none.
+      const bounded = (own?: AbortSignal) =>
+        own ? AbortSignal.any([own, signal]) : signal;
+      // A model call is asked twice: before it joins the AI work queue, and
+      // again when it gets its slot there, which can be minutes later.
+      const ctx: TechniqueContext = {
+        meter,
+        generate: async (capability, options) => {
+          ask();
+          return generateFor(capability, {
+            ...options,
+            signal: bounded(options.signal),
+            beforeSend: ask,
+          });
+        },
+        webSearch: web && guarded(web, ask, bounded),
+      };
       const run: ResearchRequest = { ...request, signal, timeoutMs };
       const outcome = await technique.run(run, ctx);
       signal.throwIfAborted();
@@ -144,15 +171,19 @@ export async function research(
   );
 }
 
-/** `web`, asking `ask` before every search. */
-function guarded(web: WebSearch, ask: () => void): WebSearch {
+/** `web`, asking `ask` before every search, and stopping with the run. */
+function guarded(
+  web: WebSearch,
+  ask: () => void,
+  bounded: (own?: AbortSignal) => AbortSignal,
+): WebSearch {
   return {
     id: web.id,
     label: web.label,
     configured: () => web.configured(),
     search: async (query, options) => {
       ask();
-      return web.search(query, options);
+      return web.search(query, { ...options, signal: bounded(options.signal) });
     },
   };
 }

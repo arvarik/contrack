@@ -409,8 +409,10 @@ search), `server/services/research/` (contact research) and
   `needs()` says what a start needs set up. A start with an unknown name
   answers 400, and one with a missing need answers 503, before anything is
   spent. Before every model call and every web search, a run reads the
-  instance switch, the account switch and research **Off**. A refusal ends
-  the run for that contact.
+  instance switch, the account switch and research **Off**. A model call
+  reads them again when it gets its slot in the queue (`beforeSend`). A
+  refusal ends the run for that contact, and the batch queue stops the rest
+  of that account's batch.
 - **Resolution.** At call time a capability takes a pin from Settings, then an
   environment pin (`AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`,
   `AI_EMBEDDINGS_MODEL`), then Auto: `AI_PROVIDER` first, then a fixed order.

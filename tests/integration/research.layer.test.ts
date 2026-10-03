@@ -91,7 +91,7 @@ const web = {
   id: "test-web",
   label: "Test Web",
   configured: vi.fn(() => true),
-  search: vi.fn(async () => [
+  search: vi.fn<WebSearch["search"]>(async () => [
     {
       url: "https://pages.example/rowan",
       title: "Rowan Vale | Northwind Partners",
@@ -174,6 +174,18 @@ describe("a research request", () => {
       id,
     ]);
     expect(web.search).toHaveBeenCalledTimes(2);
+
+    // A web search named alone runs with the technique that reads its pages.
+    const alone = await request(app)
+      .post("/api/ai-search")
+      .send({ contactIds: [id], webSearch: "test-web" });
+    const second = jobQueue.getBatch(scope(), alone.body.batchId)!;
+    await vi.waitFor(() => expect(second.status).toBe("complete"));
+    expect(second.jobs[0]).toMatchObject({
+      technique: "search-and-read",
+      webSearch: "test-web",
+      status: "success",
+    });
   });
 
   it("answers 400 for a name nothing has, and 503 for a choice that is not set up, before anything is spent", async () => {
@@ -193,23 +205,41 @@ describe("a research request", () => {
       expect(refused.body.error.code).toBe("VALIDATION_ERROR");
     }
 
-    web.configured.mockReturnValue(false);
-    const noWebSearch = await enrich({
-      technique: "probe",
+    // A web search the technique cannot use.
+    const unusable = await enrich({
+      technique: "provider-search",
       webSearch: "test-web",
     });
-    expect(noWebSearch.status).toBe(503);
-    expect(noWebSearch.body.error.code).toBe("TEST_WEB_NOT_CONFIGURED");
-    web.configured.mockReturnValue(true);
-    for (const [technique, missing, says] of [
-      ["provider-search", "quick", "quick AI model"],
-      ["search-and-read", "deep", "deep AI model"],
-      ["combined", "research", "not configured for contact research"],
+    expect(unusable.status).toBe(400);
+
+    // A named web search that is not set up is refused, also when it is
+    // named alone, and never gives way to another search.
+    web.configured.mockReturnValue(false);
+    for (const unset of [
+      await enrich({ technique: "probe", webSearch: "test-web" }),
+      await start({ webSearch: "test-web" }),
     ]) {
+      expect(unset.status).toBe(503);
+      expect(unset.body.error.code).toBe("TEST_WEB_NOT_CONFIGURED");
+    }
+    web.configured.mockReturnValue(true);
+    for (const [body, missing, says] of [
+      [{ technique: "provider-search" }, "quick", "quick AI model"],
+      [
+        { technique: "search-and-read", webSearch: "test-web" },
+        "deep",
+        "deep AI model",
+      ],
+      [
+        { technique: "combined", webSearch: "test-web" },
+        "research",
+        "for contact research",
+      ],
+    ] as const) {
       without(missing);
-      const refused = await enrich({ technique, webSearch: "test-web" });
-      expect(refused.status, technique).toBe(503);
-      expect(refused.body.error.message, technique).toContain(says);
+      const refused = await enrich(body);
+      expect(refused.status, body.technique).toBe(503);
+      expect(refused.body.error.message, body.technique).toContain(says);
     }
 
     expect(probe.run).not.toHaveBeenCalled();
@@ -237,7 +267,7 @@ describe("a research request", () => {
           depth: "standard",
           history: null,
           technique,
-          webSearch: "test-web",
+          webSearch: technique && "test-web",
         });
         expect(Object.keys(result).sort(), String(technique)).toEqual([
           "citations",
@@ -320,5 +350,63 @@ describe("an AI switch turned off mid-run", () => {
     expect(response.body.error.code).toBe("AI_OFF_FOR_ACCOUNT");
     expect(generateFor).toHaveBeenCalledTimes(1);
     expect(enrichmentContact(scope(), id).aiResearch).toBeNull();
+  });
+  it("stops the account's batch, and fails the contacts not yet researched with the same reason", async () => {
+    const second = (
+      await request(app).post("/api/contacts").send({ name: "Second Person" })
+    ).body.id;
+    vi.mocked(generateFor).mockImplementationOnce(async () => {
+      setPreferences(localOwnerId(), { aiAssist: false });
+      return FOUND.deep;
+    });
+    const batch = jobQueue.createBatch(
+      scope(),
+      [
+        { id, name: "Rowan Vale" },
+        { id: second, name: "Second Person" },
+      ],
+      { technique: "probe", webSearch: "test-web" },
+    );
+    await jobQueue.processBatch(batch.id);
+    expect(probe.run).toHaveBeenCalledTimes(1);
+    for (const job of batch.jobs)
+      expect(job).toMatchObject({
+        status: "error",
+        errorType: "auth",
+        error: "AI is off for this account",
+      });
+    expect(batch.status).toBe("complete");
+  });
+
+  it("stops the web search and the model call of a technique that passes no signal", async () => {
+    // The probe passes none. Neither answers, so the run's deadline has to
+    // stop each one: the search first, then, once it answers, the model.
+    const hang = (signal?: AbortSignal) =>
+      new Promise<never>((_, reject) =>
+        signal?.addEventListener("abort", () => reject(signal.reason)),
+      );
+    web.search.mockImplementationOnce((_query, options) =>
+      hang(options.signal),
+    );
+    vi.mocked(generateFor).mockImplementation((_capability, options) =>
+      hang(options.signal),
+    );
+    for (const call of [web.search, generateFor]) {
+      await expect(
+        research({
+          scope: scope(),
+          contact: enrichmentContact(scope(), id),
+          depth: "standard",
+          history: null,
+          technique: "probe",
+          webSearch: "test-web",
+          timeoutMs: 50,
+        }),
+      ).rejects.toThrow("exceeded 50ms");
+      const options = vi.mocked(call).mock.lastCall!.at(-1) as {
+        signal?: AbortSignal;
+      };
+      expect(options.signal?.aborted).toBe(true);
+    }
   });
 });
