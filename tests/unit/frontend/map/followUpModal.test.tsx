@@ -3,16 +3,16 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { FollowUpModal } from "../../../../src/views/map/FollowUpModal";
+import {
+  FollowUpModal,
+  getPresetDate,
+} from "../../../../src/views/map/FollowUpModal";
 import * as client from "../../../../src/api/client";
 import { toast } from "sonner";
+import { MAX_BULK_ACTION_ITEMS } from "../../../../shared/actionItems";
 
 vi.mock("sonner", () => ({
-  toast: {
-    info: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-  },
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 describe("FollowUpModal", () => {
@@ -43,16 +43,14 @@ describe("FollowUpModal", () => {
     );
   };
 
-  it("creates one POST per id for selected contacts", async () => {
+  it("adds the follow-up to every selected contact in one request", async () => {
     const apiFetchSpy = vi.spyOn(client, "apiFetch").mockResolvedValue({
       ok: true,
-      json: async () => ({ id: "item-1" }),
+      json: async () => ({ count: 2 }),
     } as Response);
-
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const onSuccess = vi.fn();
     const onClose = vi.fn();
-
     renderComponent({
       isOpen: true,
       contactIds: ["c1", "c2"],
@@ -60,69 +58,53 @@ describe("FollowUpModal", () => {
       onSuccess,
     });
 
-    const titleInput = screen.getByLabelText(/task title/i);
-    fireEvent.change(titleInput, { target: { value: "Review proposal" } });
-
-    const submitBtn = screen.getByRole("button", {
-      name: /add to 2 contacts/i,
+    fireEvent.change(screen.getByLabelText(/task title/i), {
+      target: { value: "Review proposal" },
     });
-    fireEvent.click(submitBtn);
+    fireEvent.click(screen.getByRole("button", { name: "Add to 2 contacts" }));
 
-    await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledTimes(2);
-    });
-
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    // All or none: one retry cannot add a second follow-up to anyone.
+    expect(apiFetchSpy).toHaveBeenCalledTimes(1);
     expect(apiFetchSpy).toHaveBeenCalledWith(
-      "/contacts/c1/action-items",
+      "/action-items/bulk",
       expect.objectContaining({
         method: "POST",
-        body: expect.stringContaining("Review proposal"),
+        body: JSON.stringify({
+          contactIds: ["c1", "c2"],
+          title: "Review proposal",
+          dueAt: getPresetDate("tomorrow"),
+        }),
       }),
     );
-    expect(apiFetchSpy).toHaveBeenCalledWith(
-      "/contacts/c2/action-items",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("Review proposal"),
-      }),
+    expect(toast.success).toHaveBeenCalledWith(
+      "Added follow-up for 2 contacts",
     );
-
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["actionItems"] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["dashboard"] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["contacts"] });
-
-    expect(onSuccess).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("caps execution at 100 contacts and informs via toast", async () => {
-    const apiFetchSpy = vi.spyOn(client, "apiFetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: "item-1" }),
-    } as Response);
-
-    // 120 contact IDs
-    const ids = Array.from({ length: 120 }, (_, i) => `c-${i}`);
-
+  it("says so, and sends nothing, past the most one request may name", () => {
+    const apiFetchSpy = vi.spyOn(client, "apiFetch");
+    const count = MAX_BULK_ACTION_ITEMS + 1;
     renderComponent({
       isOpen: true,
-      contactIds: ids,
+      contactIds: Array.from({ length: count }, (_, i) => `c-${i}`),
     });
 
-    const titleInput = screen.getByLabelText(/task title/i);
-    fireEvent.change(titleInput, { target: { value: "Mass announcement" } });
-
-    const submitBtn = screen.getByRole("button", {
-      name: /add to 100 contacts/i,
+    fireEvent.change(screen.getByLabelText(/task title/i), {
+      target: { value: "Mass announcement" },
     });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(apiFetchSpy).toHaveBeenCalledTimes(100);
-    });
-
-    expect(toast.info).toHaveBeenCalledWith(
-      expect.stringContaining("capped at 100 contacts"),
-    );
+    const submit = screen.getByRole("button", {
+      name: `Add to ${count} contacts`,
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(
+      screen.getByText(`can go to ${MAX_BULK_ACTION_ITEMS} people`, {
+        exact: false,
+      }).textContent,
+    ).toContain("Select fewer people");
+    fireEvent.submit(submit.closest("form")!);
+    expect(apiFetchSpy).not.toHaveBeenCalled();
   });
 });

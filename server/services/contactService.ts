@@ -1028,7 +1028,7 @@ export const contactService = {
           FROM contacts
           WHERE ownerId = ? AND lat IS NOT NULL AND lng IS NOT NULL
             AND (isArchived = 0 OR isArchived IS NULL)
-            AND deletedAt IS NULL
+            AND deletedAt IS NULL AND canonicalId IS NULL
             AND (isGhost = 0 OR isGhost IS NULL)`,
       )
       .all(scope.ownerId);

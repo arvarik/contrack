@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseServerTime } from "./dates.ts";
 import { haversineKm, isValidLatLng } from "./geo.ts";
+import { contactScore } from "./scoreBand.ts";
 
 export type FacetField =
   | "role"
@@ -118,7 +119,15 @@ export function matchesFacet(
         (typeof t === "string" ? t : t.tag).toLowerCase().includes(v),
       );
     case "score":
-      return matchesScoreFilter(contact.relationshipScore ?? null, filter);
+      // The score the card shows: a tracked contact with an interaction logged.
+      return matchesScoreFilter(
+        contactScore({
+          isTracked: contact.isTracked ?? false,
+          relationshipScore: contact.relationshipScore,
+          lastContactedAt: contact.lastContactedAt,
+        }),
+        filter,
+      );
     case "tracked":
       return matchesTrackedFilter(contact.isTracked ?? false, v);
     case "updated":

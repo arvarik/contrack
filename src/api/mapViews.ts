@@ -1,51 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiJson, jsonBody } from "./client";
 import { STALE_TIMES } from "../lib/queryConfig";
+import { UNDO_DURATION_MS } from "../lib/undoToast";
+import {
+  mapBoundsSchema,
+  type MapBounds,
+  type MapLayer,
+  type MapView,
+} from "../../shared/mapViews";
 
-export type MapLayer = "pins" | "heat";
-export type MapBounds = [
-  west: number,
-  south: number,
-  east: number,
-  north: number,
-];
+export type { MapBounds, MapLayer, MapView };
 
-export interface MapView {
-  id: string;
-  name: string;
-  query: string;
-  layer: MapLayer;
-  bounds: MapBounds;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-function validateBounds(bounds: unknown): asserts bounds is MapBounds {
-  if (!Array.isArray(bounds) || bounds.length !== 4) {
-    throw new Error(
-      "Bounds must be an array of 4 coordinates [west, south, east, north]",
-    );
-  }
-  if (!bounds.every((n) => typeof n === "number" && Number.isFinite(n))) {
-    throw new Error("Bounds coordinates must be finite numbers");
-  }
-  const [west, south, east, north] = bounds as [number, number, number, number];
-  if (west < -180 || west > 180) {
-    throw new Error("West longitude must be between -180 and 180");
-  }
-  if (east < -180 || east > 180) {
-    throw new Error("East longitude must be between -180 and 180");
-  }
-  if (south < -90 || south > 90) {
-    throw new Error("South latitude must be between -90 and 90");
-  }
-  if (north < -90 || north > 90) {
-    throw new Error("North latitude must be between -90 and 90");
-  }
-  if (south >= north) {
-    throw new Error("South latitude must be less than north latitude");
-  }
+/** Throw, before sending, the message the server gives for a box it refuses. */
+function validateBounds(bounds: unknown): void {
+  const parsed = mapBoundsSchema.safeParse(bounds);
+  if (!parsed.success) throw new Error(parsed.error.issues[0].message);
 }
 
 export async function fetchMapViews(signal?: AbortSignal): Promise<MapView[]> {
@@ -85,7 +55,7 @@ export async function updateMapView(
   });
 }
 
-export async function deleteMapView(id: string): Promise<{ success: boolean }> {
+async function deleteMapView(id: string): Promise<{ success: boolean }> {
   return apiJson<{ success: boolean }>(`/map/views/${id}`, {
     method: "DELETE",
   });
@@ -131,12 +101,29 @@ export function useUpdateMapView() {
   });
 }
 
+/** Delete a view. The toast's Undo saves it again: name, query, layer and box. */
 export function useDeleteMapView() {
   const queryClient = useQueryClient();
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["map-views"] });
   return useMutation({
-    mutationFn: deleteMapView,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["map-views"] });
+    mutationFn: (view: MapView) => deleteMapView(view.id),
+    onSuccess: (_result, { name, query, layer, bounds }) => {
+      refresh();
+      toast.success(`View "${name}" deleted`, {
+        duration: UNDO_DURATION_MS,
+        action: {
+          label: "Undo",
+          onClick: () =>
+            createMapView({ name, query, layer, bounds })
+              .then(refresh)
+              .catch((err: Error) =>
+                toast.error(`Could not restore "${name}": ${err.message}`),
+              ),
+        },
+      });
     },
+    onError: (err, view) =>
+      toast.error(`Could not delete "${view.name}": ${err.message}`),
   });
 }

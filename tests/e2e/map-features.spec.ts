@@ -501,7 +501,7 @@ test.describe("map features - filters and place search", () => {
     // The view stores its query trimmed, and its facet is a pill again.
     await expect(page).toHaveURL(/[?&]view=/);
     await expect(
-      page.getByRole("button", { name: /^company:\s*Babbage$/ }),
+      page.getByRole("button", { name: "Remove filter company: Babbage" }),
     ).toBeVisible();
     await expect(
       map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),

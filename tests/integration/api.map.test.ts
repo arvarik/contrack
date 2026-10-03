@@ -68,28 +68,30 @@ describe("GET /api/contacts/map", () => {
     });
   });
 
-  it("excludes a contact in the trash", async () => {
-    const id = await place("Trashed Person");
-    expect(await mapIds()).toContain(id);
+  it("leaves out a trashed, ghost, archived or merged contact", async () => {
+    const trashed = await place("Trashed Person");
+    const archived = await place("Archived Person");
+    const primary = await place("Primary Person");
+    const duplicate = await place("Duplicate Person");
+    const ghost = await place("Ghost Person", { isGhost: true });
 
-    const deleted = await request(app).delete(`/api/contacts/${id}`);
-    expect(deleted.status).toBe(200);
-    // Still a row, restorable from the trash, but not a pin on the map.
-    expect(await mapIds()).not.toContain(id);
-  });
-
-  it("excludes a ghost, the placeholder a mention creates", async () => {
-    const id = await place("Ghost Person", { isGhost: true });
-    expect(await mapIds()).not.toContain(id);
-  });
-
-  it("excludes an archived contact", async () => {
-    const id = await place("Archived Person");
-    const patched = await request(app)
-      .patch(`/api/contacts/${id}`)
+    expect((await request(app).delete(`/api/contacts/${trashed}`)).status).toBe(
+      200,
+    );
+    const archive = await request(app)
+      .patch(`/api/contacts/${archived}`)
       .send({ isArchived: true });
-    expect(patched.status).toBe(200);
-    expect(await mapIds()).not.toContain(id);
+    expect(archive.status).toBe(200);
+    // A merged duplicate is a row the list hides, so the map hides it too.
+    const merge = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId: primary, duplicateId: duplicate });
+    expect(merge.status).toBe(200);
+
+    const ids = await mapIds();
+    expect(ids).toContain(primary);
+    for (const id of [trashed, ghost, archived, duplicate])
+      expect(ids).not.toContain(id);
   });
 
   it("says who placed each pin", async () => {

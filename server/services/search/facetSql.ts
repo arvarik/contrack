@@ -75,6 +75,10 @@ registerFacetFunctions(sqlite);
 /** A predicate that holds for no row. */
 const NONE = "0";
 
+/** The score `contactScore` shows: tracked, an interaction logged, rounded. */
+const SHOWN_SCORE =
+  "CASE WHEN COALESCE(c.isTracked, 0) != 0 AND COALESCE(c.lastContactedAt, '') != '' THEN round(min(100, max(0, c.relationshipScore))) END";
+
 /** The contacts columns the four text facets read. */
 const TEXT_COLUMNS = {
   role: "c.role",
@@ -160,8 +164,8 @@ function facetSql(
       if (Number.isNaN(threshold)) return NONE;
       params.push(threshold);
       return (filter.operator || ">") === ">"
-        ? "c.relationshipScore IS NOT NULL AND c.relationshipScore >= ?"
-        : "c.relationshipScore IS NOT NULL AND c.relationshipScore <= ?";
+        ? `${SHOWN_SCORE} >= ?`
+        : `${SHOWN_SCORE} <= ?`;
     }
     case "tracked":
       if (needle === "yes" || needle === "true" || needle === "1")

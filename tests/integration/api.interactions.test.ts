@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { MAX_BULK_ACTION_ITEMS } from "../../shared/actionItems.ts";
 
 const app = makeTestApp();
 
@@ -133,6 +134,52 @@ describe("action items + nextFollowUpAt trigger", () => {
     const count = await request(app).get("/api/action-items/count");
     expect(count.status).toBe(200);
     expect(count.body.count).toBe(1);
+  });
+
+  it("adds one follow-up to each of many contacts, or to none of them", async () => {
+    const ids = [
+      await createContact("Bulk One"),
+      await createContact("Bulk Two"),
+    ];
+    const dueAt = "2030-04-01T09:00:00.000Z";
+
+    const res = await request(app)
+      .post("/api/action-items/bulk")
+      .send({ contactIds: [...ids, ids[0]], title: "Send a card", dueAt });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ count: 2 });
+    for (const id of ids) {
+      const contact = await request(app).get(`/api/contacts/${id}`);
+      expect(contact.body.nextFollowUpAt).toBe(dueAt);
+    }
+
+    // One id it cannot use refuses the call whole, so a retry adds no twins.
+    const refused = await request(app)
+      .post("/api/action-items/bulk")
+      .send({ contactIds: [ids[0], "no-such-contact"], title: "Again", dueAt });
+    expect(refused.status).toBe(404);
+    const items = await request(app).get(
+      `/api/contacts/${ids[0]}/action-items`,
+    );
+    expect(items.body).toHaveLength(1);
+  });
+
+  it("refuses a bulk follow-up past the limit, for nobody, or with no title", async () => {
+    const id = await createContact("Bulk Limit");
+    const tooMany = Array.from(
+      { length: MAX_BULK_ACTION_ITEMS + 1 },
+      (_, i) => `${id}-${i}`,
+    );
+    for (const body of [
+      { contactIds: tooMany, title: "Too many" },
+      { contactIds: [], title: "Nobody" },
+      { contactIds: [id], title: " " },
+    ]) {
+      const res = await request(app)
+        .post("/api/action-items/bulk")
+        .send({ ...body, dueAt: "2030-04-01" });
+      expect(res.status, body.title).toBe(400);
+    }
   });
 });
 
