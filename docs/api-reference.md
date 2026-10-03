@@ -3,6 +3,13 @@
 This page lists every HTTP endpoint the Contrack server registers. Use it to
 write scripts and tools against your own instance.
 
+The routes with a contract are also in [`openapi.json`](openapi.json), an
+OpenAPI 3.1 file with the JSON Schema of each request and answer. They are the
+contacts, notes, follow-ups, lists, tags and personal tokens, and the
+read-only query routes. `npm run api:openapi` writes the file from
+`shared/contracts/`, and a test fails when it is out of date. This page stays
+the reference for every route, for signing in and for errors.
+
 ## Conventions
 
 ### Base URL
@@ -202,7 +209,7 @@ Most list routes return the whole list. These routes page:
 | `GET /api/admin/audit`         | `limit` (1 to 200, default 50) and `before` from `nextBefore` |
 | `GET /api/ai/stats/feed`       | `offset` and `limit` (1 to 200, default 50)                   |
 | `GET /api/search/interactions` | `offset` (0 to 5,000) and `limit` (1 to 50, default 20)       |
-| `GET /api/query/contacts`      | `offset` and `limit` (up to 200, default 50)                  |
+| `GET /api/query/contacts`      | `offset` and `limit` (1 to 200, default 50)                   |
 
 ### Streaming
 
@@ -338,7 +345,7 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 | `POST /api/contacts/:id/avatar`       | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                        | your data            |
 | `GET /api/contacts/:id/score`         | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                   | your data            |
 | `GET /api/contacts/:id/relationships` | Contacts linked to this one by @mentions. `limit` 1 to 200, default 50.                                                                                                   | your data            |
-| `POST /api/contacts/:id/promote`      | Turn a ghost into a full contact.                                                                                                                                         | your data            |
+| `POST /api/contacts/:id/promote`      | Turn a ghost into a full contact. Answers the contact.                                                                                                                    | your data            |
 | `POST /api/contacts/:id/briefing`     | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                | your data            |
 | `POST /api/contacts/:id/enrich`       | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                   | your data            |
 | `POST /api/contacts/bulk`             | Import many contacts. See [Imports](#imports).                                                                                                                            | your data            |
@@ -538,7 +545,7 @@ and `email`. The server accepts any non-empty `type`.
 | `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry, with an AI summary while AI is on for you. Any other file becomes a note. `201`. | your data |
 | `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                              | your data |
 | `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                             | your data |
-| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` up to 200 (default 50), `since` (a date) and `type`.                                                | your data |
+| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` 1 to 200 (default 50), `since` (a date) and `type`.                                                 | your data |
 
 ### Log an interaction
 

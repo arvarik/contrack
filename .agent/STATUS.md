@@ -60,10 +60,10 @@
   `src/views/dedupe/components/SuggestionReviewQueue.tsx` (1,089) and
   `src/components/command-palette/CommandPalette.tsx` (1,269) each need a
   refactor of their own.
-- **Test-only seams.** A few remain from the unit test audit, for example the
-  test hover delay in `src/views/map/ContactMap.tsx`,
-  `__resetInvitationToken` and `resetLastRecorded`. PR #147's description
-  lists them.
+- **Test-only seams.** The ones PR #147 listed are gone. A few exports still
+  exist only so a test can reset module state, such as `resetPendingDeletes`
+  in `src/lib/pendingDeletes.ts`, and the `__reset*` functions of the rate
+  limiters and queues, which integration tests need.
 
 ## Resolved issues that code comments cite
 

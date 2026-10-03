@@ -50,25 +50,25 @@ flowchart LR
 
 ## Repository layout
 
-| Folder                                              | What it holds                                                                                                                                  |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/` and `lib/`.                                      |
-| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.               |
-| `server/modules/`                                   | One module for each area: its routers, MCP tools, jobs and event subscribers, and the ordered list that the core reads.                        |
-| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                   |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                               |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                               |
-| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                  |
-| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                |
-| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                |
-| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                          |
-| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                            |
-| `server/db/`                                        | The migrations and their runner, the derived indexes and their versions, and the Drizzle schema.                                               |
-| `server/events/`, `server/jobs/`                    | The event log and its dispatcher; the job runner.                                                                                              |
-| `server/db.ts`, `server/app.ts`                     | The connection and the steps that run on every boot; the Express app that `server.ts` starts.                                                  |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks. |
-| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                         |
-| `public/`                                           | Icons, fonts and the web manifest.                                                                                                             |
+| Folder                                              | What it holds                                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/` and `lib/`.                                                                             |
+| `shared/`                                           | Code that the server and the browser both run: the API contracts and event payloads (`contracts/`), facets, search history, dates, cadence, score bands, vCard and the MCP tool list. |
+| `server/modules/`                                   | One module for each area: its routers, MCP tools, jobs and event subscribers, and the ordered list that the core reads.                                                               |
+| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                                                          |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                                                      |
+| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                                                      |
+| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                                                         |
+| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                                       |
+| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                                       |
+| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                                                                 |
+| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                                   |
+| `server/db/`                                        | The migrations and their runner, the derived indexes and their versions, and the Drizzle schema.                                                                                      |
+| `server/events/`, `server/jobs/`                    | The event log and its dispatcher; the job runner.                                                                                                                                     |
+| `server/db.ts`, `server/app.ts`                     | The connection and the steps that run on every boot; the Express app that `server.ts` starts.                                                                                         |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                                        |
+| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                                |
+| `public/`                                           | Icons, fonts and the web manifest.                                                                                                                                                    |
 
 ## A request from click to database
 
@@ -94,8 +94,9 @@ This is the path of one edit, from a click to a saved row.
    8. `Cache-Control: no-store` for four prefixes.
    9. The `/api/auth` router, then `requireAuth` and `requirePasswordCurrent`.
    10. The uploads guard and the static files, then the API routers.
-4. The route checks its input with a Zod schema (`validateBody` in
-   `server/utils/validators.ts`), reads `scopeOf(req)`, and calls a service.
+4. The route checks its input with a Zod schema from `shared/contracts/`
+   (`validateBody` or `parseQuery` in `server/utils/validators.ts`), reads
+   `scopeOf(req)`, and calls a service.
 5. The service does the work. Every read and write takes the Scope and names
    the owner in the same SQL statement as the id.
 6. SQLite triggers update the derived data in the same transaction: the
@@ -162,13 +163,58 @@ This is the path of one edit, from a click to a saved row.
   An unknown error answers `500 INTERNAL` with a generic message, and only a
   server outside production adds the stack. An unknown `/api` path answers
   `404 ROUTE_NOT_FOUND`.
-- **Validation.** `server/utils/validators.ts` holds the shared Zod schemas and
-  `validateBody(schema)`, which replaces `req.body` with the parsed value or
-  throws a `ValidationError`. Routes parse query strings with Zod too, such as
-  `parseInteractionSearchQuery`. The schemas cap names, child arrays (100
-  items) and id lists (5,000 ids).
+- **Validation.** The request schemas live in `shared/contracts/`.
+  `server/utils/validators.ts` runs them: `validateBody(schema)` replaces
+  `req.body` with the parsed value or throws a `ValidationError`, and
+  `parseQuery(schema, req.query)` reads a query string the same way.
+  `parseInteractionSearchQuery` reads the note search's query. The schemas
+  cap names, child arrays (100 items) and id lists (5,000 ids).
 
 For the envelope and the codes, see [Conventions](api-reference.md#conventions).
+
+## API contract
+
+A route's contract is one Zod schema for each thing it reads and for what it
+answers. The server, the app, the MCP tools and the OpenAPI file read the same
+contract, so they cannot disagree.
+
+- **Where.** `shared/contracts/<area>.ts` declares each route with
+  `route({ method, path, summary, status, query, body, response })`
+  (`shared/contracts/route.ts`). The path is written as the route manifest
+  writes it, such as `/api/contacts/:id`. `shared/contracts/index.ts` collects
+  the contracts in `CONTRACTS`, and `contractFor("GET /api/contacts/:id")`
+  finds one.
+- **The server** validates a request with its contract's `body` or `query`.
+  It never parses its own answer: the tests check the answers.
+- **The app** takes its types from the contracts. `src/types.ts` re-exports
+  `Contact`, `Interaction`, `ActionItem`, `ContactList` and their parts under
+  the names the views use. `apiJson(contract, path, init)` in
+  `src/api/client.ts` sends the contract's method and types the answer by its
+  `response`. `apiJson<T>(path, init)` still works for a route with no
+  contract.
+- **The MCP tools** build their inputs from the same field schemas, plus
+  fields of their own such as `allowDuplicate` and `mentionContactIds`. A tool
+  checks a name, a date or an id list exactly as the REST route that does the
+  same write.
+- **The OpenAPI file.** `npm run api:openapi` (`scripts/openapi.ts`) writes
+  `docs/openapi.json`, OpenAPI 3.1, version `1.0.0`, from the contracts with
+  `z.toJSONSchema`. A test fails when the committed file is out of date.
+- **Answers are strict.** A response schema lists every field the server
+  sends, internal columns such as `ownerId` included, and has no transforms
+  and no defaults. Every integration test that builds its app with
+  `makeTestApp()` (`tests/integration/helpers.ts`) checks each 2xx JSON
+  answer of a contracted route against it, and its status too, so an
+  undeclared or a missing field fails the test that caused it.
+- **What has a contract.** The contacts, notes, follow-ups, lists, tags and
+  personal tokens, and the read-only query routes beside them (`/api/query/contacts`,
+  `/api/industries`, `/api/timeline`). `UNCONTRACTED` in `index.ts` lists
+  every other route in the manifest, and `UNCONTRACTED_CEILING` stops the list
+  from growing: a new route gets a contract. The request schemas that were in
+  `server/utils/validators.ts` are in the same folder already, as named
+  exports, those of routes with no contract yet included. A few of those
+  routes still check a body that their route file writes itself.
+- **Paths stay `/api`.** A breaking change to a route adds a new path beside
+  the old one. There is no `/api/v1`.
 
 ## Data model
 
@@ -653,6 +699,7 @@ seconds.
 | `npm run test:e2e`      | Playwright journeys in `tests/e2e/`, including the accessibility checks.                                           |
 | `npm run test:contract` | Optional live checks against the configured AI providers. They can cost money.                                     |
 | `npm run knip`          | Files, exports and types in `src/` that nothing uses.                                                              |
+| `npm run api:openapi`   | Writes `docs/openapi.json` from the route contracts. A test fails when the committed file differs.                 |
 
 CI runs the lint, the format check, the tests with coverage, a production
 build and the Playwright journeys. For the workflow, see the
