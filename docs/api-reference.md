@@ -26,7 +26,10 @@ credentials:
 
 - **A personal token.** Send `Authorization: Bearer ctk_...`. Create one in
   **Settings → Account**, or with `POST /api/auth/tokens`. A token acts as
-  the account that created it.
+  the account that created it. A read-only token may send `GET` and `HEAD`
+  requests and call the MCP server, which then lists only its read-only
+  tools. Every other request gets `403 TOKEN_READ_ONLY`, and so does the
+  Google sign-in at `/api/connectors/google/`, which adds a connector.
 - **The session cookie.** The browser gets `contrack_session` when it signs in.
   The cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when the
   request arrived over HTTPS.
@@ -90,6 +93,7 @@ Every error uses one envelope:
 | `SESSION_REQUIRED`         | 403    | The route needs the session cookie, not a token.                 |
 | `ADMIN_REQUIRED`           | 403    | The route needs an admin account.                                |
 | `PASSWORD_CHANGE_REQUIRED` | 403    | Set your own password first.                                     |
+| `TOKEN_READ_ONLY`          | 403    | A read-only token sent a request that changes data.              |
 | `AI_OFF_FOR_ACCOUNT`       | 403    | You turned AI off for your account.                              |
 | `AI_OFF_FOR_INSTANCE`      | 403    | An admin turned AI off for the instance.                         |
 | `NOT_FOUND`                | 404    | The row does not exist, or it is not yours.                      |
@@ -257,29 +261,29 @@ works. Each route then checks what it needs.
 
 ### Your account
 
-| Endpoint                                   | What it does                                                                                                                             | Access       |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `GET /api/auth/me`                         | Your account as `{ user, via }`.                                                                                                         | your session |
-| `PATCH /api/auth/me`                       | Change `displayName`, `username` or `email`. Fields you leave out stay.                                                                  | your session |
-| `POST /api/auth/me/avatar`                 | Upload your account photo. The server stores a 512 px JPEG.                                                                              | your session |
-| `DELETE /api/auth/me/avatar`               | Remove your account photo.                                                                                                               | your session |
-| `POST /api/auth/change-password`           | Change your password with `currentPassword` and `newPassword`. Ends every other session.                                                 | your session |
-| `GET /api/auth/sessions`                   | Your live sessions, with `current: true` on this one.                                                                                    | your session |
-| `DELETE /api/auth/sessions`                | Sign out everywhere else. Answers `{ "revoked": n }`.                                                                                    | your session |
-| `GET /api/auth/preferences`                | Every preference with its default, as `{ preferences, stored }`. `stored` names the keys you chose. A token may call it.                 | your session |
-| `PATCH /api/auth/preferences`              | Change one or more preferences. An unknown key refuses the request with `400`. A token may call it.                                      | your session |
-| `DELETE /api/auth/preferences/:key`        | Reset one preference to its default. `404` for an unknown key. A token may call it.                                                      | your session |
-| `GET /api/auth/tokens`                     | Your personal tokens, newest first. Never shows a token again.                                                                           | your session |
-| `POST /api/auth/tokens`                    | Create a personal token: `name` (1 to 60 characters) and `expiresInDays` (1 to 3,650, optional). The answer holds the token once. `201`. | your session |
-| `DELETE /api/auth/tokens/:id`              | Revoke one of your tokens. Answers `{ "revoked": true }`. The row stays with `revokedAt` set.                                            | your session |
-| `GET /api/auth/session-policy`             | How long new sessions last: `{ sessionTtlDays, min, max, default }`.                                                                     | your session |
-| `PUT /api/auth/session-policy`             | Set `sessionTtlDays` for new sign-ins. Deprecated: use `PUT /api/admin/settings`.                                                        | admin        |
-| `POST /api/auth/passkeys/register/options` | Start adding a passkey. Answers `{ ceremonyId, options }`.                                                                               | your session |
-| `POST /api/auth/passkeys/register/verify`  | Finish adding a passkey with `{ ceremonyId, response, name }`. `201 { passkey }`.                                                        | your session |
-| `GET /api/auth/passkeys`                   | Your passkeys, and whether you dismissed the passkey prompt.                                                                             | your session |
-| `PATCH /api/auth/passkeys/:id`             | Rename a passkey with `{ name }`.                                                                                                        | your session |
-| `DELETE /api/auth/passkeys/:id`            | Remove a passkey.                                                                                                                        | your session |
-| `POST /api/auth/passkey-nudge/dismiss`     | Stop the prompt that suggests a passkey.                                                                                                 | your session |
+| Endpoint                                   | What it does                                                                                                                                                                     | Access       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `GET /api/auth/me`                         | Your account as `{ user, via }`.                                                                                                                                                 | your session |
+| `PATCH /api/auth/me`                       | Change `displayName`, `username` or `email`. Fields you leave out stay.                                                                                                          | your session |
+| `POST /api/auth/me/avatar`                 | Upload your account photo. The server stores a 512 px JPEG.                                                                                                                      | your session |
+| `DELETE /api/auth/me/avatar`               | Remove your account photo.                                                                                                                                                       | your session |
+| `POST /api/auth/change-password`           | Change your password with `currentPassword` and `newPassword`. Ends every other session.                                                                                         | your session |
+| `GET /api/auth/sessions`                   | Your live sessions, with `current: true` on this one.                                                                                                                            | your session |
+| `DELETE /api/auth/sessions`                | Sign out everywhere else. Answers `{ "revoked": n }`.                                                                                                                            | your session |
+| `GET /api/auth/preferences`                | Every preference with its default, as `{ preferences, stored }`. `stored` names the keys you chose. A token may call it.                                                         | your session |
+| `PATCH /api/auth/preferences`              | Change one or more preferences. An unknown key refuses the request with `400`. A token may call it.                                                                              | your session |
+| `DELETE /api/auth/preferences/:key`        | Reset one preference to its default. `404` for an unknown key. A token may call it.                                                                                              | your session |
+| `GET /api/auth/tokens`                     | Your personal tokens, newest first. Never shows a token again.                                                                                                                   | your session |
+| `POST /api/auth/tokens`                    | Create a personal token: `name` (1 to 60 characters), `expiresInDays` (1 to 3,650, optional) and `readOnly` (optional, default `false`). The answer holds the token once. `201`. | your session |
+| `DELETE /api/auth/tokens/:id`              | Revoke one of your tokens. Answers `{ "revoked": true }`. The row stays with `revokedAt` set.                                                                                    | your session |
+| `GET /api/auth/session-policy`             | How long new sessions last: `{ sessionTtlDays, min, max, default }`.                                                                                                             | your session |
+| `PUT /api/auth/session-policy`             | Set `sessionTtlDays` for new sign-ins. Deprecated: use `PUT /api/admin/settings`.                                                                                                | admin        |
+| `POST /api/auth/passkeys/register/options` | Start adding a passkey. Answers `{ ceremonyId, options }`.                                                                                                                       | your session |
+| `POST /api/auth/passkeys/register/verify`  | Finish adding a passkey with `{ ceremonyId, response, name }`. `201 { passkey }`.                                                                                                | your session |
+| `GET /api/auth/passkeys`                   | Your passkeys, and whether you dismissed the passkey prompt.                                                                                                                     | your session |
+| `PATCH /api/auth/passkeys/:id`             | Rename a passkey with `{ name }`.                                                                                                                                                | your session |
+| `DELETE /api/auth/passkeys/:id`            | Remove a passkey.                                                                                                                                                                | your session |
+| `POST /api/auth/passkey-nudge/dismiss`     | Stop the prompt that suggests a passkey.                                                                                                                                         | your session |
 
 ### Personal tokens
 
@@ -291,7 +295,7 @@ see [Create a token](mcp.md#create-a-token).
 curl -X POST http://localhost:3210/api/auth/tokens \
   -H "Content-Type: application/json" \
   -b cookies.txt \
-  -d '{"name":"Nightly export","expiresInDays":365}'
+  -d '{"name":"Nightly export","expiresInDays":365,"readOnly":true}'
 ```
 
 ```json
@@ -300,14 +304,15 @@ curl -X POST http://localhost:3210/api/auth/tokens \
   "name": "Nightly export",
   "token": "ctk_...",
   "tokenPrefix": "ctk_AbCdEfGh",
-  "expiresAt": "2027-09-30T04:59:17.151Z"
+  "expiresAt": "2027-09-30T04:59:17.151Z",
+  "readOnly": true
 }
 ```
 
 Keep `token` somewhere safe. The server stores only its SHA-256 hash, and it
 never shows the token again. `GET /api/auth/tokens` answers `{ tokens }`. Each
-row has `id`, `name`, `tokenPrefix`, `createdAt`, `lastUsedAt`, `expiresAt` and
-`revokedAt`.
+row has `id`, `name`, `tokenPrefix`, `createdAt`, `lastUsedAt`, `expiresAt`,
+`revokedAt` and `readOnly`.
 
 The examples below use a token in the `CONTRACK_TOKEN` variable. With sign-in
 off, leave out the `Authorization` header.

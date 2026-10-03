@@ -40,6 +40,8 @@ export interface TokenSummary {
   lastUsedAt: string | null;
   expiresAt: string | null;
   revokedAt: string | null;
+  /** True when the token may only read. See `guardReadOnlyToken`. */
+  readOnly: boolean;
 }
 
 function hashToken(token: string): string {
@@ -54,7 +56,7 @@ function hashToken(token: string): string {
  */
 export function createToken(
   user: User,
-  input: { name: unknown; expiresInDays?: unknown },
+  input: { name: unknown; expiresInDays?: unknown; readOnly?: unknown },
   ip: string | null,
 ): {
   id: string;
@@ -62,6 +64,7 @@ export function createToken(
   token: string;
   tokenPrefix: string;
   expiresAt: string | null;
+  readOnly: boolean;
 } {
   const name =
     typeof input.name === "string" && input.name.trim()
@@ -80,16 +83,28 @@ export function createToken(
     expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   }
 
+  // Only `true` makes a read-only token, so a missing or odd value gives the
+  // token that every token was before the choice existed.
+  const readOnly = input.readOnly === true;
+
   const token = `${TOKEN_PREFIX}${crypto.randomBytes(32).toString("base64url")}`;
   const id = crypto.randomUUID();
   const tokenPrefix = token.slice(0, DISPLAY_PREFIX_LENGTH);
 
   sqlite
     .prepare(
-      `INSERT INTO api_tokens (id, userId, name, tokenHash, tokenPrefix, expiresAt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO api_tokens (id, userId, name, tokenHash, tokenPrefix, expiresAt, readOnly)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, user.id, name, hashToken(token), tokenPrefix, expiresAt);
+    .run(
+      id,
+      user.id,
+      name,
+      hashToken(token),
+      tokenPrefix,
+      expiresAt,
+      readOnly ? 1 : 0,
+    );
 
   auditService.record({
     actorUserId: user.id,
@@ -98,22 +113,23 @@ export function createToken(
     targetId: id,
     // The name and the display prefix, never the token. `tokenPrefix` would
     // be redacted by the key rule anyway, which is why it is not recorded.
-    details: { name, expiresAt },
+    details: { name, expiresAt, readOnly },
     ip,
   });
 
   log.info("Auth", `Personal token "${name}" created for "${user.username}"`);
-  return { id, name, token, tokenPrefix, expiresAt };
+  return { id, name, token, tokenPrefix, expiresAt, readOnly };
 }
 
 /** One account's tokens, newest first, revoked and expired ones included. */
 export function listTokens(userId: string): TokenSummary[] {
-  return sqlite
+  const rows = sqlite
     .prepare(
-      `SELECT id, name, tokenPrefix, createdAt, lastUsedAt, expiresAt, revokedAt
+      `SELECT id, name, tokenPrefix, createdAt, lastUsedAt, expiresAt, revokedAt, readOnly
          FROM api_tokens WHERE userId = ? ORDER BY createdAt DESC`,
     )
-    .all(userId) as TokenSummary[];
+    .all(userId) as (Omit<TokenSummary, "readOnly"> & { readOnly: number })[];
+  return rows.map((row) => ({ ...row, readOnly: row.readOnly === 1 }));
 }
 
 /**
@@ -173,7 +189,7 @@ export function revokeToken(
  */
 export function resolveToken(
   presented: string,
-): { user: User; tokenId: string } | null {
+): { user: User; tokenId: string; readOnly: boolean } | null {
   const row = sqlite
     .prepare(
       // `datetime(expiresAt)` and not the bare column. `createToken` writes an
@@ -184,11 +200,12 @@ export function resolveToken(
       // formats, and a value it cannot read becomes NULL, which makes the
       // comparison false and refuses the token. That is the safe direction
       // for a credential.
-      `SELECT id, userId FROM api_tokens
+      `SELECT id, userId, readOnly FROM api_tokens
         WHERE tokenHash = ? AND revokedAt IS NULL
           AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))`,
     )
-    .get(hashToken(presented)) as { id: string; userId: string } | undefined;
+    .get(hashToken(presented)) as
+    { id: string; userId: string; readOnly: number } | undefined;
   if (!row) return null;
 
   const user = getUserById(row.userId);
@@ -201,5 +218,5 @@ export function resolveToken(
           AND (lastUsedAt IS NULL OR lastUsedAt < datetime('now', '-1 hour'))`,
     )
     .run(row.id);
-  return { user, tokenId: row.id };
+  return { user, tokenId: row.id, readOnly: row.readOnly === 1 };
 }

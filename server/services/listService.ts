@@ -47,7 +47,7 @@ export const listService = {
       .all(scope.ownerId);
   },
 
-  createList(scope: Scope, name: string, icon: string) {
+  createList(scope: Scope, name: string, icon?: string) {
     // Scoped, so each owner's lists number from zero. An instance-wide MAX
     // would hand a new account a sortOrder above every list on the box, which
     // leaks how much is stored and makes the first list sort oddly.
@@ -240,6 +240,30 @@ export const listService = {
       for (const row of usable) count += stmt.run(listId, row.id).changes;
     });
     insertFn();
+    return count;
+  },
+
+  /**
+   * Remove many contacts from one list.
+   *
+   * The checks of `removeMember`, made once: the list, then every contact in
+   * one scoped statement. A foreign id aborts the whole call, as it does in
+   * `bulkAddMembers`. The count is how many of them were members.
+   */
+  bulkRemoveMembers(scope: Scope, listId: string, contactIds: string[]) {
+    requireOwnedList(scope, listId);
+
+    const unique = [...new Set(contactIds)];
+    const owned = contactRepo.findManyOwned(scope, unique);
+    if (owned.length !== unique.length) throw new NotFoundError("Contact");
+
+    let count = 0;
+    sqlite.transaction(() => {
+      const stmt = sqlite.prepare(
+        "DELETE FROM list_members WHERE listId = ? AND contactId = ?",
+      );
+      for (const row of owned) count += stmt.run(listId, row.id).changes;
+    })();
     return count;
   },
 };

@@ -17,6 +17,8 @@
  * - 120/min rate limiting (429 on 121st call)
  * - Resources: contrack://pulse and contrack://contacts/{id}
  * - Prompts: catch_me_up and weekly_review
+ * - A read-only token: only the read tools, and REST refuses its writes
+ * - Duplicate checks, list and tag edits, follow-up changes, input checks
  *
  * @module tests/integration/api.mcp.test
  */
@@ -122,7 +124,7 @@ describe("MCP Server (/api/mcp)", () => {
       .sort();
 
     expect(serverToolNames).toEqual(expectedToolNames);
-    expect(toolList.tools).toHaveLength(15);
+    expect(toolList.tools).toHaveLength(18);
 
     await client.close();
   });
@@ -545,6 +547,174 @@ describe("MCP Server (/api/mcp)", () => {
     });
     expect(weeklyPrompt.messages.length).toBeGreaterThan(0);
 
+    await client.close();
+  });
+
+  /** What the tests below read from a tool's structured result. */
+  type Result = {
+    id: string;
+    dueAt: string;
+    removedCount: number;
+    contacts: { id: string }[];
+    emails: { email: string; isPrimary: boolean }[];
+    tags: { tag: string }[];
+    timeline: { title: string }[];
+  };
+
+  /** Call a tool and return its result. A tool error rejects, as an app error does. */
+  async function call(
+    client: Client,
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<Result> {
+    const res = await client.callTool({ name, arguments: args });
+    if (res.isError) throw new Error(JSON.stringify(res.content));
+    return res.structuredContent as Result;
+  }
+
+  it("a read-only token lists only the read tools, and REST refuses its writes", async () => {
+    const token = createToken(
+      getUserById(actorA.user.id)!,
+      { name: "Reader", readOnly: true },
+      "127.0.0.1",
+    ).token;
+    const client = await makeConnectedClient(token);
+    const names = (await client.listTools()).tools.map((t) => t.name).sort();
+    expect(names).toEqual(
+      MCP_TOOLS.filter((t) => t.readOnly)
+        .map((t) => t.name)
+        .sort(),
+    );
+    expect(client.getInstructions()).toContain("read-only");
+    await client.close();
+
+    const bearer = `Bearer ${token}`;
+    const read = await request(server)
+      .get("/api/contacts")
+      .set("Authorization", bearer);
+    expect(read.status).toBe(200);
+    const write = await request(server)
+      .post("/api/lists")
+      .set("Authorization", bearer)
+      .send({ name: "Not allowed" });
+    expect(write.status).toBe(403);
+    expect(write.body.error.code).toBe("TOKEN_READ_ONLY");
+  });
+
+  it("create_contact refuses a known email or phone, and list_contacts finds both", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const rowan = await call(client, "create_contact", {
+      name: "Rowan Vale",
+      emails: [{ email: "rowan@example.com" }],
+      phones: [{ phone: "+1 (415) 555-0100" }],
+    });
+
+    for (const contact of [
+      { emails: [{ email: "ROWAN@example.com" }] },
+      { phones: [{ phone: "415-555-0100" }] },
+    ]) {
+      await expect(
+        call(client, "create_contact", { name: "R. Vale", ...contact }),
+      ).rejects.toMatchObject({ data: { code: "DUPLICATE_CONTACT" } });
+    }
+    for (const filter of [
+      { email: "Rowan@Example.com" },
+      { phone: "4155550100" },
+    ]) {
+      const found = await call(client, "list_contacts", filter);
+      expect(found.contacts.map((c) => c.id)).toEqual([rowan.id]);
+    }
+
+    const twin = await call(client, "create_contact", {
+      name: "Rowan Vale",
+      emails: [{ email: "rowan@example.com" }],
+      allowDuplicate: true,
+    });
+    expect(twin.id).not.toBe(rowan.id);
+    await client.close();
+  });
+
+  it("update_contact edits emails and tags in place, and the list and follow-up tools write", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const id = seedA.contactIds[2];
+    await call(client, "update_contact", {
+      id,
+      fields: {
+        addEmails: ["a@example.com", "b@example.com"],
+        addTags: ["Investor"],
+      },
+    });
+    const edited = await call(client, "update_contact", {
+      id,
+      fields: {
+        removeEmails: ["A@example.com"],
+        addTags: ["investor", "Advisor"],
+      },
+    });
+    // The primary email went, so the one left became primary.
+    expect(edited.emails).toMatchObject([
+      { email: "b@example.com", isPrimary: true },
+    ]);
+    expect(edited.tags.map((t) => t.tag).sort()).toEqual([
+      "Advisor",
+      "Investor",
+    ]);
+
+    const list = await call(client, "create_list", { name: "Conference 2026" });
+    await expect(
+      call(client, "create_list", { name: "conference 2026" }),
+    ).rejects.toMatchObject({ data: { code: "DUPLICATE_LIST" } });
+    await call(client, "add_to_list", { listId: list.id, contactIds: [id] });
+    const members = await call(client, "list_contacts", {
+      list: "Conference 2026",
+      tag: "advisor",
+    });
+    expect(members.contacts.map((c) => c.id)).toEqual([id]);
+    const removed = await call(client, "remove_from_list", {
+      listId: list.id,
+      contactIds: [id],
+    });
+    expect(removed.removedCount).toBe(1);
+
+    const item = await call(client, "create_action_item", {
+      contactId: id,
+      title: "Send the deck",
+      dueAt: "2030-01-15",
+    });
+    const moved = await call(client, "update_action_item", {
+      id: item.id,
+      dueAt: "2030-02-01",
+    });
+    expect(moved.dueAt).toBe("2030-02-01");
+    await client.close();
+  });
+
+  it("refuses bad dates and limits, and log_interaction links mentionContactIds", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const [owner, other] = seedA.contactIds;
+    for (const [name, args] of [
+      [
+        "log_interaction",
+        { contactId: owner, title: "Later", date: "2099-01-01" },
+      ],
+      [
+        "create_action_item",
+        { contactId: owner, title: "Call", dueAt: "next Friday" },
+      ],
+      ["search_people", { query: "Contact", limit: 31 }],
+    ] as const) {
+      const res = await client.callTool({ name, arguments: args });
+      expect(res.isError, name).toBe(true);
+    }
+
+    await call(client, "log_interaction", {
+      contactId: owner,
+      title: "Board prep",
+      content: "Went through the deck.",
+      mentionContactIds: [other],
+    });
+    const theirs = await call(client, "get_timeline", { contactId: other });
+    expect(theirs.timeline.map((i) => i.title)).toContain("Board prep");
     await client.close();
   });
 });

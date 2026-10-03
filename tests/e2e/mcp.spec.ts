@@ -6,7 +6,7 @@
  * - Endpoint URL display and copying
  * - Ephemeral token field updating configuration snippets
  * - Ephemeral token is never persisted (cleared on reload)
- * - Dynamic tools table with 15 registered tools
+ * - Dynamic tools table with every registered tool
  * - Accessibility scan on a phone (settings.spec.ts scans the desktop page)
  *
  * @module tests/e2e/mcp.spec
@@ -16,6 +16,7 @@ import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
 import { NAMES } from "../../src/lib/names";
+import { MCP_TOOLS } from "../../shared/mcpTools";
 
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
@@ -42,9 +43,9 @@ test.describe("Settings — MCP & API Server", () => {
     const endpointVal = await endpointInput.textContent();
     expect(endpointVal).toContain("/api/mcp");
 
-    // Verify tools table displays all 15 tools
+    // Verify tools table displays every tool
     const toolRows = page.locator("table tbody tr");
-    await expect(toolRows).toHaveCount(15);
+    await expect(toolRows).toHaveCount(MCP_TOOLS.length);
     await expect(page.getByText("search_people")).toBeVisible();
     await expect(page.getByText("get_contact")).toBeVisible();
     await expect(page.getByText("get_pulse")).toBeVisible();

@@ -57,8 +57,17 @@ export const COOKIE_NAME = "contrack_session";
 export type Principal =
   /** Cookie `contrack_session`. The only kind that may manage the account. */
   | { kind: "user"; user: User; via: "session"; sessionId: string }
-  /** `Authorization: Bearer ctk_...`, a personal token from `api_tokens`. */
-  | { kind: "user"; user: User; via: "token"; tokenId: string }
+  /**
+   * `Authorization: Bearer ctk_...`, a personal token from `api_tokens`.
+   * `readOnly` is the access its owner chose, see `guardReadOnlyToken`.
+   */
+  | {
+      kind: "user";
+      user: User;
+      via: "token";
+      tokenId: string;
+      readOnly: boolean;
+    }
   /** Auth is off. The local owner account, which nobody can sign in to. */
   | { kind: "user"; user: User; via: "implicit" }
   /** `Authorization: Bearer <env API_TOKEN>`, resolved to the primary admin. */
@@ -290,6 +299,7 @@ export function attachPrincipal(
         user: user.user,
         via: "token",
         tokenId: user.tokenId,
+        readOnly: user.readOnly,
       };
       return next();
     }
@@ -442,6 +452,46 @@ export function requirePasswordCurrent(
       "Set a new password before you use this instance. The one you were given is temporary.",
       403,
       { code: "PASSWORD_CHANGE_REQUIRED" },
+    ),
+  );
+}
+
+/** The methods that read. A read-only token may send these and no others. */
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Gate for a read-only token: it reads, and it talks to the MCP server.
+ *
+ * The token may send `GET`, `HEAD` and `OPTIONS`, and `POST /api/mcp`. The
+ * MCP server then lists only the tools that change nothing (see
+ * `server/mcp/server.ts`). Every other request answers
+ * `403 TOKEN_READ_ONLY`.
+ *
+ * The Google sign-in is refused although both of its routes are `GET`:
+ * finishing one adds a connector, which then writes to the account.
+ *
+ * Mounted ahead of the auth router, so it also covers the preference routes
+ * there, the ones a token may write to. The path is lowercased because
+ * Express matches routes without regard to case.
+ */
+export function guardReadOnlyToken(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const principal = req.principal;
+  if (principal?.via !== "token" || !principal.readOnly) return next();
+
+  const path = req.originalUrl.split("?")[0].toLowerCase().replace(/\/+$/, "");
+  const reads =
+    READ_METHODS.has(req.method) && !path.startsWith("/api/connectors/google/");
+  if (reads || (req.method === "POST" && path === "/api/mcp")) return next();
+
+  next(
+    new AppError(
+      "This token is read-only. Create a token with read and write access to change data.",
+      403,
+      { code: "TOKEN_READ_ONLY" },
     ),
   );
 }

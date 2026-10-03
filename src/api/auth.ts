@@ -107,6 +107,8 @@ export interface ApiTokenSummary {
   lastUsedAt: string | null;
   expiresAt: string | null;
   revokedAt: string | null;
+  /** True when the token may only read, and sees only the read-only MCP tools. */
+  readOnly: boolean;
 }
 
 /** The response to creating a token. `token` exists here and nowhere else. */
@@ -116,6 +118,7 @@ export interface CreatedApiToken {
   token: string;
   tokenPrefix: string;
   expiresAt: string | null;
+  readOnly: boolean;
 }
 
 export interface SessionSummary {
@@ -308,6 +311,7 @@ export function fetchApiTokens(): Promise<{ tokens: ApiTokenSummary[] }> {
 export function createApiToken(input: {
   name: string;
   expiresInDays?: number | null;
+  readOnly?: boolean;
 }): Promise<CreatedApiToken> {
   return apiJson("/auth/tokens", { method: "POST", ...jsonBody(input) });
 }

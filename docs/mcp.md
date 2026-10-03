@@ -38,12 +38,16 @@ in.
    Desktop on the laptop".
 4. Choose when it expires: **30 days**, **90 days**, **1 year**, or **Never**.
    The default is 90 days.
-5. Select **Create token**, and copy the token. It starts with `ctk_`.
+5. Choose its **Access**: **Read and write**, the default, or **Read only**.
+   A read-only token can search and read your data, and cannot change
+   anything. Its MCP client sees only the read-only tools.
+6. Select **Create token**, and copy the token. It starts with `ctk_`.
    Contrack shows it only once. Then select **I've copied it**.
 
 The **API tokens** list shows each token's name, its state, and its first
-characters. The state is active, revoked, or expired. The list also shows
-when each token was last used and when it expires.
+characters. The state is active, revoked, or expired. A read-only token also
+shows **Read-only**. The list also shows when each token was last used and
+when it expires.
 
 To revoke a token, select **Revoke** on its row, then **Revoke token**. It
 stops working at once. The row stays, marked revoked, so you can see later why
@@ -123,28 +127,42 @@ A working endpoint answers with the server's details, which include
 
 ## Tools
 
-The server offers 15 tools. A read-only tool changes nothing.
+The server offers 18 tools. A read-only tool changes nothing. A read-only
+token sees only the read-only tools.
 
-| Tool                   | What it does                                                                                                        | Access         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `search_people`        | Searches contacts with a question in plain words, with filters for role, company, location, industry, tag, and list | Read-only      |
-| `get_contact`          | Returns one contact's full profile, with the score explanation when the contact is tracked                          | Read-only      |
-| `list_contacts`        | Pages through contacts, with filters for role, company, industry, last update, and tracked                          | Read-only      |
-| `get_timeline`         | Returns a contact's interactions and timeline                                                                       | Read-only      |
-| `search_notes`         | Searches notes and interactions by words, date range, and type                                                      | Read-only      |
-| `list_action_items`    | Lists open follow-ups: overdue, today, this week, or all                                                            | Read-only      |
-| `get_pulse`            | Returns the Pulse figures: tracked contacts and their bands, catch-ups past their cadence, and follow-ups due       | Read-only      |
-| `list_tags`            | Lists the tags used in your network                                                                                 | Read-only      |
-| `list_lists`           | Lists your lists and how many contacts each holds                                                                   | Read-only      |
-| `create_contact`       | Creates a contact with profile and contact details                                                                  | Read and write |
-| `update_contact`       | Changes a contact's fields, including whether it is tracked and its cadence                                         | Read and write |
-| `log_interaction`      | Logs a meeting, call, email, or note. With AI on, it also finds the people the text mentions                        | Read and write |
-| `create_action_item`   | Adds a follow-up with a due date to a contact                                                                       | Read and write |
-| `complete_action_item` | Marks a follow-up as done                                                                                           | Read and write |
-| `add_to_list`          | Adds one or more contacts to a list                                                                                 | Read and write |
+| Tool                   | What it does                                                                                                                                                                  | Access         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `search_people`        | Searches contacts with a question in plain words, and returns up to 30 ranked matches. Filters for role, company, location, industry, tag, and list narrow those matches      | Read-only      |
+| `get_contact`          | Returns one contact's full profile, with the score explanation when the contact is tracked                                                                                    | Read-only      |
+| `list_contacts`        | Pages through contacts, with filters for role, company, location, industry, tag, list, email, phone, last update, and tracked. Email and phone match exactly                  | Read-only      |
+| `get_timeline`         | Returns a contact's interactions and timeline                                                                                                                                 | Read-only      |
+| `search_notes`         | Searches notes and interactions by words, date range, and type                                                                                                                | Read-only      |
+| `list_action_items`    | Lists open follow-ups: overdue, today, this week, or all                                                                                                                      | Read-only      |
+| `get_pulse`            | Returns the Pulse figures: tracked contacts and their bands, catch-ups past their cadence, and follow-ups due                                                                 | Read-only      |
+| `list_tags`            | Lists the tags used in your network                                                                                                                                           | Read-only      |
+| `list_lists`           | Lists your lists and how many contacts each holds                                                                                                                             | Read-only      |
+| `create_contact`       | Creates a contact with profile and contact details. It refuses an email or phone that a contact already has, unless `allowDuplicate` is set                                   | Read and write |
+| `update_contact`       | Changes a contact's fields, including whether it is tracked and its cadence. It adds or removes emails, phones, and tags, and keeps the others                                | Read and write |
+| `log_interaction`      | Logs a meeting, call, email, or note that has happened. `mentionContactIds` links the other people in it. Without them, and with AI on, it finds the people the text mentions | Read and write |
+| `create_action_item`   | Adds a follow-up with a due date to a contact                                                                                                                                 | Read and write |
+| `update_action_item`   | Changes a follow-up's title or due date                                                                                                                                       | Read and write |
+| `complete_action_item` | Marks a follow-up as done                                                                                                                                                     | Read and write |
+| `create_list`          | Creates a list. It refuses a name that one of your lists already has                                                                                                          | Read and write |
+| `add_to_list`          | Adds one or more contacts to a list                                                                                                                                           | Read and write |
+| `remove_from_list`     | Removes one or more contacts from a list                                                                                                                                      | Read and write |
 
-`search_people` and `search_notes` return up to 50 results. `list_contacts`
-and `get_timeline` return up to 100 entries at a time.
+`search_people` returns up to 30 results, and `search_notes` up to 50.
+`list_contacts` and `get_timeline` return up to 100 entries at a time.
+`list_contacts` returns the main profile fields of each contact, and
+`get_contact` returns the whole profile.
+
+Dates are ISO 8601: a day, such as `2026-11-03`, or a date and time.
+`log_interaction` refuses a date in the future, because an interaction has
+already happened. A follow-up can be due on any date.
+
+When a client connects, the server also sends instructions for its model.
+They say where contact IDs come from, to check for a contact with
+`list_contacts` before `create_contact`, and how to write dates.
 
 With AI off for your account or for the instance, `search_people` answers from
 the local index, as Ask Contrack does. **Enrich new contacts automatically**
@@ -174,12 +192,17 @@ And two prompts, which a client can offer you as commands:
   gets `401`.
 - A tool that fails returns an MCP error. Its data holds Contrack's error
   code and HTTP status, such as `NOT_FOUND` for a contact that is not in your
-  account.
+  account. `create_contact` answers `DUPLICATE_CONTACT`, and `create_list`
+  answers `DUPLICATE_LIST`. The message names the contact or the list that
+  already exists.
+- A tool called with arguments that break its rules, such as a date in the
+  future, returns a result with `isError` set and the reason in its text.
 
 ## Keep your tokens safe
 
-- A token acts as your account. Anyone who holds it can read and change your
-  contacts, notes, and follow-ups.
+- A token acts as your account. Anyone who holds it can read your data. A
+  token with read and write access can also change your contacts, notes,
+  lists, and follow-ups. Give a client that only reads a read-only token.
 - A token has your role. An admin's token can also use the administration
   API.
 - A token cannot change your password, create tokens, or manage passkeys and

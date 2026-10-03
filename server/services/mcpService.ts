@@ -11,6 +11,20 @@
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import type { Scope } from "../tenancy/scope.ts";
+import { normalizePhone } from "../utils/nlp/phone.ts";
+
+/** A contact the app shows: not a ghost, not in the trash, not merged away. */
+const IN_NETWORK =
+  "c.deletedAt IS NULL AND c.isGhost = 0 AND c.canonicalId IS NULL";
+
+/** One contact that holds an email or a phone the caller asked about. */
+export interface ContactMatch {
+  id: string;
+  name: string;
+  isArchived: boolean;
+  /** The email or the phone, as the contact holds it. */
+  matched: string;
+}
 
 export const mcpService = {
   /**
@@ -34,12 +48,35 @@ export const mcpService = {
       updatedSince?: string;
       /** True for the people the account keeps up with, false for the rest. */
       tracked?: boolean;
+      location?: string;
+      /** A tag, without regard to case. */
+      tag?: string;
+      /** A list's ID, or its whole name without regard to case. */
+      list?: string;
+      /** Exact, as `findByEmailOrPhone` matches it. */
+      email?: string;
+      /** By its digits, as `findByEmailOrPhone` matches it. */
+      phone?: string;
     },
   ) {
     let q = `SELECT * FROM contacts
         WHERE ownerId = ? AND deletedAt IS NULL AND isGhost = 0
           AND canonicalId IS NULL`;
     const params: (string | number)[] = [scope.ownerId];
+
+    for (const ids of [
+      options.email === undefined
+        ? null
+        : mcpService.findByEmailOrPhone(scope, [options.email], []),
+      options.phone === undefined
+        ? null
+        : mcpService.findByEmailOrPhone(scope, [], [options.phone]),
+    ]) {
+      if (!ids) continue;
+      if (ids.length === 0) return [];
+      q += ` AND id IN (${ids.map(() => "?").join(",")})`;
+      params.push(...ids.map((match) => match.id));
+    }
 
     if (options.role) {
       q += " AND role LIKE ?";
@@ -61,6 +98,22 @@ export const mcpService = {
       q += " AND isTracked = ?";
       params.push(options.tracked ? 1 : 0);
     }
+    if (options.location) {
+      q += " AND location LIKE ?";
+      params.push(`%${options.location}%`);
+    }
+    if (options.tag) {
+      q += ` AND EXISTS (SELECT 1 FROM contact_tags t
+               WHERE t.contactId = contacts.id AND t.tag = ? COLLATE NOCASE)`;
+      params.push(options.tag.trim());
+    }
+    if (options.list) {
+      // `list_members` has no owner, so the list's owner is checked here.
+      q += ` AND EXISTS (SELECT 1 FROM list_members lm JOIN lists l ON l.id = lm.listId
+               WHERE lm.contactId = contacts.id AND l.ownerId = ?
+                 AND (l.id = ? OR l.name = ? COLLATE NOCASE))`;
+      params.push(scope.ownerId, options.list, options.list.trim());
+    }
 
     q += " ORDER BY addedAt DESC LIMIT ? OFFSET ?";
     params.push(options.limit, options.offset);
@@ -79,6 +132,62 @@ export const mcpService = {
     }
 
     return rows;
+  },
+
+  /**
+   * The caller's contacts that hold one of these emails or phones.
+   *
+   * It reads the contacts that list_contacts reads, archived ones included:
+   * a second contact for an archived person is still a duplicate. An email
+   * matches without regard to case or the spaces around it. A phone matches
+   * on its digits through `normalizePhone`, as a connector matches one, so
+   * "+1 (415) 555-0100" finds "415-555-0100". One row for each match.
+   */
+  findByEmailOrPhone(
+    scope: Scope,
+    emails: string[],
+    phones: string[],
+  ): ContactMatch[] {
+    const matches: ContactMatch[] = [];
+    const toMatch = (row: {
+      id: string;
+      name: string;
+      isArchived: number | null;
+      matched: string;
+    }): ContactMatch => ({ ...row, isArchived: row.isArchived === 1 });
+
+    const wanted = [
+      ...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)),
+    ];
+    if (wanted.length > 0) {
+      const rows = sqlite
+        .prepare(
+          `SELECT c.id, c.name, c.isArchived, ce.email AS matched
+             FROM contact_emails ce JOIN contacts c ON c.id = ce.contactId
+            WHERE c.ownerId = ? AND ${IN_NETWORK}
+              AND LOWER(TRIM(ce.email)) IN (${wanted.map(() => "?").join(",")})`,
+        )
+        .all(scope.ownerId, ...wanted) as Parameters<typeof toMatch>[0][];
+      matches.push(...rows.map(toMatch));
+    }
+
+    const digits = new Set(phones.map(normalizePhone).filter(Boolean));
+    if (digits.size > 0) {
+      // The stored phones keep the shape they were typed in, so the digits
+      // are compared here rather than in SQL. One account holds a few
+      // thousand phones at most.
+      const rows = sqlite
+        .prepare(
+          `SELECT c.id, c.name, c.isArchived, cp.phone AS matched
+             FROM contact_phones cp JOIN contacts c ON c.id = cp.contactId
+            WHERE c.ownerId = ? AND ${IN_NETWORK}`,
+        )
+        .all(scope.ownerId) as Parameters<typeof toMatch>[0][];
+      for (const row of rows) {
+        if (digits.has(normalizePhone(row.matched))) matches.push(toMatch(row));
+      }
+    }
+    return matches;
   },
 
   /** The caller's contacts that are due for follow-up. */
