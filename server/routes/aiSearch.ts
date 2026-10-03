@@ -15,7 +15,11 @@ import { jobQueue } from "../services/aiSearch/index.ts";
 import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
-import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
+import {
+  preferredEnrichmentStrategy,
+  validateEnrichmentStrategy,
+} from "../services/aiSearch/strategies/index.ts";
+import { getPreferences } from "../services/userPreferencesService.ts";
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
 import { AppError, RateLimitedError } from "../utils/AppError.ts";
 import { scopeOf } from "../tenancy/scope.ts";
@@ -44,7 +48,7 @@ const aiSearchBodySchema = z.object({
   /**
    * How to search: the research model's own search ("two-pass", or
    * "single-pass" on OpenAI and Anthropic), SearXNG alone ("searxng"), or
-   * both ("combined"). The provider's default when absent.
+   * both ("combined"). When absent, the account's Search with choice.
    */
   strategy: z
     .enum(["two-pass", "single-pass", "searxng", "combined"])
@@ -64,7 +68,12 @@ aiSearchRouter.post(
     const scope = scopeOf(req);
     const { contactIds, strategy: requestedStrategy, depth } = req.body;
 
-    const strategy = validateEnrichmentStrategy(requestedStrategy);
+    // A start that names no strategy searches the way the account chose.
+    const strategy = requestedStrategy
+      ? validateEnrichmentStrategy(requestedStrategy)
+      : preferredEnrichmentStrategy(
+          getPreferences(scope.ownerId).researchSource,
+        );
 
     // The global run lock: another account's batch holds it. This account's
     // own running batch does not refuse; the new contacts join it below.

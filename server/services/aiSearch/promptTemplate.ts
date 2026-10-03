@@ -628,7 +628,7 @@ ${reportLines(contact)}
 }
 
 /** The most text of fetched pages one reading ask holds. */
-const READING_MAX_CHARS = 60_000;
+export const READING_MAX_CHARS = 60_000;
 
 /**
  * Pass 1 for pages Contrack fetched itself: read SearXNG's results into
@@ -664,7 +664,7 @@ ${wrapUntrusted("web pages", pages, READING_MAX_CHARS)}
 
 ${reportSection("Report every fact the matching pages state, one per line, in this form:")}
 
-Name each fact's site as the host of its SOURCE address, like [example.com]. Use only what these pages say. Leave out any topic you found nothing for. Do not write "null", "unknown" or "not found". If no page is about this person, reply with exactly: ${NO_MATCHING_PAGES}
+End each fact with the full SOURCE address of its page in brackets, like [https://example.com/people/rowan-vale], so each fact keeps its own page. Use only what these pages say. Leave out any topic you found nothing for. Do not write "null", "unknown" or "not found". If no page is about this person, reply with exactly: ${NO_MATCHING_PAGES}
   `.trim();
 }
 
@@ -729,6 +729,14 @@ const CITATION_MARKER =
 const TRAILING_SITES = /(?:\s*\[(?!\d+\])[^[\]]{0,200}\])+\s*[.;]?$/;
 
 /**
+ * A line that says a page gave nothing: "null", "unknown", "Not explicitly
+ * stated". A local 7B model wrote "None explicitly stated" for a topic it
+ * found nothing for (2026-10-02).
+ */
+const NOT_A_FACT =
+  /^(?:null|none|n\/a|unknown|not found|(?:none|not|nothing) (?:explicitly |clearly )?(?:stated|specified|mentioned|listed|given|provided|available|found))\.?$/i;
+
+/**
  * The fact lines in a search pass answer, for the dossier's Research card.
  *
  * Lines that are not "- Topic: fact" are skipped: a heading, a sentence of
@@ -758,8 +766,7 @@ export function parseFindings(text: string): ResearchFinding[] {
         .find((name) => name.length >= 2);
       fact = fact.slice(0, tail.index).trim();
     }
-    if (!fact || /^(null|none|n\/a|unknown|not found)\.?$/i.test(fact))
-      continue;
+    if (!fact || NOT_A_FACT.test(fact)) continue;
     const key = `${match[1].toLowerCase()}|${fact.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);

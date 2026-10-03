@@ -326,7 +326,11 @@ class AISearchJobQueue extends EventEmitter {
           const prompt = buildSearchPrompt(contact, history);
           const result = await withTimeout(
             (signal) =>
-              strategy.execute(contact, prompt, signal, { depth, history }),
+              strategy.execute(contact, prompt, signal, {
+                depth,
+                history,
+                timeoutMs: RESEARCH_TIMEOUT_MS[depth],
+              }),
             RESEARCH_TIMEOUT_MS[depth],
             controller.signal,
           );

@@ -16,6 +16,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 /** Captures each outbound request so we can assert what was negotiated. */
 const calls: Record<string, unknown>[] = [];
 let responder: (params: Record<string, unknown>) => unknown;
+/** What the endpoint's `/v1/models` lists. */
+let modelList: Record<string, unknown>[] = [];
 
 vi.mock("openai", () => ({
   default: class {
@@ -27,7 +29,7 @@ vi.mock("openai", () => ({
         },
       },
     };
-    models = { list: () => Promise.resolve([]) };
+    models = { list: () => Promise.resolve(modelList) };
     embeddings = { create: () => Promise.resolve({ data: [] }) };
   },
 }));
@@ -190,5 +192,27 @@ describe("guard rails", () => {
 
   it("never claims search grounding", () => {
     expect(adapter.supportsSearchGrounding).toBe(false);
+  });
+});
+
+describe("the model list", () => {
+  it("keeps the context window a server reports, under each name it uses", async () => {
+    modelList = [
+      { id: "vllm-model", object: "model", max_model_len: 32_768 },
+      { id: "router-model", object: "model", context_length: 8_192 },
+      { id: "other-model", object: "model", context_window: 16_384 },
+      // Ollama lists no window.
+      { id: "ollama-model", object: "model", owned_by: "library" },
+      { id: "odd-model", object: "model", max_model_len: "large" },
+    ];
+    const models = await adapter.listModels();
+    expect(models.map((model) => [model.id, model.contextWindow])).toEqual([
+      ["vllm-model", 32_768],
+      ["router-model", 8_192],
+      ["other-model", 16_384],
+      ["ollama-model", undefined],
+      ["odd-model", undefined],
+    ]);
+    modelList = [];
   });
 });

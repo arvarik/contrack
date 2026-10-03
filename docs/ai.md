@@ -157,8 +157,9 @@ Only Google gives free web searches: the first 5,000 each month.
 2. Choose the **Research depth**. It starts at **Standard** each time.
    When an admin has set a [SearXNG](#web-research-with-searxng) address,
    **Search with** also offers the research model's own search, **SearXNG**
-   or **Both**. It starts at the research model each time, and the time and
-   cost show for that choice only.
+   or **Both**. Contrack saves the choice for your account, and every
+   research you start searches that way. The time and cost show for the
+   research model only.
 3. Narrow the list. The **Contacts** row offers **All**, **Tracked**, **Has
    links**, **Has email** and **No data**. The **Research** row offers **Any**,
    **Not yet**, **6+ months ago** and **Found nothing**. A contact shows when
@@ -177,11 +178,13 @@ still bill a request that it already took.
 - In the contact's actions menu, choose **Enrich contact** (Standard) or
   **Enrich deeply** (Deep). On the **Dossier** tab, **Enrich contact** and
   **Enrich again** open a menu with both depths. One contact needs no
-  confirmation.
+  confirmation. With **SearXNG** or **Both** chosen under **Search with**, the
+  menu's heading names it, such as "Research depth · with SearXNG".
 - Turn on **Enrich new contacts automatically** on the **Contact enrichment**
   page, and Contrack researches each contact that you add yourself, in the app
-  or through the REST API, at Standard depth. It leaves out the contacts that
-  a file import, a connector sync or an MCP client adds. It is off by default.
+  or through the REST API, at Standard depth, with your **Search with**
+  choice. It leaves out the contacts that a file import, a connector sync or
+  an MCP client adds. It is off by default.
 
 ### What research adds
 
@@ -318,21 +321,36 @@ endpoint and the built-in embedding model, Contrack then needs no cloud AI.
 
 With a provider that searches the web, research still uses the provider,
 unless you choose **SearXNG** or **Both** under **Search with** on the
-**Contact enrichment** page.
+**Contact enrichment** page. When an admin later clears the SearXNG address,
+research searches with the provider again, and the choice waits.
 
 For each contact, SearXNG runs the searches that research with a provider
 would start with: three at Standard and six at Deep, all at once. Contrack
-takes the results from each search in turn and reads only the ones whose
-title or snippet names the person: up to five pages in full at Standard and
-ten at Deep, from public addresses, and up to twenty more by their snippet.
-The **Deep tasks** model reads them into facts, each beside its page, and the
-**Quick tasks** model fills the fields. The **Research** card shows those facts
-and pages, as it does for a provider. SearXNG's own searches are not billed.
+takes the results from each search in turn and reads only the ones whose title
+or snippet names the person, and whose address, title, snippet or page shares
+a detail with the contact: an employer, a school, the city, a role of two
+words or more, or the LinkedIn handle. When the contact has a LinkedIn
+profile, another person's LinkedIn profile is left out. It reads: up to five
+pages in full at Standard and ten at Deep, from public addresses, and up to
+twenty more by their snippet. A page that does not load, such as a LinkedIn
+profile, keeps its snippet and gives its place to the next result, up to three
+tries for each page. The **Deep tasks** model reads them into facts, each
+beside the address of its page, and the **Quick tasks** model fills the
+fields. The **Research** card shows those facts and pages, as it does for a
+provider. SearXNG's own searches are not billed.
+
+A model on a custom endpoint reads within its context window: the window
+that the endpoint reports, as vLLM does, or 4,096 tokens when it reports
+none, as Ollama does. When the results do not fit in one call, it reads them
+in up to three calls, the snippets first. A larger window reads more pages
+in fewer calls.
 
 **Both** runs the research model's search and SearXNG's at once, and keeps the
 facts of both. One is enough: when the model does not search, SearXNG's
 facts stand alone, and when SearXNG finds nothing, the model's do. Research
-records no web page only when one of them searched and matched nobody.
+records no web page only when one of them searched and matched nobody. Each
+search stops 40 seconds before the run's time ends, so a slow one leaves time
+to read the other's facts.
 
 A **Research model** of **Off — never research online** stops SearXNG
 research too.

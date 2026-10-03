@@ -32,6 +32,9 @@ const aiSearch = vi.hoisted(() => ({
   depthFiguresApply: true,
   researchProvider: "Gemini" as string | null,
   searxng: false,
+  offersSource: false,
+  researchSource: "provider" as "provider" | "searxng" | "combined",
+  setResearchSource: vi.fn(),
 }));
 vi.mock("../../../../src/contexts/AISearchContext", async (original) => ({
   isEnriching: (
@@ -117,6 +120,9 @@ afterEach(() => {
   aiSearch.depthFiguresApply = true;
   aiSearch.researchProvider = "Gemini";
   aiSearch.searxng = false;
+  aiSearch.offersSource = false;
+  aiSearch.researchSource = "provider";
+  aiSearch.setResearchSource.mockClear();
   ai.allowed = true;
   contacts.list = [];
 });
@@ -179,6 +185,35 @@ describe("EnrichMenu", () => {
       limitAs: "toast",
       depth: "deep",
     });
+  });
+
+  it("names SearXNG or both in its heading when the account chose them", () => {
+    aiSearch.offersSource = true;
+    aiSearch.researchSource = "searxng";
+    render(
+      <EnrichMenu contact={person} label="Enrich again" variant="secondary" />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Enrich again, choose how deep/ }),
+    );
+    expect(
+      within(screen.getByRole("menu")).getByText(
+        "Research depth · with SearXNG",
+      ),
+    ).toBeTruthy();
+    cleanup();
+    aiSearch.researchSource = "combined";
+    render(
+      <EnrichMenu contact={person} label="Enrich again" variant="secondary" />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Enrich again, choose how deep/ }),
+    );
+    expect(
+      within(screen.getByRole("menu")).getByText(
+        "Research depth · with Gemini and SearXNG",
+      ),
+    ).toBeTruthy();
   });
 
   it("gives no time when research runs on a provider the figures were not measured on", () => {
@@ -502,32 +537,28 @@ describe("the Enrichment page's search choice", () => {
     { id: "c1", name: "Rowan Vale", isArchived: false, isGhost: false },
     { id: "c2", name: "Kestrel Ames", isArchived: false, isGhost: false },
   ];
-  const startWith = (tile: RegExp) => {
+  /** The page with the account's saved choice, the dialog open for both people. */
+  const confirmWith = (source: "provider" | "searxng" | "combined") => {
+    aiSearch.offersSource = true;
+    aiSearch.researchSource = source;
     contacts.list = people;
     renderView();
-    fireEvent.click(screen.getByRole("radio", { name: tile }));
     fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
     fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
     return screen.getByRole("dialog");
   };
 
-  it("offers no choice without a SearXNG address, or without a provider that searches", () => {
+  it("offers no choice while there is one way to search", () => {
     contacts.list = people;
-    renderView();
-    expect(
-      screen.queryByRole("radiogroup", { name: "Search with" }),
-    ).toBeNull();
-    cleanup();
-    aiSearch.searxng = true;
-    aiSearch.researchProvider = null;
     renderView();
     expect(
       screen.queryByRole("radiogroup", { name: "Search with" }),
     ).toBeNull();
   });
 
-  it("offers the provider, SearXNG and both, with the provider chosen", () => {
-    aiSearch.searxng = true;
+  it("offers the provider, SearXNG and both, with the account's choice chosen", () => {
+    aiSearch.offersSource = true;
+    aiSearch.researchSource = "combined";
     contacts.list = people;
     renderView();
     const tiles = within(
@@ -539,17 +570,25 @@ describe("the Enrichment page's search choice", () => {
       expect.stringMatching(/^Both/),
     ]);
     expect(tiles.map((tile) => tile.getAttribute("aria-checked"))).toEqual([
+      "false",
+      "false",
       "true",
-      "false",
-      "false",
     ]);
   });
 
-  it("starts with SearXNG, without Gemini's figures, and says so before it starts", () => {
-    aiSearch.searxng = true;
+  it("saves a choice for the account, for every start after it", () => {
+    aiSearch.offersSource = true;
     contacts.list = people;
     renderView();
     fireEvent.click(screen.getByRole("radio", { name: /^SearXNG/ }));
+    expect(aiSearch.setResearchSource).toHaveBeenCalledWith("searxng");
+  });
+
+  it("starts with SearXNG, without Gemini's figures, and says so before it starts", () => {
+    aiSearch.offersSource = true;
+    aiSearch.researchSource = "searxng";
+    contacts.list = people;
+    renderView();
     // Gemini's measured time and cost describe its own search only.
     const tiles = within(
       screen.getByRole("radiogroup", { name: "Research depth" }),
@@ -564,36 +603,20 @@ describe("the Enrichment page's search choice", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Search 2 contacts" }),
     );
+    // The start names the depth. The context adds the account's choice.
     expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
       depth: "standard",
-      strategy: "searxng",
     });
   });
 
-  it("starts with both as the combined strategy", () => {
-    aiSearch.searxng = true;
-    const dialog = startWith(/^Both/);
-    expect(dialog.textContent).toContain("Searches with Both");
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Search 2 contacts" }),
-    );
-    expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
-      depth: "standard",
-      strategy: "combined",
-    });
+  it("says both before it starts", () => {
+    expect(confirmWith("combined").textContent).toContain("Searches with Both");
   });
 
-  it("starts with the provider as before, naming no strategy", () => {
-    aiSearch.searxng = true;
-    const dialog = startWith(/^Gemini/);
+  it("gives the provider's time and cost, and no source line, for its search", () => {
+    const dialog = confirmWith("provider");
     expect(dialog.textContent).toContain(batchEstimate("standard", 2));
     expect(dialog.textContent).not.toContain("Searches with");
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Search 2 contacts" }),
-    );
-    expect(aiSearch.startSearch.mock.calls[0][1]).toEqual({
-      depth: "standard",
-    });
   });
 });
 

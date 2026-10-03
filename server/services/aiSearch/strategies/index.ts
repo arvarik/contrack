@@ -12,7 +12,8 @@ import { AppError } from "../../../utils/AppError.ts";
 // shows. 'single-pass' (search and schema in one request, OpenAI and
 // Anthropic only) stays available by name. With a SearXNG address set, a
 // start may name 'searxng' to search with SearXNG alone, or 'combined' to
-// search with both and keep the facts of both.
+// search with both and keep the facts of both. A start that names none uses
+// the account's Search with choice (`preferredEnrichmentStrategy`).
 // =============================================================================
 
 import type { AISearchStrategy } from "../types.ts";
@@ -20,6 +21,12 @@ import { TwoPassStrategy } from "./twoPass.ts";
 import { SinglePassStrategy } from "./singlePass.ts";
 import { SearxngStrategy, getSearxngUrl } from "./searxng.ts";
 import { CombinedStrategy } from "./combined.ts";
+import { log } from "../../../utils/logger.ts";
+import { getErrorMessage } from "../../../utils/helpers.ts";
+import {
+  SOURCE_STRATEGY,
+  type ResearchSource,
+} from "../../../../shared/researchSource.ts";
 
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
   "two-pass": () => new TwoPassStrategy(),
@@ -117,4 +124,28 @@ export function validateEnrichmentStrategy(requested?: string): string {
       );
   }
   return name;
+}
+
+/**
+ * The strategy for a start that names none: the account's Search with
+ * choice, when it can run now, or the provider's default.
+ *
+ * A choice of SearXNG or both outlives the setup it needs: an admin can
+ * clear the SearXNG address, or the research model, later. The start then
+ * searches the default way, as it did before the choice, and does not fail.
+ * Research that is off still refuses.
+ */
+export function preferredEnrichmentStrategy(source: ResearchSource): string {
+  if (source !== "provider") {
+    try {
+      return validateEnrichmentStrategy(SOURCE_STRATEGY[source]);
+    } catch (err) {
+      if (err instanceof AppError && err.code === "RESEARCH_OFF") throw err;
+      log.info(
+        "AISearch",
+        `Search with ${source} cannot run now (${getErrorMessage(err)}); searching the default way`,
+      );
+    }
+  }
+  return validateEnrichmentStrategy();
 }

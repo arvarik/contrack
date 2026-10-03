@@ -66,6 +66,12 @@ export interface ResearchOptions {
    * run builds its second, complete-profile ask from it too.
    */
   history?: ResearchRecord | null;
+  /**
+   * How long the whole run may take, in ms, when the caller stops it then.
+   * Searching with both stops the research model's search in time to read
+   * SearXNG's facts.
+   */
+  timeoutMs?: number;
 }
 
 /**

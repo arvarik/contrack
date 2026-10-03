@@ -15,8 +15,10 @@
  *
  * When an admin has set a SearXNG address and a provider serves research,
  * "Search with" offers the provider's own search, SearXNG, or both
- * (`lib/researchSource`). The measured time and cost describe the
- * provider's search only, so they show for it alone.
+ * (`lib/researchSource`). It is the account's choice, so a contact's Enrich
+ * menu and "Enrich new contacts automatically" search the same way. The
+ * measured time and cost describe the provider's search only, so they show
+ * for it alone.
  */
 import { useState, useCallback, useDeferredValue, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -60,12 +62,7 @@ import {
   type ResearchFilter,
 } from "../../lib/enrichmentFilters";
 import { NAMES } from "../../lib/names";
-import {
-  SOURCE_ORDER,
-  SOURCE_STRATEGY,
-  sourceWords,
-  type ResearchSource,
-} from "../../lib/researchSource";
+import { SOURCE_ORDER, sourceWords } from "../../lib/researchSource";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 
 /**
@@ -125,13 +122,12 @@ export function AISearchView({
     clearLimit,
     depthFiguresApply,
     researchProvider,
-    searxng,
+    offersSource,
+    researchSource: searchWith,
+    setResearchSource,
   } = useAISearch();
-  // The provider's search each time the page opens, like the depth. The
-  // choice shows only when there are two ways to search.
-  const [source, setSource] = useState<ResearchSource>("provider");
-  const offersSource = searxng && !!researchProvider;
-  const searchWith: ResearchSource = offersSource ? source : "provider";
+  // The account's choice, saved as it changes: every start uses it. It
+  // shows only when there are two ways to search.
   const figures = depthFiguresApply && searchWith === "provider";
   const choices = useMemo(() => depthChoices(figures), [figures]);
   const sourceChoices = useMemo(() => {
@@ -272,8 +268,7 @@ export function AISearchView({
 
   const handleConfirmStart = () => {
     const ids = Array.from(selectedIds);
-    const strategy = SOURCE_STRATEGY[searchWith];
-    startSearch(ids, { depth, ...(strategy && { strategy }) });
+    startSearch(ids, { depth });
     setShowConfirm(false);
     setSelectedIds(new Set());
   };
@@ -358,9 +353,9 @@ export function AISearchView({
                   </h3>
                   <ChoiceGroup
                     label="Search with"
-                    value={source}
+                    value={searchWith}
                     options={sourceChoices}
-                    onChange={setSource}
+                    onChange={setResearchSource}
                     className="sm:grid-cols-3"
                   />
                 </>

@@ -36,7 +36,10 @@ import type {
 import {
   buildReadingPrompt,
   formalName,
+  READING_MAX_CHARS,
   isNoMatch,
+  isPlaceholderEmployer,
+  NO_MATCHING_PAGES,
   otherNameForms,
   parseFindings,
   searchName,
@@ -51,8 +54,14 @@ import {
   DEFAULT_RESEARCH_DEPTH,
   type ResearchDepth,
 } from "../../../../shared/researchDepth.ts";
-import { sourceForSite } from "../../../../shared/researchRecord.ts";
 import {
+  siteOf,
+  sourceForSite,
+  type ResearchSource,
+} from "../../../../shared/researchRecord.ts";
+import {
+  CHARS_PER_TOKEN,
+  contextWindowFor,
   createMeter,
   extractFacts,
   foundResult,
@@ -187,6 +196,303 @@ function namesPerson(result: SearxngResult, names: string[][]): boolean {
   return names.some((name) => name.every((word) => words.has(word)));
 }
 
+/**
+ * Results tried for each page read in full. A site that turns robots away,
+ * such as LinkedIn with its status 999, gives its place to the next result
+ * that names the person. On one contact, four of the first five such
+ * results were LinkedIn pages, and one page of five was read (2026-10-02).
+ */
+const TRIES_PER_PAGE = 3;
+
+/**
+ * Read up to `want` of the candidates in full, in their order, a round at a
+ * time: each round tries as many as are still wanted, all at once. A page
+ * counts as read when its text `counts`; one that does not is unread.
+ *
+ * @returns The pages read with their text, the candidates tried that could
+ *   not be read, and how many candidates were tried.
+ */
+async function readInFull(
+  candidates: readonly SearxngResult[],
+  want: number,
+  signal: AbortSignal | undefined,
+  counts: (result: SearxngResult, text: string) => boolean,
+): Promise<{
+  read: Array<{ result: SearxngResult; text: string }>;
+  unread: SearxngResult[];
+  tried: number;
+}> {
+  const read: Array<{ result: SearxngResult; text: string }> = [];
+  const unread: SearxngResult[] = [];
+  const limit = Math.min(candidates.length, want * TRIES_PER_PAGE);
+  let tried = 0;
+  while (read.length < want && tried < limit) {
+    const round = candidates.slice(
+      tried,
+      Math.min(tried + want - read.length, limit),
+    );
+    tried += round.length;
+    const texts = await Promise.all(
+      round.map((result) => fetchPageText(result.url!, signal)),
+    );
+    signal?.throwIfAborted();
+    round.forEach((result, index) => {
+      const text = texts[index];
+      if (text && counts(result, text)) read.push({ result, text });
+      else unread.push(result);
+    });
+  }
+  return { read, unread, tried };
+}
+
+/** The longest answer one reading call may write, in tokens. */
+const READING_OUTPUT_TOKENS = 8_192;
+/** The most calls one reading makes, when the pages do not fit in one. */
+const MAX_READING_PARTS = 3;
+/** The least page text a part holds, however small the window. */
+const MIN_PART_CHARS = 2_000;
+/** What joins two pages in one reading. */
+const PAGE_SEPARATOR = "\n\n---\n\n";
+
+/** How much page text one reading call holds, and how long its answer may be. */
+export interface ReadingSize {
+  /** Characters of pages in one call. */
+  partChars: number;
+  /** Tokens the answer may take. */
+  outputTokens: number;
+  /** Calls the reading may make. */
+  maxParts: number;
+}
+
+/**
+ * The size of one reading call for a deep model with this window. A window
+ * that holds the whole reading gets one call, as before. A smaller one gets
+ * a quarter of it for the answer, the instructions, and the rest for pages,
+ * in up to MAX_READING_PARTS calls.
+ *
+ * @param window - The model's context window in tokens, or undefined for a
+ *   hosted model.
+ */
+export function readingSize(
+  contact: HydratedContact,
+  window: number | undefined,
+): ReadingSize {
+  const whole = {
+    partChars: READING_MAX_CHARS,
+    outputTokens: READING_OUTPUT_TOKENS,
+    maxParts: 1,
+  };
+  if (!window) return whole;
+  const outputTokens = Math.min(READING_OUTPUT_TOKENS, Math.floor(window / 4));
+  const instructions = buildReadingPrompt(contact, "").length;
+  const room = (window - outputTokens) * CHARS_PER_TOKEN - instructions;
+  if (room >= READING_MAX_CHARS) return whole;
+  return {
+    partChars: Math.max(room, MIN_PART_CHARS),
+    outputTokens,
+    maxParts: MAX_READING_PARTS,
+  };
+}
+
+/**
+ * The pages in parts of at most `size.partChars` each, in order, and at most
+ * `size.maxParts` of them. A page longer than the room left in a part is cut
+ * to fill it, when MIN_PAGE_SHARE or more is left, and else starts the next
+ * part. What does not fit is left out, from the end.
+ */
+export function partsOf(
+  documents: readonly string[],
+  size: ReadingSize,
+): string[] {
+  const parts: string[] = [];
+  let current = "";
+  for (const document of documents) {
+    for (;;) {
+      const joiner = current ? PAGE_SEPARATOR : "";
+      const room = size.partChars - current.length - joiner.length;
+      if (document.length <= room) {
+        current += joiner + document;
+        break;
+      }
+      if (room >= MIN_PAGE_SHARE) {
+        current += joiner + document.slice(0, room);
+        break;
+      }
+      parts.push(current);
+      if (parts.length === size.maxParts) return parts;
+      current = "";
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/** The least text a page read in full keeps when the reading is short of room. */
+const MIN_PAGE_SHARE = 1_500;
+
+/**
+ * The pages read in full and the snippets, in the order the reading sees
+ * them, within what it holds.
+ *
+ * A snippet is often all that a site that turns robots away gives, and on
+ * one contact the only facts were in a LinkedIn profile's snippet. Read in
+ * three parts of 5,664 characters on a local model, three pages read in
+ * full, each about somebody else of the same name, filled every part, and
+ * the snippets were left out (2026-10-02). So:
+ *
+ * - In parts, the snippets come first. They are short, and a page fills a
+ *   part by itself, so after the pages no part had room for them. The pages
+ *   fill the room that is left (`partsOf`).
+ * - In one call, the pages come first. When the two do not fit, each page
+ *   is shortened alike, to no less than MIN_PAGE_SHARE, so the snippets fit
+ *   too, and what still does not fit is cut from the end.
+ */
+function documentsFor(
+  read: ReadonlyArray<{ result: SearxngResult; text: string }>,
+  snippets: readonly SearxngResult[],
+  size: ReadingSize,
+): string[] {
+  const pages = read.map((page) => block(page.result, page.text));
+  const shown = snippets.map((result) => block(result, result.content));
+  if (size.maxParts > 1) return [...shown, ...pages];
+  const length = (texts: string[]) =>
+    texts.reduce((sum, text) => sum + text.length + PAGE_SEPARATOR.length, 0);
+  if (pages.length === 0 || length(pages) + length(shown) <= size.partChars)
+    return [...pages, ...shown];
+  const share = Math.max(
+    MIN_PAGE_SHARE,
+    Math.floor((size.partChars - length(shown)) / pages.length) -
+      PAGE_SEPARATOR.length,
+  );
+  return [...pages.map((page) => page.slice(0, share)), ...shown];
+}
+
+/** An address as the reading may echo it: no scheme, www, case or end slash. */
+const addressKey = (address: string) =>
+  address
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/[/?#]+$/, "");
+
+/**
+ * The page a fact names: the page at the address the reading wrote, or, when
+ * it wrote a site or an address it changed, the first page on that site.
+ */
+export function pageFor(
+  named: string | undefined,
+  pages: readonly ResearchSource[],
+): ResearchSource | null {
+  if (!named) return null;
+  const key = addressKey(named);
+  return (
+    pages.find((page) => addressKey(page.url) === key) ??
+    sourceForSite(named, pages)
+  );
+}
+
+/**
+ * A LinkedIn profile's handle, lower-cased: "rowan-vale-1a2b" in
+ * linkedin.com/in/rowan-vale-1a2b, on any regional host.
+ */
+function linkedInHandle(url: string): string | null {
+  const match =
+    /^https?:\/\/(?:[a-z]{2,3}\.|www\.)?linkedin\.com\/in\/([^/?#]+)/i.exec(
+      url,
+    );
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]).toLowerCase();
+  } catch {
+    return match[1].toLowerCase();
+  }
+}
+
+/**
+ * The results that are not another person's LinkedIn profile. A person has
+ * one, so while the records hold the contact's own, a profile with another
+ * handle is somebody else of the same name. On one contact, a local model
+ * read two such profiles as the contact's, and the extraction added a job
+ * from one (2026-10-02). Without a profile in the records, all are kept.
+ */
+function withoutOtherProfiles(
+  results: SearxngResult[],
+  contact: HydratedContact,
+): SearxngResult[] {
+  const own = new Set(
+    (contact.socialLinks ?? []).flatMap(
+      (link) => linkedInHandle(link.url) ?? [],
+    ),
+  );
+  if (own.size === 0) return results;
+  return results.filter((result) => {
+    const handle = linkedInHandle(result.url ?? "");
+    return !handle || own.has(handle);
+  });
+}
+
+/** A company's legal ending, which a page often leaves out: "Inc.", "LLC". */
+const LEGAL_ENDING =
+  /[,.]?\s+(?:inc|llc|ltd|limited|corp|corporation|gmbh|co|plc|ag|sa|bv)\.?$/i;
+
+/**
+ * The details of the records that a page about this person can share,
+ * lower-cased: the employers, the schools, the city, a role of two words or
+ * more, and the LinkedIn handle. A placeholder employer such as
+ * "Self-employed" and a one-word role such as "Associate" tell nobody apart,
+ * so they are none.
+ */
+export function recordDetails(contact: HydratedContact): string[] {
+  const employers = [
+    contact.company,
+    ...(contact.experience ?? []).map((job) => job.company),
+  ].filter(
+    (company): company is string =>
+      !!company && !isPlaceholderEmployer(company),
+  );
+  const role =
+    contact.role && contact.role.trim().split(/\s+/).length >= 2
+      ? contact.role
+      : null;
+  const details = [
+    ...employers.map((company) => company.trim().replace(LEGAL_ENDING, "")),
+    ...(contact.education ?? []).map((school) => school.school),
+    contact.location?.split(",")[0],
+    role,
+    ...(contact.socialLinks ?? []).flatMap(
+      (link) => linkedInHandle(link.url) ?? [],
+    ),
+  ];
+  return [
+    ...new Set(
+      details
+        .map((detail) => detail?.trim().toLowerCase() ?? "")
+        .filter((detail) => detail.length >= 3),
+    ),
+  ];
+}
+
+/**
+ * True when a result shares a detail with the records, in its address, its
+ * title, its snippet or the page's text, or when the records have none.
+ *
+ * The rule of the reading's prompt, applied in code: a page counts only when
+ * it is about this person, the same name and at least one detail of the
+ * records. A local 7B model read pages about others of the same name as the
+ * contact's, and the extraction saved a city and a job from them; Gemini,
+ * reading the same results, did not (2026-10-02).
+ */
+function sharesDetail(
+  result: SearxngResult,
+  details: readonly string[],
+  text = "",
+): boolean {
+  if (details.length === 0) return true;
+  const said =
+    `${result.url ?? ""} ${result.title ?? ""} ${result.content ?? ""} ${text}`.toLowerCase();
+  return details.some((detail) => said.includes(detail));
+}
+
 /** One page or snippet as the reading ask sees it. */
 const block = (result: SearxngResult, text: string | null | undefined) =>
   `SOURCE: ${result.url}\nTITLE: ${result.title ?? ""}\n${(text ?? "").trim()}`;
@@ -254,12 +560,13 @@ export async function searxngEvidence(
       }),
     );
     const seen = new Set<string>();
-    const results = interleave(lists).filter((result) => {
+    const found = interleave(lists).filter((result) => {
       if (!result.url || !/^https?:\/\//i.test(result.url)) return false;
       if (seen.has(result.url)) return false;
       seen.add(result.url);
       return true;
     });
+    const results = withoutOtherProfiles(found, contact);
     // Every search failed: SearXNG's own answer says why, such as the 403 of
     // an instance whose settings.yml leaves json out of search.formats.
     if (errors.length > 0 && errors.length === queries.length)
@@ -282,53 +589,87 @@ export async function searxngEvidence(
       );
     const names = personNames(contact);
     const naming = results.filter((result) => namesPerson(result, names));
-    const pages = naming.slice(0, limits.pages);
-    const snippets = (naming.length > 0 ? naming.slice(limits.pages) : results)
-      .filter((result) => result.content?.trim())
-      .slice(0, MAX_SNIPPETS);
-    // Every page at once. A page that cannot be read keeps its snippet.
-    const texts = await Promise.all(
-      pages.map((result) => fetchPageText(result.url!, signal)),
+    const details = recordDetails(contact);
+    // The pages that name the person, read in full, in turn. A page that
+    // cannot be read, or shares no detail with the records, gives its place
+    // to the next, and keeps its snippet when the snippet shares one.
+    const { read, unread, tried } = await readInFull(
+      naming,
+      limits.pages,
+      signal,
+      (result, text) => sharesDetail(result, details, text),
     );
-    signal?.throwIfAborted();
-    // The pages read in full come first. Ten pages at Deep can fill the
-    // reading's cap alone, and the cap cuts from the end, so it cuts
-    // snippets before a page.
-    const documents = [
-      ...pages.map((result, index) =>
-        block(result, texts[index] ?? result.content),
-      ),
-      ...snippets.map((result) => block(result, result.content)),
-    ];
+    const snippets = (
+      naming.length > 0 ? [...unread, ...naming.slice(tried)] : results
+    )
+      .filter(
+        (result) => result.content?.trim() && sharesDetail(result, details),
+      )
+      .slice(0, MAX_SNIPPETS);
+    if (read.length === 0 && snippets.length === 0) {
+      log.info(
+        "SearxngStrategy",
+        `${contact.name}: ${results.length} results from ${queries.length} searches, none shares a detail with the records`,
+      );
+      return {
+        kind: "no-match",
+        queries,
+        models: ["searxng"],
+        text: `${NO_MATCHING_PAGES}: no result shares a detail with the records.`,
+      };
+    }
     log.info(
       "SearxngStrategy",
-      `${contact.name}: ${results.length} results from ${queries.length} searches, ${naming.length} name the person; read ${texts.filter(Boolean).length} of ${pages.length} pages in ${Date.now() - startMs}ms`,
+      `${contact.name}: ${results.length} results from ${queries.length} searches, ${found.length - results.length} other people's LinkedIn profiles left out, ${naming.length} name the person; read ${read.length} of ${tried} pages tried in ${Date.now() - startMs}ms`,
     );
 
     // ── Reading (pages → fact lines) ────────────────────────────────────
-    const readStart = Date.now();
-    const read = await generateFor("deep", {
-      prompt: buildReadingPrompt(contact, documents.join("\n\n---\n\n")),
-      responseFormat: "text",
-      signal,
-      timeoutMs: 90_000,
-      maxOutputTokens: 8_192,
-    });
-    signal?.throwIfAborted();
-    meter.count(read);
-    recordInvocation({
-      operation: "aiSearchReading",
-      model: read.model,
-      tokenCount: read.tokenCount,
-      latencyMs: Date.now() - readStart,
-      cached: false,
-      description: `SearXNG reading: ${contact.name}`,
-    });
-    const models = ["searxng", read.model];
-    const lines = parseFindings(read.text);
+    // In parts when the deep model's window cannot hold the pages at once.
+    const size = readingSize(contact, contextWindowFor("deep"));
+    const parts = partsOf(documentsFor(read, snippets, size), size);
+    const answers: string[] = [];
+    const readErrors: unknown[] = [];
+    let readModel = "";
+    for (const part of parts) {
+      const readStart = Date.now();
+      try {
+        const answer = await generateFor("deep", {
+          prompt: buildReadingPrompt(contact, part),
+          responseFormat: "text",
+          signal,
+          timeoutMs: 90_000,
+          maxOutputTokens: size.outputTokens,
+        });
+        signal?.throwIfAborted();
+        meter.count(answer);
+        recordInvocation({
+          operation: "aiSearchReading",
+          model: answer.model,
+          tokenCount: answer.tokenCount,
+          latencyMs: Date.now() - readStart,
+          cached: false,
+          description: `SearXNG reading: ${contact.name}`,
+        });
+        answers.push(answer.text.trim());
+        readModel = answer.model;
+      } catch (err) {
+        // A part that fails costs its own facts, not the other parts'.
+        if (signal?.aborted) throw err;
+        readErrors.push(err);
+      }
+    }
+    if (answers.length === 0) return failed(readErrors[0]);
+    if (parts.length > 1)
+      log.info(
+        "SearxngStrategy",
+        `${contact.name}: read in ${parts.length} parts of up to ${size.partChars} characters; ${readErrors.length} failed`,
+      );
+    const text = answers.join("\n");
+    const models = ["searxng", readModel];
+    const lines = parseFindings(text);
     if (lines.length === 0) {
-      if (isNoMatch(read.text))
-        return { kind: "no-match", queries, models, text: read.text.trim() };
+      if (answers.some(isNoMatch))
+        return { kind: "no-match", queries, models, text };
       return failed(
         new AppError(
           "Research read SearXNG's results and reported no facts. No contact fields changed. Try again.",
@@ -338,25 +679,33 @@ export async function searxngEvidence(
       );
     }
 
-    // Each fact's page: the one its site names.
-    const readPages = [...pages, ...snippets].map((result) => ({
-      url: result.url!,
-      title: result.title?.trim() || result.url!,
-      firstSeenAt: "",
-    }));
+    // Each fact's page: the address the reading names, or the first page on
+    // its site.
+    const readPages = [...read.map((page) => page.result), ...snippets].map(
+      (result) => ({
+        url: result.url!,
+        title: result.title?.trim() || result.url!,
+        firstSeenAt: "",
+      }),
+    );
     const findings = lines.map((finding) => {
-      const page = sourceForSite(finding.site, readPages);
-      return page ? { ...finding, url: page.url } : finding;
+      const page = pageFor(finding.site, readPages);
+      const site = siteOf(page?.url ?? finding.site ?? "") ?? finding.site;
+      return {
+        ...finding,
+        ...(site && { site }),
+        ...(page && { url: page.url }),
+      };
     });
     // The pages a fact names, or, when no fact names one, the pages read
     // in full.
     const named = new Set(findings.flatMap((finding) => finding.url ?? []));
     const cited = named.size
       ? readPages.filter((page) => named.has(page.url))
-      : readPages.slice(0, pages.length);
+      : readPages.slice(0, read.length);
     return {
       kind: "facts",
-      facts: read.text.trim(),
+      facts: text,
       findings,
       citations: toCitations(
         cited.map((page) => ({ url: page.url, title: page.title })),

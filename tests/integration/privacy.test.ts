@@ -356,7 +356,7 @@ describe("contact embeddings with a hosted model", () => {
 
 describe("Enrich new contacts automatically", () => {
   it("researches a contact a person adds, and not one an MCP client or a sync adds", async () => {
-    vi.spyOn(strategies, "validateEnrichmentStrategy").mockReturnValue(
+    vi.spyOn(strategies, "preferredEnrichmentStrategy").mockReturnValue(
       "two-pass",
     );
     const createBatch = vi.spyOn(jobQueue, "createBatch");

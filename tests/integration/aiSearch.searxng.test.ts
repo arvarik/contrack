@@ -29,6 +29,7 @@ vi.mock("../../server/utils/urlSafety.ts", async (original) => ({
   safeFetch: vi.fn(),
 }));
 import { generateFor } from "../../server/ai/gateway.ts";
+import { resolveCapability } from "../../server/ai/capabilities.ts";
 import { safeFetch } from "../../server/utils/urlSafety.ts";
 import { sqlite } from "../../server/db.ts";
 import { makeTestApp } from "./helpers.ts";
@@ -40,7 +41,10 @@ import {
 import { enrichmentContact } from "../../server/services/aiSearch/contactSnapshot.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
 import { SearxngStrategy } from "../../server/services/aiSearch/strategies/searxng.ts";
-import { CombinedStrategy } from "../../server/services/aiSearch/strategies/combined.ts";
+import {
+  CombinedStrategy,
+  EXTRACTION_RESERVE_MS,
+} from "../../server/services/aiSearch/strategies/combined.ts";
 import { NO_MATCHING_PAGES } from "../../server/services/aiSearch/promptTemplate.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
@@ -89,6 +93,24 @@ const calls = () =>
     capability,
     ...(options as AIGenerateOptions),
   }));
+
+/** Every capability answers as `byCapability` says, and `research` only when stopped. */
+function researchHangs() {
+  vi.mocked(generateFor).mockImplementation(async (capability, options) => {
+    if (capability === "research")
+      return new Promise<never>((_, reject) =>
+        options.signal?.addEventListener(
+          "abort",
+          () => reject(options.signal?.reason),
+          { once: true },
+        ),
+      );
+    const answer = byCapability[capability];
+    if (!answer || answer instanceof Error)
+      throw answer ?? new Error(`no answer for ${capability}`);
+    return answer;
+  });
+}
 
 let id: string;
 beforeEach(async () => {
@@ -261,8 +283,9 @@ describe("SearXNG research", () => {
     );
     expect(queries()).toHaveLength(6);
     // Ten pages at Deep, and the second search's result among the first two.
+    // None can be read, so the three after them are tried too.
     const fetched = vi.mocked(safeFetch).mock.calls.map(([url]) => url);
-    expect(fetched).toHaveLength(10);
+    expect(fetched).toHaveLength(13);
     expect(fetched.slice(0, 2)).toEqual([
       "https://a.example/0",
       "https://b.example/0",
@@ -347,11 +370,11 @@ describe("SearXNG research", () => {
         result(
           `https://a.example/${index}`,
           `Greg Whitlock ${index}`,
-          `Snippet ${index} about Greg Whitlock.`,
+          `Snippet ${index} about Greg Whitlock. Northwind Partners.`,
         ),
     );
     pages["https://a.example/0"] =
-      "<html><body><p>The page of Greg Whitlock.</p></body></html>";
+      "<html><body><p>The page of Greg Whitlock. Northwind Partners.</p></body></html>";
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
     await new SearxngStrategy().execute(
       enrichmentContact(scope(), id),
@@ -365,6 +388,304 @@ describe("SearXNG research", () => {
     expect(reading.indexOf("SOURCE: https://a.example/4")).toBeLessThan(
       reading.indexOf("SOURCE: https://a.example/5"),
     );
+  });
+
+  it("links each fact to the page whose address the reading names, on a site with two pages", async () => {
+    answers['"Greg Whitlock" Northwind Partners'] = [
+      result(
+        "https://profiles.example/in/greg-whitlock",
+        "Greg Whitlock - Associate",
+        "Greg Whitlock. Associate at Northwind Partners.",
+      ),
+      result(
+        "https://profiles.example/posts/greg-whitlock-award",
+        "Greg Whitlock wins the Example Award",
+        "Greg Whitlock of Northwind Partners won the Example Award.",
+      ),
+    ];
+    byCapability.deep = reply(
+      [
+        "- Current role: Associate, Northwind Partners [https://profiles.example/in/greg-whitlock]",
+        "- Award: Example Award [https://www.profiles.example/posts/greg-whitlock-award/]",
+        "- Location: Austin, TX [profiles.example]",
+      ].join("\n"),
+      "mock-reader",
+    );
+    byCapability.quick = reply("{}", "mock-extractor");
+    const research = await new SearxngStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!;
+    expect(reading.prompt).toContain("full SOURCE address of its page");
+    // The award is on the second page of the site, and the card names the
+    // site, not the address.
+    expect(
+      research.findings?.map((finding) => [finding.site, finding.url]),
+    ).toEqual([
+      ["profiles.example", "https://profiles.example/in/greg-whitlock"],
+      [
+        "profiles.example",
+        "https://profiles.example/posts/greg-whitlock-award",
+      ],
+      // A site alone: the first page read on it.
+      ["profiles.example", "https://profiles.example/in/greg-whitlock"],
+    ]);
+  });
+
+  it("reads the next page that names the person when one cannot be read", async () => {
+    answers['"Greg Whitlock" Northwind Partners'] = Array.from(
+      { length: 8 },
+      (_, index) =>
+        result(
+          `https://site${index}.example/greg`,
+          `Greg Whitlock ${index}`,
+          `Snippet ${index} about Greg Whitlock. Northwind Partners.`,
+        ),
+    );
+    // The first four turn robots away, as LinkedIn does with its 999.
+    for (let index = 4; index < 8; index++)
+      pages[`https://site${index}.example/greg`] =
+        `<html><body><p>Page ${index} of Greg Whitlock. Northwind Partners.</p></body></html>`;
+    byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
+    await new SearxngStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!.prompt;
+    for (let index = 4; index < 8; index++)
+      expect(reading).toContain(`Page ${index} of Greg Whitlock.`);
+    // The pages that could not be read keep their snippets.
+    expect(reading).toContain("Snippet 0 about Greg Whitlock.");
+    // Five, then the four still wanted.
+    expect(safeFetch).toHaveBeenCalledTimes(8);
+  });
+
+  it("reads in parts that fit a local model's window, and keeps the facts of every part that answers", async () => {
+    // A custom endpoint whose model reports no window: 4,096 tokens.
+    const hosted = vi.mocked(resolveCapability).getMockImplementation()!;
+    vi.mocked(resolveCapability).mockImplementation((capability) => ({
+      capability,
+      providerId: "custom:local",
+      model: "small-model",
+      modelClass: "flash",
+      provider: {} as never,
+    }));
+    try {
+      answers['"Greg Whitlock" Northwind Partners'] = Array.from(
+        { length: 5 },
+        (_, index) =>
+          result(
+            `https://site${index}.example/greg`,
+            `Greg Whitlock ${index}`,
+            "Greg Whitlock",
+          ),
+      );
+      for (let index = 0; index < 5; index++)
+        pages[`https://site${index}.example/greg`] =
+          `<html><body><p>Greg Whitlock of Northwind Partners. ${`Greg Whitlock worked at Firm ${index}. `.repeat(200)}</p></body></html>`;
+      let part = 0;
+      vi.mocked(generateFor).mockImplementation(async (capability) => {
+        if (capability !== "deep") return reply("{}", "small-model");
+        part += 1;
+        if (part === 2) throw new Error("The local model timed out");
+        return reply(
+          `- Past role: Firm, part ${part} [https://site0.example/greg]`,
+          "small-model",
+        );
+      });
+      const research = await new SearxngStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+      );
+      const readings = calls().filter((call) => call.capability === "deep");
+      // Five pages of 6,000 characters: three parts, one page each.
+      expect(readings).toHaveLength(3);
+      for (const reading of readings) {
+        expect(reading.maxOutputTokens).toBe(1_024);
+        // The prompt and the answer fit 4,096 tokens, at 3 characters a token.
+        expect(reading.prompt.length).toBeLessThanOrEqual((4_096 - 1_024) * 3);
+      }
+      // The part that failed costs its own facts only.
+      expect(research.findings?.map((finding) => finding.text)).toEqual([
+        "Firm, part 1",
+        "Firm, part 3",
+      ]);
+      // The extraction leaves its prompt room in the window too.
+      const extraction = calls().find((call) => call.capability === "quick")!;
+      expect(extraction.maxOutputTokens).toBeLessThanOrEqual(
+        4_096 - Math.ceil(extraction.prompt.length / 3),
+      );
+    } finally {
+      vi.mocked(resolveCapability).mockImplementation(hosted);
+    }
+  });
+
+  it("shortens the pages read in full on a small window, so the snippets are read too", async () => {
+    const hosted = vi.mocked(resolveCapability).getMockImplementation()!;
+    vi.mocked(resolveCapability).mockImplementation((capability) => ({
+      capability,
+      providerId: "custom:local",
+      model: "small-model",
+      modelClass: "flash",
+      provider: {} as never,
+    }));
+    try {
+      // Three profiles that turn robots away, and three long pages that load.
+      answers['"Greg Whitlock" Northwind Partners'] = [
+        ...Array.from({ length: 3 }, (_, index) =>
+          result(
+            `https://profiles.example/in/greg-whitlock-${index}`,
+            `Greg Whitlock ${index}`,
+            `Profile snippet ${index}: Greg Whitlock, Associate at Northwind Partners.`,
+          ),
+        ),
+        ...Array.from({ length: 3 }, (_, index) =>
+          result(
+            `https://site${index}.example/greg`,
+            `Greg Whitlock page ${index}`,
+            "Greg Whitlock",
+          ),
+        ),
+      ];
+      for (let index = 0; index < 3; index++)
+        pages[`https://site${index}.example/greg`] =
+          `<html><body><p>${`Greg Whitlock at Northwind Partners, page ${index}. `.repeat(200)}</p></body></html>`;
+      byCapability.deep = reply(NO_MATCHING_PAGES, "small-model");
+      await new SearxngStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+      );
+      const read = calls()
+        .filter((call) => call.capability === "deep")
+        .map((call) => call.prompt)
+        .join("\n");
+      for (let index = 0; index < 3; index++) {
+        expect(read).toContain(`Profile snippet ${index}`);
+        expect(read).toContain(
+          `Greg Whitlock at Northwind Partners, page ${index}.`,
+        );
+      }
+    } finally {
+      vi.mocked(resolveCapability).mockImplementation(hosted);
+    }
+  });
+
+  it("leaves out another person's LinkedIn profile when the records hold the contact's own", async () => {
+    const withProfile = (
+      await request(app)
+        .post("/api/contacts")
+        .send({
+          name: "Rowan Vale",
+          company: "Northwind Partners",
+          socialLinks: [
+            {
+              platform: "linkedin",
+              url: "https://www.linkedin.com/in/rowan-vale-1a2b",
+            },
+          ],
+        })
+    ).body.id;
+    answers['"Rowan Vale" Northwind Partners'] = [
+      result(
+        "https://www.linkedin.com/in/rowan-vale-1a2b",
+        "Rowan Vale - Northwind Partners",
+        "Own profile: Rowan Vale, Associate at Northwind Partners.",
+      ),
+      result(
+        "https://uk.linkedin.com/in/rowan-vale-9z9z",
+        "Rowan Vale - Kestrel Logistics",
+        "Other profile: Rowan Vale, Director at Kestrel Logistics.",
+      ),
+      result(
+        "https://news.example/rowan-vale",
+        "Rowan Vale joins Northwind",
+        "News: Rowan Vale joins Northwind Partners.",
+      ),
+    ];
+    byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
+    await new SearxngStrategy().execute(
+      enrichmentContact(scope(), withProfile),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!.prompt;
+    expect(reading).toContain("Own profile: Rowan Vale");
+    expect(reading).toContain("News: Rowan Vale joins");
+    expect(reading).not.toContain("Other profile");
+    expect(safeFetch).not.toHaveBeenCalledWith(
+      "https://uk.linkedin.com/in/rowan-vale-9z9z",
+      expect.anything(),
+    );
+  });
+
+  it("reads only the pages and snippets that share a detail with the records", async () => {
+    answers['"Greg Whitlock" Northwind Partners'] = [
+      result(
+        "https://kestrel.example/greg-whitlock",
+        "Greg Whitlock | Kestrel Freight",
+        "Greg Whitlock joined Kestrel Freight in Denver.",
+      ),
+      result(
+        "https://homes.example/sale",
+        "Home sold to Greg Whitlock",
+        "Greg Whitlock bought a house on Elm Street.",
+      ),
+      result(
+        "https://northwind.example/team",
+        "Our team",
+        "Greg Whitlock, Associate at Northwind Partners.",
+      ),
+    ];
+    pages["https://kestrel.example/greg-whitlock"] =
+      "<html><body><p>Greg Whitlock, partner at Kestrel Freight, Denver.</p></body></html>";
+    byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
+    await new SearxngStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!.prompt;
+    expect(reading).toContain("Associate at Northwind Partners");
+    expect(reading).not.toContain("Kestrel Freight");
+    expect(reading).not.toContain("Elm Street");
+  });
+
+  it("records no public information, with no model call, when no result shares a detail", async () => {
+    answers['"Greg Whitlock" Northwind Partners'] = [
+      result(
+        "https://homes.example/sale",
+        "Home sold to Greg Whitlock",
+        "Greg Whitlock bought a house on Elm Street.",
+      ),
+    ];
+    const research = await new SearxngStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+    );
+    expect(research).toMatchObject({
+      outcome: "no-public-info",
+      models: ["searxng"],
+    });
+    expect(generateFor).not.toHaveBeenCalled();
+  });
+
+  it("reads every result that names a person whose records hold the name alone", async () => {
+    const nameOnly = (
+      await request(app).post("/api/contacts").send({ name: "Rowan Vale" })
+    ).body.id;
+    answers['"Rowan Vale"'] = [
+      result(
+        "https://homes.example/sale",
+        "Home sold to Rowan Vale",
+        "Rowan Vale bought a house on Elm Street.",
+      ),
+    ];
+    byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
+    await new SearxngStrategy().execute(
+      enrichmentContact(scope(), nameOnly),
+      "research prompt",
+    );
+    const reading = calls().find((call) => call.capability === "deep")!.prompt;
+    expect(reading).toContain("Elm Street");
   });
 
   it("fails when the reading reports no facts and no no-match", async () => {
@@ -481,6 +802,57 @@ describe("research with both searches", () => {
     expect(calls().some((call) => call.capability === "quick")).toBe(false);
   });
 
+  it("stops the research model's search at its own deadline, and stands on SearXNG", async () => {
+    firmResults();
+    byCapability.deep = reply(READ_LINES, "mock-reader");
+    byCapability.quick = reply("{}", "mock-extractor");
+    researchHangs();
+    const research = await new CombinedStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+      undefined,
+      // Half a second for each search, after the extraction's time.
+      { timeoutMs: EXTRACTION_RESERVE_MS + 500 },
+    );
+    expect(research).toMatchObject({
+      outcome: "found",
+      models: ["searxng", "mock-reader", "mock-extractor"],
+    });
+    expect(research.findings).toHaveLength(3);
+  });
+
+  it("says which search ran out of time when neither found facts", async () => {
+    researchHangs();
+    await expect(
+      new CombinedStrategy().execute(
+        enrichmentContact(scope(), id),
+        "research prompt",
+        undefined,
+        { timeoutMs: EXTRACTION_RESERVE_MS + 200 },
+      ),
+    ).rejects.toMatchObject({
+      code: "RESEARCH_NO_EVIDENCE",
+      message: expect.stringMatching(
+        /Research model: The research model's search took more than 0 s\./,
+      ),
+    });
+  });
+
+  it("still stops at once when the run is cancelled", async () => {
+    firmResults();
+    byCapability.deep = reply(READ_LINES, "mock-reader");
+    researchHangs();
+    const controller = new AbortController();
+    const run = new CombinedStrategy().execute(
+      enrichmentContact(scope(), id),
+      "research prompt",
+      controller.signal,
+      { timeoutMs: 120_000 },
+    );
+    setTimeout(() => controller.abort(new Error("Cancelled")), 20);
+    await expect(run).rejects.toThrow("Cancelled");
+  });
+
   it("fails with both reasons when neither search has facts or a no-match", async () => {
     byCapability.research = new Error("Network 500");
     await expect(
@@ -544,6 +916,54 @@ describe("choosing how to search, through the API", () => {
     });
     // The research model's search never ran.
     expect(calls().some((call) => call.capability === "research")).toBe(false);
+  });
+});
+
+describe("the account's Search with choice", () => {
+  afterEach(async () => {
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ researchSource: "provider" });
+    vi.restoreAllMocks();
+  });
+
+  /** Start research for the contact, and hand back the strategy its batch got. */
+  async function started(body: Record<string, unknown> = {}) {
+    jobQueue.__resetForTests();
+    const created = vi.spyOn(jobQueue, "createBatch");
+    vi.spyOn(jobQueue, "processBatch").mockResolvedValue(undefined);
+    const response = await request(app)
+      .post("/api/ai-search")
+      .send({ contactIds: [id], ...body });
+    expect(response.status).toBe(200);
+    const strategy = created.mock.calls[0][2];
+    created.mockRestore();
+    return strategy;
+  }
+
+  it("is the strategy of a start that names none, and a start that names one keeps it", async () => {
+    expect(await started()).toBe("two-pass");
+    const saved = await request(app)
+      .patch("/api/auth/preferences")
+      .send({ researchSource: "combined" });
+    expect(saved.body.preferences.researchSource).toBe("combined");
+    expect(await started()).toBe("combined");
+    expect(await started({ strategy: "searxng" })).toBe("searxng");
+  });
+
+  it("gives way to the default while it cannot run, and the start still runs", async () => {
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ researchSource: "searxng" });
+    deleteSetting(SETTING_KEYS.aiSearxng);
+    expect(await started()).toBe("two-pass");
+  });
+
+  it("takes only the three sources", async () => {
+    const refused = await request(app)
+      .patch("/api/auth/preferences")
+      .send({ researchSource: "google" });
+    expect(refused.status).toBe(400);
   });
 });
 

@@ -11,6 +11,9 @@
 //
 // `startSearch` keeps one identity for the provider's life, so the memoised
 // context value does not change on every render of the provider.
+//
+// Every start searches the way the account chose under Search with, while
+// research can search more than one way.
 // =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +25,10 @@ const toastMock = vi.hoisted(() =>
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 /** What research resolves to in AI settings: a provider id, or nothing. */
-const settings = vi.hoisted(() => ({ research: "gemini" as string | null }));
+const settings = vi.hoisted(() => ({
+  research: "gemini" as string | null,
+  searxng: false,
+}));
 vi.mock("../../../../src/api/aiSettings", () => ({
   useAISettings: () => ({
     data:
@@ -30,9 +36,30 @@ vi.mock("../../../../src/api/aiSettings", () => ({
         ? undefined
         : {
             capabilities: {
-              research: { resolved: { providerId: settings.research } },
+              research: {
+                resolved: {
+                  providerId: settings.research,
+                  providerLabel: "Gemini",
+                },
+              },
             },
+            searxng: settings.searxng,
           },
+  }),
+}));
+
+/** The account's preferences, and the setter the provider saves through. */
+const prefs = vi.hoisted(() => ({
+  values: { researchSource: "provider" as "provider" | "searxng" | "combined" },
+  setPreference: vi.fn(),
+}));
+vi.mock("../../../../src/contexts/PreferencesContext", async (original) => ({
+  ...(await original<
+    typeof import("../../../../src/contexts/PreferencesContext")
+  >()),
+  usePreferences: () => ({
+    preferences: prefs.values,
+    setPreference: prefs.setPreference,
   }),
 }));
 
@@ -93,6 +120,8 @@ afterEach(() => {
   vi.clearAllMocks();
   start.isPending = false;
   settings.research = "gemini";
+  settings.searxng = false;
+  prefs.values.researchSource = "provider";
 });
 
 describe("the depths' figures", () => {
@@ -184,5 +213,58 @@ describe("startSearch", () => {
     const starting = seen[seen.length - 1];
     expect(starting.isStarting).toBe(true);
     expect(starting.startSearch).toBe(first.startSearch);
+  });
+});
+
+describe("the account's Search with choice", () => {
+  it("names the saved strategy on every start while research can search two ways", () => {
+    settings.searxng = true;
+    prefs.values.researchSource = "combined";
+    const { latest } = mount();
+    expect(latest()).toMatchObject({
+      offersSource: true,
+      researchSource: "combined",
+    });
+    act(() => latest().startSearch(["c1"], { depth: "deep" }));
+    expect(start.mutate).toHaveBeenCalledWith(
+      { contactIds: ["c1"], depth: "deep", strategy: "combined" },
+      expect.any(Object),
+    );
+    // The provider's search is named too, so a start never waits on a save.
+    prefs.values.researchSource = "provider";
+    const again = mount().latest();
+    act(() => again.startSearch(["c1"]));
+    expect(start.mutate.mock.lastCall?.[0]).toMatchObject({
+      strategy: "two-pass",
+    });
+  });
+
+  it("names none while there is one way to search, whatever was saved", () => {
+    prefs.values.researchSource = "searxng";
+    const { latest } = mount();
+    expect(latest()).toMatchObject({
+      offersSource: false,
+      researchSource: "provider",
+    });
+    act(() => latest().startSearch(["c1"]));
+    expect(start.mutate.mock.lastCall?.[0].strategy).toBeUndefined();
+  });
+
+  it("lets a start that names a strategy keep it", () => {
+    settings.searxng = true;
+    prefs.values.researchSource = "combined";
+    const { latest } = mount();
+    act(() => latest().startSearch(["c1"], { strategy: "searxng" }));
+    expect(start.mutate.mock.lastCall?.[0].strategy).toBe("searxng");
+  });
+
+  it("saves a choice as the account's preference", () => {
+    settings.searxng = true;
+    const { latest } = mount();
+    act(() => latest().setResearchSource("searxng"));
+    expect(prefs.setPreference).toHaveBeenCalledWith(
+      "researchSource",
+      "searxng",
+    );
   });
 });

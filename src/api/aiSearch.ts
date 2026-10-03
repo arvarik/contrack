@@ -30,8 +30,11 @@ export const useStartAISearch = () => {
       contactIds: string[];
       /** How thoroughly to research. The server's default is "standard". */
       depth?: ResearchDepth;
-      /** SearXNG alone, or both. The research model's own search when absent. */
-      strategy?: "searxng" | "combined";
+      /**
+       * The research model's own search, SearXNG alone, or both. The
+       * account's Search with choice when absent.
+       */
+      strategy?: "two-pass" | "searxng" | "combined";
     }) => {
       // `apiFetch` throws `ApiError` for any non-2xx, with the message read
       // out of the standard `{ error: { code, message } }` envelope, so the

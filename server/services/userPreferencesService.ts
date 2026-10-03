@@ -25,6 +25,10 @@
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import { CADENCE_DAYS } from "../../shared/cadence.ts";
+import {
+  DEFAULT_RESEARCH_SOURCE,
+  researchSourceSchema,
+} from "../../shared/researchSource.ts";
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -145,6 +149,11 @@ export const preferenceSchemas = {
   dedupeOnCreate: z.boolean(),
   dedupeOnImport: z.boolean(),
   autoEnrich: z.boolean(),
+  /**
+   * Where research searches the web: the research model's own search,
+   * SearXNG, or both. It counts only while SearXNG is set.
+   */
+  researchSource: researchSourceSchema,
 } as const;
 
 export type PreferenceKey = keyof typeof preferenceSchemas;
@@ -188,6 +197,7 @@ const DEFAULTS: Preferences = {
   dedupeOnCreate: true,
   dedupeOnImport: true,
   autoEnrich: false,
+  researchSource: DEFAULT_RESEARCH_SOURCE,
 };
 
 /** A PATCH body: any subset, and nothing else. */

@@ -473,7 +473,7 @@ describe("the reading of pages Contrack fetched", () => {
     expect(prompt).toContain("- <Topic>: <fact> [<site>]");
     expect(prompt).toContain(`reply with exactly: ${NO_MATCHING_PAGES}`);
     expect(prompt).toContain(
-      "Name each fact's site as the host of its SOURCE address",
+      "End each fact with the full SOURCE address of its page in brackets",
     );
     expect(prompt).toMatch(
       /<untrusted_data label="web pages">\nSOURCE: https:\/\/northwind\.example\/people\/rowan-vale\n/,
@@ -548,6 +548,20 @@ describe("parseFindings", () => {
 
   it("finds nothing in the no-match reply", () => {
     expect(parseFindings(NO_MATCHING_PAGES)).toEqual([]);
+  });
+
+  it("leaves out a line that says a page gave nothing", () => {
+    expect(
+      parseFindings(
+        [
+          "- Education: None explicitly stated [example.com]",
+          "- Hometown: Not explicitly stated",
+          "- Location: not specified.",
+          "- Email: unknown",
+          "- Other: None of the pages lists a phone, but one lists a fax [example.com]",
+        ].join("\n"),
+      ).map((finding) => finding.topic),
+    ).toEqual(["Other"]);
   });
 
   it("reads the site when a line ends in citation markers or several brackets", () => {
