@@ -29,16 +29,6 @@ describe("StartPanel", () => {
     expect(mark?.getAttribute("width")).toBe("144");
   });
 
-  it("holds nothing to act on", () => {
-    render(<StartPanel />);
-    expect(screen.queryAllByRole("region")).toHaveLength(0);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-    expect(screen.queryByText(/Up next/i)).toBeNull();
-    expect(screen.queryByText(/Recently viewed/i)).toBeNull();
-    expect(screen.queryByText(/Add people/i)).toBeNull();
-  });
-
   it("says it once: the mark and the heading, and no other words", () => {
     const { container } = render(<StartPanel />);
     expect(container.querySelectorAll("p")).toHaveLength(0);

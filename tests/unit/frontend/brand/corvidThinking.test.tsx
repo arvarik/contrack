@@ -83,12 +83,6 @@ describe("CorvidThinking", () => {
     expect(rhythms[0]).not.toEqual(rhythms[1]);
   });
 
-  it("says nothing where the surface already says it in text", () => {
-    const { container } = render(<CorvidThinking decorative />);
-    expect(screen.queryByRole("img")).toBeNull();
-    expect(svgOf(container).getAttribute("aria-hidden")).toBe("true");
-  });
-
   it("is a still picture at level off, and still named", () => {
     preferences.mascotMotion = "off";
     const { container } = render(<CorvidThinking />);

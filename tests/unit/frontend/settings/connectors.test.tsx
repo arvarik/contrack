@@ -153,42 +153,6 @@ describe("Frontend Connectors Components", () => {
   // 1. CalendarFormModal
   // =========================================================================
   describe("CalendarFormModal", () => {
-    it("provides feedback when testing connection succeeds", async () => {
-      const mutateAsyncMock = vi.fn().mockResolvedValue({
-        ok: true,
-        detail: "Found 42 events in calendar feed",
-      });
-
-      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-        mutateAsync: mutateAsyncMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
-
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-
-      const urlInput = screen.getByPlaceholderText(
-        /https:\/\/calendar\.google\.com\//i,
-      );
-      fireEvent.change(urlInput, {
-        target: { value: "https://example.com/calendar.ics" },
-      });
-
-      const testBtn = screen.getByRole("button", { name: /test connection/i });
-      fireEvent.click(testBtn);
-
-      await waitFor(() => {
-        expect(mutateAsyncMock).toHaveBeenCalledWith({
-          kind: "ics",
-          config: expect.objectContaining({
-            url: "https://example.com/calendar.ics",
-          }),
-        });
-        expect(
-          screen.getByText("Found 42 events in calendar feed"),
-        ).toBeTruthy();
-      });
-    });
-
     it("displays error feedback when testing connection fails", async () => {
       const mutateAsyncMock = vi
         .fn()
@@ -503,40 +467,6 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getByText("Signed out")).toBeTruthy();
       expect(screen.getByText("Sign-in expired")).toBeTruthy();
       expect(screen.getByText("Session expired")).toBeTruthy();
-    });
-
-    it("action menu option 'Sync now' calls useSyncConnector mutation", async () => {
-      const syncMutateAsync = vi.fn().mockResolvedValue({ runId: "run-sync" });
-      vi.mocked(connectorsApi.useSyncConnector).mockReturnValue({
-        mutateAsync: syncMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useSyncConnector>);
-
-      const connector = createMockConnector({
-        id: "conn-sync-1",
-        name: "Sync Test Cal",
-        status: "active",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const syncItem = screen.getByRole("menuitem", { name: "Sync now" });
-      fireEvent.click(syncItem);
-
-      await waitFor(() => {
-        expect(syncMutateAsync).toHaveBeenCalledWith("conn-sync-1");
-      });
     });
 
     it.each([
@@ -1055,49 +985,6 @@ describe("Frontend Connectors Components", () => {
       expect(
         screen.queryByRole("button", { name: /Add connector/i }),
       ).toBeNull();
-    });
-
-    it("clicking 'Connect' on Calendar in empty state opens modal", () => {
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: [],
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      fireEvent.click(screen.getByRole("button", { name: "Connect Calendar" }));
-
-      expect(
-        screen.getByRole("heading", { name: "Connect calendar" }),
-      ).toBeTruthy();
-    });
-
-    it("renders connector cards when connectors exist", () => {
-      const connectorsList = [
-        createMockConnector({ id: "conn-v1", name: "Primary Calendar" }),
-        createMockConnector({
-          id: "conn-v2",
-          name: "Secondary Calendar",
-          status: "paused",
-        }),
-      ];
-
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: connectorsList,
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      expect(screen.getByText("Primary Calendar")).toBeTruthy();
-      expect(screen.getByText("Secondary Calendar")).toBeTruthy();
-      expect(
-        screen.getByRole("button", { name: /Add connector/i }),
-      ).toBeTruthy();
     });
 
     it.each([

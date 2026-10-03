@@ -87,11 +87,6 @@ function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
   return false;
 }
 
-/** Reset last recorded search. For testing only. */
-export function resetLastRecorded(): void {
-  lastRecorded = null;
-}
-
 /**
  * Record a completed search question.
  *

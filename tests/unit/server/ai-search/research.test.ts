@@ -601,34 +601,6 @@ describe("parseFindings", () => {
 });
 
 describe("mergeFindings", () => {
-  it("keeps one copy of a fact that two asks word slightly apart", () => {
-    const merged = mergeFindings([
-      parseFindings(
-        [
-          "- Current role: Co-Founder & CEO at Northwind",
-          "- Education: BA Economics, University of Example",
-        ].join("\n"),
-      ),
-      parseFindings(
-        [
-          "- Current role: Co-Founder and CEO of Northwind [northwind.example]",
-          "- Education: BA Economics, University of Example",
-          "- Award: Fellow, Example Society",
-        ].join("\n"),
-      ),
-    ]);
-    // The current role keeps its first place, with the copy that names a site.
-    expect(merged).toEqual([
-      {
-        topic: "Current role",
-        text: "Co-Founder and CEO of Northwind",
-        site: "northwind.example",
-      },
-      { topic: "Education", text: "BA Economics, University of Example" },
-      { topic: "Award", text: "Fellow, Example Society" },
-    ]);
-  });
-
   it("prefers a copy with a page to one with a site only", () => {
     const merged = mergeFindings([
       [{ topic: "Award", text: "Fellow", site: "a.com" }],

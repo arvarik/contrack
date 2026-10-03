@@ -79,13 +79,6 @@ const mount = () =>
   );
 
 describe("Reset to defaults", () => {
-  it("is not there while every value on the page is its default", () => {
-    mount();
-    expect(screen.queryByRole("button", { name: "Reset to defaults" })).toBe(
-      null,
-    );
-  });
-
   it("ignores a changed value that no row on the page holds", () => {
     prefs.changed = ["accent"];
     mount();

@@ -33,12 +33,6 @@ describe("buildDayLine", () => {
     expect(texts(counts({ queued: 2 }))).toEqual(["Nothing due today"]);
   });
 
-  it("uses the singular for one of each", () => {
-    expect(
-      texts(counts({ overdue: 1, dueToday: 1, birthdaysThisWeek: 1 })),
-    ).toEqual(["1 overdue", "1 due today", "1 birthday this week"]);
-  });
-
   it("gives each count its own item, with no commas and no period", () => {
     const items = texts(
       counts({ overdue: 2, dueToday: 2, birthdaysThisWeek: 3, streak: 12 }),

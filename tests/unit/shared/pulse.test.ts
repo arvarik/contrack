@@ -15,36 +15,37 @@ describe("pulse.streak computeStreak", () => {
     expect(res).toEqual({ current: 0, best: 0, lastDay: null });
   });
 
-  it("counts consecutive days ending today as current", () => {
-    const interactions = [
-      { date: local(9, 15, 10), type: "note" },
-      { date: local(9, 16, 12), type: "call" },
-      { date: local(9, 17, 9), type: "meeting" },
-    ];
-    const res = computeStreak(interactions, now);
-    expect(res).toEqual({ current: 3, best: 3, lastDay: "2026-09-17" });
-  });
-
-  it("treats consecutive days ending yesterday as still current", () => {
-    const interactions = [
-      { date: local(9, 14, 10), type: "note" },
-      { date: local(9, 15, 10), type: "note" },
-      { date: local(9, 16, 12), type: "call" },
-    ];
-    const res = computeStreak(interactions, now);
-    expect(res).toEqual({ current: 3, best: 3, lastDay: "2026-09-16" });
-  });
-
-  it("resets current streak when there is a gap before yesterday", () => {
-    const interactions = [
-      { date: local(9, 13, 10), type: "note" },
-      { date: local(9, 14, 10), type: "note" },
-      { date: local(9, 15, 12), type: "call" },
-      // 2026-09-16 (yesterday) is missing
-      // 2026-09-17 (today) is missing
-    ];
-    const res = computeStreak(interactions, now);
-    expect(res).toEqual({ current: 0, best: 3, lastDay: "2026-09-15" });
+  it.each([
+    [
+      "counts consecutive days ending today as current",
+      [
+        { date: local(9, 15, 10), type: "note" },
+        { date: local(9, 16, 12), type: "call" },
+        { date: local(9, 17, 9), type: "meeting" },
+      ],
+      { current: 3, best: 3, lastDay: "2026-09-17" },
+    ],
+    [
+      "treats consecutive days ending yesterday as still current",
+      [
+        { date: local(9, 14, 10), type: "note" },
+        { date: local(9, 15, 10), type: "note" },
+        { date: local(9, 16, 12), type: "call" },
+      ],
+      { current: 3, best: 3, lastDay: "2026-09-16" },
+    ],
+    [
+      // Yesterday (2026-09-16) and today (2026-09-17) are missing.
+      "resets current streak when there is a gap before yesterday",
+      [
+        { date: local(9, 13, 10), type: "note" },
+        { date: local(9, 14, 10), type: "note" },
+        { date: local(9, 15, 12), type: "call" },
+      ],
+      { current: 0, best: 3, lastDay: "2026-09-15" },
+    ],
+  ])("%s", (_what, interactions, streak) => {
+    expect(computeStreak(interactions, now)).toEqual(streak);
   });
 
   it("keeps the best streak across history even if current streak is shorter or 0", () => {

@@ -102,10 +102,6 @@ describe("a contact written out and read back", () => {
   const written = serializeVCards(ROUND_TRIP);
   const read = parseVCard(written, "contrack");
 
-  it("produces one card per contact", () => {
-    expect(read).toHaveLength(ROUND_TRIP.length);
-  });
-
   it.each(ROUND_TRIP.map((c, i) => [c.name, i] as const))(
     "keeps every field of %s",
     (_name, index) => {

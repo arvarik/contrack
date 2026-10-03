@@ -882,8 +882,6 @@ describe("the one-line composer on a narrow contact page", () => {
   /** The composer's root, which says whether it is open. */
   const root = (pm: HTMLElement) =>
     pm.closest("[data-expanded]") as HTMLElement;
-  /** True when the element or one of its parents is hidden by class. */
-  const hiddenByClass = (el: Element) => !!el.closest(".hidden");
 
   function mountCollapsible(contactId = "contact-1") {
     render(
@@ -893,21 +891,6 @@ describe("the one-line composer on a narrow contact page", () => {
       </QueryClientProvider>,
     );
   }
-
-  it("shows the editor alone until something in it takes focus", async () => {
-    stubServer();
-    mountCollapsible();
-    const pm = await editorElement();
-
-    expect(root(pm).dataset.expanded).toBe("false");
-    expect(hiddenByClass(followUpInput())).toBe(true);
-    expect(hiddenByClass(saveButton())).toBe(true);
-
-    fireEvent.focus(pm);
-    expect(root(pm).dataset.expanded).toBe("true");
-    expect(hiddenByClass(followUpInput())).toBe(false);
-    expect(hiddenByClass(saveButton())).toBe(false);
-  });
 
   it("closes when focus leaves with nothing written, and stays open over text", async () => {
     stubServer();

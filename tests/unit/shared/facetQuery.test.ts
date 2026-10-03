@@ -9,31 +9,13 @@ import {
 // can read facets typed into Ask. These cases moved with it unchanged.
 
 describe("parseFilterValue", () => {
-  it("parses near:London/50km to km: 50", () => {
-    const filter = parseFilterValue("near", "London/50km");
-    expect(filter).toEqual({
-      field: "near",
-      value: "London",
-      km: 50,
-    });
-  });
-
-  it("parses near:London/50 without explicit km suffix to km: 50", () => {
-    const filter = parseFilterValue("near", "London/50");
-    expect(filter).toEqual({
-      field: "near",
-      value: "London",
-      km: 50,
-    });
-  });
-
-  it("defaults near:Paris to 25 km", () => {
-    const filter = parseFilterValue("near", "Paris");
-    expect(filter).toEqual({
-      field: "near",
-      value: "Paris",
-      km: 25,
-    });
+  it.each([
+    // An explicit km suffix, no suffix, and no radius at all.
+    ["London/50km", "London", 50],
+    ["London/50", "London", 50],
+    ["Paris", "Paris", 25],
+  ])("parses near:%s as %s within %i km", (raw, value, km) => {
+    expect(parseFilterValue("near", raw)).toEqual({ field: "near", value, km });
   });
 
   it("removes one pair of double quotes, so the pill reads the words", () => {

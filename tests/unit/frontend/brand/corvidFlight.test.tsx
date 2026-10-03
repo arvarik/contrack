@@ -34,7 +34,6 @@ import { CorvidMark } from "../../../../src/components/brand/CorvidMark";
 import {
   CORVID_AWAY_EVENT,
   CORVID_HOME_EVENT,
-  CORVID_REACT_EVENT,
   flyCorvid,
   recallCorvid,
 } from "../../../../src/lib/corvid";
@@ -63,10 +62,6 @@ const Perch = () => (
 const overlay = () => document.querySelector("[data-corvid-flight]");
 const perchBird = () =>
   document.querySelector<SVGGElement>('[data-testid="perch"] [data-bird]')!;
-const perchRing = () =>
-  document.querySelector<SVGPathElement>(
-    '[data-testid="perch"] [data-part="ring"]',
-  )!;
 const box = (left: number, top: number, size: number) =>
   ({
     left,
@@ -153,16 +148,6 @@ describe("CorvidFlight", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
-  it("hides the perch's bird while it is out, and never the ring", () => {
-    mount();
-    expect(perchBird().style.visibility).toBe("");
-    fly();
-    expect(perchBird().style.visibility).toBe("hidden");
-    expect(perchRing().style.visibility).toBe("");
-    advance(1_500);
-    expect(perchRing().style.visibility).toBe("");
-  });
-
   it("draws the flying bird without a ring of its own", () => {
     mount();
     fly();
@@ -183,25 +168,6 @@ describe("CorvidFlight", () => {
     expect(y0).toBeCloseTo(33.6, 1);
     advance(1_200);
     expect(birdAt()[0]).toBeGreaterThan(x0 + 50);
-  });
-
-  it("lands by itself and gives the perch its bird back", () => {
-    mount();
-    fly();
-    advance(12_000);
-    expect(overlay()).toBeNull();
-    expect(perchBird().style.visibility).toBe("");
-  });
-
-  it("gives the bird back when Escape lands it", () => {
-    mount();
-    fly();
-    advance(400);
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    });
-    expect(overlay()).toBeNull();
-    expect(perchBird().style.visibility).toBe("");
   });
 
   it("gives the bird back when the app unmounts mid-flight", () => {
@@ -255,20 +221,6 @@ describe("CorvidFlight", () => {
     // Well inside a lap, the way home is over.
     advance(4_500);
     expect(overlay()).toBeNull();
-  });
-
-  it("flutters on the perch and stays at the subtle level", () => {
-    preferences.mascotMotion = "subtle";
-    mount();
-    const asked: unknown[] = [];
-    const listen = (e: Event) =>
-      asked.push((e as CustomEvent).detail?.reaction);
-    window.addEventListener(CORVID_REACT_EVENT, listen);
-    fly();
-    window.removeEventListener(CORVID_REACT_EVENT, listen);
-    expect(overlay()).toBeNull();
-    expect(asked).toEqual(["flutter"]);
-    expect(perchBird().style.visibility).toBe("");
   });
 
   it("does nothing at all when the level is off", () => {

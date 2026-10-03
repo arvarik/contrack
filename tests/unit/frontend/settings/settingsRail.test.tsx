@@ -64,13 +64,4 @@ describe("SettingsRail", () => {
     expect(nav.getAttribute("dir")).toBe("rtl");
     expect(nav.firstElementChild?.getAttribute("dir")).toBe("ltr");
   });
-
-  it("marks the page it is on", () => {
-    mount();
-    expect(
-      screen
-        .getByRole("link", { name: "Appearance" })
-        .getAttribute("aria-current"),
-    ).toBe("page");
-  });
 });

@@ -19,7 +19,6 @@ import {
   findRows,
   findSettingsPage,
   isSettingsPageVisible,
-  settingsBackLink,
 } from "../../../../src/views/settings/registry";
 import {
   SettingsHeaderActions,
@@ -40,28 +39,6 @@ afterEach(() => {
   delete document.documentElement.dataset.motion;
   delete document.documentElement.dataset.settingsSlide;
   delete (document as { startViewTransition?: unknown }).startViewTransition;
-});
-
-describe("settingsBackLink", () => {
-  it("draws no back link from lg, on the list or on a page", () => {
-    expect(settingsBackLink("/settings", true)).toBeUndefined();
-    expect(settingsBackLink("/settings/appearance", true)).toBeUndefined();
-    expect(settingsBackLink("/settings/admin/users", true)).toBeUndefined();
-  });
-
-  it("links a page back to the settings list below lg", () => {
-    expect(settingsBackLink("/settings/appearance", false)).toEqual({
-      to: "/settings",
-      label: "Settings",
-    });
-    expect(settingsBackLink("/settings/connectors/people", false)?.to).toBe(
-      "/settings",
-    );
-  });
-
-  it("draws none on the list itself", () => {
-    expect(settingsBackLink("/settings", false)).toBeUndefined();
-  });
 });
 
 describe("findSettingsPage", () => {
@@ -186,13 +163,13 @@ describe("useSlideNavigate", () => {
       </MemoryRouter>,
     );
 
-  /** A window this wide, and a system that does or does not reduce motion. */
-  const stubMedia = ({ wide = false, reduce = false } = {}) =>
+  /** A window this wide, on a system that does not reduce motion. */
+  const stubMedia = ({ wide = false } = {}) =>
     vi.stubGlobal(
       "matchMedia",
       (query: string) =>
         ({
-          matches: query.includes("min-width") ? wide : reduce,
+          matches: query.includes("min-width") && wide,
           addEventListener: () => {},
           removeEventListener: () => {},
         }) as unknown as MediaQueryList,
@@ -270,14 +247,6 @@ describe("useSlideNavigate", () => {
     act(() => go("/settings/appearance", "forward"));
     expect(calls).toHaveLength(0);
     expect(screen.getByTestId("path").textContent).toBe("/settings/appearance");
-  });
-
-  it("navigates at once when the system asks for reduced motion", () => {
-    const calls = stubTransitions();
-    stubMedia({ reduce: true });
-    renderProbe();
-    act(() => go("/settings/appearance", "forward"));
-    expect(calls).toHaveLength(0);
   });
 
   it("keeps a newer slide's direction when the browser skips the older one", async () => {

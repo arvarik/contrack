@@ -37,9 +37,7 @@ import type { ConnectorKind, RunStats } from "../../shared/connectors.ts";
 
 export interface IngestOptions {
   ghostThreshold?: number;
-  batchSize?: number; // default 100
   signal?: AbortSignal;
-  onProgress?: (stats: RunStats) => void;
 }
 
 export interface ConnectorInfo {
@@ -52,6 +50,9 @@ export interface ConnectorInfo {
 export interface IngestResult {
   stats: RunStats;
 }
+
+/** Events committed in one transaction. */
+const BATCH_SIZE = 100;
 
 /** Contact avatars: 256 px square, the size processBase64Avatar writes. */
 const PHOTO_SIZE = 256;
@@ -154,7 +155,6 @@ export async function ingestStream(
   selfAddresses: { emails: string[]; phones: string[] },
   options: IngestOptions = {},
 ): Promise<IngestResult> {
-  const batchSize = options.batchSize ?? 100;
   const ghostThreshold =
     options.ghostThreshold ?? Number(connector.config.ghostThreshold ?? 3);
   const signal = options.signal;
@@ -713,7 +713,7 @@ export async function ingestStream(
     }
   }
 
-  // Process stream in batches of `batchSize` per transaction.
+  // Process stream in batches of `BATCH_SIZE` per transaction.
   //
   // The photo download is async and the batch transaction is synchronous, so
   // the copy is made before the event joins a batch. A contact event with a
@@ -741,7 +741,7 @@ export async function ingestStream(
       batch.push(event);
     }
 
-    if (batch.length >= batchSize) {
+    if (batch.length >= BATCH_SIZE) {
       const pending = batch;
       batch = [];
       const currentBatch = await Promise.all(pending);
@@ -752,7 +752,6 @@ export async function ingestStream(
           processSingleEvent(ev, nowIso);
         }
       })();
-      options.onProgress?.(stats);
     }
   }
 
@@ -800,6 +799,5 @@ export async function ingestStream(
     })();
   }
 
-  options.onProgress?.(stats);
   return { stats };
 }

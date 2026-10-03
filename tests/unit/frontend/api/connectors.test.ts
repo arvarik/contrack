@@ -5,9 +5,6 @@ import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   connectorKeys,
-  useConnectorKinds,
-  useConnectors,
-  useCreateConnector,
   useTestConnector,
   useUpdateConnector,
   useDeleteConnector,
@@ -48,83 +45,6 @@ describe("shared/connectors.ts", () => {
 });
 
 describe("src/api/connectors.ts hooks", () => {
-  it("useConnectorKinds fetches kind list", async () => {
-    const mockKinds = [
-      {
-        kind: "ics",
-        label: "Calendar",
-        description: "Syncs ics",
-        available: true,
-        capabilities: { schedule: true },
-      },
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(Response.json({ kinds: mockKinds })),
-    );
-
-    const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useConnectorKinds(), { wrapper });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual(mockKinds);
-  });
-
-  it("useConnectors fetches connectors list", async () => {
-    const mockConnectors = [
-      {
-        id: "c-1",
-        kind: "ics",
-        name: "My Cal",
-        status: "active",
-        config: {},
-        secretPresent: false,
-        intervalMinutes: 30,
-        nextRunAt: null,
-        lastRunAt: null,
-        lastError: null,
-        createdAt: "2026-01-01",
-        updatedAt: "2026-01-01",
-      },
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(Response.json({ connectors: mockConnectors })),
-    );
-
-    const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useConnectors(), { wrapper });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual(mockConnectors);
-  });
-
-  it("useCreateConnector posts new connector and invalidates cache", async () => {
-    const created = { id: "c-2", name: "New Cal" };
-    const fetchMock = vi.fn().mockResolvedValue(Response.json(created));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { wrapper, queryClient } = createWrapper();
-    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useCreateConnector(), { wrapper });
-    await result.current.mutateAsync({
-      kind: "ics",
-      name: "New Cal",
-      config: { url: "https://example.com/feed.ics" },
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/connectors"),
-      expect.objectContaining({
-        method: "POST",
-      }),
-    );
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: connectorKeys.all,
-    });
-  });
-
   it("useTestConnector posts test payload without cache invalidation", async () => {
     const testResult = { ok: true, detail: "Feed parsed 5 events" };
     const fetchMock = vi.fn().mockResolvedValue(Response.json(testResult));

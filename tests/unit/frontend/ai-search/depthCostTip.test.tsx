@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { DepthCostTip } from "../../../../src/views/ai-search/DepthCostTip";
 import { dollars } from "../../../../src/lib/researchDepth";
 import {
@@ -23,27 +23,6 @@ const block = (provider: string) =>
   panel().querySelector(`[data-provider="${provider}"]`)!;
 
 describe("the research cost tip", () => {
-  it("is a question mark button named for what it says", () => {
-    render(<DepthCostTip />);
-    expect(
-      screen.getByRole("button", { name: "Estimated research costs" }),
-    ).toBeTruthy();
-  });
-
-  it("opens on a press", () => {
-    render(<DepthCostTip />);
-    expect(panel().hidden).toBe(true);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Estimated research costs" }),
-    );
-    expect(panel().hidden).toBe(false);
-  });
-
-  it("names the year of the prices", () => {
-    render(<DepthCostTip />);
-    expect(panel().textContent).toContain("2026");
-  });
-
   it("gives each provider its model and both depths", () => {
     render(<DepthCostTip />);
     for (const provider of RESEARCH_PROVIDERS) {

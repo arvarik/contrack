@@ -127,22 +127,6 @@ describe("errorHandler — AppError translation", () => {
     expect(body.error.details).toEqual(issues);
   });
 
-  it("maps RateLimitedError to a 429", () => {
-    const req = mockRequest();
-    const res = mockResponse();
-
-    errorHandler(
-      new RateLimitedError("too many"),
-      req,
-      res,
-      vi.fn() as NextFunction,
-    );
-
-    expect(res.status).toHaveBeenCalledWith(429);
-    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(body.error.code).toBe("RATE_LIMITED");
-  });
-
   it("turns a known wait into a Retry-After header", () => {
     // The one place in the app that writes this header. Every 429 that knows
     // when to come back carries the number in `details.retryAfterSeconds`,

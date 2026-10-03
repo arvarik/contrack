@@ -167,7 +167,6 @@ export async function withTimeout<T>(
 // ---------------------------------------------------------------------------
 
 export interface RetryOptions {
-  maxAttempts?: number;
   baseBackoffMs?: number;
   jitterMs?: number;
   /** Optional caller-cancellation signal — if it aborts we bail out without further retries. */
@@ -183,7 +182,7 @@ export async function withRetry<T>(
   op: (attempt: number) => Promise<T>,
   opts: RetryOptions = {},
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? AI_DEFAULTS.maxAttempts;
+  const maxAttempts = AI_DEFAULTS.maxAttempts;
   const baseBackoffMs = opts.baseBackoffMs ?? AI_DEFAULTS.baseBackoffMs;
   const jitterMs = opts.jitterMs ?? AI_DEFAULTS.jitterMs;
   let lastErr: unknown;

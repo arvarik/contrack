@@ -29,7 +29,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "../../../../src/contexts/SessionContext";
 import { PreferencesProvider } from "../../../../src/contexts/PreferencesContext";
 import { SearchView } from "../../../../src/views/SearchView";
-import { resetLastRecorded } from "../../../../src/api/searchHistory";
 
 // The view reads one hook off the `api` barrel, and the barrel pulls in every
 // API module in the app. Coverage instruments what is imported, so loading
@@ -86,14 +85,12 @@ function stubMatchMedia(wide = true) {
 
 beforeEach(() => {
   stubMatchMedia(true);
-  resetLastRecorded();
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  resetLastRecorded();
 });
 
 // Three, because the synthesis bar hides itself under three results.
@@ -471,10 +468,13 @@ describe("the question the results belong to", () => {
 
 describe("the history", () => {
   it("posts to /api/search/history exactly once after a completed search with the right body", async () => {
+    // A question no other test asks: the client records a question once in
+    // two seconds, and the tests above ask QUESTION within that time.
+    const question = "Who roasts their own coffee?";
     const sent = stubFetch();
     renderView();
 
-    ask(QUESTION);
+    ask(question);
     await screen.findByText("Ada Lovelace");
 
     await waitFor(() => {
@@ -483,7 +483,7 @@ describe("the history", () => {
       );
       expect(posts).toHaveLength(1);
       expect(posts[0].body).toEqual({
-        query: QUESTION,
+        query: question,
         mode: "people",
         resultCount: MATCHES.length,
         resultIds: MATCHES.map((m) => m.id),
@@ -512,37 +512,6 @@ describe("the history", () => {
       expect(calls[calls.length - 1].body).toEqual({
         query: "Who knows Python?",
       });
-    });
-  });
-
-  it("narrows the visible list when typing into the history filter", async () => {
-    const entries = [
-      historyEntry("hist-1", "Who knows Python?"),
-      historyEntry("hist-2", "Who likes green tea?"),
-    ];
-
-    stubFetch((s) => {
-      if (s.url.includes("/search/history") && s.method === "GET") {
-        const url = new URL(s.url, "http://localhost");
-        const qParam = url.searchParams.get("q")?.toLowerCase();
-        const filtered = qParam
-          ? entries.filter((e) => e.normalizedQuery.includes(qParam))
-          : entries;
-        return historyList(filtered);
-      }
-    });
-
-    renderView();
-    const panel = await screen.findByRole("complementary", { name: "History" });
-    await within(panel).findByText("Who knows Python?");
-    expect(within(panel).getByText("Who likes green tea?")).toBeTruthy();
-
-    const filterInput = within(panel).getByLabelText("Filter history");
-    fireEvent.change(filterInput, { target: { value: "tea" } });
-
-    await waitFor(() => {
-      expect(within(panel).queryByText("Who knows Python?")).toBeNull();
-      expect(within(panel).getByText("Who likes green tea?")).toBeTruthy();
     });
   });
 

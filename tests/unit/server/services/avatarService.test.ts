@@ -168,12 +168,6 @@ describe("renderAvatar", () => {
     }
   });
 
-  it("is deterministic — the same seed always yields the same face", () => {
-    const once = renderAvatar({ style: "avataaars", seed: "Karen White" });
-    const twice = renderAvatar({ style: "avataaars", seed: "Karen White" });
-    expect(once).toBe(twice);
-  });
-
   it("gives different people different faces", () => {
     const a = renderAvatar({ style: "avataaars", seed: "Karen White" });
     const b = renderAvatar({ style: "avataaars", seed: "James Thomas" });

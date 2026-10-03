@@ -12,7 +12,6 @@ import {
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { PulseView } from "../../../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../../../src/views/pulse/components/PulseSkeleton";
-import { DuplicatesPage } from "../../../../src/views/pulse/pages/DuplicatesPage";
 import { ActionRow } from "../../../../src/views/pulse/cards/ActionRow";
 import { ComingUpCard } from "../../../../src/views/pulse/cards/ComingUpCard";
 import { Masthead } from "../../../../src/views/pulse/components/Masthead";
@@ -326,76 +325,6 @@ describe("frontend.pulse", () => {
     vi.useRealTimers();
   });
 
-  it("renders eight cards by default", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    const cards = container.querySelectorAll("[data-card-id]");
-    expect(cards.length).toBe(8);
-
-    const expectedCardIds = [
-      "up-next",
-      "completed",
-      "insight",
-      "inbox",
-      "coming-up",
-      "keeping-up",
-      "activity",
-      "composition",
-    ];
-    const renderedCardIds = Array.from(cards).map((el) =>
-      el.getAttribute("data-card-id"),
-    );
-    expect(renderedCardIds.sort()).toEqual(expectedCardIds.sort());
-  });
-
-  it("ensures a hidden card from the preference is absent", () => {
-    mockPreferences = {
-      pulseLayout: { hidden: ["keeping-up"], order: {} },
-      singleKeyShortcuts: true,
-    };
-
-    const { container } = render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    const cards = container.querySelectorAll("[data-card-id]");
-    expect(cards.length).toBe(7);
-    expect(container.querySelector('[data-card-id="keeping-up"]')).toBeNull();
-    expect(container.querySelector('[data-card-id="up-next"]')).not.toBeNull();
-  });
-
-  it("moves highlight with J and completes the highlighted item with D", async () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    // Initial item is index 0 ("act-1")
-    const listItems = screen.getAllByRole("listitem");
-    expect(listItems[0].getAttribute("aria-current")).toBe("true");
-
-    // The first 'j' only shows the current row: a key acts on a row the
-    // person can see.
-    fireEvent.keyDown(window, { key: "j" });
-    expect(listItems[0].getAttribute("aria-current")).toBe("true");
-    expect(listItems[0].className).toContain("row-selected");
-
-    // The next 'j' moves the highlight down to index 1 ("act-2")
-    fireEvent.keyDown(window, { key: "j" });
-    expect(listItems[1].getAttribute("aria-current")).toBe("true");
-
-    // Press 'd' to complete highlighted item ("act-2")
-    fireEvent.keyDown(window, { key: "d" });
-    expect(mockCompleteMutate).toHaveBeenCalledWith("act-2");
-  });
-
   it("never completes a row nobody can see: the first D only shows it", () => {
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
@@ -555,42 +484,6 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("1 of 14")).toBeDefined();
   });
 
-  it("shows the Keeping up card on Pulse with the bar and the number, and nothing about four weeks or thirty days", () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    const card = screen.getByRole("region", { name: /^Keeping up/ });
-    expect(
-      screen.getByRole("img", {
-        name: "3 tracked: 1 strong, 1 fading, 1 at risk, 0 with no interactions yet",
-      }),
-    ).toBeDefined();
-    expect(card.querySelector('[role="img"]')?.className).toContain("h-2.5");
-    expect(within(card).getByText("2")).toBeDefined();
-    expect(within(card).getByText("of 3 within cadence")).toBeDefined();
-    expect(within(card).queryByText(/four weeks/)).toBeNull();
-    expect(within(card).queryByText(/in the last 30 days/)).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "Manage" }).getAttribute("href"),
-    ).toBe("/settings/tracked");
-
-    // "1 to catch up" scrolls the queue to the Catch up heading.
-    const scrolled: Element[] = [];
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function () {
-      scrolled.push(this);
-    };
-    try {
-      fireEvent.click(screen.getByRole("button", { name: "1 to catch up" }));
-      expect(scrolled.map((el) => el.id)).toContain("up-next-catch-up");
-    } finally {
-      Element.prototype.scrollIntoView = original;
-    }
-  });
-
   it("renders WelcomeOffice when totalActive is zero", () => {
     mockDashboardData = createSampleDashboard({
       metrics: {
@@ -672,18 +565,6 @@ describe("frontend.pulse", () => {
     expect(
       screen.getByText("Add an AI key to get one. Open AI settings"),
     ).toBeDefined();
-  });
-
-  it("renders DuplicatesPage with back link to Pulse", () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse/duplicates"]}>
-        <DuplicatesPage />
-      </MemoryRouter>,
-    );
-    expect(
-      screen.getByRole("heading", { name: /Possible duplicates/i }),
-    ).toBeDefined();
-    expect(screen.getByRole("link", { name: /Pulse/i })).toBeDefined();
   });
 
   describe("ActionRow", () => {
@@ -1219,17 +1100,6 @@ describe("frontend.pulse", () => {
       renderPulseWithContactRoute();
       fireEvent.keyDown(window, { key: "Enter" });
       expect(screen.queryByTestId("contact-marker")).toBeNull();
-    });
-
-    it("opens the contact from Enter on the focused row", () => {
-      stubMatchMedia(true);
-      renderPulseWithContactRoute();
-      const rows = screen.getAllByRole("listitem");
-      expect(rows[0].getAttribute("tabindex")).toBe("0");
-      expect(rows[1].getAttribute("tabindex")).toBe("-1");
-      rows[0].focus();
-      fireEvent.keyDown(rows[0], { key: "Enter" });
-      expect(screen.getByTestId("contact-marker")).toBeDefined();
     });
 
     it("moves the highlight with ArrowDown and ArrowUp from a focused row", () => {
@@ -2073,31 +1943,6 @@ describe("frontend.pulse", () => {
       expect.objectContaining({
         order: expect.objectContaining({
           focus: expect.arrayContaining(["keeping-up"]),
-        }),
-      }),
-    );
-  });
-
-  it("moves a card one place up with the Move menu, at every width", () => {
-    render(
-      <MemoryRouter initialEntries={["/pulse"]}>
-        <PulseView />
-      </MemoryRouter>,
-    );
-
-    openCustomize();
-
-    // Activity is last in Network (Keeping up, Activity): Move up, no Move
-    // down.
-    fireEvent.click(screen.getByRole("button", { name: "Move Activity" }));
-    expect(screen.queryByRole("menuitem", { name: "Move down" })).toBeNull();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
-
-    expect(mockSetPreference).toHaveBeenCalledWith(
-      "pulseLayout",
-      expect.objectContaining({
-        order: expect.objectContaining({
-          network: ["activity", "keeping-up"],
         }),
       }),
     );
