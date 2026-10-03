@@ -269,7 +269,7 @@ describe("the autoEnrich preference on contact creation", () => {
     const strat =
       await import("../../server/services/aiSearch/strategies/index.ts");
     const stratSpy = vi
-      .spyOn(strat, "validateEnrichmentStrategy")
+      .spyOn(strat, "preferredEnrichmentStrategy")
       .mockReturnValue("two-pass");
     const batchSpy = vi.spyOn(jobQueue, "createBatch");
     const processSpy = vi
@@ -290,11 +290,20 @@ describe("the autoEnrich preference on contact creation", () => {
       [{ id: res.body.id, name: "Auto Enrich Person" }],
       "two-pass",
     );
+    // The account's Search with choice, the provider's search by default.
+    expect(stratSpy).toHaveBeenCalledWith("provider");
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ researchSource: "combined" });
+    await request(app)
+      .post("/api/contacts")
+      .send({ name: "Auto Enrich Second" });
+    expect(stratSpy).toHaveBeenLastCalledWith("combined");
 
     // Reset preference
     await request(app)
       .patch("/api/auth/preferences")
-      .send({ autoEnrich: false });
+      .send({ autoEnrich: false, researchSource: "provider" });
     stratSpy.mockRestore();
     batchSpy.mockRestore();
     processSpy.mockRestore();
@@ -306,7 +315,7 @@ describe("the autoEnrich preference on contact creation", () => {
     const strat =
       await import("../../server/services/aiSearch/strategies/index.ts");
     const stratSpy = vi
-      .spyOn(strat, "validateEnrichmentStrategy")
+      .spyOn(strat, "preferredEnrichmentStrategy")
       .mockReturnValue("two-pass");
     const checkSpy = vi
       .spyOn(jobQueue, "canStartBatch")
@@ -321,9 +330,14 @@ describe("the autoEnrich preference on contact creation", () => {
       .post("/api/contacts")
       .send({ name: "Joining Person" });
     expect(res.status).toBe(201);
-    expect(appendSpy).toHaveBeenCalledWith(expect.anything(), "running", [
-      { id: res.body.id, name: "Joining Person" },
-    ]);
+    // At Standard depth, with the account's Search with choice.
+    expect(appendSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      "running",
+      [{ id: res.body.id, name: "Joining Person" }],
+      "standard",
+      "two-pass",
+    );
     expect(batchSpy).not.toHaveBeenCalled();
 
     await request(app)

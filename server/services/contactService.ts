@@ -37,7 +37,8 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
 import { relationshipService } from "./relationshipService.ts";
-import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
+import { preferredEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
+import { DEFAULT_RESEARCH_DEPTH } from "../../shared/researchDepth.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
@@ -494,7 +495,7 @@ export const contactService = {
 
     // Auto-enrich a contact that a person added (never an import, a sync or
     // an MCP client). Whether research can run at all is
-    // validateEnrichmentStrategy's question, asked below. aiAllowedForUser
+    // preferredEnrichmentStrategy's question, asked below. aiAllowedForUser
     // reads both switches: the account's `aiAssist` and the admin's switch
     // for the whole instance.
     if (
@@ -512,14 +513,19 @@ export const contactService = {
         },
         () => {
           try {
-            const strategy = validateEnrichmentStrategy();
+            // The account's Search with choice, at Standard depth.
+            const strategy = preferredEnrichmentStrategy(prefs.researchSource);
             const check = jobQueue.canStartBatch(scope);
             // While this account's batch runs, the new contact joins it. A
             // batch created beside it would never run.
             if (check.appendTo) {
-              jobQueue.appendToBatch(scope, check.appendTo, [
-                { id, name: body.name },
-              ]);
+              jobQueue.appendToBatch(
+                scope,
+                check.appendTo,
+                [{ id, name: body.name }],
+                DEFAULT_RESEARCH_DEPTH,
+                strategy,
+              );
             } else if (check.allowed) {
               const batch = jobQueue.createBatch(
                 scope,

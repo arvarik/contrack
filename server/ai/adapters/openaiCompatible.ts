@@ -106,12 +106,25 @@ export class OpenAICompatibleAdapter implements AIProvider {
     for await (const model of response) {
       const id = model.id;
       const looksEmbedding = /embed|bge|minilm|e5-|gte-/i.test(id);
+      // The window the server runs the model with, when it says: vLLM names
+      // it `max_model_len`, and other servers `context_length` or
+      // `context_window`. Ollama names none here.
+      const fields = model as unknown as Record<string, unknown>;
+      const contextWindow = [
+        fields.max_model_len,
+        fields.context_length,
+        fields.context_window,
+      ].find(
+        (value): value is number =>
+          typeof value === "number" && Number.isInteger(value) && value > 0,
+      );
       models.push({
         id,
         label: id,
         capabilities: looksEmbedding ? ["embeddings"] : ["chat"],
         // Bare metadata: the UI lets the user re-assign capability.
         capabilityConfidence: "guessed",
+        ...(contextWindow && { contextWindow }),
       });
     }
     return models;

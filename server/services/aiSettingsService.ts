@@ -42,6 +42,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { applyCatalogGuardrails } from "../ai/modelFilter.ts";
 import { seal } from "../utils/secretBox.ts";
+import { getSearxngUrl } from "./integrationSettings.ts";
 
 /** Model list cached per provider. */
 export interface CachedModelList {
@@ -439,6 +440,11 @@ export interface AISettingsView {
     }
   >;
   searxngUrl?: string;
+  /**
+   * Whether a SearXNG address is set, in the settings or by SEARXNG_URL, so
+   * the Enrichment page can offer to search with it.
+   */
+  searxng: boolean;
   /** The instance switch: whether any provider call may leave this server. */
   instance: InstanceAiState;
 }
@@ -625,6 +631,7 @@ export function getSettingsView(): AISettingsView {
     })),
     capabilities,
     searxngUrl: getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url,
+    searxng: !!getSearxngUrl(),
     instance: instanceAiState(),
   };
 }

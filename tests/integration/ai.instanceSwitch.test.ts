@@ -185,7 +185,7 @@ describe("auto-enrichment", () => {
       await import("../../server/services/aiSearch/jobQueue.ts");
     const strat =
       await import("../../server/services/aiSearch/strategies/index.ts");
-    vi.spyOn(strat, "validateEnrichmentStrategy").mockReturnValue("two-pass");
+    vi.spyOn(strat, "preferredEnrichmentStrategy").mockReturnValue("two-pass");
     const batchSpy = vi.spyOn(jobQueue, "createBatch");
     const appendSpy = vi.spyOn(jobQueue, "appendToBatch");
     vi.spyOn(jobQueue, "processBatch").mockResolvedValue(

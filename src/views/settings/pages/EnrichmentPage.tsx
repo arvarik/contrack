@@ -11,6 +11,7 @@ import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
 import { useGroundingCapacity } from "../../../api/enrichment";
 import { usePreferences } from "../../../contexts/PreferencesContext";
+import { useOptionalAISearch } from "../../../contexts/AISearchContext";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 import { cn } from "../../../lib/utils";
@@ -19,6 +20,9 @@ export const EnrichmentPage = () => {
   const { preferences, setPreference } = usePreferences();
   const { isAdmin } = useAuth();
   const { data: groundingCapacity } = useGroundingCapacity();
+  // With two ways to search, automatic research searches the way the
+  // account chose under Search with.
+  const offersSource = !!useOptionalAISearch()?.offersSource;
 
   return (
     // One box for the whole page, the enrichment list included, so every
@@ -29,7 +33,11 @@ export const EnrichmentPage = () => {
           id="auto-enrich"
           title="Enrich new contacts automatically"
           prefKey="autoEnrich"
-          description="Researches each contact that you add yourself, at Standard depth. Not the contacts from an import, a sync or an MCP client"
+          description={
+            offersSource
+              ? "Researches each contact that you add yourself, at Standard depth, with your choice under Search with. Not the contacts from an import, a sync or an MCP client"
+              : "Researches each contact that you add yourself, at Standard depth. Not the contacts from an import, a sync or an MCP client"
+          }
           inline
         >
           <Switch

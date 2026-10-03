@@ -4,7 +4,8 @@
  * Provides:
  * - startSearch(contactIds, options?): kicks off a batch and opens the
  *   overlay, or adds the contacts to the batch already running, at the
- *   depth the caller names (Standard when it names none). Callers: the
+ *   depth the caller names (Standard when it names none), and with the
+ *   account's Search with choice (`researchSource`). Callers: the
  *   Enrichment settings page, for many contacts, and for one, "Enrich
  *   contact" and "Enrich deeply" in a contact's actions menu, and the
  *   dossier's Enrich contact and Enrich again menus.
@@ -16,6 +17,12 @@
  * - isVisible: whether the overlay is showing
  * - depthFiguresApply: whether the depths' measured time and cost describe
  *   this instance's research, which they do only when Gemini runs it
+ * - researchProvider and searxng: the provider that searches the web, and
+ *   whether a SearXNG address is set
+ * - offersSource, researchSource and setResearchSource: whether research can
+ *   search more than one way, the account's choice (`researchSource`
+ *   preference, the provider's search while there is one way), and its
+ *   setter. The Enrichment page sets it, and every start uses it
  *
  * The AISearchProgressOverlay is rendered via portal from this provider,
  * so it floats above all content regardless of routing.
@@ -40,6 +47,11 @@ import { ApiError, rateLimitFacts } from "../api/client";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 import type { AISearchBatch } from "../types";
 import type { ResearchDepth } from "../../shared/researchDepth";
+import {
+  SOURCE_STRATEGY,
+  type ResearchSource,
+} from "../../shared/researchSource";
+import { usePreferences } from "./PreferencesContext";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
 /** How one call to `startSearch` reports a limit. */
@@ -56,6 +68,11 @@ interface StartSearchOptions {
   limitAs?: "page" | "toast";
   /** How thoroughly to research. Standard when absent. */
   depth?: ResearchDepth;
+  /**
+   * How to search, over the account's choice: the research model's own
+   * search, SearXNG alone, or both. The account's choice when absent.
+   */
+  strategy?: "two-pass" | "searxng" | "combined";
 }
 
 interface AISearchContextValue {
@@ -83,6 +100,16 @@ interface AISearchContextValue {
    * for a model the instance does not run.
    */
   depthFiguresApply: boolean;
+  /** The label of the provider that searches the web, such as "Gemini". */
+  researchProvider: string | null;
+  /** Whether an admin set a SearXNG address, so research can search with it. */
+  searxng: boolean;
+  /** Whether research can search more than one way: SearXNG and a provider. */
+  offersSource: boolean;
+  /** Where research searches: the account's choice, while it has one. */
+  researchSource: ResearchSource;
+  /** Save the account's choice. Every later start uses it. */
+  setResearchSource: (source: ResearchSource) => void;
 }
 
 const AISearchContext = createContext<AISearchContextValue | null>(null);
@@ -137,6 +164,26 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const { data: aiSettings } = useAISettings();
   const depthFiguresApply =
     aiSettings?.capabilities?.research?.resolved?.providerId === "gemini";
+  const researchProvider =
+    aiSettings?.capabilities?.research?.resolved?.providerLabel ?? null;
+  const searxng = !!aiSettings?.searxng;
+  const { preferences, setPreference } = usePreferences();
+  const offersSource = searxng && !!researchProvider;
+  const researchSource: ResearchSource = offersSource
+    ? preferences.researchSource
+    : "provider";
+  const setResearchSource = useCallback(
+    (source: ResearchSource) => setPreference("researchSource", source),
+    [setPreference],
+  );
+  // Read at the start through a ref, so `startSearch` keeps one identity.
+  // A start names the strategy, so it never waits on the preference's save.
+  const sourceStrategy = useRef<
+    (typeof SOURCE_STRATEGY)[ResearchSource] | undefined
+  >(undefined);
+  sourceStrategy.current = offersSource
+    ? SOURCE_STRATEGY[researchSource]
+    : undefined;
 
   // SSE stream hook — updates batch state in real-time
   const handleUpdate = useCallback((updatedBatch: AISearchBatch) => {
@@ -165,10 +212,14 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const startSearch = useCallback(
     (
       contactIds: string[],
-      { limitAs = "page", depth }: StartSearchOptions = {},
+      { limitAs = "page", depth, strategy }: StartSearchOptions = {},
     ) => {
       startMutate(
-        { contactIds, depth },
+        {
+          contactIds,
+          depth,
+          strategy: strategy ?? sourceStrategy.current,
+        },
         {
           onSuccess: (result) => {
             // A start that joined the running batch keeps the batch on screen:
@@ -236,6 +287,11 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       limitMessage,
       clearLimit,
       depthFiguresApply,
+      researchProvider,
+      searxng,
+      offersSource,
+      researchSource,
+      setResearchSource,
     }),
     [
       startSearch,
@@ -245,6 +301,11 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       limitMessage,
       clearLimit,
       depthFiguresApply,
+      researchProvider,
+      searxng,
+      offersSource,
+      researchSource,
+      setResearchSource,
     ],
   );
 

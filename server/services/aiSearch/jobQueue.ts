@@ -188,7 +188,9 @@ class AISearchJobQueue extends EventEmitter {
    * The batch loop reads the job list as it goes, so a job added here runs
    * after the ones already queued. A contact already queued or running in
    * the batch is not added twice; one that finished can run again, which is
-   * a second research round.
+   * a second research round. Each job keeps the depth and the strategy it
+   * was started with, so a start with SearXNG can join a batch that searches
+   * with the research model.
    *
    * @returns The batch and how many jobs joined it, or null when the batch
    *   is not this account's or has finished.
@@ -198,6 +200,7 @@ class AISearchJobQueue extends EventEmitter {
     batchId: string,
     contacts: Array<{ id: string; name: string }>,
     depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
+    strategy?: string,
   ): { batch: AISearchBatch; added: number } | null {
     const batch = this.getBatch(scope, batchId);
     if (!batch || batch.status !== "processing") return null;
@@ -219,6 +222,7 @@ class AISearchJobQueue extends EventEmitter {
         status: "queued",
         fieldsUpdated: 0,
         depth,
+        strategy: strategy ?? batch.strategy,
       });
       added += 1;
     }
@@ -250,6 +254,7 @@ class AISearchJobQueue extends EventEmitter {
       status: "queued" as AISearchJobStatus,
       fieldsUpdated: 0,
       depth,
+      strategy: strategyName,
     }));
 
     const batch: AISearchBatch = {
@@ -297,7 +302,6 @@ class AISearchJobQueue extends EventEmitter {
     const { batch } = owned;
     const scope = scopeForOwnerId(owned.ownerId);
     const batchId = batch.id;
-    const strategy = getStrategy(batch.strategy);
     const controller = new AbortController();
     this.controllers.set(batchId, controller);
     this.processing = true;
@@ -317,11 +321,16 @@ class AISearchJobQueue extends EventEmitter {
           // A contact researched before gets a second round: the prompt
           // names what is known, the sites already read, and what is missing.
           const depth = job.depth ?? DEFAULT_RESEARCH_DEPTH;
+          const strategy = getStrategy(job.strategy ?? batch.strategy);
           const history = researchHistory(contact);
           const prompt = buildSearchPrompt(contact, history);
           const result = await withTimeout(
             (signal) =>
-              strategy.execute(contact, prompt, signal, { depth, history }),
+              strategy.execute(contact, prompt, signal, {
+                depth,
+                history,
+                timeoutMs: RESEARCH_TIMEOUT_MS[depth],
+              }),
             RESEARCH_TIMEOUT_MS[depth],
             controller.signal,
           );

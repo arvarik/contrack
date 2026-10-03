@@ -377,32 +377,35 @@ page with a changed value ends with **Reset to defaults**. Scripts read and
 change them with `GET` and `PATCH /api/auth/preferences` (see
 [Authentication](api-reference.md#authentication)).
 
-| Setting                               | Page                 | Choices                            | Default     | Key                  |
-| ------------------------------------- | -------------------- | ---------------------------------- | ----------- | -------------------- |
-| **Theme**                             | Appearance           | Light, Dark, System                | System      | `theme`              |
-| **Accent colour**                     | Appearance           | Any colour                         | `#006a91`   | `accent`             |
-| **Text size**                         | Appearance           | Default, Large                     | Default     | `textScale`          |
-| **Motion**                            | Appearance           | System, Reduced                    | System      | `motion`             |
-| **Corvid motion**                     | Appearance           | Full, Subtle, Off                  | Full        | `mascotMotion`       |
-| **List density**                      | Appearance           | Comfortable, Compact               | Comfortable | `listDensity`        |
-| **Where Contrack opens**              | Network and contacts | Network, Pulse                     | Network     | `startPage`          |
-| **Default sort**                      | Network and contacts | Name, Recent                       | Name        | `listSort`           |
-| **Recent contacts**                   | Network and contacts | 0 to 10. 0 hides the row           | 3           | `recentLimit`        |
-| **Default cadence**                   | Network and contacts | Weekly, Monthly, Quarterly, Yearly | Quarterly   | `defaultCadenceDays` |
-| **Track new contacts**                | Network and contacts | On, Off                            | Off         | `trackNewContacts`   |
-| **Week starts on**                    | Network and contacts | Monday, Sunday                     | Monday      | `weekStart`          |
-| **Weather**                           | Network and contacts | On, Off                            | Off         | `showWeather`        |
-| **Temperature unit**                  | Network and contacts | °C, °F                             | °C          | `tempUnit`           |
-| **Single-key shortcuts**              | Keyboard             | On, Off                            | On          | `singleKeyShortcuts` |
-| **Use AI for this account**           | Privacy and AI       | On, Off                            | On          | `aiAssist`           |
-| **Auto-merge sensitivity**            | Duplicates           | Cautious, Balanced, Eager          | Balanced    | `dedupePreset`       |
-| **Check new contacts automatically**  | Duplicates           | On, Off                            | On          | `dedupeOnCreate`     |
-| **Check imports automatically**       | Duplicates           | On, Off                            | On          | `dedupeOnImport`     |
-| **Enrich new contacts automatically** | Contact enrichment   | On, Off                            | Off         | `autoEnrich`         |
+| Setting                               | Page                 | Choices                            | Default        | Key                  |
+| ------------------------------------- | -------------------- | ---------------------------------- | -------------- | -------------------- |
+| **Theme**                             | Appearance           | Light, Dark, System                | System         | `theme`              |
+| **Accent colour**                     | Appearance           | Any colour                         | `#006a91`      | `accent`             |
+| **Text size**                         | Appearance           | Default, Large                     | Default        | `textScale`          |
+| **Motion**                            | Appearance           | System, Reduced                    | System         | `motion`             |
+| **Corvid motion**                     | Appearance           | Full, Subtle, Off                  | Full           | `mascotMotion`       |
+| **List density**                      | Appearance           | Comfortable, Compact               | Comfortable    | `listDensity`        |
+| **Where Contrack opens**              | Network and contacts | Network, Pulse                     | Network        | `startPage`          |
+| **Default sort**                      | Network and contacts | Name, Recent                       | Name           | `listSort`           |
+| **Recent contacts**                   | Network and contacts | 0 to 10. 0 hides the row           | 3              | `recentLimit`        |
+| **Default cadence**                   | Network and contacts | Weekly, Monthly, Quarterly, Yearly | Quarterly      | `defaultCadenceDays` |
+| **Track new contacts**                | Network and contacts | On, Off                            | Off            | `trackNewContacts`   |
+| **Week starts on**                    | Network and contacts | Monday, Sunday                     | Monday         | `weekStart`          |
+| **Weather**                           | Network and contacts | On, Off                            | Off            | `showWeather`        |
+| **Temperature unit**                  | Network and contacts | °C, °F                             | °C             | `tempUnit`           |
+| **Single-key shortcuts**              | Keyboard             | On, Off                            | On             | `singleKeyShortcuts` |
+| **Use AI for this account**           | Privacy and AI       | On, Off                            | On             | `aiAssist`           |
+| **Auto-merge sensitivity**            | Duplicates           | Cautious, Balanced, Eager          | Balanced       | `dedupePreset`       |
+| **Check new contacts automatically**  | Duplicates           | On, Off                            | On             | `dedupeOnCreate`     |
+| **Check imports automatically**       | Duplicates           | On, Off                            | On             | `dedupeOnImport`     |
+| **Enrich new contacts automatically** | Contact enrichment   | On, Off                            | Off            | `autoEnrich`         |
+| **Search with**                       | Contact enrichment   | Research model, SearXNG, Both      | Research model | `researchSource`     |
 
 - **Default cadence** stores days: 7, 30, 90 or 365. A value of 60 or 180 still
   loads, and the select shows it as a fifth choice.
 - **Auto-merge sensitivity** stores `conservative`, `default` or `aggressive`.
+- **Search with** stores `provider`, `searxng` or `combined`. It shows only
+  while an admin has set a SearXNG address and a provider serves research.
 - **Search history** on **Privacy and AI** is not a preference. Contrack keeps
   each question that you ask in Ask Contrack and the command palette, and
   **Clear history** deletes them all (see [History](search.md#history)).

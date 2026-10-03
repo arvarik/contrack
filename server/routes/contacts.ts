@@ -3,7 +3,8 @@ import {
   lockEnrichment,
 } from "../services/aiSearch/contactSnapshot.ts";
 import { withTimeout } from "../ai/resilience.ts";
-import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
+import { preferredEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
+import { getPreferences } from "../services/userPreferencesService.ts";
 import { requireContact } from "../services/contactGuard.ts";
 import { idsSchema } from "../utils/validators.ts";
 import { Router, type Request } from "express";
@@ -641,7 +642,9 @@ router.post(
     // the repository so the check is visible at the call that spends money.
     contactRepo.requireOwned(scope, id);
 
-    const strategyName = validateEnrichmentStrategy();
+    const strategyName = preferredEnrichmentStrategy(
+      getPreferences(scope.ownerId).researchSource,
+    );
     const contact = enrichmentContact(scope, id);
     const release = lockEnrichment(id);
     const controller = new AbortController();
@@ -666,10 +669,15 @@ router.post(
 
       // The allowance a batch job has at this depth, under Node's own
       // request timeout of 300 s (server.ts sets no shorter one).
+      const timeoutMs = Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000);
       const result = await withTimeout(
         (signal) =>
-          strategy.execute(contact, prompt, signal, { depth, history }),
-        Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000),
+          strategy.execute(contact, prompt, signal, {
+            depth,
+            history,
+            timeoutMs,
+          }),
+        timeoutMs,
         controller.signal,
       );
       controller.signal.throwIfAborted();

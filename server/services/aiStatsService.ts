@@ -46,6 +46,7 @@ export const AI_OPERATIONS = [
   "bulkParse",
   "aiSearchGrounding",
   "aiSearchExtraction",
+  "aiSearchReading",
   "aiSearchSinglePass",
   "queryParse",
   "hyde",

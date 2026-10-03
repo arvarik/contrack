@@ -78,6 +78,8 @@ export interface AISettings {
     }
   >;
   searxngUrl?: string;
+  /** A SearXNG address is set, in the settings or by SEARXNG_URL. */
+  searxng?: boolean;
   instance: InstanceAi;
 }
 

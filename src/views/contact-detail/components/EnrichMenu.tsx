@@ -18,7 +18,8 @@
  * contact's actions menu lists the same two depths as rows of its own.
  *
  * A row starts the same background run as the Enrichment page
- * (`startSearch`). While this contact's research runs, the button reads
+ * (`startSearch`), with the account's Search with choice. When that is
+ * SearXNG or both, the heading says so: "Research depth · with SearXNG". While this contact's research runs, the button reads
  * "Enriching…" and waits, so a second press cannot queue the contact twice.
  * Without AI, outside the AI Search provider, or for a ghost, it is not
  * there. The times show only when research runs on Gemini, where they were
@@ -42,6 +43,7 @@ import {
   DEPTH_WORDS,
   depthTime,
 } from "../../../lib/researchDepth";
+import { searchesWith } from "../../../lib/researchSource";
 
 interface EnrichMenuProps {
   contact: Pick<Contact, "id" | "isGhost">;
@@ -85,12 +87,17 @@ export function EnrichMenu({
   }));
 
   const words = enriching ? "Enriching…" : label;
+  // The provider's search is the default, and goes unsaid.
+  const heading =
+    search.researchSource === "provider"
+      ? "Research depth"
+      : `Research depth · with ${searchesWith(search.researchProvider ?? "AI", search.researchSource)}`;
   return (
     <ActionMenu
       // The name starts with the words on the button, so a person who says
       // what they see reaches it (WCAG 2.5.3).
       label={enriching ? words : `${label}, choose how deep`}
-      heading="Research depth"
+      heading={heading}
       items={items}
       align="end"
       variant={variant}
