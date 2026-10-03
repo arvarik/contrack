@@ -12,10 +12,13 @@ export async function searchPlace(
   );
 }
 
+/** The not-on-the-map list's key. A place lookup's key starts with "geo" too. */
+export const GEO_STATUS_KEY = ["geo", "status"] as const;
+
 /** The contacts with an address and no pin. Every contact write refreshes it. */
 export const useGeoStatus = () =>
   useQuery({
-    queryKey: ["geo", "status"],
+    queryKey: GEO_STATUS_KEY,
     queryFn: async ({ signal }) =>
       (
         await apiJson<{ contacts: NotOnMapContact[] }>("/geo/status", {

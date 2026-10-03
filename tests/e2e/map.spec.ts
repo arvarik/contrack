@@ -242,7 +242,9 @@ test.describe("map", () => {
       await insights.click();
       await expect(insights).toHaveAttribute("aria-expanded", "false");
 
-      await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
+      await page
+        .getByRole("button", { name: "2 contacts at one place, list them" })
+        .click();
       const list = page.getByRole("list", { name: "People at this place" });
       await expect(list.getByRole("button")).toHaveCount(2);
       const alan = list.getByRole("button", {

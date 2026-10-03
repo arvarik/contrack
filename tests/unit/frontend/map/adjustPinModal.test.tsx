@@ -198,7 +198,7 @@ describe("AdjustPinModal", () => {
     ]);
     // No refetch of what was just written: only the no-pin list is stale.
     const keys = invalidated.mock.calls.map((call) => call[0]?.queryKey);
-    expect(keys).toEqual([["geo"]]);
+    expect(keys).toEqual([["geo", "status"]]);
   });
 
   it("follows a drag", () => {

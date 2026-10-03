@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { Contact } from "../types";
 import { apiJson } from "./client";
+import { GEO_STATUS_KEY } from "./geo";
 
 /** Refresh contact lists and the views whose counts depend on them. */
 export function invalidateContactViews(client: QueryClient): void {
@@ -13,10 +14,10 @@ export function invalidateContactViews(client: QueryClient): void {
     "zeroState",
     "trash",
     "relationships",
-    "geo",
   ]) {
     void client.invalidateQueries({ queryKey: [key] });
   }
+  void client.invalidateQueries({ queryKey: GEO_STATUS_KEY });
 }
 
 const writes = new Map<string, Promise<unknown>>();
@@ -87,7 +88,7 @@ export function followPin(client: QueryClient, contact: Contact): void {
         lng: fresh.lng,
         geoSource: fresh.geoSource,
       });
-      void client.invalidateQueries({ queryKey: ["geo"] });
+      void client.invalidateQueries({ queryKey: GEO_STATUS_KEY });
       return;
     }
   })();

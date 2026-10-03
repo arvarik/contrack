@@ -24,6 +24,7 @@ import {
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { apiFetch } from "./client";
+import { GEO_STATUS_KEY } from "./geo";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth
@@ -330,7 +331,7 @@ export const useSetContactLocation = () => {
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
         old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
       );
-      void queryClient.invalidateQueries({ queryKey: ["geo"] });
+      void queryClient.invalidateQueries({ queryKey: GEO_STATUS_KEY });
       if ("regeocode" in data && !isValidLatLng(contact.lat, contact.lng))
         followPin(queryClient, contact);
     },

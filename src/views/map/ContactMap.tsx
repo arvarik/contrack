@@ -143,6 +143,12 @@ type Card =
     }
   | { kind: "cluster"; cluster: ClusterFeature; padding?: PaddingOptions };
 
+/** A cluster's people, and whether no zoom splits it, so a click lists them. */
+interface ClusterPeople {
+  ids: string[];
+  stack: boolean;
+}
+
 /** A pinned card and a sheet stay until closed on purpose. */
 const stays = (card: Card | null) =>
   card?.kind === "contact" && (card.mode === "pinned" || card.mode === "sheet");
@@ -408,11 +414,11 @@ export const ContactMap = ({
   );
   const [stack, setStack] = useState<ContactStack | null>(null);
 
-  // Per-cluster leaves cache for displaying "X of Y selected"
-  const clusterLeavesCache = useRef<Map<number, string[]>>(new Map());
-  const [clusterLeaves, setClusterLeaves] = useState<Map<number, string[]>>(
-    new Map(),
-  );
+  // Each cluster's people, and whether it is a stack that no zoom splits.
+  const clusterLeavesCache = useRef<Map<number, ClusterPeople>>(new Map());
+  const [clusterLeaves, setClusterLeaves] = useState<
+    Map<number, ClusterPeople>
+  >(new Map());
 
   useEffect(() => {
     const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
@@ -431,16 +437,16 @@ export const ContactMap = ({
     Promise.all(
       missing.map(async (c) => {
         try {
-          const leaves = await source.getClusterLeaves(
-            c.clusterId,
-            Infinity,
-            0,
-          );
+          const [leaves, zoom] = await Promise.all([
+            source.getClusterLeaves(c.clusterId, Infinity, 0),
+            source.getClusterExpansionZoom(c.clusterId),
+          ]);
           const ids = leaves
             .map((l) => l.properties?.id)
             .filter((id): id is string => typeof id === "string");
-          clusterLeavesCache.current.set(c.clusterId, ids);
-          return [c.clusterId, ids] as const;
+          const people = { ids, stack: zoom > CLUSTER_MAX_ZOOM };
+          clusterLeavesCache.current.set(c.clusterId, people);
+          return people;
         } catch {
           return null;
         }
@@ -584,22 +590,10 @@ export const ContactMap = ({
     [map, byId, setCard, room],
   );
 
-  // A previewed cluster that no zoom can split, which a click lists instead.
-  const [stackId, setStackId] = useState<number | null>(null);
-  useEffect(() => {
-    const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
-    if (card?.kind !== "cluster" || !source) return;
-    const { clusterId } = card.cluster;
-    source.getClusterExpansionZoom(clusterId).then(
-      (zoom) => setStackId(zoom > CLUSTER_MAX_ZOOM ? clusterId : null),
-      () => {},
-    );
-  }, [card, map]);
-
   // The cluster's people for its preview, the ones with the most history first.
   const clusterMembers = useMemo(() => {
     if (card?.kind !== "cluster") return [];
-    return (clusterLeaves.get(card.cluster.clusterId) ?? [])
+    return (clusterLeaves.get(card.cluster.clusterId)?.ids ?? [])
       .map((id) => byId.get(id))
       .filter((c): c is MapContact => Boolean(c))
       .sort(
@@ -719,7 +713,7 @@ export const ContactMap = ({
             features.map((feature) => {
               if (feature.kind === "cluster") {
                 const known = clusterLeaves.get(feature.clusterId);
-                const leaves = known || [];
+                const leaves = known?.ids ?? [];
                 const selectedInCluster = selectedIds
                   ? leaves.filter((id) => selectedIds.has(id)).length
                   : 0;
@@ -738,6 +732,7 @@ export const ContactMap = ({
                       card?.kind === "cluster" &&
                       card.cluster.clusterId === feature.clusterId
                     }
+                    stacked={known?.stack}
                     halo={halo}
                     dimmed={
                       dimming && !!known && !halo && selectedInCluster === 0
@@ -794,7 +789,9 @@ export const ContactMap = ({
               key={card.cluster.clusterId}
               cluster={card.cluster}
               members={clusterMembers}
-              stacked={stackId === card.cluster.clusterId}
+              stacked={
+                clusterLeaves.get(card.cluster.clusterId)?.stack ?? false
+              }
               padding={card.padding}
             />
           )}

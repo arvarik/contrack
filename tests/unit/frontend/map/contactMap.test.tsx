@@ -165,6 +165,7 @@ function loadedMap(zoom = 1, source?: unknown) {
 /** A contacts source whose one cluster holds these contacts. */
 const sourceWith = (ids: string[]) => ({
   getClusterLeaves: async () => ids.map((id) => ({ properties: { id } })),
+  getClusterExpansionZoom: async () => 12,
 });
 
 const cluster = (clusterId: number, count: number): VisibleFeature => ({
