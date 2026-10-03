@@ -63,6 +63,7 @@ import {
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { adminRouter } from "./routes/admin.ts";
+import { jobsRouter } from "./routes/jobs.ts";
 import { healthRouter } from "./routes/health.ts";
 import {
   countPasswordAccounts,
@@ -303,6 +304,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // route inside carries requireAdmin itself, so that the manifest test can
   // see the guard in each route's stack.
   app.use("/api/admin", adminRouter);
+  app.use("/api/admin", jobsRouter);
 
   app.use("/api", avatarRouter);
   app.use("/api/link-preview", linkPreviewRouter);

@@ -107,6 +107,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "GET",
+    path: "/api/admin/jobs",
+    class: "admin",
+    isolated: false,
+  },
+  {
     method: "PUT",
     path: "/api/admin/integrations",
     class: "admin",

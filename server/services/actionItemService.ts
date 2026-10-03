@@ -17,6 +17,7 @@ import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import type { Scope } from "../tenancy/scope.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
 
 /**
  * Narrow action_items row shape — only the columns the mutation guards
@@ -127,14 +128,21 @@ export const actionItemService = {
   create(scope: Scope, contactId: string, title: string, dueAt: string) {
     assertOwnedContact(scope, contactId);
     const id = crypto.randomUUID();
-    sqlite
-      .prepare(
-        `
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `
       INSERT INTO action_items (id, contactId, ownerId, title, dueAt)
       VALUES (?, ?, ?, ?, ?)
     `,
-      )
-      .run(id, contactId, scope.ownerId, title, dueAt);
+        )
+        .run(id, contactId, scope.ownerId, title, dueAt);
+      recordEvent(scope, "action_item.created", id, {
+        contactId,
+        interactionId: null,
+      });
+    })();
+    dispatchEvents();
 
     log.info(
       "ActionItems",
@@ -158,14 +166,17 @@ export const actionItemService = {
 
     const setClauses: string[] = [];
     const values: string[] = [];
+    const changed: string[] = [];
 
     if (updates.dueAt !== undefined) {
       setClauses.push("dueAt = ?");
       values.push(updates.dueAt);
+      changed.push("dueAt");
     }
     if (updates.title !== undefined) {
       setClauses.push("title = ?");
       values.push(updates.title);
+      changed.push("title");
     }
 
     if (setClauses.length === 0) return existing;
@@ -173,11 +184,18 @@ export const actionItemService = {
     setClauses.push("updatedAt = datetime('now')");
     values.push(id, scope.ownerId);
 
-    sqlite
-      .prepare(
-        `UPDATE action_items SET ${setClauses.join(", ")} WHERE id = ? AND ownerId = ?`,
-      )
-      .run(...values);
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE action_items SET ${setClauses.join(", ")} WHERE id = ? AND ownerId = ?`,
+        )
+        .run(...values);
+      recordEvent(scope, "action_item.updated", id, {
+        contactId: existing.contactId,
+        changed,
+      });
+    })();
+    dispatchEvents();
 
     log.info(
       "ActionItems",
@@ -196,14 +214,20 @@ export const actionItemService = {
     assertOwnedContact(scope, existing.contactId);
     if (existing.completedAt) return existing; // Already completed — idempotent
 
-    sqlite
-      .prepare(
-        `
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `
       UPDATE action_items SET completedAt = datetime('now'), updatedAt = datetime('now')
       WHERE id = ? AND ownerId = ?
     `,
-      )
-      .run(id, scope.ownerId);
+        )
+        .run(id, scope.ownerId);
+      recordEvent(scope, "action_item.completed", id, {
+        contactId: existing.contactId,
+      });
+    })();
+    dispatchEvents();
 
     log.info("ActionItems", `Completed "${existing.title}" (${id})`);
     return findOwnedItem(scope, id);
@@ -217,9 +241,15 @@ export const actionItemService = {
     if (!existing) return false;
     assertOwnedContact(scope, existing.contactId);
 
-    sqlite
-      .prepare("DELETE FROM action_items WHERE id = ? AND ownerId = ?")
-      .run(id, scope.ownerId);
+    sqlite.transaction(() => {
+      sqlite
+        .prepare("DELETE FROM action_items WHERE id = ? AND ownerId = ?")
+        .run(id, scope.ownerId);
+      recordEvent(scope, "action_item.deleted", id, {
+        contactId: existing.contactId,
+      });
+    })();
+    dispatchEvents();
     log.info("ActionItems", `Deleted "${existing.title}" (${id})`);
     return true;
   },

@@ -41,7 +41,17 @@ const FIXTURE = path.resolve(
  * What the migrations after the fixture add, by name. A new migration adds
  * the name of each table, index and trigger it creates.
  */
-const ADDED_SINCE_FIXTURE = ["schema_migrations"];
+const ADDED_SINCE_FIXTURE = [
+  "schema_migrations",
+  // 0002_events_and_jobs
+  "events",
+  "idx_events_owner",
+  "events_owner_required",
+  "event_cursors",
+  "jobs",
+  "idx_jobs_due",
+  "idx_jobs_dedupe",
+];
 
 interface MasterRow {
   type: string;

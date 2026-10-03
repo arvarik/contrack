@@ -8,6 +8,7 @@ import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
+import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type { ContactRow, MergeSnapshotData } from "./types.ts";
 
 /**
@@ -649,9 +650,15 @@ export function executeMerge(
       "soft",
       JSON.stringify(snapshotData),
     );
+
+    recordEvent(scope, "contact.merged", primaryId, {
+      duplicateId,
+      mergedBy,
+    });
   });
 
   mergeTxn();
+  dispatchEvents();
   scheduleSearchIndex(primaryId);
   log.info(
     "DedupeService",

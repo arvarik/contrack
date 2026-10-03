@@ -1257,3 +1257,75 @@ export const schemaMigrations = sqliteTable("schema_migrations", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+// =============================================================================
+// Events and jobs (migration 0002_events_and_jobs)
+// =============================================================================
+
+/**
+ * events — what a write changed, recorded in the write's own transaction by
+ * `recordEvent` (server/events/record.ts). Subscribers read it in `id` order
+ * after the commit. The payload is JSON in the schema of its type
+ * (shared/contracts/events.ts), and it carries ids and field names only.
+ * Maintenance removes rows older than 30 days that every cursor has passed.
+ */
+export const events = sqliteTable(
+  "events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    type: text("type").notNull(),
+    subjectType: text("subjectType").notNull(),
+    subjectId: text("subjectId").notNull(),
+    payload: text("payload").notNull(),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [index("idx_events_owner").on(table.ownerId, table.id)],
+);
+
+/**
+ * event_cursors — one row per subscriber: the last event it handled, and how
+ * many times in a row it has failed on the next one.
+ */
+export const eventCursors = sqliteTable("event_cursors", {
+  subscriber: text("subscriber").primaryKey(),
+  lastEventId: integer("lastEventId").notNull().default(0),
+  failures: integer("failures").notNull().default(0),
+});
+
+/**
+ * jobs — durable background work (server/jobs/runner.ts). `ownerId` is null
+ * for the instance's own work, such as a backup, so the table is not in
+ * OWNED_TABLES. `dedupeKey` allows one queued or running row per key, which
+ * is how a recurring job keeps exactly one next run.
+ */
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    ownerId: text("ownerId").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    payload: text("payload").notNull().default("{}"),
+    status: text("status").notNull().default("queued"),
+    runAt: text("runAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("maxAttempts").notNull().default(3),
+    lastError: text("lastError"),
+    progress: text("progress"),
+    dedupeKey: text("dedupeKey"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    startedAt: text("startedAt"),
+    finishedAt: text("finishedAt"),
+  },
+  (table) => [index("idx_jobs_due").on(table.status, table.runAt)],
+);

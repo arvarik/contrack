@@ -10,9 +10,11 @@
 
 import type { Migration } from "../runner.ts";
 import * as m0001 from "./0001_baseline.ts";
+import * as m0002 from "./0002_events_and_jobs.ts";
 
 export const MIGRATIONS: readonly Migration[] = [
   { id: "0001_baseline", up: m0001.up },
+  { id: "0002_events_and_jobs", up: m0002.up },
 ];
 
 /** The last migration this build holds. A database that is up to date has it. */

@@ -9,8 +9,7 @@ import "./server/utils/loadEnv.ts";
 import http from "node:http";
 
 import { log } from "./server/utils/logger.ts";
-import { refreshPlannerStats, sqlite } from "./server/db.ts";
-import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
+import { sqlite } from "./server/db.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { serveClient } from "./server/serveClient.ts";
 import {
@@ -19,13 +18,7 @@ import {
 } from "./server/middleware/auth.ts";
 import { countUsers } from "./server/services/authService.ts";
 import { startBackupSchedule } from "./server/services/backupService.ts";
-import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
-import {
-  relationshipService,
-  ensureWeeklySnapshot,
-} from "./server/services/relationshipService.ts";
-import { startDailyMaintenance } from "./server/services/maintenanceService.ts";
 import {
   backfillEmbeddings,
   ensureDedupeEmbeddingStore,
@@ -49,11 +42,15 @@ import { DATA_DIR } from "./server/utils/paths.ts";
 import { mailService } from "./server/services/mailService.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
+import { stopConnectorScheduler } from "./server/connectors/scheduler.ts";
+import { dispatchEvents, registerSubscribers } from "./server/events/index.ts";
+import { CONTACT_SUBSCRIBERS } from "./server/events/contactSubscribers.ts";
 import {
-  startConnectorScheduler,
-  stopConnectorScheduler,
-} from "./server/connectors/scheduler.ts";
-import { startStoredPhotoSweep } from "./server/connectors/photoSweep.ts";
+  registerJobs,
+  startJobRunner,
+  stopJobRunner,
+} from "./server/jobs/runner.ts";
+import { JOBS } from "./server/jobs/index.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
@@ -126,6 +123,16 @@ async function startServer() {
   // name 1.x used would otherwise boot with no token at all, and an operator
   // who believes their instance is protected would have no way to find out.
   assertNoLegacyAuthToken();
+
+  // ── Events and jobs ─────────────────────────────────────────────────────
+  // The reactions to writes and the background work this process knows.
+  // Both registrations are idempotent, and the services register their own
+  // subscribers as well, so a test or a script that writes runs them too.
+  registerSubscribers(CONTACT_SUBSCRIBERS);
+  registerJobs(JOBS);
+  // Boot catches up from the cursors: the reactions to writes that the last
+  // process committed and did not get to.
+  dispatchEvents();
 
   // AI keys saved in Settings before 2.0 are plain text in app_settings, and
   // so in every backup. Seal them once, the way other stored secrets are.
@@ -204,17 +211,19 @@ async function startServer() {
 
   registerShutdownHandlers(server);
 
-  if (process.env.DISABLE_BACKGROUND_JOBS === "true") {
+  // ── Background jobs ─────────────────────────────────────────────────────
+  // One runner for the scheduled work (server/jobs/): the connector tick,
+  // the score sweeps, backups, the daily maintenance sweep, the trash purge,
+  // the model catalogs, the planner statistics, and the start-up geocoding
+  // and photo sweep. At boot it queues again what a restart stopped, even
+  // with background jobs off, and runs nothing more in that case.
+  if (!startJobRunner()) {
     log.info(
       "Server",
       "Background maintenance and embedding backfills are disabled.",
     );
     return;
   }
-
-  startRetroactiveGeocoding();
-  startConnectorScheduler();
-  startStoredPhotoSweep();
 
   // ── Ask Contrack starter questions ───────────────────────────────────────
   // Every account's pool of "Try asking" questions, built one account per
@@ -224,36 +233,11 @@ async function startServer() {
     log.warn("Server", `Starter questions failed: ${getErrorMessage(err)}`),
   );
 
-  // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
+  // ── Data lifecycle ───────────────────────────────────────────────────────
+  // The snapshots are jobs. This says at boot when the newest verified one
+  // is too old, which is the only place an operator finds out that the
+  // backups they think they have stopped some time ago.
   startBackupSchedule();
-  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
-    const runTrashPurge = () => {
-      try {
-        contactService.purgeExpiredTrash();
-      } catch (err) {
-        log.warn("Server", `Trash purge failed: ${getErrorMessage(err)}`);
-      }
-    };
-    runTrashPurge();
-    setInterval(runTrashPurge, 24 * 60 * 60 * 1000);
-  }
-
-  // ── Daily maintenance ────────────────────────────────────────────────────
-  // One sweep for every table that accumulates rows no request removes: audit
-  // entries past retention, expired sessions, tokens revoked a month ago,
-  // invitations that died a month ago, and AI invocations outside the stats
-  // window. Before Phase 3 the invocation cleanup ran once at boot and the
-  // session sweep was boot-only, so an instance left running for a year swept
-  // twice. Reached only when DISABLE_BACKGROUND_JOBS is unset, because the
-  // early return above has already sent that case home.
-  // The gate and the schedule both live in the service, so a test can reach
-  // them. The early return above already covers this case, and the second
-  // gate costs nothing.
-  try {
-    startDailyMaintenance();
-  } catch (err) {
-    log.warn("Server", `Daily maintenance failed: ${getErrorMessage(err)}`);
-  }
 
   // ── Web search switch ───────────────────────────────────────────────────
   // Research turned off the old way, with the research model set to Off,
@@ -266,62 +250,6 @@ async function startServer() {
       `Web search switch migration failed: ${getErrorMessage(err)}`,
     );
   }
-
-  // ── AI model catalogs ───────────────────────────────────────────────────
-  // Populate the per-provider model lists that the AI page offers,
-  // so the dropdowns are filled on first open rather than after a manual
-  // refresh.
-  // Only providers whose cache is missing or older than the TTL are fetched,
-  // and every failure is swallowed — discovery is never on a critical path.
-  const refreshModelCatalogs = () =>
-    import("./server/services/aiSettingsService.ts")
-      .then(({ refreshStaleModelCaches }) => refreshStaleModelCaches())
-      .catch((err) =>
-        log.warn("Server", `AI model discovery failed: ${err.message}`),
-      );
-  refreshModelCatalogs();
-  setInterval(refreshModelCatalogs, 24 * 60 * 60 * 1000);
-
-  // Query-planner statistics refresh. SQLite recommends a periodic
-  // `PRAGMA optimize` for connections that stay open for days — it re-runs
-  // ANALYZE only for tables whose shape drifted, so the common case is a
-  // no-op. Each drain of the search index runs it as well (see
-  // `refreshPlannerStats`), and shutdown runs it too.
-  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
-    setInterval(refreshPlannerStats, 24 * 60 * 60 * 1000).unref();
-  }
-
-  // ── Relationship scoring ────────────────────────────────────────────────
-  // Two sweeps, both per owner and both yielding between batches so requests
-  // are never starved by a long synchronous scoring pass.
-  //
-  // Hourly reads `contacts.scoreDirty`, which the database sets through
-  // triggers on contacts, interactions and action items, so it does work in
-  // proportion to what changed rather than to how many contacts exist. Daily
-  // reads everything, because recency decays with the clock and no trigger can
-  // see that. Startup runs the incremental one: on a first boot after the
-  // upgrade every row is marked, so it is a full pass exactly once.
-  const runSweep = (kind: "stale" | "all") => () =>
-    (kind === "all"
-      ? relationshipService.recomputeAll()
-      : relationshipService.recomputeStale()
-    ).catch((err) =>
-      log.warn("Server", `Relationship score sweep failed: ${err.message}`),
-    );
-  runSweep("stale")()
-    .then(() => {
-      try {
-        ensureWeeklySnapshot();
-      } catch (err) {
-        log.warn(
-          "Server",
-          `Weekly score snapshot failed: ${getErrorMessage(err)}`,
-        );
-      }
-    })
-    .catch(() => {});
-  setInterval(runSweep("stale"), 60 * 60 * 1000);
-  setInterval(runSweep("all"), 24 * 60 * 60 * 1000);
 
   // Initialize search index queue to recover any ungracefully interrupted jobs
   initSearchIndexQueue();
@@ -397,6 +325,11 @@ function registerShutdownHandlers(server: import("http").Server): void {
     shuttingDown = true;
     log.info("Server", `${signal} received — draining connections`);
 
+    // Start no more jobs, and abort the connector syncs in flight. A job
+    // still running when the process exits is queued again at the next boot.
+    stopJobRunner().catch((err) => {
+      log.warn("Server", `Job runner shutdown error: ${getErrorMessage(err)}`);
+    });
     stopConnectorScheduler().catch((err) => {
       log.warn(
         "Server",

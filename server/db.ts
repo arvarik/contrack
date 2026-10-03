@@ -232,6 +232,8 @@ export const OWNED_TABLES = [
   "connector_links",
   "upcoming_events",
   "map_views",
+  // 0002_events_and_jobs
+  "events",
 ] as const;
 
 /**

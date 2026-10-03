@@ -17,6 +17,7 @@
 import {
   Activity,
   AlertTriangle,
+  CalendarClock,
   Check,
   Clock,
   Copy,
@@ -33,6 +34,11 @@ import {
   type HealthAccount,
   type InstanceHealth,
 } from "../../../api/admin";
+import {
+  useBackgroundJobs,
+  type JobStatus,
+  type RecurringJob,
+} from "../../../api/jobs";
 import { Badge } from "../../../components/ui/Badge";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
@@ -156,6 +162,53 @@ function targetLabel(
     target.providerId.replace(/^custom:/, "");
   return target.model ? `${provider} · ${target.model}` : provider;
 }
+
+/** The background jobs, in words. A kind added later reads from its key. */
+const JOB_NAMES: Record<string, string> = {
+  "connectors.tick": "Connector syncs",
+  "connectors.photoSweep": "Stored photos",
+  "scores.stale": "Changed scores",
+  "scores.all": "All scores",
+  "backup.scheduled": "Scheduled backup",
+  "backup.startup": "Startup backup",
+  "maintenance.daily": "Daily cleanup",
+  "contacts.trashPurge": "Trash purge",
+  "ai.modelCatalogs": "AI model lists",
+  "database.plannerStats": "Database statistics",
+  "geocode.startup": "Map pins",
+  "dedupe.check": "Duplicate check",
+};
+
+/** "scores.stale" as "Changed scores", and an unknown kind in plain words. */
+const jobName = (kind: string): string =>
+  JOB_NAMES[kind] ?? words(kind.replace(/\./g, " "));
+
+/** How often a job runs: "Every minute", "Every 6 hours", "Off". */
+function formatEvery(ms: number | null): string {
+  if (ms === null) return "Off";
+  const units: [string, number][] = [
+    ["day", 86_400_000],
+    ["hour", 3_600_000],
+    ["minute", 60_000],
+    ["second", 1_000],
+  ];
+  for (const [unit, size] of units) {
+    if (ms >= size && ms % size === 0) {
+      const count = ms / size;
+      return count === 1 ? `Every ${unit}` : `Every ${count} ${unit}s`;
+    }
+  }
+  return `Every ${Math.round(ms / 1000)} seconds`;
+}
+
+/** A run's result, as the card says it. */
+const STATUS_WORDS: Record<JobStatus, string> = {
+  queued: "Waiting",
+  running: "Running",
+  done: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
 
 /** "dailyInsight" as "Daily insight". */
 function words(key: string): string {
@@ -428,6 +481,151 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
   );
 };
 
+/**
+ * One recurring job: its name and how often it runs, then its last run with
+ * the result and its next run. A `dt` and a `dd` in a `div`, the one other
+ * shape a `dl` may hold.
+ */
+const JobRow = ({ job }: { job: RecurringJob }) => {
+  const failed = job.lastStatus === "failed";
+  const last =
+    job.lastRunAt && job.lastStatus
+      ? `${STATUS_WORDS[job.lastStatus]} ${formatRelative(job.lastRunAt, "at an unknown time")}`
+      : "Not run yet";
+  // Milliseconds to the next run. "Next just now" reads wrong, so the last
+  // minute has words of its own.
+  const wait =
+    job.nextRunAt === null ? null : Date.parse(job.nextRunAt) - Date.now();
+  const next =
+    job.every === null || wait === null || Number.isNaN(wait)
+      ? "Not scheduled"
+      : wait <= 0
+        ? "Due now"
+        : wait < 60_000
+          ? "Next within a minute"
+          : `Next ${formatRelative(job.nextRunAt, "at an unknown time")}`;
+  return (
+    <div className="flex items-start justify-between gap-4 text-xs">
+      <dt className="min-w-0">
+        <span className="block font-medium text-on-surface break-words">
+          {jobName(job.kind)}
+        </span>
+        <span className="block text-on-surface-variant">
+          {formatEvery(job.every)}
+        </span>
+      </dt>
+      <dd className="text-right tabular-nums min-w-0">
+        <span
+          className={cn(
+            "block font-medium",
+            failed ? "text-error" : "text-on-surface",
+          )}
+          title={job.lastRunAt ? formatWhen(job.lastRunAt) : undefined}
+        >
+          {last}
+        </span>
+        <span
+          className="block text-on-surface-variant"
+          title={job.nextRunAt ? formatWhen(job.nextRunAt) : undefined}
+        >
+          {next}
+        </span>
+      </dd>
+    </div>
+  );
+};
+
+/**
+ * The background jobs: what runs by itself and when, and what failed in the
+ * last day. Read-only. A job that failed has run out of tries, and the
+ * error is the one it ended with.
+ */
+const JobsCard = () => {
+  const { data, isLoading, isError } = useBackgroundJobs();
+  const failed = data?.failed ?? [];
+  const recurring = data?.recurring ?? [];
+  const stopped =
+    recurring.length > 0 &&
+    recurring.every(
+      (job) => job.nextRunAt === null && job.lastStatus !== "running",
+    );
+
+  let note: ReactNode;
+  if (isLoading) {
+    note = <p className="text-xs text-on-surface-variant">Reading the jobs…</p>;
+  } else if (isError || !data) {
+    note = (
+      <p className="text-xs text-error text-pretty">
+        The background jobs could not be read
+      </p>
+    );
+  } else {
+    note = (
+      <div className="space-y-2 pt-1">
+        <h3 className="text-xs font-bold text-on-surface">
+          Failed in the last 24 hours
+        </h3>
+        {failed.length === 0 ? (
+          <EmptyState
+            icon={Check}
+            level={3}
+            title="No failed jobs"
+            className="py-4"
+          />
+        ) : (
+          <ul className="space-y-2">
+            {failed.map((job) => (
+              <li key={job.id} className="text-xs space-y-0.5">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="font-medium text-on-surface break-words min-w-0">
+                    {jobName(job.kind)}
+                  </span>
+                  <span
+                    className="shrink-0 text-on-surface-variant tabular-nums"
+                    title={
+                      job.finishedAt ? formatWhen(job.finishedAt) : undefined
+                    }
+                  >
+                    {formatRelative(job.finishedAt, "Unknown")}
+                  </span>
+                </div>
+                <p className="text-error break-words text-pretty">
+                  {job.lastError ?? "No reason was recorded"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Card
+      title="Background jobs"
+      icon={<CalendarClock className="w-4 h-4" />}
+      badge={
+        failed.length > 0 ? (
+          <Badge tone="danger" icon={<AlertTriangle className="w-3 h-3" />}>
+            {failed.length} failed
+          </Badge>
+        ) : stopped ? (
+          <Badge tone="warning">Stopped</Badge>
+        ) : data ? (
+          <Badge tone="success" icon={<Check className="w-3 h-3" />}>
+            On schedule
+          </Badge>
+        ) : undefined
+      }
+      note={note}
+    >
+      {recurring.map((job) => (
+        <JobRow key={job.kind} job={job} />
+      ))}
+    </Card>
+  );
+};
+
 // ---------------------------------------------------------------------------
 
 export const HealthView = () => {
@@ -469,6 +667,10 @@ export const HealthView = () => {
             <EmbeddingsCard health={health} />
             <ProviderCard health={health} />
             <CacheCard health={health} />
+            {/* Both columns: a job's row carries four facts. */}
+            <div className="sm:col-span-2">
+              <JobsCard />
+            </div>
           </div>
         </>
       )}
