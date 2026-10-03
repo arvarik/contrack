@@ -17,14 +17,15 @@ port, the data folder and sign-in, and setups that never open the app.
   block lists.
 - **Which one wins.** A variable and an app setting can name the same thing:
 
-| App setting                                                                     | Variable                                                                      | Which one wins                                                                                                            |
-| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| A provider key                                                                  | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`                       | The variable. The provider row shows **from .env**                                                                        |
-| The model for a task                                                            | `AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`, `AI_EMBEDDINGS_MODEL` | A model picked in the app                                                                                                 |
-| **Use AI on this instance**                                                     | `AI_DISABLED`                                                                 | The variable holds AI off, and the switch is locked                                                                       |
-| **Outgoing mail**                                                               | `SMTP_URL`, with `MAIL_FROM` and `MAIL_REPLY_TO`                              | The variable. The page shows its values read only                                                                         |
-| **Google OAuth client**                                                         | `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`                     | The variables, when both are set. The field is locked                                                                     |
-| **Self-hosted search (SearXNG)**, **Trash**, **Backups**, **Snapshots to keep** | `SEARXNG_URL`, `TRASH_RETENTION_DAYS`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP` | A value saved in the app, then the variable, then the default. While the variable is set, the app cannot change the field |
+| App setting                                    | Variable                                                                      | Which one wins                                                                                                            |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| A provider key                                 | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`                       | The variable. The provider row says which, such as **Set by GEMINI_API_KEY**                                              |
+| A model: Fast, Strong, web search or embedding | `AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`, `AI_EMBEDDINGS_MODEL` | A model pinned in the app. With none, the variable, and the select says **From AI_QUICK_MODEL** or its own variable       |
+| **SearXNG address**                            | `SEARXNG_URL`                                                                 | The variable. The field is locked                                                                                         |
+| **Use AI on this instance**                    | `AI_DISABLED`                                                                 | The variable holds AI off, and the switch is locked                                                                       |
+| **Outgoing mail**                              | `SMTP_URL`, with `MAIL_FROM` and `MAIL_REPLY_TO`                              | The variable. The page shows its values read only                                                                         |
+| **Google OAuth client**                        | `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`                     | The variables, when both are set. The field is locked                                                                     |
+| **Trash**, **Backups**, **Snapshots to keep**  | `TRASH_RETENTION_DAYS`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP`                | A value saved in the app, then the variable, then the default. While the variable is set, the app cannot change the field |
 
 For the last row, set the variable before anyone saves a value in the app. A
 value saved earlier keeps winning.
@@ -35,19 +36,19 @@ value saved earlier keeps winning.
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `AI_PROVIDER`                    | The provider that **Automatic** tries first: `gemini`, `openai` or `anthropic`. A bare model name in an `AI_*_MODEL` pin also goes to it                                                       | `gemini`                                        |
 | `GEMINI_API_KEY`                 | Google Gemini API key. It wins over a key saved in the app                                                                                                                                     | None                                            |
-| `OPENAI_API_KEY`                 | OpenAI API key. It always calls OpenAI itself: a local model server is a custom endpoint                                                                                                       | None                                            |
+| `OPENAI_API_KEY`                 | OpenAI API key. It always calls OpenAI itself: a local model server is an OpenAI-compatible server                                                                                             | None                                            |
 | `ANTHROPIC_API_KEY`              | Anthropic API key                                                                                                                                                                              | None                                            |
 | `AI_DISABLED`                    | `true` or `1` turns AI off for the whole instance. **Use AI on this instance** cannot turn it back on. Local search keeps working                                                              | `false`                                         |
-| `AI_QUICK_MODEL`                 | Pins the **Quick tasks** model, as `model` or `provider:model`, such as `anthropic:claude-sonnet-5`. A model picked in the app wins                                                            | Automatic                                       |
-| `AI_DEEP_MODEL`                  | Pins the **Deep tasks** model, in the same form                                                                                                                                                | Automatic                                       |
-| `AI_RESEARCH_MODEL`              | Pins the **Research model**, in the same form                                                                                                                                                  | Automatic                                       |
+| `AI_QUICK_MODEL`                 | Pins the **Fast model**, as `model` or `provider:model`, such as `anthropic:claude-sonnet-5`. A model pinned in the app wins                                                                   | Automatic                                       |
+| `AI_DEEP_MODEL`                  | Pins the **Strong model**, in the same form                                                                                                                                                    | Automatic                                       |
+| `AI_RESEARCH_MODEL`              | Pins the **Web search model**, in the same form                                                                                                                                                | Automatic                                       |
 | `AI_EMBEDDINGS_MODEL`            | Pins a hosted embedding model, in the same form. A change rebuilds both vector indexes                                                                                                         | The built-in local model                        |
 | `SEARCH_RERANK_MODEL`            | The local model that reorders the top of Ask Contrack's local list. `off` turns it off. Another model downloads once, which needs `MODEL_DOWNLOADS=true`                                       | `Xenova/ms-marco-TinyBERT-L-2-v2`               |
 | `SEARCH_RERANK_BUDGET_MS`        | The most milliseconds that model may add to a question. Later scores are dropped, and the list keeps its order                                                                                 | `25`                                            |
 | `MODEL_DIR`                      | The folder of model files that the server reads before it downloads anything, as `<folder>/<model id>/<file>`. `npm run models:fetch` fills it                                                 | `DATA_DIR/models` (image: `/app/models`)        |
 | `MODEL_DOWNLOADS`                | `false`, `0`, `off` or `no` stops model downloads from huggingface.co. A model that is not on disk then fails to load, and the log says how to fetch it                                        | `true` (image: `false`)                         |
 | `TRANSFORMERS_CACHE`             | The folder that the server writes downloaded model files to                                                                                                                                    | `DATA_DIR/.cache` when `DATA_DIR` is set        |
-| `SEARXNG_URL`                    | The base URL of your SearXNG, for contact research when no provider offers web search                                                                                                          | None                                            |
+| `SEARXNG_URL`                    | The base URL of your SearXNG, for contact research. It wins over an address saved in the app                                                                                                   | None                                            |
 | `HOST`                           | The interface that the server listens on. `0.0.0.0` listens on every interface                                                                                                                 | `127.0.0.1` (image: `0.0.0.0`)                  |
 | `PORT`                           | The port that the server listens on                                                                                                                                                            | `3210`                                          |
 | `PUBLIC_URL`                     | The address people open, such as `https://crm.example.com`, with no path. Mail sends no sign-in, reset or invitation link without it. A bad value stops the start                              | Taken from each request                         |
@@ -104,51 +105,54 @@ that the image ships. `tests/unit/repo/envDocs.test.ts` fails when this table,
 
 The steps are in [AI](ai.md). This section lists the parts and the rules.
 
-### Tasks and their variables
+### Models and their variables
 
-| Task in the app     | What uses it                                                                                                                                                       | Variable              | Custom endpoint |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | --------------- |
-| **Quick tasks**     | Ask Contrack planning and checks, the group brief, briefings, the daily insight, **Add from text**, people named in notes, mail summaries, and research extraction | `AI_QUICK_MODEL`      | Yes             |
-| **Deep tasks**      | Email file summaries, AI duplicate checks, and research extraction with SearXNG                                                                                    | `AI_DEEP_MODEL`       | Yes             |
-| **Research model**  | The web search step of contact research                                                                                                                            | `AI_RESEARCH_MODEL`   | No              |
-| **Embedding model** | Search by meaning and duplicate matching                                                                                                                           | `AI_EMBEDDINGS_MODEL` | Yes             |
+| Model in the app     | What uses it                                                                                                                                                                  | Variable              | OpenAI-compatible server |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------ |
+| **Fast model**       | Ask Contrack planning and checks, the group brief, briefings, the daily insight, **Add from text**, people named in notes, mail summaries, and the fields that research fills | `AI_QUICK_MODEL`      | Yes                      |
+| **Strong model**     | Email file summaries, AI duplicate checks, and the pages that SearXNG finds                                                                                                   | `AI_DEEP_MODEL`       | Yes                      |
+| **Web search model** | The provider's own web search in contact research                                                                                                                             | `AI_RESEARCH_MODEL`   | No                       |
+| **Embedding model**  | Search by meaning and duplicate matching                                                                                                                                      | `AI_EMBEDDINGS_MODEL` | Yes                      |
 
-A task finds its model in this order:
+Each model is found in this order:
 
-1. A model picked in **Settings → Administration → AI providers**.
-2. The variable, when it names a connected provider.
+1. A model pinned in **Settings → Administration → AI**.
+2. The variable, when it names a connected provider. The select then says
+   **From AI_QUICK_MODEL**, or the variable that is set.
 3. **Automatic**: the provider in `AI_PROVIDER`, then a fixed order, then any
-   other connected provider. **Quick tasks** try Gemini, OpenAI, Anthropic.
-   **Deep tasks** and web research try Gemini, Anthropic, OpenAI. Web research
-   skips custom endpoints.
+   other connected provider. The **Fast model** tries Gemini, OpenAI,
+   Anthropic. The **Strong model** and the **Web search model** try Gemini,
+   Anthropic, OpenAI. The web search model skips OpenAI-compatible servers.
 
 The embedding model has no **Automatic**: with no pin, it is the built-in
 model. A pin written as `model` goes to the `AI_PROVIDER` provider. A pin
 written as `provider:model` names `gemini`, `openai` or `anthropic`. To pin a
-custom endpoint's model, use the app.
+model on an OpenAI-compatible server, use the app.
+
+The **Reranker** row is read-only. Only `SEARCH_RERANK_MODEL` changes it.
 
 ### What Automatic picks
 
-| Task                                  | Gemini                  | OpenAI       | Anthropic          |
-| ------------------------------------- | ----------------------- | ------------ | ------------------ |
-| **Quick tasks**                       | `gemini-3.5-flash-lite` | `gpt-6-luna` | `claude-haiku-4-5` |
-| **Deep tasks** and **Research model** | `gemini-3.8-flash`      | `gpt-6-sol`  | `claude-sonnet-5`  |
+| Model                                     | Gemini                  | OpenAI       | Anthropic          |
+| ----------------------------------------- | ----------------------- | ------------ | ------------------ |
+| **Fast model**                            | `gemini-3.5-flash-lite` | `gpt-6-luna` | `claude-haiku-4-5` |
+| **Strong model** and **Web search model** | `gemini-3.8-flash`      | `gpt-6-sol`  | `claude-sonnet-5`  |
 
 These are the fallbacks before a model list loads. Once it loads, each provider
 takes the newest model of the same family. Gemini also skips a model that
-Google paused with a `429` answer, until the pause ends. A custom endpoint
-uses the first chat model in its list, for both **Quick tasks** and **Deep
-tasks**.
+Google paused with a `429` answer, until the pause ends. An OpenAI-compatible
+server uses the first chat model in its list, for both the **Fast model** and
+the **Strong model**.
 
-Contrack loads each provider's model list when a key or an endpoint is saved,
-at start, and once a day. **Refresh model list** loads it at once. The list
+Contrack loads each provider's model list when a key or a server is saved,
+at start, and once a day. **Refresh the model list** loads it at once. The list
 leaves out models that do not chat, deprecated models, and chat models more
 than a year old when the provider dates them. **(?)** after a model name marks
-a guess from the name, because OpenAI and custom endpoints report bare model
-names. A pin to Gemini, OpenAI or Anthropic gets one small test request before
+a guess from the name, because OpenAI and OpenAI-compatible servers report
+bare model names. A pin to Gemini, OpenAI or Anthropic gets one small test request before
 it saves.
 
-### Custom endpoints
+### OpenAI-compatible servers
 
 | Field                  | Rule                                                                         |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -157,7 +161,7 @@ it saves.
 | **Base URL**           | An `http` or `https` URL that ends in `/v1`, such as `http://alpha:11434/v1` |
 | **API key (optional)** | Stored encrypted. A local server needs none                                  |
 
-Contrack asks a custom endpoint for a strict JSON schema first. When the
+Contrack asks an OpenAI-compatible server for a strict JSON schema first. When the
 server refuses it, Contrack falls back to JSON mode, then to instructions in
 the prompt, and remembers what each model accepts.
 
@@ -166,8 +170,8 @@ the prompt, and remembers what each model accepts.
 - One model serves both vector indexes: search and duplicates.
 - The built-in model is `Xenova/all-MiniLM-L6-v2`, with 384 dimensions. It runs
   on a worker thread on the CPU.
-- A hosted model is an embedding model that Gemini, OpenAI or a custom endpoint
-  lists. Anthropic has none. Contrack embeds a short text first to learn the
+- A hosted model is an embedding model that Gemini, OpenAI or an
+  OpenAI-compatible server lists. Anthropic has none. Contrack embeds a short text first to learn the
   vector width, and refuses a model that returns nothing.
 - Gemini embeds a question, a contact and a duplicate check each with its own
   task type, which ranks better than one type for all three.
@@ -176,8 +180,9 @@ the prompt, and remembers what each model accepts.
 - While AI is off for the instance, the built-in model serves, whatever is
   pinned.
 - With a hosted model, the search index embeds new and changed contacts only
-  after someone confirms on the **Semantic search coverage** card.
-- A hosted model embeds no contact of an account with **Use AI for this
+  after someone confirms on the **Search by meaning** card, under the
+  embedding model.
+- A hosted model embeds no contact of an account with **Use AI for my
   account** off, for search or for duplicates.
 
 ### Model files and offline installs
@@ -334,7 +339,7 @@ Set the mail server in **Settings → Administration → Outgoing mail**, or wit
 ## Encryption key
 
 Contrack encrypts every credential that the database stores, with AES-256-GCM:
-AI provider keys and custom endpoint keys saved in the app, the SMTP password,
+AI provider keys and OpenAI-compatible server keys saved in the app, the SMTP password,
 connector credentials, and the Google OAuth client secret. Keys given as
 variables are not stored.
 
@@ -377,35 +382,40 @@ page with a changed value ends with **Reset to defaults**. Scripts read and
 change them with `GET` and `PATCH /api/auth/preferences` (see
 [Authentication](api-reference.md#authentication)).
 
-| Setting                               | Page                 | Choices                            | Default        | Key                  |
-| ------------------------------------- | -------------------- | ---------------------------------- | -------------- | -------------------- |
-| **Theme**                             | Appearance           | Light, Dark, System                | System         | `theme`              |
-| **Accent colour**                     | Appearance           | Any colour                         | `#006a91`      | `accent`             |
-| **Text size**                         | Appearance           | Default, Large                     | Default        | `textScale`          |
-| **Motion**                            | Appearance           | System, Reduced                    | System         | `motion`             |
-| **Corvid motion**                     | Appearance           | Full, Subtle, Off                  | Full           | `mascotMotion`       |
-| **List density**                      | Appearance           | Comfortable, Compact               | Comfortable    | `listDensity`        |
-| **Where Contrack opens**              | Network and contacts | Network, Pulse                     | Network        | `startPage`          |
-| **Default sort**                      | Network and contacts | Name, Recent                       | Name           | `listSort`           |
-| **Recent contacts**                   | Network and contacts | 0 to 10. 0 hides the row           | 3              | `recentLimit`        |
-| **Default cadence**                   | Network and contacts | Weekly, Monthly, Quarterly, Yearly | Quarterly      | `defaultCadenceDays` |
-| **Track new contacts**                | Network and contacts | On, Off                            | Off            | `trackNewContacts`   |
-| **Week starts on**                    | Network and contacts | Monday, Sunday                     | Monday         | `weekStart`          |
-| **Weather**                           | Network and contacts | On, Off                            | Off            | `showWeather`        |
-| **Temperature unit**                  | Network and contacts | °C, °F                             | °C             | `tempUnit`           |
-| **Single-key shortcuts**              | Keyboard             | On, Off                            | On             | `singleKeyShortcuts` |
-| **Use AI for this account**           | Privacy and AI       | On, Off                            | On             | `aiAssist`           |
-| **Auto-merge sensitivity**            | Duplicates           | Cautious, Balanced, Eager          | Balanced       | `dedupePreset`       |
-| **Check new contacts automatically**  | Duplicates           | On, Off                            | On             | `dedupeOnCreate`     |
-| **Check imports automatically**       | Duplicates           | On, Off                            | On             | `dedupeOnImport`     |
-| **Enrich new contacts automatically** | Contact enrichment   | On, Off                            | Off            | `autoEnrich`         |
-| **Search with**                       | Contact enrichment   | Research model, SearXNG, Both      | Research model | `researchSource`     |
+| Setting                               | Page                 | Choices                            | Default          | Key                  |
+| ------------------------------------- | -------------------- | ---------------------------------- | ---------------- | -------------------- |
+| **Theme**                             | Appearance           | Light, Dark, System                | System           | `theme`              |
+| **Accent colour**                     | Appearance           | Any colour                         | `#006a91`        | `accent`             |
+| **Text size**                         | Appearance           | Default, Large                     | Default          | `textScale`          |
+| **Motion**                            | Appearance           | System, Reduced                    | System           | `motion`             |
+| **Corvid motion**                     | Appearance           | Full, Subtle, Off                  | Full             | `mascotMotion`       |
+| **List density**                      | Appearance           | Comfortable, Compact               | Comfortable      | `listDensity`        |
+| **Where Contrack opens**              | Network and contacts | Network, Pulse                     | Network          | `startPage`          |
+| **Default sort**                      | Network and contacts | Name, Recent                       | Name             | `listSort`           |
+| **Recent contacts**                   | Network and contacts | 0 to 10. 0 hides the row           | 3                | `recentLimit`        |
+| **Default cadence**                   | Network and contacts | Weekly, Monthly, Quarterly, Yearly | Quarterly        | `defaultCadenceDays` |
+| **Track new contacts**                | Network and contacts | On, Off                            | Off              | `trackNewContacts`   |
+| **Week starts on**                    | Network and contacts | Monday, Sunday                     | Monday           | `weekStart`          |
+| **Weather**                           | Network and contacts | On, Off                            | Off              | `showWeather`        |
+| **Temperature unit**                  | Network and contacts | °C, °F                             | °C               | `tempUnit`           |
+| **Single-key shortcuts**              | Keyboard             | On, Off                            | On               | `singleKeyShortcuts` |
+| **Use AI for my account**             | Privacy and AI       | On, Off                            | On               | `aiAssist`           |
+| **Auto-merge sensitivity**            | Duplicates           | Cautious, Balanced, Eager          | Balanced         | `dedupePreset`       |
+| **Check new contacts automatically**  | Duplicates           | On, Off                            | On               | `dedupeOnCreate`     |
+| **Check imports automatically**       | Duplicates           | On, Off                            | On               | `dedupeOnImport`     |
+| **Enrich new contacts automatically** | Contact enrichment   | On, Off                            | Off              | `autoEnrich`         |
+| **Web search engine**                 | Contact enrichment   | Instance default, or an engine     | Instance default | `webSearchEngine`    |
 
 - **Default cadence** stores days: 7, 30, 90 or 365. A value of 60 or 180 still
   loads, and the select shows it as a fifth choice.
 - **Auto-merge sensitivity** stores `conservative`, `default` or `aggressive`.
-- **Search with** stores `provider`, `searxng` or `combined`. It shows only
-  while an admin has set a SearXNG address and a provider serves research.
+- **Use AI for my account** shows as one **Use AI** switch on an instance
+  with one account. That switch is the instance's switch, and turning it on
+  also turns `aiAssist` back on.
+- **Web search engine** stores `default`, `provider`, `searxng` or
+  `combined`. `default` follows the engine that an admin sets for the
+  instance. On an instance with one account, the page shows and changes the
+  instance's engine, so this stays `default`.
 - **Search history** on **Privacy and AI** is not a preference. Contrack keeps
   each question that you ask in Ask Contrack and the command palette, and
   **Clear history** deletes them all (see [History](search.md#history)).
@@ -420,21 +430,25 @@ change them with `GET` and `PATCH /api/auth/preferences` (see
 An admin sets these for every account. They are in **Settings →
 Administration**.
 
-| Setting                            | Page          | Default         | Range or form                                     | Variable                                                                      |
-| ---------------------------------- | ------------- | --------------- | ------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **Instance name**                  | General       | None (Contrack) | Up to 60 characters                               | None                                                                          |
-| **Anyone can create an account**   | General       | Off             | On, Off                                           | None                                                                          |
-| **Sign in by emailed link**        | General       | Off             | Needs **Outgoing mail**                           | None                                                                          |
-| **Session length**                 | General       | 30 days         | 1 to 365 days, for new sign-ins                   | None                                                                          |
-| **Trash**                          | General       | 30 days         | 1 to 365 days                                     | `TRASH_RETENTION_DAYS`                                                        |
-| **Backups**                        | General       | 24 hours        | 0 to 168 hours. Off is 0                          | `BACKUP_INTERVAL_HOURS`                                                       |
-| **Snapshots to keep**              | General       | 7               | 1 to 50 in the app, 1 to 100 by variable          | `BACKUP_KEEP`                                                                 |
-| **Self-hosted search (SearXNG)**   | General       | None            | An `http` or `https` URL                          | `SEARXNG_URL`                                                                 |
-| **Google OAuth client**            | General       | None            | A client ID and a client secret                   | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`                        |
-| Mail server                        | Outgoing mail | None            | Host, port, TLS, user, password, sender, Reply-To | `SMTP_URL`, `MAIL_FROM`, `MAIL_REPLY_TO`                                      |
-| **Use AI on this instance**        | AI providers  | On              | On, Off                                           | `AI_DISABLED`                                                                 |
-| Provider keys and custom endpoints | AI providers  | None            | One key per provider, any number of endpoints     | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`                       |
-| The model for each task            | AI providers  | Automatic       | A model, or **Off** for the **Research model**    | `AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`, `AI_EMBEDDINGS_MODEL` |
+| Setting                                     | Page          | Default                   | Range or form                                                        | Variable                                                |
+| ------------------------------------------- | ------------- | ------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Instance name**                           | General       | None (Contrack)           | Up to 60 characters                                                  | None                                                    |
+| **Anyone can create an account**            | General       | Off                       | On, Off                                                              | None                                                    |
+| **Sign in by emailed link**                 | General       | Off                       | Needs **Outgoing mail**                                              | None                                                    |
+| **Session length**                          | General       | 30 days                   | 1 to 365 days, for new sign-ins                                      | None                                                    |
+| **Trash**                                   | General       | 30 days                   | 1 to 365 days                                                        | `TRASH_RETENTION_DAYS`                                  |
+| **Backups**                                 | General       | 24 hours                  | 0 to 168 hours. Off is 0                                             | `BACKUP_INTERVAL_HOURS`                                 |
+| **Snapshots to keep**                       | General       | 7                         | 1 to 50 in the app, 1 to 100 by variable                             | `BACKUP_KEEP`                                           |
+| **Google OAuth client**                     | General       | None                      | A client ID and a client secret                                      | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`  |
+| Mail server                                 | Outgoing mail | None                      | Host, port, TLS, user, password, sender, Reply-To                    | `SMTP_URL`, `MAIL_FROM`, `MAIL_REPLY_TO`                |
+| **Use AI on this instance**                 | AI            | On                        | On, Off                                                              | `AI_DISABLED`                                           |
+| Provider keys and OpenAI-compatible servers | AI            | None                      | One key per provider, any number of servers                          | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` |
+| **Fast model**, **Strong model**            | AI            | Automatic                 | A model                                                              | `AI_QUICK_MODEL`, `AI_DEEP_MODEL`                       |
+| **Embedding model**                         | AI            | Built-in                  | A model                                                              | `AI_EMBEDDINGS_MODEL`                                   |
+| **Allow web search**                        | AI            | On                        | On, Off                                                              | None                                                    |
+| **Web search model**                        | AI            | Automatic                 | A Gemini, OpenAI or Anthropic model                                  | `AI_RESEARCH_MODEL`                                     |
+| **SearXNG address**                         | AI            | None                      | An `http` or `https` URL, not a cloud metadata or link-local address | `SEARXNG_URL`                                           |
+| **Web search engine**                       | AI            | The provider's own search | The provider, SearXNG, or both                                       | None                                                    |
 
 The **Trash**, **Backups** and **Snapshots to keep** rows offer set choices. A
 value set another way shows as it is, with a note. A change to **Backups**

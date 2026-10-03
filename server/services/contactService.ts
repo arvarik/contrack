@@ -513,8 +513,8 @@ export const contactService = {
         },
         () => {
           try {
-            // The account's Search with choice, at Standard depth.
-            const choice = chooseResearch({}, prefs.researchSource);
+            // The account's web search engine, at Standard depth.
+            const choice = chooseResearch({}, prefs.webSearchEngine);
             const check = jobQueue.canStartBatch(scope);
             // While this account's batch runs, the new contact joins it. A
             // batch created beside it would never run.

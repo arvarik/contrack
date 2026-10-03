@@ -1,8 +1,16 @@
 /**
  * PrivacyPage — Privacy and AI settings for this account.
  *
- * Controls account-level AI opt-out, explains what stays local on this machine,
- * shows available AI capabilities, and links to AI usage statistics.
+ * The AI switch, the search history, what stays on this machine, and what
+ * each AI feature uses (`FeatureMap`), with a link to AI usage.
+ *
+ * The switch is the account's own, "Use AI for my account", when the
+ * instance has more than one account. With one, that account is the admin
+ * and the instance is theirs alone: two switches, one for the account and
+ * one for the instance, did the same thing in two places. The page then
+ * shows one, "Use AI", which is the instance's switch. Turning it on also
+ * turns the account's own back on, so a switch left off before cannot keep
+ * AI off unseen.
  *
  * @module views/settings/pages/PrivacyPage
  */
@@ -12,15 +20,19 @@ import { ArrowRight, ShieldCheck, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useAuth } from "../../../components/auth/AuthGate";
-import { SettingRow } from "../SettingRow";
+import { SettingRow, useHashTarget } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import {
   useSearchHistoryList,
   useClearHistory,
 } from "../../../api/searchHistory";
-import { AiCapabilitiesList } from "../AiCapabilitiesCard";
-import { useInstanceAi } from "../../../api/aiSettings";
+import { FeatureMap } from "../../ai-settings/FeatureMap";
+import {
+  useAISettings,
+  useInstanceAi,
+  useSetInstanceAi,
+} from "../../../api/aiSettings";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -60,6 +72,11 @@ export const PrivacyPage = () => {
   // says why.
   const { data: instanceAi } = useInstanceAi();
   const instanceOff = instanceAi?.aiOff === true;
+  const { data: aiSettings } = useAISettings();
+  const setInstanceAi = useSetInstanceAi();
+  // One account, the admin: the account's switch is the instance's.
+  const soleAccount = isAdmin && aiSettings?.multipleAccounts === false;
+  const features = useHashTarget<HTMLDivElement>("ai-features");
 
   const count = data?.pages[0]?.total ?? 0;
   const questions = `${count} ${count === 1 ? "question" : "questions"}`;
@@ -84,31 +101,70 @@ export const PrivacyPage = () => {
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <div className={SETTINGS_CARD}>
-        <SettingRow
-          id="ai-assist"
-          title="Use AI for this account"
-          prefKey="aiAssist"
-          description={
-            <>
-              Lets Contrack use the AI providers set up here for summaries,
-              enrichment, briefings, and insights. When it is off, Contrack
-              sends nothing to an AI provider for you
-              {instanceOff && (
-                <span className="block mt-1 font-medium text-on-surface">
-                  An admin turned AI off for everyone on this instance
-                </span>
-              )}
-            </>
-          }
-          inline
-        >
-          <Switch
-            label="Use AI for this account"
-            checked={preferences.aiAssist && !instanceOff}
-            disabled={instanceOff}
-            onChange={(next) => setPreference("aiAssist", next)}
-          />
-        </SettingRow>
+        {soleAccount ? (
+          <SettingRow
+            id="ai-assist"
+            title="Use AI"
+            description={
+              <>
+                Off sends nothing to any AI provider. Search on this server
+                still works
+                {instanceAi?.lockedByEnv && (
+                  <span className="block mt-1 font-medium text-on-surface">
+                    Set by <code className="font-mono">AI_DISABLED</code>
+                  </span>
+                )}
+              </>
+            }
+            inline
+          >
+            <Switch
+              label="Use AI"
+              checked={!instanceOff && preferences.aiAssist}
+              disabled={instanceAi?.lockedByEnv || setInstanceAi.isPending}
+              onChange={(on) => {
+                if (!on) {
+                  setInstanceAi.mutate(true, {
+                    onSuccess: () => toast.success("AI is off"),
+                    onError: (err) => toast.error(err.message),
+                  });
+                  return;
+                }
+                if (!preferences.aiAssist) setPreference("aiAssist", true);
+                if (instanceOff)
+                  setInstanceAi.mutate(false, {
+                    onSuccess: () => toast.success("AI is on"),
+                    onError: (err) => toast.error(err.message),
+                  });
+              }}
+            />
+          </SettingRow>
+        ) : (
+          <SettingRow
+            id="ai-assist"
+            title="Use AI for my account"
+            prefKey="aiAssist"
+            description={
+              <>
+                Off sends nothing to an AI provider for you. Search on this
+                server still works
+                {instanceOff && (
+                  <span className="block mt-1 font-medium text-on-surface">
+                    An admin turned AI off for everyone on this instance
+                  </span>
+                )}
+              </>
+            }
+            inline
+          >
+            <Switch
+              label="Use AI for my account"
+              checked={preferences.aiAssist && !instanceOff}
+              disabled={instanceOff}
+              onChange={(next) => setPreference("aiAssist", next)}
+            />
+          </SettingRow>
+        )}
 
         <SettingRow
           id="search-history"
@@ -158,13 +214,34 @@ export const PrivacyPage = () => {
 
       <section aria-labelledby="privacy-ai">
         <h2 id="privacy-ai" className={SETTINGS_SECTION_HEADING}>
-          AI on this instance
+          What each feature uses
         </h2>
-        <div className={cn(SETTINGS_CARD, "space-y-4")}>
+        <div
+          id="ai-features"
+          ref={features.ref}
+          tabIndex={-1}
+          className={cn(
+            SETTINGS_CARD,
+            "space-y-4 scroll-mt-20 outline-none transition-colors duration-(--dur-slow)",
+            features.flashing && "flash bg-primary/10",
+          )}
+        >
           <p className="text-sm text-on-surface-variant text-pretty">
-            An administrator sets these up for everyone here
+            {isAdmin ? (
+              <>
+                The models and web search for everyone here.{" "}
+                <Link
+                  to="/settings/admin/ai"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Change them in Administration → AI
+                </Link>
+              </>
+            ) : (
+              "An admin sets these up for everyone here"
+            )}
           </p>
-          <AiCapabilitiesList />
+          <FeatureMap scope="account" />
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="text-sm text-on-surface-variant text-pretty">
               How much AI you used, and what it cost

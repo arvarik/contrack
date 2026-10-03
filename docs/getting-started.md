@@ -91,13 +91,13 @@ The sidebar on a wide screen, and the tab bar on a phone, lead to five places:
 Settings is one list of pages in five groups. Type in **Search settings** to
 find a single setting.
 
-| Group              | Pages                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **You**            | **Account**, **Appearance**, **Network and contacts**, **Keyboard**, **Privacy and AI** and **AI usage**                                          |
-| **Tools**          | **Import**, **Duplicates** and **Contact enrichment**                                                                                             |
-| **Your data**      | **Tags**, **Lists**, **Export**, **Tracked contacts**, **Archived contacts** and **Trash**                                                        |
-| **Connect**        | **Connectors**, **Correspondents** and **MCP and API**                                                                                            |
-| **Administration** | **General**, **Accounts**, **Invitations**, **Outgoing mail**, **AI providers**, **AI usage**, **Backups**, **Audit log** and **Instance health** |
+| Group              | Pages                                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **You**            | **Account**, **Appearance**, **Network and contacts**, **Keyboard**, **Privacy and AI** and **AI usage**                                |
+| **Tools**          | **Import**, **Duplicates** and **Contact enrichment**                                                                                   |
+| **Your data**      | **Tags**, **Lists**, **Export**, **Tracked contacts**, **Archived contacts** and **Trash**                                              |
+| **Connect**        | **Connectors**, **Correspondents** and **MCP and API**                                                                                  |
+| **Administration** | **General**, **Accounts**, **Invitations**, **Outgoing mail**, **AI**, **AI usage**, **Backups**, **Audit log** and **Instance health** |
 
 - **Account** shows only when sign-in is on.
 - **Administration** shows only to an admin. With sign-in off, you are the
@@ -166,12 +166,12 @@ AI is optional. Your contacts, notes, search, tracking and the map all work
 without it. AI adds briefings before a meeting, research on the web, reading
 of pasted text, and checked answers in Ask Contrack.
 
-1. Open **Settings → Administration → AI providers**. You need to be an admin.
+1. Open **Settings → Administration → AI**. You need to be an admin.
 2. Press **Add Google Gemini key**, **Add OpenAI key** or
    **Add Anthropic key**.
 3. Paste the key and press **Connect**.
 
-You can also connect a server of your own, such as Ollama. See
+You can also connect an OpenAI-compatible server, such as Ollama. See
 [Connect a provider](ai.md#connect-a-provider). To turn AI off for your
 account, see [Turn AI off](ai.md#turn-ai-off).
 
@@ -211,7 +211,8 @@ On Windows and Linux, `Cmd+K` is `Ctrl+K`, and `Cmd+Shift+I` is
 - **List**: a named group of contacts that you make, such as "Investors". A
   contact can be on many lists.
 - **Tag**: a short label on a contact, such as "advisor".
-- **Research record**: what a web research run found and added to a contact.
+- **Research record**: what a contact research run found and added to a
+  contact.
   It shows on the **Research** card of the **Dossier** tab.
 
 ## Next steps

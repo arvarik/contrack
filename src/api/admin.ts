@@ -506,11 +506,8 @@ export const useUpdateInstanceSettings = () => {
 // Integrations
 // ---------------------------------------------------------------------------
 
+/** The General page's integrations. SearXNG is on Administration → AI. */
 interface IntegrationsConfig {
-  searxng: {
-    url: string | null;
-    source: "setting" | "env" | "none";
-  };
   googleOAuth: {
     configured: boolean;
     source: "setting" | "env" | "none";
@@ -520,7 +517,6 @@ interface IntegrationsConfig {
 }
 
 interface UpdateIntegrationsInput {
-  searxngUrl?: string;
   googleOAuth?: { clientId: string; clientSecret: string } | null;
 }
 

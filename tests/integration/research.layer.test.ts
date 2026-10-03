@@ -44,6 +44,10 @@ import {
   type Technique,
   type WebSearch,
 } from "../../server/services/research/index.ts";
+import {
+  chooseResearch,
+  engineStates,
+} from "../../server/services/research/choice.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import type { AIGenerateResult } from "../../server/ai/types.ts";
@@ -224,16 +228,16 @@ describe("a research request", () => {
     }
     web.configured.mockReturnValue(true);
     for (const [body, missing, says] of [
-      [{ technique: "provider-search" }, "quick", "quick AI model"],
+      [{ technique: "provider-search" }, "quick", "needs a Fast model"],
       [
         { technique: "search-and-read", webSearch: "test-web" },
         "deep",
-        "deep AI model",
+        "needs a Strong model",
       ],
       [
         { technique: "combined", webSearch: "test-web" },
         "research",
-        "for contact research",
+        "needs a web search model",
       ],
     ] as const) {
       without(missing);
@@ -248,7 +252,7 @@ describe("a research request", () => {
   });
 
   it("gives every field from every technique, found or not", async () => {
-    // No technique named: the account's Search with choice, the research
+    // No technique named: the account's web search engine, the web search
     // model's own search.
     for (const answers of [FOUND, NONE])
       for (const technique of [
@@ -318,7 +322,7 @@ describe("the extraction", () => {
 describe("an AI switch turned off mid-run", () => {
   it("refuses the next web search when the instance switch goes off, and ends the run", async () => {
     // Off after the first search. Both searches run at once, so the
-    // research model's reply cites nothing: it would be asked again.
+    // web search model's reply cites nothing: it would be asked again.
     web.search.mockImplementationOnce(async () => {
       setAiOffForInstance(true);
       return [];
@@ -408,5 +412,53 @@ describe("an AI switch turned off mid-run", () => {
       };
       expect(options.signal?.aborted).toBe(true);
     }
+  });
+});
+
+describe("which engine a start runs, and what each engine lacks", () => {
+  /** SearXNG, set up, under its own id. */
+  const searxng = {
+    ...web,
+    id: "searxng",
+    label: "SearXNG",
+    configured: vi.fn(() => true),
+  } satisfies WebSearch;
+  beforeEach(() => setWebSearch(searxng));
+  afterEach(() => {
+    setWebSearch(null);
+    searxng.configured.mockReturnValue(true);
+    vi.mocked(resolveCapability).mockImplementation(hosted);
+  });
+
+  it("gives way to SearXNG when the web search model's own search cannot run", () => {
+    // The model's own search needs a Fast model; SearXNG reads with the
+    // Strong one and fills the fields with it too.
+    without("quick");
+    expect(chooseResearch({}, "default")).toEqual({
+      technique: "search-and-read",
+      webSearch: "searxng",
+    });
+  });
+
+  it("names the Strong model on a SearXNG stack that nothing can run on", () => {
+    vi.mocked(resolveCapability).mockImplementation(() => null);
+    expect(() => chooseResearch({}, "default")).toThrow(/Strong model/);
+  });
+
+  it("names the chosen engine's own need when nothing can run", () => {
+    searxng.configured.mockReturnValue(false);
+    without("quick");
+    expect(() => chooseResearch({}, "default")).toThrow(/Fast model/);
+  });
+
+  it("reports each engine's needs in the order a start checks them", () => {
+    without("deep");
+    expect(engineStates()).toEqual({
+      provider: { available: true, missing: [] },
+      searxng: { available: false, missing: ["deep"] },
+      combined: { available: false, missing: ["deep"] },
+    });
+    searxng.configured.mockReturnValue(false);
+    expect(engineStates().searxng.missing).toEqual(["web-search", "deep"]);
   });
 });

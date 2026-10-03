@@ -466,7 +466,7 @@ test.describe("Settings — Tools and Data", () => {
     // This instance has no AI key, so research runs on no provider, and the
     // figures, measured on Gemini, describe nothing here.
     await page.goto("/settings/enrichment");
-    const depth = page.getByRole("radiogroup", { name: "Research depth" });
+    const depth = page.getByRole("radiogroup", { name: "Depth" });
     await expect(depth.getByRole("radio")).toHaveCount(2);
     await expect(
       depth.getByRole("radio", { name: /^Standard/ }),
@@ -513,6 +513,19 @@ test.describe("Settings — Tools and Data", () => {
               },
             },
           },
+          // Gemini's own search is the engine that runs.
+          webSearch: {
+            allowed: true,
+            engine: "provider",
+            engines: {
+              provider: { available: true, missing: [] },
+              searxng: { available: false, missing: ["web-search"] },
+              combined: { available: false, missing: ["web-search"] },
+            },
+            searxng: { configured: false, source: "none" },
+          },
+          multipleAccounts: false,
+          instance: { aiOff: false, lockedByEnv: false },
         },
       }),
     );

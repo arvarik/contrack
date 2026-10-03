@@ -71,6 +71,14 @@ const BUILT_IN: {
   },
 ];
 
+/**
+ * The environment variable that holds a built-in provider's key, such as
+ * GEMINI_API_KEY, or undefined for a custom endpoint.
+ */
+export function providerEnvVariable(providerId: string): string | undefined {
+  return BUILT_IN.find((builtIn) => builtIn.id === providerId)?.envVar;
+}
+
 /** Instance cache, keyed by a config fingerprint so key edits take effect. */
 const instances = new Map<
   string,
@@ -119,7 +127,7 @@ export function readStoredKey(
       unreadable.add(value);
       log.warn(
         "AIRegistry",
-        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → Administration → AI providers.`,
+        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → Administration → AI.`,
       );
     }
     return undefined;
@@ -218,7 +226,7 @@ function instantiate(config: ProviderConfig): AIProvider {
  * generation (through resolveCapability), each provider embedding
  * (embedWithProvider), model discovery and the model test before a pin. So
  * the instance switch is checked here, and nothing else has to remember it.
- * `getProviderConfigs` does not check it, so the AI providers page still
+ * `getProviderConfigs` does not check it, so Settings → Administration → AI still
  * lists the stored keys and endpoints while AI is off.
  */
 export function getProvider(id: string): AIProvider | null {

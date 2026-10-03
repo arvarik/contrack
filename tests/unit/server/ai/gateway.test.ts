@@ -15,6 +15,7 @@ beforeEach(() => {
     capability: "quick",
     providerId: "mock",
     modelClass: "lite",
+    source: "auto",
     provider: { generate } as unknown as AIProvider,
   });
 });

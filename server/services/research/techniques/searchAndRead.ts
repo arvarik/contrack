@@ -17,6 +17,7 @@
 // combined technique runs this beside the research model's own search.
 // =============================================================================
 
+import { NEEDS_STRONG_MODEL } from "../needs.ts";
 import { toCitations } from "../../../ai/citations.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import {
@@ -611,10 +612,7 @@ export const searchAndRead: Technique = {
   name: "search-and-read",
   needs: () => [
     { what: "web-search" },
-    {
-      what: "deep",
-      message: "Configure a deep AI model to read the search results.",
-    },
+    { what: "deep", message: NEEDS_STRONG_MODEL },
   ],
   run: searchAndReadPages,
 };

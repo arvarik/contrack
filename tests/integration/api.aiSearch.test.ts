@@ -59,7 +59,7 @@ describe("POST /api/ai-search", () => {
       .send({ contactIds: [contactId] });
 
     expect(res.status).toBe(503);
-    expect(res.body.error.message).toContain("AI provider is not configured");
+    expect(res.body.error.message).toContain("needs a web search model");
   });
 
   it("dynamically resolves to 'searxng' on self-hosted setups with SearXNG configured", async () => {

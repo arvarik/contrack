@@ -61,11 +61,17 @@ export function radioKeys(event: KeyboardEvent<HTMLElement>) {
   if (step === 0) return;
   const group = event.currentTarget.closest('[role="radiogroup"]');
   if (!group) return;
+  // The disabled options are skipped, but the one the focus is on stays in
+  // the list: a checked option that cannot be chosen now, such as an engine
+  // that lost its setup, holds the tab stop, and the arrows must leave it.
   const options = [
-    ...group.querySelectorAll<HTMLElement>(
-      '[role="radio"]:not(:disabled):not([aria-disabled="true"])',
-    ),
-  ];
+    ...group.querySelectorAll<HTMLElement>('[role="radio"]'),
+  ].filter(
+    (option) =>
+      option === event.currentTarget ||
+      (!option.matches(":disabled") &&
+        option.getAttribute("aria-disabled") !== "true"),
+  );
   const from = options.indexOf(event.currentTarget);
   if (from === -1) return;
   event.preventDefault();

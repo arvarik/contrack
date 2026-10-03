@@ -2,11 +2,14 @@ import { aiCache } from "../utils/aiCache.ts";
 // =============================================================================
 // AI Settings Service — provider credentials, capability assignments, models
 // =============================================================================
-// Backing logic for the AI providers page. Owns:
+// Backing logic for Settings → Administration → AI. Owns:
 //   - provider API keys entered through the UI (env keys stay read-only),
 //     stored sealed with the instance secret
-//   - custom OpenAI-compatible endpoints
-//   - capability assignments (fast / smart / research / embeddings)
+//   - custom OpenAI-compatible endpoints (OpenAI-compatible servers)
+//   - capability assignments: the Fast model (quick), the Strong model
+//     (deep), the web search model (research) and the embedding model
+//   - the web search policy: whether research may search the web, and the
+//     instance's engine (server/ai/webSearchPolicy.ts)
 //   - the cached model catalog per provider
 // =============================================================================
 
@@ -18,6 +21,7 @@ import {
   getCachedModels,
   invalidateProviderCache,
   isSealed,
+  providerEnvVariable,
   readStoredKey,
   type CustomEndpointConfig,
   type ProviderConfig,
@@ -31,18 +35,36 @@ import {
 } from "../ai/instanceSwitch.ts";
 import {
   classForCapability,
+  envOverrideVariable,
+  getCapabilityAssignment,
   getCapabilityAssignments,
+  isResearchOff,
   type AICapability,
   type CapabilityAssignment,
+  type CapabilitySource,
   resolveCapability,
 } from "../ai/capabilities.ts";
+import {
+  getWebSearchPolicy,
+  setWebSearchPolicy,
+} from "../ai/webSearchPolicy.ts";
+import { rerankModel } from "../ai/reranker.ts";
+import { countUsers } from "./authService.ts";
+import { engineStates } from "./research/choice.ts";
+import type {
+  EngineState,
+  WebSearchEngine,
+} from "../../shared/webSearchEngine.ts";
 import type { ModelInfo } from "../ai/provider.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { applyCatalogGuardrails } from "../ai/modelFilter.ts";
 import { seal } from "../utils/secretBox.ts";
-import { getSearxngUrl } from "./integrationSettings.ts";
+import {
+  getSearxngStatus,
+  type IntegrationSource,
+} from "./integrationSettings.ts";
 
 /** Model list cached per provider. */
 export interface CachedModelList {
@@ -234,7 +256,16 @@ export function setCapabilityAssignment(
   if (!VALID_CAPABILITIES.includes(capability)) {
     throw new ValidationError(`Unknown capability "${capability}"`);
   }
-  if (!["auto", "pinned", "disabled"].includes(assignment.mode)) {
+  if (assignment.mode === "disabled") {
+    // Web search has its own switch, which keeps a pinned model, and no
+    // other model can be turned off.
+    throw new ValidationError(
+      capability === "research"
+        ? 'Turn web search off with PUT /api/settings/ai/web-search { "allowed": false }'
+        : `The ${capability} model cannot be turned off`,
+    );
+  }
+  if (!["auto", "pinned"].includes(assignment.mode)) {
     throw new ValidationError(`Unknown mode "${assignment.mode}"`);
   }
   if (assignment.mode === "pinned" && !assignment.providerId) {
@@ -244,6 +275,47 @@ export function setCapabilityAssignment(
   assignments[capability] = assignment;
   setSetting(SETTING_KEYS.aiCapabilities, assignments);
   aiCache.invalidateAll();
+}
+
+/**
+ * Allow or stop web search, or choose the instance's engine.
+ *
+ * Turning web search back on also clears the research capability's old
+ * "disabled" mode, which was the way to turn it off before the switch.
+ */
+export function setWebSearch(patch: {
+  allowed?: boolean;
+  engine?: WebSearchEngine;
+}): void {
+  if (patch.allowed === true) clearLegacyResearchOff();
+  setWebSearchPolicy({
+    ...(patch.allowed !== undefined && { off: !patch.allowed }),
+    ...(patch.engine !== undefined && { engine: patch.engine }),
+  });
+  aiCache.invalidateAll();
+}
+
+/** Give the research capability Automatic again if it holds the old "disabled". */
+function clearLegacyResearchOff(): void {
+  if (getCapabilityAssignment("research").mode !== "disabled") return;
+  const assignments = getCapabilityAssignments();
+  assignments.research = { mode: "auto" };
+  setSetting(SETTING_KEYS.aiCapabilities, assignments);
+}
+
+/**
+ * Move an instance that turned research off the old way, with the research
+ * capability's mode "disabled", to the web search switch. Run once at boot:
+ * the switch is then off, and the web search model is Automatic again.
+ */
+export function migrateResearchOff(): void {
+  if (getCapabilityAssignment("research").mode !== "disabled") return;
+  setWebSearchPolicy({ off: true });
+  clearLegacyResearchOff();
+  log.info(
+    "AISettings",
+    "Research was off: web search is now off by its switch, and the web search model is Automatic",
+  );
 }
 
 /**
@@ -409,6 +481,8 @@ export interface AISettingsView {
      * every Contrack prompt carries a contact's details.
      */
     freeTier?: boolean;
+    /** The variable that set the key, such as GEMINI_API_KEY, when source is "env". */
+    envVariable?: string;
   }[];
   /** Built-in providers with no credentials yet — shown as "Add key". */
   availableProviders: { id: string; label: string }[];
@@ -431,7 +505,17 @@ export interface AISettingsView {
         model?: string;
         /** Human-readable target — the built-in model has no provider entry. */
         label?: string;
+        /**
+         * Which step chose it: a pin saved here, the `AI_*_MODEL` variable,
+         * or Automatic. A model the environment chose is not Automatic.
+         */
+        source: CapabilitySource;
       } | null;
+      /**
+       * The `AI_*_MODEL` variable for this capability when it is set. With no
+       * pin saved here, it chooses the model in place of Automatic.
+       */
+      envDefault?: string;
       /**
        * Why `resolved` is null, phrased for the user. Absent when the
        * capability is working, or when it was deliberately disabled.
@@ -439,12 +523,33 @@ export interface AISettingsView {
       unavailableReason?: string;
     }
   >;
-  searxngUrl?: string;
+  /** Contact research's web search: the switch, the engine, and SearXNG. */
+  webSearch: {
+    /** False when an admin turned "Allow web search" off. */
+    allowed: boolean;
+    /** The engine an account that keeps "Instance default" searches with. */
+    engine: WebSearchEngine;
+    /** Whether each engine can run now, and what it lacks. */
+    engines: Record<WebSearchEngine, EngineState>;
+    searxng: {
+      /** A SearXNG address is set, by SEARXNG_URL or here. */
+      configured: boolean;
+      /** "env" when SEARXNG_URL sets it, which locks the field. */
+      source: IntegrationSource;
+      /** The address. Only an admin's view carries it (the route strips it). */
+      url?: string | null;
+    };
+  };
   /**
-   * Whether a SearXNG address is set, in the settings or by SEARXNG_URL, so
-   * the Enrichment page can offer to search with it.
+   * The local model that reorders Ask Contrack's local list, or null when
+   * SEARCH_RERANK_MODEL is "off". It is read-only: only the variable sets it.
    */
-  searxng: boolean;
+  reranker: { model: string | null; source: "default" | "env" };
+  /**
+   * More than one account on this instance. With one, that account's AI
+   * controls are the instance's own, so the pages show each control once.
+   */
+  multipleAccounts: boolean;
   /** The instance switch: whether any provider call may leave this server. */
   instance: InstanceAiState;
 }
@@ -469,15 +574,22 @@ function resolveForView(
   assignment: CapabilityAssignment,
   configs: ProviderConfig[],
 ): AISettingsView["capabilities"][string] {
-  if (assignment.mode === "disabled") {
-    // Deliberate, so not a problem to explain away.
-    return { assignment, resolved: null };
-  }
+  const envVariable = envOverrideVariable(capability);
+  const envDefault = process.env[envVariable]?.trim() ? envVariable : undefined;
 
   if (capability === "embeddings") {
     const e = resolveEmbeddings();
+    // The built-in model is Automatic, also when a pinned hosted model gave
+    // way to it while AI is off on the instance.
+    const source: CapabilitySource =
+      e.kind === "builtin"
+        ? "auto"
+        : assignment.mode === "pinned"
+          ? "pinned"
+          : "env";
     return {
       assignment,
+      ...(envDefault && { envDefault }),
       resolved:
         e.kind === "builtin"
           ? {
@@ -485,11 +597,13 @@ function resolveForView(
               providerLabel: "Built-in",
               model: e.model,
               label: `Built-in local model · ${e.dimension}-dim`,
+              source,
             }
           : {
               providerId: e.providerId!,
               providerLabel: labelFor(e.providerId!, configs),
               model: e.model,
+              source,
             },
     };
   }
@@ -498,6 +612,7 @@ function resolveForView(
   if (r) {
     return {
       assignment,
+      ...(envDefault && { envDefault }),
       resolved: {
         providerId: r.providerId,
         providerLabel: labelFor(r.providerId, configs),
@@ -510,12 +625,14 @@ function resolveForView(
           r.provider.defaultModelFor?.(r.modelClass, {
             grounding: capability === "research",
           }),
+        source: r.source,
       },
     };
   }
 
   return {
     assignment,
+    ...(envDefault && { envDefault }),
     resolved: null,
     unavailableReason: reasonFor(capability, configs),
   };
@@ -535,18 +652,18 @@ function reasonFor(
   capability: AICapability,
   configs: ProviderConfig[],
 ): string {
-  if (isAiOffForInstance()) return "AI is off for this instance.";
+  if (isAiOffForInstance()) return "AI is off on this instance.";
   if (configs.length === 0) {
-    return "No providers connected. Add an API key above, or a custom endpoint.";
+    return "No provider is connected. Add a key or an OpenAI-compatible server under Providers.";
   }
   if (capability === "research") {
     // Research is the one capability a self-hosted stack cannot serve through
     // a model alone — but SearXNG covers it, and when configured the feature
     // genuinely works despite resolving to no provider.
-    if (getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url) {
-      return "No connected provider offers web search, so research runs through your SearXNG instance.";
+    if (getSearxngStatus().url) {
+      return "No connected provider searches the web. Research searches with SearXNG.";
     }
-    return "No connected provider offers web search. Connect Gemini, OpenAI, or Anthropic, or set a SearXNG URL below.";
+    return "No connected provider searches the web. Connect Gemini, OpenAI or Anthropic, or add a SearXNG address.";
   }
   // The common self-hosted case: the only provider is a custom endpoint whose
   // model list was never discovered, so there is no model to call. "No provider
@@ -559,9 +676,9 @@ function reasonFor(
   );
   if (compatWithoutModels.length === configs.length) {
     const names = compatWithoutModels.map((c) => c.label).join(", ");
-    return `No chat models discovered on ${names}. Refresh its model list above — if it stays empty, the endpoint is unreachable or serves no chat models.`;
+    return `No chat models found on ${names}. Refresh its model list under Providers. If it stays empty, the server is unreachable or serves no chat models.`;
   }
-  return "No connected provider can serve this capability.";
+  return "No connected provider has a model for this.";
 }
 
 /**
@@ -604,6 +721,9 @@ export function getSettingsView(): AISettingsView {
         ? provider.supportsSearchGrounding !== false
         : KIND_FEATURES[config.kind].grounding,
       freeTier: provider?.getQuotaSnapshot?.().freeTier || undefined,
+      ...(config.source === "env" && {
+        envVariable: providerEnvVariable(config.id),
+      }),
     };
   });
 
@@ -630,9 +750,28 @@ export function getSettingsView(): AISettingsView {
       keyPreview: redact(readStoredKey(e.apiKey, e.label || e.id)),
     })),
     capabilities,
-    searxngUrl: getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url,
-    searxng: !!getSearxngUrl(),
+    webSearch: webSearchView(),
+    reranker: {
+      model: rerankModel(),
+      source: process.env.SEARCH_RERANK_MODEL?.trim() ? "env" : "default",
+    },
+    multipleAccounts: countUsers() > 1,
     instance: instanceAiState(),
+  };
+}
+
+/** Contact research's web search, as the settings pages show it. */
+function webSearchView(): AISettingsView["webSearch"] {
+  const searxng = getSearxngStatus();
+  return {
+    allowed: !isResearchOff(),
+    engine: getWebSearchPolicy().engine,
+    engines: engineStates(),
+    searxng: {
+      configured: searxng.url !== null,
+      source: searxng.source,
+      url: searxng.url,
+    },
   };
 }
 

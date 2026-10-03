@@ -380,9 +380,9 @@ const ProviderCard = ({ health }: { health: InstanceHealth }) => {
         ) : undefined
       }
     >
-      <Row label="Quick tasks">{targetLabel(provider.capabilities.quick)}</Row>
-      <Row label="Deep tasks">{targetLabel(provider.capabilities.deep)}</Row>
-      <Row label="Web research">
+      <Row label="Fast model">{targetLabel(provider.capabilities.quick)}</Row>
+      <Row label="Strong model">{targetLabel(provider.capabilities.deep)}</Row>
+      <Row label="Web search model">
         {targetLabel(provider.capabilities.research)}
       </Row>
       <Row label="Gemini web searches today">{grounding.rpd}</Row>

@@ -232,7 +232,7 @@ describe("Automatic capabilities on a compat endpoint", () => {
     const view = await request(app).get("/api/settings/ai");
     expect(view.body.capabilities.quick.resolved).toBeNull();
     expect(view.body.capabilities.quick.unavailableReason).toMatch(
-      /no chat models discovered/i,
+      /no chat models found/i,
     );
 
     const res = await request(app)

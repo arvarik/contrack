@@ -5,7 +5,7 @@
 // providers. This module maps each capability to a concrete provider + model
 // at call time, using (in priority order):
 //
-//   1. An explicit pin from the settings store (the AI providers page).
+//   1. An explicit pin from the settings store (Settings → Administration → AI).
 //   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_MODEL).
 //   3. Auto: the legacy AI_PROVIDER first (so existing deployments behave
 //      identically), then a documented preference order over whatever
@@ -40,6 +40,7 @@ import {
 import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
 import { isAiOffForInstance } from "./instanceSwitch.ts";
+import { getWebSearchPolicy } from "./webSearchPolicy.ts";
 
 /** User-facing AI capabilities. */
 export type AICapability = "quick" | "deep" | "research" | "embeddings";
@@ -64,7 +65,16 @@ export interface ResolvedCapability {
   model?: string;
   /** Internal routing class passed to native adapters. */
   modelClass: ModelClass;
+  /**
+   * Which step chose it: a pin saved in the app, the `AI_*_MODEL` variable,
+   * or Automatic. The settings page names it, so a model the environment
+   * chose is not shown as Automatic.
+   */
+  source: CapabilitySource;
 }
+
+/** Which step of `resolveCapability` chose the model. */
+export type CapabilitySource = "pinned" | "env" | "auto";
 
 /** Internal model class backing each generation capability. */
 const CAPABILITY_CLASS: Record<
@@ -88,11 +98,17 @@ const AUTO_ORDER: Record<Exclude<AICapability, "embeddings">, string[]> = {
 };
 
 /** Env overrides, checked before auto-resolution. */
-const ENV_OVERRIDE: Record<Exclude<AICapability, "embeddings">, string> = {
+const ENV_OVERRIDE: Record<AICapability, string> = {
   quick: "AI_QUICK_MODEL",
   deep: "AI_DEEP_MODEL",
   research: "AI_RESEARCH_MODEL",
+  embeddings: "AI_EMBEDDINGS_MODEL",
 };
+
+/** The variable that pins a capability's model from the environment. */
+export function envOverrideVariable(capability: AICapability): string {
+  return ENV_OVERRIDE[capability];
+}
 
 /** The internal model class a generation capability runs on. */
 export function classForCapability(
@@ -125,13 +141,18 @@ export function getCapabilityAssignment(
 }
 
 /**
- * True when an admin set the research model to "Off — never research online".
+ * True when an admin turned "Allow web search" off (webSearchPolicy.ts), or
+ * turned research off the way it was done before that switch: the research
+ * capability's mode "disabled".
  *
  * Research through SearXNG resolves no provider, so `resolveCapability`
  * alone cannot stop it. Every research path asks this as well.
  */
 export function isResearchOff(): boolean {
-  return getCapabilityAssignment("research").mode === "disabled";
+  return (
+    getWebSearchPolicy().off ||
+    getCapabilityAssignment("research").mode === "disabled"
+  );
 }
 
 /**
@@ -171,7 +192,7 @@ export function parseEnvOverride(
  * call. Quick and deep therefore land on the same model: nothing in the compat
  * catalog says which model is the cheaper one, and inventing a ranking from
  * model names would be a guess the user cannot see. Pin the capabilities on
- * the AI providers page to split them.
+ * Settings → Administration → AI to split them.
  *
  * Returns undefined for native providers (they route themselves) and when no
  * chat model is cached, which `resolveCapability` treats as "this provider
@@ -217,6 +238,7 @@ export function resolveCapability(
         // choose for themselves; a compat endpoint needs one named here.
         model: assignment.model ?? (config ? autoModelFor(config) : undefined),
         modelClass,
+        source: "pinned",
       };
     }
     log.warn(
@@ -238,6 +260,7 @@ export function resolveCapability(
           provider,
           model: parsed.model,
           modelClass,
+          source: "env",
         };
       }
     }
@@ -274,7 +297,7 @@ export function resolveCapability(
     if (config.kind === "openai-compatible" && !model) {
       log.warn(
         "AICapabilities",
-        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → Administration → AI providers`,
+        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → Administration → AI`,
       );
       continue;
     }
@@ -284,6 +307,7 @@ export function resolveCapability(
       provider,
       model,
       modelClass,
+      source: "auto",
     };
   }
 

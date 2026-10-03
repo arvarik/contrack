@@ -6,7 +6,7 @@
  *   ┌──────────────────┐
  *   │ ✦ Enrich again ▾ │
  *   └──────────────────┘
- *   RESEARCH DEPTH
+ *   DEPTH
  *     Standard     about 40 s
  *     Deep         about 1 min
  * ```
@@ -18,8 +18,9 @@
  * contact's actions menu lists the same two depths as rows of its own.
  *
  * A row starts the same background run as the Enrichment page
- * (`startSearch`), with the account's Search with choice. When that is
- * SearXNG or both, the heading says so: "Research depth · with SearXNG". While this contact's research runs, the button reads
+ * (`startSearch`), with the account's web search engine. When the engine
+ * that runs is SearXNG or both, the heading says so: "Depth · with
+ * SearXNG". While this contact's research runs, the button reads
  * "Enriching…" and waits, so a second press cannot queue the contact twice.
  * Without AI, outside the AI Search provider, or for a ghost, it is not
  * there. The times show only when research runs on Gemini, where they were
@@ -43,7 +44,7 @@ import {
   DEPTH_WORDS,
   depthTime,
 } from "../../../lib/researchDepth";
-import { searchesWith } from "../../../lib/researchSource";
+import { engineName } from "../../../lib/webSearchEngine";
 
 interface EnrichMenuProps {
   contact: Pick<Contact, "id" | "isGhost">;
@@ -87,11 +88,11 @@ export function EnrichMenu({
   }));
 
   const words = enriching ? "Enriching…" : label;
-  // The provider's search is the default, and goes unsaid.
+  // The web search model's own search is the default, and goes unsaid.
   const heading =
-    search.researchSource === "provider"
-      ? "Research depth"
-      : `Research depth · with ${searchesWith(search.researchProvider ?? "AI", search.researchSource)}`;
+    search.runsEngine && search.runsEngine !== "provider"
+      ? `Depth · with ${engineName(search.runsEngine, search.webSearchProvider)}`
+      : "Depth";
   return (
     <ActionMenu
       // The name starts with the words on the button, so a person who says

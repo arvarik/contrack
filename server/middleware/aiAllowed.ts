@@ -13,10 +13,10 @@
  * both switches with `aiAllowedFor` and the service skips every model stage.
  * The AI rate limiters still count the path.
  *
- * A Quick scan for duplicates (`POST /api/dedupe/scan` with `mode: "quick"`)
- * is the second exception. It compares emails, phones and names and calls no
- * model, so it runs with AI off. A Smart or a Full scan embeds contacts and
- * asks a model, so it stays behind both switches.
+ * An Exact scan for duplicates (`POST /api/dedupe/scan` with `mode:
+ * "quick"`) is the second exception. It compares emails, phones and names
+ * and calls no model, so it runs with AI off. An AI scan or a Full AI scan
+ * embeds contacts and asks a model, so it stays behind both switches.
  *
  * Mounted after `attachPrincipal` in `server/app.ts`.
  *

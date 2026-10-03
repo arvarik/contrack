@@ -1082,6 +1082,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   {
     method: "PUT",
+    path: "/api/settings/ai/web-search",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "PUT",
     path: "/api/settings/ai/searxng",
     class: "admin",
     isolated: false,

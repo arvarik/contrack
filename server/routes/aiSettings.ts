@@ -12,6 +12,8 @@ import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { requireAdmin, requirePasswordCurrent } from "../middleware/auth.ts";
+import { searxngUrlSchema } from "../utils/validators.ts";
+import { webSearchEngineSchema } from "../../shared/webSearchEngine.ts";
 import { auditService } from "../services/auditService.ts";
 import {
   isSearxngEnvSet,
@@ -23,6 +25,7 @@ import {
   setProviderKey,
   deleteProviderKey,
   setCapabilityAssignment,
+  setWebSearch,
   upsertCustomEndpoint,
   deleteCustomEndpoint,
   refreshModels,
@@ -96,8 +99,12 @@ function rebuildVectorStores(): void {
 
 router.get(
   "/",
-  asyncHandler(async (_req, res) => {
-    res.json(getSettingsView());
+  asyncHandler(async (req, res) => {
+    const view = getSettingsView();
+    // A member learns that SearXNG is set, not where it is: the address is
+    // often a private one on the admin's network.
+    if (req.principal?.user.role !== "admin") delete view.webSearch.searxng.url;
+    res.json(view);
   }),
 );
 
@@ -219,6 +226,8 @@ const assignmentSchema = z.object({
   providerId: z.string().optional(),
   model: z.string().optional(),
 });
+// "disabled" stays in the enum so the answer names the switch to use
+// (setCapabilityAssignment), rather than a bare "invalid enum value".
 
 router.put(
   "/capabilities/:capability",
@@ -228,8 +237,8 @@ router.put(
     const rid = req.requestId;
     const capability = String(req.params.capability) as AICapability;
     // A pin is tested against the provider before it is saved, and while AI
-    // is off for the instance nothing may reach a provider. Auto and
-    // Disabled need no test, so they can still be chosen.
+    // is off for the instance nothing may reach a provider. Automatic needs
+    // no test, so it can still be chosen.
     if (req.body.mode === "pinned") assertAiOnForInstance();
     // An embeddings model is only usable if the endpoint really implements
     // /v1/embeddings. Compat servers advertise bare model ids, so capability is
@@ -328,11 +337,40 @@ router.put(
   }),
 );
 
-// ─── SearXNG (self-hosted research) ──────────────────────────────────────────
+// ─── Web search ──────────────────────────────────────────────────────────────
 
-const searxngSchema = z.object({
-  url: z.string().url().or(z.literal("")),
-});
+const webSearchSchema = z
+  .object({
+    /** "Allow web search": false stops every web search, SearXNG's too. */
+    allowed: z.boolean().optional(),
+    /** The engine an account that keeps "Instance default" searches with. */
+    engine: webSearchEngineSchema.optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send allowed, engine, or both",
+  });
+
+router.put(
+  "/web-search",
+  requireAdmin,
+  validateBody(webSearchSchema),
+  asyncHandler(async (req, res) => {
+    setWebSearch(req.body);
+    auditSettingChange(req, SETTING_KEYS.aiWebSearch, {
+      ...(req.body.allowed !== undefined && { allowed: req.body.allowed }),
+      ...(req.body.engine !== undefined && { engine: req.body.engine }),
+    });
+    log.info(
+      "API",
+      `[${req.requestId}] PUT /api/settings/ai/web-search → ${JSON.stringify(req.body)}`,
+    );
+    res.json({ success: true, view: getSettingsView() });
+  }),
+);
+
+// ─── SearXNG (self-hosted web search) ────────────────────────────────────────
+
+const searxngSchema = z.object({ url: searxngUrlSchema });
 
 router.put(
   "/searxng",

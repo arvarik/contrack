@@ -23,6 +23,7 @@
 // the model's memory, and is refused too.
 // =============================================================================
 
+import { NEEDS_FAST_MODEL, NEEDS_WEB_SEARCH_MODEL } from "../needs.ts";
 import type { AIGenerateResult } from "../../../ai/gateway.ts";
 import { resolveRedirects, toCitations } from "../../../ai/citations.ts";
 import {
@@ -198,7 +199,7 @@ async function searchWithProvider(
     if (!answers.some((answer) => answer.text.trim()))
       return failed(
         new AppError(
-          "The research model returned no answer. No contact fields changed. Try again.",
+          "The web search model returned no answer. No contact fields changed. Try again.",
           502,
           { code: "AI_NO_ANSWER" },
         ),
@@ -206,14 +207,14 @@ async function searchWithProvider(
     if (noMatches.length > 0)
       return failed(
         new AppError(
-          "The research model did not report a web search for this contact. No contact fields changed. Try again, or choose another research model in AI settings.",
+          "The web search model did not report a web search for this contact. No contact fields changed. Try again, or choose another web search model in Settings → Administration → AI.",
           502,
           { code: "AI_NO_SEARCH" },
         ),
       );
     return failed(
       new AppError(
-        "Research did not include source links. No contact fields changed. Try again, or choose another research model in AI settings.",
+        "Research did not include source links. No contact fields changed. Try again, or choose another web search model in Settings → Administration → AI.",
         502,
         { code: "AI_GROUNDING_MISSING" },
       ),
@@ -271,15 +272,8 @@ async function searchWithProvider(
 export const providerSearch: Technique = {
   name: "provider-search",
   needs: () => [
-    {
-      what: "research",
-      message:
-        "AI provider is not configured for contact research. Check AI settings.",
-    },
-    {
-      what: "quick",
-      message: "Configure a quick AI model for research extraction.",
-    },
+    { what: "research", message: NEEDS_WEB_SEARCH_MODEL },
+    { what: "quick", message: NEEDS_FAST_MODEL },
   ],
   run: searchWithProvider,
 };

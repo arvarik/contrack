@@ -29,6 +29,10 @@
  * 4. A tile with a hint puts it under the label, and a `detail`, such as a
  *    time and a cost, on a line of its own under that. Pressing the chosen
  *    tile does nothing, so a click cannot save the same value twice.
+ * 5. A `disabled` tile is one that cannot run now, such as an engine with
+ *    no setup. It stays in the group, dimmed, with its hint saying why, so
+ *    the choice is still there to see. It is `aria-disabled`, which the
+ *    arrow keys skip (`radioKeys`), and a press does nothing.
  *
  * The columns are the caller's (`className`, a grid), one by default.
  *
@@ -46,6 +50,8 @@ export interface Choice<T> {
   hint?: string;
   /** A third line, in figures: "About 30 s and $0.13 a contact". */
   detail?: string;
+  /** It cannot be chosen now. Its hint says why. */
+  disabled?: boolean;
 }
 
 interface ChoiceGroupProps<T> {
@@ -82,26 +88,30 @@ export function ChoiceGroup<T>({
     >
       {options.map((option, index) => {
         const checked = option.value === value;
+        const unavailable = option.disabled === true;
         return (
           <button
             key={String(option.value)}
             type="button"
             role="radio"
             aria-checked={checked}
-            aria-disabled={waiting || undefined}
+            aria-disabled={waiting || unavailable || undefined}
             tabIndex={radioTabIndex(checked, index, anyChecked)}
             onKeyDown={radioKeys}
             onClick={() => {
-              if (!checked && !waiting) onChange(option.value);
+              if (!checked && !waiting && !unavailable) onChange(option.value);
             }}
             className={cn(
               "flex gap-3 text-left px-4 py-3 rounded-xl transition-colors",
               option.hint ? "items-start" : "items-center",
-              waiting && "cursor-not-allowed",
+              (waiting || unavailable) && "cursor-not-allowed",
               locked && "opacity-75",
+              unavailable && !checked && "opacity-60",
               checked
                 ? SELECTED_TINT
-                : "state-layer bg-surface-container-highest",
+                : unavailable
+                  ? "bg-surface-container-highest"
+                  : "state-layer bg-surface-container-highest",
             )}
           >
             <RadioDot

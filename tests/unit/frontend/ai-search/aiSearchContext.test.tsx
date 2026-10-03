@@ -12,8 +12,8 @@
 // `startSearch` keeps one identity for the provider's life, so the memoised
 // context value does not change on every render of the provider.
 //
-// Every start searches the way the account chose under Search with, while
-// research can search more than one way.
+// Every start names the web search engine that runs: the account's own, or
+// the instance's, or, when that cannot run, the one research gives way to.
 // =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,10 +24,16 @@ const toastMock = vi.hoisted(() =>
 );
 vi.mock("sonner", () => ({ toast: toastMock }));
 
-/** What research resolves to in AI settings: a provider id, or nothing. */
+type Engine = "provider" | "searxng" | "combined";
+
+/**
+ * What research resolves to in AI settings: a provider id, or nothing, the
+ * instance's engine, and the engines that can run.
+ */
 const settings = vi.hoisted(() => ({
   research: "gemini" as string | null,
-  searxng: false,
+  engine: "provider" as Engine,
+  runnable: ["provider"] as Engine[],
 }));
 vi.mock("../../../../src/api/aiSettings", () => ({
   useAISettings: () => ({
@@ -39,18 +45,30 @@ vi.mock("../../../../src/api/aiSettings", () => ({
               research: {
                 resolved: {
                   providerId: settings.research,
-                  providerLabel: "Gemini",
+                  providerLabel: "Google Gemini",
                 },
               },
             },
-            searxng: settings.searxng,
+            webSearch: {
+              allowed: true,
+              engine: settings.engine,
+              engines: Object.fromEntries(
+                (["provider", "searxng", "combined"] as const).map((engine) => [
+                  engine,
+                  settings.runnable.includes(engine)
+                    ? { available: true, missing: [] }
+                    : { available: false, missing: ["web-search"] },
+                ]),
+              ),
+              searxng: { configured: settings.runnable.includes("searxng") },
+            },
           },
   }),
 }));
 
-/** The account's preferences, and the setter the provider saves through. */
+/** The account's preferences. */
 const prefs = vi.hoisted(() => ({
-  values: { researchSource: "provider" as "provider" | "searxng" | "combined" },
+  values: { webSearchEngine: "default" as "default" | Engine },
   setPreference: vi.fn(),
 }));
 vi.mock("../../../../src/contexts/PreferencesContext", async (original) => ({
@@ -120,8 +138,9 @@ afterEach(() => {
   vi.clearAllMocks();
   start.isPending = false;
   settings.research = "gemini";
-  settings.searxng = false;
-  prefs.values.researchSource = "provider";
+  settings.engine = "provider";
+  settings.runnable = ["provider"];
+  prefs.values.webSearchEngine = "default";
 });
 
 describe("the depths' figures", () => {
@@ -134,6 +153,12 @@ describe("the depths' figures", () => {
     // Settings not loaded, or no provider for research.
     settings.research = null;
     expect(mount().latest().depthFiguresApply).toBe(false);
+    cleanup();
+    // Gemini, with SearXNG doing the searching: not what was measured.
+    settings.research = "gemini";
+    settings.runnable = ["provider", "searxng"];
+    prefs.values.webSearchEngine = "searxng";
+    expect(mount().latest().depthFiguresApply).toBe(false);
   });
 });
 
@@ -142,7 +167,7 @@ describe("startSearch", () => {
     const { latest } = mount();
     act(() => latest().startSearch(["c1"]));
     expect(start.mutate).toHaveBeenCalledWith(
-      { contactIds: ["c1"], depth: undefined },
+      { contactIds: ["c1"], depth: undefined, strategy: "two-pass" },
       expect.any(Object),
     );
 
@@ -175,7 +200,7 @@ describe("startSearch", () => {
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { depth: "deep" }));
     expect(start.mutate).toHaveBeenCalledWith(
-      { contactIds: ["c1"], depth: "deep" },
+      { contactIds: ["c1"], depth: "deep", strategy: "two-pass" },
       expect.any(Object),
     );
   });
@@ -216,55 +241,54 @@ describe("startSearch", () => {
   });
 });
 
-describe("the account's Search with choice", () => {
-  it("names the saved strategy on every start while research can search two ways", () => {
-    settings.searxng = true;
-    prefs.values.researchSource = "combined";
-    const { latest } = mount();
-    expect(latest()).toMatchObject({
-      offersSource: true,
-      researchSource: "combined",
-    });
-    act(() => latest().startSearch(["c1"], { depth: "deep" }));
-    expect(start.mutate).toHaveBeenCalledWith(
-      { contactIds: ["c1"], depth: "deep", strategy: "combined" },
-      expect.any(Object),
-    );
-    // The provider's search is named too, so a start never waits on a save.
-    prefs.values.researchSource = "provider";
-    const again = mount().latest();
-    act(() => again.startSearch(["c1"]));
-    expect(start.mutate.mock.lastCall?.[0]).toMatchObject({
-      strategy: "two-pass",
-    });
-  });
+describe("the engine every start runs", () => {
+  const strategy = () => start.mutate.mock.lastCall?.[0].strategy;
 
-  it("names none while there is one way to search, whatever was saved", () => {
-    prefs.values.researchSource = "searxng";
+  it("is the instance's while the account keeps Instance default", () => {
+    settings.engine = "combined";
+    settings.runnable = ["provider", "searxng", "combined"];
     const { latest } = mount();
     expect(latest()).toMatchObject({
-      offersSource: false,
-      researchSource: "provider",
+      engine: "combined",
+      runsEngine: "combined",
+      webSearchProvider: "Google Gemini",
     });
     act(() => latest().startSearch(["c1"]));
-    expect(start.mutate.mock.lastCall?.[0].strategy).toBeUndefined();
+    expect(strategy()).toBe("combined");
+  });
+
+  it("is the account's own when it chose one", () => {
+    settings.engine = "combined";
+    settings.runnable = ["provider", "searxng", "combined"];
+    prefs.values.webSearchEngine = "searxng";
+    const { latest } = mount();
+    act(() => latest().startSearch(["c1"]));
+    expect(strategy()).toBe("searxng");
+  });
+
+  it("gives way to one that can run, as the server does", () => {
+    prefs.values.webSearchEngine = "searxng";
+    const { latest } = mount();
+    expect(latest()).toMatchObject({
+      engine: "searxng",
+      runsEngine: "provider",
+    });
+    act(() => latest().startSearch(["c1"]));
+    expect(strategy()).toBe("two-pass");
+  });
+
+  it("names none when none can run, so the server says what is missing", () => {
+    settings.runnable = [];
+    const { latest } = mount();
+    expect(latest().runsEngine).toBeNull();
+    act(() => latest().startSearch(["c1"]));
+    expect(strategy()).toBeUndefined();
   });
 
   it("lets a start that names a strategy keep it", () => {
-    settings.searxng = true;
-    prefs.values.researchSource = "combined";
+    settings.runnable = ["provider", "searxng", "combined"];
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { strategy: "searxng" }));
-    expect(start.mutate.mock.lastCall?.[0].strategy).toBe("searxng");
-  });
-
-  it("saves a choice as the account's preference", () => {
-    settings.searxng = true;
-    const { latest } = mount();
-    act(() => latest().setResearchSource("searxng"));
-    expect(prefs.setPreference).toHaveBeenCalledWith(
-      "researchSource",
-      "searxng",
-    );
+    expect(strategy()).toBe("searxng");
   });
 });

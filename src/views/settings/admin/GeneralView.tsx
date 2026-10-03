@@ -448,70 +448,6 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
 
 // ─── 4. Integrations ─────────────────────────────────────────────────────────
 
-const SearxngRow = () => {
-  const { data, isLoading } = useIntegrations();
-  const update = useUpdateIntegrations();
-  const [input, setInput] = useState<string | null>(null);
-  const searxng = data?.searxng;
-  const value = input ?? searxng?.url ?? "";
-
-  const save = (url: string, message: string) =>
-    update.mutate(
-      { searxngUrl: url },
-      {
-        onSuccess: () => {
-          setInput(null);
-          toast.success(message);
-        },
-        onError: (error: Error) => toast.error(error.message),
-      },
-    );
-
-  return (
-    <SettingRow
-      id="searxng"
-      title="Self-hosted search (SearXNG)"
-      description="Web research uses your own SearXNG when no AI provider offers web search"
-      below
-    >
-      {searxng?.source === "env" ? (
-        <p className={NOTE}>Set by SEARXNG_URL in the environment</p>
-      ) : (
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            id="searxng-url"
-            type="url"
-            aria-label="SearXNG base URL"
-            value={value}
-            disabled={isLoading || update.isPending}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="http://searxng.local:8080"
-            className={cn(KEY_INPUT, "flex-1 min-w-0")}
-          />
-          <button
-            type="button"
-            disabled={input === null || update.isPending}
-            onClick={() => save(value.trim(), "SearXNG endpoint saved")}
-            className="btn-primary shrink-0"
-          >
-            Save
-          </button>
-          {searxng?.url && (
-            <button
-              type="button"
-              disabled={update.isPending}
-              onClick={() => save("", "SearXNG endpoint removed")}
-              className="btn-secondary shrink-0 text-error"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      )}
-    </SettingRow>
-  );
-};
-
 const GoogleRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
@@ -763,12 +699,7 @@ const GoogleRow = () => {
 const Integrations = () => {
   const { isError, refetch } = useIntegrations();
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
-  return (
-    <>
-      <SearxngRow />
-      <GoogleRow />
-    </>
-  );
+  return <GoogleRow />;
 };
 
 // ─── Main View ───────────────────────────────────────────────────────────────

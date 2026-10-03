@@ -4,7 +4,8 @@
  *
  * Shows:
  * - How many contacts will be searched, and at which depth
- * - What searches, when it is SearXNG or both rather than the provider
+ * - The web search engine, when it is SearXNG or both rather than the web
+ *   search model's own search
  * - The batch's time and cost at that depth, from the measured figures,
  *   when research runs on Gemini, where they were measured
  * - How many have been previously searched (re-search info)
@@ -25,7 +26,7 @@ interface Props {
   depth: ResearchDepth;
   /** Whether the measured figures describe this research (Gemini only). */
   showEstimate: boolean;
-  /** SearXNG or both, when the person chose one of them over the provider. */
+  /** The engine a batch runs, when it is SearXNG or both. */
   searchWith?: { name: string; does: string };
 }
 
@@ -63,7 +64,7 @@ export function AISearchConfirmModal({
           <InfoRow text={DEPTH_WORDS[depth].does} />
           {searchWith && (
             <InfoRow
-              text={`Searches with ${searchWith.name}: ${searchWith.does}`}
+              text={`Searches with ${searchWith.name}. ${searchWith.does}`}
             />
           )}
           {showEstimate && <InfoRow text={batchEstimate(depth, total)} />}

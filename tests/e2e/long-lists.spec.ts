@@ -154,7 +154,7 @@ test("Manual merge draws only the rows in view of 450, reaches the last, and Sca
     input.closest(".overflow-y-auto")!.scrollTop = 0;
   });
   await page.getByRole("radio", { name: "Scan", exact: true }).click();
-  await expect(page.getByRole("radio", { name: /^Quick scan/ })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /^Exact scan/ })).toBeVisible();
   await expect(search).toHaveCount(0);
   await expect(page.locator("[data-index]")).toHaveCount(0);
   await page.context().close();
@@ -167,8 +167,11 @@ test("Enrichment draws only the rows in its box, reaches the last, and Select al
   await page.goto("/settings/enrichment");
   await expect(page.getByText(new RegExp(`^${TOTAL} contacts$`))).toBeVisible();
   const box = ".max-h-\\[360px\\]";
+  // The list draws its rows a frame after it measures its box.
+  await expect
+    .poll(async () => (await drawn(page, box)).count)
+    .toBeGreaterThan(0);
   const top = await drawn(page, box);
-  expect(top.count).toBeGreaterThan(0);
   expect(top.count).toBeLessThan(60);
 
   await page.locator(box).evaluate((el) => {

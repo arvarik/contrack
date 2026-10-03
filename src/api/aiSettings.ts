@@ -1,15 +1,19 @@
 /**
  * AI Settings API Hooks — capability-based AI configuration.
  *
- * Backs the AI providers page: provider credentials, custom
- * OpenAI-compatible endpoints, per-capability model assignment, and model
- * discovery. Also the instance switch: whether an admin turned AI off for
- * every account.
+ * Backs Settings → Administration → AI: provider credentials, OpenAI-
+ * compatible servers, the model for each capability, model discovery, and
+ * web search (the switch, the engine and SearXNG). Also the instance switch:
+ * whether an admin turned AI off for every account.
  *
  * @module api/aiSettings
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
+import type {
+  EngineState,
+  WebSearchEngine,
+} from "../../shared/webSearchEngine";
 
 export type AICapability = "quick" | "deep" | "research" | "embeddings";
 
@@ -35,6 +39,8 @@ interface ProviderStatus {
    * free tier Google may use prompts and responses to improve its products.
    */
   freeTier?: boolean;
+  /** The variable that set the key, such as GEMINI_API_KEY, when source is "env". */
+  envVariable?: string;
 }
 
 interface CustomEndpoint {
@@ -72,15 +78,42 @@ export interface AISettings {
         model?: string;
         /** Set when the target has no provider entry (the built-in model). */
         label?: string;
+        /**
+         * Which step chose it: a pin saved here, the `AI_*_MODEL` variable,
+         * or Automatic.
+         */
+        source: "pinned" | "env" | "auto";
       } | null;
+      /** The `AI_*_MODEL` variable when it is set: Automatic's stand-in. */
+      envDefault?: string;
       /** Why `resolved` is null, phrased for the user. */
       unavailableReason?: string;
     }
   >;
-  searxngUrl?: string;
-  /** A SearXNG address is set, in the settings or by SEARXNG_URL. */
-  searxng?: boolean;
+  /** Contact research's web search. */
+  webSearch: WebSearchSettings;
+  /** The local model that reorders Ask Contrack's list, or null when off. */
+  reranker: { model: string | null; source: "default" | "env" };
+  /** More than one account: each control then has an account and an instance copy. */
+  multipleAccounts: boolean;
   instance: InstanceAi;
+}
+
+/** The web search part of the view. */
+interface WebSearchSettings {
+  /** False when an admin turned "Allow web search" off. */
+  allowed: boolean;
+  /** The instance's engine: what "Instance default" searches with. */
+  engine: WebSearchEngine;
+  /** Whether each engine can run now, and what it lacks. */
+  engines: Record<WebSearchEngine, EngineState>;
+  searxng: {
+    configured: boolean;
+    /** "env" when SEARXNG_URL sets it, which locks the field. */
+    source: "setting" | "env" | "none";
+    /** The address. Only an admin's view has it. */
+    url?: string | null;
+  };
 }
 
 interface ModelOption {
@@ -271,5 +304,44 @@ export const useDeleteEndpoint = () => {
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-settings"] }),
+  });
+};
+
+/**
+ * "Allow web search", the instance's engine, or both. Admin only. The
+ * answer carries the whole view, which every engine's state depends on.
+ */
+export const useSetWebSearch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: {
+      allowed?: boolean;
+      engine?: WebSearchEngine;
+    }): Promise<{ success: true; view: AISettings }> => {
+      const res = await apiFetch("/settings/ai/web-search", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      return res.json();
+    },
+    onSuccess: (result) => qc.setQueryData(KEY, result.view),
+    onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+};
+
+/** Save the SearXNG address, or remove it with "". Admin only. */
+export const useSetSearxng = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (url: string): Promise<{ success: true }> => {
+      const res = await apiFetch("/settings/ai/searxng", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      return res.json();
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };

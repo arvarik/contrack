@@ -11,7 +11,7 @@
  * ┌ 4 possible duplicates ─────────────────── Review them → ┐   when any wait
  * [ Scan | Manual merge ]
  * ┌──────────────────────────────────────────────────────────┐
- * │ ◉ Quick scan     ○ Smart scan     ○ Full scan            │
+ * │ ◉ Exact scan     ○ AI scan        ○ Full AI scan         │
  * │                                            [ Scan now ]  │
  * └──────────────────────────────────────────────────────────┘
  * AUTOMATIC MERGING
