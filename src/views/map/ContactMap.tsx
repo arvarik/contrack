@@ -451,7 +451,7 @@ export const ContactMap = ({
     setStack(null);
     setCard(null);
     clusterLeavesCache.current.clear();
-    setClusterLeaves(new Map());
+    setClusterLeaves((prev) => (prev.size ? new Map() : prev));
   }, [contacts, setCard]);
   // A card or a stack belongs to a pin, and the heat takes the pins away.
   useEffect(() => {
