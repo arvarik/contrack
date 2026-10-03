@@ -78,7 +78,7 @@ describe("SaveViewModal", () => {
 
     rerender(<SaveViewModal {...props} currentLayer="pins" overdueOnly />);
     expect(
-      screen.getByText("The overdue filter is not saved with the view."),
+      screen.getByText("The overdue filter is not saved with the view"),
     ).toBeTruthy();
   });
 

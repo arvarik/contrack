@@ -115,7 +115,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
             <span className="text-on-surface-variant/80">Layer:</span>
             <span className="font-medium text-on-surface">{layerLabel}</span>
           </div>
-          {overdueOnly && <p>The overdue filter is not saved with the view.</p>}
+          {overdueOnly && <p>The overdue filter is not saved with the view</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2">

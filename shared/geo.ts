@@ -21,7 +21,7 @@ export interface MapStyleUrls {
  */
 export type GeoSource = "geocoder" | "manual" | null;
 
-/** One row of `GET /api/contacts/map` and the projection of a slim row. */
+/** One placed contact, as `toMapContacts` projects a slim row. */
 export interface MapContact {
   id: string;
   name: string;
@@ -124,7 +124,7 @@ export function haversineKm(
 }
 
 /**
- * Build the map source from the route's rows.
+ * Build the map source from the map's rows.
  *
  * GeoJSON orders a position longitude first. The contact id is the feature
  * id and the `id` property, because MapLibre keeps properties through

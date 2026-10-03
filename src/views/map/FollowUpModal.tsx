@@ -165,7 +165,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         {tooMany && (
           <p className="text-xs text-error font-medium">
             A follow-up can go to {MAX_BULK_ACTION_ITEMS} people at a time.
-            Select fewer people to add it.
+            Select fewer people to add it
           </p>
         )}
 
