@@ -13,13 +13,13 @@ import type { ClusterFeature } from "./useClusterFeatures";
 import type { PinEvent } from "./ContactMarker";
 import { clusterCardId } from "./MapHoverCard";
 
-/** The cluster's accessible name. */
-function clusterLabel(count: number, selected = 0): string {
+/** The cluster's accessible name, which says what a click does. */
+function clusterLabel(count: number, selected = 0, stacked = false): string {
   const word = count === 1 ? "contact" : "contacts";
-  if (selected > 0) {
-    return `${selected} of ${count} selected, ${count} ${word}, zoom in`;
-  }
-  return `${count} ${word}, zoom in`;
+  const what = stacked
+    ? `${count} ${word} at one place, list them`
+    : `${count} ${word}, zoom in`;
+  return selected > 0 ? `${selected} of ${count} selected, ${what}` : what;
 }
 
 interface ClusterMarkerProps {
@@ -29,6 +29,12 @@ interface ClusterMarkerProps {
   onCard?: (cluster: ClusterFeature, event: PinEvent) => void;
   /** The preview is open, and describes the cluster. */
   described?: boolean;
+  /** No zoom splits it, so a click lists its people. */
+  stacked?: boolean;
+  /** It holds the open contact, a card's or a list row's: the pin's halo. */
+  halo?: boolean;
+  /** Another contact is open, so this cluster steps back. */
+  dimmed?: boolean;
 }
 
 export const ClusterMarker = memo(function ClusterMarker({
@@ -37,6 +43,9 @@ export const ClusterMarker = memo(function ClusterMarker({
   onExpand,
   onCard,
   described = false,
+  stacked = false,
+  halo = false,
+  dimmed = false,
 }: ClusterMarkerProps) {
   const hasSelected = selectedCount > 0;
 
@@ -45,6 +54,7 @@ export const ClusterMarker = memo(function ClusterMarker({
       longitude={cluster.longitude}
       latitude={cluster.latitude}
       anchor="center"
+      style={halo ? { zIndex: 2 } : undefined}
     >
       {/*
         The count is text, and scaling text blurs it, so a hover lifts the
@@ -53,10 +63,12 @@ export const ClusterMarker = memo(function ClusterMarker({
       */}
       <button
         type="button"
-        aria-label={clusterLabel(cluster.count, selectedCount)}
+        aria-label={clusterLabel(cluster.count, selectedCount, stacked)}
         aria-describedby={
           described ? clusterCardId(cluster.clusterId) : undefined
         }
+        data-halo={halo || undefined}
+        data-dimmed={dimmed || undefined}
         onClick={() => onExpand(cluster)}
         onPointerEnter={(event) => {
           if (event.pointerType !== "touch") onCard?.(cluster, "enter");
@@ -64,7 +76,7 @@ export const ClusterMarker = memo(function ClusterMarker({
         onPointerLeave={() => onCard?.(cluster, "leave")}
         onFocus={() => onCard?.(cluster, "focus")}
         onBlur={() => onCard?.(cluster, "blur")}
-        className={`flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform hover:-translate-y-1 ${
+        className={`map-pin flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-[translate,opacity] hover:-translate-y-1 ${
           hasSelected ? "ring-2 ring-primary" : "ring-1 ring-outline-variant"
         }`}
       >

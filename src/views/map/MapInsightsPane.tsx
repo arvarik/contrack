@@ -11,25 +11,29 @@
  * wide screen.
  *
  * Two views: a summary of the people in view (their top industries,
- * companies and tags, each a filter to press, and their time zones) and the
- * people themselves, a virtualised list where a press flies to the pin.
+ * companies and tags, each a filter to press on and off, and their time
+ * zones) and the people themselves, the overdue first. Pointing at a person
+ * marks their pin, and a press flies to it and shows their card.
  *
  * @module views/map/MapInsightsPane
  */
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  AlertTriangle,
   BarChart3,
   Briefcase,
   Building,
   Clock,
   Tag,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
+import { isPastDay } from "../../../shared/dates";
 import type { MapContact } from "../../../shared/geo";
 import { formatFacet } from "../../../shared/facetQuery";
-import type { FacetField } from "../../../shared/searchFacets";
+import type { FacetField, FacetFilter } from "../../../shared/searchFacets";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
 import {
   SIDE_PANEL_SCROLLER,
@@ -40,9 +44,16 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { Modal } from "../../components/ui/Modal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
-import { SECTION_HEADING, TONE_WASH } from "../../lib/styles";
+import {
+  SECTION_HEADING,
+  SELECTED_TINT,
+  TONE_TEXT,
+  TONE_WASH,
+  type Tone,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import type { MapStats, TopBucket } from "./mapStats";
+import type { MapEmpty, MapStats, TopBucket } from "./mapStats";
+import { facetKey } from "./useMapFilter";
 
 const INSIGHTS_TITLE = "Map insights";
 
@@ -59,22 +70,51 @@ const SCROLLER = SIDE_PANEL_SCROLLER;
 /** The small caps heading over each group. */
 const GROUP_HEADING = cn(SECTION_HEADING, "flex items-center gap-1.5 mb-1");
 
-interface MapInsightsPaneProps {
+/** What the panel says with no one in view, by the reason. */
+const EMPTY: Record<
+  MapEmpty | "view",
+  { title: string; body?: string; icon?: LucideIcon; tone?: Tone }
+> = {
+  loading: { title: "Loading contacts…" },
+  failed: {
+    title: "Could not load contacts",
+    icon: AlertTriangle,
+    tone: "error",
+  },
+  none: {
+    title: "No one is on the map yet",
+    body: "Add a location to a contact",
+  },
+  view: {
+    title: "No one in view",
+    body: "Zoom out or clear the filters to see who is here",
+  },
+};
+
+/** What a summary bar needs to add its filter, or to remove it. */
+interface FacetProps {
+  /** The filter's pills. A bar whose pill is there shows it is on. */
+  activeFilters?: readonly FacetFilter[];
+  onApplyFacet: (facetQuery: string) => void;
+  onRemoveFacet?: (index: number) => void;
+}
+
+interface MapInsightsPaneProps extends FacetProps {
   isOpen: boolean;
   onToggle: (open: boolean) => void;
   stats: MapStats;
+  /** Why nobody is on the map, when nobody is. */
+  empty?: MapEmpty;
   inViewContacts: MapContact[];
-  onApplyFacet: (facetQuery: string) => void;
   onSelectContact: (contact: MapContact) => void;
+  /** A People row points at its contact's pin, or at none. */
+  onHighlightContact?: (id: string | null) => void;
 }
 
 export const MapInsightsPane = ({
   isOpen,
   onToggle,
-  stats,
-  inViewContacts,
-  onApplyFacet,
-  onSelectContact,
+  ...insights
 }: MapInsightsPaneProps) => {
   const isWide = useMediaQuery(WIDE_QUERY);
   const [view, setView] = useState<View>("summary");
@@ -92,15 +132,7 @@ export const MapInsightsPane = ({
       className="shrink-0 self-start"
     />
   );
-  const content = (
-    <InsightsContent
-      view={view}
-      stats={stats}
-      inViewContacts={inViewContacts}
-      onApplyFacet={onApplyFacet}
-      onSelectContact={onSelectContact}
-    />
-  );
+  const content = <InsightsContent view={view} {...insights} />;
 
   return (
     <>
@@ -137,67 +169,61 @@ export const MapInsightsPane = ({
   );
 };
 
-interface InsightsContentProps {
+type InsightsContentProps = Omit<
+  MapInsightsPaneProps,
+  "isOpen" | "onToggle"
+> & {
   view: View;
-  stats: MapStats;
-  inViewContacts: MapContact[];
-  onApplyFacet: (facetQuery: string) => void;
-  onSelectContact: (contact: MapContact) => void;
-}
+};
 
 const InsightsContent = ({
   view,
   stats,
+  empty,
   inViewContacts,
-  onApplyFacet,
   onSelectContact,
+  onHighlightContact,
+  ...facets
 }: InsightsContentProps) => {
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-4">
       {stats.inView === 0 ? (
-        <EmptyState
-          icon={Users}
-          level={3}
-          title="No one in view"
-          body="Zoom out or clear the filters to see who is here"
-        />
+        <EmptyState icon={Users} level={3} {...EMPTY[empty ?? "view"]} />
       ) : view === "summary" ? (
-        <Summary stats={stats} onApplyFacet={onApplyFacet} />
+        <Summary stats={stats} {...facets} />
       ) : (
-        <People contacts={inViewContacts} onSelect={onSelectContact} />
+        <People
+          contacts={inViewContacts}
+          onSelect={onSelectContact}
+          onHighlight={onHighlightContact}
+        />
       )}
     </div>
   );
 };
 
-const Summary = ({
-  stats,
-  onApplyFacet,
-}: {
-  stats: MapStats;
-  onApplyFacet: (facetQuery: string) => void;
-}) => (
+const Summary = ({ stats, ...facets }: { stats: MapStats } & FacetProps) => (
   <div className={cn(SCROLLER, "space-y-5")}>
     <Bars
       title="Top industries"
       icon={Briefcase}
       field="industry"
       items={stats.topIndustries}
-      onApplyFacet={onApplyFacet}
+      {...facets}
     />
     <Bars
       title="Top companies"
       icon={Building}
       field="company"
       items={stats.topCompanies}
-      onApplyFacet={onApplyFacet}
+      {...facets}
     />
     <Bars
       title="Top tags"
       icon={Tag}
       field="tag"
       items={stats.topTags}
-      onApplyFacet={onApplyFacet}
+      {...facets}
     />
     {stats.timeZones.length > 0 && (
       <section>
@@ -223,20 +249,21 @@ const Summary = ({
   </div>
 );
 
-/** One group: a bar per value, each a filter to press. */
+/** One group: a bar per value, each a filter to press on and off. */
 const Bars = ({
   title,
   icon: Icon,
   field,
   items,
+  activeFilters = [],
   onApplyFacet,
+  onRemoveFacet,
 }: {
   title: string;
   icon: LucideIcon;
   field: FacetField;
   items: TopBucket[];
-  onApplyFacet: (facetQuery: string) => void;
-}) => {
+} & FacetProps) => {
   if (items.length === 0) return null;
   const most = Math.max(...items.map((item) => item.count), 1);
   return (
@@ -246,33 +273,48 @@ const Bars = ({
         {title}
       </h3>
       <ul>
-        {items.map((item) => (
-          <li key={item.name}>
-            <button
-              type="button"
-              onClick={() =>
-                onApplyFacet(formatFacet({ field, value: item.name.trim() }))
-              }
-              aria-label={`Filter by ${field}: ${item.name} (${item.count})`}
-              className="hit-area state-layer w-full rounded-lg px-2 py-1.5 text-left cursor-pointer"
-            >
-              <span className="flex items-center justify-between gap-2 text-xs font-medium mb-1">
-                <span className="text-on-surface truncate">{item.name}</span>
-                <span className="text-on-surface-variant font-bold tabular-nums shrink-0">
-                  {item.count}
+        {items.map((item) => {
+          const facet = { field, value: item.name.trim() };
+          // The bar's own pill, when it is there: a press removes it.
+          const pill = activeFilters.findIndex(
+            (f) => facetKey(f) === facetKey(facet),
+          );
+          const on = pill >= 0;
+          return (
+            <li key={item.name}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() =>
+                  on ? onRemoveFacet?.(pill) : onApplyFacet(formatFacet(facet))
+                }
+                aria-label={`Filter by ${field}: ${item.name} (${item.count})`}
+                className={cn(
+                  "hit-area state-layer w-full rounded-lg px-2 py-1.5 text-left cursor-pointer",
+                  on && SELECTED_TINT,
+                )}
+              >
+                <span className="flex items-center justify-between gap-2 text-xs font-medium mb-1">
+                  <span className={cn("truncate", !on && "text-on-surface")}>
+                    {item.name}
+                  </span>
+                  <span className="flex items-center gap-1 text-on-surface-variant font-bold tabular-nums shrink-0">
+                    {item.count}
+                    {on && <X className="w-3 h-3" aria-hidden="true" />}
+                  </span>
                 </span>
-              </span>
-              <span className="block h-1.5 rounded-sm bg-surface-container-highest overflow-hidden">
-                <span
-                  className="block h-full rounded-sm bg-primary"
-                  style={{
-                    width: `${Math.max(4, Math.round((item.count / most) * 100))}%`,
-                  }}
-                />
-              </span>
-            </button>
-          </li>
-        ))}
+                <span className="block h-1.5 rounded-sm bg-surface-container-highest overflow-hidden">
+                  <span
+                    className="block h-full rounded-sm bg-primary"
+                    style={{
+                      width: `${Math.max(4, Math.round((item.count / most) * 100))}%`,
+                    }}
+                  />
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -280,17 +322,38 @@ const Bars = ({
 
 const ROW_HEIGHT = 56;
 
-/** The people in view, virtualised: a network can put thousands in view. */
+/**
+ * The people in view, the overdue first and then by name. Virtualised: a
+ * network can put thousands in view.
+ */
 const People = ({
   contacts,
   onSelect,
+  onHighlight,
 }: {
   contacts: MapContact[];
   onSelect: (contact: MapContact) => void;
+  onHighlight?: (id: string | null) => void;
 }) => {
   const scroller = useRef<HTMLDivElement>(null);
+  const { people, overdue } = useMemo(() => {
+    const now = new Date();
+    const late = new Set(
+      contacts.filter((c) => isPastDay(c.nextFollowUpAt, now)).map((c) => c.id),
+    );
+    return {
+      people: [...contacts].sort(
+        (a, b) =>
+          Number(late.has(b.id)) - Number(late.has(a.id)) ||
+          a.name.localeCompare(b.name),
+      ),
+      overdue: late,
+    };
+  }, [contacts]);
+  // A list that goes away leaves no pin marked.
+  useEffect(() => () => onHighlight?.(null), [onHighlight]);
   const rows = useVirtualizer({
-    count: contacts.length,
+    count: people.length,
     getScrollElement: () => scroller.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 5,
@@ -298,10 +361,20 @@ const People = ({
 
   return (
     <div ref={scroller} className={SCROLLER}>
-      <ul className="relative" style={{ height: rows.getTotalSize() }}>
+      <ul
+        aria-label="People in view"
+        className="relative"
+        style={{ height: rows.getTotalSize() }}
+        onMouseLeave={() => onHighlight?.(null)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget))
+            onHighlight?.(null);
+        }}
+      >
         {rows.getVirtualItems().map((row) => {
-          const contact = contacts[row.index];
+          const contact = people[row.index];
           if (!contact) return null;
+          const late = overdue.has(contact.id);
           // The chip reads the same view as the ring, and shows nothing for
           // a contact with no score.
           const score = scoreView(contact);
@@ -317,11 +390,11 @@ const People = ({
               <button
                 type="button"
                 onClick={() => onSelect(contact)}
-                aria-label={
-                  contact.company
-                    ? `${contact.name}, ${contact.company}`
-                    : contact.name
-                }
+                onMouseEnter={() => onHighlight?.(contact.id)}
+                onFocus={() => onHighlight?.(contact.id)}
+                aria-label={[contact.name, contact.company, late && "overdue"]
+                  .filter(Boolean)
+                  .join(", ")}
                 className="state-layer w-full h-full flex items-center gap-2.5 px-2 rounded-lg text-left cursor-pointer"
               >
                 <ScoreRingAvatar contact={contact} size={36} decorative />
@@ -330,6 +403,11 @@ const People = ({
                     {contact.name}
                   </span>
                   <span className="block text-xs text-on-surface-variant truncate">
+                    {late && (
+                      <span className={cn("font-semibold", TONE_TEXT.error)}>
+                        Overdue ·{" "}
+                      </span>
+                    )}
                     {contact.company ||
                       contact.role ||
                       contact.location ||

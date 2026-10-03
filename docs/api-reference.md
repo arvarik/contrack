@@ -332,7 +332,7 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 | `PUT /api/contacts/:id`               | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                | your data            |
 | `DELETE /api/contacts/:id`            | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                         | your data            |
 | `GET /api/contacts/archived`          | Archived contacts, most recently changed first.                                                                                                                           | your data            |
-| `GET /api/contacts/map`               | Contacts with coordinates for the map: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed and ghost contacts are left out. | your data            |
+| `GET /api/contacts/map`               | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out. | your data            |
 | `PATCH /api/contacts/:id/location`    | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.            | your data            |
 | `POST /api/contacts/:id/avatar`       | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                        | your data            |
 | `GET /api/contacts/:id/score`         | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                   | your data            |
@@ -612,6 +612,7 @@ A follow-up (an action item) is a task with a due date on one contact.
 | `GET /api/action-items/count`          | The number of open follow-ups due today or earlier: `{ count }`.                                                                                                                                    | your data |
 | `GET /api/contacts/:id/action-items`   | One contact's follow-ups.                                                                                                                                                                           | your data |
 | `POST /api/contacts/:id/action-items`  | Create a follow-up: `{ title, dueAt }`. `201`.                                                                                                                                                      | your data |
+| `POST /api/action-items/bulk`          | The same follow-up for many contacts: `{ contactIds, title, dueAt }`, up to 500 ids. `201 { count }`. An id you cannot use refuses the whole call, and nothing is written.                          | your data |
 | `PATCH /api/action-items/:id`          | Change `title` or `dueAt`. A later `dueAt` snoozes it.                                                                                                                                              | your data |
 | `PATCH /api/action-items/:id/complete` | Mark a follow-up done.                                                                                                                                                                              | your data |
 | `DELETE /api/action-items/:id`         | Delete a follow-up.                                                                                                                                                                                 | your data |
@@ -960,14 +961,29 @@ snapshots exist.
 
 | Endpoint                    | What it does                                                                                                                                                                     | Access               |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). Answers `{ query, lat, lng, provider, cached }`. `404 NO_RESULT` when nothing matches. It reads no contacts.                    | any signed-in caller |
+| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                    | any signed-in caller |
+| `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
 | `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
 | `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
 | `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer`, `bounds` or `sortOrder`.                                                                                                                        | your data            |
 | `DELETE /api/map/views/:id` | Delete a saved view.                                                                                                                                                             | your data            |
 
-The contact rows for the map and the pin routes are in [Contacts](#contacts).
-A failed place search is remembered for 7 days.
+In `bounds`, west must be less than east, and south less than north. The Map
+page reads its contacts from `GET /api/contacts?view=slim`.
+`GET /api/contacts/map` and the pin routes are in [Contacts](#contacts).
+`PATCH /api/contacts/:id/location` with `regeocode` answers `400 NO_ADDRESS`
+when the contact has no address text to read.
+
+A place search answers `{ query, lat, lng, provider, cached, displayName }`.
+`displayName` is the place Nominatim matched. `404 NO_RESULT` means nothing
+matches, and `503 GEOCODER_UNAVAILABLE` means Nominatim is busy or does not
+answer. A search that finds nothing is remembered for 7 days. A search that
+gets no answer is not.
+
+Each row of `GET /api/geo/status` has `id`, `name`, `company`, `avatarUrl`,
+`location` (the text the geocoder reads), `isTracked`, `lat` and `lng` (both
+null), and `reason`: `pending` (not tried yet, or queued) or `not-found` (the
+geocoder found nothing).
 
 ## Connectors
 

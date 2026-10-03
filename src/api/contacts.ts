@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import {
+  followPin,
   invalidateContactViews,
   patchContactCaches,
   writeContactInOrder,
@@ -23,6 +24,7 @@ import {
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { apiFetch } from "./client";
+import { GEO_STATUS_KEY } from "./geo";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth
@@ -238,10 +240,12 @@ export const useCreateContact = () => {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (contact) => {
       // Somebody new: the corvid hops.
       corvidReact("hop");
       invalidateContactViews(queryClient);
+      if (!isValidLatLng(contact.lat, contact.lng))
+        followPin(queryClient, contact);
     },
   });
 };
@@ -277,11 +281,14 @@ export const useUpdateContact = () => {
         });
         return res.json();
       }),
-    onSuccess: (contact) => {
+    onSuccess: (contact, { data }) => {
       queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
         old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
       );
+      // A new address can move the pin after the answer has left the server.
+      if ("location" in data || "addresses" in data)
+        followPin(queryClient, contact);
     },
     onError: (error) => toast.error(`Could not save contact: ${error.message}`),
     onSettled: () => invalidateContactViews(queryClient),
@@ -295,13 +302,8 @@ export const useUpdateContact = () => {
 type ContactLocationInput = { lat: number; lng: number } | { regeocode: true };
 
 /**
- * Move a contact's pin by hand, or hand it back to the geocoder.
- *
- * The answer is the whole contact, so it is written straight into the
- * contact query and the badge follows without a round trip. The map's data
- * and the contact are then refreshed: the map because a pin moved, and the
- * contact because a regeocode with a cached answer has already put the pin
- * back by the time the response left the server.
+ * Move a contact's pin by hand, or hand it back to the geocoder. The answer is
+ * the whole contact, and it goes straight into both caches.
  */
 export const useSetContactLocation = () => {
   const queryClient = useQueryClient();
@@ -324,15 +326,14 @@ export const useSetContactLocation = () => {
         );
         return res.json();
       }),
-    onSuccess: (contact) => {
+    onSuccess: (contact, { data }) => {
       queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
         old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
       );
-      void queryClient.invalidateQueries({ queryKey: ["contacts", "map"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["contacts", contact.id],
-      });
+      void queryClient.invalidateQueries({ queryKey: GEO_STATUS_KEY });
+      if ("regeocode" in data && !isValidLatLng(contact.lat, contact.lng))
+        followPin(queryClient, contact);
     },
     onError: (error) => toast.error(`Could not move the pin: ${error.message}`),
   });

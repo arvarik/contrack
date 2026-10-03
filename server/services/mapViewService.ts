@@ -2,10 +2,13 @@ import crypto from "crypto";
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
-import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
-
-const MAP_LAYERS = ["pins", "heat"] as const;
-export type MapLayer = (typeof MAP_LAYERS)[number];
+import { AppError, NotFoundError } from "../utils/AppError.ts";
+import {
+  MAP_LAYERS,
+  mapBoundsSchema,
+  type MapBounds,
+  type MapView,
+} from "../../shared/mapViews.ts";
 
 /**
  * A view's layer. Health was a third layer until v2: a view saved with it,
@@ -16,18 +19,31 @@ const layerSchema = z.preprocess(
   z.enum(MAP_LAYERS),
 );
 
-function readLayer(value: unknown): MapLayer {
-  const parsed = layerSchema.safeParse(value);
-  if (!parsed.success) throw new ValidationError("Layer must be pins or heat");
-  return parsed.data;
-}
+const NAME_RULE = "Name must be between 1 and 60 characters";
+const nameSchema = z.string().trim().min(1, NAME_RULE).max(60, NAME_RULE);
+const querySchema = z
+  .string()
+  .trim()
+  .max(200, "Query cannot exceed 200 characters");
 
-export type MapBounds = [
-  west: number,
-  south: number,
-  east: number,
-  north: number,
-];
+/** The body of `POST /api/map/views`. */
+export const mapViewCreateSchema = z.object({
+  name: nameSchema,
+  query: querySchema.default(""),
+  layer: layerSchema.default("pins"),
+  bounds: mapBoundsSchema,
+});
+
+/** The body of `PATCH /api/map/views/:id`. Every field is optional. */
+export const mapViewUpdateSchema = z
+  .object({
+    name: nameSchema,
+    query: querySchema,
+    layer: layerSchema,
+    bounds: mapBoundsSchema,
+    sortOrder: z.number().int().min(0),
+  })
+  .partial();
 
 export interface MapViewRow {
   id: string;
@@ -42,54 +58,12 @@ export interface MapViewRow {
   updatedAt: string;
 }
 
-export interface MapView {
-  id: string;
-  name: string;
-  query: string;
-  layer: MapLayer;
-  bounds: MapBounds;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export function validateBounds(bounds: unknown): asserts bounds is MapBounds {
-  if (!Array.isArray(bounds) || bounds.length !== 4) {
-    throw new ValidationError(
-      "Bounds must be an array of 4 coordinates [west, south, east, north]",
-    );
-  }
-  if (!bounds.every((n) => typeof n === "number" && Number.isFinite(n))) {
-    throw new ValidationError("Bounds coordinates must be finite numbers");
-  }
-  const [west, south, east, north] = bounds as [number, number, number, number];
-  if (west < -180 || west > 180) {
-    throw new ValidationError("West longitude must be between -180 and 180");
-  }
-  if (east < -180 || east > 180) {
-    throw new ValidationError("East longitude must be between -180 and 180");
-  }
-  if (south < -90 || south > 90) {
-    throw new ValidationError("South latitude must be between -90 and 90");
-  }
-  if (north < -90 || north > 90) {
-    throw new ValidationError("North latitude must be between -90 and 90");
-  }
-  if (south >= north) {
-    throw new ValidationError(
-      "South latitude must be less than north latitude",
-    );
-  }
-}
-
 function parseRow(row: MapViewRow): MapView {
   let bounds: MapBounds = [-180, -90, 180, 90];
   try {
-    const parsed = JSON.parse(row.bounds);
-    validateBounds(parsed);
-    bounds = parsed;
+    bounds = mapBoundsSchema.parse(JSON.parse(row.bounds));
   } catch {
-    // Fallback to global bounds if corrupt
+    // A corrupt box, or one saved before a rule, opens on the whole world.
   }
   return {
     id: row.id,
@@ -125,12 +99,7 @@ export const mapViewService = {
 
   createMapView(
     scope: Scope,
-    input: {
-      name: string;
-      query?: string;
-      layer?: string;
-      bounds: unknown;
-    },
+    input: z.output<typeof mapViewCreateSchema>,
   ): MapView {
     const countRow = sqlite
       .prepare("SELECT COUNT(*) AS n FROM map_views WHERE ownerId = ?")
@@ -141,20 +110,7 @@ export const mapViewService = {
       });
     }
 
-    const name = (input.name ?? "").trim();
-    if (!name || name.length > 60) {
-      throw new ValidationError("Name must be between 1 and 60 characters");
-    }
-
-    const query = (input.query ?? "").trim();
-    if (query.length > 200) {
-      throw new ValidationError("Query cannot exceed 200 characters");
-    }
-
-    const layer = readLayer(input.layer ?? "pins");
-
-    validateBounds(input.bounds);
-
+    const { name, query, layer, bounds } = input;
     const maxOrder = sqlite
       .prepare(
         "SELECT MAX(sortOrder) as maxOrder FROM map_views WHERE ownerId = ?",
@@ -162,7 +118,7 @@ export const mapViewService = {
       .get(scope.ownerId) as { maxOrder: number | null };
     const sortOrder = (maxOrder?.maxOrder ?? -1) + 1;
     const id = crypto.randomUUID();
-    const boundsJson = JSON.stringify(input.bounds);
+    const boundsJson = JSON.stringify(bounds);
 
     sqlite
       .prepare(
@@ -177,13 +133,7 @@ export const mapViewService = {
   updateMapView(
     scope: Scope,
     id: string,
-    patch: {
-      name?: string;
-      query?: string;
-      layer?: string;
-      bounds?: unknown;
-      sortOrder?: number;
-    },
+    patch: z.output<typeof mapViewUpdateSchema>,
   ): MapView {
     // Assert row exists for this owner
     this.getMapView(scope, id);
@@ -192,42 +142,26 @@ export const mapViewService = {
     const values: unknown[] = [];
 
     if (patch.name !== undefined) {
-      const name = patch.name.trim();
-      if (!name || name.length > 60) {
-        throw new ValidationError("Name must be between 1 and 60 characters");
-      }
       updates.push("name = ?");
-      values.push(name);
+      values.push(patch.name);
     }
 
     if (patch.query !== undefined) {
-      const query = patch.query.trim();
-      if (query.length > 200) {
-        throw new ValidationError("Query cannot exceed 200 characters");
-      }
       updates.push("query = ?");
-      values.push(query);
+      values.push(patch.query);
     }
 
     if (patch.layer !== undefined) {
       updates.push("layer = ?");
-      values.push(readLayer(patch.layer));
+      values.push(patch.layer);
     }
 
     if (patch.bounds !== undefined) {
-      validateBounds(patch.bounds);
       updates.push("bounds = ?");
       values.push(JSON.stringify(patch.bounds));
     }
 
     if (patch.sortOrder !== undefined) {
-      if (
-        typeof patch.sortOrder !== "number" ||
-        !Number.isInteger(patch.sortOrder) ||
-        patch.sortOrder < 0
-      ) {
-        throw new ValidationError("sortOrder must be a non-negative integer");
-      }
       updates.push("sortOrder = ?");
       values.push(patch.sortOrder);
     }

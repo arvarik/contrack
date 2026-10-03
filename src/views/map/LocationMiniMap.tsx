@@ -141,7 +141,12 @@ export const LocationMiniMap = ({
   // a closed dialog costs nothing on every contact page.
   const dialog = adjusting && (
     <Suspense fallback={null}>
-      <AdjustPinModal contact={contact} isOpen onClose={closeAdjust} />
+      <AdjustPinModal
+        contact={contact}
+        hasAddress={hasAddress}
+        isOpen
+        onClose={closeAdjust}
+      />
     </Suspense>
   );
 

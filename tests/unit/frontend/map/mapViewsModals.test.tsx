@@ -69,6 +69,19 @@ describe("SaveViewModal", () => {
     });
   });
 
+  it("says that a view does not save the overdue filter", () => {
+    const props = { isOpen: true, onClose: vi.fn(), onSave: vi.fn() };
+    const { rerender } = render(
+      <SaveViewModal {...props} currentLayer="pins" />,
+    );
+    expect(screen.queryByText(/overdue filter/)).toBeNull();
+
+    rerender(<SaveViewModal {...props} currentLayer="pins" overdueOnly />);
+    expect(
+      screen.getByText("The overdue filter is not saved with the view"),
+    ).toBeTruthy();
+  });
+
   it("displays server rejection error message", async () => {
     const handleSave = vi
       .fn()

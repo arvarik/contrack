@@ -5,9 +5,9 @@
  * `ContactMap` is a div here that renders its children and hands the test
  * two of its callbacks: the click on the map, and the map itself once it is
  * ready. The marker is a div that hands over its drag handler. What is left
- * is the dialog's own logic: a pin that follows a click, a drag or an arrow
- * key, coordinates a person can read, a Save that is off until something
- * moved, and the two requests it makes.
+ * is the dialog's own logic: a pin that follows a click, a drag, an arrow
+ * key or a place search, coordinates a person can read, a Save that is off
+ * until something moved, and the two requests it makes.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +20,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface Position {
   longitude: number;
@@ -74,7 +75,7 @@ const ADA = {
   name: "Ada Lovelace",
   company: "Babbage & Co",
   avatarUrl: null,
-  location: "London, UK",
+  location: "London, UK" as string | null,
   isTracked: false,
   lat: 51.5074,
   lng: -0.1278,
@@ -112,13 +113,18 @@ function stubFetch() {
   return requests;
 }
 
-function mount(contact: typeof ADA, onClose = vi.fn()) {
+function mount(contact: typeof ADA, onClose = vi.fn(), hasAddress?: boolean) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <AdjustPinModal contact={contact} isOpen onClose={onClose} />
+      <AdjustPinModal
+        contact={contact}
+        hasAddress={hasAddress}
+        isOpen
+        onClose={onClose}
+      />
     </QueryClientProvider>,
   );
   return { client, onClose };
@@ -137,6 +143,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("AdjustPinModal", () => {
@@ -161,9 +169,11 @@ describe("AdjustPinModal", () => {
     ).toBeTruthy();
   });
 
-  it("moves the pin to a click on the map, and saves it there", async () => {
+  it("moves the pin to a click, saves it, and puts the answer in both caches", async () => {
     const requests = stubFetch();
-    const { onClose } = mount(ADA);
+    const { client, onClose } = mount(ADA);
+    client.setQueryData(["contacts"], [ADA]);
+    const invalidated = vi.spyOn(client, "invalidateQueries");
 
     act(() =>
       mapHandles.onMapClick?.({ longitude: 2.3522, latitude: 48.8566 }),
@@ -181,6 +191,14 @@ describe("AdjustPinModal", () => {
     expect(requests[0].url).toContain("/api/contacts/c1/location");
     expect(requests[0].method).toBe("PATCH");
     expect(requests[0].body).toEqual({ lat: 48.8566, lng: 2.3522 });
+    const pin = { lat: 48.8566, lng: 2.3522, geoSource: "manual" };
+    expect(client.getQueryData(["contacts", "c1"])).toMatchObject(pin);
+    expect(client.getQueryData(["contacts"])).toEqual([
+      expect.objectContaining(pin),
+    ]);
+    // No refetch of what was just written: only the no-pin list is stale.
+    const keys = invalidated.mock.calls.map((call) => call[0]?.queryKey);
+    expect(keys).toEqual([["geo", "status"]]);
   });
 
   it("follows a drag", () => {
@@ -231,37 +249,122 @@ describe("AdjustPinModal", () => {
     expect(document.activeElement).toBe(pin);
   });
 
-  it("hands the pin back to the geocoder on request", async () => {
-    const requests = stubFetch();
-    const { onClose } = mount(ADA);
+  it("hands the pin back, and takes the geocoder's pin when it lands", async () => {
+    vi.useFakeTimers();
+    const requests: { url: string; body?: unknown }[] = [];
+    const geocoded = { lat: 51.5, lng: -0.12, geoSource: "geocoder" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        const body =
+          typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, body });
+        // The PATCH clears the pin. A later read finds the geocoder's.
+        const pin = body ? { lat: null, lng: null, geoSource: null } : geocoded;
+        return Promise.resolve(Response.json({ ...ADA, ...pin }));
+      }),
+    );
+    const { client, onClose } = mount(ADA);
 
     fireEvent.click(screen.getByRole("button", { name: "Use address again" }));
-
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(onClose).toHaveBeenCalled();
     expect(requests[0].body).toEqual({ regeocode: true });
+    expect(client.getQueryData(["contacts", "c1"])).toMatchObject({
+      lat: null,
+    });
+
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(requests[1].url).toBe("/api/contacts/c1");
+    expect(client.getQueryData(["contacts", "c1"])).toMatchObject(geocoded);
   });
 
-  it("writes the answer into the contact query and refreshes the map", async () => {
+  it("offers Use address again only when there is an address to read", () => {
     stubFetch();
-    const { client, onClose } = mount(ADA);
-    client.setQueryData(["contacts", "map"], []);
-    const invalidated = vi.spyOn(client, "invalidateQueries");
+    mount({ ...ADA, location: null });
+    expect(
+      screen.queryByRole("button", { name: "Use address again" }),
+    ).toBeNull();
+    cleanup();
+
+    // The contact page knows about address rows the `location` field lacks.
+    mount({ ...ADA, location: null }, vi.fn(), true);
+    expect(
+      screen.getByRole("button", { name: "Use address again" }),
+    ).toBeTruthy();
+  });
+
+  it("stays open when the save fails, with the reason in a toast", async () => {
+    const shown = vi.spyOn(toast, "error");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ error: { message: "Server down" } }, { status: 500 }),
+      ),
+    );
+    const { onClose } = mount(ADA);
 
     act(() =>
       mapHandles.onMapClick?.({ longitude: 2.3522, latitude: 48.8566 }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(client.getQueryData(["contacts", "c1"])).toMatchObject({
-      id: "c1",
-      lat: 48.8566,
-      lng: 2.3522,
-      geoSource: "manual",
+    await waitFor(() =>
+      expect(shown).toHaveBeenCalledWith("Could not move the pin: Server down"),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("finds a place by name and moves the pin and the map, or says why not", async () => {
+    const replies = [
+      Response.json(
+        { error: { message: "Place search is busy or unavailable" } },
+        { status: 503 },
+      ),
+      Response.json({
+        query: "Lisbon",
+        lat: 38.7223,
+        lng: -9.1393,
+        provider: "Nominatim",
+        cached: false,
+        displayName: "Lisbon, Portugal",
+      }),
+    ];
+    const fetchMock = vi.fn(async (_url: string) => replies.shift()!);
+    vi.stubGlobal("fetch", fetchMock);
+    mount(ADA);
+    const map = {
+      getZoom: () => 4,
+      getPadding: () => ({}),
+      flyTo: vi.fn(),
+      jumpTo: vi.fn(),
+      easeTo: vi.fn(),
+    };
+    act(() => mapHandles.onMapReady?.(map));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find a place" }), {
+      target: { value: "Lisbon" },
     });
-    const keys = invalidated.mock.calls.map((call) => call[0]?.queryKey);
-    expect(keys).toContainEqual(["contacts", "map"]);
-    expect(keys).toContainEqual(["contacts", "c1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Place search is busy or unavailable",
+    );
+    expect(markerHandles.at).toEqual({ longitude: ADA.lng, latitude: ADA.lat });
+
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    await waitFor(() =>
+      expect(markerHandles.at).toEqual({
+        longitude: -9.1393,
+        latitude: 38.7223,
+      }),
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/geo/search?q=Lisbon");
+    expect(map.flyTo).toHaveBeenCalledWith(
+      expect.objectContaining({ center: [-9.1393, 38.7223] }),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    // Nothing is written until Save.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("starts with no pin for a contact nobody has placed", () => {

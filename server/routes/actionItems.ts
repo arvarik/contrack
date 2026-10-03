@@ -1,15 +1,7 @@
 import { requireContact } from "../services/contactGuard.ts";
 /**
- * Action Items Router — REST API for follow-up task management.
- *
- * Endpoints:
- *   GET    /api/action-items          — All pending items (global dashboard)
- *   GET    /api/action-items/count    — Urgent count for sidebar badge
- *   GET    /api/contacts/:id/action-items — Per-contact items
- *   POST   /api/contacts/:id/action-items — Create new action item
- *   PATCH  /api/action-items/:id      — Snooze/edit
- *   PATCH  /api/action-items/:id/complete — Mark complete
- *   DELETE /api/action-items/:id      — Delete
+ * Action Items Router — the REST API for follow-ups. "Follow-ups" in
+ * docs/api-reference.md lists every route.
  *
  * @module server/routes/actionItems
  */
@@ -18,6 +10,7 @@ import { log } from "../utils/logger.ts";
 import { actionItemService } from "../services/actionItemService.ts";
 import {
   validateBody,
+  actionItemBulkCreateSchema,
   actionItemCreateSchema,
   actionItemUpdateSchema,
 } from "../utils/validators.ts";
@@ -59,6 +52,23 @@ router.get(
     const count = actionItemService.getUrgentCount(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/action-items/count → ${count}`);
     res.json({ count });
+  }),
+);
+
+router.post(
+  "/action-items/bulk",
+  validateBody(actionItemBulkCreateSchema),
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+    const { contactIds, title, dueAt } = req.body;
+    const count = actionItemService.createMany(
+      scopeOf(req),
+      contactIds,
+      title,
+      dueAt,
+    );
+    log.info("API", `[${rid}] POST /api/action-items/bulk → ${count} created`);
+    res.status(201).json({ count });
   }),
 );
 

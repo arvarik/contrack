@@ -10,7 +10,7 @@
  *
  * @module views/map/heat
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ExpressionSpecification,
   HeatmapLayerSpecification,
@@ -229,6 +229,87 @@ export function useZoomAtLeast(
     };
   }, [map, zoom, enabled]);
   return enabled && past;
+}
+
+/** The pixels around the pointer that the heat's readout counts. */
+const READOUT_RADIUS = 32;
+
+/** How many people are around the pointer, and where it is on the map. */
+interface HeatReadout {
+  count: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * The people within `radius` px of `point`. Only those in the degree box
+ * around it are projected, so a large network costs little.
+ */
+export function countNear(
+  map: Pick<MapLibreMap, "project" | "unproject">,
+  contacts: readonly Pick<MapContact, "lat" | "lng">[],
+  point: { x: number; y: number },
+  radius = READOUT_RADIUS,
+): number {
+  const nw = map.unproject([point.x - radius, point.y - radius]);
+  const se = map.unproject([point.x + radius, point.y + radius]);
+  let count = 0;
+  for (const { lat, lng } of contacts) {
+    if (lng < nw.lng || lng > se.lng || lat > nw.lat || lat < se.lat) continue;
+    const at = map.project([lng, lat]);
+    if (Math.hypot(at.x - point.x, at.y - point.y) <= radius) count += 1;
+  }
+  return count;
+}
+
+/**
+ * The people around a mouse or a pen over the map, read at most once a
+ * frame. Null with nobody there, and once the pointer leaves.
+ */
+export function useHeatReadout(
+  map: MapLibreMap,
+  contacts: readonly Pick<MapContact, "lat" | "lng">[],
+): HeatReadout | null {
+  const [readout, setReadout] = useState<HeatReadout | null>(null);
+  // In the window's pixels, and kept when the contacts change.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const el = map.getCanvasContainer();
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const box = el.getBoundingClientRect();
+      const at = pointer.current && {
+        x: pointer.current.x - box.left,
+        y: pointer.current.y - box.top,
+      };
+      const count = at ? countNear(map, contacts, at) : 0;
+      setReadout(at && count > 0 ? { count, ...at } : null);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointer.current = { x: event.clientX, y: event.clientY };
+      schedule();
+    };
+    const onLeave = () => {
+      pointer.current = null;
+      schedule();
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerleave", onLeave);
+    map.on("move", schedule);
+    schedule();
+    return () => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerleave", onLeave);
+      map.off("move", schedule);
+      cancelAnimationFrame(frame);
+    };
+  }, [map, contacts]);
+  return readout;
 }
 
 /**

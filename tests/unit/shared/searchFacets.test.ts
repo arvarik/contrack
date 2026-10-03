@@ -131,19 +131,29 @@ describe("searchFacets matchesFacet", () => {
       );
     });
 
-    it("matches score operators", () => {
+    it("matches score operators on the score a card shows", () => {
+      const scored: FacetContact = {
+        ...contact,
+        isTracked: true,
+        lastContactedAt: "2026-09-01T10:00:00.000Z",
+      };
       expect(
-        matchesFacet(contact, { field: "score", value: "70", operator: ">" }),
+        matchesFacet(scored, { field: "score", value: "70", operator: ">" }),
       ).toBe(true);
       expect(
-        matchesFacet(contact, { field: "score", value: "80", operator: ">" }),
+        matchesFacet(scored, { field: "score", value: "80", operator: ">" }),
       ).toBe(false);
       expect(
-        matchesFacet(contact, { field: "score", value: "80", operator: "<" }),
+        matchesFacet(scored, { field: "score", value: "80", operator: "<" }),
       ).toBe(true);
       expect(
-        matchesFacet(contact, { field: "score", value: "70", operator: "<" }),
+        matchesFacet(scored, { field: "score", value: "70", operator: "<" }),
       ).toBe(false);
+      // "Not tracked" and "No interactions yet" show no score to match.
+      for (const shown of [contact, { ...scored, lastContactedAt: null }])
+        expect(
+          matchesFacet(shown, { field: "score", value: "70", operator: ">" }),
+        ).toBe(false);
     });
   });
 

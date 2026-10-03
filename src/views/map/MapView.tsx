@@ -72,6 +72,8 @@ import {
 import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
+import { NotOnMap } from "./NotOnMap";
+import type { MiniMapContact } from "./LocationMiniMap";
 import { MapInsightsPane } from "./MapInsightsPane";
 import { SaveViewModal } from "./SaveViewModal";
 import { RenameViewModal } from "./RenameViewModal";
@@ -113,7 +115,21 @@ const placedBounds = (people: readonly MapContact[]) =>
   );
 
 export const MapView = () => {
-  const { data: contacts = [], isLoading } = useMapContacts();
+  const {
+    data: contacts = [],
+    isLoading,
+    isPending,
+    isLoadingError,
+    refetch,
+  } = useMapContacts();
+  // Why nobody is on the map, when nobody is.
+  const empty = isPending
+    ? "loading"
+    : isLoadingError
+      ? "failed"
+      : contacts.length === 0
+        ? "none"
+        : undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const { search } = useLocation();
   const { preferences, setPreference } = usePreferences();
@@ -307,13 +323,15 @@ export const MapView = () => {
     [updateMapView],
   );
 
+  // The hook's toast holds the Undo. The page stays as the view left it,
+  // with its layer in the URL.
   const handleDeleteView = useCallback(
-    async (view: MapViewType) => {
-      await deleteMapView.mutateAsync(view.id);
-      toast.success(`View "${view.name}" deleted`);
-      // The page stays as the view left it, with its layer in the URL.
-      if (urlViewId === view.id) handleLayerChange(layer);
-    },
+    (view: MapViewType) =>
+      deleteMapView.mutate(view, {
+        onSuccess: () => {
+          if (urlViewId === view.id) handleLayerChange(layer);
+        },
+      }),
     [deleteMapView, urlViewId, handleLayerChange, layer],
   );
 
@@ -401,13 +419,14 @@ export const MapView = () => {
   const [isSingleAddToListOpen, setIsSingleAddToListOpen] = useState(false);
 
   const bulkAddToList = useBulkAddToList();
-  const [adjustId, setAdjustId] = useState<string | null>(null);
-  const adjusting = adjustId && contacts.find((c) => c.id === adjustId);
+  // The contact itself, so one with no pin can open the dialog too.
+  const [adjusting, setAdjusting] = useState<MiniMapContact | null>(null);
 
   const handleCardAction = useCallback(
     (action: Exclude<CardAction, "open">, id: string) => {
       if (action === "log") setQuickNoteContactId(id);
-      else if (action === "adjust") setAdjustId(id);
+      else if (action === "adjust")
+        setAdjusting(contacts.find((c) => c.id === id) ?? null);
       else if (action === "list") {
         setSingleListContactId(id);
         setIsSingleAddToListOpen(true);
@@ -416,7 +435,7 @@ export const MapView = () => {
         setIsFollowUpOpen(true);
       }
     },
-    [],
+    [contacts],
   );
 
   const handleAddToListSubmit = useCallback(
@@ -506,9 +525,15 @@ export const MapView = () => {
     );
   }, [fitTo, filter.filteredContacts, map, openId]);
 
+  // A People row points at its pin, and a press shows the pin's card.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [cardRequest, setCardRequest] = useState<{ id: string } | null>(null);
+
   const handleSelectContactFromPane = useCallback(
     (contact: MapContact) => {
       if (!map || !isValidLatLng(contact.lat, contact.lng)) return;
+      // On a phone the sheet covers the map, so it closes before the flight.
+      if (!isWide) setMobilePaneOpen(false);
       const padding = paddingFor(
         measureInsets(map.getContainer(), { contactOpen: false }),
       );
@@ -517,8 +542,9 @@ export const MapView = () => {
         { longitude: contact.lng as number, latitude: contact.lat as number },
         { padding },
       );
+      setCardRequest({ id: contact.id });
     },
-    [map],
+    [map, isWide],
   );
 
   /**
@@ -611,12 +637,18 @@ export const MapView = () => {
   }, [closeContact, openId]);
 
   /**
-   * Single-key shortcuts: "/", "F", "I".
+   * Single-key shortcuts: "/", "F", "I", "L". An open menu keeps the keys,
+   * its letters jump to its items, and so does a dialog with the focus.
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event)) return;
+      if (
+        document.querySelector('[role="menu"]') ||
+        document.activeElement?.closest('[role="dialog"]')
+      )
+        return;
 
       if (event.key === "/") {
         if (!singleKeyShortcuts) return;
@@ -734,12 +766,17 @@ export const MapView = () => {
             <StatsStrip
               className="pointer-events-auto"
               stats={stats}
+              empty={empty}
               overdueOnly={filter.overdueOnly}
               onOverdueOnlyChange={filter.setOverdueOnly}
               onFitAll={handleFitAll}
               heat={heatStops}
               heatFaded={pastHeat}
               onZoomToHeat={zoomToHeat}
+            />
+            <NotOnMap
+              className="pointer-events-auto ml-2 shrink-0"
+              onSetLocation={setAdjusting}
             />
           </div>
         )}
@@ -748,6 +785,8 @@ export const MapView = () => {
           loading={isLoading}
           selectedId={openId}
           selectedIds={selection.selectedIds}
+          highlightedId={isPaneOpen ? highlightedId : null}
+          cardRequest={cardRequest}
           onSelect={openContact}
           onMapClick={closeContact}
           onMapReady={setMap}
@@ -757,6 +796,29 @@ export const MapView = () => {
           layer={layer}
           onCardAction={handleCardAction}
         />
+        {/* The contacts did not load: say so over the map, clear of the
+            open insights panel, with a way to ask again. */}
+        {empty === "failed" && (
+          <div
+            className={cn(
+              "absolute inset-0 z-[5] flex items-center justify-center p-4 pointer-events-none",
+              isPaneOpen && "lg:pr-80",
+            )}
+          >
+            <div className="pointer-events-auto glass-panel shadow-xl rounded-2xl border border-outline-variant/20 flex items-center gap-3 py-2 pl-4 pr-2">
+              <p role="alert" className="text-sm font-semibold text-on-surface">
+                Could not load contacts
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="btn-secondary btn-sm"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Map selection floating toolbars */}
         {selection.selectedCount > 0 && (
@@ -861,6 +923,7 @@ export const MapView = () => {
           onSave={handleSaveView}
           currentQuery={filter.rawInput}
           currentLayer={layer}
+          overdueOnly={filter.overdueOnly}
         />
 
         {adjusting && (
@@ -868,7 +931,7 @@ export const MapView = () => {
             <AdjustPinModal
               contact={adjusting}
               isOpen
-              onClose={() => setAdjustId(null)}
+              onClose={() => setAdjusting(null)}
             />
           </Suspense>
         )}
@@ -884,9 +947,13 @@ export const MapView = () => {
         isOpen={isPaneOpen}
         onToggle={toggleInsightsPane}
         stats={stats}
+        empty={empty}
         inViewContacts={inViewContacts}
+        activeFilters={filter.parsed.filters}
         onApplyFacet={handleApplyFacet}
+        onRemoveFacet={filter.removeFacet}
         onSelectContact={handleSelectContactFromPane}
+        onHighlightContact={setHighlightedId}
       />
     </div>
   );

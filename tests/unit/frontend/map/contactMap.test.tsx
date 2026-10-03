@@ -133,22 +133,27 @@ const createdWith = () =>
     onStyleData: (event: { target: unknown }) => void;
   };
 
-/** A MapLibre map as `onLoad` sees it: a container, and the two rotation handlers. */
-function loadedMap(zoom = 1) {
+/** A MapLibre map as `onLoad` sees it, one pixel a degree from (100, 100). */
+function loadedMap(zoom = 1, source?: unknown) {
   const container = document.createElement("div");
+  const canvas = document.createElement("div");
   const strip = document.createElement("details");
   strip.className =
     "maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show";
   strip.setAttribute("open", "");
-  container.append(strip);
+  container.append(strip, canvas);
   return {
     strip,
+    canvas,
     getContainer: () => container,
+    getCanvasContainer: () => canvas,
+    project: vi.fn(([lng, lat]: number[]) => ({ x: lng + 100, y: 100 - lat })),
+    unproject: ([x, y]: number[]) => ({ lng: x - 100, lat: 100 - y }),
     touchZoomRotate: { disableRotation: vi.fn() },
     keyboard: { disableRotation: vi.fn() },
     on: vi.fn(),
     off: vi.fn(),
-    getSource: () => undefined,
+    getSource: () => source,
     isStyleLoaded: () => true,
     getZoom: () => zoom,
     getLayer: () => undefined,
@@ -157,27 +162,47 @@ function loadedMap(zoom = 1) {
   };
 }
 
+/** A contacts source whose one cluster holds these contacts. */
+const sourceWith = (ids: string[]) => ({
+  getClusterLeaves: async () => ids.map((id) => ({ properties: { id } })),
+  getClusterExpansionZoom: async () => 12,
+});
+
+const cluster = (clusterId: number, count: number): VisibleFeature => ({
+  kind: "cluster",
+  key: `cluster:${clusterId}`,
+  clusterId,
+  count,
+  longitude: -0.12,
+  latitude: 51.5,
+});
+
 beforeEach(() => {
   visible.mockReturnValue([]);
   mapProps.mockClear();
   sourceProps.mockClear();
   layerProps.mockClear();
   window.localStorage.clear();
+  // jsdom has no ResizeObserver, which the loaded map's resize path uses.
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
 });
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe("ContactMap", () => {
-  it("names the map as a region", () => {
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
-    expect(screen.getByRole("region", { name: "Contact map" })).toBeTruthy();
-  });
-
-  it("draws one named button per visible contact", () => {
+  it("is a named region with one named button per visible contact", () => {
     visible.mockReturnValue(PEOPLE.map(point));
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    expect(screen.getByRole("region", { name: "Contact map" })).toBeTruthy();
     expect(screen.getAllByRole("button")).toHaveLength(3);
     expect(
       screen.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
@@ -194,16 +219,7 @@ describe("ContactMap", () => {
   });
 
   it("draws a cluster as a count button that says what a click does", () => {
-    visible.mockReturnValue([
-      {
-        kind: "cluster",
-        key: "cluster:7",
-        clusterId: 7,
-        count: 12,
-        longitude: -0.12,
-        latitude: 51.5,
-      },
-    ]);
+    visible.mockReturnValue([cluster(7, 12)]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
     const button = screen.getByRole("button", {
       name: "12 contacts, zoom in",
@@ -291,9 +307,114 @@ describe("ContactMap", () => {
     vi.useRealTimers();
   });
 
-  it("says it is still loading while the contacts load", () => {
+  it("pins a requested card, gives focus back to its asker, and asks again for a new request", () => {
+    visible.mockReturnValue([point(PEOPLE[0])]);
+    // Every render brings new contacts, which must not ask again.
+    const view = (request: { id: string } | null) => (
+      <>
+        <button type="button">Row</button>
+        <ContactMap
+          contacts={[...PEOPLE]}
+          onSelect={() => {}}
+          cardRequest={request}
+        />
+      </>
+    );
+    const { rerender } = render(view(null));
+    const row = screen.getByRole("button", { name: "Row" });
+    act(() => row.focus());
+    const request = { id: "c1" };
+    rerender(view(request));
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeTruthy();
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(
+      "Open contact",
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(row);
+    rerender(view(request));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(view({ id: "c1" }));
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeTruthy();
+  });
+
+  it("rings the open contact with a halo, and dims the others", async () => {
+    visible.mockReturnValue([point(PEOPLE[0]), cluster(7, 2)]);
+    const view = (selectedId: string) => (
+      <ContactMap
+        contacts={PEOPLE}
+        onSelect={() => {}}
+        selectedId={selectedId}
+      />
+    );
+    const { rerender } = render(view("c1"));
+    await screen.findByTestId("map");
+    act(() =>
+      createdWith().onLoad({ target: loadedMap(1, sourceWith(["c2", "c3"])) }),
+    );
+    const ada = screen.getByRole("button", {
+      name: "Ada Lovelace, Babbage & Co",
+    });
+    const stack = screen.getByRole("button", { name: "2 contacts, zoom in" });
+    await waitFor(() => expect(stack.dataset.dimmed).toBe("true"));
+    expect(ada.dataset.halo).toBe("true");
+
+    // A stack that holds the open contact wears the halo for them.
+    rerender(view("c3"));
+    expect(stack.dataset.halo).toBe("true");
+    expect(stack.dataset.dimmed).toBeUndefined();
+    expect(ada.dataset.dimmed).toBe("true");
+  });
+
+  it("rings the pin a list row points at, and the pin whose card is open", () => {
+    visible.mockReturnValue(PEOPLE.map(point));
+    render(
+      <ContactMap contacts={PEOPLE} onSelect={() => {}} highlightedId="c2" />,
+    );
+    const pin = (name: string) => screen.getByRole("button", { name });
+    expect(pin("Grace Hopper, US Navy").dataset.halo).toBe("true");
+    const ada = pin("Ada Lovelace, Babbage & Co");
+    expect(ada.dataset.halo).toBeUndefined();
+    fireEvent.pointerDown(ada, { pointerType: "touch" });
+    fireEvent.pointerUp(ada, { pointerType: "touch" });
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeTruthy();
+    expect(ada.dataset.halo).toBe("true");
+    // Nobody is open, so no pin steps back.
+    expect(pin("Alan Turing, NPL").dataset.dimmed).toBeUndefined();
+  });
+
+  it("marks an overdue follow-up with a dot that the pin's description names", () => {
+    const late = { ...PEOPLE[0], nextFollowUpAt: "2020-01-01" };
+    visible.mockReturnValue([point(late), point(PEOPLE[1])]);
+    render(<ContactMap contacts={[late, PEOPLE[1]]} onSelect={() => {}} />);
+    expect(
+      screen.getByRole("button", {
+        name: "Ada Lovelace, Babbage & Co",
+        description: "Follow-up overdue",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "Grace Hopper, US Navy" })
+        .hasAttribute("aria-describedby"),
+    ).toBe(false);
+  });
+
+  it("clusters the source's last zoom, so people on one point stay one stack", async () => {
+    // Past the last clustered zoom, people on one point were pins on top of
+    // each other, and only the top one could be clicked.
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    await screen.findByTestId("map");
+    const source = sourceProps.mock.calls
+      .map(([props]) => props)
+      .find((props) => props.id === "contacts");
+    expect(source).toMatchObject({ maxzoom: 18, clusterMaxZoom: 18 });
+  });
+
+  it("says the contacts are loading while they load", () => {
     render(<ContactMap contacts={[]} onSelect={() => {}} loading />);
-    expect(screen.getByText("Scanning geospatial data...")).toBeTruthy();
+    expect(screen.getByText("Loading contacts…")).toBeTruthy();
   });
 
   it("is born on the default view, and keeps no map, unless asked", async () => {
@@ -396,21 +517,12 @@ describe("ContactMap", () => {
 });
 
 describe("the heat layer", () => {
-  // The heat reads the accent off the page, as the page paints it. jsdom
-  // has no ResizeObserver, which the loaded map's resize path uses.
+  // The heat reads the accent off the page, as the page paints it.
   beforeEach(() => {
     document.documentElement.style.setProperty("--color-primary", "#006a91");
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        disconnect() {}
-      },
-    );
   });
   afterEach(() => {
     document.documentElement.style.removeProperty("--color-primary");
-    vi.unstubAllGlobals();
   });
 
   it("reads its own unclustered copy of the contacts", async () => {
@@ -445,20 +557,41 @@ describe("the heat layer", () => {
     ).toBe(false);
   });
 
-  it("keeps the pins off the heat until it fades", async () => {
-    visible.mockReturnValue(PEOPLE.map(point));
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
-    await screen.findByTestId("map");
-    act(() => createdWith().onLoad({ target: loadedMap(5) }));
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
-  });
+  it.each([
+    [5, 0],
+    [8.5, 3],
+  ])(
+    "keeps the pins off the heat until it fades: at zoom %s, %s pins",
+    async (zoom, pins) => {
+      visible.mockReturnValue(PEOPLE.map(point));
+      render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
+      await screen.findByTestId("map");
+      act(() => createdWith().onLoad({ target: loadedMap(zoom) }));
+      expect(screen.queryAllByRole("button")).toHaveLength(pins);
+    },
+  );
 
-  it("brings the pins back where the heat fades", async () => {
-    visible.mockReturnValue(PEOPLE.map(point));
+  it("says about how many people are by a mouse while the pins are off", async () => {
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} layer="heat" />);
     await screen.findByTestId("map");
-    act(() => createdWith().onLoad({ target: loadedMap(8.5) }));
-    expect(screen.getAllByRole("button")).toHaveLength(3);
+    const map = loadedMap(5);
+    act(() => createdWith().onLoad({ target: map }));
+    // Three moves in one frame are one read, which projects each person once.
+    for (const clientX of [90, 95, 100])
+      fireEvent.pointerMove(map.canvas, {
+        pointerType: "mouse",
+        clientX,
+        clientY: 48,
+      });
+    expect(await screen.findByText("About 3 people here")).toBeTruthy();
+    expect(map.project).toHaveBeenCalledTimes(3);
+
+    // A finger is not followed, and the count goes when the mouse leaves.
+    fireEvent.pointerMove(map.canvas, { pointerType: "touch", clientX: 0 });
+    await act(() => new Promise((done) => requestAnimationFrame(done)));
+    expect(screen.getByText("About 3 people here")).toBeTruthy();
+    fireEvent.pointerLeave(map.canvas);
+    await waitFor(() => expect(screen.queryByText(/people here/)).toBeNull());
   });
 });
 

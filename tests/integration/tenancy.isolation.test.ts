@@ -176,6 +176,7 @@ const COVERED = [
   "GET /api/export/csv",
   "GET /api/export/json",
   "GET /api/export/vcard",
+  "GET /api/geo/status",
   "GET /api/imports",
   "GET /api/imports/:id",
   "GET /api/imports/:id/rows",
@@ -206,6 +207,7 @@ const COVERED = [
   "PATCH /api/map/views/:id",
   "PATCH /api/search/history/:id",
   "PATCH /api/tags/:tag",
+  "POST /api/action-items/bulk",
   "POST /api/ai-search",
   "POST /api/ai-search/:batchId/cancel",
   "POST /api/contacts",
@@ -503,6 +505,22 @@ describe("list endpoints return only the caller's rows", () => {
     const forB = await asUser(B)(request(app).get("/api/contacts/map"));
     expect(ids(forA.body)).toEqual([placed]);
     expect(forB.body).toEqual([]);
+  });
+
+  it("GET /api/geo/status lists only the caller's contacts", async () => {
+    const waiting = await asUser(A)(
+      request(app)
+        .post("/api/contacts")
+        .send({ name: "Rowan Vale", location: "Lisbon, Portugal" }),
+    );
+    expect(waiting.status).toBe(201);
+
+    const forA = await asUser(A)(request(app).get("/api/geo/status"));
+    const forB = await asUser(B)(request(app).get("/api/geo/status"));
+    const forC = await asUser(C)(request(app).get("/api/geo/status"));
+    expect(ids(forA.body.contacts)).toContain(waiting.body.id);
+    expect(ids(forB.body.contacts)).not.toContain(waiting.body.id);
+    expect(forC.body.contacts).toEqual([]);
   });
 
   it("GET /api/contacts/archived excludes the other owner", async () => {
@@ -1306,6 +1324,23 @@ describe("action items under a contact", () => {
     );
     expect(res.status).toBe(404);
     expect(rowsOwnedBy("action_items", A.user.id)).toBe(before);
+  });
+
+  it("POST /api/action-items/bulk refuses a foreign id and writes nothing", async () => {
+    const beforeA = rowsOwnedBy("action_items", A.user.id);
+    const beforeB = rowsOwnedBy("action_items", B.user.id);
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/action-items/bulk")
+        .send({
+          contactIds: [seedB.contactIds[4], seedA.contactIds[0]],
+          title: "Bob's idea",
+          dueAt: "2027-06-01",
+        }),
+    );
+    expect(res.status).toBe(404);
+    expect(rowsOwnedBy("action_items", A.user.id)).toBe(beforeA);
+    expect(rowsOwnedBy("action_items", B.user.id)).toBe(beforeB);
   });
 });
 
@@ -3728,12 +3763,9 @@ describe("all scoped routes are isolated", () => {
     const collections = scoped
       .filter((r) => r.method === "GET" && !r.path.includes("/:"))
       .map(key);
-    // Every one of them is covered above. The number is here so that adding a
-    // collection route shows up in the diff of this file. 43 since the link
-    // preview became scoped: it lists nothing, and its test above proves the
-    // image it saves lands in the caller's own folder. 44 with Ask's starter
-    // questions.
-    expect(collections).toHaveLength(44);
+    // Each is covered above. The count makes a new collection route show in
+    // this file's diff: 45 with the map's list of contacts that have no pin.
+    expect(collections).toHaveLength(45);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

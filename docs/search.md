@@ -116,7 +116,7 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 - Text facets ignore case and match any part of the value: `company:acme` finds "Acme Corp".
 - A value with a space goes in double quotes, for example `industry:"Venture Capital"` or `list:"Board members"`. The facet becomes a pill at the space after the closing quote.
 - A contact must match every facet you add.
-- Only tracked contacts have a real score. Add `tracked:yes` when you filter by `score:`.
+- `score:` reads the score a contact shows. Only a tracked contact with a logged interaction has one.
 - `near:` needs the Map's place lookup, so it narrows only the Map (see [Filter the map](map.md#filter-the-map)).
 
 ### Last contact

@@ -34,6 +34,27 @@ describe("StatsStrip", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
+  // It said "No one in view" while the contacts loaded, and when they failed.
+  it("says why nobody is on the map, in place of the count", () => {
+    for (const [empty, words] of [
+      ["loading", "Loading contacts…"],
+      ["failed", "Could not load contacts"],
+      ["none", "No one is on the map yet"],
+    ] as const) {
+      render(
+        <StatsStrip
+          stats={{ inView: 0, matching: 0, overdue: 0 }}
+          empty={empty}
+          overdueOnly={false}
+          onOverdueOnlyChange={vi.fn()}
+          onFitAll={vi.fn()}
+        />,
+      );
+      expect(line().textContent).toBe(words);
+      cleanup();
+    }
+  });
+
   it("presses overdue into a filter, in the overdue tone, and back out", () => {
     const onChange = vi.fn();
     const { rerender } = render(

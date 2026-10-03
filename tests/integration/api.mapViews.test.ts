@@ -155,6 +155,8 @@ describe("Map Views API (/api/map/views)", () => {
       [-10, -95, 10, 60], // south out of range
       [-10, 50, 10, 95], // north out of range
       [-10, 60, 10, 50], // south >= north
+      [170, -20, -170, 20], // west east of east, which fitBounds cannot show
+      [5, 50, 5, 60], // west >= east
     ];
 
     for (const bounds of badBoundsCases) {
@@ -164,56 +166,37 @@ describe("Map Views API (/api/map/views)", () => {
           bounds,
         }),
       );
-      expect(res.status).toBe(400);
+      expect(res.status, JSON.stringify(bounds)).toBe(400);
     }
   });
 
-  it("rejects invalid name, query, and layer with 400 Bad Request", async () => {
-    // Empty name
-    let res = await asUser(alice)(
+  it("refuses a bad name or query with 400 VALIDATION_ERROR, on create and on change", async () => {
+    const created = await asUser(alice)(
       request(app)
         .post("/api/map/views")
-        .send({
-          name: "",
-          bounds: [0, 0, 1, 1],
-        }),
+        .send({ name: "Valid Name", bounds: [0, 0, 1, 1] }),
     );
-    expect(res.status).toBe(400);
-
-    // Name > 60 chars
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "a".repeat(61),
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
-
-    // Query > 200 chars
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "Valid Name",
-          query: "q".repeat(201),
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
-
-    // Invalid layer
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "Valid Name",
-          layer: "satellite",
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
+    // A number used to reach `.trim()` and answer 500.
+    for (const body of [
+      { name: "" },
+      { name: "a".repeat(61) },
+      { name: 123 },
+      { name: "Valid Name", query: "q".repeat(201) },
+      { name: "Valid Name", query: 7 },
+    ]) {
+      const post = await asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({ bounds: [0, 0, 1, 1], ...body }),
+      );
+      const patch = await asUser(alice)(
+        request(app).patch(`/api/map/views/${created.body.id}`).send(body),
+      );
+      for (const res of [post, patch]) {
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      }
+    }
   });
 
   it("enforces 100-view cap with 409 TOO_MANY_VIEWS", async () => {
