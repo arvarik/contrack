@@ -139,10 +139,13 @@ describe("LocationMiniMap", () => {
     expect(await screen.findByTestId("adjust-pin-modal")).toBeTruthy();
     const props = modalProps.mock.calls[0][0] as {
       contact: typeof ADA;
+      hasAddress: boolean;
       isOpen: boolean;
       onClose: () => void;
     };
     expect(props.contact).toBe(ADA);
+    // The page's own answer, so an address row with no `location` counts.
+    expect(props.hasAddress).toBe(true);
     expect(props.isOpen).toBe(true);
 
     props.onClose();

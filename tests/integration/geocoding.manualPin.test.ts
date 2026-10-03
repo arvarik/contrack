@@ -246,14 +246,21 @@ describe("handing the pin back on request", () => {
     expect(queued).toHaveBeenCalledWith(id, "London, UK");
   });
 
-  it("reads the primary address when there is no location field", async () => {
-    const id = await person("Address Only Person", {
-      location: null,
-      addresses: [
-        { address: "Rome, Italy", label: "work", isPrimary: false },
-        { address: "Paris, France", label: "home", isPrimary: true },
-      ],
-    });
+  it("reads the primary address before the location field, on every path", async () => {
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({
+        name: "Rowan Vale",
+        location: "London, UK",
+        addresses: [
+          { address: "Rome, Italy", label: "work", isPrimary: false },
+          { address: "Paris, France", label: "home", isPrimary: true },
+        ],
+      });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+    expect(queued).toHaveBeenCalledWith(id, "Paris, France");
+
     const placed = await request(app)
       .patch(`/api/contacts/${id}/location`)
       .send(LONDON);
@@ -266,5 +273,32 @@ describe("handing the pin back on request", () => {
 
     expect(res.status).toBe(200);
     expect(queued).toHaveBeenCalledWith(id, "Paris, France");
+    // The startup sweep reads the same text for the same contact.
+    expect(contactsAwaitingGeocode()).toContainEqual({
+      id,
+      text: "Paris, France",
+    });
+  });
+
+  it("refuses to hand back a pin when there is no address to read", async () => {
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Quinn Harbor", ...LONDON });
+    const id = created.body.id as string;
+    const placed = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send(PARIS);
+    expect(placed.status).toBe(200);
+    queued.mockClear();
+
+    const res = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send({ regeocode: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("NO_ADDRESS");
+    // The pin a person placed is still there, and nothing was queued.
+    expect(pinRow(id)).toMatchObject({ ...PARIS, geoSource: "manual" });
+    expect(queued).not.toHaveBeenCalled();
   });
 });

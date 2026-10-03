@@ -2,7 +2,9 @@ import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
+import { notOnMap } from "../services/geocoding/index.ts";
 import { searchPlace } from "../services/geocoding/search.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -41,6 +43,14 @@ router.get(
     }
 
     res.json(result);
+  }),
+);
+
+/** The caller's contacts with an address and no pin, and why. */
+router.get(
+  "/status",
+  asyncHandler(async (req, res) => {
+    res.json({ contacts: notOnMap(scopeOf(req)) });
   }),
 );
 

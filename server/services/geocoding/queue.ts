@@ -9,16 +9,24 @@ import {
   cacheGeocode,
   FAILURE_TTL_DAYS,
 } from "./cache.ts";
-import { geocodeWithFallback, INTER_REQUEST_DELAY_MS } from "./provider.ts";
+import { geocodeWithFallback } from "./provider.ts";
+
+/** No answer: wait 30 s, twice as long for each in a row, up to 15 min. */
+const RETRY_FIRST_MS = 30_000;
+const RETRY_MAX_MS = 15 * 60_000;
+/** After this many tries with no answer, a task waits for the next boot. */
+const MAX_TRIES = 5;
 
 interface GeoTask {
   contactId: string;
   location: string;
   normalizedKey: string;
+  tries?: number;
 }
 
 const geocodeQueue: GeoTask[] = [];
 let isGeocoding = false;
+let noAnswers = 0;
 
 export function queueGeocode(contactId: string, location: string): void {
   // Integration tests set this to keep background fetches off the network.
@@ -77,13 +85,29 @@ async function processGeocodeQueue(): Promise<void> {
 
     const result = await geocodeWithFallback(task.location);
 
-    if (result) {
+    if (result.status === "error") {
+      // No answer is not "nothing found": cache nothing, and ask again later.
+      const tries = (task.tries ?? 0) + 1;
+      if (tries < MAX_TRIES) geocodeQueue.push({ ...task, tries });
+      const wait = Math.min(RETRY_FIRST_MS * 2 ** noAnswers, RETRY_MAX_MS);
+      noAnswers++;
+      log.warn(
+        "Geocode",
+        `No answer for "${task.location}", next lookup in ${wait / 1000}s`,
+      );
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
+    noAnswers = 0;
+
+    if (result.status === "found") {
       cacheGeocode(
         task.normalizedKey,
         result.lat,
         result.lng,
         result.provider,
         true,
+        result.displayName,
       );
       applyCoordinates(
         task.contactId,
@@ -102,8 +126,6 @@ async function processGeocodeQueue(): Promise<void> {
         `No results for "${task.location}" — cached as failure for ${FAILURE_TTL_DAYS}d`,
       );
     }
-
-    await new Promise((r) => setTimeout(r, INTER_REQUEST_DELAY_MS));
   }
 
   isGeocoding = false;

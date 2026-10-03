@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { Contact } from "../types";
+import { apiJson } from "./client";
 
 /** Refresh contact lists and the views whose counts depend on them. */
 export function invalidateContactViews(client: QueryClient): void {
@@ -12,6 +13,7 @@ export function invalidateContactViews(client: QueryClient): void {
     "zeroState",
     "trash",
     "relationships",
+    "geo",
   ]) {
     void client.invalidateQueries({ queryKey: [key] });
   }
@@ -60,4 +62,33 @@ export function patchContactCaches(
     client.setQueryData(["contacts"], list);
     client.setQueryData(["contacts", id], one);
   };
+}
+
+/** The waits between the looks: 2 s after the write, and again at 6 s. */
+const PIN_CHECKS_MS = [2_000, 4_000];
+
+/**
+ * Ask again for a contact whose pin the geocoder may still place or move, and
+ * write the new pin into both caches when it lands.
+ */
+export function followPin(client: QueryClient, contact: Contact): void {
+  const { id, lat, lng, location, addresses } = contact;
+  if (!location?.trim() && !addresses?.some((a) => a.address.trim())) return;
+  void (async () => {
+    for (const wait of PIN_CHECKS_MS) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      const fresh = await apiJson<Contact>(
+        `/contacts/${encodeURIComponent(id)}`,
+      ).catch(() => null);
+      if (!fresh) return;
+      if (fresh.lat === lat && fresh.lng === lng) continue;
+      patchContactCaches(client, id, {
+        lat: fresh.lat,
+        lng: fresh.lng,
+        geoSource: fresh.geoSource,
+      });
+      void client.invalidateQueries({ queryKey: ["geo"] });
+      return;
+    }
+  })();
 }

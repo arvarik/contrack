@@ -960,14 +960,27 @@ snapshots exist.
 
 | Endpoint                    | What it does                                                                                                                                                                     | Access               |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). Answers `{ query, lat, lng, provider, cached }`. `404 NO_RESULT` when nothing matches. It reads no contacts.                    | any signed-in caller |
+| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                    | any signed-in caller |
+| `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
 | `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
 | `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
 | `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer`, `bounds` or `sortOrder`.                                                                                                                        | your data            |
 | `DELETE /api/map/views/:id` | Delete a saved view.                                                                                                                                                             | your data            |
 
 The contact rows for the map and the pin routes are in [Contacts](#contacts).
-A failed place search is remembered for 7 days.
+`PATCH /api/contacts/:id/location` with `regeocode` answers `400 NO_ADDRESS`
+when the contact has no address text to read.
+
+A place search answers `{ query, lat, lng, provider, cached, displayName }`.
+`displayName` is the place Nominatim matched. `404 NO_RESULT` means nothing
+matches, and `503 GEOCODER_UNAVAILABLE` means Nominatim is busy or does not
+answer. A search that finds nothing is remembered for 7 days. A search that
+gets no answer is not.
+
+Each row of `GET /api/geo/status` has `id`, `name`, `company`, `avatarUrl`,
+`location` (the text the geocoder reads), `isTracked`, `lat` and `lng` (both
+null), and `reason`: `pending` (not tried yet, or queued) or `not-found` (the
+geocoder found nothing).
 
 ## Connectors
 

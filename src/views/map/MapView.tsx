@@ -72,6 +72,8 @@ import {
 import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
+import { NotOnMap } from "./NotOnMap";
+import type { MiniMapContact } from "./LocationMiniMap";
 import { MapInsightsPane } from "./MapInsightsPane";
 import { SaveViewModal } from "./SaveViewModal";
 import { RenameViewModal } from "./RenameViewModal";
@@ -401,13 +403,14 @@ export const MapView = () => {
   const [isSingleAddToListOpen, setIsSingleAddToListOpen] = useState(false);
 
   const bulkAddToList = useBulkAddToList();
-  const [adjustId, setAdjustId] = useState<string | null>(null);
-  const adjusting = adjustId && contacts.find((c) => c.id === adjustId);
+  // The contact itself, so one with no pin can open the dialog too.
+  const [adjusting, setAdjusting] = useState<MiniMapContact | null>(null);
 
   const handleCardAction = useCallback(
     (action: Exclude<CardAction, "open">, id: string) => {
       if (action === "log") setQuickNoteContactId(id);
-      else if (action === "adjust") setAdjustId(id);
+      else if (action === "adjust")
+        setAdjusting(contacts.find((c) => c.id === id) ?? null);
       else if (action === "list") {
         setSingleListContactId(id);
         setIsSingleAddToListOpen(true);
@@ -416,7 +419,7 @@ export const MapView = () => {
         setIsFollowUpOpen(true);
       }
     },
-    [],
+    [contacts],
   );
 
   const handleAddToListSubmit = useCallback(
@@ -741,6 +744,10 @@ export const MapView = () => {
               heatFaded={pastHeat}
               onZoomToHeat={zoomToHeat}
             />
+            <NotOnMap
+              className="pointer-events-auto ml-2 shrink-0"
+              onSetLocation={setAdjusting}
+            />
           </div>
         )}
         <ContactMap
@@ -868,7 +875,7 @@ export const MapView = () => {
             <AdjustPinModal
               contact={adjusting}
               isOpen
-              onClose={() => setAdjustId(null)}
+              onClose={() => setAdjusting(null)}
             />
           </Suspense>
         )}

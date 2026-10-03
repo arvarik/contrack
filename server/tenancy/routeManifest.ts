@@ -809,6 +809,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "instance-read",
     isolated: false,
   },
+  { method: "GET", path: "/api/geo/status", class: "scoped", isolated: true },
   {
     method: "GET",
     path: "/api/imports",
