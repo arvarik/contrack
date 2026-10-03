@@ -27,6 +27,30 @@ export const useUrgentActionItemCount = () => {
   });
 };
 
+/** One follow-up for each contact, in one request that saves all or none. */
+export const useBulkCreateActionItems = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      contactIds: string[];
+      title: string;
+      dueAt: string;
+    }): Promise<{ count: number }> => {
+      const res = await apiFetch("/action-items/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+};
+
 export const useUpdateActionItem = () => {
   const queryClient = useQueryClient();
   return useMutation({

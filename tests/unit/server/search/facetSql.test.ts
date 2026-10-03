@@ -110,7 +110,7 @@ const ROWS: Row[] = [
     company: "Acme",
     location: null,
     industry: "Media",
-    relationshipScore: null,
+    relationshipScore: 45,
     isTracked: 1,
     updatedAt: null,
     lastContactedAt: null,
@@ -419,6 +419,11 @@ describe("compileFacets", () => {
       }),
     ).toEqual(["Gus Arctic"]);
     expect(names({ field: "role", value: "i̇ç" })).toEqual(["Cem İnce"]);
+    // Only a score a card shows: Bea is untracked, Dana never contacted.
+    expect(names({ field: "score", value: "40", operator: ">" })).toEqual([
+      "Ada Engineer",
+      "Fay Dateline",
+    ]);
     // An unreadable date counts as never, as the palette reads it.
     expect(names({ field: "contacted", value: "never" })).toEqual([
       "Dana Nobody",

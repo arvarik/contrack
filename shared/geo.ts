@@ -1,12 +1,6 @@
 /**
- * The map's data, shared by the server that sends it and the client that
- * draws it.
- *
- * `GET /api/contacts/map` returns one row per placed contact. The route keeps
- * that row shape, and the client turns the rows into a GeoJSON
- * FeatureCollection here, because MapLibre clusters a GeoJSON source and
- * nothing else. A row whose coordinates cannot be drawn is dropped at this
- * boundary, so the map never receives one.
+ * The map's rows and their GeoJSON source. The Map page builds the rows from
+ * `GET /api/contacts?view=slim`. `GET /api/contacts/map` is for API clients.
  *
  * @module shared/geo
  */

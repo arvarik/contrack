@@ -206,6 +206,7 @@ const COVERED = [
   "PATCH /api/map/views/:id",
   "PATCH /api/search/history/:id",
   "PATCH /api/tags/:tag",
+  "POST /api/action-items/bulk",
   "POST /api/ai-search",
   "POST /api/ai-search/:batchId/cancel",
   "POST /api/contacts",
@@ -1306,6 +1307,23 @@ describe("action items under a contact", () => {
     );
     expect(res.status).toBe(404);
     expect(rowsOwnedBy("action_items", A.user.id)).toBe(before);
+  });
+
+  it("POST /api/action-items/bulk refuses a foreign id and writes nothing", async () => {
+    const beforeA = rowsOwnedBy("action_items", A.user.id);
+    const beforeB = rowsOwnedBy("action_items", B.user.id);
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/action-items/bulk")
+        .send({
+          contactIds: [seedB.contactIds[4], seedA.contactIds[0]],
+          title: "Bob's idea",
+          dueAt: "2027-06-01",
+        }),
+    );
+    expect(res.status).toBe(404);
+    expect(rowsOwnedBy("action_items", A.user.id)).toBe(beforeA);
+    expect(rowsOwnedBy("action_items", B.user.id)).toBe(beforeB);
   });
 });
 

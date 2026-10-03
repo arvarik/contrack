@@ -307,13 +307,15 @@ export const MapView = () => {
     [updateMapView],
   );
 
+  // The hook's toast holds the Undo. The page stays as the view left it,
+  // with its layer in the URL.
   const handleDeleteView = useCallback(
-    async (view: MapViewType) => {
-      await deleteMapView.mutateAsync(view.id);
-      toast.success(`View "${view.name}" deleted`);
-      // The page stays as the view left it, with its layer in the URL.
-      if (urlViewId === view.id) handleLayerChange(layer);
-    },
+    (view: MapViewType) =>
+      deleteMapView.mutate(view, {
+        onSuccess: () => {
+          if (urlViewId === view.id) handleLayerChange(layer);
+        },
+      }),
     [deleteMapView, urlViewId, handleLayerChange, layer],
   );
 
@@ -861,6 +863,7 @@ export const MapView = () => {
           onSave={handleSaveView}
           currentQuery={filter.rawInput}
           currentLayer={layer}
+          overdueOnly={filter.overdueOnly}
         />
 
         {adjusting && (

@@ -17,7 +17,12 @@
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { sqlite, SCORE_COLUMNS, contactEditColumns } from "../../server/db.ts";
+import {
+  sqlite,
+  PIN_COLUMNS,
+  SCORE_COLUMNS,
+  contactEditColumns,
+} from "../../server/db.ts";
 import { relationshipService } from "../../server/services/relationshipService.ts";
 import { setPreferences } from "../../server/services/userPreferencesService.ts";
 import { makeTestApp } from "./helpers.ts";
@@ -143,7 +148,7 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe("the updatedAt trigger fires on edits and nothing else", () => {
-  it("lists exactly the table's columns minus the score columns", () => {
+  it("lists exactly the table's columns minus the score and pin columns", () => {
     const ddl = (
       sqlite
         .prepare(
@@ -161,20 +166,24 @@ describe("the updatedAt trigger fires on edits and nothing else", () => {
       sqlite.pragma("table_info(contacts)") as { name: string }[]
     ).map((c) => c.name);
 
+    const computed: string[] = [...SCORE_COLUMNS, ...PIN_COLUMNS];
     expect(listed.slice().sort()).toEqual(
-      all.filter((c) => !SCORE_COLUMNS.includes(c as never)).sort(),
+      all.filter((c) => !computed.includes(c)).sort(),
     );
-    // Both score columns exist, so the filter above removed something.
-    for (const column of SCORE_COLUMNS) expect(all).toContain(column);
+    // Every left-out column exists, so the filter above removed something.
+    for (const column of computed) expect(all).toContain(column);
     expect(contactEditColumns(sqlite).slice().sort()).toEqual(
       listed.slice().sort(),
     );
   });
 
-  it("does not stamp updatedAt when only the score is written", async () => {
+  // The geocoder writes pins in the background, so `updated:<1m` matched
+  // people it had just placed, and the dedupe embedder re-read them.
+  it.each([
+    ["the score", "relationshipScore = 77"],
+    ["a pin", "lat = 51.5, lng = -0.12, geoSource = 'geocoder'"],
+  ])("does not count writing %s as an edit or a reason to score", (_l, set) => {
     const id = addContact(A.user.id);
-    const before = readRow(id).updatedAt;
-
     // datetime('now') has one-second resolution, so a stamp inside the same
     // second would be invisible. Write a value the clock cannot reach.
     sqlite
@@ -182,17 +191,14 @@ describe("the updatedAt trigger fires on edits and nothing else", () => {
         "UPDATE contacts SET updatedAt = '2020-01-01T00:00:00.000Z' WHERE id = ?",
       )
       .run(id);
-    expect(readRow(id).updatedAt).toBe("2020-01-01T00:00:00.000Z");
+    settle();
 
-    sqlite
-      .prepare(
-        "UPDATE contacts SET relationshipScore = 77, scoreDirty = 0 WHERE id = ?",
-      )
-      .run(id);
+    sqlite.prepare(`UPDATE contacts SET ${set} WHERE id = ?`).run(id);
 
-    expect(readRow(id).updatedAt).toBe("2020-01-01T00:00:00.000Z");
-    expect(readRow(id).relationshipScore).toBe(77);
-    expect(before).not.toBe("");
+    expect(readRow(id)).toMatchObject({
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      scoreDirty: 0,
+    });
   });
 
   it("stamps updatedAt when a field of the contact is written", () => {
@@ -263,15 +269,6 @@ describe("what marks a contact for re-scoring", () => {
     settle();
     sqlite.prepare("UPDATE contacts SET cadenceDays = 30 WHERE id = ?").run(id);
     expect(readRow(id).scoreDirty).toBe(1);
-  });
-
-  it("does not mark a contact when only the score is written", () => {
-    const id = addContact(A.user.id);
-    settle();
-    sqlite
-      .prepare("UPDATE contacts SET relationshipScore = 61 WHERE id = ?")
-      .run(id);
-    expect(readRow(id).scoreDirty).toBe(0);
   });
 
   it("marks a contact when an interaction is written, changed or removed", () => {

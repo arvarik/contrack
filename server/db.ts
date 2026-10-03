@@ -1136,7 +1136,7 @@ installSearchIndex(sqlite);
 // 4. Auto-stamp updatedAt, and mark a contact for re-scoring
 // =============================================================================
 // Guarantees updatedAt is always current regardless of which code path
-// (geocoder, archive toggle, bulk update, etc.) mutates the row.
+// (archive toggle, bulk update, etc.) edits the row.
 // Uses AFTER UPDATE to avoid recursion — the trigger itself runs after
 // the original UPDATE, and the SET updatedAt is a no-op if already current.
 //
@@ -1155,10 +1155,8 @@ installSearchIndex(sqlite);
 //   • Story S10 cannot work at all. "Score only what changed" needs a signal
 //     that scoring does not itself set.
 //
-// The column list is derived from the table rather than written out, so a
-// column added later is covered without anyone remembering to come back here.
-// `tests/integration/scoring.incremental.test.ts` asserts the list is exactly
-// the table minus SCORE_COLUMNS.
+// The list is the table less SCORE_COLUMNS and PIN_COLUMNS, so a new column
+// is covered. `tests/integration/scoring.incremental.test.ts` checks it.
 // =============================================================================
 
 /**
@@ -1169,12 +1167,14 @@ installSearchIndex(sqlite);
  */
 export const SCORE_COLUMNS = ["relationshipScore", "scoreDirty"] as const;
 
-/** Every `contacts` column except {@link SCORE_COLUMNS}, quoted for DDL. */
+/** The pin, placed by the geocoder or dragged by hand. Neither is an edit. */
+export const PIN_COLUMNS = ["lat", "lng", "geoSource"] as const;
+
+/** Every `contacts` column but the score and pin columns, quoted for DDL. */
 export function contactEditColumns(db: Database.Database): string[] {
+  const computed: readonly string[] = [...SCORE_COLUMNS, ...PIN_COLUMNS];
   const columns = db.pragma("table_info(contacts)") as { name: string }[];
-  return columns
-    .map((c) => c.name)
-    .filter((name) => !(SCORE_COLUMNS as readonly string[]).includes(name));
+  return columns.map((c) => c.name).filter((name) => !computed.includes(name));
 }
 
 const editColumnList = contactEditColumns(sqlite)

@@ -27,6 +27,14 @@ import { cn } from "../../lib/utils";
 const pillTone = (filter: FacetFilter): Tone =>
   filter.error ? "error" : filter.field === "tracked" ? "primary" : "neutral";
 
+/** The value a pill shows: a place with its state, or the operator and value. */
+const pillValue = (filter: FacetFilter): string => {
+  if (filter.field !== "near") return `${filter.operator || ""}${filter.value}`;
+  if (filter.error) return `${filter.value} (${filter.error})`;
+  if (filter.resolving) return `${filter.value} (resolving…)`;
+  return filter.km ? `${filter.value}/${filter.km}km` : filter.value;
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface FacetPillsProps {
@@ -51,6 +59,7 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: DURATION.fast, ease: EASE }}
             onClick={() => onRemove(i)}
+            aria-label={`Remove filter ${filter.field}: ${pillValue(filter)}`}
             className={cn(
               "hit-area state-layer inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors group",
               TONE_WASH[pillTone(filter)],
@@ -59,17 +68,7 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
             {/* Secondary by weight, not by opacity: the pill's ink at 60
                 percent fell under AA on every wash. */}
             <span className="font-medium">{filter.field}:</span>
-            <span>
-              {filter.field === "near"
-                ? filter.error
-                  ? `${filter.value} (${filter.error})`
-                  : filter.resolving
-                    ? `${filter.value} (resolving…)`
-                    : filter.km
-                      ? `${filter.value}/${filter.km}km`
-                      : filter.value
-                : `${filter.operator || ""}${filter.value}`}
-            </span>
+            <span>{pillValue(filter)}</span>
             <X className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
           </motion.button>
         ))}

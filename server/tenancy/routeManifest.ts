@@ -74,6 +74,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    method: "POST",
+    path: "/api/action-items/bulk",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "GET",
     path: "/api/action-items/completed",
     class: "scoped",

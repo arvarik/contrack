@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { ValidationError } from "./AppError.ts";
 import { isValidTimeZone } from "../services/search/datePhrases.ts";
+import { MAX_BULK_ACTION_ITEMS } from "../../shared/actionItems.ts";
 
 // ============================================================================
 // Foundation / Base Values
@@ -262,6 +263,14 @@ export const interactionUpdateSchema = z
 export const actionItemCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
   dueAt: dateSchema,
+});
+
+/** Payload for POST /action-items/bulk: the same follow-up for each contact. */
+export const actionItemBulkCreateSchema = actionItemCreateSchema.extend({
+  contactIds: idsSchema.refine(
+    (ids) => ids.length <= MAX_BULK_ACTION_ITEMS,
+    `At most ${MAX_BULK_ACTION_ITEMS} contacts at a time`,
+  ),
 });
 
 export const actionItemUpdateSchema = z
