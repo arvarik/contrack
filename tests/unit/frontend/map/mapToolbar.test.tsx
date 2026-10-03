@@ -19,8 +19,11 @@ import type { MapContact } from "../../../../shared/geo";
 vi.mock("../../../../src/api/geo", () => ({
   searchPlace: vi.fn(),
 }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { info: vi.fn() }) }));
 
+import { toast } from "sonner";
 import { searchPlace } from "../../../../src/api/geo";
+import { NetworkError } from "../../../../src/api/client";
 
 const mockContacts: MapContact[] = [
   {
@@ -175,20 +178,25 @@ describe("MapToolbar and useMapFilter", () => {
     ).toBeNull();
   });
 
-  it("clears every pill and the overdue filter, from Clear filters and from the X", () => {
+  it("narrows to the overdue, and offers Clear all while any filter is on, which clears them all", () => {
     const people = [
       { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
       mockContacts[1],
     ];
     renderWithProviders(<TestComponent contacts={people} />);
+    const clearAll = () =>
+      screen.queryByRole("button", { name: "Clear all filters" });
+    expect(clearAll()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
+    expect(shown()).toEqual(["Ada Lovelace"]);
+    expect(clearAll()).toBeTruthy();
     fireEvent.change(input(), {
       target: { value: "company:Babbage tag:Military " },
     });
     expect(shown()).toEqual([]);
     expect(screen.getByText("0 of 2 match")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    fireEvent.click(clearAll()!);
     expect(input()).toHaveProperty("value", "");
     expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
     expect(
@@ -196,6 +204,7 @@ describe("MapToolbar and useMapFilter", () => {
         .getByRole("button", { name: "1 overdue" })
         .getAttribute("aria-pressed"),
     ).toBe("false");
+    expect(clearAll()).toBeNull();
 
     fireEvent.change(input(), {
       target: { value: "company:Babbage tag:Computing " },
@@ -205,21 +214,8 @@ describe("MapToolbar and useMapFilter", () => {
     expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
   });
 
-  it("narrows the map to the overdue, and lets everyone back", () => {
-    const people = [
-      { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
-      mockContacts[1],
-    ];
-    renderWithProviders(<TestComponent contacts={people} />);
-    const overdue = screen.getByRole("button", { name: "1 overdue" });
-    fireEvent.click(overdue);
-    expect(shown()).toEqual(["Ada Lovelace"]);
-    expect(overdue.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(overdue);
-    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
-  });
-
-  it("flies to a place it finds, and says so when it finds none", async () => {
+  // Every failure read "Nothing found for that place", a dead server too.
+  it("flies to a place it finds and names it, and says why it found none", async () => {
     const map = fakeMap();
     vi.mocked(searchPlace)
       .mockResolvedValueOnce({
@@ -228,11 +224,12 @@ describe("MapToolbar and useMapFilter", () => {
         lng: 2.3522,
         provider: "Nominatim",
         cached: false,
+        displayName: "Paris, France",
       })
-      .mockRejectedValueOnce(new Error("Nothing found for that place"));
+      .mockRejectedValueOnce(new NetworkError());
     renderWithProviders(<TestComponent map={map} />);
 
-    for (const place of ["Paris", "AtlantisNotFound"]) {
+    for (const place of ["Paris", "Lisbon"]) {
       if (!screen.queryByRole("textbox", { name: "Go to place" }))
         fireEvent.click(screen.getByRole("button", { name: "Go to place" }));
       const box = screen.getByRole("textbox", { name: "Go to place" });
@@ -243,9 +240,10 @@ describe("MapToolbar and useMapFilter", () => {
     expect(map.flyTo).toHaveBeenCalledWith(
       expect.objectContaining({ center: [2.3522, 48.8566], zoom: 10 }),
     );
+    expect(toast).toHaveBeenCalledWith("Showing Paris, France");
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toContain(
-        "Nothing found for that place",
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Can't reach the Contrack server",
       ),
     );
   });

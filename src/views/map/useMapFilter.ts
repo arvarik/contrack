@@ -29,7 +29,9 @@ import {
 /** A query that arrives whole ends in a space, so its last facet is a pill. */
 const asTyped = (query: string) => (query.trim() ? `${query.trim()} ` : "");
 
-const facetKey = (filter: FacetFilter) => formatFacet(filter).toLowerCase();
+/** Two facets that format alike, in any case, are one pill. */
+export const facetKey = (filter: FacetFilter) =>
+  formatFacet(filter).toLowerCase();
 const placeKey = (filter: FacetFilter) => filter.value.trim().toLowerCase();
 const PLACE_QUERY = ["geo", "place"] as const;
 
