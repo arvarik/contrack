@@ -1,7 +1,23 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 import { queueGeocode } from "../../server/services/geocoding/index.ts";
-import { normalizeLocationKey } from "../../server/services/geocoding/cache.ts";
-import { geocodeWithFallback } from "../../server/services/geocoding/provider.ts";
+import {
+  getCachedGeocode,
+  isRecentFailure,
+  normalizeLocationKey,
+} from "../../server/services/geocoding/cache.ts";
+import {
+  geocodeWithFallback,
+  INTER_REQUEST_DELAY_MS,
+} from "../../server/services/geocoding/provider.ts";
+import { searchPlace } from "../../server/services/geocoding/search.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -31,18 +47,22 @@ describe("Geocoding Integration Tests", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("asks Nominatim with its User-Agent and names it as the provider", async () => {
+  it("asks Nominatim with its User-Agent and names the place it found", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
-      Response.json([{ lat: "48.8566", lon: "2.3522" }]),
+      Response.json([
+        { lat: "48.8566", lon: "2.3522", display_name: "Paris, France" },
+      ]),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await geocodeWithFallback("Paris, France");
 
     expect(result).toEqual({
+      status: "found",
       lat: 48.8566,
       lng: 2.3522,
       provider: "Nominatim",
+      displayName: "Paris, France",
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
@@ -52,5 +72,77 @@ describe("Geocoding Integration Tests", () => {
     expect(new Headers(init?.headers).get("User-Agent")).toMatch(
       /^ContrackCRM\//,
     );
+  });
+});
+
+// One fake clock for the block, so the pacing carries from test to test.
+describe("no answer, and the pace", () => {
+  beforeAll(() => vi.useFakeTimers());
+  afterAll(() => vi.useRealTimers());
+
+  it("takes no answer as no answer: no broader address, nothing found", async () => {
+    for (const reply of [
+      () => Promise.resolve(new Response("busy", { status: 429 })),
+      () => Promise.reject(new TypeError("fetch failed")),
+    ]) {
+      const fetchMock = vi.fn(reply);
+      vi.stubGlobal("fetch", fetchMock);
+      const outcome = geocodeWithFallback("12 Harbour Road, Porto, Portugal");
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await outcome).toEqual({ status: "error" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("keeps the place search and the queue to one call a second", async () => {
+    const starts: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        starts.push(Date.now());
+        return Response.json([]);
+      }),
+    );
+
+    const both = Promise.all([
+      geocodeWithFallback("Braga"),
+      searchPlace("Faro"),
+    ]);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await both;
+
+    expect(starts).toHaveLength(2);
+    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(
+      INTER_REQUEST_DELAY_MS,
+    );
+  });
+
+  it("asks again after a wait when there is no answer, and caches nothing until then", async () => {
+    vi.stubEnv("DISABLE_BACKGROUND_JOBS", "false");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+      .mockResolvedValueOnce(
+        Response.json([
+          { lat: "41.1579", lon: "-8.6291", display_name: "Porto, Portugal" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const key = normalizeLocationKey("Porto, Portugal");
+
+    queueGeocode("waiting-contact", "Porto, Portugal");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getCachedGeocode(key)).toBeNull();
+    expect(isRecentFailure(key)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getCachedGeocode(key)).toEqual({
+      lat: 41.1579,
+      lng: -8.6291,
+      provider: "Nominatim",
+      displayName: "Porto, Portugal",
+    });
   });
 });

@@ -13,6 +13,10 @@ import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { buildProductionCsp } from "../../server/app.ts";
 import {
+  cacheGeocode,
+  normalizeLocationKey,
+} from "../../server/services/geocoding/cache.ts";
+import {
   DEFAULT_MAP_STYLE_DARK,
   DEFAULT_MAP_STYLE_LIGHT,
 } from "../../server/utils/mapConfig.ts";
@@ -103,6 +107,57 @@ describe("GET /api/contacts/map", () => {
       .send({ lat: 48.8566, lng: 2.3522 });
     expect(moved.status).toBe(200);
     expect((await rowFor(id))?.geoSource).toBe("manual");
+    // The slim list the map page draws from says the same.
+    const slim = await request(app).get("/api/contacts?view=slim");
+    const slimRow = (slim.body as MapRow[]).find((r) => r.id === id);
+    expect(slimRow?.geoSource).toBe("manual");
+  });
+});
+
+describe("GET /api/geo/status", () => {
+  it("lists the contacts with an address and no pin, and why each has none", async () => {
+    const waiting = await request(app).post("/api/contacts").send({
+      name: "Rowan Vale",
+      company: "Northwind Partners",
+      location: "Lisbon, Portugal",
+    });
+    const lost = await request(app)
+      .post("/api/contacts")
+      .send({
+        name: "Sable Quill",
+        addresses: [
+          { address: "Nowhere Lane, Atlantis", label: "home", isPrimary: true },
+        ],
+      });
+    cacheGeocode(
+      normalizeLocationKey("Nowhere Lane, Atlantis"),
+      null,
+      null,
+      "none",
+      false,
+    );
+    const placed = await place("Placed Status Person");
+
+    const res = await request(app).get("/api/geo/status");
+
+    expect(res.status).toBe(200);
+    const rows = res.body.contacts as { id: string }[];
+    expect(rows.find((r) => r.id === waiting.body.id)).toEqual({
+      id: waiting.body.id,
+      name: "Rowan Vale",
+      company: "Northwind Partners",
+      avatarUrl: waiting.body.avatarUrl,
+      location: "Lisbon, Portugal",
+      isTracked: false,
+      lat: null,
+      lng: null,
+      reason: "pending",
+    });
+    expect(rows.find((r) => r.id === lost.body.id)).toMatchObject({
+      location: "Nowhere Lane, Atlantis",
+      reason: "not-found",
+    });
+    expect(rows.map((r) => r.id)).not.toContain(placed);
   });
 });
 

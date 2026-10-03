@@ -15,7 +15,11 @@ import type {
   ContactRow,
   ChildRecordsPayload,
 } from "../repositories/types.ts";
-import { queueGeocode } from "./geocoding/index.ts";
+import {
+  geocodeText,
+  PRIMARY_ADDRESS_SQL,
+  queueGeocode,
+} from "./geocoding/index.ts";
 import {
   processBase64Avatar,
   isBase64DataUri,
@@ -42,6 +46,7 @@ import { DEFAULT_RESEARCH_DEPTH } from "../../shared/researchDepth.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
+import { AppError } from "../utils/AppError.ts";
 
 // ---------------------------------------------------------------------------
 // Incremental Dedupe — Debounce Map
@@ -274,96 +279,56 @@ function purgeContactSearchArtifacts(id: string): void {
 
 /** The address a contact shows, and who placed the pin. */
 interface PinState {
-  location: string | null;
-  primaryAddress: string | null;
   /**
-   * The address the contact page shows: the primary address row when there
-   * are rows, else the legacy `location` field. The page shows `location` as
-   * an address row until the list is first edited, and that first edit sends
-   * the same text back as a row. Comparing this, and not the two fields one
-   * by one, is what keeps that edit from moving a pin.
+   * The text the pin stands for (`geocodeText`). The list's first edit sends
+   * `location` back as the same address row, which leaves this unchanged.
    */
   shown: string | null;
   /** True when a person placed the pin. The geocoder leaves it alone. */
   manual: boolean;
 }
 
-/**
- * What the contact shows for an address, and whether a person placed the pin.
- *
- * Read before and after a write, so the write can be asked one question: did
- * it change the address the pin stands for?
- */
+/** Read before and after a write: did it change the text the pin stands for? */
 function pinStateOf(scope: Scope, id: string): PinState {
   const row = sqlite
     .prepare(
-      `SELECT location, geoSource FROM contacts WHERE id = ? AND ownerId = ?`,
+      `SELECT location, geoSource, ${PRIMARY_ADDRESS_SQL} AS primaryAddress
+         FROM contacts WHERE id = ? AND ownerId = ?`,
     )
     .get(id, scope.ownerId) as
-    { location: string | null; geoSource: string | null } | undefined;
-  const address = sqlite
-    .prepare(
-      `SELECT address FROM contact_addresses WHERE contactId = ?
-        ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1`,
-    )
-    .get(id) as { address: string | null } | undefined;
-  const location = row?.location || null;
-  const primaryAddress = address?.address || null;
+    | {
+        location: string | null;
+        geoSource: string | null;
+        primaryAddress: string | null;
+      }
+    | undefined;
   return {
-    location,
-    primaryAddress,
-    shown: primaryAddress ?? location,
+    shown: geocodeText(row?.primaryAddress ?? null, row?.location ?? null),
     manual: row?.geoSource === "manual",
   };
 }
 
 /**
- * The text a write asked the geocoder to read: `location` first, else the
- * primary address it carried, else nothing.
- */
-function requestedGeocodeText(
-  body: Pick<ContactPayload, "location" | "addresses">,
-): string | null {
-  if (body.location) return body.location;
-  if (Array.isArray(body.addresses) && body.addresses.length > 0) {
-    const primary =
-      body.addresses.find(
-        (a) => typeof a === "object" && a !== null && a.isPrimary,
-      ) || body.addresses[0];
-    const text = typeof primary === "string" ? primary : primary.address;
-    return text || null;
-  }
-  return null;
-}
-
-/**
- * Queue the geocoder after a write, with one exception.
- *
- * A pin placed by hand is not the geocoder's to move. The write may change
- * anything else about the contact and the pin stays where the person put it.
- * Only a change to the address the contact shows hands the pin back: the
- * address moved from under it, so `geoSource` is cleared and the geocoder
- * reads the new text. Until it answers, the old coordinates stand.
+ * Queue the geocoder after a write that touched the address fields. A pin a
+ * person placed goes back to the geocoder only when its text changed.
  */
 function regeocodeAfterWrite(
   scope: Scope,
   id: string,
   before: PinState,
-  requested: string | null,
+  touched: boolean,
 ): void {
-  if (!before.manual) {
-    if (requested) queueGeocode(id, requested);
-    return;
-  }
+  if (!touched) return;
   const after = pinStateOf(scope, id);
-  if (after.shown === before.shown) return;
-  sqlite
-    .prepare(
-      `UPDATE contacts SET geoSource = NULL WHERE id = ? AND ownerId = ?`,
-    )
-    .run(id, scope.ownerId);
-  const text = requested ?? after.shown;
-  if (text) queueGeocode(id, text);
+  if (before.manual) {
+    if (after.shown === before.shown) return;
+    sqlite
+      .prepare(
+        `UPDATE contacts SET geoSource = NULL WHERE id = ? AND ownerId = ?`,
+      )
+      .run(id, scope.ownerId);
+  }
+  if (after.shown) queueGeocode(id, after.shown);
 }
 
 /** Permanently delete a contact row (children cascade; embeddings purged). */
@@ -410,6 +375,7 @@ type SlimContactRow = Pick<
   | "nextFollowUpAt"
   | "lat"
   | "lng"
+  | "geoSource"
   | "relationshipScore"
   | "isTracked"
   | "trackedAt"
@@ -462,19 +428,8 @@ export const contactService = {
     });
     txn();
 
-    if (body.location) {
-      queueGeocode(id, body.location);
-    } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
-      const primaryAddress =
-        body.addresses.find(
-          (a) => typeof a === "object" && a !== null && a.isPrimary,
-        ) || body.addresses[0];
-      const addressString =
-        typeof primaryAddress === "string"
-          ? primaryAddress
-          : primaryAddress.address;
-      if (addressString) queueGeocode(id, addressString);
-    }
+    const text = pinStateOf(scope, id).shown;
+    if (text) queueGeocode(id, text);
 
     // Fire-and-forget: generate embedding in the background
     generateAndStoreEmbedding(id).catch((err) =>
@@ -634,7 +589,8 @@ export const contactService = {
             );
             continue;
           }
-          if (c.location) queueGeocode(id, c.location);
+          const text = pinStateOf(scope, id).shown;
+          if (text) queueGeocode(id, text);
           createdIds.push(id);
           count++;
           if (importId)
@@ -764,10 +720,16 @@ export const contactService = {
     // on the read that follows and not after the hourly sweep.
     if (body.isTracked === true) relationshipService.computeScore(id);
 
+    // Before the read, so an address the cache knows comes back with its pin.
+    regeocodeAfterWrite(
+      scope,
+      id,
+      pinBefore,
+      body.location !== undefined || body.addresses !== undefined,
+    );
+
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
-
-    regeocodeAfterWrite(scope, id, pinBefore, requestedGeocodeText(body));
 
     // Fire-and-forget: recompute embedding if key fields changed
     const embeddingFields = [
@@ -843,12 +805,7 @@ export const contactService = {
 
     // A PATCH carries no child arrays, so `location` is the one address
     // field it can move.
-    regeocodeAfterWrite(
-      scope,
-      id,
-      pinBefore,
-      typeof body.location === "string" && body.location ? body.location : null,
-    );
+    regeocodeAfterWrite(scope, id, pinBefore, body.location !== undefined);
 
     // Fire-and-forget: recompute search embedding if searchable fields changed
     // NOTE: FTS5 is already updated by the contacts_au trigger, but the
@@ -1037,16 +994,19 @@ export const contactService = {
   },
 
   /**
-   * Hand the pin back to the geocoder.
-   *
-   * The coordinates go first, so the contact leaves the map until the
-   * geocoder answers rather than sitting on a pin that is nobody's decision
-   * any more. The geocoder then reads the same text it read the first time.
-   * A cached answer lands before this returns. A new one lands when the
-   * queue drains.
+   * Hand the pin back to the geocoder: clear it and queue the address text.
+   * A contact with no address text keeps its pin, and the request is refused.
    */
   regeocode(scope: Scope, id: string) {
     assertOwnedContact(scope, id);
+    const text = pinStateOf(scope, id).shown;
+    if (!text) {
+      throw new AppError(
+        "This contact has no address to place the pin from. Add an address, or place the pin by hand",
+        400,
+        { code: "NO_ADDRESS" },
+      );
+    }
     db.update(schema.contacts)
       .set({ lat: null, lng: null, geoSource: null })
       .where(
@@ -1056,9 +1016,7 @@ export const contactService = {
         ),
       )
       .run();
-    const pin = pinStateOf(scope, id);
-    const text = pin.location ?? pin.primaryAddress;
-    if (text) queueGeocode(id, text);
+    queueGeocode(id, text);
     invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
@@ -1098,7 +1056,7 @@ export const contactService = {
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday,
+             lat, lng, geoSource, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday,
              -- The last run's outcome, for the Enrichment page's "Found
              -- nothing" filter, without sending every record's JSON.
              CASE WHEN json_valid(aiResearch)
