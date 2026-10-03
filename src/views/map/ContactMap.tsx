@@ -469,18 +469,19 @@ export const ContactMap = ({
     clusterLeavesCache.current.clear();
     setClusterLeaves((prev) => (prev.size ? new Map() : prev));
   }, [contacts, setCard]);
-  // A caller's card, pinned as Space pins it. Each request asks once, so
-  // new contacts do not open it again.
+  // A caller's card, pinned as Space pins it, or a sheet on a touch screen.
+  // Each request asks once, so new contacts do not open it again.
   const asked = useRef<{ id: string } | null>(null);
   useEffect(() => {
     if (!cardRequest || cardRequest === asked.current) return;
     asked.current = cardRequest;
     if (!hoverCard || !byId.has(cardRequest.id)) return;
     const from = document.activeElement;
+    const touch = window.matchMedia?.("(hover: none)").matches;
     setCard({
       kind: "contact",
       id: cardRequest.id,
-      mode: "pinned",
+      mode: touch ? "sheet" : "pinned",
       padding: room(),
       from: from instanceof HTMLElement && from !== document.body ? from : null,
     });
