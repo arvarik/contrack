@@ -40,13 +40,16 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 | `server/middleware/`   | Auth, rate limits, AI switches, uploads guard, errors, cache headers                              |
 | `server/workers/`      | The CPU worker that runs the local models                                                         |
 | `server/utils/`        | `AppError`, validators, `aiCache`, `secretBox`, `urlSafety`, paths, logger                        |
-| `server/db.ts`         | Connection, migrations, virtual tables, triggers, boot steps                                      |
+| `server/db.ts`         | The connection, the call to the migration runner and the index installers, every-boot steps       |
+| `server/db/`           | `runner.ts`, `migrations/`, `indexes.ts` (derived structures and their versions), `schema.ts`     |
+| `server/modules/`      | One module per area: routers, MCP tools, jobs, subscribers. `index.ts` is the mount order         |
+| `server/events/`       | `recordEvent`, the dispatcher and its cursors, the subscribers                                    |
+| `server/jobs/`         | The job runner, `runJobNow`, the recurring and start-up jobs                                      |
 | `shared/`              | Code both sides import: facets, score bands, research records, MCP tool list                      |
 | `src/api/`             | React Query hooks, one file per domain                                                            |
 | `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `ai-search/`, `map/`, `settings/`, `dedupe/` |
 | `src/components/`      | Shared UI: `ui/` primitives, `layout/`, `command-palette/`, `brand/` (the corvid), `auth/`        |
 | `src/lib/`             | Tokens (`styles.ts`), names, shortcuts, theme, the corvid's motion                                |
-| `src/db/schema.ts`     | The Drizzle schema                                                                                |
 | `scripts/`             | Seeds, model fetch, eval recorders, brand icons, password reset                                   |
 | `tests/`               | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/`                                             |
 
@@ -107,19 +110,30 @@ SQL, and tests prove it.
 
 ## 5. Data
 
-- The schema is `src/db/schema.ts`. Change it, run `npm run db:generate`, and
-  commit the migration in `drizzle/`. The server applies migrations at boot.
-- Virtual tables, triggers and boot steps live in `server/db.ts`, outside
-  Drizzle:
+- A schema change is a new migration: `npm run db:new <name>` writes
+  `server/db/migrations/NNNN_<name>.ts`. `server/db/runner.ts` applies each
+  migration once, in order, in one transaction with its row in
+  `schema_migrations`, and a failure stops the boot with its id. Mirror every
+  table and column in `server/db/schema.ts`. Never edit a shipped migration.
+  `0001_baseline` is the boot code of 2.0 at `d67c8a9`, and
+  `tests/fixtures/schema/v2.0-d67c8a9.sql` is the schema it must produce.
+- A migration never reads a list that later code extends. The baseline keeps
+  frozen copies of the owned-table lists, and `server/db.ts` keeps the live
+  `OWNED_TABLES`.
+- Derived structures are rebuilt from code by `server/db/indexes.ts` on every
+  boot, each with an `index` row and a version in `schema_migrations`:
   - `contacts_fts` and `interactions_fts` (FTS5). Bump `FTS_SCHEMA_VERSION`
     when their columns or trigger payloads change; the index then rebuilds.
   - `search_embeddings` (`vec0`, `INT8[384]`, one scale per table),
     `search_passage_vectors` (long profile text in passages, same format), and
     `contact_embeddings` (float vectors for duplicate detection).
-  - Triggers keep FTS in step (deletes by `rowid`, never by `contactId`),
-    stamp `updatedAt` with named columns, stamp `trackedAt`, keep
-    `nextFollowUpAt` equal to the earliest open follow-up, and mark contacts
-    whose score must be recomputed.
+  - The FTS triggers keep the index in step (deletes by `rowid`, never by
+    `contactId`).
+- The baseline's triggers stamp `updatedAt` with named columns, stamp
+  `trackedAt`, keep `nextFollowUpAt` equal to the earliest open follow-up,
+  and mark contacts whose score must be recomputed. A migration that adds a
+  `contacts` column rebuilds `contacts_auto_updated_at` and
+  `contacts_score_dirty` with the new column list.
 - `vec0` tables do not cascade. Deleting or merging a contact must delete its
   rows in `search_embeddings`, `contact_embeddings` and
   `dedupe_embedding_meta`. Never `UPDATE` a partition key or rename a `vec0`
@@ -183,14 +197,29 @@ measured in CI without keys.
 - **Cost.** Every call is recorded in `ai_invocations` for the AI usage pages.
   AI-cost routes are rate limited per address and per account.
 
-## 8. Background work
+## 8. Modules, events and jobs
 
-At boot: migrations and ownership reconcile, the CPU worker loads the local
-models, embedding backfills run per account in rounds, and the geocoder fills
-missing coordinates from Nominatim (1.1 s apart, cached). On schedules: the
-score sweep (hourly for changed contacts, daily for all), backups
-(`BACKUP_INTERVAL_HOURS`), trash purge and maintenance, and the connector
-scheduler (a 60 s tick). `DISABLE_BACKGROUND_JOBS=true` skips all of it.
+- Each area is a module in `server/modules/<id>/index.ts`
+  (`defineModule({ id, routers, mcpTools, jobs, subscribers, onStart })`).
+  `server/modules/index.ts` is the list and the mount order: keep the `mcp`
+  module before `contacts`. `createApp()`, `registerAllTools` and `server.ts`
+  read it.
+- A write records an event in its own transaction (`recordEvent`, which
+  throws outside a transaction) and calls `dispatchEvents()` after the
+  transaction and before it reads its answer. Subscribers react from a cursor
+  each, in `event_cursors`. The contact write reactions (search index, dedupe
+  vector and check, geocode, score, caches, auto-enrich) are subscribers in
+  `server/events/contactSubscribers.ts`, not inline calls. Payloads carry ids
+  and field names only (`shared/contracts/events.ts`).
+- Background work is a job in the `jobs` table (`server/jobs/runner.ts`),
+  never a `setInterval`. At boot: migrations and ownership reconcile, the
+  runner requeues `running` rows, the search module loads the local models
+  and runs the embedding backfills, and the start-up jobs geocode missing
+  pins and copy stored photos. Recurring jobs: the connector tick (60 s), the
+  score sweeps (hourly, daily), backups (`BACKUP_INTERVAL_HOURS`), the trash
+  purge, maintenance, model catalogs and planner statistics. The duplicate
+  check is an on-demand job. `DISABLE_BACKGROUND_JOBS=true` runs none of
+  them, and `runJobNow` still works.
 
 ## 9. Rules that are easy to break
 
@@ -206,7 +235,7 @@ scheduler (a 60 s tick). `DISABLE_BACKGROUND_JOBS=true` skips all of it.
   `DATA_DIR/secret.key`).
 - Write one `auditService.record()` row for every admin action, with no
   credential in `details`.
-- Relative imports in `server/`, `shared/`, `src/db/` and `scripts/` name the
+- Relative imports in `server/`, `shared/` and `scripts/` name the
   file with its extension (`./geo.ts`). The `@/` alias works in frontend code
   only.
 - Log with `log.info` for state changes, `log.warn` for retries and
@@ -216,5 +245,5 @@ scheduler (a 60 s tick). `DISABLE_BACKGROUND_JOBS=true` skips all of it.
 ## 10. Commands
 
 `npm run dev` (port 3210), `npm run build`, `npm test`, `npm run lint`,
-`npm run knip`, `npm run test:e2e`, `npm run db:generate`,
+`npm run knip`, `npm run test:e2e`, `npm run db:new <name>`,
 `npm run models:fetch`, `npm run brand:icons`. `CONTRIBUTING.md` explains each.
