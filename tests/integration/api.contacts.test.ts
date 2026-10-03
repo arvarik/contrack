@@ -289,11 +289,11 @@ describe("the autoEnrich preference on contact creation", () => {
       [{ id: res.body.id, name: "Auto Enrich Person" }],
       { technique: "provider-search" },
     );
-    // The account's Search with choice, the provider's search by default.
-    expect(stratSpy).toHaveBeenCalledWith({}, "provider");
+    // The account's web search engine: the instance's by default.
+    expect(stratSpy).toHaveBeenCalledWith({}, "default");
     await request(app)
       .patch("/api/auth/preferences")
-      .send({ researchSource: "combined" });
+      .send({ webSearchEngine: "combined" });
     await request(app)
       .post("/api/contacts")
       .send({ name: "Auto Enrich Second" });
@@ -302,7 +302,7 @@ describe("the autoEnrich preference on contact creation", () => {
     // Reset preference
     await request(app)
       .patch("/api/auth/preferences")
-      .send({ autoEnrich: false, researchSource: "provider" });
+      .send({ autoEnrich: false, webSearchEngine: "default" });
     stratSpy.mockRestore();
     batchSpy.mockRestore();
     processSpy.mockRestore();

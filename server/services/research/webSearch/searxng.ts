@@ -2,7 +2,8 @@
 // Research — SearXNG, a self-hosted web search
 // =============================================================================
 // A SearXNG instance answers each query through its JSON API. The admin sets
-// its address in Settings → Administration → General, or with SEARXNG_URL.
+// its address in Settings → Administration → AI → Web search, or with
+// SEARXNG_URL.
 //
 // The instance is the admin's own and often has a private address, so this
 // call does not go through the public-URL guard. The result pages do: the

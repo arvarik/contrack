@@ -34,11 +34,10 @@ A pair that is close but not exact gets a score from several signals:
 - Two different import sources.
 - Embeddings: how alike the two contacts read as a whole. By default Contrack
   makes embeddings on your machine with its built-in model. An admin can
-  choose a provider model instead, see
-  [Models for each task](ai.md#models-for-each-task).
+  choose a provider model instead, see [Models](ai.md#models).
 
-When an AI provider is connected, a Smart or Full scan asks it about the pairs
-that stay unclear. Without a provider, the scan keeps the strongest of those
+When an AI provider is connected, an AI scan or a Full AI scan asks the
+[Strong model](ai.md#models) about the pairs that stay unclear. Without a provider, the scan keeps the strongest of those
 pairs as suggestions, at a lower confidence, so they always wait for you.
 
 A note can also add a pair. With AI on, Contrack finds the people a note
@@ -63,16 +62,16 @@ duplicates**.
 1. Open **Settings → Duplicates**.
 2. Choose a scan:
 
-   | Scan           | What it finds                                                                                          |
-   | -------------- | ------------------------------------------------------------------------------------------------------ |
-   | **Quick scan** | The exact matches in the table above. It is the fastest.                                               |
-   | **Smart scan** | The exact matches, then close pairs, with AI for the unclear ones. It is selected when the page opens. |
-   | **Full scan**  | Like Smart scan, after it makes a new embedding for every contact. It takes the longest.               |
+   | Scan             | What it finds                                                                                          |
+   | ---------------- | ------------------------------------------------------------------------------------------------------ |
+   | **Exact scan**   | The exact matches in the table above. It is the fastest, and it asks no AI.                            |
+   | **AI scan**      | The exact matches, then close pairs, with AI for the unclear ones. It is selected when the page opens. |
+   | **Full AI scan** | An AI scan after it makes a new embedding for every contact. It takes the longest.                     |
 
 3. Select **Scan now**.
 
-A card shows each step: **Exact matches**, **AI analysis** in a Smart or Full
-scan, and **Cluster grouping**. You can leave the page, and the scan goes on.
+A card shows each step: **Exact matches**, **AI analysis** in an AI scan, and
+**Cluster grouping**. You can leave the page, and the scan goes on.
 Only one scan runs at a time on an instance. If another account is scanning,
 yours waits and starts by itself.
 
@@ -83,10 +82,11 @@ contacts in the Trash. When it finishes, its results replace the list in
 In a scan, a pair of two contacts at or above your auto-merge sensitivity
 merges by itself. A group of three or more contacts always waits for you.
 
-> **Note:** A Smart scan and a Full scan need AI to be on. When **Use AI for
-> this account** is off in **Settings → Privacy and AI**, or an admin turned AI
-> off for the instance, the page offers only **Quick scan**. A Quick scan asks
-> no AI provider, so it runs with AI off. The automatic checks also still run.
+> **Note:** The two AI scans need AI to be on. When **Use AI for my account**
+> is off in **Settings → Privacy and AI**, or an admin turned AI off for the
+> instance, the AI scans show as unavailable, with the reason, and **Exact
+> scan** is selected. An Exact scan asks no AI provider, so it runs with AI
+> off. The automatic checks also still run.
 
 ### Work through the results
 
@@ -283,5 +283,5 @@ Scripts can start a scan and merge contacts too. See the
 - [Contacts](contacts.md)
 - [Ghosts](contacts.md#ghosts)
 - [Import a file](import-and-sync.md#import-a-file)
-- [Models for each task](ai.md#models-for-each-task)
+- [Models](ai.md#models)
 - [Keyboard shortcuts](keyboard-shortcuts.md)

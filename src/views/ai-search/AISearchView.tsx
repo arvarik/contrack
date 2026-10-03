@@ -13,12 +13,12 @@
  * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
  * the subsystem behind it.
  *
- * When an admin has set a SearXNG address and a provider serves research,
- * "Search with" offers the provider's own search, SearXNG, or both
- * (`lib/researchSource`). It is the account's choice, so a contact's Enrich
- * menu and "Enrich new contacts automatically" search the same way. The
- * measured time and cost describe the provider's search only, so they show
- * for it alone.
+ * The web search engine is a setting, not part of this tool: it is chosen
+ * once, on the card above (`EngineChoice`), and every start uses it, here,
+ * in a contact's Enrich menu and in "Enrich new contacts automatically".
+ * The confirmation names the engine a batch runs when it is not the web
+ * search model's own. The measured time and cost describe Gemini's own
+ * search only, so they show for it alone (`depthFiguresApply`).
  */
 import { useState, useCallback, useDeferredValue, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -62,7 +62,7 @@ import {
   type ResearchFilter,
 } from "../../lib/enrichmentFilters";
 import { NAMES } from "../../lib/names";
-import { SOURCE_ORDER, sourceWords } from "../../lib/researchSource";
+import { ENGINE_HINT, engineName } from "../../lib/webSearchEngine";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 
 /**
@@ -121,23 +121,13 @@ export function AISearchView({
     limitMessage,
     clearLimit,
     depthFiguresApply,
-    researchProvider,
-    offersSource,
-    researchSource: searchWith,
-    setResearchSource,
+    webSearchProvider,
+    runsEngine,
   } = useAISearch();
-  // The account's choice, saved as it changes: every start uses it. It
-  // shows only when there are two ways to search.
-  const figures = depthFiguresApply && searchWith === "provider";
-  const choices = useMemo(() => depthChoices(figures), [figures]);
-  const sourceChoices = useMemo(() => {
-    const words = sourceWords(researchProvider ?? "AI");
-    return SOURCE_ORDER.map((value) => ({
-      value,
-      label: words[value].name,
-      hint: words[value].does,
-    }));
-  }, [researchProvider]);
+  const choices = useMemo(
+    () => depthChoices(depthFiguresApply),
+    [depthFiguresApply],
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   // The list follows a deferred copy of the box, so a letter shows in the
@@ -328,38 +318,17 @@ export function AISearchView({
                   className={cn(SECTION_HEADING, "flex items-center gap-2")}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  Research depth
+                  Depth
                 </h3>
                 <DepthCostTip />
               </div>
               <ChoiceGroup
-                label="Research depth"
+                label="Depth"
                 value={depth}
                 options={choices}
                 onChange={setDepth}
                 className="sm:grid-cols-2"
               />
-              {offersSource && (
-                <>
-                  <h3
-                    id="research-source-heading"
-                    className={cn(
-                      SECTION_HEADING,
-                      "flex items-center gap-2 pt-1",
-                    )}
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    Search with
-                  </h3>
-                  <ChoiceGroup
-                    label="Search with"
-                    value={searchWith}
-                    options={sourceChoices}
-                    onChange={setResearchSource}
-                    className="sm:grid-cols-3"
-                  />
-                </>
-              )}
             </section>
 
             <div className={cn(CARD, "p-0 overflow-hidden")}>
@@ -493,7 +462,7 @@ export function AISearchView({
             </button>
             {/* What the batch will take, before the press, at the depth
                 chosen above: the confirmation says it again. */}
-            {selectedIds.size > 0 && figures && (
+            {selectedIds.size > 0 && depthFiguresApply && (
               <p
                 aria-live="polite"
                 className="-mt-2 text-center text-xs text-on-surface-variant tabular-nums"
@@ -513,11 +482,14 @@ export function AISearchView({
         selectedContacts={selectedContacts}
         isStarting={isStarting}
         depth={depth}
-        showEstimate={figures}
+        showEstimate={depthFiguresApply}
         searchWith={
-          searchWith === "provider"
-            ? undefined
-            : sourceWords(researchProvider ?? "AI")[searchWith]
+          runsEngine && runsEngine !== "provider"
+            ? {
+                name: engineName(runsEngine, webSearchProvider),
+                does: ENGINE_HINT[runsEngine],
+              }
+            : undefined
         }
       />
     </div>

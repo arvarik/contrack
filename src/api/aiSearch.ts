@@ -31,8 +31,8 @@ export const useStartAISearch = () => {
       /** How thoroughly to research. The server's default is "standard". */
       depth?: ResearchDepth;
       /**
-       * The research model's own search, SearXNG alone, or both. The
-       * account's Search with choice when absent.
+       * The web search model's own search, SearXNG alone, or both. The
+       * account's web search engine when absent.
        */
       strategy?: "two-pass" | "searxng" | "combined";
     }) => {

@@ -71,10 +71,10 @@ describe("GET /api/settings/ai", () => {
     // With nothing connected, every generation capability should say so in
     // terms of the next action rather than just reporting emptiness.
     expect(res.body.capabilities.quick.unavailableReason).toMatch(
-      /no providers connected/i,
+      /no provider is connected/i,
     );
     expect(res.body.capabilities.research.unavailableReason).toMatch(
-      /no providers connected/i,
+      /no provider is connected/i,
     );
   });
 
@@ -96,16 +96,8 @@ describe("GET /api/settings/ai", () => {
     // Match text unique to the configured case — both messages mention
     // SearXNG, so /searxng/i alone would pass either way.
     expect(res.body.capabilities.research.unavailableReason).toMatch(
-      /runs through your SearXNG/i,
+      /research searches with SearXNG/i,
     );
-  });
-
-  it("omits a reason for a deliberately disabled capability", async () => {
-    await request(app)
-      .put("/api/settings/ai/capabilities/research")
-      .send({ mode: "disabled" });
-    const res = await request(app).get("/api/settings/ai");
-    expect(res.body.capabilities.research.unavailableReason).toBeUndefined();
   });
 });
 
@@ -130,14 +122,17 @@ describe("capability assignment", () => {
     expect(after.body.capabilities.deep.assignment.model).toBe("claude-opus-5");
   });
 
-  it("supports disabling online research", async () => {
-    const res = await request(app)
+  it("refuses the old research Off, and names the switch that replaced it", async () => {
+    const research = await request(app)
       .put("/api/settings/ai/capabilities/research")
       .send({ mode: "disabled" });
-    expect(res.status).toBe(200);
-    expect(res.body.view.capabilities.research.assignment.mode).toBe(
-      "disabled",
-    );
+    expect(research.status).toBe(400);
+    expect(research.body.error.message).toMatch(/web-search/);
+    const fast = await request(app)
+      .put("/api/settings/ai/capabilities/quick")
+      .send({ mode: "disabled" });
+    expect(fast.status).toBe(400);
+    expect(fast.body.error.message).toMatch(/cannot be turned off/);
   });
 
   it("rejects an unknown mode", async () => {
@@ -371,7 +366,7 @@ describe("custom OpenAI-compatible endpoints", () => {
     const view = await request(app).get("/api/settings/ai");
     expect(view.body.capabilities.quick.resolved).toBeNull();
     expect(view.body.capabilities.quick.unavailableReason).toMatch(
-      /no chat models discovered on Silent Server/i,
+      /no chat models found on Silent Server/i,
     );
   });
 });
@@ -392,7 +387,42 @@ describe("SearXNG configuration", () => {
     expect(res.status).toBe(200);
 
     const view = await request(app).get("/api/settings/ai");
-    expect(view.body.searxngUrl).toBe("http://searxng.local:8080");
+    expect(view.body.webSearch.searxng).toEqual({
+      configured: true,
+      source: "setting",
+      url: "http://searxng.local:8080",
+    });
+  });
+
+  it("refuses a cloud metadata or a link-local address", async () => {
+    for (const url of ["http://169.254.169.254", "http://[fe80::1]:8080"]) {
+      const res = await request(app)
+        .put("/api/settings/ai/searxng")
+        .send({ url });
+      expect(res.status, url).toBe(400);
+    }
+  });
+
+  it("lets SEARXNG_URL win over a saved address, and lock the field", async () => {
+    await request(app)
+      .put("/api/settings/ai/searxng")
+      .send({ url: "http://saved.local:8080" });
+    process.env.SEARXNG_URL = "http://env.local:8888/";
+    try {
+      const view = await request(app).get("/api/settings/ai");
+      expect(view.body.webSearch.searxng).toEqual({
+        configured: true,
+        source: "env",
+        url: "http://env.local:8888",
+      });
+      const save = await request(app)
+        .put("/api/settings/ai/searxng")
+        .send({ url: "http://other.local:8080" });
+      expect(save.status).toBe(409);
+      expect(save.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    } finally {
+      delete process.env.SEARXNG_URL;
+    }
   });
 
   it("rejects a non-URL value", async () => {
@@ -439,7 +469,7 @@ describe("the instance switch", () => {
     // Every generation capability says why it resolves to nothing, and
     // embeddings stay on the built-in model.
     expect(view.body.capabilities.quick.unavailableReason).toBe(
-      "AI is off for this instance.",
+      "AI is off on this instance.",
     );
     expect(view.body.capabilities.embeddings.resolved.providerId).toBe(
       "builtin",
@@ -510,11 +540,16 @@ describe("the instance switch", () => {
       expect(pin.body.error.code, capability).toBe("AI_OFF_FOR_INSTANCE");
     }
 
-    // Auto and Disabled need no provider, so they can still be chosen.
-    const disabled = await request(app)
+    // Automatic and the web search switch need no provider, so they can
+    // still be chosen.
+    const auto = await request(app)
       .put("/api/settings/ai/capabilities/research")
-      .send({ mode: "disabled" });
-    expect(disabled.status).toBe(200);
+      .send({ mode: "auto" });
+    expect(auto.status).toBe(200);
+    const off = await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: false });
+    expect(off.status).toBe(200);
   });
 
   it("keeps a new endpoint, and says its models were not checked", async () => {
@@ -542,5 +577,133 @@ describe("the instance switch", () => {
       supportsDiscovery: true,
       supportsGrounding: false,
     });
+  });
+});
+
+describe("web search", () => {
+  const webSearch = async () =>
+    (await request(app).get("/api/settings/ai")).body.webSearch;
+
+  it("is allowed by default, with the web search model's own engine", async () => {
+    const view = await webSearch();
+    expect(view.allowed).toBe(true);
+    expect(view.engine).toBe("provider");
+    // With no provider and no SearXNG, each engine names what it lacks, in
+    // the order a start is checked.
+    expect(view.engines).toEqual({
+      provider: { available: false, missing: ["research", "quick"] },
+      searxng: { available: false, missing: ["web-search", "deep"] },
+      combined: {
+        available: false,
+        missing: ["web-search", "research", "deep", "quick"],
+      },
+    });
+  });
+
+  it("turns off, says so first for every engine, and turns back on", async () => {
+    const off = await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: false });
+    expect(off.status).toBe(200);
+    expect(off.body.view.webSearch.allowed).toBe(false);
+    expect(off.body.view.webSearch.engines.searxng.missing[0]).toBe("off");
+
+    const on = await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: true });
+    expect(on.body.view.webSearch.allowed).toBe(true);
+    expect(on.body.view.webSearch.engines.searxng.missing).not.toContain("off");
+  });
+
+  it("keeps a pinned web search model while it is off", async () => {
+    // The old Off was a mode of the research model, and lost the pin.
+    sqlite
+      .prepare(
+        "INSERT INTO app_settings (key, value) VALUES ('ai.capabilities', ?)",
+      )
+      .run(
+        JSON.stringify({
+          research: { mode: "pinned", providerId: "gemini", model: "m" },
+        }),
+      );
+    const { clearSettingsCache } =
+      await import("../../server/services/settingsService.ts");
+    clearSettingsCache();
+    await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: false });
+    await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: true });
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.capabilities.research.assignment).toEqual({
+      mode: "pinned",
+      providerId: "gemini",
+      model: "m",
+    });
+  });
+
+  it("sets the instance's engine, and refuses an unknown one or an empty body", async () => {
+    const set = await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ engine: "combined" });
+    expect(set.status).toBe(200);
+    expect((await webSearch()).engine).toBe("combined");
+    for (const body of [{ engine: "google" }, {}]) {
+      const res = await request(app)
+        .put("/api/settings/ai/web-search")
+        .send(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
+  it("moves an instance that turned research off the old way to the switch", async () => {
+    sqlite
+      .prepare(
+        "INSERT INTO app_settings (key, value) VALUES ('ai.capabilities', ?)",
+      )
+      .run(JSON.stringify({ research: { mode: "disabled" } }));
+    const { clearSettingsCache } =
+      await import("../../server/services/settingsService.ts");
+    clearSettingsCache();
+    // Off before the move too: the old mode still counts.
+    expect((await webSearch()).allowed).toBe(false);
+
+    const { migrateResearchOff } =
+      await import("../../server/services/aiSettingsService.ts");
+    migrateResearchOff();
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.webSearch.allowed).toBe(false);
+    expect(view.body.capabilities.research.assignment).toEqual({
+      mode: "auto",
+    });
+  });
+
+  it("says where each model came from, and the variable that stands in for Automatic", async () => {
+    process.env.AI_QUICK_MODEL = "gemini:some-model";
+    try {
+      const view = await request(app).get("/api/settings/ai");
+      expect(view.body.capabilities.quick.envDefault).toBe("AI_QUICK_MODEL");
+      expect(view.body.capabilities.deep.envDefault).toBeUndefined();
+      expect(view.body.capabilities.embeddings.resolved.source).toBe("auto");
+    } finally {
+      delete process.env.AI_QUICK_MODEL;
+    }
+  });
+
+  it("names the reranker, the variable that sets it, and whether there is more than one account", async () => {
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.reranker).toEqual({
+      model: "Xenova/ms-marco-TinyBERT-L-2-v2",
+      source: "default",
+    });
+    expect(typeof view.body.multipleAccounts).toBe("boolean");
+    process.env.SEARCH_RERANK_MODEL = "off";
+    try {
+      const off = await request(app).get("/api/settings/ai");
+      expect(off.body.reranker).toEqual({ model: null, source: "env" });
+    } finally {
+      delete process.env.SEARCH_RERANK_MODEL;
+    }
   });
 });

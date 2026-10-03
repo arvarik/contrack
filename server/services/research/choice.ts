@@ -1,14 +1,15 @@
 // =============================================================================
 // Research — the choice: the technique and web search a start runs with
 // =============================================================================
-// A start may name a technique and a web search. What it leaves out is the
-// default: the account's Search with choice (`researchSource`) while it can
-// run, or else the research model's own search, or the web search alone when
-// no provider serves research.
+// A start may name a technique and a web search. What it names is used, or
+// the start is refused. A start that names nothing runs the account's web
+// search engine (`webSearchEngine`, which may be the instance's) while that
+// can run, or else the first engine that can.
 //
 // A start is checked before anything is spent. Research that is off refuses
-// every start. An unknown name answers 400, and a choice that is not set up
-// answers 503 with the first need it lacks (`Technique.needs`).
+// every start. An unknown name, or a web search named with a technique that
+// uses none, answers 400. A choice that is not set up answers 503 with the
+// first need it lacks (`Technique.needs`).
 // =============================================================================
 
 import { z } from "zod";
@@ -16,10 +17,16 @@ import { isResearchOff, resolveCapability } from "../../ai/capabilities.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import type {
-  ResearchSource,
-  SOURCE_STRATEGY,
-} from "../../../shared/researchSource.ts";
+import {
+  ENGINE_STRATEGY,
+  WEB_SEARCH_ENGINES,
+  engineFor,
+  type EngineChoice,
+  type EngineNeed,
+  type EngineState,
+  type WebSearchEngine,
+} from "../../../shared/webSearchEngine.ts";
+import { getWebSearchPolicy } from "../../ai/webSearchPolicy.ts";
 import { isTechnique, searchesWeb, techniqueNamed } from "./techniques.ts";
 import {
   DEFAULT_WEB_SEARCH,
@@ -47,8 +54,8 @@ export const researchChoiceSchema = z.object({
     .optional(),
 });
 
-/** The choice each Search with source stands for. */
-const SOURCE_CHOICE: Record<ResearchSource, ResearchChoice> = {
+/** The choice each web search engine stands for. */
+const ENGINE_CHOICE: Record<WebSearchEngine, ResearchChoice> = {
   provider: { technique: "provider-search" },
   searxng: { technique: "search-and-read", webSearch: "searxng" },
   combined: { technique: "combined", webSearch: "searxng" },
@@ -56,12 +63,12 @@ const SOURCE_CHOICE: Record<ResearchSource, ResearchChoice> = {
 
 /** The choice each `strategy` of `POST /api/ai-search` names: the words the app sends. */
 export const STRATEGY_CHOICE: Record<
-  (typeof SOURCE_STRATEGY)[ResearchSource],
+  (typeof ENGINE_STRATEGY)[WebSearchEngine],
   ResearchChoice
 > = {
-  "two-pass": SOURCE_CHOICE.provider,
-  searxng: SOURCE_CHOICE.searxng,
-  combined: SOURCE_CHOICE.combined,
+  "two-pass": ENGINE_CHOICE.provider,
+  searxng: ENGINE_CHOICE.searxng,
+  combined: ENGINE_CHOICE.combined,
 };
 
 /**
@@ -80,7 +87,7 @@ export function strategyOf(choice: ResearchChoice): string {
 function refuseWhileOff(): void {
   if (isResearchOff())
     throw new AppError(
-      "Contact research is off. An admin can turn it on in Settings → Administration → AI providers.",
+      "Web search is off, so contact research cannot run. An admin can turn it on in Settings → Administration → AI → Web search.",
       503,
       { code: "RESEARCH_OFF" },
     );
@@ -113,60 +120,103 @@ function checked(technique: string, webSearch?: string): ResearchChoice {
 }
 
 /**
- * The default when a start names nothing: the research model's own search,
- * or the web search alone when no provider serves research and the web
- * search is set up.
+ * True on a stack with SearXNG and no web search model: SearXNG is then the
+ * one engine the stack is set up for, and when nothing can run, its missing
+ * need is the one worth naming.
  */
-function defaultChoice(): ResearchChoice {
-  if (
+function searxngStack(): boolean {
+  return (
     !resolveCapability("research") &&
     webSearchNamed(DEFAULT_WEB_SEARCH).configured()
-  )
-    return { technique: "search-and-read" };
-  return { technique: "provider-search" };
+  );
+}
+
+/**
+ * The engines a start tries, in order: the account's own first, then the
+ * ones it gives way to. Both needs everything the other two need, so it is
+ * never a fallback.
+ */
+function enginesToTry(engine: WebSearchEngine): WebSearchEngine[] {
+  const fallbacks: WebSearchEngine[] = searxngStack()
+    ? ["searxng", "provider"]
+    : ["provider", "searxng"];
+  return [engine, ...fallbacks.filter((other) => other !== engine)];
 }
 
 /**
  * The technique and web search a start runs with: the ones it names, or
- * else the account's Search with choice, or else the default.
+ * else the account's engine, or else the first engine that can run.
  *
  * What a start names is used, or the start is refused. A web search named
- * alone goes with the account's technique when that one searches the web,
+ * alone goes with the engine's technique when that one searches the web,
  * and with search-and-read when it does not.
  *
- * A Search with choice of SearXNG or both outlives the setup it needs: an
- * admin can clear the SearXNG address, or the research model, later. A start
- * that names nothing then searches the default way, as it did before the
- * choice, and does not fail. Research that is off still refuses.
+ * An engine outlives the setup it needs: an admin can clear the SearXNG
+ * address, or the web search model, later. A start that names nothing then
+ * searches with an engine that can run, and does not fail. Web search that
+ * is off still refuses, and so does a start no engine can run, with the
+ * engine's first missing need.
  *
  * @param asked - What the start names.
- * @param source - The account's Search with choice.
+ * @param choice - The account's engine choice: "default" for the instance's.
  * @throws AppError 503 `RESEARCH_OFF`, 400 for an unknown name or a web
  *   search the technique cannot use, or 503 for a choice that is not set up.
  */
 export function chooseResearch(
   asked: Partial<ResearchChoice>,
-  source: ResearchSource,
+  choice: EngineChoice,
 ): ResearchChoice {
   refuseWhileOff();
-  const preferred = SOURCE_CHOICE[source];
+  const engine = engineFor(choice, getWebSearchPolicy().engine);
   if (asked.technique || asked.webSearch) {
+    const preferred = ENGINE_CHOICE[engine].technique;
     const technique =
       asked.technique ??
-      (searchesWeb(techniqueNamed(preferred.technique))
-        ? preferred.technique
-        : "search-and-read");
+      (searchesWeb(techniqueNamed(preferred)) ? preferred : "search-and-read");
     return checked(technique, asked.webSearch);
   }
-  if (source !== "provider") {
+  const refusals = new Map<WebSearchEngine, unknown>();
+  for (const candidate of enginesToTry(engine)) {
+    const { technique, webSearch } = ENGINE_CHOICE[candidate];
     try {
-      return checked(preferred.technique, preferred.webSearch);
+      const chosen = checked(technique, webSearch);
+      if (candidate !== engine)
+        log.info(
+          "Research",
+          `The ${engine} engine cannot run now (${getErrorMessage(refusals.get(engine))}); searching with ${candidate}`,
+        );
+      return chosen;
     } catch (err) {
-      log.info(
-        "Research",
-        `Search with ${source} cannot run now (${getErrorMessage(err)}); searching the default way`,
-      );
+      refusals.set(candidate, err);
     }
   }
-  return checked(defaultChoice().technique);
+  throw refusals.get(searxngStack() ? "searxng" : engine);
+}
+
+/**
+ * Whether each engine can run now, and what it lacks: the settings pages
+ * show an engine that cannot run as disabled, with the reason.
+ *
+ * The needs are the techniques' own (`Technique.needs`), the ones a start is
+ * checked against, so the page and the server never disagree. Web search
+ * that is off is the first need of every engine.
+ */
+export function engineStates(): Record<WebSearchEngine, EngineState> {
+  const off = isResearchOff();
+  const states = {} as Record<WebSearchEngine, EngineState>;
+  for (const engine of WEB_SEARCH_ENGINES) {
+    const { technique, webSearch } = ENGINE_CHOICE[engine];
+    const missing: EngineNeed[] = off ? ["off"] : [];
+    const chosen = techniqueNamed(technique);
+    for (const need of chosen.needs()) {
+      if (need.what === "web-search") {
+        if (!webSearchNamed(webSearch ?? DEFAULT_WEB_SEARCH).configured())
+          missing.push("web-search");
+      } else if (!resolveCapability(need.what)) {
+        missing.push(need.what);
+      }
+    }
+    states[engine] = { available: missing.length === 0, missing };
+  }
+  return states;
 }

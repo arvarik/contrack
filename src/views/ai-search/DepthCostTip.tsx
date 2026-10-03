@@ -1,5 +1,5 @@
 /**
- * DepthCostTip: the question mark beside "Research depth". It opens a bubble
+ * DepthCostTip: the question mark beside "Depth". It opens a bubble
  * with what one contact costs at each depth on Google, Claude and OpenAI, at
  * the 2026 list prices of the model research uses on each.
  *

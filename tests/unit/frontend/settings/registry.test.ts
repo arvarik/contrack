@@ -45,6 +45,29 @@ describe("settings registry", () => {
     expect(page?.title).toBe(NAMES[key].title);
   });
 
+  it.each([
+    ["embedding", "/settings/admin/ai#embedding-model"],
+    ["quick tasks", "/settings/admin/ai#fast-model"],
+    ["deep tasks", "/settings/admin/ai#strong-model"],
+    ["rerank", "/settings/admin/ai#reranker"],
+    ["research model", "/settings/admin/ai#web-search-model"],
+    ["never research online", "/settings/admin/ai#allow-web-search"],
+    ["ollama", "/settings/admin/ai#openai-compatible"],
+    ["searxng", "/settings/admin/ai#searxng"],
+    ["search with", "/settings/enrichment#web-search-engine"],
+    ["which model", "/settings/privacy#ai-features"],
+  ])("finds every AI control by its name or its old one: %s", (query, path) => {
+    const hits = findRows(query, { isAdmin: true }).map((hit) => hit.path);
+    expect(hits).toContain(path);
+  });
+
+  it("keeps SearXNG off the General page, its old home", () => {
+    const hits = findRows("searxng", { isAdmin: true }).map((hit) => hit.path);
+    expect(
+      hits.some((path) => path.startsWith("/settings/admin/general")),
+    ).toBe(false);
+  });
+
   it("findRows returns hits for personal preference rows", () => {
     const cadenceHit = findRows("cadence").find((h) => h.id === "cadence");
     expect(cadenceHit?.path).toBe("/settings/network#cadence");

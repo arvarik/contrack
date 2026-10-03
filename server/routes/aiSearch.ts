@@ -52,7 +52,7 @@ const aiSearchBodySchema = researchChoiceSchema
      * ("two-pass"), SearXNG alone ("searxng"), or both ("combined"). It
      * names a technique and a web search (`STRATEGY_CHOICE`), so a body
      * names it or `technique` and `webSearch`, not both. When all are
-     * absent, the account's Search with choice.
+     * absent, the account's web search engine.
      */
     strategy: z.enum(["two-pass", "searxng", "combined"]).optional(),
     /** How thoroughly to research each contact. Default "standard". */
@@ -78,7 +78,7 @@ aiSearchRouter.post(
     // A start that names nothing searches the way the account chose.
     const choice = chooseResearch(
       strategy ? STRATEGY_CHOICE[strategy] : { technique, webSearch },
-      getPreferences(scope.ownerId).researchSource,
+      getPreferences(scope.ownerId).webSearchEngine,
     );
 
     // The global run lock: another account's batch holds it. This account's

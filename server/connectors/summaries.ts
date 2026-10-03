@@ -6,7 +6,7 @@
  *
  * A summary sends an email body to an AI provider, so it runs only when both
  * AI switches allow it: the instance switch an admin sets, and the connector
- * owner's own "Use AI for this account". The Privacy page promises that with
+ * owner's own "Use AI for my account". The Privacy page promises that with
  * the account switch off, nothing goes to a provider for that person, and a
  * connector syncs in the background with nobody there to ask.
  *

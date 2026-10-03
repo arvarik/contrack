@@ -646,7 +646,7 @@ router.post(
 
     const choice = chooseResearch(
       { technique: req.body.technique, webSearch: req.body.webSearch },
-      getPreferences(scope.ownerId).researchSource,
+      getPreferences(scope.ownerId).webSearchEngine,
     );
     const contact = enrichmentContact(scope, id);
     const release = lockEnrichment(id);

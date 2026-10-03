@@ -26,6 +26,11 @@
 // search's pages in parts can be the slow one too.
 // =============================================================================
 
+import {
+  NEEDS_FAST_MODEL,
+  NEEDS_STRONG_MODEL,
+  NEEDS_WEB_SEARCH_MODEL,
+} from "../needs.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";
 import { AppError } from "../../../utils/AppError.ts";
@@ -58,7 +63,7 @@ function reason(outcome: SourceOutcome): string {
  * source stopped there failed, and the other one's facts still count. A
  * cancelled run still throws.
  *
- * @param name - The source, for the reason: "The research model's search".
+ * @param name - The source, for the reason: "The web search model's search".
  */
 async function within(
   name: string,
@@ -95,7 +100,7 @@ async function searchBoth(
   const label = ctx.webSearch?.label ?? "The web search";
   const [provider, web] = await Promise.all([
     within(
-      "The research model's search",
+      "The web search model's search",
       (bounded) => providerSearch.run({ ...request, signal: bounded }, ctx),
       signal,
       timeoutMs,
@@ -124,7 +129,7 @@ async function searchBoth(
   return {
     kind: "failed",
     error: new AppError(
-      `Neither search found facts. No contact fields changed. Research model: ${reason(provider)} ${label}: ${reason(web)}`,
+      `Neither search found facts. No contact fields changed. Web search model: ${reason(provider)} ${label}: ${reason(web)}`,
       502,
       { code: "RESEARCH_NO_EVIDENCE" },
     ),
@@ -133,24 +138,14 @@ async function searchBoth(
 
 export const combined: Technique = {
   name: "combined",
-  // Both searches, so both have to be there: the web search, the research
-  // model, the deep model that reads the web search's pages and the quick
+  // Both searches, so both have to be there: the web search, the web search
+  // model, the Strong model that reads the web search's pages and the Fast
   // one that extracts.
   needs: () => [
     { what: "web-search" },
-    {
-      what: "research",
-      message:
-        "AI provider is not configured for contact research. Check AI settings.",
-    },
-    {
-      what: "deep",
-      message: "Configure a quick and a deep AI model to search with both.",
-    },
-    {
-      what: "quick",
-      message: "Configure a quick and a deep AI model to search with both.",
-    },
+    { what: "research", message: NEEDS_WEB_SEARCH_MODEL },
+    { what: "deep", message: NEEDS_STRONG_MODEL },
+    { what: "quick", message: NEEDS_FAST_MODEL },
   ],
   run: searchBoth,
 };

@@ -40,9 +40,7 @@ import {
 } from "../services/lifecycleSettings.ts";
 import {
   getIntegrationsStatus,
-  setSearxngUrl,
   setGoogleOAuthCredentials,
-  isSearxngEnvSet,
   isGoogleOAuthEnvSet,
 } from "../services/integrationSettings.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
@@ -484,18 +482,6 @@ router.put(
   validateBody(adminIntegrationsSchema),
   asyncHandler(async (req, res) => {
     const changed: string[] = [];
-
-    if (req.body.searxngUrl !== undefined) {
-      if (isSearxngEnvSet()) {
-        throw new AppError(
-          "SearXNG URL is set by environment variable SEARXNG_URL",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
-      setSearxngUrl(req.body.searxngUrl);
-      changed.push("searxngUrl");
-    }
 
     if (req.body.googleOAuth !== undefined) {
       if (isGoogleOAuthEnvSet()) {

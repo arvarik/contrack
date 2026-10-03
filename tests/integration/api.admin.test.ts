@@ -2032,12 +2032,12 @@ describe("instance lifecycle and integration settings (P4)", () => {
     expect(resKeep.body.error.code).toBe("SET_BY_ENVIRONMENT");
     delete process.env.BACKUP_KEEP;
 
-    // SearXNG URL locked by env
+    // SearXNG URL locked by env, on the AI page's route, its one home
     process.env.SEARXNG_URL = "http://searxng.env";
     const resSearx = await as(admin)(
       request(app)
-        .put("/api/admin/integrations")
-        .send({ searxngUrl: "http://searxng.new" }),
+        .put("/api/settings/ai/searxng")
+        .send({ url: "http://searxng.new" }),
     );
     expect(resSearx.status).toBe(409);
     expect(resSearx.body.error.code).toBe("SET_BY_ENVIRONMENT");
@@ -2076,7 +2076,6 @@ describe("instance lifecycle and integration settings (P4)", () => {
     );
     expect(initial.status).toBe(200);
     expect(initial.body).toEqual({
-      searxng: { url: null, source: "none" },
       googleOAuth: {
         configured: false,
         source: "none",
@@ -2085,7 +2084,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
       },
     });
 
-    // 2. PUT the Google OAuth client and the SearXNG URL
+    // 2. PUT the Google OAuth client
     const CLIENT_ID = "contrack-test.apps.googleusercontent.com";
     const SECRET = "GOCSPX-contrack-test-secret-abcdef12345";
     const putRes = await as(admin)(
@@ -2093,15 +2092,10 @@ describe("instance lifecycle and integration settings (P4)", () => {
         .put("/api/admin/integrations")
         .send({
           googleOAuth: { clientId: CLIENT_ID, clientSecret: SECRET },
-          searxngUrl: "https://searxng.internal.example.com",
         }),
     );
     expect(putRes.status).toBe(200);
     const configured = {
-      searxng: {
-        url: "https://searxng.internal.example.com",
-        source: "setting",
-      },
       googleOAuth: {
         configured: true,
         source: "setting",
@@ -2150,16 +2144,16 @@ describe("instance lifecycle and integration settings (P4)", () => {
     const integrationsEntries = (
       auditRes.body.entries as { action: string; targetId: string }[]
     ).filter((e) => e.action === "integrations.changed");
-    expect(integrationsEntries.map((e) => e.targetId)).toEqual(
-      expect.arrayContaining(["googleOAuth", "searxngUrl"]),
-    );
+    expect(integrationsEntries.map((e) => e.targetId)).toEqual(["googleOAuth"]);
 
-    // 7. Clear the SearXNG URL with an empty string
-    const clearRes = await as(admin)(
-      request(app).put("/api/admin/integrations").send({ searxngUrl: "" }),
+    // 7. The SearXNG address has one home, Administration → AI: this route
+    // takes it no more, and stores nothing for it.
+    const searxng = await as(admin)(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({ searxngUrl: "https://searxng.internal.example.com" }),
     );
-    expect(clearRes.status).toBe(200);
-    expect(clearRes.body.searxng).toEqual({ url: null, source: "none" });
+    expect(searxng.status).toBe(400);
     expect(getSearxngUrl()).toBeNull();
   });
 
@@ -2175,12 +2169,12 @@ describe("instance lifecycle and integration settings (P4)", () => {
     const beside = await as(admin)(
       request(app).put("/api/admin/integrations").send({
         mapboxKey: "pk.stray",
-        searxngUrl: "https://searxng.internal.example.com",
+        googleOAuth: null,
       }),
     );
     expect(beside.status).toBe(200);
-    expect(Object.keys(beside.body).sort()).toEqual(["googleOAuth", "searxng"]);
-    expect(beside.body.searxng.source).toBe("setting");
+    expect(Object.keys(beside.body)).toEqual(["googleOAuth"]);
+    expect(beside.body.googleOAuth.source).toBe("none");
 
     const stray = sqlite
       .prepare("SELECT 1 FROM app_settings WHERE key = 'geo.mapboxKey'")

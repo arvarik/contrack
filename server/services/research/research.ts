@@ -111,7 +111,7 @@ export async function research(
     ? { technique: request.technique, webSearch: request.webSearch }
     : chooseResearch(
         { webSearch: request.webSearch },
-        getPreferences(scope.ownerId).researchSource,
+        getPreferences(scope.ownerId).webSearchEngine,
       );
   const technique = techniqueNamed(choice.technique);
   const web = searchesWeb(technique)

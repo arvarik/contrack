@@ -43,7 +43,7 @@ vi.mock("../../../../src/api", () => ({
 }));
 
 const row = () =>
-  screen.queryByRole("region", { name: "Semantic search coverage" });
+  screen.queryByRole("region", { name: "Search by meaning coverage" });
 
 afterEach(() => {
   cleanup();

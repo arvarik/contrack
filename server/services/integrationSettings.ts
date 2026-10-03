@@ -39,8 +39,8 @@ export interface GoogleOAuthCredentials {
   source: "setting" | "env";
 }
 
+/** The General page's integrations. SearXNG is in the AI settings view. */
 export interface IntegrationsStatus {
-  searxng: SearxngIntegrationStatus;
   googleOAuth: GoogleOAuthIntegrationStatus;
 }
 
@@ -61,46 +61,38 @@ function redact(secret: string | null | undefined): string | null {
 }
 
 /**
- * Returns the configured SearXNG URL.
- * Reads database setting before falling back to SEARXNG_URL env.
+ * Where SearXNG is: SEARXNG_URL, which wins and locks the setting, or the
+ * address an admin saved in Settings → Administration → AI → Web search.
+ *
+ * The variable used to lose to a saved address, while the save itself was
+ * refused with SET_BY_ENVIRONMENT. An address saved before the variable was
+ * set then ran, and nothing on the page could change it.
  */
-export function getSearxngUrl(): string | null {
-  const setting = getSetting<{ url: string }>(SETTING_KEYS.aiSearxng);
-  const settingUrl = setting?.url?.trim();
+export function getSearxngStatus(): SearxngIntegrationStatus {
+  if (isSearxngEnvSet()) {
+    return {
+      url: process.env.SEARXNG_URL!.trim().replace(/\/+$/, ""),
+      source: "env",
+    };
+  }
+  const settingUrl = getSetting<{ url: string }>(
+    SETTING_KEYS.aiSearxng,
+  )?.url?.trim();
   if (settingUrl) {
-    return settingUrl.replace(/\/+$/, "");
+    return { url: settingUrl.replace(/\/+$/, ""), source: "setting" };
   }
+  return { url: null, source: "none" };
+}
 
-  const envUrl = process.env.SEARXNG_URL?.trim();
-  if (envUrl) {
-    return envUrl.replace(/\/+$/, "");
-  }
-
-  return null;
+/** The SearXNG base URL research searches with, or null when none is set. */
+export function getSearxngUrl(): string | null {
+  return getSearxngStatus().url;
 }
 
 /**
  * Returns metadata status for integrations without exposing secrets.
  */
 export function getIntegrationsStatus(): IntegrationsStatus {
-  const setting = getSetting<{ url: string }>(SETTING_KEYS.aiSearxng);
-  const settingUrl = setting?.url?.trim();
-  let searxngStatus: SearxngIntegrationStatus;
-
-  if (settingUrl) {
-    searxngStatus = {
-      url: settingUrl.replace(/\/+$/, ""),
-      source: "setting",
-    };
-  } else if (isSearxngEnvSet()) {
-    searxngStatus = {
-      url: process.env.SEARXNG_URL!.trim().replace(/\/+$/, ""),
-      source: "env",
-    };
-  } else {
-    searxngStatus = { url: null, source: "none" };
-  }
-
   const googleCreds = getGoogleOAuthCredentials();
   const googleOAuthStatus: GoogleOAuthIntegrationStatus = googleCreds
     ? {
@@ -116,10 +108,7 @@ export function getIntegrationsStatus(): IntegrationsStatus {
         clientSecretPreview: null,
       };
 
-  return {
-    searxng: searxngStatus,
-    googleOAuth: googleOAuthStatus,
-  };
+  return { googleOAuth: googleOAuthStatus };
 }
 
 /**

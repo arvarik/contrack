@@ -154,7 +154,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ## 🚀 Quick Start
 
-**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → Administration → AI providers** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
+**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → Administration → AI** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
 
 ### Option 1: Docker, prebuilt image (fastest)
 
@@ -178,7 +178,7 @@ Authentication is off by default, on the assumption that the container is reache
 git clone https://github.com/arvarik/contrack.git
 cd contrack
 cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI providers
+# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI
 docker compose up -d
 ```
 
@@ -191,7 +191,7 @@ git clone https://github.com/arvarik/contrack.git
 cd contrack
 npm install
 cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI providers
+# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI
 npm run dev
 ```
 

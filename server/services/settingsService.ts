@@ -74,6 +74,11 @@ export const SETTING_KEYS = {
   aiModelCache: "ai.modelCache",
   /** { url: string } — self-hosted SearXNG instance for research */
   aiSearxng: "ai.searxng",
+  /**
+   * { off?: boolean, engine?: WebSearchEngine } — whether contact research
+   * may search the web, and the instance's engine (server/ai/webSearchPolicy.ts)
+   */
+  aiWebSearch: "ai.webSearch",
   /** { model, dimension } — the embedding model the vec0 tables were built with */
   embeddingsState: "ai.embeddingsState",
   /** boolean — an admin turned AI off for every account (server/ai/instanceSwitch.ts) */

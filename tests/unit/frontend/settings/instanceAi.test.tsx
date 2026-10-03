@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 // =============================================================================
-// Unit: the instance AI switch on the two settings pages that show it
+// Unit: the AI switches on the two settings pages that show them
 // =============================================================================
-// The AI providers page (admin) carries "Use AI on this instance". AI_DISABLED
-// on the server holds it off, so then it cannot be pressed and says why. The
-// Privacy page's "Use AI for this account" cannot turn AI on while an admin
-// has it off for the instance, so it shows off, cannot be pressed, and says
-// why.
+// Administration → AI carries "Use AI on this instance". AI_DISABLED on the
+// server holds it off, so then it cannot be pressed and says why.
+//
+// Privacy and AI carries the account's switch, "Use AI for my account",
+// while the instance has more than one account. It cannot turn AI on while
+// an admin has it off for the instance, so it shows off, cannot be pressed,
+// and says why. With one account, that account is the admin, and the page
+// shows one switch, "Use AI", which is the instance's: turning it on also
+// turns the account's own back on.
 // =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,38 +23,32 @@ import * as aiSettingsApi from "../../../../src/api/aiSettings";
 vi.mock("../../../../src/contexts/PreferencesContext", () => ({
   usePreferences: vi.fn(),
 }));
+const viewer = vi.hoisted(() => ({ isAdmin: false }));
 vi.mock("../../../../src/components/auth/AuthGate", () => ({
-  useAuth: () => ({ isAdmin: false, authRequired: true }),
+  useAuth: () => ({ isAdmin: viewer.isAdmin, authRequired: true }),
 }));
 vi.mock("../../../../src/api/searchHistory", () => ({
   useSearchHistoryList: () => ({ data: undefined }),
   useClearHistory: () => ({ mutate: vi.fn(), isPending: false }),
 }));
-vi.mock("../../../../src/views/settings/AiCapabilitiesCard", () => ({
-  AiCapabilitiesList: () => null,
+// The page's other parts have tests of their own.
+vi.mock("../../../../src/views/ai-settings/FeatureMap", () => ({
+  FeatureMap: () => null,
 }));
-vi.mock("../../../../src/views/ai-settings/CapabilitiesCard", () => ({
-  CapabilitiesCard: () => null,
+vi.mock("../../../../src/views/ai-settings/ProvidersSection", () => ({
+  ProvidersSection: () => null,
 }));
-vi.mock("../../../../src/views/search", () => ({
-  SearchCoverageBar: () => null,
+vi.mock("../../../../src/views/ai-settings/ModelsSection", () => ({
+  ModelsSection: () => null,
+}));
+vi.mock("../../../../src/views/ai-settings/WebSearchSection", () => ({
+  WebSearchSection: () => null,
 }));
 
-/** A mutation hook's answer, idle. */
-const idle = () => ({
-  mutate: vi.fn(),
-  mutateAsync: vi.fn(),
-  isPending: false,
-});
 vi.mock("../../../../src/api/aiSettings", () => ({
   useInstanceAi: vi.fn(),
   useAISettings: vi.fn(),
   useSetInstanceAi: vi.fn(),
-  useSetProviderKey: () => idle(),
-  useDeleteProviderKey: () => idle(),
-  useRefreshModels: () => idle(),
-  useSaveEndpoint: () => idle(),
-  useDeleteEndpoint: () => idle(),
 }));
 
 import { PrivacyPage } from "../../../../src/views/settings/pages/PrivacyPage";
@@ -59,14 +57,23 @@ import { AISettingsView } from "../../../../src/views/ai-settings/AISettingsView
 const setPreference = vi.fn();
 const setInstanceAi = vi.fn();
 
+/** The account's own switch, as its preference stores it. */
+let aiAssist = true;
+
 beforeEach(() => {
-  vi.mocked(prefContext.usePreferences).mockReturnValue({
-    preferences: { aiAssist: true },
-    stored: [],
-    changed: [],
-    resetPreference: vi.fn(),
-    setPreference,
-  } as unknown as ReturnType<typeof prefContext.usePreferences>);
+  viewer.isAdmin = false;
+  aiAssist = true;
+  settings(false);
+  vi.mocked(prefContext.usePreferences).mockImplementation(
+    () =>
+      ({
+        preferences: { aiAssist },
+        stored: [],
+        changed: [],
+        resetPreference: vi.fn(),
+        setPreference,
+      }) as unknown as ReturnType<typeof prefContext.usePreferences>,
+  );
   vi.mocked(aiSettingsApi.useSetInstanceAi).mockReturnValue({
     mutate: setInstanceAi,
     isPending: false,
@@ -85,14 +92,19 @@ function instance(aiOff: boolean, lockedByEnv = false) {
   } as unknown as ReturnType<typeof aiSettingsApi.useInstanceAi>);
 }
 
-/** The AI providers page with no providers and this instance switch. */
-function settings(aiOff: boolean, lockedByEnv = false) {
+/** The AI settings view with no providers, this switch, and the accounts. */
+function settings(
+  aiOff: boolean,
+  lockedByEnv = false,
+  multipleAccounts = true,
+) {
   vi.mocked(aiSettingsApi.useAISettings).mockReturnValue({
     data: {
       providers: [],
       availableProviders: [],
       customEndpoints: [],
       capabilities: {},
+      multipleAccounts,
       instance: { aiOff, lockedByEnv },
     },
     isLoading: false,
@@ -111,7 +123,7 @@ describe("the Privacy page", () => {
     renderPrivacy();
 
     const toggle = screen.getByRole("switch", {
-      name: "Use AI for this account",
+      name: "Use AI for my account",
     }) as HTMLButtonElement;
     expect(toggle.disabled).toBe(false);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
@@ -126,7 +138,7 @@ describe("the Privacy page", () => {
     renderPrivacy();
 
     const toggle = screen.getByRole("switch", {
-      name: "Use AI for this account",
+      name: "Use AI for my account",
     }) as HTMLButtonElement;
     expect(toggle.disabled).toBe(true);
     expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -134,9 +146,59 @@ describe("the Privacy page", () => {
       screen.getByText("An admin turned AI off for everyone on this instance"),
     ).toBeTruthy();
   });
+
+  it("gives an admin on an instance with more accounts their own switch too", () => {
+    viewer.isAdmin = true;
+    instance(false);
+    renderPrivacy();
+    expect(screen.getByRole("switch", { name: "Use AI for my account" }));
+    expect(screen.queryByRole("switch", { name: "Use AI" })).toBeNull();
+  });
+
+  describe("with one account", () => {
+    beforeEach(() => {
+      viewer.isAdmin = true;
+      settings(false, false, false);
+    });
+
+    it("shows one switch, the instance's, and turns AI off for the instance", () => {
+      instance(false);
+      renderPrivacy();
+      expect(
+        screen.queryByRole("switch", { name: "Use AI for my account" }),
+      ).toBeNull();
+      const toggle = screen.getByRole("switch", { name: "Use AI" });
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(toggle);
+      expect(setInstanceAi).toHaveBeenCalledWith(true, expect.anything());
+      expect(setPreference).not.toHaveBeenCalled();
+    });
+
+    it("turns the instance and the account's own switch back on", () => {
+      // Off both ways: an admin switch, and an account switch left off.
+      aiAssist = false;
+      instance(true);
+      renderPrivacy();
+      const toggle = screen.getByRole("switch", { name: "Use AI" });
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+      fireEvent.click(toggle);
+      expect(setInstanceAi).toHaveBeenCalledWith(false, expect.anything());
+      expect(setPreference).toHaveBeenCalledWith("aiAssist", true);
+    });
+
+    it("cannot turn AI on while AI_DISABLED holds it off, and says so", () => {
+      instance(true, true);
+      renderPrivacy();
+      const toggle = screen.getByRole("switch", {
+        name: "Use AI",
+      }) as HTMLButtonElement;
+      expect(toggle.disabled).toBe(true);
+      expect(screen.getByText("AI_DISABLED")).toBeTruthy();
+    });
+  });
 });
 
-describe("the AI providers page", () => {
+describe("Administration → AI", () => {
   it("turns AI off for the instance from its switch", () => {
     settings(false);
     inRouter(<AISettingsView />);
@@ -146,7 +208,9 @@ describe("the AI providers page", () => {
     }) as HTMLButtonElement;
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     expect(
-      screen.getByText(/Contrack sends nothing to any AI provider/),
+      screen.getByText(
+        /Off sends nothing to any AI provider, for every account/,
+      ),
     ).toBeTruthy();
 
     fireEvent.click(toggle);
@@ -163,6 +227,6 @@ describe("the AI providers page", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(toggle.disabled).toBe(true);
     expect(screen.getByText("AI_DISABLED")).toBeTruthy();
-    expect(screen.getByText(/on the\s+server/)).toBeTruthy();
+    expect(screen.getByText(/Set by/)).toBeTruthy();
   });
 });

@@ -30,11 +30,9 @@ const aiSearch = vi.hoisted(() => ({
   limitMessage: null,
   clearLimit: vi.fn(),
   depthFiguresApply: true,
-  researchProvider: "Gemini" as string | null,
-  searxng: false,
-  offersSource: false,
-  researchSource: "provider" as "provider" | "searxng" | "combined",
-  setResearchSource: vi.fn(),
+  webSearchProvider: "Google Gemini" as string | null,
+  engine: "provider" as "provider" | "searxng" | "combined",
+  runsEngine: "provider" as "provider" | "searxng" | "combined" | null,
 }));
 vi.mock("../../../../src/contexts/AISearchContext", async (original) => ({
   isEnriching: (
@@ -118,11 +116,9 @@ afterEach(() => {
   aiSearch.isStarting = false;
   aiSearch.batch = null;
   aiSearch.depthFiguresApply = true;
-  aiSearch.researchProvider = "Gemini";
-  aiSearch.searxng = false;
-  aiSearch.offersSource = false;
-  aiSearch.researchSource = "provider";
-  aiSearch.setResearchSource.mockClear();
+  aiSearch.webSearchProvider = "Google Gemini";
+  aiSearch.engine = "provider";
+  aiSearch.runsEngine = "provider";
   ai.allowed = true;
   contacts.list = [];
 });
@@ -171,7 +167,7 @@ describe("EnrichMenu", () => {
       screen.getByRole("button", { name: /^Enrich again, choose how deep/ }),
     );
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByText("Research depth")).toBeTruthy();
+    expect(within(menu).getByText("Depth")).toBeTruthy();
     expect(
       within(menu)
         .getAllByRole("menuitem")
@@ -187,9 +183,8 @@ describe("EnrichMenu", () => {
     });
   });
 
-  it("names SearXNG or both in its heading when the account chose them", () => {
-    aiSearch.offersSource = true;
-    aiSearch.researchSource = "searxng";
+  it("names SearXNG or both in its heading when research runs on them", () => {
+    aiSearch.runsEngine = "searxng";
     render(
       <EnrichMenu contact={person} label="Enrich again" variant="secondary" />,
     );
@@ -197,12 +192,10 @@ describe("EnrichMenu", () => {
       screen.getByRole("button", { name: /^Enrich again, choose how deep/ }),
     );
     expect(
-      within(screen.getByRole("menu")).getByText(
-        "Research depth · with SearXNG",
-      ),
+      within(screen.getByRole("menu")).getByText("Depth · with SearXNG"),
     ).toBeTruthy();
     cleanup();
-    aiSearch.researchSource = "combined";
+    aiSearch.runsEngine = "combined";
     render(
       <EnrichMenu contact={person} label="Enrich again" variant="secondary" />,
     );
@@ -211,7 +204,7 @@ describe("EnrichMenu", () => {
     );
     expect(
       within(screen.getByRole("menu")).getByText(
-        "Research depth · with Gemini and SearXNG",
+        "Depth · with Google Gemini and SearXNG",
       ),
     ).toBeTruthy();
   });
@@ -480,7 +473,7 @@ describe("the Enrichment page's depth", () => {
   it("names, describes and prices both depths, Standard chosen", () => {
     contacts.list = people;
     renderView();
-    const group = screen.getByRole("radiogroup", { name: "Research depth" });
+    const group = screen.getByRole("radiogroup", { name: "Depth" });
     const tiles = within(group).getAllByRole("radio");
     expect(tiles.map((tile) => tile.getAttribute("aria-checked"))).toEqual([
       "true",
@@ -516,7 +509,7 @@ describe("the Enrichment page's depth", () => {
     contacts.list = people;
     renderView();
     const tiles = within(
-      screen.getByRole("radiogroup", { name: "Research depth" }),
+      screen.getByRole("radiogroup", { name: "Depth" }),
     ).getAllByRole("radio");
     expect(tiles[0].textContent).not.toContain(perContact("standard"));
     expect(tiles[1].textContent).not.toContain(perContact("deep"));
@@ -532,15 +525,15 @@ describe("the Enrichment page's depth", () => {
   });
 });
 
-describe("the Enrichment page's search choice", () => {
+describe("the Enrichment tool's engine", () => {
   const people = [
     { id: "c1", name: "Rowan Vale", isArchived: false, isGhost: false },
     { id: "c2", name: "Kestrel Ames", isArchived: false, isGhost: false },
   ];
-  /** The page with the account's saved choice, the dialog open for both people. */
-  const confirmWith = (source: "provider" | "searxng" | "combined") => {
-    aiSearch.offersSource = true;
-    aiSearch.researchSource = source;
+  /** The tool with research running on `engine`, the dialog open for both people. */
+  const confirmOn = (engine: "provider" | "searxng" | "combined") => {
+    aiSearch.runsEngine = engine;
+    aiSearch.depthFiguresApply = engine === "provider";
     contacts.list = people;
     renderView();
     fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
@@ -548,73 +541,37 @@ describe("the Enrichment page's search choice", () => {
     return screen.getByRole("dialog");
   };
 
-  it("offers no choice while there is one way to search", () => {
+  it("leaves the choice to the page's settings card, not the tool", () => {
     contacts.list = people;
     renderView();
     expect(
-      screen.queryByRole("radiogroup", { name: "Search with" }),
+      screen.queryByRole("radiogroup", { name: "Web search engine" }),
     ).toBeNull();
   });
 
-  it("offers the provider, SearXNG and both, with the account's choice chosen", () => {
-    aiSearch.offersSource = true;
-    aiSearch.researchSource = "combined";
-    contacts.list = people;
-    renderView();
-    const tiles = within(
-      screen.getByRole("radiogroup", { name: "Search with" }),
-    ).getAllByRole("radio");
-    expect(tiles.map((tile) => tile.textContent)).toEqual([
-      expect.stringMatching(/^Gemini/),
-      expect.stringMatching(/^SearXNG/),
-      expect.stringMatching(/^Both/),
-    ]);
-    expect(tiles.map((tile) => tile.getAttribute("aria-checked"))).toEqual([
-      "false",
-      "false",
-      "true",
-    ]);
-  });
-
-  it("saves a choice for the account, for every start after it", () => {
-    aiSearch.offersSource = true;
-    contacts.list = people;
-    renderView();
-    fireEvent.click(screen.getByRole("radio", { name: /^SearXNG/ }));
-    expect(aiSearch.setResearchSource).toHaveBeenCalledWith("searxng");
-  });
-
-  it("starts with SearXNG, without Gemini's figures, and says so before it starts", () => {
-    aiSearch.offersSource = true;
-    aiSearch.researchSource = "searxng";
-    contacts.list = people;
-    renderView();
-    // Gemini's measured time and cost describe its own search only.
-    const tiles = within(
-      screen.getByRole("radiogroup", { name: "Research depth" }),
-    ).getAllByRole("radio");
-    expect(tiles[0].textContent).not.toContain(perContact("standard"));
-    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
-    expect(screen.queryByText(/in all/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Start enrichment/ }));
-    const dialog = screen.getByRole("dialog");
+  it("says SearXNG, and what it costs, before a batch starts, without Gemini's figures", () => {
+    const dialog = confirmOn("searxng");
+    expect(dialog.textContent).toContain(
+      "Searches with SearXNG. Free searches on your SearXNG",
+    );
     expect(dialog.textContent).not.toContain("in all");
-    expect(dialog.textContent).toContain("Searches with SearXNG");
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Search 2 contacts" }),
     );
-    // The start names the depth. The context adds the account's choice.
+    // The start names the depth. The context names the engine that runs.
     expect(aiSearch.startSearch).toHaveBeenCalledWith(["c1", "c2"], {
       depth: "standard",
     });
   });
 
-  it("says both before it starts", () => {
-    expect(confirmWith("combined").textContent).toContain("Searches with Both");
+  it("names both engines before a batch starts", () => {
+    expect(confirmOn("combined").textContent).toContain(
+      "Searches with Google Gemini and SearXNG",
+    );
   });
 
-  it("gives the provider's time and cost, and no source line, for its search", () => {
-    const dialog = confirmWith("provider");
+  it("gives the provider's time and cost, and no engine line, for its own search", () => {
+    const dialog = confirmOn("provider");
     expect(dialog.textContent).toContain(batchEstimate("standard", 2));
     expect(dialog.textContent).not.toContain("Searches with");
   });

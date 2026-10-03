@@ -99,8 +99,8 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 1. **Change colour**: paints this contact's page only, in Blue, Emerald,
    Amber, Rose, Pink or Teal.
-2. **Enrich contact** and **Enrich deeply**: web research at the Standard or
-   the Deep depth, when AI is on for you. See
+2. **Enrich contact** and **Enrich deeply**: contact research at the Standard
+   or the Deep depth, when AI is on for you. See
    [Research contacts](ai.md#research-contacts).
 3. **Copy basic details** and **Copy full details**: the name, emails and
    phones, or also the role, company, birthday and addresses.
@@ -221,7 +221,7 @@ press its dashed name under a note.
   **Generate briefing**, or **Regenerate briefing** to write it again. It
   reads the profile and the last 15 interactions. A briefing stays for three
   days, and a new, changed or deleted interaction clears it. It needs AI, and
-  uses the [Quick tasks model](ai.md#models-for-each-task).
+  uses the [Fast model](ai.md#models).
 - **About**, custom facts, **Experience overview** and **Education**: what
   imports and research found.
 - **Research**: each research run and what it added, the facts it found with

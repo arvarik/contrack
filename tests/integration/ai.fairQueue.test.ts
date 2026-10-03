@@ -117,6 +117,7 @@ describe("Multitenant Fair AI Queue Integration", () => {
       capability: "quick",
       providerId: "mock-gemini",
       modelClass: "lite",
+      source: "auto",
       provider: {
         id: "mock-gemini",
         generate: vi.fn(async (opts) => {
@@ -226,6 +227,7 @@ describe("Multitenant Fair AI Queue Integration", () => {
         capability: "quick",
         providerId: "mock-gemini",
         modelClass: "lite",
+        source: "auto",
         provider: {
           id: "mock-gemini",
           generate: vi.fn(async (opts) => {

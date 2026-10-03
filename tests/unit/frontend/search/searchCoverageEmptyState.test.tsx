@@ -121,7 +121,7 @@ const refreshes = (sent: Sent[]) =>
 
 /** The row, by the name it is found by. */
 const row = () =>
-  screen.queryByRole("region", { name: "Semantic search coverage" });
+  screen.queryByRole("region", { name: "Search by meaning coverage" });
 
 describe("SearchView - the coverage row", () => {
   let queryClient: QueryClient;
@@ -206,7 +206,7 @@ describe("SearchView - the coverage row", () => {
     renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     expect(within(region).getByText("Indexing 15 of 20…")).toBeTruthy();
     // The built-in model drains its own queue, so there is nothing to press.
@@ -227,7 +227,7 @@ describe("SearchView - the coverage row", () => {
 
     // No coverage card, no hero and no explanation.
     expect(
-      screen.queryByRole("heading", { name: "Semantic search coverage" }),
+      screen.queryByRole("heading", { name: "Search by meaning" }),
     ).toBeNull();
     expect(screen.queryByText("Ask anything")).toBeNull();
     expect(screen.queryByText(/Indexing turns contacts/)).toBeNull();
@@ -243,7 +243,7 @@ describe("SearchView - the coverage row", () => {
     renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     expect(within(region).getByText("12 of 20 contacts indexed")).toBeTruthy();
     fireEvent.click(
@@ -266,7 +266,7 @@ describe("SearchView - the coverage row", () => {
     const { refresh } = renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     const button = within(region).getByRole("button", {
       name: "Index missing",
@@ -300,7 +300,7 @@ describe("SearchView - the coverage row", () => {
     mockCoverage.data = coverageOf({});
     refresh();
     expect(
-      screen.queryByRole("region", { name: "Semantic search coverage" }),
+      screen.queryByRole("region", { name: "Search by meaning coverage" }),
     ).toBeNull();
     expect(document.activeElement).toBe(
       screen.getByLabelText("Ask anything about your network"),
@@ -324,7 +324,7 @@ describe("SearchView - the coverage row", () => {
     renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     // A paid provider's queue waits for a person, so it is not running.
     expect(within(region).getByText("12 of 20 contacts indexed")).toBeTruthy();
@@ -361,7 +361,7 @@ describe("SearchView - the coverage row", () => {
     renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     expect(region.textContent).toContain(
       "18 of 20 contacts indexed · 2 failed",
@@ -390,7 +390,7 @@ describe("SearchView - the coverage row", () => {
     renderComponent("/search");
 
     const region = await screen.findByRole("region", {
-      name: "Semantic search coverage",
+      name: "Search by meaning coverage",
     });
     expect(within(region).getByText("Updating the search index…")).toBeTruthy();
   });

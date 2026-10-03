@@ -378,10 +378,15 @@ search), `server/services/research/` (contact research) and
 `server/services/aiSearch/` (the research batch queue and the merge).
 
 - **Capabilities.** Code asks for a kind of work, not a model
-  (`server/ai/capabilities.ts`). `quick` covers parsing, mentions, search
-  planning and checking, and the daily insight. `deep` covers briefings, email
-  summaries, duplicate checks and extraction. `research` covers web research.
-  `embeddings` covers the search and duplicate vectors (`server/ai/embeddings.ts`).
+  (`server/ai/capabilities.ts`). The settings name each one by its model.
+  `quick`, the Fast model, covers parsing, mentions, briefings, the daily
+  insight, mail summaries, search planning and checking, and the fields that
+  research fills. `deep`, the Strong model, covers `.eml` summaries, duplicate
+  checks, and the pages that SearXNG finds. `research`, the web search model,
+  covers a provider's own web search. `embeddings`, the embedding model,
+  covers the search and duplicate vectors (`server/ai/embeddings.ts`).
+  `src/lib/aiFeatures.ts` maps the models to the features for the settings
+  pages.
 - **Embedder and reranker.** Search and dedupe turn text into vectors through
   one interface, `Embedder` (`server/ai/embedder.ts`), and search reorders its
   local list through another, `Reranker` (`server/ai/reranker.ts`). A local
@@ -399,25 +404,26 @@ search), `server/services/research/` (contact research) and
   `research()` (`server/services/research/`). The batch queue, the
   one-contact route and auto-enrichment call it, and no other code runs a
   technique. A request names a technique and a web search, or gets the
-  account's **Search with** choice. A technique finds facts and returns
-  evidence, never fields: `provider-search` (the research model's own
-  search), `search-and-read` (a web search, whose pages the deep model
-  reads) or `combined` (both at once). One extraction reads the evidence
+  account's web search engine (`webSearchEngine`, or the instance's engine
+  when it is `default`). A technique finds facts and returns evidence, never
+  fields: `provider-search` (the web search model's own search),
+  `search-and-read` (a web search, whose pages the deep model reads) or
+  `combined` (both at once). One extraction reads the evidence
   into fields, and every technique's result has the same fields. A web
   search (`WebSearch`) is a port too, and SearXNG is its only adapter. Both
   ports have a registry and a `set*` seam for tests. Each technique's
   `needs()` says what a start needs set up. A start with an unknown name
   answers 400, and one with a missing need answers 503, before anything is
   spent. Before every model call and every web search, a run reads the
-  instance switch, the account switch and research **Off**. A model call
-  reads them again when it gets its slot in the queue (`beforeSend`). A
-  refusal ends the run for that contact, and the batch queue stops the rest
-  of that account's batch.
+  instance switch, the account switch and **Allow web search**
+  (`server/ai/webSearchPolicy.ts`). A model call reads them again when it
+  gets its slot in the queue (`beforeSend`). A refusal ends the run for that
+  contact, and the batch queue stops the rest of that account's batch.
 - **Resolution.** At call time a capability takes a pin from Settings, then an
   environment pin (`AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`,
   `AI_EMBEDDINGS_MODEL`), then Auto: `AI_PROVIDER` first, then a fixed order.
-  The providers come from environment keys, keys saved in Settings and custom
-  endpoints (`server/ai/providerRegistry.ts`). While AI is off for the
+  The providers come from environment keys, keys saved in Settings and
+  OpenAI-compatible servers (`server/ai/providerRegistry.ts`). While AI is off for the
   instance, no provider resolves.
 - **Gateway.** `generateFor` and `streamFor` (`server/ai/gateway.ts`) are the
   only way to run a generation. They check the instance switch, resolve the
@@ -459,7 +465,7 @@ search), `server/services/research/` (contact research) and
   summaries, auto-enrichment, contact research before each of its calls, the
   MCP search, and hosted embeddings (`mayEmbedContactsFor`).
 
-For the settings a person sees, see [Models for each task](ai.md#models-for-each-task).
+For the settings a person sees, see [The AI page](ai.md#the-ai-page).
 
 ## Background work
 

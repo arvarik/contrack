@@ -37,7 +37,7 @@ const OP_LABELS: Record<string, string> = {
   bulkParse: "Bulk parse",
   queryParse: "Query parse",
   hyde: "Query expansion",
-  aiSearchGrounding: "Web research",
+  aiSearchGrounding: "Web search",
   aiSearchExtraction: "Research extraction",
   aiSearchReading: "Research reading",
   aiSearchSinglePass: "Research (single pass)",

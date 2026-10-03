@@ -479,6 +479,7 @@ describe("SearXNG research", () => {
       providerId: "custom:local",
       model: "small-model",
       modelClass: "flash",
+      source: "pinned",
       provider: {} as never,
     }));
     try {
@@ -538,6 +539,7 @@ describe("SearXNG research", () => {
       providerId: "custom:local",
       model: "small-model",
       modelClass: "flash",
+      source: "pinned",
       provider: {} as never,
     }));
     try {
@@ -841,7 +843,7 @@ describe("research with both searches", () => {
     ).rejects.toMatchObject({
       code: "RESEARCH_NO_EVIDENCE",
       message: expect.stringMatching(
-        /Research model: The research model's search took more than 0 s\./,
+        /Web search model: The web search model's search took more than 0 s\./,
       ),
     });
   });
@@ -871,7 +873,7 @@ describe("research with both searches", () => {
     ).rejects.toMatchObject({
       code: "RESEARCH_NO_EVIDENCE",
       message: expect.stringMatching(
-        /Research model: Network 500 SearXNG: SearXNG returned no usable results/,
+        /Web search model: Network 500 SearXNG: SearXNG returned no usable results/,
       ),
     });
   });
@@ -927,11 +929,12 @@ describe("choosing how to search, through the API", () => {
   });
 });
 
-describe("the account's Search with choice", () => {
+describe("the account's web search engine", () => {
   afterEach(async () => {
     await request(app)
       .patch("/api/auth/preferences")
-      .send({ researchSource: "provider" });
+      .send({ webSearchEngine: "default" });
+    deleteSetting(SETTING_KEYS.aiWebSearch);
     vi.restoreAllMocks();
   });
 
@@ -953,36 +956,64 @@ describe("the account's Search with choice", () => {
     expect(await started()).toBe("two-pass");
     const saved = await request(app)
       .patch("/api/auth/preferences")
-      .send({ researchSource: "combined" });
-    expect(saved.body.preferences.researchSource).toBe("combined");
+      .send({ webSearchEngine: "combined" });
+    expect(saved.body.preferences.webSearchEngine).toBe("combined");
     expect(await started()).toBe("combined");
     expect(await started({ strategy: "searxng" })).toBe("searxng");
   });
 
-  it("gives way to the default while it cannot run, and the start still runs", async () => {
+  it("follows the instance's engine while the account keeps Instance default", async () => {
+    const set = await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ engine: "searxng" });
+    expect(set.status).toBe(200);
+    expect(await started()).toBe("searxng");
+    // An account's own choice wins over the instance's.
     await request(app)
       .patch("/api/auth/preferences")
-      .send({ researchSource: "searxng" });
+      .send({ webSearchEngine: "provider" });
+    expect(await started()).toBe("two-pass");
+  });
+
+  it("gives way to an engine that can run, and the start still runs", async () => {
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ webSearchEngine: "searxng" });
     deleteSetting(SETTING_KEYS.aiSearxng);
     expect(await started()).toBe("two-pass");
   });
 
-  it("takes only the three sources", async () => {
+  it("refuses every start while web search is off", async () => {
+    await request(app)
+      .put("/api/settings/ai/web-search")
+      .send({ allowed: false });
+    const response = await request(app)
+      .post("/api/ai-search")
+      .send({ contactIds: [id] });
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe("RESEARCH_OFF");
+    expect(response.body.error.message).toMatch(/Web search is off/);
+  });
+
+  it("takes the three engines and Instance default, and nothing else", async () => {
     const refused = await request(app)
       .patch("/api/auth/preferences")
-      .send({ researchSource: "google" });
+      .send({ webSearchEngine: "google" });
     expect(refused.status).toBe(400);
+    const back = await request(app)
+      .patch("/api/auth/preferences")
+      .send({ webSearchEngine: "default" });
+    expect(back.status).toBe(200);
   });
 });
 
 describe("the AI settings say whether SearXNG is set", () => {
   it("answers true for a saved address and false for none", async () => {
-    expect((await request(app).get("/api/settings/ai")).body.searxng).toBe(
-      true,
-    );
+    const configured = async () =>
+      (await request(app).get("/api/settings/ai")).body.webSearch.searxng
+        .configured;
+    expect(await configured()).toBe(true);
     deleteSetting(SETTING_KEYS.aiSearxng);
-    expect((await request(app).get("/api/settings/ai")).body.searxng).toBe(
-      false,
-    );
+    expect(await configured()).toBe(false);
   });
 });

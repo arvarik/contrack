@@ -25,10 +25,7 @@
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import { CADENCE_DAYS } from "../../shared/cadence.ts";
-import {
-  DEFAULT_RESEARCH_SOURCE,
-  researchSourceSchema,
-} from "../../shared/researchSource.ts";
+import { engineChoiceSchema } from "../../shared/webSearchEngine.ts";
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -150,10 +147,10 @@ export const preferenceSchemas = {
   dedupeOnImport: z.boolean(),
   autoEnrich: z.boolean(),
   /**
-   * Where research searches the web: the research model's own search,
-   * SearXNG, or both. It counts only while SearXNG is set.
+   * The web search engine contact research uses for this account: "default"
+   * follows the instance's engine, or the account names its own.
    */
-  researchSource: researchSourceSchema,
+  webSearchEngine: engineChoiceSchema,
 } as const;
 
 export type PreferenceKey = keyof typeof preferenceSchemas;
@@ -197,7 +194,7 @@ const DEFAULTS: Preferences = {
   dedupeOnCreate: true,
   dedupeOnImport: true,
   autoEnrich: false,
-  researchSource: DEFAULT_RESEARCH_SOURCE,
+  webSearchEngine: "default",
 };
 
 /** A PATCH body: any subset, and nothing else. */

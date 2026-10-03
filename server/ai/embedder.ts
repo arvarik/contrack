@@ -411,7 +411,7 @@ export function currentEmbedder(): Embedder {
  * A local model runs on this server, so it embeds every account. A provider
  * model sends each contact's text to the provider, so it embeds only the
  * contacts of an account that allows AI: the admin picks the model for
- * everyone, and "Use AI for this account" still says no for one person. That
+ * everyone, and "Use AI for my account" still says no for one person. That
  * account keeps keyword search, and its questions are not embedded either
  * (`embedQuery`).
  *

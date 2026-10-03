@@ -122,7 +122,7 @@ function mount() {
 
 const search = () =>
   screen.queryByRole("textbox", { name: "Search contacts to merge" });
-const quickScan = () => screen.queryByRole("radio", { name: /^Quick scan/ });
+const exactScan = () => screen.queryByRole("radio", { name: /^Exact scan/ });
 
 beforeEach(() => {
   state.contacts = people(3);
@@ -139,35 +139,36 @@ afterEach(() => {
 describe("the Duplicates tabs", () => {
   it("swaps Scan and Manual merge at once, with nothing of the other tab left", () => {
     mount();
-    expect(quickScan()).toBeTruthy();
+    expect(exactScan()).toBeTruthy();
 
     fireEvent.click(screen.getByRole("radio", { name: "Manual merge" }));
     // In the same frame: the merge tab is here and the scans are gone.
     expect(search()).toBeTruthy();
-    expect(quickScan()).toBeNull();
+    expect(exactScan()).toBeNull();
 
     fireEvent.click(screen.getByRole("radio", { name: "Scan" }));
-    expect(quickScan()).toBeTruthy();
+    expect(exactScan()).toBeTruthy();
     expect(search()).toBeNull();
   });
 
   it("keeps the scan chosen before a trip to Manual merge", () => {
     mount();
-    fireEvent.click(quickScan()!);
-    expect(quickScan()!.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(exactScan()!);
+    expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(screen.getByRole("radio", { name: "Manual merge" }));
     fireEvent.click(screen.getByRole("radio", { name: "Scan" }));
-    expect(quickScan()!.getAttribute("aria-checked")).toBe("true");
+    expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
     expect(
       screen
-        .getByRole("radio", { name: /^Smart scan/ })
+        .getByRole("radio", { name: /^AI scan/ })
         .getAttribute("aria-checked"),
     ).toBe("false");
   });
 });
 
 describe("the scans with AI off", () => {
-  const smartScan = () => screen.queryByRole("radio", { name: /^Smart scan/ });
+  const aiScan = () => screen.getByRole("radio", { name: /^AI scan/ });
+  const fullScan = () => screen.getByRole("radio", { name: /^Full AI scan/ });
 
   it("offers the three scans while AI is on, and starts the one chosen", () => {
     mount();
@@ -177,16 +178,24 @@ describe("the scans with AI off", () => {
     expect(startScan).toHaveBeenCalledWith("deep");
   });
 
-  for (const off of ["account", "instance"] as const) {
-    it(`offers only the Quick scan, and starts it, while AI is off for the ${off}`, () => {
+  for (const [off, why] of [
+    ["account", "AI is off for your account"],
+    ["instance", "AI is off on this instance"],
+  ] as const) {
+    it(`keeps the AI scans in sight, disabled with the reason, and starts the Exact scan while AI is off for the ${off}`, () => {
       if (off === "account") ai.account = false;
       else ai.instanceOff = true;
       mount();
-      expect(smartScan()).toBeNull();
-      expect(quickScan()!.getAttribute("aria-checked")).toBe("true");
-      expect(
-        screen.getByText("Smart scan and Full scan use AI, which is off"),
-      ).toBeTruthy();
+      // The AI scans stay, so the choice is still there to see, and say why
+      // they cannot run.
+      for (const tile of [aiScan(), fullScan()]) {
+        expect(tile.getAttribute("aria-disabled")).toBe("true");
+        expect(tile.textContent).toContain(why);
+      }
+      expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
+      // A press on an AI scan does nothing.
+      fireEvent.click(aiScan());
+      expect(aiScan().getAttribute("aria-checked")).toBe("false");
       fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
       expect(startScan).toHaveBeenCalledWith("quick");
     });

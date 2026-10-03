@@ -65,23 +65,29 @@ const STEP_BUTTON =
 const SCAN_MODES: readonly Choice<DedupeScanMode>[] = [
   {
     value: "quick",
-    label: "Quick scan",
+    label: "Exact scan",
     hint: "The same email, phone or name",
   },
   {
     value: "deep",
-    label: "Smart scan",
-    hint: "Adds AI, for duplicates that are not obvious",
+    label: "AI scan",
+    hint: "Adds close matches, and asks AI about the unclear pairs",
   },
   {
     value: "full",
-    label: "Full scan",
-    hint: "Like Smart, after rereading every contact",
+    label: "Full AI scan",
+    hint: "An AI scan after re-reading every contact",
   },
 ];
 
-/** The one scan that runs with AI off: it calls no model. */
-const QUICK_ONLY = SCAN_MODES.filter((mode) => mode.value === "quick");
+/**
+ * The scans with AI off: the two AI scans stay, disabled, and say why, so
+ * the choice is still there to see. The Exact scan calls no model and runs.
+ */
+const scansWithAiOff = (why: string): readonly Choice<DedupeScanMode>[] =>
+  SCAN_MODES.map((mode) =>
+    mode.value === "quick" ? mode : { ...mode, hint: why, disabled: true },
+  );
 
 /**
  * The Duplicates page's tool. It renders inside the Settings shell, in the
@@ -93,9 +99,9 @@ export const DedupeView = () => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
   const [resultView, setResultView] = useState<ResultView>("swipe");
   const [selectedMode, setSelectedMode] = useState<DedupeScanMode>("deep");
-  // A Smart or a Full scan asks a model, so with AI off (for the account or
-  // for the instance) the server refuses them. A Quick scan calls no model,
-  // so it is the one scan on offer then, and it is the one that starts.
+  // An AI scan asks a model, so with AI off (for the account or for the
+  // instance) the server refuses it. The Exact scan calls no model, so it is
+  // the one scan that runs then, and the one that starts.
   const accountAi = useAiAllowed();
   const { data: instanceAi } = useInstanceAi();
   const aiOn = accountAi && instanceAi?.aiOff !== true;
@@ -433,15 +439,18 @@ export const DedupeView = () => {
                 <ChoiceGroup
                   label="Scan"
                   value={scanMode}
-                  options={aiOn ? SCAN_MODES : QUICK_ONLY}
+                  options={
+                    aiOn
+                      ? SCAN_MODES
+                      : scansWithAiOff(
+                          instanceAi?.aiOff
+                            ? "AI is off on this instance"
+                            : "AI is off for your account",
+                        )
+                  }
                   onChange={setSelectedMode}
-                  className={aiOn ? "sm:grid-cols-3" : undefined}
+                  className="sm:grid-cols-3"
                 />
-                {!aiOn && (
-                  <p className="text-xs text-on-surface-variant">
-                    Smart scan and Full scan use AI, which is off
-                  </p>
-                )}
                 <div className="flex justify-end">
                   <button
                     type="button"

@@ -284,8 +284,8 @@ Contrack works on a machine with no internet access, with a few limits.
   `npm run models:fetch -- /srv/contrack/models`.
 - **npm install.** On Linux x64, `ONNXRUNTIME_NODE_INSTALL=skip npm install`
   skips GPU files that Contrack does not use.
-- **These need the network:** AI providers (a custom endpoint on your network
-  works), the basemap tiles (unless you [host your own](configuration.md#map)),
+- **These need the network:** AI providers (an OpenAI-compatible server on
+  your network works), the basemap tiles (unless you [host your own](configuration.md#map)),
   placing addresses on the map, company logos, link previews in notes, the
   weather, connectors, and outgoing mail.
 
@@ -294,7 +294,7 @@ lists the folders and the order in which the server reads them.
 
 ## Health and logs
 
-![Settings, Administration, Instance health: the schema, the database, the last backup, the queues, and the AI provider for each task](images/instance-health.png)
+![Settings, Administration, Instance health: the schema, the database, the last backup, the queues, and the Fast, Strong and web search models](images/instance-health.png)
 
 - `GET /healthz` answers `200` with `"status":"ok"` when the server and the
   database respond, and `503` when the database does not. It needs no
@@ -407,8 +407,8 @@ block, and reload nginx.
 
 `secret.key` is missing or different, or `CONTRACK_SECRET_KEY` changed. The
 log says that a saved key "cannot be decrypted". Put the old `secret.key`
-back. Or enter the credentials again in **AI providers**, in **Outgoing
-mail**, and in each connector.
+back. Or enter the credentials again in **Administration → AI**, in
+**Outgoing mail**, and in each connector.
 
 ### npm fails with EBADDEVENGINES
 

@@ -416,17 +416,22 @@ function isCloudMetadataOrLinkLocal(urlStr: string): boolean {
 }
 
 /** Body for PUT /api/admin/integrations. Empty string clears. */
+/**
+ * A SearXNG base URL, or "" to remove it. An operator's own SearXNG is often
+ * on a private address, which is allowed, but a cloud metadata or a
+ * link-local address never is.
+ */
+export const searxngUrlSchema = z
+  .string()
+  .trim()
+  .url("Must be a valid URL")
+  .refine((val) => !isCloudMetadataOrLinkLocal(val), {
+    message: "Cloud metadata and link-local addresses are not permitted",
+  })
+  .or(z.literal(""));
+
 export const adminIntegrationsSchema = z
   .object({
-    searxngUrl: z
-      .string()
-      .trim()
-      .url("Must be a valid URL")
-      .refine((val) => !isCloudMetadataOrLinkLocal(val), {
-        message: "Cloud metadata and link-local addresses are not permitted",
-      })
-      .or(z.literal(""))
-      .optional(),
     googleOAuth: z
       .object({
         clientId: z.string().trim().min(1, "Client ID is required"),

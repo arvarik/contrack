@@ -37,6 +37,7 @@ import {
 import { initBuiltinEmbedder } from "./server/ai/embedder.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { initCrossEncoder } from "./server/ai/reranker.ts";
+import { migrateResearchOff } from "./server/services/aiSettingsService.ts";
 import { warmStarterQuestions } from "./server/services/search/starterQuestions.ts";
 import {
   mailLinkOrigin,
@@ -254,8 +255,20 @@ async function startServer() {
     log.warn("Server", `Daily maintenance failed: ${getErrorMessage(err)}`);
   }
 
+  // ── Web search switch ───────────────────────────────────────────────────
+  // Research turned off the old way, with the research model set to Off,
+  // moves to the "Allow web search" switch, which keeps a pinned model.
+  try {
+    migrateResearchOff();
+  } catch (err) {
+    log.warn(
+      "Server",
+      `Web search switch migration failed: ${getErrorMessage(err)}`,
+    );
+  }
+
   // ── AI model catalogs ───────────────────────────────────────────────────
-  // Populate the per-provider model lists that the AI providers page offers,
+  // Populate the per-provider model lists that the AI page offers,
   // so the dropdowns are filled on first open rather than after a manual
   // refresh.
   // Only providers whose cache is missing or older than the TTL are fetched,

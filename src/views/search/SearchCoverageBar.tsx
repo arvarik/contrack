@@ -1,10 +1,11 @@
 /**
- * SearchCoverageBar: how much of the network People search can read.
+ * SearchCoverageBar: how much of the network search by meaning can read.
  *
  * Two looks, for two places:
  *
- *   - `card` (the default), on the AI settings page: the coverage, its
- *     numbers and its actions as buttons, with a progress bar under them.
+ *   - `card` (the default), under the embedding model on Administration →
+ *     AI: the coverage, its numbers and its actions as buttons, with a
+ *     progress bar under them.
  *   - `row`, under the Ask Contrack search box: one slim line with a short
  *     bar, the count in words and quiet text buttons. It is only there while
  *     there is something to say, so a network that is fully indexed shows
@@ -208,7 +209,7 @@ export function SearchCoverageBar({
         {hasNews && (
           <section
             ref={keepFocus}
-            aria-label="Semantic search coverage"
+            aria-label="Search by meaning coverage"
             className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant"
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -294,9 +295,9 @@ export function SearchCoverageBar({
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-on-surface">
-                Semantic search coverage
-              </h2>
+              <h3 className="text-sm font-bold text-on-surface">
+                Search by meaning
+              </h3>
               <span
                 className={cn(
                   "text-xs font-semibold px-2 py-0.5 rounded-md",

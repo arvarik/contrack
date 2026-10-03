@@ -85,4 +85,54 @@ describe("ChoiceGroup", () => {
     fireEvent.click(tile);
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("keeps a tile that cannot be chosen now, dimmed, says why, and skips it", () => {
+    const onChange = vi.fn();
+    render(
+      <ChoiceGroup
+        label="Web search engine"
+        value="provider"
+        options={[
+          { value: "provider", label: "Gemini" },
+          {
+            value: "searxng",
+            label: "SearXNG",
+            hint: "Needs a SearXNG address",
+            disabled: true,
+          },
+          { value: "combined", label: "Both" },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    const searxng = screen.getByRole("radio", { name: /SearXNG/ });
+    expect(searxng.getAttribute("aria-disabled")).toBe("true");
+    expect(searxng.textContent).toContain("Needs a SearXNG address");
+    fireEvent.click(searxng);
+    expect(onChange).not.toHaveBeenCalled();
+    // The arrow keys pass over it.
+    fireEvent.keyDown(screen.getByRole("radio", { name: "Gemini" }), {
+      key: "ArrowRight",
+    });
+    expect(onChange).toHaveBeenCalledWith("combined");
+  });
+
+  it("lets the arrow keys leave a chosen tile that cannot be chosen now", () => {
+    const onChange = vi.fn();
+    render(
+      <ChoiceGroup
+        label="Web search engine"
+        value="searxng"
+        options={[
+          { value: "provider", label: "Gemini" },
+          { value: "searxng", label: "SearXNG", disabled: true },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    const searxng = screen.getByRole("radio", { name: "SearXNG" });
+    expect(searxng.tabIndex).toBe(0);
+    fireEvent.keyDown(searxng, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenCalledWith("provider");
+  });
 });

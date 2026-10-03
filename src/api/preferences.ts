@@ -10,7 +10,7 @@
  *
  * @module api/preferences
  */
-import type { ResearchSource } from "../../shared/researchSource";
+import type { EngineChoice } from "../../shared/webSearchEngine";
 import { apiJson, jsonBody } from "./client";
 
 /** Which palette the app paints. `system` follows the operating system. */
@@ -69,8 +69,8 @@ export interface Preferences {
   dedupeOnCreate: boolean;
   dedupeOnImport: boolean;
   autoEnrich: boolean;
-  /** Where research searches the web, while SearXNG is set. */
-  researchSource: ResearchSource;
+  /** The web search engine research uses: "default" is the instance's. */
+  webSearchEngine: EngineChoice;
 }
 
 export interface PreferencesResponse {
@@ -124,7 +124,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dedupeOnCreate: true,
   dedupeOnImport: true,
   autoEnrich: false,
-  researchSource: "provider",
+  webSearchEngine: "default",
 };
 
 /**

@@ -107,7 +107,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
  * made a second ghost every time.
  *
  * The note goes to a provider, so both AI switches are read here, when the
- * job runs: the instance switch and the owner's "Use AI for this account".
+ * job runs: the instance switch and the owner's "Use AI for my account".
  * A note saved just before the owner turned AI off still stays on the server.
  */
 async function runMentionExtraction(
