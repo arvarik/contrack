@@ -139,7 +139,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
   // Go to place search
   const handleGoTo = useCallback(async () => {
-    if (!map || !gotoQuery.trim()) return;
+    // The place search needs two characters, as the pin dialog's Find does.
+    if (!map || gotoQuery.trim().length < 2) return;
     setGotoLoading(true);
     setGotoError(null);
     try {

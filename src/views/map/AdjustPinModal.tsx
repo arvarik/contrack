@@ -92,7 +92,8 @@ export const AdjustPinModal = ({
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const hintId = useId();
   const save = useSetContactLocation();
-  const [place, setPlace] = useState("");
+  // With no pin, the search starts from the address the geocoder could not place.
+  const [place, setPlace] = useState(placed ? "" : (contact.location ?? ""));
   const [finding, setFinding] = useState(false);
   const [findError, setFindError] = useState<string | null>(null);
 
