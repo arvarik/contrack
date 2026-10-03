@@ -1,33 +1,38 @@
-import { installPassageIndex } from "./services/search/passageIndex.ts";
 /**
- * Database Initialization — SQLite connection, Drizzle ORM, FTS5, and triggers.
+ * Database Initialization — the SQLite connection, the migrations and the
+ * derived indexes.
  *
- * This file is the single source of truth for database setup. It:
+ * Every service imports this file. On import it:
  * 1. Opens the SQLite connection in WAL mode with foreign keys enforced
- * 2. Runs Drizzle Kit migrations from `./drizzle/`
- * 3. Creates and backfills the FTS5 full-text search index with triggers
- * 4. Installs `updatedAt` auto-stamp triggers for contacts and interactions
+ * 2. Applies the migrations in server/db/migrations/ that this database has
+ *    not run, and records each in schema_migrations (server/db/runner.ts)
+ * 3. Installs the FTS tables, the vec0 stores, the passage index and the
+ *    triggers that feed them (server/db/indexes.ts)
+ * 4. Runs the four steps that run on every boot (§3 below)
+ *
+ * The exports keep the names and signatures they had before the migrations
+ * moved to server/db/. A helper that lives there takes the connection, and
+ * the wrapper here binds it to this one.
  *
  * @module server/db
  */
 import Database from "better-sqlite3";
-import {
-  installSearchIndex,
-  installSearchVectorTriggers,
-} from "./services/search/ftsIndex.ts";
-import {
-  UNIT_SCALE,
-  VECTOR_SCALE_KEY,
-  floatsOf,
-  quantize,
-  scaleFor,
-} from "./services/search/vectorScale.ts";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import * as schema from "../src/db/schema.ts";
+import * as schema from "./db/schema.ts";
 import { log } from "./utils/logger.ts";
-import { defaultAvatarUrl, isDefaultAvatarFor } from "./utils/avatarUrl.ts";
 import crypto from "crypto";
+import { runMigrations } from "./db/runner.ts";
+import { MIGRATIONS } from "./db/migrations/index.ts";
+import { installIndexes } from "./db/indexes.ts";
+import { backfillMentionRows as backfillMentionRowsOn } from "./db/helpers.ts";
+import {
+  ensureLocalOwner as ensureLocalOwnerOn,
+  primaryAdminId as primaryAdminIdOn,
+} from "./db/owners.ts";
+import {
+  rebuildVecTable as rebuildVecTableOn,
+  tableExists as tableExistsOn,
+} from "./db/vec.ts";
 
 // =============================================================================
 // 1. Open SQLite Connection
@@ -168,505 +173,48 @@ export const VEC_VERSION = vec_version;
 // Before any migration runs. Partition keys arrived in 0.1.6 and vector
 // queries depend on them, so an instance that cannot have them
 // must refuse to start rather than migrate and then fail. `assertVecVersion`
-// is declared at §9k; a function declaration hoists, so it is callable here.
+// is declared below; a function declaration hoists, so it is callable here.
 assertVecVersion(vec_version);
 
 export const db = drizzle(sqlite, { schema });
 
 // =============================================================================
-// 2. Run Drizzle Migrations
+// 2. Migrations, then the derived indexes
 // =============================================================================
-// Sequential, tracked migrations from the ./drizzle directory.
-// Drizzle maintains a `__drizzle_migrations` meta-table to track which
-// migrations have already been applied — guaranteeing idempotency.
-// =============================================================================
-
-migrate(db, { migrationsFolder: "./drizzle" });
-log.info("Database", "Drizzle migrations applied successfully");
-
-// =============================================================================
-// 2z. Identity — users, sessions, and data ownership
-// =============================================================================
-// Declared here rather than as a Drizzle migration for the same reason
-// `app_settings` is (§2z-2): this file is the one place guaranteed to run
-// before any query, and the DDL is trivially idempotent. The tables are still
-// mirrored in src/db/schema.ts so the rest of the app gets Drizzle types.
-//
-// See the OWNERSHIP note in src/db/schema.ts for what `ownerId` means and why
-// only four tables carry it.
+// The runner applies every migration this database has not run, in order,
+// each in one transaction with its row in schema_migrations. A migration that
+// throws stops the boot here, with its id in the error. Then every derived
+// structure is installed, and its version recorded. A database holding a
+// migration this build does not have refuses to start.
 // =============================================================================
 
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    username TEXT NOT NULL UNIQUE,
-    displayName TEXT,
-    passwordHash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member',
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastLoginAt TEXT,
-    avatarUrl TEXT
-  );
+runMigrations(sqlite, MIGRATIONS);
+installIndexes(sqlite);
 
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    expiresAt TEXT NOT NULL,
-    lastSeenAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    userAgent TEXT,
-    method TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId);
-  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expiresAt);
-`);
-
-const sessionCols = sqlite.pragma("table_info(sessions)") as { name: string }[];
-if (!sessionCols.some((c) => c.name === "method")) {
-  sqlite.exec("ALTER TABLE sessions ADD COLUMN method TEXT");
-  log.info("Database", "Added method column to sessions");
-}
-
-// The ownership columns themselves are added in §9i, once every table that
-// carries one has been created.
-
-// Expired sessions are rejected on use, but sweeping them on boot keeps the
-// table from accumulating rows nobody will ever look at again.
-const sweptSessions = sqlite
-  .prepare(`DELETE FROM sessions WHERE expiresAt <= datetime('now')`)
-  .run();
-if (sweptSessions.changes > 0) {
-  log.info("Database", `Swept ${sweptSessions.changes} expired session(s)`);
-}
+export { TENANCY_SCHEMA_VERSION } from "./db/indexes.ts";
+export {
+  contactEditColumns,
+  deleteRetiredSettings,
+  RETIRED_SETTING_KEYS,
+  SCORE_COLUMNS,
+} from "./db/helpers.ts";
+export {
+  installVecStatusTriggers,
+  VEC_ACTIVE_MATCH,
+  VEC_METADATA_COLUMNS,
+  VEC_METADATA_SQL,
+  vecElementFor,
+  vecTableDdl,
+  type VecElement,
+} from "./db/vec.ts";
 
 /**
- * The tenancy schema version this build writes and expects. A database that
- * reads less runs the tenancy block on its next boot. Version 1 added the
- * ownership columns, the invariant triggers and the composite indexes.
+ * Tables that carry `ownerId`. Every row in each has an owner after boot.
+ *
+ * The live list. A migration that adds an owned table adds it here too, and
+ * the ownership guard in §3 checks every table in it on every boot. The
+ * baseline migration keeps its own copy, frozen as it was at d67c8a9.
  */
-export const TENANCY_SCHEMA_VERSION = 2;
-
-// =============================================================================
-// 2z-0. Contacts columns the tenancy block indexes
-// =============================================================================
-// §2z-4 builds composite indexes over these columns, so on a fresh database
-// they have to exist by then. Drizzle `0000` ships `isArchived` and
-// `relationshipScore` but not `deletedAt`, `canonicalId`, `phoneticHash` or
-// `searchExpansion`. Each column is added once, here, and only when it is
-// missing.
-//
-// `geoSource` is not indexed by anything. It lives in this loop because it is
-// the one place a contacts column is added once, by name, and guarded.
-//
-// `isTracked` says a person chose to keep up with this contact. Only a
-// tracked contact is scored, appears on Pulse, or is tinted on the map.
-// `trackedAt` is the moment the flag last turned on, written by the two
-// `contacts_track_stamp_*` triggers in §4 and by nothing else. It is the
-// clock for a tracked contact nobody has logged a note on yet.
-//
-// `aiResearch` is the contact's research record: every enrichment, what it
-// added, the facts it reported and the pages it cited, as JSON in the shape
-// of shared/researchRecord.ts. Only the enrichment merge writes it.
-// =============================================================================
-
-for (const column of [
-  "searchExpansion TEXT",
-  "deletedAt TEXT",
-  "canonicalId TEXT",
-  "isArchived INTEGER DEFAULT 0",
-  "phoneticHash TEXT",
-  "relationshipScore INTEGER DEFAULT 50",
-  "geoSource TEXT",
-  "isTracked INTEGER NOT NULL DEFAULT 0",
-  "trackedAt TEXT",
-  "aiResearch TEXT",
-]) {
-  const name = column.split(" ")[0];
-  const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
-  if (!columns.some((c) => c.name === name)) {
-    sqlite.exec(`ALTER TABLE contacts ADD COLUMN ${column}`);
-    log.info("Database", `Added ${name} column to contacts (pre-tenancy)`);
-  }
-}
-
-// =============================================================================
-// 2z-1. Identity columns on users
-// =============================================================================
-// `status` and `credentialState` are what make the local owner account work:
-// the local owner is the row with `credentialState = 'none'`, and a disabled
-// account is one with `status = 'disabled'`.
-//
-// Two SQLite rules shape this list. A NOT NULL column added to an existing
-// table needs a literal default. A column with a REFERENCES clause may only be
-// added when its default is NULL. `createdBy` is the one foreign key here, so
-// it is the one column with no default.
-// =============================================================================
-
-for (const column of [
-  "status TEXT NOT NULL DEFAULT 'active'",
-  "credentialState TEXT NOT NULL DEFAULT 'password'",
-  "mustChangePassword INTEGER NOT NULL DEFAULT 0",
-  "passwordChangedAt TEXT",
-  "disabledAt TEXT",
-  "createdBy TEXT REFERENCES users(id) ON DELETE SET NULL",
-  "avatarUrl TEXT",
-]) {
-  const name = column.split(" ")[0];
-  const columns = sqlite.pragma("table_info(users)") as { name: string }[];
-  if (!columns.some((c) => c.name === name)) {
-    sqlite.exec(`ALTER TABLE users ADD COLUMN ${column}`);
-    log.info("Database", `Added ${name} column to users`);
-  }
-}
-
-// =============================================================================
-// 2z-2. Identity tables
-// =============================================================================
-// `app_settings` is created here because §2z-4 stores the tenancy schema
-// version in it. It also backs the AI configuration: provider keys entered
-// through the UI, custom OpenAI-compatible endpoints, capability assignments
-// and cached model lists (see server/services/settingsService.ts). `PRAGMA user_version` already holds FTS_SCHEMA_VERSION and is
-// a single 32-bit field, so a second migration cannot share that slot.
-//
-// `api_tokens`, `invitations`, `user_settings` and `audit_log` are created here
-// so that one migration touches `users` once, and so `attachPrincipal` can look up a
-// personal token.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS app_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS api_tokens (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    tokenHash TEXT NOT NULL UNIQUE,
-    tokenPrefix TEXT NOT NULL,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastUsedAt TEXT,
-    expiresAt TEXT,
-    revokedAt TEXT,
-    readOnly INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(userId);
-
-  CREATE TABLE IF NOT EXISTS invitations (
-    id TEXT PRIMARY KEY,
-    email TEXT,
-    role TEXT NOT NULL DEFAULT 'member',
-    tokenHash TEXT NOT NULL UNIQUE,
-    invitedBy TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    expiresAt TEXT NOT NULL,
-    acceptedAt TEXT,
-    acceptedBy TEXT REFERENCES users(id) ON DELETE SET NULL,
-    revokedAt TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS user_settings (
-    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (userId, key)
-  );
-
-  CREATE TABLE IF NOT EXISTS audit_log (
-    id TEXT PRIMARY KEY,
-    actorUserId TEXT REFERENCES users(id) ON DELETE SET NULL,
-    action TEXT NOT NULL,
-    targetType TEXT,
-    targetId TEXT,
-    details TEXT,
-    ip TEXT,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(createdAt DESC);
-  CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actorUserId, createdAt DESC);
-
-  CREATE TABLE IF NOT EXISTS passkeys (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    publicKey BLOB NOT NULL,
-    counter INTEGER NOT NULL DEFAULT 0,
-    transports TEXT,
-    deviceType TEXT NOT NULL DEFAULT 'singleDevice',
-    backedUp INTEGER NOT NULL DEFAULT 0,
-    aaguid TEXT,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastUsedAt TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(userId);
-
-  CREATE TABLE IF NOT EXISTS auth_challenges (
-    id TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    userId TEXT REFERENCES users(id) ON DELETE CASCADE,
-    challenge TEXT NOT NULL,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    expiresAt TEXT NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires ON auth_challenges(expiresAt);
-
-  CREATE TABLE IF NOT EXISTS auth_links (
-    id TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tokenHash TEXT NOT NULL UNIQUE,
-    createdBy TEXT REFERENCES users(id) ON DELETE SET NULL,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    expiresAt TEXT NOT NULL,
-    usedAt TEXT,
-    requestIp TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_auth_links_user ON auth_links(userId, createdAt);
-  CREATE INDEX IF NOT EXISTS idx_auth_links_cleanup ON auth_links(expiresAt, usedAt);
-`);
-
-// `readOnly` came after the table. A token made before it reads and writes,
-// which is what every token did then, so the default is 0.
-const tokenCols = sqlite.pragma("table_info(api_tokens)") as { name: string }[];
-if (!tokenCols.some((c) => c.name === "readOnly")) {
-  sqlite.exec(
-    "ALTER TABLE api_tokens ADD COLUMN readOnly INTEGER NOT NULL DEFAULT 0",
-  );
-  log.info("Database", "Added readOnly column to api_tokens");
-}
-
-// =============================================================================
-// 2z-3. Dedupe tables
-// =============================================================================
-// Created here because §2z-4 adds `ownerId` to every owned table and three of
-// them are these.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS dedupe_suggestions (
-    id TEXT PRIMARY KEY,
-    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    matchType TEXT NOT NULL,
-    confidence REAL NOT NULL,
-    reasoning TEXT NOT NULL,
-    matchedField TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    reviewedAt TEXT,
-    reviewedBy TEXT,
-    UNIQUE(contactIdA, contactIdB)
-  );
-  CREATE INDEX IF NOT EXISTS idx_dedupe_status ON dedupe_suggestions(status);
-  CREATE INDEX IF NOT EXISTS idx_dedupe_confidence ON dedupe_suggestions(confidence DESC);
-
-  CREATE TABLE IF NOT EXISTS dedupe_exclusions (
-    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (contactIdA, contactIdB)
-  );
-
-  CREATE TABLE IF NOT EXISTS dedupe_merge_log (
-    id TEXT PRIMARY KEY,
-    primaryId TEXT NOT NULL,
-    duplicateId TEXT NOT NULL,
-    mergedBy TEXT NOT NULL,
-    mergeType TEXT NOT NULL,
-    confidence REAL NOT NULL,
-    reasoning TEXT NOT NULL,
-    mergedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    undoneAt TEXT,
-    duplicateSnapshot TEXT
-  );
-`);
-
-// =============================================================================
-// 2z-3b. Imports — one durable record per bulk import
-// =============================================================================
-// A bulk import used to exist only for the life of its request. A connection
-// that dropped part way left the browser with no way to learn what happened,
-// and a second attempt created every contact again under fresh ids. The
-// record here is what the browser reconnects to, and what makes a second
-// request with the same id a question rather than a second import.
-//
-// `imports` carries an owner of its own and is in OWNED_TABLES: it hangs off
-// nothing, so the caller supplies the owner and the required-owner trigger
-// refuses a row without one. `import_rows` hangs off `imports` and reaches its
-// owner through that join, the way `list_members` reaches one through `lists`.
-// It keeps a row's payload only while the row is failed, so a retry can run it
-// again without the browser re-sending the file.
-//
-// Created here, before §2z-4, because the claim loop below walks every owned
-// table and the table has to exist for the statement to prepare.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS imports (
-    id TEXT PRIMARY KEY,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    status TEXT NOT NULL DEFAULT 'running',
-    phase TEXT,
-    message TEXT,
-    total INTEGER NOT NULL DEFAULT 0,
-    processed INTEGER NOT NULL DEFAULT 0,
-    imported INTEGER NOT NULL DEFAULT 0,
-    failed INTEGER NOT NULL DEFAULT 0,
-    autoMerged INTEGER,
-    needsReview INTEGER,
-    newUnique INTEGER,
-    error TEXT,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    completedAt TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_imports_owner_created ON imports(ownerId, createdAt DESC);
-
-  CREATE TABLE IF NOT EXISTS import_rows (
-    importId TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
-    rowIndex INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    contactId TEXT,
-    name TEXT,
-    error TEXT,
-    payload TEXT,
-    PRIMARY KEY (importId, rowIndex)
-  );
-  CREATE INDEX IF NOT EXISTS idx_import_rows_status ON import_rows(importId, status);
-
-  CREATE TABLE IF NOT EXISTS score_snapshots (
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    weekStart TEXT NOT NULL,
-    score REAL NOT NULL,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (contactId, weekStart)
-  );
-  CREATE INDEX IF NOT EXISTS idx_score_snapshots_owner_week ON score_snapshots(ownerId, weekStart);
-
-  CREATE TABLE IF NOT EXISTS search_history (
-    id              TEXT PRIMARY KEY,
-    ownerId         TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    mode            TEXT NOT NULL,
-    query           TEXT NOT NULL,
-    normalizedQuery TEXT NOT NULL,
-    resultCount     INTEGER,
-    resultIds       TEXT,
-    fallback        INTEGER NOT NULL DEFAULT 0,
-    pinned          INTEGER NOT NULL DEFAULT 0,
-    runCount        INTEGER NOT NULL DEFAULT 1,
-    createdAt       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    lastRunAt       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    UNIQUE (ownerId, mode, normalizedQuery)
-  );
-  CREATE INDEX IF NOT EXISTS idx_search_history_owner_last
-    ON search_history (ownerId, lastRunAt DESC, id DESC);
-  CREATE INDEX IF NOT EXISTS idx_search_history_owner_mode_last
-    ON search_history (ownerId, mode, lastRunAt DESC, id DESC);
-  CREATE INDEX IF NOT EXISTS idx_search_history_owner_pinned
-    ON search_history (ownerId, pinned, lastRunAt DESC, id DESC);
-
-  CREATE TABLE IF NOT EXISTS connectors (
-    id TEXT PRIMARY KEY,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    kind TEXT NOT NULL,
-    name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    config TEXT NOT NULL DEFAULT '{}',
-    secret TEXT,
-    cursor TEXT,
-    intervalMinutes INTEGER NOT NULL DEFAULT 30,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    nextRunAt TEXT,
-    lastRunAt TEXT,
-    lastError TEXT,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-  CREATE INDEX IF NOT EXISTS idx_connectors_owner ON connectors(ownerId, createdAt);
-  CREATE INDEX IF NOT EXISTS idx_connectors_due ON connectors(status, nextRunAt);
-
-  CREATE TABLE IF NOT EXISTS connector_runs (
-    id TEXT PRIMARY KEY,
-    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    trigger TEXT NOT NULL,
-    status TEXT NOT NULL,
-    startedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    finishedAt TEXT,
-    stats TEXT,
-    error TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_connector_runs_conn ON connector_runs(connectorId, startedAt DESC);
-
-  CREATE TABLE IF NOT EXISTS connector_links (
-    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    kind TEXT NOT NULL,
-    externalId TEXT NOT NULL,
-    localId TEXT,
-    seenCount INTEGER NOT NULL DEFAULT 1,
-    lastSeenAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    ignoredAt TEXT,
-    PRIMARY KEY (connectorId, kind, externalId)
-  );
-  CREATE INDEX IF NOT EXISTS idx_connector_links_local ON connector_links(localId);
-
-  CREATE TABLE IF NOT EXISTS upcoming_events (
-    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    externalId TEXT NOT NULL,
-    title TEXT NOT NULL,
-    startsAt TEXT NOT NULL,
-    endsAt TEXT NOT NULL,
-    participants TEXT NOT NULL,
-    contactIds TEXT NOT NULL,
-    PRIMARY KEY (connectorId, externalId)
-  );
-  CREATE INDEX IF NOT EXISTS idx_upcoming_owner_start ON upcoming_events(ownerId, startsAt);
-
-  CREATE TABLE IF NOT EXISTS oauth_states (
-    state TEXT PRIMARY KEY,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL,
-    codeVerifier TEXT NOT NULL,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS map_views (
-    id TEXT PRIMARY KEY,
-    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    name TEXT NOT NULL,
-    query TEXT NOT NULL DEFAULT '',
-    layer TEXT NOT NULL DEFAULT 'pins',
-    bounds TEXT NOT NULL,
-    sortOrder INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-  CREATE INDEX IF NOT EXISTS idx_map_views_owner ON map_views(ownerId, sortOrder, name);
-`);
-
-// =============================================================================
-// 2z-4. Tenancy — ownership columns and the local owner
-// =============================================================================
-// This block gives every owned table an `ownerId` column, creates the local
-// owner, and installs the triggers and indexes that keep every owner true. It
-// has to run here, before §3: the FTS backfill selects `c.ownerId`. A SELECT
-// inside `exec` is prepared before it runs, so a missing column fails the boot
-// even on an empty database. The column must exist first.
-//
-// Order inside the transaction is fixed: columns, local owner, invariant
-// triggers, composite indexes, version write.
-// =============================================================================
-
-/** Tables that carry `ownerId`. Every row in each has an owner after boot. */
 export const OWNED_TABLES = [
   "contacts",
   "lists",
@@ -686,54 +234,6 @@ export const OWNED_TABLES = [
   "map_views",
 ] as const;
 
-/** Owned tables with no parent contact. The caller must supply the owner. */
-const OWNER_REQUIRED_TABLES = [
-  "contacts",
-  "lists",
-  "dedupe_merge_log",
-  "ai_invocations",
-  "imports",
-  "score_snapshots",
-  "search_history",
-  "connectors",
-  "connector_runs",
-  "connector_links",
-  "upcoming_events",
-  "map_views",
-] as const;
-
-/**
- * Owned tables whose owner is derivable from a parent contact.
- *
- * `key` names the primary parent column. `also` is a second contact column
- * that must agree, which is what makes a cross-owner dedupe pair impossible.
- * `pk` is how the fill trigger finds the row it just inserted: every table
- * here has an `id` except `dedupe_exclusions`, whose key is the pair.
- */
-const OWNER_CHILD_TABLES = [
-  { table: "interactions", key: "contactId", also: null, pk: "id = NEW.id" },
-  { table: "action_items", key: "contactId", also: null, pk: "id = NEW.id" },
-  {
-    table: "dedupe_suggestions",
-    key: "contactIdA",
-    also: "contactIdB",
-    pk: "id = NEW.id",
-  },
-  {
-    table: "dedupe_exclusions",
-    key: "contactIdA",
-    also: "contactIdB",
-    pk: "contactIdA = NEW.contactIdA AND contactIdB = NEW.contactIdB",
-  },
-] as const;
-
-function countUsers(): number {
-  const row = sqlite.prepare(`SELECT COUNT(*) AS n FROM users`).get() as {
-    n: number;
-  };
-  return row.n;
-}
-
 /**
  * The admin that machine credentials and instance-wide work act as.
  *
@@ -741,43 +241,15 @@ function countUsers(): number {
  * order makes impossible.
  */
 export function primaryAdminId(): string {
-  const row = sqlite
-    .prepare(
-      `SELECT id FROM users WHERE role = 'admin' AND status = 'active'
-       ORDER BY createdAt ASC LIMIT 1`,
-    )
-    .get() as { id: string } | undefined;
-  if (!row) throw new Error("No active admin account exists");
-  return row.id;
+  return primaryAdminIdOn(sqlite);
 }
 
 /**
- * The account that owns this device's data when nobody has signed in.
- *
- * `passwordHash = 'none$'` can never verify: parseHash splits on `$`, returns
- * null unless it gets six parts, and this has two. Nobody can sign in as this
- * account. It is an admin because in auth-off mode the person at the keyboard
- * is the operator.
- *
- * On an instance that already has real accounts this creates nothing and
- * returns the primary admin, so an upgrade never invents a second owner.
+ * The account that owns this device's data when nobody has signed in. See
+ * server/db/owners.ts.
  */
 export function ensureLocalOwner(): string {
-  const existing = sqlite
-    .prepare(`SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`)
-    .get() as { id: string } | undefined;
-  if (existing) return existing.id;
-  if (countUsers() > 0) return primaryAdminId();
-
-  const id = crypto.randomUUID();
-  sqlite
-    .prepare(
-      `INSERT INTO users (id, email, username, displayName, passwordHash, role, credentialState)
-       VALUES (?, 'local@contrack.local', 'local', 'This device', 'none$', 'admin', 'none')`,
-    )
-    .run(id);
-  log.info("Database", `Created the local owner account (${id})`);
-  return id;
+  return ensureLocalOwnerOn(sqlite);
 }
 
 /**
@@ -805,594 +277,67 @@ export function claimUnownedData(ownerId: string): Record<string, number> {
   return claimed;
 }
 
+/** True when the named table is already in this database. */
+export function tableExists(name: string): boolean {
+  return tableExistsOn(sqlite, name);
+}
+
 /**
- * The tenancy migration this database has reached.
- *
- * Exported for the admin health panel. `PRAGMA user_version` already holds
- * the FTS schema version and is a single 32-bit field, which is why this one
- * lives in `app_settings` instead.
+ * Read a vec0 table out, drop it, recreate it in the current shape and put
+ * the rows back. Returns what moved, or null when the table was already
+ * current. See server/db/vec.ts.
  */
-export function readTenancyVersion(): number {
-  try {
-    const row = sqlite
-      .prepare(`SELECT value FROM app_settings WHERE key = 'schema.tenancy'`)
-      .get() as { value: string } | undefined;
-    if (!row) return 0;
-    const parsed = Number(JSON.parse(row.value));
-    return Number.isFinite(parsed) ? parsed : 0;
-  } catch {
-    // No app_settings table yet, which means a fresh database. The tenancy
-    // migration has not run.
-    return 0;
-  }
+export function rebuildVecTable(
+  table: string,
+): ReturnType<typeof rebuildVecTableOn> {
+  return rebuildVecTableOn(sqlite, table);
 }
 
-function writeTenancyVersion(version: number): void {
-  sqlite
-    .prepare(
-      `INSERT INTO app_settings (key, value, updatedAt)
-       VALUES ('schema.tenancy', ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP`,
-    )
-    .run(JSON.stringify(version));
-}
-
-/** SQL for the triggers that keep every owned row's owner true. */
-function ownerInvariantTriggerSql(): string {
-  const out: string[] = [];
-
-  for (const table of OWNER_REQUIRED_TABLES) {
-    out.push(
-      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_required BEFORE INSERT ON ${table}
-       WHEN NEW.ownerId IS NULL
-       BEGIN SELECT RAISE(ABORT, '${table}.ownerId is required'); END;`,
-    );
-  }
-
-  for (const { table, key, also, pk } of OWNER_CHILD_TABLES) {
-    // The fill trigger is a safety net for callers that only know the parent
-    // id. Services still pass ownerId, which takes the check path instead.
-    out.push(
-      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_fill AFTER INSERT ON ${table}
-       WHEN NEW.ownerId IS NULL
-       BEGIN
-         UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = NEW.${key})
-          WHERE ${pk};
-       END;`,
-    );
-
-    const mismatch = [
-      `NEW.ownerId != (SELECT ownerId FROM contacts WHERE id = NEW.${key})`,
-    ];
-    if (also) {
-      mismatch.push(
-        `NEW.ownerId != (SELECT ownerId FROM contacts WHERE id = NEW.${also})`,
+/**
+ * Refuse to start below the release that introduced partition keys.
+ *
+ * The returned string carries a leading `v` and may carry a pre-release
+ * suffix (`v0.1.10-alpha.4`), so this parses three integers rather than
+ * comparing strings — `"v0.1.10" < "v0.1.6"` is true as a string and false as
+ * a version.
+ */
+export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
+  const parts = version
+    .replace(/^v/, "")
+    .split(/[.-]/)
+    .slice(0, 3)
+    .map((n) => Number.parseInt(n, 10));
+  const found = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+  for (let i = 0; i < 3; i++) {
+    if (found[i] > minimum[i]) return;
+    if (found[i] < minimum[i]) {
+      throw new Error(
+        `sqlite-vec >= ${minimum.join(".")} is required for partitioned vector search; found ${version}`,
       );
     }
-    out.push(
-      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_check BEFORE INSERT ON ${table}
-       WHEN NEW.ownerId IS NOT NULL AND (${mismatch.join(" OR ")})
-       BEGIN SELECT RAISE(ABORT, '${table}.ownerId does not match the contact owner'); END;`,
-    );
-  }
-
-  // No 2.0 code changes an owner. This trigger is here for a future "reassign
-  // data" admin action. It cannot touch the vec0 tables: sqlite-vec refuses an
-  // UPDATE of a partition key, so that feature re-inserts those rows in code.
-  out.push(
-    `CREATE TRIGGER IF NOT EXISTS contacts_owner_propagate AFTER UPDATE OF ownerId ON contacts
-     WHEN NEW.ownerId IS NOT OLD.ownerId
-     BEGIN
-       UPDATE interactions       SET ownerId = NEW.ownerId WHERE contactId = NEW.id;
-       UPDATE action_items       SET ownerId = NEW.ownerId WHERE contactId = NEW.id;
-       UPDATE dedupe_suggestions SET ownerId = NEW.ownerId WHERE contactIdA = NEW.id OR contactIdB = NEW.id;
-       UPDATE dedupe_exclusions  SET ownerId = NEW.ownerId WHERE contactIdA = NEW.id OR contactIdB = NEW.id;
-     END;`,
-  );
-
-  return out.join("\n");
-}
-
-/** Composite indexes for the owner-first reads in tenant-scoped queries. */
-const OWNER_COMPOSITE_INDEXES = `
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_status    ON contacts(ownerId, isGhost, isArchived, canonicalId);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_deleted   ON contacts(ownerId, deletedAt);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_lastc     ON contacts(ownerId, lastContactedAt);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_added     ON contacts(ownerId, addedAt);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_score     ON contacts(ownerId, relationshipScore);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_phonetic  ON contacts(ownerId, phoneticHash);
-  CREATE INDEX IF NOT EXISTS idx_contacts_owner_canon     ON contacts(ownerId, canonicalId);
-  CREATE INDEX IF NOT EXISTS idx_interactions_owner_date  ON interactions(ownerId, date);
-  CREATE INDEX IF NOT EXISTS idx_action_items_owner_due   ON action_items(ownerId, dueAt) WHERE completedAt IS NULL;
-  CREATE INDEX IF NOT EXISTS idx_action_items_owner_done  ON action_items(ownerId, completedAt);
-  CREATE INDEX IF NOT EXISTS idx_lists_owner_sort         ON lists(ownerId, sortOrder);
-  CREATE INDEX IF NOT EXISTS idx_dedupe_sugg_owner_status ON dedupe_suggestions(ownerId, status);
-  CREATE INDEX IF NOT EXISTS idx_dedupe_sugg_owner_conf   ON dedupe_suggestions(ownerId, confidence DESC);
-  CREATE INDEX IF NOT EXISTS idx_dedupe_excl_owner        ON dedupe_exclusions(ownerId);
-  CREATE INDEX IF NOT EXISTS idx_merge_log_owner_at       ON dedupe_merge_log(ownerId, mergedAt DESC);
-  CREATE INDEX IF NOT EXISTS idx_ai_inv_owner_created     ON ai_invocations(ownerId, createdAt DESC);
-`;
-
-const tenancyVersion = readTenancyVersion();
-if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
-  const migrationStarted = performance.now();
-  const steps: string[] = [];
-  const step = (label: string, fn: () => string | null): void => {
-    const started = performance.now();
-    const detail = fn();
-    const ms = performance.now() - started;
-    steps.push(
-      `${label} ${detail ?? ""}${detail ? " " : ""}${ms.toFixed(0)}ms`,
-    );
-  };
-
-  sqlite.transaction(() => {
-    // The columns, the local owner, the triggers and the composites. A
-    // database that already reads 1 or more has all of them.
-    if (tenancyVersion < 1) {
-      step("columns", () => {
-        let added = 0;
-        for (const table of OWNED_TABLES) {
-          const columns = sqlite.pragma(`table_info(${table})`) as {
-            name: string;
-          }[];
-          if (columns.length === 0) {
-            throw new Error(
-              `Cannot add ownerId: table "${table}" does not exist. §2z-4 must run after every owned table is created.`,
-            );
-          }
-          if (!columns.some((c) => c.name === "ownerId")) {
-            // A REFERENCES clause is legal on ADD COLUMN only when the default
-            // is NULL, which is the semantics wanted anyway. RESTRICT rather
-            // than CASCADE on purpose: deleting an account that still owns
-            // contacts should fail loudly, not delete the contacts.
-            sqlite.exec(
-              `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
-            );
-            added++;
-          }
-        }
-        return `${added} added,`;
-      });
-
-      step("local owner", () => {
-        ensureLocalOwner();
-        return "";
-      });
-
-      step("invariant triggers", () => {
-        sqlite.exec(ownerInvariantTriggerSql());
-        return "";
-      });
-
-      step("composite indexes", () => {
-        sqlite.exec(OWNER_COMPOSITE_INDEXES);
-        return "";
-      });
-    }
-
-    writeTenancyVersion(TENANCY_SCHEMA_VERSION);
-  })();
-
-  log.info(
-    "Database",
-    `Tenancy migration v${tenancyVersion} to v${TENANCY_SCHEMA_VERSION} in ${(performance.now() - migrationStarted).toFixed(0)}ms (${steps.join("; ")})`,
-  );
-}
-
-// =============================================================================
-// 2a-1. Data Migration — Default avatars follow the contact's pronouns
-// =============================================================================
-// The default face used to come from the name alone. It now reads the
-// pronouns first, and a pronoun reaches the avatar route only through the
-// URL's `look` parameter. Rows created before that carry a default URL with
-// no `look`, so give them one.
-//
-// Only a contact that still wears the default avatar for its own name is
-// touched: a face picked in the avatar picker and a photo stay as they are.
-// Idempotent: a row already carrying the right look writes nothing, so after
-// the first boot the UPDATE never runs. On that first boot the edit trigger
-// stamps `updatedAt` on the rows it redraws, as an edit would. Only contacts
-// with pronouns are candidates, so that is a small batch, once.
-// =============================================================================
-
-try {
-  const withPronouns = sqlite
-    .prepare(
-      // tenant-lint: allow boot migration
-      "SELECT id, name, pronouns, avatarUrl FROM contacts WHERE pronouns IS NOT NULL AND avatarUrl LIKE '/api/avatar/avataaars?%'",
-    )
-    .all() as {
-    id: string;
-    name: string;
-    pronouns: string;
-    avatarUrl: string;
-  }[];
-
-  const stale = withPronouns
-    .filter((row) => isDefaultAvatarFor(row.avatarUrl, row.name))
-    .map((row) => ({
-      id: row.id,
-      next: defaultAvatarUrl(row.name, row.pronouns),
-      current: row.avatarUrl,
-    }))
-    .filter((row) => row.next !== row.current);
-
-  if (stale.length > 0) {
-    const update = sqlite.prepare(
-      // tenant-lint: allow boot migration
-      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
-    );
-    sqlite.transaction(() => {
-      for (const row of stale) update.run(row.next, row.id);
-    })();
-    log.info(
-      "Database",
-      `Redrew ${stale.length} default avatar(s) from the contact's pronouns`,
-    );
-  }
-} catch (err) {
-  log.warn(
-    "Database",
-    `Pronoun avatar migration skipped: ${err instanceof Error ? err.message : String(err)}`,
-  );
-}
-
-// =============================================================================
-// 2b. Data Cleanup — Sanitize legacy AI Search artifacts
-// =============================================================================
-// These idempotent queries fix two issues in previously-hydrated contacts:
-// 1. AI-search interests stored without isAiGenerated=1 (LLM didn't set the flag)
-// 2. Experience/education dates stored as the literal string 'null'
-// Both are safe to run on every startup — they're no-ops when nothing matches.
-// =============================================================================
-
-try {
-  // Fix interests: any interest on a contact that has AI-search-sourced data
-  // should be marked as AI-generated (it was inserted by the merge engine)
-  const fixedInterests = sqlite
-    .prepare(
-      `
-    UPDATE contact_interests SET isAiGenerated = 1
-    WHERE isAiGenerated = 0
-    AND contactId IN (SELECT DISTINCT contactId FROM contact_experience WHERE source = 'ai-search')
-  `,
-    )
-    .run();
-  if (fixedInterests.changes > 0) {
-    log.info(
-      "Database",
-      `Fixed ${fixedInterests.changes} AI-search interests missing isAiGenerated flag`,
-    );
-  }
-
-  // Scrub 'null' strings from experience dates
-  const fixedExpStart = sqlite
-    .prepare(
-      `UPDATE contact_experience SET startDate = NULL WHERE startDate = 'null'`,
-    )
-    .run();
-  const fixedExpEnd = sqlite
-    .prepare(
-      `UPDATE contact_experience SET endDate = NULL WHERE endDate = 'null'`,
-    )
-    .run();
-  const fixedEduStart = sqlite
-    .prepare(
-      `UPDATE contact_education SET startDate = NULL WHERE startDate = 'null'`,
-    )
-    .run();
-  const fixedEduEnd = sqlite
-    .prepare(
-      `UPDATE contact_education SET endDate = NULL WHERE endDate = 'null'`,
-    )
-    .run();
-  const totalDateFixes =
-    fixedExpStart.changes +
-    fixedExpEnd.changes +
-    fixedEduStart.changes +
-    fixedEduEnd.changes;
-  if (totalDateFixes > 0) {
-    log.info(
-      "Database",
-      `Scrubbed ${totalDateFixes} 'null' string date value(s) from experience/education`,
-    );
-  }
-} catch (err) {
-  log.warn(
-    "Database",
-    `Data cleanup skipped: ${err instanceof Error ? err.message : String(err)}`,
-  );
-}
-
-// =============================================================================
-// 3. FTS5 Full-Text Search Index
-// =============================================================================
-// FTS5 virtual tables are NOT managed by Drizzle ORM, so we maintain them
-// here with explicit DDL. The index is rebuilt on every startup to ensure
-// consistency with the current data.
-//
-// The FTS backfill query and the FTS triggers name `searchExpansion` and
-// `deletedAt`. §2z-0 has added both by now.
-// =============================================================================
-
-sqlite.exec(
-  `CREATE INDEX IF NOT EXISTS idx_contacts_deleted ON contacts(deletedAt)`,
-);
-
-// `scoreDirty` is here rather than in §2z-0 because §4 below builds its trigger
-// from the column list and has to see it.
-{
-  const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
-  if (!columns.some((c) => c.name === "scoreDirty")) {
-    sqlite.exec(
-      `ALTER TABLE contacts ADD COLUMN scoreDirty INTEGER NOT NULL DEFAULT 1`,
-    );
   }
 }
-installSearchIndex(sqlite);
 
-// =============================================================================
-// 4. Auto-stamp updatedAt, and mark a contact for re-scoring
-// =============================================================================
-// Guarantees updatedAt is always current regardless of which code path
-// (geocoder, archive toggle, bulk update, etc.) mutates the row.
-// Uses AFTER UPDATE to avoid recursion — the trigger itself runs after
-// the original UPDATE, and the SET updatedAt is a no-op if already current.
-//
-// BOTH TRIGGERS LIST THEIR COLUMNS. A bare `AFTER UPDATE ON contacts` fires
-// for any write, and two writes on this table are not edits: the hourly
-// relationship score and the dirty flag that schedules it. With the broad
-// trigger the hourly sweep stamped `updatedAt` on every contact in the
-// instance, every hour. Three things followed from that:
-//
-//   • `updatedAt` stopped meaning "when this contact was last edited" and
-//     started meaning "the last sweep". Measured on 10,000 contacts: every
-//     row's `updatedAt` moved on every pass.
-//   • `findStaleEmbeddings` re-embeds any contact whose `updatedAt` is newer
-//     than its `embeddedAt`, so the next dedupe scan re-embedded the whole
-//     corpus through the configured provider.
-//   • Story S10 cannot work at all. "Score only what changed" needs a signal
-//     that scoring does not itself set.
-//
-// The column list is derived from the table rather than written out, so a
-// column added later is covered without anyone remembering to come back here.
-// `tests/integration/scoring.incremental.test.ts` asserts the list is exactly
-// the table minus SCORE_COLUMNS.
-// =============================================================================
-
-/**
- * Columns that hold what Contrack computed about a contact, not the contact.
- *
- * Writing one of these is not an edit, so it neither stamps `updatedAt` nor
- * schedules another recompute.
- */
-export const SCORE_COLUMNS = ["relationshipScore", "scoreDirty"] as const;
-
-/** Every `contacts` column except {@link SCORE_COLUMNS}, quoted for DDL. */
-export function contactEditColumns(db: Database.Database): string[] {
-  const columns = db.pragma("table_info(contacts)") as { name: string }[];
-  return columns
-    .map((c) => c.name)
-    .filter((name) => !(SCORE_COLUMNS as readonly string[]).includes(name));
+/** Add the mention rows that notes saved before the extraction lack. */
+export function backfillMentionRows(): number {
+  return backfillMentionRowsOn(sqlite);
 }
 
-const editColumnList = contactEditColumns(sqlite)
-  .map((name) => `"${name}"`)
-  .join(", ");
-
-// tenant-lint: allow boot migration
-sqlite.exec(`
-  DROP TRIGGER IF EXISTS contacts_auto_updated_at;
-  CREATE TRIGGER contacts_auto_updated_at
-  AFTER UPDATE OF ${editColumnList} ON contacts
-  FOR EACH ROW
-  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
-  BEGIN
-    UPDATE contacts SET updatedAt = datetime('now') WHERE id = NEW.id;
-  END;
-
-  DROP TRIGGER IF EXISTS contacts_score_dirty;
-  CREATE TRIGGER contacts_score_dirty
-  AFTER UPDATE OF ${editColumnList} ON contacts
-  FOR EACH ROW
-  WHEN NEW.scoreDirty = 0
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1 WHERE id = NEW.id;
-  END;
-`);
-
-// The hourly sweep reads this and nothing else. A partial index holds only the
-// dirty rows, so an instance with nothing to do pays for an empty index scan
-// rather than a scan of every contact it has.
-// tenant-lint: allow boot migration
-sqlite.exec(
-  `CREATE INDEX IF NOT EXISTS idx_contacts_score_dirty
-     ON contacts(ownerId) WHERE scoreDirty = 1`,
-);
-
-// `trackedAt` is stamped here, in the database, so a route, an MCP tool, a
-// merge and an import all record the moment the same way and none of them
-// can forget. A flag that turns on takes the time; a flag that turns off
-// clears it. A row born tracked takes the time on insert.
+// =============================================================================
+// 3. Every boot
+// =============================================================================
+// Four steps run on every start, after the migrations and the indexes,
+// because live code needs them and not only old rows:
 //
-// `isTracked` is an edit column, so the two triggers above already stamp
-// `updatedAt` and mark the row for scoring when it flips. These two only add
-// the clock.
-// tenant-lint: allow boot migration
-sqlite.exec(`
-  DROP TRIGGER IF EXISTS contacts_track_stamp_ins;
-  CREATE TRIGGER contacts_track_stamp_ins
-  AFTER INSERT ON contacts
-  FOR EACH ROW
-  WHEN NEW.isTracked = 1 AND NEW.trackedAt IS NULL
-  BEGIN
-    UPDATE contacts SET trackedAt = datetime('now') WHERE id = NEW.id;
-  END;
-
-  DROP TRIGGER IF EXISTS contacts_track_stamp_upd;
-  CREATE TRIGGER contacts_track_stamp_upd
-  AFTER UPDATE OF isTracked ON contacts
-  FOR EACH ROW
-  WHEN NEW.isTracked != OLD.isTracked
-  BEGIN
-    UPDATE contacts
-       SET trackedAt = CASE WHEN NEW.isTracked = 1 THEN datetime('now') ELSE NULL END
-     WHERE id = NEW.id;
-  END;
-`);
-
-// Every reader of the score and Pulse asks for one account's tracked
-// contacts. The partial index holds only those rows.
-// tenant-lint: allow boot migration
-sqlite.exec(
-  `CREATE INDEX IF NOT EXISTS idx_contacts_owner_tracked
-     ON contacts(ownerId) WHERE isTracked = 1`,
-);
-
-// =============================================================================
-// 5. Auto-stamp updatedAt on every interactions mutation
-// =============================================================================
-// Same pattern as contacts — guarantees updatedAt is always current even when
-// background processes (mention extraction, EML import re-parent, etc.) update rows.
-// =============================================================================
-
-// tenant-lint: allow boot migration
-sqlite.exec(`
-  DROP TRIGGER IF EXISTS interactions_auto_updated_at;
-  CREATE TRIGGER interactions_auto_updated_at AFTER UPDATE ON interactions
-  FOR EACH ROW
-  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
-  BEGIN
-    UPDATE interactions SET updatedAt = datetime('now') WHERE id = NEW.id;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_auto_updated_at;
-  CREATE TRIGGER action_items_auto_updated_at AFTER UPDATE ON action_items
-  FOR EACH ROW
-  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
-  BEGIN
-    UPDATE action_items SET updatedAt = datetime('now') WHERE id = NEW.id;
-  END;
-`);
-
-log.info(
-  "Database",
-  "updatedAt and score-dirty triggers installed (contacts, interactions, action_items)",
-);
-
-// =============================================================================
-// 6. Action Items Table + Sync Triggers
-// =============================================================================
-// Drizzle `0000` creates the action_items table. This section adds its two
-// indexes. Three triggers keep contacts.nextFollowUpAt in sync as a
-// denormalized cache set to MIN(dueAt) of pending (non-completed) action items.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE INDEX IF NOT EXISTS idx_action_items_contact ON action_items(contactId);
-  CREATE INDEX IF NOT EXISTS idx_action_items_due ON action_items(dueAt) WHERE completedAt IS NULL;
-`);
-
-// tenant-lint: allow boot migration
-sqlite.exec(`
-  DROP TRIGGER IF EXISTS action_items_sync_insert;
-  CREATE TRIGGER action_items_sync_insert AFTER INSERT ON action_items BEGIN
-    UPDATE contacts SET nextFollowUpAt = (
-      SELECT MIN(dueAt) FROM action_items
-      WHERE contactId = NEW.contactId AND completedAt IS NULL
-    ) WHERE id = NEW.contactId;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_sync_update;
-  CREATE TRIGGER action_items_sync_update AFTER UPDATE ON action_items BEGIN
-    UPDATE contacts SET nextFollowUpAt = (
-      SELECT MIN(dueAt) FROM action_items
-      WHERE contactId = NEW.contactId AND completedAt IS NULL
-    ) WHERE id = NEW.contactId;
-    -- A task that moved between contacts leaves the old one's cache behind.
-    -- A merge re-parents tasks, and without this the duplicate kept showing
-    -- a follow-up it no longer had. Same-contact updates match nothing here.
-    UPDATE contacts SET nextFollowUpAt = (
-      SELECT MIN(dueAt) FROM action_items
-      WHERE contactId = OLD.contactId AND completedAt IS NULL
-    ) WHERE id = OLD.contactId AND OLD.contactId != NEW.contactId;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_sync_delete;
-  CREATE TRIGGER action_items_sync_delete AFTER DELETE ON action_items BEGIN
-    UPDATE contacts SET nextFollowUpAt = (
-      SELECT MIN(dueAt) FROM action_items
-      WHERE contactId = OLD.contactId AND completedAt IS NULL
-    ) WHERE id = OLD.contactId;
-  END;
-`);
-
-// A new contact starts dirty through the column default, so no INSERT trigger
-// is needed here. The three statements below cover the rows a contact does not
-// own: an interaction or an action item that is written, changed, or removed
-// changes what the score is computed from.
+// - §8, because POST /api/contacts still accepts `nextFollowUpAt`, and only
+//   this turns it into a task.
+// - §9i, the ownership guard over the live OWNED_TABLES.
+// - ANALYZE and PRAGMA optimize, for the planner.
+// - §10, because ghost contacts from mentions and connectors are written with
+//   no `phoneticHash`, and only this fills it.
 //
-// Each is guarded by `scoreDirty = 0`, so importing a thousand interactions
-// against one already-dirty contact costs a thousand index seeks and one row
-// write rather than a thousand.
-//
-// Action items do not feed the formula today — it reads `cadenceDays`,
-// `lastContactedAt` and the interaction history and nothing else. They are
-// marked anyway because the story names them and because a formula that grows
-// to read them must not need a migration to be correct.
-// tenant-lint: allow boot migration
-sqlite.exec(`
-  DROP TRIGGER IF EXISTS interactions_score_dirty_ins;
-  CREATE TRIGGER interactions_score_dirty_ins AFTER INSERT ON interactions
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id = NEW.contactId AND scoreDirty = 0;
-  END;
-
-  DROP TRIGGER IF EXISTS interactions_score_dirty_upd;
-  CREATE TRIGGER interactions_score_dirty_upd AFTER UPDATE ON interactions
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id IN (NEW.contactId, OLD.contactId) AND scoreDirty = 0;
-  END;
-
-  DROP TRIGGER IF EXISTS interactions_score_dirty_del;
-  CREATE TRIGGER interactions_score_dirty_del AFTER DELETE ON interactions
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id = OLD.contactId AND scoreDirty = 0;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_score_dirty_ins;
-  CREATE TRIGGER action_items_score_dirty_ins AFTER INSERT ON action_items
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id = NEW.contactId AND scoreDirty = 0;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_score_dirty_upd;
-  CREATE TRIGGER action_items_score_dirty_upd AFTER UPDATE ON action_items
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id IN (NEW.contactId, OLD.contactId) AND scoreDirty = 0;
-  END;
-
-  DROP TRIGGER IF EXISTS action_items_score_dirty_del;
-  CREATE TRIGGER action_items_score_dirty_del AFTER DELETE ON action_items
-  FOR EACH ROW
-  BEGIN
-    UPDATE contacts SET scoreDirty = 1
-     WHERE id = OLD.contactId AND scoreDirty = 0;
-  END;
-`);
-
-log.info("Database", "action_items table + sync triggers installed");
+// Everything else that used to run here runs once, in the baseline migration.
+// =============================================================================
 
 // =============================================================================
 // 8. Backfill: Migrate existing nextFollowUpAt → action_items
@@ -1435,453 +380,6 @@ if (orphanedFollowUps.length > 0) {
 }
 
 // =============================================================================
-// 9. Deduplication Engine Schema
-// =============================================================================
-// `canonicalId` and `phoneticHash` are added in §2z-0, and the suggestion,
-// exclusion and merge-log tables are created in §2z-3. Only the phonetic
-// index is made here.
-// =============================================================================
-
-sqlite.exec(
-  `CREATE INDEX IF NOT EXISTS idx_contacts_phonetic ON contacts(phoneticHash)`,
-);
-
-// 9f. Contact embedding vector storage (requires sqlite-vec loaded above)
-// 9f-b. Search embedding vector storage (local model, 384-dim, int8)
-//
-// Separate tables: the dedupe index and the search index hold different
-// vectors of different widths from different models. Both are created from
-// `vecTableDdl` below, so the shape is written once. Search vectors are int8
-// (`vectorScale.ts`), dedupe vectors float.
-if (!tableExists("contact_embeddings")) {
-  sqlite.exec(vecTableDdl("contact_embeddings", 768));
-}
-if (!tableExists("search_embeddings")) {
-  sqlite.exec(
-    vecTableDdl("search_embeddings", 384, vecElementFor("search_embeddings")),
-  );
-}
-
-/**
- * The width a vec0 table actually has, read back from its DDL.
- *
- * The widths above are creation defaults and apply only on a fresh database.
- * Choosing a non-default embeddings model rebuilds these tables at that
- * model's width (see ensureEmbeddingStore / ensureDedupeEmbeddingStore), and
- * `IF NOT EXISTS` then leaves the existing table alone. Logging the literal
- * from the CREATE therefore reported 768/384 on every boot no matter what the
- * tables held — which is worse than saying nothing, because vector width is
- * the first thing you check when embeddings misbehave.
- */
-function vecTableWidth(table: string): string {
-  const row = sqlite
-    .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
-    .get(table) as { sql?: string } | undefined;
-  return row?.sql?.match(/(?:FLOAT|INT8)\[(\d+)\]/i)?.[1] ?? "unknown";
-}
-
-log.info(
-  "Database",
-  `contact_embeddings vec0 table ready (${vecTableWidth("contact_embeddings")}-dim, dedupe)`,
-);
-log.info(
-  "Database",
-  `search_embeddings vec0 table ready (${vecTableWidth("search_embeddings")}-dim ${vecElementOf(tableDdl("search_embeddings"))}, search)`,
-);
-
-// =============================================================================
-// 9k. vec0 partition-key rebuild
-// =============================================================================
-// A table created before 2.0 has no partition key, and sqlite-vec refuses to
-// add one: ALTER TABLE on a vec0 table returns OK, leaves the shadow tables
-// under the old name, and the next read fails with "no such table". So the
-// rows are read out, the table is dropped, a partitioned one is created at the
-// same width, and the rows go back in. All inside one transaction per table.
-//
-// No embedding is recomputed. The stored `ai.embeddingsState` signature and
-// dimension are untouched, so ensureEmbeddingStore and
-// ensureDedupeEmbeddingStore see no change on the next boot and no provider
-// API call happens.
-// =============================================================================
-
-/**
- * The three status columns every vec0 table carries beside its vector.
- *
- * They are sqlite-vec METADATA columns, which means a predicate on one is
- * evaluated inside the K-nearest-neighbour scan rather than after it. That is
- * the difference between "the ten nearest rows, of which some are archived"
- * and "the ten nearest rows that are not archived".
- *
- * The alternative, and what this replaced, was
- * `contactId IN (SELECT c.id FROM contacts c WHERE ...)`. It gives the same
- * answers — sqlite-vec pushes that constraint into the scan too — but SQLite
- * has to materialize the subquery first, which is a full scan of `contacts`
- * on every search. `EXPLAIN QUERY PLAN` shows it as `LIST SUBQUERY / SCAN c`.
- *
- * Measured through `findSearchNeighbors` itself, three accounts, k = 50, the
- * same table and the same vectors both ways:
- *
- *     1,000 contacts     0.83 ms  ->  0.10 ms
- *    10,000 contacts     8.16 ms  ->  0.36 ms
- *    50,000 contacts    43.68 ms  ->  1.48 ms
- *
- * Same fifty contacts in the same order both ways. The cost is proportional
- * to the account's contact count and independent of k, because the work is
- * building the id list rather than searching the vectors.
- *
- * `active` is one column rather than two because a vec0 metadata predicate is
- * a simple comparison: there is no `IS NULL` to push down, so the two null
- * checks are folded into a boolean when the row is written.
- */
-export const VEC_METADATA_COLUMNS = [
-  "isGhost",
-  "isArchived",
-  "active",
-] as const;
-
-/**
- * The metadata values for a contact, as a SQL expression list.
- *
- * Every insert into a vec0 table reads these from `contacts` in the same
- * statement, the way it already reads `ownerId`. sqlite-vec refuses a NULL
- * metadata value and refuses an INSERT that omits one, so there is no way to
- * write a row with the wrong status short of writing the wrong contact id.
- *
- * `c` is the alias the caller must give the contacts row.
- */
-export const VEC_METADATA_SQL =
-  "c.isGhost, COALESCE(c.isArchived, 0), (c.deletedAt IS NULL AND c.canonicalId IS NULL)";
-
-/**
- * The predicate that keeps a KNN to contacts somebody can actually see.
- *
- * Bare column names, not `c.`-qualified: these are the vec0 table's own
- * columns, and the whole point is that there is no join to qualify them
- * against. It is the metadata-column form of `ACTIVE_CONTACT_SQL`.
- */
-export const VEC_ACTIVE_MATCH = "isGhost = 0 AND isArchived = 0 AND active = 1";
-
-/** What one vector component is stored as: a 4-byte float or 1 signed byte. */
-export type VecElement = "float" | "int8";
-
-/**
- * The element a vec0 table must store.
- *
- * `search_embeddings` is int8: a quarter of the space, with the same
- * neighbours up to rounding (`services/search/vectorScale.ts`).
- * `contact_embeddings` stays float, because dedupe compares its distances
- * with fixed thresholds.
- */
-export function vecElementFor(table: string): VecElement {
-  return table === "search_embeddings" ? "int8" : "float";
-}
-
-/** The element a vec0 table was created with, read from its DDL. */
-function vecElementOf(ddl: string | undefined): VecElement {
-  return ddl && /\bINT8\[/i.test(ddl) ? "int8" : "float";
-}
-
-/** The CREATE statement of a table, or undefined when it does not exist. */
-function tableDdl(table: string): string | undefined {
-  return (
-    sqlite
-      .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
-      .get(table) as { sql?: string } | undefined
-  )?.sql;
-}
-
-/** vec0 tables and the DDL they must have. Pinned equal by a unit test. */
-export function vecTableDdl(
-  table: string,
-  dimension: number,
-  element: VecElement = "float",
-): string {
-  return `CREATE VIRTUAL TABLE ${table} USING vec0(
-    contactId TEXT PRIMARY KEY,
-    ownerId TEXT PARTITION KEY,
-    isGhost INTEGER,
-    isArchived INTEGER,
-    active INTEGER,
-    embedding ${element === "int8" ? "INT8" : "FLOAT"}[${dimension}]
-  )`;
-}
-
-/** True when the named table is already in this database. */
-export function tableExists(name: string): boolean {
-  return (
-    sqlite
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type IN ('table') AND name = ?",
-      )
-      .get(name) !== undefined
-  );
-}
-
-/**
- * Whether a vec0 table has to be read out, dropped and rebuilt.
- *
- * Three reasons, none of which sqlite-vec can fix with ALTER TABLE: a table
- * created before 2.0 has no partition key, one created before the metadata
- * columns has no status to filter on, and one created before int8 search
- * vectors stores floats. ALTER TABLE on a vec0 table returns OK, leaves the
- * shadow tables under the old name, and the next read fails with "no such
- * table".
- */
-function vecTableNeedsRebuild(ddl: string, element: VecElement): boolean {
-  if (!/PARTITION KEY/i.test(ddl)) return true;
-  if (vecElementOf(ddl) !== element) return true;
-  return VEC_METADATA_COLUMNS.some(
-    (column) => !new RegExp(`\\b${column}\\s+INTEGER`, "i").test(ddl),
-  );
-}
-
-/**
- * Refuse to start below the release that introduced partition keys.
- *
- * The returned string carries a leading `v` and may carry a pre-release
- * suffix (`v0.1.10-alpha.4`), so this parses three integers rather than
- * comparing strings — `"v0.1.10" < "v0.1.6"` is true as a string and false as
- * a version.
- */
-export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
-  const parts = version
-    .replace(/^v/, "")
-    .split(/[.-]/)
-    .slice(0, 3)
-    .map((n) => Number.parseInt(n, 10));
-  const found = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-  for (let i = 0; i < 3; i++) {
-    if (found[i] > minimum[i]) return;
-    if (found[i] < minimum[i]) {
-      throw new Error(
-        `sqlite-vec >= ${minimum.join(".")} is required for partitioned vector search; found ${version}`,
-      );
-    }
-  }
-}
-
-/**
- * Read a vec0 table out, drop it, recreate it in the current shape and put the
- * rows back. Returns what moved, or null when the table was already current.
- *
- * Exported so the upgrade path can be tested against a table built in an old
- * shape, rather than only through a whole-database fixture. Callers at boot
- * pass the two real tables.
- *
- * No embedding is recomputed. The stored `ai.embeddingsState` signature and
- * dimension are untouched, so ensureEmbeddingStore and
- * ensureDedupeEmbeddingStore see no change on the next boot and no provider
- * API call happens.
- *
- * A float `search_embeddings` becomes int8 here: one scale over every vector
- * it holds goes into `app_settings` as `search.vectorScale`, and each vector
- * goes back in quantized with it, in the same transaction.
- */
-export function rebuildVecTable(table: string): {
-  copied: number;
-  dropped: number;
-  dimension: number;
-  element: VecElement;
-  scale: number | null;
-} | null {
-  const ddl = tableDdl(table);
-  const element = vecElementFor(table);
-  if (!ddl || !vecTableNeedsRebuild(ddl, element)) return null;
-  const from = vecElementOf(ddl);
-  if (from === "int8" && element === "float") {
-    throw new Error(
-      `Cannot rebuild ${table} from int8 to float: the float vectors are gone. Drop the table and re-embed.`,
-    );
-  }
-  const quantizing = from === "float" && element === "int8";
-
-  const width = vecTableWidth(table);
-  const dimension = Number.parseInt(width, 10);
-  if (!Number.isFinite(dimension) || dimension <= 0) {
-    throw new Error(
-      `Cannot rebuild ${table}: its DDL does not declare a vector width (read "${width}"). Refusing to guess a dimension.`,
-    );
-  }
-
-  let copied = 0;
-  let dropped = 0;
-  let scale: number | null = null;
-  sqlite.transaction(() => {
-    // A row whose contact is gone is already an orphan. It is left behind
-    // rather than given a NULL partition, which query 9 of the verification
-    // script would then flag forever.
-    const rows = sqlite
-      .prepare(
-        // tenant-lint: allow boot migration
-        `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding,
-                c.isGhost AS isGhost,
-                COALESCE(c.isArchived, 0) AS isArchived,
-                (c.deletedAt IS NULL AND c.canonicalId IS NULL) AS active
-           FROM ${table} e JOIN contacts c ON c.id = e.contactId`,
-      )
-      .all() as {
-      contactId: string;
-      ownerId: string;
-      embedding: Buffer;
-      isGhost: number;
-      isArchived: number;
-      active: number;
-    }[];
-    const total = (
-      sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
-        n: number;
-      }
-    ).n;
-    dropped = total - rows.length;
-
-    // Float to int8: one scale over every vector, stored before a row goes
-    // back in. The floats are read once and kept for the quantizing below.
-    const floats = quantizing ? rows.map((row) => floatsOf(row.embedding)) : [];
-    if (quantizing) {
-      scale = scaleFor(floats);
-      if (scale !== null)
-        sqlite
-          .prepare(
-            `INSERT INTO app_settings (key, value, updatedAt) VALUES (?, ?, ?)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt`,
-          )
-          .run(
-            VECTOR_SCALE_KEY,
-            JSON.stringify(scale),
-            new Date().toISOString(),
-          );
-    }
-
-    sqlite.exec(`DROP TABLE ${table}`);
-    sqlite.exec(vecTableDdl(table, dimension, element));
-
-    // The three status values are bound as BigInt. better-sqlite3 binds every
-    // JavaScript number as REAL, and sqlite-vec answers a REAL for an INTEGER
-    // metadata column with "Expected integer ... received FLOAT". Every other
-    // write path reads them straight out of `contacts` in an INSERT..SELECT,
-    // where SQLite keeps the column type; this one cannot, because the rows
-    // were read before the table was dropped.
-    //
-    // An int8 vector is bound through `vec_int8(?)`. sqlite-vec reads a bare
-    // blob as float32 and refuses it for an INT8 column.
-    const insert = sqlite.prepare(
-      `INSERT INTO ${table} (contactId, ownerId, isGhost, isArchived, active, embedding)
-       VALUES (?, ?, ?, ?, ?, ${element === "int8" ? "vec_int8(?)" : "?"})`,
-    );
-    rows.forEach((row, i) => {
-      insert.run(
-        row.contactId,
-        row.ownerId,
-        BigInt(row.isGhost ?? 0),
-        BigInt(row.isArchived ?? 0),
-        BigInt(row.active ?? 1),
-        // Every vector zero leaves no scale, and zero is zero at any scale.
-        quantizing ? quantize(floats[i], scale ?? UNIT_SCALE) : row.embedding,
-      );
-      copied++;
-    });
-  })();
-
-  return { copied, dropped, dimension, element, scale };
-}
-
-for (const table of ["search_embeddings", "contact_embeddings"]) {
-  const started = performance.now();
-  const result = rebuildVecTable(table);
-  if (!result) continue;
-
-  log.info(
-    "Database",
-    `Rebuilt ${table} as ${result.element} with a partition key and status columns: ${result.copied} vectors copied at ${result.dimension} dim` +
-      `${result.scale !== null ? `, scale ${result.scale.toFixed(2)}` : ""}` +
-      `${result.dropped > 0 ? `, ${result.dropped} orphan(s) dropped` : ""} in ${(performance.now() - started).toFixed(0)}ms`,
-  );
-}
-
-// =============================================================================
-// 9k-b. vec0 status triggers
-// =============================================================================
-// The metadata columns are only useful while they agree with the contact row.
-// A vector is written once and then the contact is archived, restored,
-// trashed, un-trashed, merged away or promoted out of ghost state, and every
-// one of those happens somewhere other than the code that wrote the vector.
-//
-// So the database keeps them, not the application. This is the same argument
-// the FTS index already makes: a trigger is the only place that sees every
-// write, and a status column maintained by callers is a status column that is
-// wrong as soon as somebody adds a caller.
-//
-// Narrow on purpose. `AFTER UPDATE OF` fires only when one of the four
-// columns is in the SET list, and the WHEN clause drops the rest, so the
-// hourly relationship-score recompute over every contact pays almost nothing.
-// Measured on 10,000 contacts: 5,000 unrelated updates cost 2.9 ms with the
-// trigger against 2.6 ms without, and 5,000 real status changes cost 15.3 ms.
-// =============================================================================
-
-/** Keep both vec0 tables' status columns equal to the contact row. */
-export function installVecStatusTriggers(sqlite: Database.Database): void {
-  // Both bodies write the one row the trigger fired for, and the vec0 tables
-  // are derived from contacts and hold no other key.
-  // tenant-lint: allow derived table
-  sqlite.exec(
-    ["search_embeddings", "contact_embeddings"]
-      .map(
-        (table) => `
-    DROP TRIGGER IF EXISTS ${table}_status;
-    CREATE TRIGGER ${table}_status
-      AFTER UPDATE OF isGhost, isArchived, deletedAt, canonicalId ON contacts
-      WHEN NEW.isGhost IS NOT OLD.isGhost
-        OR NEW.isArchived IS NOT OLD.isArchived
-        OR NEW.deletedAt IS NOT OLD.deletedAt
-        OR NEW.canonicalId IS NOT OLD.canonicalId
-    BEGIN
-      UPDATE ${table}
-         SET isGhost = NEW.isGhost,
-             isArchived = COALESCE(NEW.isArchived, 0),
-             active = (NEW.deletedAt IS NULL AND NEW.canonicalId IS NULL)
-       WHERE contactId = NEW.id;
-    END;`,
-      )
-      .join("\n"),
-  );
-}
-
-installVecStatusTriggers(sqlite);
-
-// 9g. Embedding metadata: tracks when each contact was last embedded
-//     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS dedupe_embedding_meta (
-    contactId TEXT PRIMARY KEY,
-    embeddedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-`);
-
-/**
- * Settings the app no longer reads. The Mapbox geocoder is gone (Nominatim
- * is the one geocoder), and a key an admin stored before sat sealed in
- * `geo.mapboxKey` with nothing to read it and no control to remove it, and
- * rode along in every backup.
- */
-export const RETIRED_SETTING_KEYS = ["geo.mapboxKey"] as const;
-
-/** Delete the retired settings. Runs on every boot, a no-op once they are gone. */
-export function deleteRetiredSettings(database: typeof sqlite): number {
-  const remove = database.prepare(`DELETE FROM app_settings WHERE key = ?`);
-  let removed = 0;
-  for (const key of RETIRED_SETTING_KEYS) removed += remove.run(key).changes;
-  return removed;
-}
-
-const removedSettings = deleteRetiredSettings(sqlite);
-if (removedSettings > 0) {
-  log.info(
-    "Database",
-    `Removed ${removedSettings} retired setting(s) from app_settings`,
-  );
-}
-
-// =============================================================================
 // 9i. Ownership guard
 // =============================================================================
 // The columns themselves are added in §2z-4, which has to run before §3
@@ -1901,37 +399,13 @@ for (const table of OWNED_TABLES) {
 }
 
 // =============================================================================
-// 9h. Hot-path indexes
+// 9h. Planner statistics
 // =============================================================================
-// Every contact hydration joins ~10 child tables on contactId, and the
-// dashboard/zero-state/dedupe queries filter contacts on status columns.
-// Without these, each lookup is a full table scan (only PK autoindexes and a
-// few composite uniques existed). All idempotent via IF NOT EXISTS.
-// =============================================================================
-
-sqlite.exec(`
-  CREATE INDEX IF NOT EXISTS idx_contact_emails_contact ON contact_emails(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_phones_contact ON contact_phones(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_social_links_contact ON contact_social_links(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_education_contact ON contact_education(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_experience_contact ON contact_experience(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_sources_contact ON contact_sources(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contact_tags_contact ON contact_tags(contactId);
-  CREATE INDEX IF NOT EXISTS idx_interactions_contact ON interactions(contactId);
-  CREATE INDEX IF NOT EXISTS idx_interaction_mentions_contact ON interaction_mentions(contactId);
-  CREATE INDEX IF NOT EXISTS idx_list_members_contact ON list_members(contactId);
-  CREATE INDEX IF NOT EXISTS idx_contacts_canonical ON contacts(canonicalId);
-  CREATE INDEX IF NOT EXISTS idx_contacts_status ON contacts(isGhost, isArchived, canonicalId);
-  CREATE INDEX IF NOT EXISTS idx_contacts_last_contacted ON contacts(lastContactedAt);
-  CREATE INDEX IF NOT EXISTS idx_contacts_added ON contacts(addedAt);
-  CREATE INDEX IF NOT EXISTS idx_contacts_score ON contacts(relationshipScore);
-`);
-
-// Give the query planner statistics for the new indexes.
+// Give the query planner statistics for the indexes the migrations built.
 //
 // `PRAGMA optimize` only re-analyzes tables that
 // already have sqlite_stat1 rows, and nothing had ever run ANALYZE, so the
-// owner-first composite indexes above would have been invisible to the
+// owner-first composite indexes would have been invisible to the
 // planner. This runs once per boot and is cheap on a database this size.
 sqlite.exec("ANALYZE");
 sqlite.pragma("optimize");
@@ -1997,53 +471,3 @@ if (contactsMissingHash.length > 0) {
     `Backfilled phoneticHash for ${contactsMissingHash.length} contacts`,
   );
 }
-
-// =============================================================================
-// 11. Mention Rows Backfill
-// =============================================================================
-// The names a model found in a note went into `interactions.mentions` (JSON)
-// and never into `interaction_mentions`, so those people's timelines did not
-// show the note and the Pulse Inbox did not count a ghost's notes. The
-// extraction writes both now. This adds the rows that notes saved before it
-// lack. On later runs it finds nothing, so it is a no-op.
-//
-// A row needs a live contact of the note's own owner: a merged ghost moved
-// its rows to the contact it merged into, and a row for it would bring the
-// merged record back into the graph. The note's own contact gets no row.
-// Only an object element is read. `json_each` gives a string element as
-// plain text, and `json_extract` on it throws, which would stop the boot.
-// =============================================================================
-
-/** Add the missing rows, and return how many it added. */
-export function backfillMentionRows(): number {
-  return sqlite
-    .prepare(
-      // tenant-lint: allow boot migration
-      `
-  INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId)
-  SELECT DISTINCT i.id, c.id
-    FROM interactions i,
-         json_each(CASE WHEN json_valid(i.mentions) AND json_type(i.mentions) = 'array'
-                        THEN i.mentions ELSE '[]' END) m
-    JOIN contacts c
-      ON c.id = json_extract(CASE WHEN m.type = 'object' THEN m.value END, '$.contactId')
-     AND c.ownerId = i.ownerId
-   WHERE i.mentions IS NOT NULL
-     AND c.id <> i.contactId
-     AND c.deletedAt IS NULL
-     AND c.canonicalId IS NULL
-`,
-    )
-    .run().changes;
-}
-
-const mentionRowsAdded = backfillMentionRows();
-if (mentionRowsAdded > 0) {
-  log.info(
-    "Database",
-    `Backfilled ${mentionRowsAdded} mention rows from notes read by AI`,
-  );
-}
-
-installPassageIndex(sqlite, Number(vecTableWidth("search_embeddings")));
-installSearchVectorTriggers(sqlite);

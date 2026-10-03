@@ -150,6 +150,22 @@ export const userSettings = sqliteTable(
 );
 
 /**
+ * app_settings — instance-wide settings, one JSON value per key.
+ *
+ * Provider keys entered through the UI, custom OpenAI-compatible endpoints,
+ * capability assignments and cached model lists live here
+ * (server/services/settingsService.ts), and `search.vectorScale` for the
+ * int8 search vectors.
+ */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updatedAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
  * audit_log — who did what to whom.
  *
  * `actorUserId` is SET NULL rather than CASCADE: deleting an account must not
@@ -317,6 +333,12 @@ export const contacts = sqliteTable("contacts", {
   isArchived: integer("isArchived").default(0),
   relationshipScore: integer("relationshipScore").default(50),
   /**
+   * 1 when the relationship score must be computed again. A new contact
+   * starts dirty, and the `contacts_score_dirty` trigger marks an edited one.
+   * Writing it is not an edit (`SCORE_COLUMNS` in server/db/helpers.ts).
+   */
+  scoreDirty: integer("scoreDirty").notNull().default(1),
+  /**
    * A person chose to keep up with this contact. Only a tracked contact is
    * scored, appears on Pulse, or is tinted on the map. Off for everyone
    * until a person says so.
@@ -324,10 +346,16 @@ export const contacts = sqliteTable("contacts", {
   isTracked: integer("isTracked").notNull().default(0),
   /**
    * When `isTracked` last turned on, written by the `contacts_track_stamp_*`
-   * triggers in server/db.ts and cleared when it turns off. The clock for a
-   * tracked contact with no interaction yet.
+   * triggers (server/db/migrations/0001_baseline.ts) and cleared when it
+   * turns off. The clock for a tracked contact with no interaction yet.
    */
   trackedAt: text("trackedAt"),
+  /**
+   * Extra search words for this contact, indexed in `contacts_fts` and read
+   * by vector search. A derived cache: nothing in 2.0 writes it, and the
+   * triggers and the index queue clear it when the text under it changes.
+   */
+  searchExpansion: text("searchExpansion"),
   // Dedupe infrastructure
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
   deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.
@@ -756,6 +784,18 @@ export const dedupeMergeLog = sqliteTable("dedupe_merge_log", {
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
+/**
+ * dedupe_embedding_meta — when each contact's dedupe vector was computed.
+ *
+ * A contact whose `updatedAt` is newer than `embeddedAt` is embedded again.
+ */
+export const dedupeEmbeddingMeta = sqliteTable("dedupe_embedding_meta", {
+  contactId: text("contactId").primaryKey(),
+  embeddedAt: text("embeddedAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 // =============================================================================
 // Action Items (Proactive Follow-Up Tasks)
 // =============================================================================
@@ -879,6 +919,83 @@ export const searchIndexQueue = sqliteTable("search_index_queue", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   contactUpdatedAt: text("contactUpdatedAt"),
 });
+
+/**
+ * search_revision — a counter per owner that a trigger raises on every
+ * change to a searched contact column. The Ask cache keys on it.
+ */
+export const searchRevision = sqliteTable("search_revision", {
+  ownerId: text("ownerId").primaryKey(),
+  revision: integer("revision").notNull(),
+});
+
+/**
+ * notes_revision — the same counter for notes, raised on every insert, edit
+ * and delete of an interaction.
+ */
+export const notesRevision = sqliteTable("notes_revision", {
+  ownerId: text("ownerId").primaryKey(),
+  revision: integer("revision").notNull(),
+});
+
+/**
+ * imports — one durable record per bulk import, so a browser that lost its
+ * connection can reconnect to it, and a second request with the same id is
+ * a question rather than a second import.
+ */
+export const imports = sqliteTable(
+  "imports",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("running"),
+    phase: text("phase"),
+    message: text("message"),
+    total: integer("total").notNull().default(0),
+    processed: integer("processed").notNull().default(0),
+    imported: integer("imported").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    autoMerged: integer("autoMerged"),
+    needsReview: integer("needsReview"),
+    newUnique: integer("newUnique"),
+    error: text("error"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updatedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    completedAt: text("completedAt"),
+  },
+  (table) => [
+    index("idx_imports_owner_created").on(table.ownerId, table.createdAt),
+  ],
+);
+
+/**
+ * import_rows — one row per input row of an import. It keeps the row's
+ * payload only while the row is failed, so a retry can run it again.
+ */
+export const importRows = sqliteTable(
+  "import_rows",
+  {
+    importId: text("importId")
+      .notNull()
+      .references(() => imports.id, { onDelete: "cascade" }),
+    rowIndex: integer("rowIndex").notNull(),
+    status: text("status").notNull(),
+    contactId: text("contactId"),
+    name: text("name"),
+    error: text("error"),
+    payload: text("payload"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.importId, table.rowIndex] }),
+    index("idx_import_rows_status").on(table.importId, table.status),
+  ],
+);
 
 /**
  * score_snapshots — Weekly snapshots of relationship scores.
@@ -1101,3 +1218,42 @@ export const mapViews = sqliteTable(
     ),
   }),
 );
+
+/**
+ * geocode_cache — what the geocoder answered for each normalized location,
+ * found or not, shared by every account. A failure is asked again after
+ * FAILURE_TTL_DAYS (server/services/geocoding/cache.ts).
+ */
+export const geocodeCache = sqliteTable("geocode_cache", {
+  key: text("key").primaryKey(),
+  lat: real("lat"),
+  lng: real("lng"),
+  provider: text("provider").notNull(),
+  success: integer("success").notNull().default(0),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+// =============================================================================
+// The migration ledger
+// =============================================================================
+
+/**
+ * schema_migrations — one row per applied migration (`kind = 'migration'`,
+ * such as `0001_baseline`), and one per derived structure with the version
+ * it is built at (`kind = 'index'`, such as `contacts_fts`). Written by
+ * server/db/runner.ts and server/db/indexes.ts.
+ *
+ * Not here on purpose: `__drizzle_migrations`, which only the baseline
+ * migration writes, the FTS5 and vec0 virtual tables, and the shadow tables
+ * those create.
+ */
+export const schemaMigrations = sqliteTable("schema_migrations", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  version: integer("version").notNull().default(1),
+  appliedAt: text("appliedAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});

@@ -21,7 +21,6 @@
   "ignorePatterns": [
     "dist/",
     "node_modules/",
-    "drizzle/",
     "docs/",
     // Playwright's own output: the HTML report ships bundled JavaScript.
     "playwright-report/",

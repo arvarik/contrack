@@ -4,7 +4,7 @@ import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { emailText } from "../utils/emailText.ts";
 import { db, sqlite } from "../db.ts";
-import * as schema from "../../src/db/schema.ts";
+import * as schema from "../db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 import {

@@ -2,17 +2,19 @@
 // Integration Tests — the tenancy schema of a new database
 // =============================================================================
 // A new database gets its ownership columns, triggers and composite indexes
-// from the boot code in server/db.ts. This file reads what the first boot left
-// behind, then boots again against the same file.
+// from the baseline migration (server/db/migrations/0001_baseline.ts). This
+// file reads what the first boot left behind, then boots again against the
+// same file.
 //
-// The second boot matters because every start runs the whole of server/db.ts.
-// A step that is not idempotent shows up as a changed schema, a second local
-// owner, or a version that moved.
+// The second boot matters because every start runs the migration runner,
+// every index installer and the steps server/db.ts runs on every boot. A step
+// that is not idempotent shows up as a changed schema, a second local owner,
+// a migration applied twice, or a version that moved.
 // =============================================================================
 
 import { describe, it, expect, afterAll, vi } from "vitest";
 import type Database from "better-sqlite3";
-import { sqlite } from "../../server/db.ts";
+import { sqlite, TENANCY_SCHEMA_VERSION } from "../../server/db.ts";
 import { FTS_SCHEMA_VERSION } from "../../server/services/search/ftsIndex.ts";
 import { verify } from "../../scripts/tenancy-verify.ts";
 
@@ -27,12 +29,23 @@ function schemaOf(db: Database.Database): string {
   );
 }
 
-function tenancyVersionOf(db: Database.Database): string {
+/** Every row of the ledger: each migration, and each index with its version. */
+function ledgerOf(db: Database.Database): unknown[] {
+  return db
+    .prepare(
+      "SELECT id, kind, version, appliedAt FROM schema_migrations ORDER BY id",
+    )
+    .all();
+}
+
+function versionOf(db: Database.Database, id: string): number | undefined {
   return (
     db
-      .prepare("SELECT value FROM app_settings WHERE key = 'schema.tenancy'")
-      .get() as { value: string }
-  ).value;
+      .prepare(
+        "SELECT version FROM schema_migrations WHERE id = ? AND kind = 'index'",
+      )
+      .get(id) as { version: number } | undefined
+  )?.version;
 }
 
 function userCount(db: Database.Database): number {
@@ -88,7 +101,7 @@ describe("a new database", () => {
 
 describe("booting the same database again", () => {
   const schemaBefore = schemaOf(sqlite);
-  const versionBefore = tenancyVersionOf(sqlite);
+  const ledgerBefore = ledgerOf(sqlite);
   let second: Database.Database;
 
   afterAll(() => {
@@ -105,10 +118,10 @@ describe("booting the same database again", () => {
   });
 
   it("keeps the tenancy version and the search schema version", () => {
-    expect(tenancyVersionOf(second)).toBe(versionBefore);
-    expect(second.pragma("user_version", { simple: true })).toBe(
-      FTS_SCHEMA_VERSION,
-    );
+    // Every row as it was, so no migration ran again and no version moved.
+    expect(ledgerOf(second)).toEqual(ledgerBefore);
+    expect(versionOf(second, "tenancy")).toBe(TENANCY_SCHEMA_VERSION);
+    expect(versionOf(second, "contacts_fts")).toBe(FTS_SCHEMA_VERSION);
   });
 
   it("creates no second local owner", () => {

@@ -1,6 +1,6 @@
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { sqlite, db } from "../../db.ts";
-import * as schema from "../../../src/db/schema.ts";
+import * as schema from "../../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";

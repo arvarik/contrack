@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
-import * as schema from "../../src/db/schema.ts";
+import * as schema from "../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import {
   contactRepo,

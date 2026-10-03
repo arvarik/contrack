@@ -2,17 +2,8 @@ import { sqlite } from "../../db.ts";
 
 export const FAILURE_TTL_DAYS = 7;
 
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS geocode_cache (
-    key       TEXT PRIMARY KEY,
-    lat       REAL,
-    lng       REAL,
-    provider  TEXT NOT NULL,
-    success   INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  );
-`);
-
+// The baseline migration creates geocode_cache, and server/db.ts has run it
+// by the time this module loads.
 const cacheStmts = {
   get: sqlite.prepare(
     `SELECT lat, lng, provider, success, createdAt FROM geocode_cache WHERE key = ?`,

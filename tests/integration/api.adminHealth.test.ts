@@ -21,6 +21,7 @@ const { sqlite, OWNED_TABLES, TENANCY_SCHEMA_VERSION } =
   await import("../../server/db.ts");
 const { FTS_SCHEMA_VERSION } =
   await import("../../server/services/search/ftsIndex.ts");
+const { MIGRATIONS } = await import("../../server/db/migrations/index.ts");
 const { dedupeQueue } =
   await import("../../server/services/dedupe/jobQueue.ts");
 const { scopeForOwnerId } = await import("../../server/tenancy/scope.ts");
@@ -95,6 +96,9 @@ describe("what it says", () => {
         tenancyExpected: number;
         fts: number;
         ftsExpected: number;
+        migration: string | null;
+        migrationExpected: string;
+        indexes: { id: string; version: number; expected: number }[];
         vec: string;
         upToDate: boolean;
       };
@@ -104,6 +108,16 @@ describe("what it says", () => {
     expect(body.schema.tenancyExpected).toBe(TENANCY_SCHEMA_VERSION);
     expect(body.schema.fts).toBe(FTS_SCHEMA_VERSION);
     expect(body.schema.ftsExpected).toBe(FTS_SCHEMA_VERSION);
+    const last = MIGRATIONS[MIGRATIONS.length - 1].id;
+    expect(body.schema.migration).toBe(last);
+    expect(body.schema.migrationExpected).toBe(last);
+    // Every derived structure, each at the version this build builds.
+    expect(body.schema.indexes.map((index) => index.id)).toEqual(
+      expect.arrayContaining(["tenancy", "contacts_fts", "search_embeddings"]),
+    );
+    for (const index of body.schema.indexes) {
+      expect(index.version, index.id).toBe(index.expected);
+    }
     // The one version that comes from a native extension rather than a row we
     // wrote. Anything is acceptable except nothing.
     expect(body.schema.vec).toMatch(/^v?\d+\.\d+\.\d+/);

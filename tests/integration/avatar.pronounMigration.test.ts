@@ -2,8 +2,13 @@
 // Integration: the boot pass that gives old default avatars a pronoun look
 // =============================================================================
 // Contacts saved before the default face read pronouns carry a URL with no
-// `look`. The boot pass in server/db.ts §2a-1 adds one, and must leave every
-// face somebody chose exactly as it was.
+// `look`. The pass in the baseline migration (§2a-1) adds one, and must leave
+// every face somebody chose exactly as it was.
+//
+// The baseline runs once per database. Each boot below forgets its row in
+// schema_migrations first, so the boot runs the baseline over contacts that
+// were saved before it, the way the first boot of this code runs it over a
+// database from d67c8a9.
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -12,6 +17,11 @@ import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
 
 let first: Database.Database;
 let second: Database.Database;
+
+/** Make the next boot run the baseline migration again. */
+function forgetBaseline(db: Database.Database): void {
+  db.prepare("DELETE FROM schema_migrations WHERE id = '0001_baseline'").run();
+}
 
 const rows = [
   {
@@ -83,6 +93,7 @@ beforeAll(async () => {
       }[]
     ).map((r) => [r.id, r.updatedAt]),
   );
+  forgetBaseline(first);
   first.close();
 
   // A fresh module registry, so server/db.ts boots again over the same file.
@@ -136,6 +147,7 @@ describe("boot: default avatars take the contact's pronouns", () => {
     const before = second
       .prepare("SELECT id, avatarUrl, updatedAt FROM contacts ORDER BY id")
       .all();
+    forgetBaseline(second);
     second.close();
     vi.resetModules();
     ({ sqlite: second } = await import("../../server/db.ts"));

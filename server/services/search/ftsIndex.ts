@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { readIndexVersion, recordIndexVersion } from "../../db/runner.ts";
 import { log } from "../../utils/logger.ts";
 import { installInteractionSearchIndex } from "./interactionFtsIndex.ts";
 
@@ -11,17 +12,36 @@ export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) =
 // tags and interests their own column, `tags`, and adds the digit forms of
 // each phone number to `extras`. Version 6 adds `addresses`, every address a
 // contact has, at the lowest rank (`WEIGHTS` in lexical.ts). The gate below
-// drops and rebuilds both tables when the stored user_version differs, so the
+// drops and rebuilds both tables when the recorded version differs, so the
 // first boot after upgrade re-indexes every active contact and every note.
 // Measured at 233 ms for 50,000 contacts.
 /**
- * The FTS schema version, kept in `PRAGMA user_version`.
+ * The FTS schema version, recorded as the `contacts_fts` row of
+ * schema_migrations (server/db/indexes.ts).
  *
  * Exported so the admin health panel can report what this database is on
  * without opening it, which is the whole point of the panel.
  */
 export const FTS_SCHEMA_VERSION = 6;
 const VERSION = FTS_SCHEMA_VERSION;
+
+/** The schema_migrations row of both FTS tables. */
+const INDEX_ID = "contacts_fts";
+
+/**
+ * The version this database's FTS tables were built at.
+ *
+ * The `contacts_fts` row of schema_migrations. Before that row exists, on the
+ * first boot of the ledger over an older database, the one fallback:
+ * `PRAGMA user_version`, where every build before the ledger kept it. A new
+ * database reads 0 there and builds the tables.
+ */
+function builtVersion(sqlite: Database.Database): number {
+  return (
+    readIndexVersion(sqlite, INDEX_ID) ??
+    Number(sqlite.pragma("user_version", { simple: true }))
+  );
+}
 
 /**
  * Every contacts_fts column, in order. Position 0 is the UNINDEXED contactId.
@@ -183,7 +203,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
   let rebuilt = false;
   let noteRows = 0;
   sqlite.transaction(() => {
-    const version = sqlite.pragma("user_version", { simple: true });
+    const version = builtVersion(sqlite);
     rebuilt = version !== VERSION;
     if (rebuilt) sqlite.exec("DROP TABLE IF EXISTS contacts_fts");
     sqlite.exec(`
@@ -312,7 +332,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
       AND NOT EXISTS (SELECT 1 FROM contacts_fts f WHERE f.rowid = c.rowid)`);
     sqlite.exec(`${insertMissingRows};`);
     noteRows = installInteractionSearchIndex(sqlite, rebuilt);
-    sqlite.pragma(`user_version = ${VERSION}`);
+    recordIndexVersion(sqlite, INDEX_ID, VERSION);
   })();
 
   if (rebuilt) {
