@@ -16,9 +16,10 @@ import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import {
-  preferredEnrichmentStrategy,
-  validateEnrichmentStrategy,
-} from "../services/aiSearch/strategies/index.ts";
+  chooseResearch,
+  researchChoiceSchema,
+  STRATEGY_CHOICE,
+} from "../services/research/index.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
 import { AppError, RateLimitedError } from "../utils/AppError.ts";
@@ -36,26 +37,31 @@ export const aiSearchRouter = Router();
 // second enrichment with 429 while the provider had capacity to spare, and
 // the provider's own 429 already pauses a model in the adapter. One batch
 // runs at a time, and a second start by the same account joins it.
-const aiSearchBodySchema = z.object({
-  contactIds: z
-    .array(z.string().trim().min(1).max(100))
-    .min(1)
-    .max(100)
-    .refine(
-      (ids) => new Set(ids).size === ids.length,
-      "Contact IDs must be unique",
-    ),
-  /**
-   * How to search: the research model's own search ("two-pass", or
-   * "single-pass" on OpenAI and Anthropic), SearXNG alone ("searxng"), or
-   * both ("combined"). When absent, the account's Search with choice.
-   */
-  strategy: z
-    .enum(["two-pass", "single-pass", "searxng", "combined"])
-    .optional(),
-  /** How thoroughly to research each contact. Default "standard". */
-  depth: researchDepthSchema.optional(),
-});
+const aiSearchBodySchema = researchChoiceSchema
+  .extend({
+    contactIds: z
+      .array(z.string().trim().min(1).max(100))
+      .min(1)
+      .max(100)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Contact IDs must be unique",
+      ),
+    /**
+     * How to search, in the app's words: the research model's own search
+     * ("two-pass"), SearXNG alone ("searxng"), or both ("combined"). It
+     * names a technique and a web search (`STRATEGY_CHOICE`), so a body
+     * names it or `technique` and `webSearch`, not both. When all are
+     * absent, the account's Search with choice.
+     */
+    strategy: z.enum(["two-pass", "searxng", "combined"]).optional(),
+    /** How thoroughly to research each contact. Default "standard". */
+    depth: researchDepthSchema.optional(),
+  })
+  .refine(
+    (body) => !(body.strategy && (body.technique || body.webSearch)),
+    "Name a strategy, or a technique and a web search, not both",
+  );
 
 // =============================================================================
 // POST /ai-search — Start a new batch
@@ -66,14 +72,14 @@ aiSearchRouter.post(
   validateBody(aiSearchBodySchema),
   asyncHandler(async (req, res, next) => {
     const scope = scopeOf(req);
-    const { contactIds, strategy: requestedStrategy, depth } = req.body;
+    const { contactIds, strategy, technique, webSearch, depth } =
+      req.body as z.infer<typeof aiSearchBodySchema>;
 
-    // A start that names no strategy searches the way the account chose.
-    const strategy = requestedStrategy
-      ? validateEnrichmentStrategy(requestedStrategy)
-      : preferredEnrichmentStrategy(
-          getPreferences(scope.ownerId).researchSource,
-        );
+    // A start that names nothing searches the way the account chose.
+    const choice = chooseResearch(
+      strategy ? STRATEGY_CHOICE[strategy] : { technique, webSearch },
+      getPreferences(scope.ownerId).researchSource,
+    );
 
     // The global run lock: another account's batch holds it. This account's
     // own running batch does not refuse; the new contacts join it below.
@@ -109,7 +115,7 @@ aiSearchRouter.post(
         check.appendTo,
         contacts,
         depth,
-        strategy,
+        choice,
       );
       if (!joined)
         throw new AppError(
@@ -124,7 +130,7 @@ aiSearchRouter.post(
     }
 
     // Create batch
-    const batch = jobQueue.createBatch(scope, contacts, strategy, depth);
+    const batch = jobQueue.createBatch(scope, contacts, choice, depth);
 
     // Kick off processing async (fire-and-forget — don't await)
     jobQueue.processBatch(batch.id).catch((err) => {

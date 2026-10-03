@@ -1,13 +1,13 @@
 // =============================================================================
-// Unit: pageText — what the SearXNG strategy reads from a fetched page
+// Unit: pageText — what research reads from a fetched page
 // =============================================================================
-// The strategy parses with cheerio/slim (htmlparser2). Unlike the full build
+// Research parses with cheerio/slim (htmlparser2). Unlike the full build
 // (parse5), it adds no <body> to a fragment or a text/plain answer, so these
 // cases pin the fallback that reads the whole document instead.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
-import { pageText } from "../../../../server/services/aiSearch/strategies/searxng.ts";
+import { pageText } from "../../../../server/services/research/pages.ts";
 
 describe("pageText", () => {
   it("reads the body without scripts or page chrome", () => {

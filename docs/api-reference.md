@@ -866,12 +866,12 @@ and AI off for you, it answers `403 AI_OFF_FOR_ACCOUNT`. Success answers
 Research finds public pages about a contact and fills empty fields. It needs
 an AI provider for research. See [Research contacts](ai.md#research-contacts).
 
-| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                                                              | Access    |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `POST /api/ai-search`                 | Start a batch: `contactIds` (1 to 100, unique), `strategy` (`two-pass`, `single-pass`, `searxng`, or `combined` for the research model's search and SearXNG's at once, and your **Search with** choice when absent) and `depth` (`standard` or `deep`). Answers `{ batchId, jobCount }`. A start while your batch runs joins it, with `"appended": true`. | your data |
-| `GET /api/ai-search/status`           | Poll a batch: `?batchId=`. `404` when the batch is gone.                                                                                                                                                                                                                                                                                                  | your data |
-| `GET /api/ai-search/stream`           | The batch as SSE: `?batchId=`. It closes when the batch stops.                                                                                                                                                                                                                                                                                            | your data |
-| `POST /api/ai-search/:batchId/cancel` | Stop a batch. Queued jobs never start. Answers the batch.                                                                                                                                                                                                                                                                                                 | your data |
+| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                           | Access    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| `POST /api/ai-search`                 | Start a batch: `contactIds` (1 to 100, unique), `strategy` (`two-pass`, `searxng`, or `combined` for the research model's search and SearXNG's at once), or `technique` (`provider-search`, `search-and-read` or `combined`) and `webSearch` (`searxng`), not both, and your **Search with** choice when absent, and `depth` (`standard` or `deep`). Answers `{ batchId, jobCount }`. A start while your batch runs joins it, with `"appended": true`. | your data |
+| `GET /api/ai-search/status`           | Poll a batch: `?batchId=`. `404` when the batch is gone.                                                                                                                                                                                                                                                                                                                                                                                               | your data |
+| `GET /api/ai-search/stream`           | The batch as SSE: `?batchId=`. It closes when the batch stops.                                                                                                                                                                                                                                                                                                                                                                                         | your data |
+| `POST /api/ai-search/:batchId/cancel` | Stop a batch. Queued jobs never start. Answers the batch.                                                                                                                                                                                                                                                                                                                                                                                              | your data |
 
 One batch runs at a time on the instance, one contact at a time. Another
 account's batch answers `429 RATE_LIMITED`. A batch lives in memory, so a
@@ -879,14 +879,20 @@ restart loses its progress. Finished contact updates stay.
 
 The batch `status` is `processing`, `complete` or `cancelled`. Each job is
 `queued`, `searching`, `merging`, `success`, `error` or `cancelled`, and a
-finished job has an `outcome`.
+finished job has an `outcome`, and names its `technique`, its `webSearch` and
+the same choice as a `strategy`.
 
 `POST /api/contacts/:id/enrich` researches one contact and answers
 `{ success, fieldsUpdated, outcome, latencyMs, models, tokenCount }`:
 
 - `outcome` is `added`, `nothing-new` or `no-public-info`.
 - The run has 240 seconds at Standard and 290 seconds at Deep.
-- It searches the way your **Search with** choice (`researchSource`) says.
+- It searches the way your **Search with** choice (`researchSource`) says,
+  unless the body names a `technique` (`provider-search`, `search-and-read`
+  or `combined`) or a `webSearch` (`searxng`).
+- `400 VALIDATION_ERROR` for a technique or a web search that does not
+  exist. `503` for one that is not set up, such as
+  `503 SEARXNG_NOT_CONFIGURED`.
 - `409` when research on the contact is already running, or the contact
   changed. `502 AI_GROUNDING_MISSING` when no search cited a page.
   `502 AI_NO_ANSWER` when no search answered. `503` with no research provider.

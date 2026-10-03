@@ -1,38 +1,24 @@
 // =============================================================================
-// AI Search — SearXNG Strategy (self-hosted search)
+// Research — the search-and-read technique
 // =============================================================================
-// Replaces provider-native search grounding with a self-hosted SearXNG
-// metasearch instance. It runs the searches itself, so research does not
-// wait on a model's choice to search, and it works with a purely local
-// stack (an Ollama or vLLM chat model with SearXNG).
+// A web search service, such as a self-hosted SearXNG, runs the searches,
+// and a model reads the pages. Research then does not wait on a model's
+// choice to search, and it works with a purely local stack (an Ollama or vLLM
+// chat model with SearXNG).
 //
-// Pass 1 — Retrieval: query SearXNG's JSON API with the searches the provider
-//          research would run, then fetch the result pages that name the
-//          person and reduce them to text. No model involved.
-//          Reading: the "deep" model reads the pages and the other results'
-//          snippets into fact lines, with the search pass's rules and form
-//          (`buildReadingPrompt`), so each fact keeps its page.
-// Pass 2 — Extraction: the quick model, or the deep one on a stack without
-//          one, reads the fact lines into the output schema.
+// Retrieval: run the searches the provider research would run through the
+//            request's web search (`WebSearch`), then read the result pages
+//            that name the person (`pages.ts`). No model involved.
+// Reading:   the "deep" model reads the pages and the other results'
+//            snippets into fact lines, with the search pass's rules and form
+//            (`buildReadingPrompt`), so each fact keeps its page.
 //
-// `searxngEvidence` runs pass 1, and the combined strategy runs it beside the
-// research model's own search.
-//
-// Web pages are hostile input by construction: every fetch goes through the
-// shared SSRF guards, responses are size-capped, and the text is fenced with
-// wrapUntrusted() before it ever reaches a prompt.
+// The extraction then reads the lines into fields (`extract.ts`). The
+// combined technique runs this beside the research model's own search.
 // =============================================================================
 
-import * as cheerio from "cheerio/slim";
-import { generateFor } from "../../../ai/gateway.ts";
-import { isResearchOff, resolveCapability } from "../../../ai/capabilities.ts";
 import { toCitations } from "../../../ai/citations.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
-import type {
-  AISearchStrategy,
-  AISearchResult,
-  ResearchOptions,
-} from "../types.ts";
 import {
   buildReadingPrompt,
   formalName,
@@ -44,16 +30,12 @@ import {
   parseFindings,
   searchName,
   suggestedSearches,
-} from "../promptTemplate.ts";
+} from "../../aiSearch/promptTemplate.ts";
 import { recordInvocation } from "../../aiStatsService.ts";
-import { safeFetch, readBodyCapped } from "../../../utils/urlSafety.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";
 import { AppError } from "../../../utils/AppError.ts";
-import {
-  DEFAULT_RESEARCH_DEPTH,
-  type ResearchDepth,
-} from "../../../../shared/researchDepth.ts";
+import type { ResearchDepth } from "../../../../shared/researchDepth.ts";
 import {
   siteOf,
   sourceForSite,
@@ -62,104 +44,30 @@ import {
 import {
   CHARS_PER_TOKEN,
   contextWindowFor,
-  createMeter,
-  extractFacts,
-  foundResult,
-  noMatchResult,
-  type Meter,
   type SourceOutcome,
-} from "./evidence.ts";
+} from "../evidence.ts";
+import { textOf } from "../pages.ts";
+import { webSearchCode } from "../webSearch.ts";
+import type {
+  ResearchRequest,
+  Technique,
+  TechniqueContext,
+  WebResult,
+} from "../types.ts";
 
 /** Searches run, and result pages read in full, at each depth. */
-const SEARXNG_LIMITS: Record<
-  ResearchDepth,
-  { queries: number; pages: number }
-> = {
+const READ_LIMITS: Record<ResearchDepth, { queries: number; pages: number }> = {
   standard: { queries: 3, pages: 5 },
   deep: { queries: 6, pages: 10 },
 };
-/** Characters of extracted text kept per page. */
-const MAX_PAGE_CHARS = 6_000;
 /** Results read by their snippet alone, beside the pages read in full. */
 const MAX_SNIPPETS = 20;
 
-interface SearxngResult {
-  title?: string;
-  url?: string;
-  content?: string;
-}
-
-import { getSearxngUrl } from "../../integrationSettings.ts";
-export { getSearxngUrl };
-
-/** Query SearXNG's JSON API. */
-async function searxngSearch(
-  baseUrl: string,
-  query: string,
-  signal?: AbortSignal,
-): Promise<SearxngResult[]> {
-  const url = new URL(`${baseUrl}/search`);
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("safesearch", "0");
-
-  // The SearXNG instance itself is operator-configured (often a private
-  // address), so it deliberately bypasses the public-URL guard that applies
-  // to the *result* pages below.
-  const response = await fetch(url, {
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-      : AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw new AppError(
-      `SearXNG returned ${response.status} ${response.statusText}`,
-      502,
-      { code: "SEARXNG_ERROR" },
-    );
-  }
-  const body = JSON.parse(await readBodyCapped(response, signal)) as {
-    results?: SearxngResult[];
-  };
-  return body.results ?? [];
-}
-
-/** Fetch a result page and reduce it to readable text. */
-async function fetchPageText(
-  pageUrl: string,
-  signal?: AbortSignal,
-): Promise<string | null> {
-  try {
-    const { response } = await safeFetch(pageUrl, { timeoutMs: 8_000, signal });
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!/text\/html|text\/plain|application\/xhtml/i.test(contentType)) {
-      return null;
-    }
-    return pageText(await readBodyCapped(response, signal));
-  } catch (err) {
-    log.debug("SearxngStrategy", `Skipped ${pageUrl}: ${getErrorMessage(err)}`);
-    return null;
-  }
-}
-
 /**
- * The readable text of a fetched page, without scripts, styles and page
- * chrome, cut to MAX_PAGE_CHARS.
- *
- * cheerio/slim parses with htmlparser2, which adds no <body> to a fragment
- * or a text/plain answer the way a browser's parser does. So the whole
- * document is read when it has no body element, with the head and title
- * removed first.
+ * The most results one search asks for. SearXNG answers one page, of fewer
+ * than this, so it never cuts one.
  */
-export function pageText(html: string): string | null {
-  const $ = cheerio.load(html);
-  $("script, style, nav, footer, header, noscript, svg, head, title").remove();
-  const body = $("body");
-  const raw = body.length > 0 ? body.text() : $.root().text();
-  const text = raw.replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, MAX_PAGE_CHARS) : null;
-}
+const RESULTS_PER_SEARCH = 50;
 
 /** The first result of each list, then the second of each, and so on. */
 function interleave<T>(lists: readonly T[][]): T[] {
@@ -189,10 +97,8 @@ function personNames(contact: HydratedContact): string[][] {
 }
 
 /** True when a result's title or snippet has every word of one of the names. */
-function namesPerson(result: SearxngResult, names: string[][]): boolean {
-  const words = new Set(
-    wordsOf(`${result.title ?? ""} ${result.content ?? ""}`),
-  );
+function namesPerson(result: WebResult, names: string[][]): boolean {
+  const words = new Set(wordsOf(`${result.title} ${result.snippet}`));
   return names.some((name) => name.every((word) => words.has(word)));
 }
 
@@ -213,17 +119,17 @@ const TRIES_PER_PAGE = 3;
  *   not be read, and how many candidates were tried.
  */
 async function readInFull(
-  candidates: readonly SearxngResult[],
+  candidates: readonly WebResult[],
   want: number,
   signal: AbortSignal | undefined,
-  counts: (result: SearxngResult, text: string) => boolean,
+  counts: (result: WebResult, text: string) => boolean,
 ): Promise<{
-  read: Array<{ result: SearxngResult; text: string }>;
-  unread: SearxngResult[];
+  read: Array<{ result: WebResult; text: string }>;
+  unread: WebResult[];
   tried: number;
 }> {
-  const read: Array<{ result: SearxngResult; text: string }> = [];
-  const unread: SearxngResult[] = [];
+  const read: Array<{ result: WebResult; text: string }> = [];
+  const unread: WebResult[] = [];
   const limit = Math.min(candidates.length, want * TRIES_PER_PAGE);
   let tried = 0;
   while (read.length < want && tried < limit) {
@@ -233,7 +139,7 @@ async function readInFull(
     );
     tried += round.length;
     const texts = await Promise.all(
-      round.map((result) => fetchPageText(result.url!, signal)),
+      round.map((result) => textOf(result, signal)),
     );
     signal?.throwIfAborted();
     round.forEach((result, index) => {
@@ -348,12 +254,12 @@ const MIN_PAGE_SHARE = 1_500;
  *   too, and what still does not fit is cut from the end.
  */
 function documentsFor(
-  read: ReadonlyArray<{ result: SearxngResult; text: string }>,
-  snippets: readonly SearxngResult[],
+  read: ReadonlyArray<{ result: WebResult; text: string }>,
+  snippets: readonly WebResult[],
   size: ReadingSize,
 ): string[] {
   const pages = read.map((page) => block(page.result, page.text));
-  const shown = snippets.map((result) => block(result, result.content));
+  const shown = snippets.map((result) => block(result, result.snippet));
   if (size.maxParts > 1) return [...shown, ...pages];
   const length = (texts: string[]) =>
     texts.reduce((sum, text) => sum + text.length + PAGE_SEPARATOR.length, 0);
@@ -416,9 +322,9 @@ function linkedInHandle(url: string): string | null {
  * from one (2026-10-02). Without a profile in the records, all are kept.
  */
 function withoutOtherProfiles(
-  results: SearxngResult[],
+  results: WebResult[],
   contact: HydratedContact,
-): SearxngResult[] {
+): WebResult[] {
   const own = new Set(
     (contact.socialLinks ?? []).flatMap(
       (link) => linkedInHandle(link.url) ?? [],
@@ -426,7 +332,7 @@ function withoutOtherProfiles(
   );
   if (own.size === 0) return results;
   return results.filter((result) => {
-    const handle = linkedInHandle(result.url ?? "");
+    const handle = linkedInHandle(result.url);
     return !handle || own.has(handle);
   });
 }
@@ -483,26 +389,26 @@ export function recordDetails(contact: HydratedContact): string[] {
  * reading the same results, did not (2026-10-02).
  */
 function sharesDetail(
-  result: SearxngResult,
+  result: WebResult,
   details: readonly string[],
   text = "",
 ): boolean {
   if (details.length === 0) return true;
   const said =
-    `${result.url ?? ""} ${result.title ?? ""} ${result.content ?? ""} ${text}`.toLowerCase();
+    `${result.url} ${result.title} ${result.snippet} ${text}`.toLowerCase();
   return details.some((detail) => said.includes(detail));
 }
 
 /** One page or snippet as the reading ask sees it. */
-const block = (result: SearxngResult, text: string | null | undefined) =>
-  `SOURCE: ${result.url}\nTITLE: ${result.title ?? ""}\n${(text ?? "").trim()}`;
+const block = (result: WebResult, text: string) =>
+  `SOURCE: ${result.url}\nTITLE: ${result.title}\n${text.trim()}`;
 
 /**
- * Pass 1 with SearXNG: search, read the pages, and write fact lines.
+ * Search with the request's web search, read the pages, and write fact lines.
  *
  * It never throws for what it found. It says what came of it: fact lines
- * with their pages, a no-match after SearXNG returned results, or the error
- * that explains why there is neither. Only a cancelled job throws.
+ * with their pages, a no-match after the search returned results, or the
+ * error that explains why there is neither. Only a run that stops throws.
  *
  * - The searches are the provider research's own (`suggestedSearches`): 3 at
  *   Standard, 6 at Deep, all at once.
@@ -511,35 +417,23 @@ const block = (result: SearxngResult, text: string | null | undefined) =>
  *   read: up to 5 pages in full at Standard and 10 at Deep, and up to 20
  *   more by their snippet. When none names the person, the reading sees the
  *   first snippets and says whether any is about them.
- * - SearXNG's searches are not billed, so the meter counts the reading's
- *   tokens and no search.
+ * - The web search's searches are not the model's, so the meter counts the
+ *   reading's tokens and no search. SearXNG's are not billed.
  */
-export async function searxngEvidence(
-  contact: HydratedContact,
-  signal: AbortSignal | undefined,
-  options: ResearchOptions,
-  meter: Meter,
+async function searchAndReadPages(
+  request: ResearchRequest,
+  ctx: TechniqueContext,
 ): Promise<SourceOutcome> {
+  const { contact, signal } = request;
   const failed = (error: unknown): SourceOutcome => ({
     kind: "failed",
     error,
   });
   try {
-    // Read at each contact, so a batch that started before an admin turned
-    // research off searches no further.
-    if (isResearchOff())
-      return failed(
-        new AppError("Contact research is off", 503, { code: "RESEARCH_OFF" }),
-      );
-    const baseUrl = getSearxngUrl();
-    if (!baseUrl)
-      return failed(
-        new AppError("No SearXNG instance is configured", 503, {
-          code: "SEARXNG_NOT_CONFIGURED",
-        }),
-      );
+    const web = ctx.webSearch;
+    if (!web) return failed(new AppError("No web search was chosen", 503));
     const startMs = Date.now();
-    const limits = SEARXNG_LIMITS[options.depth ?? DEFAULT_RESEARCH_DEPTH];
+    const limits = READ_LIMITS[request.depth];
 
     // ── Retrieval (no model) ────────────────────────────────────────────
     const queries = suggestedSearches(contact).slice(0, limits.queries);
@@ -547,12 +441,15 @@ export async function searxngEvidence(
     const lists = await Promise.all(
       queries.map(async (query) => {
         try {
-          return await searxngSearch(baseUrl, query, signal);
+          return await web.search(query, {
+            limit: RESULTS_PER_SEARCH,
+            signal,
+          });
         } catch (err) {
           signal?.throwIfAborted();
           errors.push(err);
           log.warn(
-            "SearxngStrategy",
+            "SearchAndRead",
             `Search failed for "${query}": ${getErrorMessage(err)}`,
           );
           return [];
@@ -561,30 +458,21 @@ export async function searxngEvidence(
     );
     const seen = new Set<string>();
     const found = interleave(lists).filter((result) => {
-      if (!result.url || !/^https?:\/\//i.test(result.url)) return false;
+      if (!/^https?:\/\//i.test(result.url)) return false;
       if (seen.has(result.url)) return false;
       seen.add(result.url);
       return true;
     });
     const results = withoutOtherProfiles(found, contact);
-    // Every search failed: SearXNG's own answer says why, such as the 403 of
-    // an instance whose settings.yml leaves json out of search.formats.
+    // Every search failed: the service's own answer says why.
     if (errors.length > 0 && errors.length === queries.length)
-      return failed(
-        errors[0] instanceof AppError
-          ? errors[0]
-          : new AppError(
-              `SearXNG did not answer: ${getErrorMessage(errors[0])}`,
-              502,
-              { code: "SEARXNG_ERROR" },
-            ),
-      );
+      return failed(errors[0]);
     if (results.length === 0)
       return failed(
         new AppError(
-          "SearXNG returned no usable results for this contact",
+          `${web.label} returned no usable results for this contact`,
           502,
-          { code: "SEARXNG_NO_RESULTS" },
+          { code: webSearchCode(web, "NO_RESULTS") },
         ),
       );
     const names = personNames(contact);
@@ -603,23 +491,23 @@ export async function searxngEvidence(
       naming.length > 0 ? [...unread, ...naming.slice(tried)] : results
     )
       .filter(
-        (result) => result.content?.trim() && sharesDetail(result, details),
+        (result) => result.snippet.trim() && sharesDetail(result, details),
       )
       .slice(0, MAX_SNIPPETS);
     if (read.length === 0 && snippets.length === 0) {
       log.info(
-        "SearxngStrategy",
+        "SearchAndRead",
         `${contact.name}: ${results.length} results from ${queries.length} searches, none shares a detail with the records`,
       );
       return {
         kind: "no-match",
         queries,
-        models: ["searxng"],
+        models: [web.id],
         text: `${NO_MATCHING_PAGES}: no result shares a detail with the records.`,
       };
     }
     log.info(
-      "SearxngStrategy",
+      "SearchAndRead",
       `${contact.name}: ${results.length} results from ${queries.length} searches, ${found.length - results.length} other people's LinkedIn profiles left out, ${naming.length} name the person; read ${read.length} of ${tried} pages tried in ${Date.now() - startMs}ms`,
     );
 
@@ -633,7 +521,7 @@ export async function searxngEvidence(
     for (const part of parts) {
       const readStart = Date.now();
       try {
-        const answer = await generateFor("deep", {
+        const answer = await ctx.generate("deep", {
           prompt: buildReadingPrompt(contact, part),
           responseFormat: "text",
           signal,
@@ -641,14 +529,14 @@ export async function searxngEvidence(
           maxOutputTokens: size.outputTokens,
         });
         signal?.throwIfAborted();
-        meter.count(answer);
+        ctx.meter.count(answer);
         recordInvocation({
           operation: "aiSearchReading",
           model: answer.model,
           tokenCount: answer.tokenCount,
           latencyMs: Date.now() - readStart,
           cached: false,
-          description: `SearXNG reading: ${contact.name}`,
+          description: `${web.label} reading: ${contact.name}`,
         });
         answers.push(answer.text.trim());
         readModel = answer.model;
@@ -661,20 +549,20 @@ export async function searxngEvidence(
     if (answers.length === 0) return failed(readErrors[0]);
     if (parts.length > 1)
       log.info(
-        "SearxngStrategy",
+        "SearchAndRead",
         `${contact.name}: read in ${parts.length} parts of up to ${size.partChars} characters; ${readErrors.length} failed`,
       );
     const text = answers.join("\n");
-    const models = ["searxng", readModel];
+    const models = [web.id, readModel];
     const lines = parseFindings(text);
     if (lines.length === 0) {
       if (answers.some(isNoMatch))
         return { kind: "no-match", queries, models, text };
       return failed(
         new AppError(
-          "Research read SearXNG's results and reported no facts. No contact fields changed. Try again.",
+          `Research read ${web.label}'s results and reported no facts. No contact fields changed. Try again.`,
           502,
-          { code: "SEARXNG_NO_FACTS" },
+          { code: webSearchCode(web, "NO_FACTS") },
         ),
       );
     }
@@ -683,8 +571,8 @@ export async function searxngEvidence(
     // its site.
     const readPages = [...read.map((page) => page.result), ...snippets].map(
       (result) => ({
-        url: result.url!,
-        title: result.title?.trim() || result.url!,
+        url: result.url,
+        title: result.title.trim() || result.url,
         firstSeenAt: "",
       }),
     );
@@ -719,37 +607,14 @@ export async function searxngEvidence(
   }
 }
 
-export class SearxngStrategy implements AISearchStrategy {
-  readonly name = "searxng";
-
-  async execute(
-    contact: HydratedContact,
-    _prompt: string,
-    signal?: AbortSignal,
-    options: ResearchOptions = {},
-  ): Promise<AISearchResult> {
-    signal?.throwIfAborted();
-    const startMs = Date.now();
-    const depth = options.depth ?? DEFAULT_RESEARCH_DEPTH;
-    const meter = createMeter();
-    const found = await searxngEvidence(
-      contact,
-      signal,
-      { ...options, depth },
-      meter,
-    );
-    if (found.kind === "failed") throw found.error;
-    if (found.kind === "no-match")
-      return noMatchResult([found], meter, depth, startMs);
-    // A stack with SearXNG and one local model may have no quick model.
-    const read = await extractFacts(
-      contact,
-      found.facts,
-      signal,
-      meter,
-      resolveCapability("quick") ? "quick" : "deep",
-      "SearxngStrategy",
-    );
-    return foundResult([found], read, meter, depth, startMs);
-  }
-}
+export const searchAndRead: Technique = {
+  name: "search-and-read",
+  needs: () => [
+    { what: "web-search" },
+    {
+      what: "deep",
+      message: "Configure a deep AI model to read the search results.",
+    },
+  ],
+  run: searchAndReadPages,
+};

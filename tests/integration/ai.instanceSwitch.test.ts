@@ -183,9 +183,10 @@ describe("auto-enrichment", () => {
   it("starts research for a new contact while AI is on, and none while it is off", async () => {
     const { jobQueue } =
       await import("../../server/services/aiSearch/jobQueue.ts");
-    const strat =
-      await import("../../server/services/aiSearch/strategies/index.ts");
-    vi.spyOn(strat, "preferredEnrichmentStrategy").mockReturnValue("two-pass");
+    const strat = await import("../../server/services/research/index.ts");
+    vi.spyOn(strat, "chooseResearch").mockReturnValue({
+      technique: "provider-search",
+    });
     const batchSpy = vi.spyOn(jobQueue, "createBatch");
     const appendSpy = vi.spyOn(jobQueue, "appendToBatch");
     vi.spyOn(jobQueue, "processBatch").mockResolvedValue(

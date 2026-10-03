@@ -95,7 +95,7 @@ import {
 } from "../../server/services/dedupe/embeddings.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
-import * as strategies from "../../server/services/aiSearch/strategies/index.ts";
+import * as researchLayer from "../../server/services/research/index.ts";
 import { createToken } from "../../server/services/apiTokenService.ts";
 import { getUserById } from "../../server/services/authService.ts";
 import { __resetMcpRateLimit } from "../../server/routes/mcp.ts";
@@ -356,9 +356,9 @@ describe("contact embeddings with a hosted model", () => {
 
 describe("Enrich new contacts automatically", () => {
   it("researches a contact a person adds, and not one an MCP client or a sync adds", async () => {
-    vi.spyOn(strategies, "preferredEnrichmentStrategy").mockReturnValue(
-      "two-pass",
-    );
+    vi.spyOn(researchLayer, "chooseResearch").mockReturnValue({
+      technique: "provider-search",
+    });
     const createBatch = vi.spyOn(jobQueue, "createBatch");
     vi.spyOn(jobQueue, "processBatch").mockResolvedValue(
       undefined as unknown as void,

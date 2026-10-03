@@ -31,7 +31,7 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 | Folder                 | Holds                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------- |
 | `server/routes/`       | Thin Express routers. Validate with zod, delegate, wrap in `asyncHandler`                         |
-| `server/services/`     | Business logic, including `search/`, `dedupe/`, `aiSearch/` (research), `geocoding/`              |
+| `server/services/`     | Business logic, including `search/`, `dedupe/`, `research/`, `aiSearch/`, `geocoding/`            |
 | `server/repositories/` | Contact hydration and query helpers                                                               |
 | `server/ai/`           | Capabilities, gateway, work queue, adapters, prompt safety                                        |
 | `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                            |

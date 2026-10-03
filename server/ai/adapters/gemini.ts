@@ -690,7 +690,8 @@ export class GeminiAdapter implements AIProvider {
     if (options.enableSearchGrounding) {
       // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
       // responseSchema. Must use text output for grounded retrieval.
-      // The TwoPassStrategy in aiSearch handles schema extraction separately.
+      // Contact research extracts into the schema in a call of its own
+      // (server/services/research/extract.ts).
       config.tools = [{ googleSearch: {} }];
       config.responseMimeType = "text/plain";
     } else if (options.responseFormat === "json") {

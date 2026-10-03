@@ -2,8 +2,6 @@ import {
   enrichmentContact,
   lockEnrichment,
 } from "../services/aiSearch/contactSnapshot.ts";
-import { withTimeout } from "../ai/resilience.ts";
-import { preferredEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { requireContact } from "../services/contactGuard.ts";
 import { idsSchema } from "../utils/validators.ts";
@@ -35,13 +33,17 @@ import { generateAndStoreBulkEmbeddings } from "../services/dedupe/embeddings.ts
 import { importIdSchema } from "./imports.ts";
 import type { NewContactPayload } from "../repositories/types.ts";
 import { providerIdFor } from "../ai/gateway.ts";
-import { getStrategy } from "../services/aiSearch/strategies/index.ts";
-import { buildSearchPrompt } from "../services/aiSearch/promptTemplate.ts";
 import {
   mergeSearchResult,
   researchHistory,
 } from "../services/aiSearch/mergeEngine.ts";
-import { RESEARCH_TIMEOUT_MS } from "../services/aiSearch/jobQueue.ts";
+import {
+  chooseResearch,
+  research,
+  researchChoiceSchema,
+  RESEARCH_TIMEOUT_MS,
+  toAISearchResult,
+} from "../services/research/index.ts";
 import {
   DEFAULT_RESEARCH_DEPTH,
   researchDepthSchema,
@@ -617,16 +619,16 @@ router.post(
 /**
  * POST /api/contacts/:id/enrich
  *
- * Single-contact enrichment using the TwoPassStrategy (grounding-based web research).
- * Reuses the same pipeline as batch AI Search but for an individual contact.
+ * Single-contact enrichment, through the research layer that runs the batch
+ * jobs too, for an individual contact.
  *
  * Quota-aware: Returns 429 if grounding RPD is exhausted.
  * Returns 503 if AI provider is not configured.
  */
-/** The single enrichment's body: nothing, or the depth. */
+/** The single enrichment's body: nothing, or the depth, the technique and the web search. */
 const enrichBodySchema = z.preprocess(
   (body) => body ?? {},
-  z.object({ depth: researchDepthSchema.optional() }),
+  researchChoiceSchema.extend({ depth: researchDepthSchema.optional() }),
 );
 
 router.post(
@@ -642,7 +644,8 @@ router.post(
     // the repository so the check is visible at the call that spends money.
     contactRepo.requireOwned(scope, id);
 
-    const strategyName = preferredEnrichmentStrategy(
+    const choice = chooseResearch(
+      { technique: req.body.technique, webSearch: req.body.webSearch },
       getPreferences(scope.ownerId).researchSource,
     );
     const contact = enrichmentContact(scope, id);
@@ -654,31 +657,25 @@ router.post(
     res.on("close", onClose);
     try {
       const startMs = Date.now();
-      // F-02: Use provider-aware strategy instead of hardcoded 'two-pass'
-      // Strategy follows whichever provider serves the *research* capability,
-      // not the legacy default provider.
-      const researchProvider = providerIdFor("research");
-      const strategy = getStrategy(strategyName);
-      const history = researchHistory(contact);
-      const prompt = buildSearchPrompt(contact, history);
-
+      // The research provider is named for the log only: the technique
+      // decides which models it calls.
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} (${depth}) for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
+        `[${rid}] POST /api/contacts/${id}/enrich — starting ${choice.technique} (${depth}) for "${contact.name}" (provider: ${providerIdFor("research") ?? "none"})`,
       );
 
-      // The allowance a batch job has at this depth, under Node's own
-      // request timeout of 300 s (server.ts sets no shorter one).
-      const timeoutMs = Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000);
-      const result = await withTimeout(
-        (signal) =>
-          strategy.execute(contact, prompt, signal, {
-            depth,
-            history,
-            timeoutMs,
-          }),
-        timeoutMs,
-        controller.signal,
+      const result = toAISearchResult(
+        await research({
+          scope,
+          contact,
+          depth,
+          history: researchHistory(contact),
+          signal: controller.signal,
+          ...choice,
+          // The allowance a batch job has at this depth, under Node's own
+          // request timeout of 300 s (server.ts sets no shorter one).
+          timeoutMs: Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000),
+        }),
       );
       controller.signal.throwIfAborted();
       const fieldsUpdated = mergeSearchResult(

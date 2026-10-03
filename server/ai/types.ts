@@ -55,10 +55,10 @@ export interface AIGenerateOptions {
 
   /**
    * Override the default model selection for this specific call.
-   * Used by strategies that need to target specific models for each pass
-   * (e.g., TwoPassStrategy uses grounding-capable models for Pass 1 and
-   * cheaper models for Pass 2). When set, the adapter skips its routing
-   * engine and uses this model directly.
+   * Used by callers that need to target specific models for each pass
+   * (e.g., contact research uses grounding-capable models for its search
+   * and cheaper models for the extraction). When set, the adapter skips its
+   * routing engine and uses this model directly.
    */
   model?: string;
 

@@ -19,12 +19,11 @@ import {
   isAnyProviderConfigured,
 } from "../../server/ai/gateway.ts";
 import { sqlite } from "../../server/db.ts";
-import { makeTestApp } from "./helpers.ts";
+import { makeTestApp, researchWith } from "./helpers.ts";
 import { enrichmentContact } from "../../server/services/aiSearch/contactSnapshot.ts";
 import { mergeSearchResult } from "../../server/services/aiSearch/mergeEngine.ts";
 import { aiSearchOutputSchema } from "../../server/services/aiSearch/promptTemplate.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
-import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPass.ts";
 import { interactionService } from "../../server/services/interactionService.ts";
 import { dashboardService } from "../../server/services/dashboardService.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
@@ -175,7 +174,10 @@ describe("batch research lifecycle", () => {
   it("does not repeat paid research for an empty grounding result", async () => {
     vi.mocked(generateFor).mockResolvedValue(reply(""));
     await expect(
-      new TwoPassStrategy().execute(enrichmentContact(scope(), id), "test"),
+      researchWith("provider-search", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toThrow("No public information");
     expect(generateFor).toHaveBeenCalledTimes(1);
   });
@@ -234,7 +236,10 @@ describe("batch research lifecycle", () => {
       .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
       .mockRejectedValue(new Error("Network 500"));
     await expect(
-      new TwoPassStrategy().execute(enrichmentContact(scope(), id), "test"),
+      researchWith("provider-search", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toThrow("Network 500");
     expect(generateFor).toHaveBeenCalledTimes(3);
   });
@@ -266,11 +271,9 @@ describe("batch research lifecycle", () => {
   });
   it("does not retry the complete workflow after a failed provider stage", async () => {
     vi.mocked(generateFor).mockRejectedValue(new Error("Network 500"));
-    const batch = jobQueue.createBatch(
-      scope(),
-      [{ id, name: "Test Person" }],
-      "two-pass",
-    );
+    const batch = jobQueue.createBatch(scope(), [{ id, name: "Test Person" }], {
+      technique: "provider-search",
+    });
     await jobQueue.processBatch(batch.id);
     expect(batch.status).toBe("complete");
     expect(batch.jobs[0].status).toBe("error");
@@ -293,7 +296,7 @@ describe("batch research lifecycle", () => {
         { id, name: "Test Person" },
         { id: nextId, name: "Second Person" },
       ],
-      "two-pass",
+      { technique: "provider-search" },
     );
     const running = jobQueue.processBatch(batch.id);
     await vi.waitFor(() => expect(generateFor).toHaveBeenCalledTimes(1));

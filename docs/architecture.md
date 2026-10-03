@@ -56,7 +56,7 @@ flowchart LR
 | `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
 | `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
 | `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `aiSearch/` (contact research) and `geocoding/`.                                                 |
+| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                |
 | `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
 | `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
 | `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                 |
@@ -374,7 +374,8 @@ from its committed baseline, up or down.
 
 Every AI feature is optional. The AI layer is `server/ai/`. The features live
 in `server/ai/services/` (contact parsing, briefings and summaries, mentions,
-search) and `server/services/aiSearch/` (contact research).
+search), `server/services/research/` (contact research) and
+`server/services/aiSearch/` (the research batch queue and the merge).
 
 - **Capabilities.** Code asks for a kind of work, not a model
   (`server/ai/capabilities.ts`). `quick` covers parsing, mentions, search
@@ -394,6 +395,22 @@ search) and `server/services/aiSearch/` (contact research).
   rebuilds them. A new model is a new adapter, and search does not change.
   `scripts/benchmark-search.ts --embedder <model>` compares a local model
   with the bundled one.
+- **Research.** Every contact research request runs through one function,
+  `research()` (`server/services/research/`). The batch queue, the
+  one-contact route and auto-enrichment call it, and no other code runs a
+  technique. A request names a technique and a web search, or gets the
+  account's **Search with** choice. A technique finds facts and returns
+  evidence, never fields: `provider-search` (the research model's own
+  search), `search-and-read` (a web search, whose pages the deep model
+  reads) or `combined` (both at once). One extraction reads the evidence
+  into fields, and every technique's result has the same fields. A web
+  search (`WebSearch`) is a port too, and SearXNG is its only adapter. Both
+  ports have a registry and a `set*` seam for tests. Each technique's
+  `needs()` says what a start needs set up. A start with an unknown name
+  answers 400, and one with a missing need answers 503, before anything is
+  spent. Before every model call and every web search, a run reads the
+  instance switch, the account switch and research **Off**. A refusal ends
+  the run for that contact.
 - **Resolution.** At call time a capability takes a pin from Settings, then an
   environment pin (`AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`,
   `AI_EMBEDDINGS_MODEL`), then Auto: `AI_PROVIDER` first, then a fixed order.
@@ -437,8 +454,8 @@ search) and `server/services/aiSearch/` (contact research).
   `requireAiAllowed` then refuses the AI routes, except Ask Contrack, which
   answers from local data. The work that runs outside a route reads
   `aiAllowedForUser` itself: mention detection, `.eml` summaries, connector
-  summaries, auto-enrichment, the MCP search, and hosted embeddings
-  (`mayEmbedContactsFor`).
+  summaries, auto-enrichment, contact research before each of its calls, the
+  MCP search, and hosted embeddings (`mayEmbedContactsFor`).
 
 For the settings a person sees, see [Models for each task](ai.md#models-for-each-task).
 
