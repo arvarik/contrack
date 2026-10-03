@@ -98,7 +98,9 @@ test("a search result opens a contact dialog that returns focus to the result", 
   await input.fill("who knows engines");
   await input.press("Enter");
 
-  const result = page.getByRole("button", { name: /Ada Lovelace/ });
+  // Anchored, so the History pane's "Run again: Ada Lovelace", left by an
+  // earlier spec on the shared instance, is never the button this presses.
+  const result = page.getByRole("button", { name: /^Ada Lovelace/ });
   await expect(result).toBeVisible();
   await result.focus();
   await page.keyboard.press("Enter");
