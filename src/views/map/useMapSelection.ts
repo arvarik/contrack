@@ -103,7 +103,7 @@ export function useMapSelection({
   // Clear selection on Escape when no modal or menu is open
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedIds.size > 0) {
+      if (e.key === "Escape" && !e.defaultPrevented && selectedIds.size > 0) {
         // If a modal or menu is open, let the modal handle Escape first
         if (document.querySelector('[role="dialog"], [role="menu"]')) return;
         e.preventDefault();

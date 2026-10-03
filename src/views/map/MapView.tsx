@@ -15,6 +15,8 @@
  * @module views/map/MapView
  */
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -23,7 +25,12 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { useMatch, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useMatch,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { cubicBezier } from "motion/react";
 import { CalendarPlus, ZoomIn, X } from "lucide-react";
@@ -47,6 +54,7 @@ import {
 } from "../../components/layout/SidePanel";
 import { EASE } from "../../lib/motion";
 import { ContactMap } from "./ContactMap";
+import type { CardAction } from "./MapHoverCard";
 import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
 import {
   HEAT_END_ZOOM,
@@ -73,6 +81,7 @@ import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { isValidLatLng, type MapContact } from "../../../shared/geo";
+import { parseFacetQuery } from "../../../shared/facetQuery";
 import { useMapSelection } from "./useMapSelection";
 import { useBulkActions } from "../../components/bulk/useBulkActions";
 import { BulkActionToolbar } from "../contact-list/BulkActionToolbar";
@@ -83,6 +92,11 @@ import { QuickInteractionModal } from "../../components/QuickInteractionModal";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
 import { cn } from "../../lib/utils";
+
+// The dialog's chunk loads the first time a card asks for it.
+const AdjustPinModal = lazy(() =>
+  import("./AdjustPinModal").then((m) => ({ default: m.AdjustPinModal })),
+);
 
 /**
  * The insights panel's own curve, so the map's pan and the panel's slide
@@ -101,6 +115,7 @@ const placedBounds = (people: readonly MapContact[]) =>
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { search } = useLocation();
   const { preferences, setPreference } = usePreferences();
 
   const urlViewId = searchParams.get("view");
@@ -121,11 +136,7 @@ export const MapView = () => {
       setLayerState(preferences.mapLayer);
     }
   }, [preferences.mapLayer, urlLayer]);
-  const [activeViewId, setActiveViewId] = useState<string | null>(urlViewId);
-
-  const filter = useMapFilter(contacts, {
-    onClearActiveView: () => setActiveViewId(null),
-  });
+  const filter = useMapFilter(contacts);
   const navigate = useNavigate();
   const openMatch = useMatch("/map/contact/:id");
   const openId = openMatch?.params.id ?? null;
@@ -138,7 +149,12 @@ export const MapView = () => {
   const isDesktopPaneOpen = preferences.mapPaneOpen ?? true;
   const isPaneOpen = isWide ? isDesktopPaneOpen : mobilePaneOpen;
 
-  const { data: mapViews = [] } = useMapViews();
+  const { data: loadedViews } = useMapViews();
+  const mapViews = useMemo(() => loadedViews ?? [], [loadedViews]);
+  // The view in the URL, while the map shows only it: a stale id names none.
+  const activeViewId =
+    (!filter.overdueOnly && mapViews.find((v) => v.id === urlViewId)?.id) ||
+    null;
   const createMapView = useCreateMapView();
   const updateMapView = useUpdateMapView();
   const deleteMapView = useDeleteMapView();
@@ -151,7 +167,6 @@ export const MapView = () => {
   const handleLayerChange = useCallback(
     (nextLayer: MapLayer) => {
       setLayerState(nextLayer);
-      setActiveViewId(null);
       setPreference("mapLayer", nextLayer);
       setSearchParams(
         (prev) => {
@@ -172,13 +187,13 @@ export const MapView = () => {
    * is one point. Reduced motion jumps.
    */
   const fitTo = useCallback(
-    (bounds: MapBounds, pointZoom: number) => {
+    (bounds: MapBounds, pointZoom: number, instant = false) => {
       if (!map) return;
       const [west, south, east, north] = bounds;
       const padding = paddingFor(
         measureInsets(map.getContainer(), { contactOpen: openId !== null }),
       );
-      const reduced = prefersReducedMotion();
+      const reduced = instant || prefersReducedMotion();
       if (west === east && south === north) {
         const point = { center: [west, south] as [number, number], padding };
         if (reduced) map.jumpTo({ ...point, zoom: pointZoom });
@@ -196,53 +211,43 @@ export const MapView = () => {
     [map, openId],
   );
 
-  const handleSelectView = useCallback(
-    (view: MapViewType) => {
-      // A view is a query and a layer, and the overdue filter is neither.
-      // Cleared first: it clears the active view, which is set next.
-      filter.setOverdueOnly(false);
-      setActiveViewId(view.id);
-      filter.setRawInput(view.query, { syncUrl: false });
+  // A view is a query, a layer and a box. The overdue filter is none of them.
+  const { setOverdueOnly } = filter;
+  const applyView = useCallback(
+    (view: MapViewType, instant = false) => {
+      setOverdueOnly(false);
       setLayerState(view.layer);
       setPreference("mapLayer", view.layer);
-
-      setSearchParams({ view: view.id }, { replace: true });
-      fitTo(view.bounds, 10);
+      setSearchParams(
+        view.query ? { view: view.id, q: view.query } : { view: view.id },
+        { replace: true },
+      );
+      fitTo(view.bounds, 10, instant);
     },
-    [filter, fitTo, setPreference, setSearchParams],
+    [setOverdueOnly, fitTo, setPreference, setSearchParams],
   );
 
-  // Initial load ?view= resolution:
-  const hasAppliedInitialView = useRef(false);
+  // The page opened on a `?view=` link: show that view, or drop a stale id.
+  const linkedViewId = useRef(urlViewId);
   useEffect(() => {
-    if (
-      !urlViewId ||
-      hasAppliedInitialView.current ||
-      mapViews.length === 0 ||
-      !map
-    )
-      return;
-    const matching = mapViews.find((v) => v.id === urlViewId);
-    if (matching) {
-      hasAppliedInitialView.current = true;
-      setActiveViewId(matching.id);
-      filter.setRawInput(matching.query, { syncUrl: false });
-      setLayerState(matching.layer);
-      setPreference("mapLayer", matching.layer);
-
-      const [west, south, east, north] = matching.bounds;
-      const padding = paddingFor(
-        measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+    const id = linkedViewId.current;
+    if (!id || !loadedViews || !map) return;
+    linkedViewId.current = null;
+    const view = loadedViews.find((v) => v.id === id);
+    if (view) {
+      applyView(view, true);
+    } else {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("view");
+          return next;
+        },
+        { replace: true },
       );
-      map.fitBounds(
-        [
-          [west, south],
-          [east, north],
-        ],
-        { padding, duration: 0, maxZoom: 14 },
-      );
+      toast.info("That saved view no longer exists");
     }
-  }, [urlViewId, mapViews, map, filter, openId, setPreference]);
+  }, [loadedViews, map, applyView, setSearchParams]);
 
   const handleSaveView = useCallback(
     async (name: string) => {
@@ -279,8 +284,14 @@ export const MapView = () => {
         bounds,
       });
       toast.success(`View "${created.name}" saved`);
-      setActiveViewId(created.id);
-      setSearchParams({ view: created.id }, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("view", created.id);
+          return next;
+        },
+        { replace: true },
+      );
     },
     [map, createMapView, filter.rawInput, layer, setSearchParams],
   );
@@ -300,21 +311,10 @@ export const MapView = () => {
     async (view: MapViewType) => {
       await deleteMapView.mutateAsync(view.id);
       toast.success(`View "${view.name}" deleted`);
-      if (activeViewId === view.id) {
-        setActiveViewId(null);
-        setSearchParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete("view");
-            if (filter.rawInput.trim()) next.set("q", filter.rawInput.trim());
-            if (layer !== "pins") next.set("layer", layer);
-            return next;
-          },
-          { replace: true },
-        );
-      }
+      // The page stays as the view left it, with its layer in the URL.
+      if (urlViewId === view.id) handleLayerChange(layer);
     },
-    [deleteMapView, activeViewId, setSearchParams, filter.rawInput, layer],
+    [deleteMapView, urlViewId, handleLayerChange, layer],
   );
 
   // "In view" is what a person can see: the map less the open insights
@@ -401,6 +401,23 @@ export const MapView = () => {
   const [isSingleAddToListOpen, setIsSingleAddToListOpen] = useState(false);
 
   const bulkAddToList = useBulkAddToList();
+  const [adjustId, setAdjustId] = useState<string | null>(null);
+  const adjusting = adjustId && contacts.find((c) => c.id === adjustId);
+
+  const handleCardAction = useCallback(
+    (action: Exclude<CardAction, "open">, id: string) => {
+      if (action === "log") setQuickNoteContactId(id);
+      else if (action === "adjust") setAdjustId(id);
+      else if (action === "list") {
+        setSingleListContactId(id);
+        setIsSingleAddToListOpen(true);
+      } else {
+        setSingleFollowUpContactId(id);
+        setIsFollowUpOpen(true);
+      }
+    },
+    [],
+  );
 
   const handleAddToListSubmit = useCallback(
     (listId: string) => {
@@ -457,11 +474,8 @@ export const MapView = () => {
 
   const handleApplyFacet = useCallback(
     (facetQuery: string) => {
-      const trimmed = facetQuery.trim();
-      const current = filter.rawInput.trim();
-      if (!current.includes(trimmed)) {
-        filter.setRawInput(current ? `${current} ${trimmed} ` : `${trimmed} `);
-      }
+      const [facet] = parseFacetQuery(facetQuery).filters;
+      if (facet) filter.addFacet(facet);
     },
     [filter],
   );
@@ -573,13 +587,14 @@ export const MapView = () => {
   }, [openId]);
   const cramped = room !== null && room < MIN_OPEN_PX;
 
+  // The filter, the layer and the view stay in the URL while a contact is open.
   const openContact = useCallback(
-    (id: string) => navigate(`/map/contact/${id}`),
-    [navigate],
+    (id: string) => navigate({ pathname: `/map/contact/${id}`, search }),
+    [navigate, search],
   );
   const closeContact = useCallback(() => {
-    if (openId) navigate("/map");
-  }, [navigate, openId]);
+    if (openId) navigate({ pathname: "/map", search });
+  }, [navigate, openId, search]);
 
   /**
    * Escape closes the contact.
@@ -589,11 +604,11 @@ export const MapView = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (document.querySelector('[role="dialog"], [role="menu"]')) return;
-      navigate("/map");
+      closeContact();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, openId]);
+  }, [closeContact, openId]);
 
   /**
    * Single-key shortcuts: "/", "F", "I".
@@ -675,20 +690,12 @@ export const MapView = () => {
         />
         <MapToolbar
           map={map}
-          rawInput={filter.rawInput}
-          setRawInput={filter.setRawInput}
-          tokenizer={filter.tokenizer}
-          effectiveFilters={filter.effectiveFilters}
-          totalCount={filter.totalCount}
-          matchCount={filter.matchCount}
-          hasActiveFilter={filter.hasActiveFilter}
-          resolveNearFilters={filter.resolveNearFilters}
-          clearFilters={filter.clearFilters}
+          filter={filter}
           layer={layer}
           onLayerChange={handleLayerChange}
           views={mapViews}
           activeViewId={activeViewId}
-          onSelectView={handleSelectView}
+          onSelectView={applyView}
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onStartRename={(v) => setRenameTargetView(v)}
           onDeleteView={handleDeleteView}
@@ -717,6 +724,7 @@ export const MapView = () => {
         {!cramped && selection.selectedCount === 0 && (
           <div
             ref={measureLine}
+            data-map-chrome="bottom"
             className={cn(
               "absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex items-start max-w-[calc(100%-2rem)] pointer-events-none",
               isPaneOpen && "lg:max-w-[calc(100%-22rem)]",
@@ -747,15 +755,7 @@ export const MapView = () => {
           rememberView={!urlViewId}
           reuse
           layer={layer}
-          onLogNote={(id) => setQuickNoteContactId(id)}
-          onAddToList={(id) => {
-            setSingleListContactId(id);
-            setIsSingleAddToListOpen(true);
-          }}
-          onFollowUp={(id) => {
-            setSingleFollowUpContactId(id);
-            setIsFollowUpOpen(true);
-          }}
+          onCardAction={handleCardAction}
         />
 
         {/* Map selection floating toolbars */}
@@ -764,6 +764,7 @@ export const MapView = () => {
             <div
               role="toolbar"
               aria-label="Map selection actions"
+              data-map-chrome="bottom"
               className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
               style={{ bottom: bulkRoom + 8 }}
             >
@@ -861,6 +862,16 @@ export const MapView = () => {
           currentQuery={filter.rawInput}
           currentLayer={layer}
         />
+
+        {adjusting && (
+          <Suspense fallback={null}>
+            <AdjustPinModal
+              contact={adjusting}
+              isOpen
+              onClose={() => setAdjustId(null)}
+            />
+          </Suspense>
+        )}
 
         <RenameViewModal
           view={renameTargetView}

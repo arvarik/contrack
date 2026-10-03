@@ -90,6 +90,8 @@ vi.mock("../../../../src/views/map/useClusterFeatures", () => ({
 
 // Imported after the mocks, which is what vi.mock hoisting expects.
 const { ContactMap } = await import("../../../../src/views/map/ContactMap");
+const { GRACE_MS, OPEN_MS } =
+  await import("../../../../src/views/map/useHoverCard");
 
 const person = (id: string, name: string, company: string): MapContact => ({
   id,
@@ -219,38 +221,74 @@ describe("ContactMap", () => {
     expect(onSelect).toHaveBeenCalledWith("c2");
   });
 
-  it("shows the card for the pin under the pointer", () => {
+  it("opens a pin's card once the pointer rests, and keeps it while the pointer moves in", () => {
+    vi.useFakeTimers();
     visible.mockReturnValue([point(PEOPLE[0])]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
     const pin = screen.getByRole("button", {
       name: "Ada Lovelace, Babbage & Co",
     });
-    expect(screen.queryByText("London, UK")).toBeNull();
     fireEvent.pointerEnter(pin, { pointerType: "mouse" });
-    expect(screen.getByText("London, UK")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(OPEN_MS));
+    const card = screen.getByRole("dialog", { name: "Ada Lovelace" });
+
     fireEvent.pointerLeave(pin, { pointerType: "mouse" });
-    expect(screen.queryByText("London, UK")).toBeNull();
+    fireEvent.pointerEnter(card);
+    act(() => vi.advanceTimersByTime(GRACE_MS));
+    expect(
+      screen.getByRole("button", { name: "Log interaction" }),
+    ).toBeTruthy();
+    fireEvent.pointerLeave(card);
+    act(() => vi.advanceTimersByTime(GRACE_MS));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    vi.useRealTimers();
   });
 
-  it("opens no card for a finger, which cannot hover", () => {
+  // A finger cannot hover: the first tap shows the card, the second opens.
+  it("shows a finger's card first, and opens the contact on the second tap", () => {
+    const onSelect = vi.fn();
+    visible.mockReturnValue([point(PEOPLE[0])]);
+    render(<ContactMap contacts={PEOPLE} onSelect={onSelect} />);
+    const pin = screen.getByRole("button", {
+      name: "Ada Lovelace, Babbage & Co",
+    });
+    const tap = () => {
+      fireEvent.pointerDown(pin, { pointerType: "touch" });
+      fireEvent.focus(pin);
+      fireEvent.pointerUp(pin, { pointerType: "touch" });
+      fireEvent.click(pin);
+    };
+    tap();
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeTruthy();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(onSelect).not.toHaveBeenCalled();
+    tap();
+    expect(onSelect).toHaveBeenCalledWith("c1");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes a pinned card on Escape, and the pin's tooltip stays shut", () => {
+    vi.useFakeTimers();
     visible.mockReturnValue([point(PEOPLE[0])]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
     const pin = screen.getByRole("button", {
       name: "Ada Lovelace, Babbage & Co",
     });
-    // A tap fires the enter and never the leave. The card would open under
-    // the contact the tap opens and still be there when the contact closes.
-    fireEvent.pointerEnter(pin, { pointerType: "touch" });
-    expect(screen.queryByText("London, UK")).toBeNull();
-    // Some browsers focus a tapped button. That focus is the tap's, not a
-    // keyboard's, and opens nothing.
-    fireEvent.pointerDown(pin, { pointerType: "touch" });
-    fireEvent.focus(pin);
-    expect(screen.queryByText("London, UK")).toBeNull();
-    fireEvent.blur(pin);
-    // Focus from a keyboard still opens it, on any device.
-    fireEvent.focus(pin);
-    expect(screen.getByText("London, UK")).toBeTruthy();
+    act(() => pin.focus());
+    act(() => vi.advanceTimersByTime(OPEN_MS));
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(pin, { key: " " });
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(
+      "Open contact",
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.activeElement).toBe(pin);
+    act(() => vi.advanceTimersByTime(OPEN_MS * 2));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    vi.useRealTimers();
   });
 
   it("says it is still loading while the contacts load", () => {

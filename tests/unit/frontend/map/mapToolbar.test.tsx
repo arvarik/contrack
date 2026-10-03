@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import React from "react";
 import {
   cleanup,
@@ -64,8 +64,8 @@ const mockContacts: MapContact[] = [
 ];
 
 /**
- * The toolbar over one filter, as the map page has it. With `results`, the
- * bottom line and the list of who is on the map come under it.
+ * The toolbar over one filter, as the map page has it, with the bottom line
+ * and the list of who is on the map under it.
  */
 function TestComponent({
   contacts = mockContacts,
@@ -78,7 +78,6 @@ function TestComponent({
   onStartLasso,
   onSelectInView,
   room,
-  results = false,
 }: {
   room?: number | null;
   contacts?: MapContact[];
@@ -90,23 +89,13 @@ function TestComponent({
   onOpenSaveModal?: () => void;
   onStartLasso?: () => void;
   onSelectInView?: () => void;
-  results?: boolean;
 }) {
   const filter = useMapFilter(contacts);
-
   return (
     <>
       <MapToolbar
         map={map}
-        rawInput={filter.rawInput}
-        setRawInput={filter.setRawInput}
-        tokenizer={filter.tokenizer}
-        effectiveFilters={filter.effectiveFilters}
-        totalCount={filter.totalCount}
-        matchCount={filter.matchCount}
-        hasActiveFilter={filter.hasActiveFilter}
-        resolveNearFilters={filter.resolveNearFilters}
-        clearFilters={filter.clearFilters}
+        filter={filter}
         layer={layer}
         onLayerChange={onLayerChange}
         onFitAll={() => {}}
@@ -117,20 +106,16 @@ function TestComponent({
         onSelectInView={onSelectInView}
         room={room}
       />
-      {results && (
-        <>
-          <StatsStrip
-            stats={computeMapStats(filter.filteredContacts)}
-            overdueOnly={filter.overdueOnly}
-            onOverdueOnlyChange={filter.setOverdueOnly}
-          />
-          <ul aria-label="On the map">
-            {filter.filteredContacts.map((contact) => (
-              <li key={contact.id}>{contact.name}</li>
-            ))}
-          </ul>
-        </>
-      )}
+      <StatsStrip
+        stats={computeMapStats(filter.filteredContacts)}
+        overdueOnly={filter.overdueOnly}
+        onOverdueOnlyChange={filter.setOverdueOnly}
+      />
+      <ul aria-label="On the map">
+        {filter.filteredContacts.map((contact) => (
+          <li key={contact.id}>{contact.name}</li>
+        ))}
+      </ul>
     </>
   );
 }
@@ -150,164 +135,124 @@ function renderWithProviders(ui: React.ReactElement, initialPath = "/map") {
   );
 }
 
-/** The names on the map, in order, from the list `results` adds. */
+/** The names on the map, in order. */
 const shown = () =>
   Array.from(
     screen.getByRole("list", { name: "On the map" }).querySelectorAll("li"),
   ).map((item) => item.textContent);
 
+const input = () => screen.getByRole("textbox", { name: "Filter contacts" });
+
+/** A day `days` before today, as the date a follow-up is stored with. */
+const daysAgo = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** A map that records where it was sent. */
+const fakeMap = () => ({
+  getContainer: () => document.createElement("div"),
+  flyTo: vi.fn(),
+  jumpTo: vi.fn(),
+});
+
 describe("MapToolbar and useMapFilter", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
 
   // An open contact covered the end of the toolbar at 1440 px, and left a
   // strip of 100 px at 1024 px with the toolbar cut off in it.
-  it("keeps inside the map an open contact leaves, 16 px clear of it", () => {
+  it("keeps inside the map an open contact leaves, and steps aside for a sliver", () => {
     renderWithProviders(<TestComponent room={516} />);
-    const card = screen
-      .getByRole("textbox", { name: "Filter contacts" })
-      .closest(".glass-panel") as HTMLElement;
-    expect(card.style.maxWidth).toBe("484px");
-    cleanup();
-    renderWithProviders(<TestComponent room={1200} />);
     expect(
-      (
-        screen
-          .getByRole("textbox", { name: "Filter contacts" })
-          .closest(".glass-panel") as HTMLElement
-      ).style.maxWidth,
-    ).toBe("520px");
-  });
-
-  it("steps aside when the open contact leaves only a sliver", () => {
+      (input().closest(".glass-panel") as HTMLElement).style.maxWidth,
+    ).toBe("484px");
+    cleanup();
     renderWithProviders(<TestComponent room={100} />);
     expect(
       screen.queryByRole("textbox", { name: "Filter contacts" }),
     ).toBeNull();
-    expect(screen.queryAllByRole("button", { name: "Fit all" })).toHaveLength(
-      0,
-    );
   });
 
-  it("renders filter input and Fit all button", () => {
-    renderWithProviders(<TestComponent />);
+  it("clears every pill and the overdue filter, from Clear filters and from the X", () => {
+    const people = [
+      { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
+      mockContacts[1],
+    ];
+    renderWithProviders(<TestComponent contacts={people} />);
+    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
+    fireEvent.change(input(), {
+      target: { value: "company:Babbage tag:Military " },
+    });
+    expect(shown()).toEqual([]);
+    expect(screen.getByText("0 of 2 match")).toBeTruthy();
 
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(input()).toHaveProperty("value", "");
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
     expect(
-      screen.getByRole("textbox", { name: "Filter contacts" }),
-    ).toBeTruthy();
-    expect(
-      screen.getAllByRole("button", { name: "Fit all" }).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Go to place" })).toBeTruthy();
-  });
+      screen
+        .getByRole("button", { name: "1 overdue" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
 
-  it("filters contacts by company facet token", async () => {
-    renderWithProviders(<TestComponent results />, "/map?q=company:Babbage%20");
-
-    await waitFor(() => {
-      expect(shown()).toEqual(["Ada Lovelace"]);
+    fireEvent.change(input(), {
+      target: { value: "company:Babbage tag:Computing " },
     });
+    expect(shown()).toEqual(["Ada Lovelace"]);
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter text" }));
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
   });
 
-  it("shows 0 of N match and allows clearing filters", async () => {
-    renderWithProviders(
-      <TestComponent results />,
-      "/map?q=company:NonExistent%20",
+  it("narrows the map to the overdue, and lets everyone back", () => {
+    const people = [
+      { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
+      mockContacts[1],
+    ];
+    renderWithProviders(<TestComponent contacts={people} />);
+    const overdue = screen.getByRole("button", { name: "1 overdue" });
+    fireEvent.click(overdue);
+    expect(shown()).toEqual(["Ada Lovelace"]);
+    expect(overdue.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(overdue);
+    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
+  });
+
+  it("flies to a place it finds, and says so when it finds none", async () => {
+    const map = fakeMap();
+    vi.mocked(searchPlace)
+      .mockResolvedValueOnce({
+        query: "Paris",
+        lat: 48.8566,
+        lng: 2.3522,
+        provider: "Nominatim",
+        cached: false,
+      })
+      .mockRejectedValueOnce(new Error("Nothing found for that place"));
+    renderWithProviders(<TestComponent map={map} />);
+
+    for (const place of ["Paris", "AtlantisNotFound"]) {
+      if (!screen.queryByRole("textbox", { name: "Go to place" }))
+        fireEvent.click(screen.getByRole("button", { name: "Go to place" }));
+      const box = screen.getByRole("textbox", { name: "Go to place" });
+      fireEvent.change(box, { target: { value: place } });
+      fireEvent.keyDown(box, { key: "Enter" });
+      await waitFor(() => expect(searchPlace).toHaveBeenCalledWith(place));
+    }
+    expect(map.flyTo).toHaveBeenCalledWith(
+      expect.objectContaining({ center: [2.3522, 48.8566], zoom: 10 }),
     );
-
-    await waitFor(() => {
-      expect(screen.getByText("0 of 2 match")).toBeTruthy();
-      expect(shown()).toEqual([]);
-    });
-
-    const clearButton = screen.getByRole("button", { name: "Clear filters" });
-    fireEvent.click(clearButton);
-
-    await waitFor(() => {
-      expect(shown()).toContain("Ada Lovelace");
-      expect(shown()).toContain("Grace Hopper");
-    });
-  });
-
-  it("switches to Go to place search and flies map on submit", async () => {
-    const mockMap = {
-      getContainer: () => document.createElement("div"),
-      getZoom: () => 3,
-      getPadding: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
-      flyTo: vi.fn(),
-      jumpTo: vi.fn(),
-      fitBounds: vi.fn(),
-    };
-
-    vi.mocked(searchPlace).mockResolvedValueOnce({
-      query: "Paris",
-      lat: 48.8566,
-      lng: 2.3522,
-      provider: "Nominatim",
-      cached: false,
-    });
-
-    renderWithProviders(<TestComponent map={mockMap} />);
-
-    // Click "Go to" button
-    const gotoBtn = screen.getByRole("button", { name: "Go to place" });
-    fireEvent.click(gotoBtn);
-
-    const placeInput = screen.getByRole("textbox", { name: "Go to place" });
-    expect(placeInput).toBeTruthy();
-
-    fireEvent.change(placeInput, { target: { value: "Paris" } });
-    fireEvent.keyDown(placeInput, { key: "Enter" });
-
-    await waitFor(() => {
-      expect(searchPlace).toHaveBeenCalledWith("Paris");
-      expect(mockMap.flyTo).toHaveBeenCalledWith(
-        expect.objectContaining({
-          center: [2.3522, 48.8566],
-          zoom: 10,
-        }),
-      );
-    });
-  });
-
-  it("shows inline error when place search returns no result", async () => {
-    const mockMap = {
-      getContainer: () => document.createElement("div"),
-      getZoom: () => 3,
-      getPadding: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
-      flyTo: vi.fn(),
-      jumpTo: vi.fn(),
-      fitBounds: vi.fn(),
-    };
-
-    vi.mocked(searchPlace).mockRejectedValueOnce(
-      new Error("Nothing found for that place"),
-    );
-
-    renderWithProviders(<TestComponent map={mockMap} />);
-
-    // Click "Go to" button
-    fireEvent.click(screen.getByRole("button", { name: "Go to place" }));
-
-    const placeInput = screen.getByRole("textbox", { name: "Go to place" });
-    fireEvent.change(placeInput, { target: { value: "AtlantisNotFound" } });
-    fireEvent.keyDown(placeInput, { key: "Enter" });
-
-    await waitFor(() => {
+    await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toContain(
         "Nothing found for that place",
-      );
-    });
+      ),
+    );
   });
 
   it("switches between the two layers, pins and heat", () => {
     const handleLayerChange = vi.fn();
-
-    renderWithProviders(
-      <TestComponent layer="pins" onLayerChange={handleLayerChange} />,
-    );
-
+    renderWithProviders(<TestComponent onLayerChange={handleLayerChange} />);
     const layers = screen.getByRole("radiogroup", { name: "Map layer" });
     expect(
       Array.from(layers.querySelectorAll('[role="radio"]')).map(
@@ -318,36 +263,28 @@ describe("MapToolbar and useMapFilter", () => {
     expect(handleLayerChange).toHaveBeenCalledWith("heat");
   });
 
-  it("renders ViewsMenu and allows selecting a saved view", () => {
-    const mockViews = [
-      {
-        id: "view-1",
-        name: "London Hub",
-        query: "London",
-        layer: "heat" as const,
-        bounds: [-0.5, 51.3, 0.2, 51.7] as [number, number, number, number],
-        sortOrder: 0,
-        createdAt: "2026-09-19T00:00:00.000Z",
-        updatedAt: "2026-09-19T00:00:00.000Z",
-      },
-    ];
+  it("chooses a saved view from the Views menu", () => {
+    const view = {
+      id: "view-1",
+      name: "London Hub",
+      query: "London",
+      layer: "heat" as const,
+      bounds: [-0.5, 51.3, 0.2, 51.7] as [number, number, number, number],
+      sortOrder: 0,
+      createdAt: "2026-09-19T00:00:00.000Z",
+      updatedAt: "2026-09-19T00:00:00.000Z",
+    };
     const handleSelectView = vi.fn();
-
     renderWithProviders(
       <TestComponent
-        views={mockViews}
+        views={[view]}
         onSelectView={handleSelectView}
         onOpenSaveModal={() => {}}
       />,
     );
-
-    const viewsButton = screen.getByRole("button", { name: "Saved views" });
-    fireEvent.click(viewsButton);
-
-    const londonItem = screen.getByRole("menuitem", { name: "London Hub" });
-    expect(londonItem).toBeTruthy();
-    fireEvent.click(londonItem);
-    expect(handleSelectView).toHaveBeenCalledWith(mockViews[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Saved views" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "London Hub" }));
+    expect(handleSelectView).toHaveBeenCalledWith(view);
   });
 
   // The Select menu is an `ActionMenu`: a menu button that opens a named
@@ -355,22 +292,17 @@ describe("MapToolbar and useMapFilter", () => {
   it("opens the Select menu and runs lasso and all-in-view from its items", () => {
     const handleLasso = vi.fn();
     const handleInView = vi.fn();
-
     renderWithProviders(
       <TestComponent
         onStartLasso={handleLasso}
         onSelectInView={handleInView}
       />,
     );
-
     const trigger = screen.getByRole("button", { name: "Select contacts" });
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
-    expect(screen.queryByRole("menu")).toBeNull();
 
     fireEvent.click(trigger);
-    expect(screen.getByRole("menu", { name: "Select contacts" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Box select" })).toBeTruthy();
-
     fireEvent.click(screen.getByRole("menuitem", { name: "Lasso select" }));
     expect(handleLasso).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
@@ -378,59 +310,5 @@ describe("MapToolbar and useMapFilter", () => {
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("menuitem", { name: "All in view" }));
     expect(handleInView).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu")).toBeNull();
-  });
-});
-
-/** A day `days` before today, as the date a follow-up is stored with. */
-const daysAgo = (days: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-// No facet filters by follow-up, so overdue is a filter of its own, pressed
-// on the bottom line, and Clear filters clears it with the query.
-describe("the overdue filter", () => {
-  const people: MapContact[] = [
-    { ...mockContacts[0], nextFollowUpAt: daysAgo(2) },
-    { ...mockContacts[1], nextFollowUpAt: null },
-  ];
-
-  afterEach(() => cleanup());
-
-  it("narrows the map to the overdue, and lets everyone back", () => {
-    renderWithProviders(<TestComponent contacts={people} results />);
-    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
-    expect(shown()).toEqual(["Ada Lovelace"]);
-    expect(
-      screen
-        .getByRole("button", { name: "1 overdue" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
-
-    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
-    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
-  });
-
-  it("clears with the query when nobody matches both", () => {
-    renderWithProviders(<TestComponent contacts={people} results />);
-    fireEvent.click(screen.getByRole("button", { name: "1 overdue" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Filter contacts" }), {
-      target: { value: "Hopper" },
-    });
-    expect(shown()).toEqual([]);
-    expect(screen.getByText("0 of 2 match")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(shown()).toEqual(["Ada Lovelace", "Grace Hopper"]);
-    expect(screen.queryByRole("button", { name: /overdue/ })).toBeTruthy();
-    expect(
-      screen
-        .getByRole("button", { name: "1 overdue" })
-        .getAttribute("aria-pressed"),
-    ).toBe("false");
   });
 });

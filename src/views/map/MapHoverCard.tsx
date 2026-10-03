@@ -1,315 +1,336 @@
 /**
- * MapHoverCard — Rich hover and pinned card for map contact pins.
- *
- * Requirements:
- * - Tooltip state on 150 ms hover and on focus with NO buttons (never traps focus).
- * - Pinned dialog state on click or Space with a heading and four IconButtons:
- *   1. Open (navigates to /map/contact/:id)
- *   2. Log note (QuickInteractionModal with initialContactId)
- *   3. Add to list (Add to list modal for this contact)
- *   4. Follow-up (Follow-up modal for this contact)
- * - ScoreRingAvatar 44 px
- * - Score chip (with ScoreBreakdown on click when pinned)
- * - Last contact ("Last contact 12 days ago" or "Never")
- * - Local time from timeZoneAt ("14:05 · GMT+1")
- * - Up to three tags with TAG_PILL
- * - Lists
- * - Escape closes and returns focus to the pin
- * - 300 px width, CARD_COMPACT tokens
+ * The map's cards: a pin's hover card and its phone sheet, and a cluster's
+ * preview. A card keeps inside `padding`, the part of the map nothing covers.
  *
  * @module views/map/MapHoverCard
  */
-import React, { useEffect, useRef, useMemo } from "react";
-import { Popup } from "@vis.gl/react-maplibre";
-import type { Map as MapLibreMap } from "maplibre-gl";
-import { formatDistanceToNow } from "date-fns";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { Popup, type PopupInstance } from "@vis.gl/react-maplibre";
+import type { PaddingOptions } from "maplibre-gl";
+import { motion } from "motion/react";
 import {
-  ExternalLink,
-  PenLine,
-  ListPlus,
   CalendarPlus,
-  Clock,
+  ExternalLink,
+  ListPlus,
   MapPin,
+  MapPinPen,
+  PenLine,
+  X,
 } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
+import { scoreView } from "../../../shared/scoreBand";
 import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
-import { ScoreBreakdown } from "../../components/ScoreBreakdown";
 import { IconButton } from "../../components/ui/IconButton";
-import { timeZoneAt } from "../../components/LocalTimeWeather";
-import { TAG_PILL, TONE_WASH } from "../../lib/styles";
-import { NOT_TRACKED_TEXT, scoreView } from "../../../shared/scoreBand";
+import {
+  describeLocalTime,
+  timeZoneAt,
+} from "../../components/LocalTimeWeather";
+import { formatRelative } from "../../lib/datetime";
+import { BANNER_DAYS, describeFollowUp } from "../../lib/followUp";
+import { DURATION, EASE } from "../../lib/motion";
+import { TAG_PILL, TONE_TEXT, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import type { ClusterFeature } from "./useClusterFeatures";
 
-/** Half the 48 px pin plus clearance so the card clears the ring. */
-const PIN_CLEARANCE = 30;
+/** Half the 48 px pin plus a gap, so a card clears the ring. */
+export const PIN_CLEARANCE = 30;
 
-function formatCardLocalTime(
-  lat: number | null | undefined,
-  lng: number | null | undefined,
-): string | null {
-  const now = new Date();
-  if (lat == null || lng == null) return null;
-  const tz = timeZoneAt(lat, lng);
-  if (!tz) return null;
-  try {
-    const timeStr = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(now);
+export type CardAction = "open" | "log" | "followUp" | "list" | "adjust";
 
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz,
-      timeZoneName: "shortOffset",
-    }).formatToParts(now);
+const ACTIONS: {
+  action: CardAction;
+  label: string;
+  short: string;
+  Icon: ComponentType<{ className?: string }>;
+}[] = [
+  { action: "open", label: "Open contact", short: "Open", Icon: ExternalLink },
+  { action: "log", label: "Log interaction", short: "Log", Icon: PenLine },
+  {
+    action: "followUp",
+    label: "Add follow-up",
+    short: "Follow-up",
+    Icon: CalendarPlus,
+  },
+  { action: "list", label: "Add to list", short: "List", Icon: ListPlus },
+  { action: "adjust", label: "Adjust pin", short: "Pin", Icon: MapPinPen },
+];
 
-    const offset = parts.find((p) => p.type === "timeZoneName")?.value || "";
-    return `${timeStr} · ${offset}`;
-  } catch {
-    return null;
-  }
+const MORE = "text-[11px] font-semibold text-on-surface-variant";
+
+export const cardId = (id: string) => `map-hover-card-${id}`;
+export const clusterCardId = (id: number) => `map-cluster-card-${id}`;
+
+/** The most urgent fact: a follow-up due within the week, or the last contact. */
+function statusOf(contact: MapContact) {
+  const due = describeFollowUp(contact.nextFollowUpAt);
+  if (due && due.days <= BANNER_DAYS) return due;
+  return {
+    tone: "neutral" as const,
+    text: contact.lastContactedAt
+      ? `Last contact ${formatRelative(contact.lastContactedAt)}`
+      : "No contact logged yet",
+  };
 }
 
-function formatLastContact(lastContactedAt?: string | null): string {
-  if (!lastContactedAt) return "Never";
-  try {
-    return `Last contact ${formatDistanceToNow(new Date(lastContactedAt), { addSuffix: true })}`;
-  } catch {
-    return "Never";
-  }
-}
-
-interface MapHoverCardProps {
-  contact: MapContact;
-  pinned: boolean;
-  onClose: () => void;
-  onOpen?: (id: string) => void;
-  onLogNote?: (id: string) => void;
-  onAddToList?: (id: string) => void;
-  onFollowUp?: (id: string) => void;
-  map?: MapLibreMap | null;
-}
-
-export const MapHoverCard: React.FC<MapHoverCardProps> = ({
+function CardBody({
   contact,
-  pinned,
-  onClose,
-  onOpen,
-  onLogNote,
-  onAddToList,
-  onFollowUp,
-  map,
-}) => {
-  const firstActionRef = useRef<HTMLButtonElement>(null);
-
-  // Auto-focus first action button when entering pinned mode
-  useEffect(() => {
-    if (pinned) {
-      firstActionRef.current?.focus();
-    }
-  }, [pinned]);
-
-  // Escape key closes card and returns focus to pin button
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-        const pinBtn = document.querySelector<HTMLButtonElement>(
-          `button[data-contact-id="${contact.id}"]`,
-        );
-        pinBtn?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, contact.id]);
-
-  const localTime = useMemo(
-    () => formatCardLocalTime(contact.lat, contact.lng),
-    [contact.lat, contact.lng],
-  );
-
-  const lastContactStr = useMemo(
-    () => formatLastContact(contact.lastContactedAt),
-    [contact.lastContactedAt],
-  );
-
-  const tags = (contact.tags || []).slice(0, 3);
-  const lists = contact.lists || [];
-  // The card used to print the stored column, so a contact nobody had met
-  // showed "Score 50". It reads the same view as the ring now.
+  aside,
+  children,
+}: {
+  contact: MapContact;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   const view = scoreView(contact);
-  const score = view.kind === "scored" ? view.score : null;
-
-  // The chip wears the band's tone. A contact with no score wears the neutral
-  // one.
-  const scoreChip = cn(
-    "inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px]",
-    TONE_WASH[view.kind === "scored" ? view.band.token : "neutral"],
-  );
-
-  const anchor = useMemo(() => {
-    if (!map) return undefined;
-    try {
-      const pt = map.project([contact.lng, contact.lat]);
-      if (pt.y < 280) return "top";
-    } catch {
-      // ignore
-    }
-    return undefined;
-  }, [map, contact.lng, contact.lat]);
-
+  const zone = timeZoneAt(contact.lat, contact.lng);
+  const local = zone ? describeLocalTime(zone) : null;
+  const place = [
+    contact.location,
+    local && `${local.time} ${local.zone.short}`,
+  ].filter(Boolean);
+  const status = statusOf(contact);
+  const tags = contact.tags ?? [];
+  const lists = contact.lists ?? [];
   return (
-    <Popup
-      longitude={contact.lng}
-      latitude={contact.lat}
-      offset={PIN_CLEARANCE}
-      anchor={anchor}
-      closeButton={false}
-      closeOnClick={false}
-      focusAfterOpen={false}
-      maxWidth="320px"
-      className="contact-popup"
-    >
-      <div
-        role={pinned ? "dialog" : "tooltip"}
-        aria-label={pinned ? contact.name : undefined}
-        id={`map-hover-card-${contact.id}`}
-        className="w-[300px] bg-surface-container-lowest/98 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-outline-variant/30 font-body space-y-3"
-      >
-        {/* Header: Avatar, Name, Role & Company */}
-        <div className="flex items-start gap-3">
-          <ScoreRingAvatar contact={contact} size={44} ring="list" decorative />
-          <div className="min-w-0 flex-1">
-            {pinned ? (
-              <h2 className="text-sm font-extrabold text-on-surface truncate">
-                <a
-                  href={`/map/contact/${contact.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onOpen?.(contact.id);
-                  }}
-                  className="hover:underline"
-                >
-                  {contact.name}
-                </a>
-              </h2>
-            ) : (
-              <p className="text-sm font-extrabold text-on-surface truncate">
-                {contact.name}
-              </p>
-            )}
-
-            {(contact.role || contact.company) && (
-              <p className="text-xs text-on-surface-variant truncate">
-                {[contact.role, contact.company].filter(Boolean).join(" at ")}
-              </p>
-            )}
-
-            {contact.location && (
-              <p className="flex items-center gap-1 text-[11px] font-semibold text-primary truncate mt-0.5">
-                <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span>{contact.location}</span>
-              </p>
-            )}
-          </div>
+    <div className="space-y-2 font-body">
+      <div className="flex items-start gap-3">
+        <ScoreRingAvatar contact={contact} size={44} ring="list" decorative />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-extrabold text-on-surface">
+            {contact.name}
+          </p>
+          {(contact.role || contact.company) && (
+            <p className="truncate text-xs text-on-surface-variant">
+              {[contact.role, contact.company].filter(Boolean).join(" at ")}
+            </p>
+          )}
         </div>
-
-        {/* Facts row: Score chip, Last contact, Local time */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs border-t border-outline-variant/20">
-          {view.kind === "untracked" && (
-            <span className={scoreChip}>{NOT_TRACKED_TEXT}</span>
-          )}
-          {score !== null && (
-            <div className="shrink-0">
-              {pinned ? (
-                <ScoreBreakdown contactId={contact.id} score={score}>
-                  <span className={cn(scoreChip, "cursor-pointer hit-area")}>
-                    Score {score}
-                  </span>
-                </ScoreBreakdown>
-              ) : (
-                <span className={scoreChip}>Score {score}</span>
-              )}
-            </div>
-          )}
-
-          <span className="text-on-surface-variant text-[11px]">
-            {lastContactStr}
+        {view.kind === "scored" && (
+          <span
+            className={cn(
+              "shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold",
+              TONE_WASH[view.band.token],
+            )}
+          >
+            Score {view.score}
           </span>
-
-          {localTime && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant font-medium ml-auto">
-              <Clock className="w-3 h-3 text-primary/70 shrink-0" />
-              <span>{localTime}</span>
+        )}
+        {aside}
+      </div>
+      {place.length > 0 && (
+        <p className="flex items-center gap-1 text-[11px] font-semibold text-primary">
+          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{place.join(" · ")}</span>
+        </p>
+      )}
+      <p className={cn("text-xs font-semibold", TONE_TEXT[status.tone])}>
+        {status.text}
+      </p>
+      {(tags.length > 0 || lists.length > 0) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {tags.slice(0, 3).map((tag) => (
+            <span key={tag} className={TAG_PILL}>
+              {tag}
+            </span>
+          ))}
+          {tags.length > 3 && <span className={MORE}>+{tags.length - 3}</span>}
+          {lists[0] && (
+            <span className="rounded-md bg-secondary/10 px-2 py-0.5 text-[11px] font-semibold text-secondary">
+              {lists[0].name}
+            </span>
+          )}
+          {lists.length > 1 && (
+            <span className={MORE}>
+              +{lists.length - 1} {lists.length === 2 ? "list" : "lists"}
             </span>
           )}
         </div>
+      )}
+      {children}
+    </div>
+  );
+}
 
-        {/* Tags & Lists */}
-        {(tags.length > 0 || lists.length > 0) && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            {tags.map((tag) => (
-              <span key={tag} className={TAG_PILL}>
-                {tag}
-              </span>
-            ))}
-            {lists.map((l) => (
-              <span
-                key={l.id}
-                className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-secondary/10 text-secondary"
-                title={l.name}
+const popupProps = {
+  offset: PIN_CLEARANCE,
+  closeButton: false,
+  closeOnClick: false,
+  focusAfterOpen: false,
+  maxWidth: "none",
+  className: "contact-popup map-card",
+};
+
+interface MapHoverCardProps {
+  contact: MapContact;
+  /** `focus` is the keyboard's tooltip, with no buttons. `pinned` stays open. */
+  mode: "focus" | "hover" | "pinned";
+  padding?: PaddingOptions;
+  onAction: (action: CardAction) => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+}
+
+export const MapHoverCard = ({
+  contact,
+  mode,
+  padding,
+  onAction,
+  onPointerEnter,
+  onPointerLeave,
+}: MapHoverCardProps) => {
+  const popup = useRef<PopupInstance>(null);
+  const first = useRef<HTMLButtonElement>(null);
+  // A new size or room places the card again, and a pinned card takes focus.
+  useEffect(() => {
+    popup.current?.setPadding(padding);
+    if (mode === "pinned") first.current?.focus();
+  }, [mode, padding]);
+  const tooltip = mode === "focus";
+  return (
+    <Popup
+      ref={popup}
+      longitude={contact.lng}
+      latitude={contact.lat}
+      padding={padding}
+      {...popupProps}
+    >
+      <div
+        id={cardId(contact.id)}
+        role={tooltip ? "tooltip" : "dialog"}
+        aria-label={tooltip ? undefined : contact.name}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        className="w-72"
+      >
+        <CardBody contact={contact}>
+          {tooltip ? (
+            <p className="text-[11px] text-on-surface-variant">
+              Space for actions · Enter to open
+            </p>
+          ) : (
+            <div className="-mx-2 -mb-2 flex justify-between border-t border-outline-variant/20 pt-1">
+              {ACTIONS.map(({ action, label, Icon }, i) => (
+                <IconButton
+                  key={action}
+                  ref={i === 0 ? first : undefined}
+                  aria-label={label}
+                  title={label}
+                  tone="subtle"
+                  size="sm"
+                  onClick={() => onAction(action)}
+                >
+                  <Icon className="h-4 w-4" />
+                </IconButton>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </div>
+    </Popup>
+  );
+};
+
+/** A finger cannot hover, so a tap on a pin shows its card here first. */
+export const MapPeekSheet = ({
+  contact,
+  onAction,
+  onClose,
+}: {
+  contact: MapContact;
+  onAction: (action: CardAction) => void;
+  onClose: () => void;
+}) => (
+  <motion.div
+    role="dialog"
+    aria-label={contact.name}
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: DURATION.fast, ease: EASE }}
+    className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-20 mx-auto max-w-md rounded-2xl bg-surface-container-lowest p-4 shadow-2xl ring-1 ring-outline-variant/30 md:bottom-4"
+  >
+    <CardBody
+      contact={contact}
+      aside={
+        <IconButton
+          aria-label="Close"
+          tone="subtle"
+          size="sm"
+          className="-mr-2 -mt-2"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </IconButton>
+      }
+    >
+      <div className="grid grid-cols-5 gap-1 border-t border-outline-variant/20 pt-2">
+        {ACTIONS.map(({ action, label, short, Icon }) => (
+          <button
+            key={action}
+            type="button"
+            aria-label={label}
+            onClick={() => onAction(action)}
+            className="state-layer flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold text-on-surface"
+          >
+            <Icon className="h-4 w-4" />
+            {short}
+          </button>
+        ))}
+      </div>
+    </CardBody>
+  </motion.div>
+);
+
+/** Who is in a cluster: its five best-known people and what a click does. */
+export const ClusterPreview = ({
+  cluster,
+  members,
+  stacked,
+  padding,
+}: {
+  cluster: ClusterFeature;
+  members: MapContact[];
+  /** No zoom splits it, so a click lists the people. */
+  stacked: boolean;
+  padding?: PaddingOptions;
+}) => {
+  const shown = members.slice(0, 5);
+  return (
+    <Popup
+      longitude={cluster.longitude}
+      latitude={cluster.latitude}
+      padding={padding}
+      {...popupProps}
+    >
+      <div
+        id={clusterCardId(cluster.clusterId)}
+        role="tooltip"
+        className="w-60 space-y-2 font-body"
+      >
+        <p className="text-sm font-extrabold text-on-surface">
+          {cluster.count} people
+        </p>
+        {shown.length > 0 && (
+          <ul className="space-y-1.5">
+            {shown.map((contact) => (
+              <li
+                key={contact.id}
+                className="flex items-center gap-2 text-xs text-on-surface"
               >
-                {l.name}
-              </span>
+                <ScoreRingAvatar contact={contact} size={24} decorative />
+                <span className="truncate">
+                  <span className="font-semibold">{contact.name}</span>
+                  {contact.company && ` · ${contact.company}`}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-
-        {/* Action buttons — only rendered in pinned state */}
-        {pinned && (
-          <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20">
-            <IconButton
-              ref={firstActionRef}
-              aria-label="Open contact"
-              title="Open contact details"
-              onClick={() => onOpen?.(contact.id)}
-              tone="subtle"
-              size="sm"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              aria-label="Log interaction"
-              title="Log interaction"
-              onClick={() => onLogNote?.(contact.id)}
-              tone="subtle"
-              size="sm"
-            >
-              <PenLine className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              aria-label="Add to list"
-              title="Add to list"
-              onClick={() => onAddToList?.(contact.id)}
-              tone="subtle"
-              size="sm"
-            >
-              <ListPlus className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              aria-label="Add follow-up"
-              title="Add follow-up task"
-              onClick={() => onFollowUp?.(contact.id)}
-              tone="subtle"
-              size="sm"
-            >
-              <CalendarPlus className="w-4 h-4" />
-            </IconButton>
-          </div>
+        {shown.length > 0 && cluster.count > shown.length && (
+          <p className={MORE}>and {cluster.count - shown.length} more</p>
         )}
+        <p className="text-[11px] font-semibold text-primary">
+          {stacked ? "Click to list them" : "Click to zoom in"}
+        </p>
       </div>
     </Popup>
   );

@@ -3,7 +3,7 @@
 // =============================================================================
 // A page that opens a contact from its own list names itself as Back. The
 // Enrichment page does, with its filters in the address. Anything else goes
-// by the route: the archived list, the map, or the network.
+// by the route: the archived list, the map with its filter, or the network.
 // =============================================================================
 
 import { describe, expect, it } from "vitest";
@@ -39,8 +39,8 @@ describe("the contact page's Back", () => {
   });
 
   it("otherwise goes by the route", () => {
-    expect(backTarget("/map/contact/c1", null)).toEqual({
-      to: "/map",
+    expect(backTarget("/map/contact/c1", null, "?q=tag%3Avc")).toEqual({
+      to: "/map?q=tag%3Avc",
       label: NAMES.map.label,
     });
     expect(backTarget("/settings/archived/contact/c1", undefined)).toEqual({

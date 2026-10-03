@@ -355,7 +355,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.map.label,
     keys: ["Space"],
-    description: "Pin card",
+    description: "Card actions",
     bareLetter: false,
     page: "/map",
   },

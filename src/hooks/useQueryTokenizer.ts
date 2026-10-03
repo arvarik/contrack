@@ -1,14 +1,6 @@
 /**
- * useQueryTokenizer — Parse prefix operators from the search input.
- *
- * Supports GitHub-style faceted filters:
- *   role:founder, company:stripe, location:london, industry:fintech,
- *   tag:investor, score:>80, updated:>6m, contacted:>90d, tracked:yes
- *
- * A token becomes "locked" (a pill) when followed by a space.
- * Remaining free-text is forwarded to FTS5/vector search. The value parser
- * and the whole-query parser live in `shared/facetQuery.ts`, which the
- * server's Ask pipeline reads too.
+ * Facet pills from a search input: a token such as `tag:vc` is a pill once a
+ * space follows it. The palette's hook also keeps a pill whose text is gone.
  *
  * @module hooks/useQueryTokenizer
  */
@@ -16,6 +8,7 @@ import { useMemo, useCallback, useState } from "react";
 import {
   FACET_FIELD_PATTERN,
   QUOTED_VALUE_PATTERN,
+  formatFacet,
   parseFilterValue,
 } from "../../shared/facetQuery";
 
@@ -64,16 +57,60 @@ const ACTIVE_PREFIX_REGEX = new RegExp(
 const unquotePartial = (partial: string) =>
   partial.replace(/^"([^"]*)"?/, "$1");
 
+const sameValue = (a: FacetFilter, b: FacetFilter) =>
+  a.field === b.field && a.value === b.value;
+
+/** Split the input into pills, free text and the facet being typed. */
+export function parseQuery(
+  rawInput: string,
+  locked: readonly FacetFilter[] = [],
+): ParsedQuery {
+  const filters = [...locked];
+  let remaining = rawInput;
+  for (const [full, field, value] of rawInput.matchAll(COMPLETED_FACET_REGEX)) {
+    const filter = parseFilterValue(field.toLowerCase() as FacetField, value);
+    if (filter && !filters.some((f) => sameValue(f, filter)))
+      filters.push(filter);
+    remaining = remaining.replace(full, "");
+  }
+  const active = remaining.match(ACTIVE_PREFIX_REGEX);
+  return {
+    filters,
+    freeText: remaining.replace(ACTIVE_PREFIX_REGEX, "").trim(),
+    activePrefix: active
+      ? {
+          field: active[1].toLowerCase() as FacetField,
+          partial: unquotePartial(active[2] || ""),
+        }
+      : null,
+  };
+}
+
+/** The input with `filter` in place of the facet being typed, and a space. */
+export function withFacet(input: string, filter: FacetFilter): string {
+  const rest = input.replace(ACTIVE_PREFIX_REGEX, "").trimEnd();
+  return `${rest ? `${rest} ` : ""}${formatFacet(filter)} `;
+}
+
+/** The input without the tokens that parse to `filter`. */
+export function withoutFacet(input: string, filter: FacetFilter): string {
+  const value = filter.value.toLowerCase();
+  return input.replace(
+    COMPLETED_FACET_REGEX,
+    (full, field: string, raw: string) => {
+      const typed = parseFilterValue(field.toLowerCase() as FacetField, raw);
+      const typedValue = typed?.value.toLowerCase();
+      const same =
+        typed?.field === filter.field &&
+        (typedValue === value || typedValue?.replace(/-/g, " ") === value);
+      return same ? "" : full;
+    },
+  );
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-/**
- * Parse the raw search input into structured facet filters + free text.
- *
- * Usage:
- * ```ts
- * const { parsed, addFilter, removeFilter, buildSearchString } = useQueryTokenizer(search, setSearch);
- * ```
- */
+/** The palette's pills: a pill stays until removed, even once its text is gone. */
 export function useQueryTokenizer(
   rawInput: string,
   setRawInput: (value: string) => void,
@@ -81,113 +118,23 @@ export function useQueryTokenizer(
   /** Manually locked filters (from pills the user hasn't removed) */
   const [lockedFilters, setLockedFilters] = useState<FacetFilter[]>([]);
 
-  const parsed = useMemo((): ParsedQuery => {
-    const filters: FacetFilter[] = [...lockedFilters];
-    let remaining = rawInput;
+  const parsed = useMemo(
+    () => parseQuery(rawInput, lockedFilters),
+    [rawInput, lockedFilters],
+  );
 
-    // Extract completed facet tokens (must have trailing space)
-    const completedMatches: { full: string; field: string; value: string }[] =
-      [];
-    let match: RegExpExecArray | null;
-    const regex = new RegExp(COMPLETED_FACET_REGEX.source, "gi");
-
-    while ((match = regex.exec(rawInput)) !== null) {
-      completedMatches.push({
-        full: match[0],
-        field: match[1].toLowerCase(),
-        value: match[2],
-      });
-    }
-
-    // Merge completed tokens into the filter set (locked filters first)
-    for (const cm of completedMatches) {
-      const filter = parseFilterValue(cm.field as FacetField, cm.value);
-      if (filter) {
-        // Don't add duplicates
-        if (
-          !filters.some(
-            (f) => f.field === filter.field && f.value === filter.value,
-          )
-        ) {
-          filters.push(filter);
-        }
-      }
-
-      // Remove the token from the raw input
-      remaining = remaining.replace(cm.full, "");
-    }
-
-    // Check for active prefix at end of input
-    let activePrefix: ParsedQuery["activePrefix"] = null;
-    const activePrefixMatch = remaining.match(ACTIVE_PREFIX_REGEX);
-    if (activePrefixMatch) {
-      activePrefix = {
-        field: activePrefixMatch[1].toLowerCase() as FacetField,
-        partial: unquotePartial(activePrefixMatch[2] || ""),
-      };
-      // Remove the active prefix from freeText
-      remaining = remaining.replace(ACTIVE_PREFIX_REGEX, "");
-    }
-
-    return {
-      filters,
-      freeText: remaining.trim(),
-      activePrefix,
-    };
-  }, [rawInput, lockedFilters]);
-
-  // Promote newly completed tokens into locked state. This is a render-phase
-  // state adjustment (the React-sanctioned "derive state during render"
-  // pattern): parsed.filters is always lockedFilters plus any new tokens, so
-  // a length difference means new tokens were typed. The setState triggers an
-  // immediate re-render where the lengths match, terminating the loop.
+  // New tokens become locked pills, adjusted during render: the next render's
+  // lengths match, which ends it.
   if (parsed.filters.length !== lockedFilters.length) {
     setLockedFilters(parsed.filters);
   }
 
-  /**
-   * Remove any completed token text from the input that parses to the given
-   * filter, so re-parsing doesn't immediately re-lock a removed pill.
-   */
-  const stripFilterToken = useCallback(
-    (input: string, filter: FacetFilter): string => {
-      const regex = new RegExp(COMPLETED_FACET_REGEX.source, "gi");
-      return input.replace(regex, (full, field: string, value: string) => {
-        const candidate = parseFilterValue(
-          field.toLowerCase() as FacetField,
-          value,
-        );
-        if (
-          candidate &&
-          candidate.field === filter.field &&
-          (candidate.value === filter.value ||
-            candidate.value.toLowerCase() === filter.value.toLowerCase() ||
-            candidate.value.toLowerCase().replace(/-/g, " ") ===
-              filter.value.toLowerCase())
-        ) {
-          return "";
-        }
-        return full;
-      });
-    },
-    [],
-  );
-
   /** Add a filter manually (from autocomplete selection) */
   const addFilter = useCallback(
     (filter: FacetFilter) => {
-      // Don't add duplicates
-      if (
-        lockedFilters.some(
-          (f) => f.field === filter.field && f.value === filter.value,
-        )
-      ) {
-        return;
-      }
+      if (lockedFilters.some((f) => sameValue(f, filter))) return;
       setLockedFilters((prev) =>
-        prev.some((f) => f.field === filter.field && f.value === filter.value)
-          ? prev
-          : [...prev, filter],
+        prev.some((f) => sameValue(f, filter)) ? prev : [...prev, filter],
       );
 
       // Remove the active prefix from the raw input
@@ -202,11 +149,11 @@ export function useQueryTokenizer(
       const removed = lockedFilters[index];
       setLockedFilters((prev) => prev.filter((_, i) => i !== index));
       if (removed) {
-        const stripped = stripFilterToken(rawInput, removed);
+        const stripped = withoutFacet(rawInput, removed);
         if (stripped !== rawInput) setRawInput(stripped);
       }
     },
-    [lockedFilters, rawInput, setRawInput, stripFilterToken],
+    [lockedFilters, rawInput, setRawInput],
   );
 
   /** Remove the last locked filter (Backspace on empty input) */
@@ -214,10 +161,10 @@ export function useQueryTokenizer(
     if (lockedFilters.length === 0) return false;
     const removed = lockedFilters[lockedFilters.length - 1];
     setLockedFilters((prev) => prev.slice(0, -1));
-    const stripped = stripFilterToken(rawInput, removed);
+    const stripped = withoutFacet(rawInput, removed);
     if (stripped !== rawInput) setRawInput(stripped);
     return true;
-  }, [lockedFilters, rawInput, setRawInput, stripFilterToken]);
+  }, [lockedFilters, rawInput, setRawInput]);
 
   /** Reset all locked filters */
   const clearFilters = useCallback(() => {

@@ -149,7 +149,7 @@ letters like the others. The list is one `Tab` stop. See
 
 These work on the **Map** page, also while a contact is open over the map.
 `Enter` and `Space` work on a pin that has focus: `Enter` opens the contact,
-and `Space` keeps its card open. See
+and `Space` moves into its card's buttons. See
 [Select contacts on the map](map.md#select-contacts-on-the-map).
 
 | Keys    | What it does                  | Single key |
@@ -160,7 +160,7 @@ and `Space` keeps its card open. See
 | `L`     | Lasso select                  | Yes        |
 | `Esc`   | Clear selection or close card | No         |
 | `Enter` | Open contact                  | No         |
-| `Space` | Pin card                      | No         |
+| `Space` | Card actions                  | No         |
 
 ## Contact
 

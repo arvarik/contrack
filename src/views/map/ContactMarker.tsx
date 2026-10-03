@@ -6,13 +6,8 @@
  * event handler attribute. It is a real `<button>`: focusable, named
  * "<name>, <company>", and opened with Enter like any other button.
  *
- * The hover card opens for a pointer that can hover, and for focus. A finger
- * cannot hover: a tap fires the same enter event a mouse does and never the
- * leave, so on a phone the card would open under the contact the tap opens
- * and still be there when the contact closes. A touch is told apart by its
- * pointer type and opens no card, and the focus some browsers give a tapped
- * button is not a request for one either: only focus that arrived without a
- * touch, from a keyboard, opens the card.
+ * A mouse and the keyboard open its card here. A finger cannot hover, so its
+ * first tap shows the card and the second opens the contact.
  *
  * @module views/map/ContactMarker
  */
@@ -21,6 +16,7 @@ import { Marker } from "@vis.gl/react-maplibre";
 import type { MapContact } from "../../../shared/geo";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
+import { cardId } from "./MapHoverCard";
 
 /** The pin's accessible name: the contact, and where they work when known. */
 export function contactPinLabel(
@@ -49,15 +45,17 @@ export function pinAvatarSrc(
   return fallbackAvatarUrl(contact.name);
 }
 
+/** What a pin reports to the map's card. */
+export type PinEvent = "enter" | "leave" | "focus" | "blur" | "space" | "tap";
+
 interface ContactMarkerProps {
   contact: MapContact;
   selected: boolean;
   multiSelected?: boolean;
   onSelect: (id: string) => void;
-  /** Called with the contact id on hover and focus, and null on leave and blur. */
-  onPreview: (id: string | null) => void;
-  onPinCard?: (id: string) => void;
-  hasActiveCard?: boolean;
+  onCard: (id: string, event: PinEvent) => void;
+  /** The pin's card is open as a tooltip, which then describes the pin. */
+  described?: boolean;
 }
 
 export const ContactMarker = memo(function ContactMarker({
@@ -65,14 +63,14 @@ export const ContactMarker = memo(function ContactMarker({
   selected,
   multiSelected = false,
   onSelect,
-  onPreview,
-  onPinCard,
-  hasActiveCard = false,
+  onCard,
+  described = false,
 }: ContactMarkerProps) {
   const [broken, setBroken] = useState(false);
   const src = broken ? fallbackAvatarUrl(contact.name) : pinAvatarSrc(contact);
-  // True between a touch on the pin and the focus that touch may bring.
-  const touched = useRef(false);
+  // The last press. A tap's focus and click are not a mouse's.
+  const press = useRef<{ type: string; x: number; y: number } | null>(null);
+  const { id } = contact;
 
   const isHighlighted = selected || multiSelected;
 
@@ -86,34 +84,50 @@ export const ContactMarker = memo(function ContactMarker({
       <button
         type="button"
         aria-label={contactPinLabel(contact)}
-        aria-describedby={
-          hasActiveCard ? `map-hover-card-${contact.id}` : undefined
-        }
-        data-contact-id={contact.id}
+        aria-describedby={described ? cardId(id) : undefined}
+        data-contact-id={id}
         onClick={() => {
-          onSelect(contact.id);
+          if (press.current?.type !== "touch") onSelect(id);
         }}
         onKeyDown={(event) => {
           if (event.key === " ") {
             event.preventDefault();
-            onPinCard?.(contact.id);
+            onCard(id, "space");
           } else if (event.key === "Enter") {
             event.preventDefault();
-            onSelect(contact.id);
+            onSelect(id);
           }
         }}
         onPointerDown={(event) => {
-          touched.current = event.pointerType === "touch";
+          press.current = {
+            type: event.pointerType,
+            x: event.clientX,
+            y: event.clientY,
+          };
+        }}
+        // A tap, not a drag. Read here: MapLibre takes a quick second tap's
+        // click for its double-tap zoom.
+        onPointerUp={(event) => {
+          const start = press.current;
+          if (
+            start?.type === "touch" &&
+            Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10
+          )
+            onCard(id, "tap");
         }}
         onPointerEnter={(event) => {
-          if (event.pointerType !== "touch") onPreview(contact.id);
+          if (event.pointerType !== "touch") onCard(id, "enter");
         }}
-        onPointerLeave={() => onPreview(null)}
+        onPointerLeave={(event) => {
+          if (event.pointerType !== "touch") onCard(id, "leave");
+        }}
         onFocus={() => {
-          if (!touched.current) onPreview(contact.id);
-          touched.current = false;
+          if (press.current?.type !== "touch") onCard(id, "focus");
         }}
-        onBlur={() => onPreview(null)}
+        onBlur={() => {
+          press.current = null;
+          onCard(id, "blur");
+        }}
         className={cn(
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
           "bg-surface-container-lowest shadow-md",

@@ -1,25 +1,23 @@
 // @vitest-environment jsdom
 // =============================================================================
-// The map's facets, on rows built the way the map builds them
+// The map's filter, on rows built the way the map builds them
 // =============================================================================
-// The map filters its own rows with `matchesFacet`, and those rows come from
-// `toMapContacts`, a projection of the slim contact cache. Three facets read
-// nothing on screen when the projection leaves their field out: `updated:`
-// matched nobody, and `missing:email` and `missing:phone` matched everybody.
-// A quoted value from an insight bar, `industry:"Venture Capital"`, was cut
-// at its space by the tokenizer, so the map showed 0 matches.
-//
-// The query arrives through the address, with the trailing space the insight
-// bars write, and the rows go through the real projection.
+// The rows come from `toMapContacts`, a projection of the slim contact cache,
+// and the query arrives through the address the way a link or a saved view
+// gives it: with no space after its last facet.
 // =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
-import { cleanup, renderHook } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toMapContacts } from "../../../../src/api/contacts";
 import { useMapFilter } from "../../../../src/views/map/useMapFilter";
 
-vi.mock("../../../../src/api/geo", () => ({ searchPlace: vi.fn() }));
+vi.mock("../../../../src/api/geo", () => ({
+  searchPlace: vi.fn(async () => ({ lat: 51.5, lng: -0.12 })),
+}));
+import { searchPlace } from "../../../../src/api/geo";
 
 afterEach(cleanup);
 
@@ -34,6 +32,8 @@ function slimRow(fields: {
   updatedAt: string;
   emails: { email: string }[];
   phones: { phone: string }[];
+  tags?: { tag: string }[];
+  lat?: number;
 }) {
   return {
     name: fields.id,
@@ -66,6 +66,7 @@ const rows = toMapContacts([
     updatedAt: iso(3),
     emails: [{ email: "ada@example.com" }],
     phones: [],
+    tags: [{ tag: "design" }],
   }),
   slimRow({
     id: "fintech",
@@ -73,21 +74,33 @@ const rows = toMapContacts([
     updatedAt: iso(400),
     emails: [],
     phones: [{ phone: "+44 20 7946 0000" }],
+    tags: [{ tag: "design-lead" }],
+    lat: 40.7,
   }),
 ] as never);
 
-/** The ids the map shows for the query in its address. */
-function matchesFor(query: string): string[] {
+/** The filter over `rows`, opened at `/map?q=<query>`, and the address. */
+function renderFilter(query = "") {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <MemoryRouter initialEntries={[`/map?q=${encodeURIComponent(query)}`]}>
-      {children}
-    </MemoryRouter>
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/map?q=${encodeURIComponent(query)}`]}>
+        {children}
+      </MemoryRouter>
+    </QueryClientProvider>
   );
-  const { result } = renderHook(() => useMapFilter(rows), { wrapper });
-  return result.current.filteredContacts.map((contact) => contact.id);
+  return renderHook(
+    () => ({ filter: useMapFilter(rows), search: useLocation().search }),
+    { wrapper },
+  ).result;
 }
 
-describe("the map's facets", () => {
+const ids = (result: ReturnType<typeof renderFilter>) =>
+  result.current.filter.filteredContacts.map((contact) => contact.id);
+
+describe("the map's filter", () => {
   it("carries the fields the facets read into each map row", () => {
     const [vc] = rows;
     expect(vc.updatedAt).toBeTruthy();
@@ -95,17 +108,46 @@ describe("the map's facets", () => {
     expect(vc.phones).toEqual([]);
   });
 
-  it("finds an insight bar's quoted value with a space", () => {
-    expect(matchesFor('industry:"Venture Capital" ')).toEqual(["vc"]);
+  // A saved view stores its query trimmed, and its last facet read as text.
+  it("reads the last facet of a link or a saved view as a pill", () => {
+    expect(ids(renderFilter('industry:"Venture Capital"'))).toEqual(["vc"]);
+    expect(ids(renderFilter("updated:<1m"))).toEqual(["vc"]);
+    expect(ids(renderFilter("updated:>6m"))).toEqual(["fintech"]);
+    expect(ids(renderFilter("missing:email"))).toEqual(["fintech"]);
+    expect(ids(renderFilter("missing:phone"))).toEqual(["vc"]);
   });
 
-  it("reads updated: from the row's last change", () => {
-    expect(matchesFor("updated:<1m ")).toEqual(["vc"]);
-    expect(matchesFor("updated:>6m ")).toEqual(["fintech"]);
+  it("keeps the pills, the text and the address in step", async () => {
+    const result = renderFilter("tag:design-lead");
+    // A bar's facet that begins a longer pill is a facet of its own.
+    act(() =>
+      result.current.filter.addFacet({ field: "tag", value: "design" }),
+    );
+    act(() =>
+      result.current.filter.addFacet({ field: "tag", value: "design" }),
+    );
+    expect(result.current.filter.rawInput).toBe("tag:design-lead tag:design ");
+    await waitFor(() =>
+      expect(result.current.search).toBe("?q=tag%3Adesign-lead+tag%3Adesign"),
+    );
+
+    act(() => result.current.filter.removeFacet(0));
+    expect(result.current.filter.rawInput.trim()).toBe("tag:design");
+
+    act(() => result.current.filter.setRawInput("tag:design tag:vc zzz"));
+    act(() => result.current.filter.clearFilters());
+    expect(result.current.filter.parsed.filters).toEqual([]);
+    expect(ids(result)).toEqual(["vc", "fintech"]);
+    await waitFor(() => expect(result.current.search).toBe(""));
   });
 
-  it("finds only the people with no email or no phone", () => {
-    expect(matchesFor("missing:email ")).toEqual(["fintech"]);
-    expect(matchesFor("missing:phone ")).toEqual(["vc"]);
+  it("looks up a near: place once, as soon as its pill forms", async () => {
+    const result = renderFilter();
+    act(() =>
+      result.current.filter.setRawInput("near:London near:london/5km "),
+    );
+    expect(result.current.filter.effectiveFilters[0].resolving).toBe(true);
+    await waitFor(() => expect(ids(result)).toEqual(["vc"]));
+    expect(searchPlace).toHaveBeenCalledTimes(1);
   });
 });

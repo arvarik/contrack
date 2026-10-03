@@ -176,3 +176,31 @@ export function clearBounds(
   const northEast = map.unproject([container.clientWidth - right, 0]);
   return [southWest.lng, southWest.lat, northEast.lng, northEast.lat];
 }
+
+/** The attribute on the toolbar ("top") and on the bottom line ("bottom"). */
+const MAP_CHROME_ATTR = "data-map-chrome";
+
+/**
+ * Where a card may open: the map less its covers, its toolbar and its bottom
+ * line, 8 px clear. A contact that is closing still counts as a cover.
+ */
+export function cardPadding(container: HTMLElement): PaddingOptions {
+  const rect = container.getBoundingClientRect();
+  const { right, bottom } = measureInsets(container, { contactOpen: true });
+  const edges = { top: 0, bottom };
+  for (const el of container.ownerDocument.querySelectorAll<HTMLElement>(
+    `[${MAP_CHROME_ATTR}]`,
+  )) {
+    const box = el.getBoundingClientRect();
+    if (box.height === 0) continue;
+    if (el.getAttribute(MAP_CHROME_ATTR) === "top")
+      edges.top = Math.max(edges.top, box.bottom - rect.top);
+    else edges.bottom = Math.max(edges.bottom, rect.bottom - box.top);
+  }
+  return {
+    top: edges.top + 8,
+    right: right + 8,
+    bottom: edges.bottom + 8,
+    left: 8,
+  };
+}
