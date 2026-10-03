@@ -16,9 +16,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
 import { actionItemService } from "../../services/actionItemService.ts";
 import { NotFoundError, ValidationError } from "../../utils/AppError.ts";
-import { dateSchema } from "../../utils/validators.ts";
+import { actionItemRoutes } from "../../../shared/contracts/actionItems.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
+
+// The REST bodies of the same writes. A tool's title and due date are checked
+// exactly as the routes check them.
+const createBody = actionItemRoutes.create.body.shape;
+const updateBody = actionItemRoutes.update.body.shape;
 
 export function registerActionItemTools(
   server: McpServer,
@@ -92,10 +97,10 @@ export function registerActionItemTools(
       description: MCP_TOOL_DESCRIPTIONS.create_action_item,
       inputSchema: {
         contactId: z.string().min(1).describe("Contact ID"),
-        title: z.string().trim().min(1).describe("Title of the action item"),
+        title: createBody.title.describe("Title of the action item"),
         // The REST route's rule. A value such as "next Friday" would be
         // saved, and then never count as overdue or due today.
-        dueAt: dateSchema.describe(
+        dueAt: createBody.dueAt.describe(
           "Due date in ISO 8601: a day (2026-11-03) or a date and time",
         ),
       },
@@ -120,12 +125,10 @@ export function registerActionItemTools(
       description: MCP_TOOL_DESCRIPTIONS.update_action_item,
       inputSchema: {
         id: z.string().min(1).describe("Action item ID to change"),
-        title: z.string().trim().min(1).optional().describe("The new title"),
-        dueAt: dateSchema
-          .optional()
-          .describe(
-            "The new due date in ISO 8601: a day (2026-11-03) or a date and time",
-          ),
+        title: updateBody.title.describe("The new title"),
+        dueAt: updateBody.dueAt.describe(
+          "The new due date in ISO 8601: a day (2026-11-03) or a date and time",
+        ),
       },
       annotations: {
         idempotentHint: true,

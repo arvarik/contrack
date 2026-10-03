@@ -20,6 +20,7 @@ import type { ContactPayload } from "../../repositories/types.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { normalizePhone } from "../../utils/nlp/phone.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
+import { contactRoutes } from "../../../shared/contracts/contacts.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
 
 /**
@@ -81,6 +82,14 @@ function edit(
 }
 
 const lower = (value: string) => value.trim().toLowerCase();
+
+// The REST bodies of the same writes. A profile field is checked exactly as
+// `POST /api/contacts` and `PUT /api/contacts/:id` check it. The emails,
+// phones, tags and the tracking flag keep the tools' own shapes: the REST
+// bodies also take bare strings and "true" or "1" for them, which a model
+// does not need to see.
+const createBody = contactRoutes.create.body.shape;
+const updateBody = contactRoutes.replace.body.shape;
 
 export function registerContactTools(
   server: McpServer,
@@ -218,13 +227,13 @@ export function registerContactTools(
     {
       description: MCP_TOOL_DESCRIPTIONS.create_contact,
       inputSchema: {
-        name: z.string().min(1).describe("Full name of the contact"),
-        headline: z.string().optional().describe("Professional headline"),
-        role: z.string().optional().describe("Job title or role"),
-        company: z.string().optional().describe("Company or organization"),
-        location: z.string().optional().describe("Location or city"),
-        about: z.string().optional().describe("Bio or background notes"),
-        industry: z.string().optional().describe("Industry"),
+        name: createBody.name.describe("Full name of the contact"),
+        headline: createBody.headline.describe("Professional headline"),
+        role: createBody.role.describe("Job title or role"),
+        company: createBody.company.describe("Company or organization"),
+        location: createBody.location.describe("Location or city"),
+        about: createBody.about.describe("Bio or background notes"),
+        industry: createBody.industry.describe("Industry"),
         emails: z
           .array(
             z.object({
@@ -295,22 +304,23 @@ export function registerContactTools(
         id: z.string().min(1).describe("Contact ID to update"),
         fields: z
           .object({
-            name: z.string().optional(),
-            role: z.string().optional(),
-            company: z.string().optional(),
-            location: z.string().optional(),
-            headline: z.string().optional(),
-            about: z.string().optional(),
-            industry: z.string().optional(),
-            themeColor: z.string().optional(),
+            name: updateBody.name,
+            role: updateBody.role,
+            company: updateBody.company,
+            location: updateBody.location,
+            headline: updateBody.headline,
+            about: updateBody.about,
+            industry: updateBody.industry,
+            themeColor: updateBody.themeColor,
             isTracked: z
               .boolean()
               .optional()
               .describe("Keep up with this person (true) or stop (false)"),
-            cadenceDays: z
-              .number()
-              .int()
-              .positive()
+            // The REST rule without its null: a tracked contact with no
+            // cadence never comes due, so a model may not clear it.
+            cadenceDays: createBody.cadenceDays
+              .unwrap()
+              .unwrap()
               .optional()
               .describe(
                 "How often to keep up, in days: 30, 60, 90, 180 or 365",

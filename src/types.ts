@@ -1,203 +1,73 @@
 /**
  * Shared Frontend Type Definitions.
  *
- * These interfaces define the JSON shapes consumed by React components and
- * React Query hooks. They mirror the server's `HydratedContact` shape from
- * `server/repositories/types.ts` — if you modify one, verify the other.
+ * The JSON shapes React components and React Query hooks read. A resource
+ * with a contract in `shared/contracts/` takes its type from there, under the
+ * name the app has always used, so the server's answer and the app's type
+ * cannot drift apart. The rest are written here by hand.
  *
- * @see {@link file://server/repositories/types.ts} — Server-side counterpart
+ * @see {@link file://shared/contracts/index.ts} — the contracts
  */
 
 import type { MatchedOn } from "../shared/matchedOn";
 import type { RefineOption } from "../shared/facetQuery";
+import type {
+  ActionItem as ActionItemContract,
+  QueuedActionItem,
+} from "../shared/contracts/actionItems";
+import type {
+  Contact as ContactContract,
+  ContactAddress,
+  ContactEducation,
+  ContactEmail,
+  ContactExperience,
+  ContactPhone,
+  ContactSocialLink,
+} from "../shared/contracts/contacts";
+import type {
+  Interaction as InteractionContract,
+  InteractionSearchHit,
+  TimelineEntry,
+} from "../shared/contracts/interactions";
 
-// =============================================================================
-// Normalized Child Entity Types
-// =============================================================================
-// Each child entity has its own database table with a CASCADE FK to `contacts`.
-// All `id` fields are server-issued UUIDv4 strings (`nanoid`-compatible).
-// =============================================================================
-
-/** A single email address attached to a contact. Multiple per contact allowed. */
-export interface ContactEmail {
-  /** Server-issued primary key. */
-  id: string;
-  /** RFC-5321 syntactically valid email address. Not validated for deliverability. */
-  email: string;
-  /** Free-form label such as `"work"`, `"personal"`, or the importer's tag. */
-  label: string;
-  /** True when this email should be presented as the contact's default. */
-  isPrimary: boolean;
-  /** Origin tag (`"linkedin"`, `"google"`, `"manual"`, etc.) or `null` if unknown. */
-  source: string | null;
-}
-
-/** A single phone number attached to a contact. Stored as the original string. */
-export interface ContactPhone {
-  id: string;
-  /** Raw phone string as entered/imported. Not normalized to E.164 in this type. */
-  phone: string;
-  label: string;
-  isPrimary: boolean;
-  source: string | null;
-}
-
-/** A social or professional URL with platform classification. */
-export interface ContactSocialLink {
-  id: string;
-  /** Normalized platform tag (`"linkedin"`, `"twitter"`, `"github"`, …). */
-  platform: string;
-  url: string;
-  /** Username/handle extracted from the URL when one is detectable. */
-  handle: string | null;
-  source: string | null;
-}
-
-/** A school / degree row from a contact's education history. */
-export interface ContactEducation {
-  id: string;
-  school: string;
-  degree: string | null;
-  fieldOfStudy: string | null;
-  /** ISO-8601 date string or `null` if unknown. */
-  startDate: string | null;
-  endDate: string | null;
-  description: string | null;
-}
-
-/** A single job / role in a contact's work history. */
-export interface ContactExperience {
-  id: string;
-  company: string;
-  role: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  /** True for the contact's current job. Multiple `isCurrent: true` rows are allowed. */
-  isCurrent: boolean;
-  description: string | null;
-  location: string | null;
-}
-
-/** A per-import provenance record — which platform did this contact come from. */
-interface ContactSource {
-  id: string;
-  platform: string;
-  /** External system's stable ID for this contact (e.g. LinkedIn member URN). */
-  externalId: string | null;
-  /** When the relationship was originally formed on the source platform. */
-  connectedOn: string | null;
-  /** When this row was created in Contrack. */
-  importedAt: string;
-}
-
-/** A free-form tag. Multiple tags per contact, no schema-enforced taxonomy. */
-interface ContactTag {
-  id: string;
-  tag: string;
-}
-
-/** A user-created list/group of contacts. */
-export interface ContactList {
-  id: string;
-  name: string;
-  /** Lucide icon name used for the list's chip rendering. */
-  icon: string;
-  /** Drag-and-drop order. Lower values appear first. */
-  sortOrder: number;
-  createdAt: string;
-  /** Server-computed count of members; only populated when this list is fetched in list-mode. */
-  memberCount?: number;
-}
-
-/** A postal address attached to a contact. */
-export interface ContactAddress {
-  id: string;
-  address: string;
-  label: string;
-  isPrimary: boolean;
-}
+export type {
+  ContactAddress,
+  ContactEducation,
+  ContactEmail,
+  ContactExperience,
+  ContactPhone,
+  ContactSocialLink,
+};
+export type { ContactList } from "../shared/contracts/lists";
 
 // =============================================================================
 // Primary Entity Types
 // =============================================================================
 
 /**
- * The fully-hydrated contact shape returned by `GET /api/contacts/:id`.
+ * A contact as the app holds it: the whole contact that
+ * `GET /api/contacts/:id` sends (`Contact` in shared/contracts/contacts.ts),
+ * and the fields that only the list view and the search answers add.
  *
- * Mirror of {@link import("../../server/repositories/types").HydratedContact} —
- * if you change the server-side `HydratedContact`, update this interface too.
+ * Two fields keep the type the views have always read. The server sends
+ * `cadenceDays: null` and `themeColor: null` after a write that sent null,
+ * and the views read a number and a string, so the hooks in `src/api/` cast
+ * the contract's contact to this one at the fetch.
  *
- * Optional fields (`aiBriefing`, `aiSummary`, etc.) are present only on
- * single-contact responses. The list endpoint returns a `ContactSlim`
- * variant in `src/api/contacts.ts`.
+ * The app keeps the list view's rows as Contacts too, although the server
+ * sends them with fewer fields (`SlimContact`): see `fetchContactsSlim`.
  */
-export interface Contact {
-  id: string;
-  name: string;
-  firstName: string | null;
-  lastName: string | null;
-  headline: string | null;
-  role: string | null;
-  company: string | null;
-  location: string | null;
-  birthday: string | null;
-  preferences: string | null;
-  avatarUrl: string | null;
-  isGhost: boolean;
-  isArchived: boolean;
-  /**
-   * A person chose to keep up with this contact. Only a tracked contact has
-   * a score, a place on Pulse and a tint on the map.
-   */
-  isTracked: boolean;
-  /** When `isTracked` last turned on. Null while untracked. */
-  trackedAt: string | null;
-  addedAt: string;
-  updatedAt: string;
+export type Contact = Omit<ContactContract, "cadenceDays" | "themeColor"> & {
   cadenceDays: number;
-  lastContactedAt: string | null;
-  nextFollowUpAt: string | null;
   themeColor: string;
-  about: string | null;
-  pronouns: string | null;
-  industry: string | null;
-  website: string | null;
-  lat: number | null;
-  lng: number | null;
-  /** Who placed the pin: the geocoder, a person, or nobody yet. */
-  geoSource?: "geocoder" | "manual" | null;
-  aiBriefing?: string | null;
-  aiBriefingAt?: string | null;
-  aiSummary?: string | null;
-  aiBackground?: string | null;
-  /** Research record JSON (shared/researchRecord.ts), from enrichment. */
-  aiResearch?: string | null;
-  aiHydratedAt?: string | null;
-  // Relations (populated by server JOINs)
-  emails: ContactEmail[];
-  phones: ContactPhone[];
-  socialLinks: ContactSocialLink[];
-  education: ContactEducation[];
-  experience: ContactExperience[];
-  sources: ContactSource[];
-  tags: ContactTag[];
-  lists: ContactList[];
-  addresses: ContactAddress[];
-  interests: { id: string; interest: string; isAiGenerated?: boolean }[];
-  attributes: { id: string; name: string; value: string }[];
-  interactionCount?: number;
-  relationshipScore?: number;
-  /** Computed by API — number of social links (available in slim view) */
+  /** The list view: how many social links the contact has. */
   socialLinkCount?: number;
-  /**
-   * Computed by the API in the slim view: the last research run's outcome,
-   * or null before any run.
-   */
+  /** The list view: the last research run's outcome, or null before any run. */
   researchOutcome?: "added" | "nothing-new" | "no-public-info" | null;
   /** True when returned via approximate/fuzzy matching rather than exact FTS5 match */
   approximate?: boolean;
   matchType?: "exact" | "approximate";
-}
+};
 
 /**
  * Mutation payload type for contact updates.
@@ -226,9 +96,17 @@ export type ContactUpdateData = Partial<
   phones?: Partial<ContactPhone>[];
   addresses?: Partial<ContactAddress>[];
   socialLinks?: Partial<ContactSocialLink>[];
-  interests?: { id?: string; interest: string; isAiGenerated?: boolean }[];
+  /**
+   * The contact page sends its interests back as it got them, with the flag
+   * as the server sends it: 0 or 1.
+   */
+  interests?: {
+    id?: string;
+    interest: string;
+    isAiGenerated?: boolean | number | null;
+  }[];
   attributes?: { id?: string; name: string; value: string }[];
-  tags?: Partial<ContactTag>[];
+  tags?: { id?: string; tag?: string }[];
   education?: Partial<ContactEducation>[];
   experience?: Partial<ContactExperience>[];
 };
@@ -264,71 +142,44 @@ export interface ParsedContactData extends Partial<
 }
 
 /**
- * A single entry on a contact's interaction timeline.
+ * An interaction as the app holds it: the row every interaction route sends
+ * (`Interaction` in shared/contracts/interactions.ts), with what the
+ * timeline adds to each entry.
  *
- * `type` is intentionally a free-form string (not an enum) because the UI
- * recognizes a closed set but the import pipeline may inject custom types
- * (e.g. CSV import sources). Well-known values rendered by the UI:
- *   `note`, `call`, `meeting`, `email`, `message`, `sms`, `import`,
- *   `linkedin`, `facebook`.
+ * `type` is a free-form string. Well-known values the UI renders: `note`,
+ * `call`, `meeting`, `email`, `message`, `sms`, `import`, `linkedin`,
+ * `facebook`.
  */
-export interface Interaction {
-  id: string;
-  contactId: string;
-  /** Well-known: `note`, `call`, `meeting`, `email`, `message`, `sms`, `import`, `linkedin`, `facebook`. */
-  type: string;
-  title: string;
-  /** Tiptap-rendered HTML or raw text. Nullable for type-only entries (e.g. system imports). */
-  content: string | null;
-  /** ISO-8601 instant when the interaction occurred (NOT the row's insert time). */
-  date: string;
-  /** Human-formatted duration (`"42m"`, `"1h 5m"`). Stored as a string for free-form display. */
-  duration: string | null;
-  fileUrl?: string | null;
-  fileName?: string | null;
-  fileType?: string | null;
-  source?: string | null;
-  /** JSON-encoded array of mentioned contact IDs. Decoded on the server side. */
-  mentions?: string | null;
-  /** When this interaction was created via a @mention, the displayed name of the mentioning contact. */
-  isViaName?: string | null;
-  /** When this interaction was created via a @mention, the ID of the mentioning contact. */
-  isViaId?: string | null;
-  updatedAt?: string | null;
-  /** Linked follow-up tasks. Populated by joined queries; absent on the bare POST request. */
-  actionItems?: {
-    id: string;
-    title: string;
-    dueAt: string;
-    completedAt: string | null;
-  }[];
-  /** Write-only — accepted by POST to create a linked action item in the same call. */
-  actionItem?: { title: string; dueAt: string };
-}
+export type Interaction = InteractionContract &
+  Partial<Pick<TimelineEntry, "isViaName" | "isViaId" | "actionItems">> & {
+    /**
+     * Write-only: `POST /api/contacts/:id/interactions` makes this follow-up
+     * in the same write as the note.
+     */
+    actionItem?: { title: string; dueAt: string };
+  };
 
 /**
- * A first-class follow-up task linked to a contact.
+ * A follow-up task linked to a contact (`ActionItem` in
+ * shared/contracts/actionItems.ts).
  *
- * Fields prefixed with `contact*` are joined from `contacts` and are only
- * populated on global-list endpoints (`GET /api/action-items`). The
- * per-contact endpoint returns the bare row.
+ * The `contact*` fields come only with the account's queue
+ * (`GET /api/action-items` and `/completed`). One contact's own items are the
+ * bare row. `interactionId` and `ownerId` stay optional because the Pulse
+ * payload of `GET /api/dashboard`, which has no contract yet, types its items
+ * by this one too.
  */
-export interface ActionItem {
-  id: string;
-  contactId: string;
-  title: string;
-  /** ISO-8601 instant of the next planned outreach. */
-  dueAt: string;
-  /** `null` until completed. Once stamped, the row is hidden from the active queue. */
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  // Joined from contacts (only on global list endpoints)
-  contactName?: string;
-  contactCompany?: string | null;
-  contactAvatarUrl?: string | null;
-  contactThemeColor?: string;
-}
+export type ActionItem = Omit<ActionItemContract, "interactionId" | "ownerId"> &
+  Partial<Pick<ActionItemContract, "interactionId" | "ownerId">> &
+  Partial<
+    Pick<
+      QueuedActionItem,
+      | "contactName"
+      | "contactCompany"
+      | "contactAvatarUrl"
+      | "contactThemeColor"
+    >
+  >;
 
 // =============================================================================
 // Dedupe Engine Types
@@ -567,27 +418,12 @@ export interface ZeroStatePayload {
 /** Start and end offsets of a matched term, in UTF-16 code units. */
 export type HighlightRange = [number, number];
 
-/** One note that answered a search: the person, the date, and the passage. */
-export interface InteractionSearchHit {
-  /** The interaction id. */
-  id: string;
-  contactId: string;
-  type: string;
-  title: string;
-  /** The interaction date exactly as stored. */
-  date: string;
-  /** The best passage of the body, or its opening when the title matched. */
-  excerpt: string | null;
-  highlights: { title: HighlightRange[]; excerpt: HighlightRange[] };
-  contact: {
-    id: string;
-    name: string;
-    avatarUrl: string | null;
-    themeColor: string | null;
-    company: string | null;
-    role: string | null;
-  };
-}
+/**
+ * One note that answered a search: the person, the date, and the passage.
+ * `GET /api/interactions/search` has its contract, and this route sends the
+ * same hits.
+ */
+export type { InteractionSearchHit };
 
 /** The period a search was limited to, and where it came from. */
 interface InteractionSearchRange {

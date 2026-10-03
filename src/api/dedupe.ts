@@ -1,4 +1,5 @@
-import { ApiError, apiFetch, apiJson } from "./client";
+import { ApiError, apiFetch, apiJson, jsonBody } from "./client";
+import { contactRoutes } from "../../shared/contracts/contacts";
 import { fetchAuthStatus } from "./auth";
 import { emitAuthExpired } from "../lib/appEvents";
 import { corvidReact } from "../lib/corvid";
@@ -16,7 +17,7 @@ import { corvidReact } from "../lib/corvid";
  */
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Contact, DedupeScanMode, DedupeScanProgress } from "../types";
+import type { DedupeScanMode, DedupeScanProgress } from "../types";
 import { suggestionKeys } from "./suggestions";
 
 const API_BASE = "/api";
@@ -277,24 +278,18 @@ export const useDedupeStream = (
 export const useMergeContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       primaryId,
       duplicateId,
     }: {
       primaryId: string;
       duplicateId: string;
-    }) => {
-      const res = await apiFetch(`/contacts/merge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primaryId, duplicateId }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Merge failed");
-      }
-      return res.json();
-    },
+    }) =>
+      apiJson(
+        contactRoutes.merge,
+        `/contacts/merge`,
+        jsonBody({ primaryId, duplicateId }),
+      ),
     onSuccess: () => {
       // Two records made one: the corvid tidies its own feathers.
       corvidReact("preen");
@@ -314,29 +309,18 @@ export const useMergeContacts = () => {
 export const useMergeCluster = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       primaryId,
       duplicateIds,
     }: {
       primaryId: string;
       duplicateIds: string[];
-    }) => {
-      const res = await apiFetch(`/contacts/merge-cluster`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ primaryId, duplicateIds }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Cluster merge failed");
-      }
-      return res.json() as Promise<{
-        success: boolean;
-        merged: number;
-        failed: number;
-        contact: Contact;
-      }>;
-    },
+    }) =>
+      apiJson(
+        contactRoutes.mergeCluster,
+        `/contacts/merge-cluster`,
+        jsonBody({ primaryId, duplicateIds }),
+      ),
     onSuccess: () => {
       // Two records made one: the corvid tidies its own feathers.
       corvidReact("preen");
@@ -357,24 +341,12 @@ export const useMergeCluster = () => {
 export const useMergeClusters = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (
-      clusters: { primaryId: string; duplicateIds: string[] }[],
-    ) => {
-      const res = await apiFetch(`/contacts/merge-clusters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clusters }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Batch cluster merge failed");
-      }
-      return res.json() as Promise<{
-        results: { primaryId: string; merged: number; failed: number }[];
-        totalMerged: number;
-        totalFailed: number;
-      }>;
-    },
+    mutationFn: (clusters: { primaryId: string; duplicateIds: string[] }[]) =>
+      apiJson(
+        contactRoutes.mergeClusters,
+        `/contacts/merge-clusters`,
+        jsonBody({ clusters }),
+      ),
     onSuccess: () => {
       // Two records made one: the corvid tidies its own feathers.
       corvidReact("preen");

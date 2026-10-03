@@ -25,6 +25,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SessionMethod } from "../../shared/devices";
 import type { MapStyleUrls } from "../../shared/geo";
 import {
+  tokenRoutes,
+  type ApiToken,
+  type CreatedApiToken,
+} from "../../shared/contracts/tokens";
+import {
   ApiError,
   API_BASE,
   NetworkError,
@@ -98,28 +103,10 @@ interface AuthStatus {
 }
 
 /** One personal API token, as the account's own token list shows it. */
-export interface ApiTokenSummary {
-  id: string;
-  name: string;
-  /** The first twelve characters, enough to tell two tokens apart. */
-  tokenPrefix: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  revokedAt: string | null;
-  /** True when the token may only read, and sees only the read-only MCP tools. */
-  readOnly: boolean;
-}
+export type ApiTokenSummary = ApiToken;
 
 /** The response to creating a token. `token` exists here and nowhere else. */
-export interface CreatedApiToken {
-  id: string;
-  name: string;
-  token: string;
-  tokenPrefix: string;
-  expiresAt: string | null;
-  readOnly: boolean;
-}
+export type { CreatedApiToken };
 
 export interface SessionSummary {
   id: string;
@@ -299,7 +286,7 @@ export function revokeOtherSessions(): Promise<{ revoked: number }> {
 
 /** The account's tokens, newest first, revoked and expired ones included. */
 export function fetchApiTokens(): Promise<{ tokens: ApiTokenSummary[] }> {
-  return apiJson("/auth/tokens");
+  return apiJson(tokenRoutes.list, "/auth/tokens");
 }
 
 /**
@@ -313,14 +300,12 @@ export function createApiToken(input: {
   expiresInDays?: number | null;
   readOnly?: boolean;
 }): Promise<CreatedApiToken> {
-  return apiJson("/auth/tokens", { method: "POST", ...jsonBody(input) });
+  return apiJson(tokenRoutes.create, "/auth/tokens", jsonBody(input));
 }
 
 /** Stop a token working. The row stays, so its owner can see what happened. */
 export function revokeApiToken(id: string): Promise<{ revoked: true }> {
-  return apiJson(`/auth/tokens/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+  return apiJson(tokenRoutes.revoke, `/auth/tokens/${encodeURIComponent(id)}`);
 }
 
 // ---------------------------------------------------------------------------

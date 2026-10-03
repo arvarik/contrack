@@ -66,6 +66,7 @@
     "audit:contrast": "node scripts/contrast-audit.mjs",
     "brand:icons": "node scripts/brand/build-icons.ts",
     "docs:wiki": "node scripts/docs/wiki.ts",
+    "api:openapi": "node scripts/openapi.ts",
     "tenancy:verify": "node scripts/tenancy-verify.ts",
     "eval:record": "node scripts/record-search-eval.ts",
     "test:eval": "vitest run --project eval",

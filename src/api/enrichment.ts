@@ -1,4 +1,5 @@
 import { apiJson } from "./client";
+import { contactRoutes } from "../../shared/contracts/contacts";
 import { useAuth } from "../components/auth/AuthGate";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 /**
@@ -59,14 +60,6 @@ export const useGroundingCapacity = () => {
 // Mutations
 // =============================================================================
 
-interface EnrichResult {
-  success: boolean;
-  fieldsUpdated: number;
-  latencyMs: number;
-  models: string[];
-  tokenCount: number;
-}
-
 /**
  * Single-contact enrichment mutation.
  * Fires TwoPassStrategy (grounding → extraction → merge) for one contact.
@@ -74,7 +67,7 @@ interface EnrichResult {
 export const useEnrichContact = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (contactId: string): Promise<EnrichResult> =>
+    mutationFn: (contactId: string) =>
       // Three branches used to sit here reading `res.status` for 429, 503 and
       // "not ok". None of them could run: `apiFetch` throws `ApiError` for
       // every non-2xx, so the response this function sees is always a 2xx.
@@ -82,9 +75,7 @@ export const useEnrichContact = () => {
       // grounding quota, which since Phase 3 is usually the per-account AI
       // limiter instead. The message is now decided in `onError`, from the
       // code the server actually sent.
-      apiJson<EnrichResult>(`/contacts/${contactId}/enrich`, {
-        method: "POST",
-      }),
+      apiJson(contactRoutes.enrich, `/contacts/${contactId}/enrich`),
     onSuccess: (data, contactId) => {
       // Invalidate contact data so the UI refreshes with new fields
       qc.invalidateQueries({ queryKey: ["contacts"] });

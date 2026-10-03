@@ -23,6 +23,7 @@ import {
   emitPasswordChangeRequired,
 } from "../lib/appEvents";
 import { noteCorvidActivity } from "../lib/corvid";
+import type { ResponseOf, RouteContract } from "../../shared/contracts/route";
 
 export const API_BASE = "/api";
 
@@ -263,7 +264,8 @@ export async function apiFetch(
 }
 
 /**
- * The parsed body of a response, or an {@link ApiError} describing why not.
+ * The parsed body of a success. `apiFetch` has already thrown an
+ * {@link ApiError} for anything else.
  *
  * Use this for anything that reads JSON, which is nearly everything:
  * `handleResponse<Shape>(await apiFetch(path))`. A `204` and an empty body
@@ -271,16 +273,42 @@ export async function apiFetch(
  * not have to pretend to return something.
  */
 async function handleResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) throw await failureOf(res);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
 }
 
-/** `apiFetch` and `handleResponse` in one call, for the ordinary JSON case. */
-export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  return handleResponse<T>(await apiFetch(path, init));
+/**
+ * `apiFetch` and `handleResponse` in one call, for the ordinary JSON case.
+ *
+ * Give it the route's contract from `shared/contracts/` and it sends the
+ * contract's method and types the answer by the contract's response. The
+ * answer is not parsed: the types say what the server sends, and the
+ * integration suite checks that it does. A route with no contract yet takes
+ * the type it is given.
+ */
+export async function apiJson<C extends RouteContract>(
+  contract: C,
+  path: string,
+  init?: Omit<RequestInit, "method">,
+): Promise<ResponseOf<C>>;
+export async function apiJson<T>(path: string, init?: RequestInit): Promise<T>;
+export async function apiJson(
+  pathOrContract: string | RouteContract,
+  pathOrInit?: string | RequestInit,
+  init?: Omit<RequestInit, "method">,
+): Promise<unknown> {
+  if (typeof pathOrContract === "string")
+    return handleResponse(
+      await apiFetch(pathOrContract, pathOrInit as RequestInit | undefined),
+    );
+  return handleResponse(
+    await apiFetch(pathOrInit as string, {
+      ...init,
+      method: pathOrContract.method,
+    }),
+  );
 }
 
 /** A JSON request body, with the header the server needs to parse it. */

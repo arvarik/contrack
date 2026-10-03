@@ -49,8 +49,16 @@ const api = vi.hoisted(() => ({
   hold: false,
   release: null as null | (() => void),
 }));
-vi.mock("../../../../src/api/client", () => ({
+vi.mock("../../../../src/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../src/api/client")>()),
   apiFetch: (...args: unknown[]) => api.fetch(...args),
+  // A hook names its route's contract: the request reaches `api.fetch` with
+  // the contract's method, as it reaches the server.
+  apiJson: async (
+    route: { method: string },
+    path: string,
+    init?: RequestInit,
+  ) => (await api.fetch(path, { ...init, method: route.method })).json(),
 }));
 
 const prefs = vi.hoisted(() => ({

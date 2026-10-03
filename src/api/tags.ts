@@ -7,15 +7,13 @@
  * @module api/tags
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiJson } from "./client";
+import { apiJson, jsonBody } from "./client";
+import { tagRoutes, type TagSummary } from "../../shared/contracts/tags";
 
-export interface TagSummary {
-  tag: string;
-  count: number;
-}
+export type { TagSummary };
 
 const fetchTagSummary = async (): Promise<TagSummary[]> => {
-  const data = await apiJson<{ tags: TagSummary[] }>("/tags/summary");
+  const data = await apiJson(tagRoutes.summary, "/tags/summary");
   return data.tags;
 };
 
@@ -25,14 +23,14 @@ export const useTagSummary = () =>
     queryFn: fetchTagSummary,
   });
 
-const renameTag = (
-  fromTag: string,
-  toTag: string,
-): Promise<{ affected: number }> =>
-  apiJson<{ affected: number }>(`/tags/${encodeURIComponent(fromTag)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ to: toTag }),
-  });
+// `jsonBody` sets the Content-Type. Without it the browser sends the JSON as
+// text/plain, the server does not parse it, and the rename is refused.
+const renameTag = (fromTag: string, toTag: string) =>
+  apiJson(
+    tagRoutes.rename,
+    `/tags/${encodeURIComponent(fromTag)}`,
+    jsonBody({ to: toTag }),
+  );
 
 export const useRenameTag = () => {
   const queryClient = useQueryClient();
@@ -46,10 +44,8 @@ export const useRenameTag = () => {
   });
 };
 
-const deleteTag = (tag: string): Promise<{ affected: number }> =>
-  apiJson<{ affected: number }>(`/tags/${encodeURIComponent(tag)}`, {
-    method: "DELETE",
-  });
+const deleteTag = (tag: string) =>
+  apiJson(tagRoutes.delete, `/tags/${encodeURIComponent(tag)}`);
 
 export const useDeleteTag = () => {
   const queryClient = useQueryClient();

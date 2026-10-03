@@ -1,4 +1,4 @@
-import { idsSchema } from "../utils/validators.ts";
+import { idsSchema } from "../../shared/contracts/common.ts";
 // =============================================================================
 // Routes — Data Lifecycle: trash (undoable deletes), backups, full export
 // =============================================================================
