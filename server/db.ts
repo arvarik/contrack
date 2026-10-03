@@ -352,7 +352,8 @@ sqlite.exec(`
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     lastUsedAt TEXT,
     expiresAt TEXT,
-    revokedAt TEXT
+    revokedAt TEXT,
+    readOnly INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(userId);
 
@@ -429,6 +430,16 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_auth_links_user ON auth_links(userId, createdAt);
   CREATE INDEX IF NOT EXISTS idx_auth_links_cleanup ON auth_links(expiresAt, usedAt);
 `);
+
+// `readOnly` came after the table. A token made before it reads and writes,
+// which is what every token did then, so the default is 0.
+const tokenCols = sqlite.pragma("table_info(api_tokens)") as { name: string }[];
+if (!tokenCols.some((c) => c.name === "readOnly")) {
+  sqlite.exec(
+    "ALTER TABLE api_tokens ADD COLUMN readOnly INTEGER NOT NULL DEFAULT 0",
+  );
+  log.info("Database", "Added readOnly column to api_tokens");
+}
 
 // =============================================================================
 // 2z-3. Dedupe tables

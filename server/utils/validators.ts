@@ -377,6 +377,7 @@ export const registerSchema = z.object({
 export const tokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),
   expiresInDays: z.number().int().min(1).max(3650).nullable().optional(),
+  readOnly: z.boolean().optional(),
 });
 
 /** Body for PUT /api/admin/settings. Either field may be sent alone. */

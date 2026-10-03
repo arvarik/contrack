@@ -73,6 +73,11 @@ interface CreateInteractionPayload {
   source?: string | null;
   actionItem?: { title: string; dueAt: string };
   skipMentions?: boolean;
+  /**
+   * The other people in the interaction, by contact ID, from an MCP client.
+   * They are linked as given, and no model reads the text for names.
+   */
+  mentionContactIds?: string[];
 }
 
 /** Payload for updating an existing interaction. Only title and content are mutable. */
@@ -325,6 +330,13 @@ export const interactionService = {
     const { type, title, content, date, duration, source } = body;
     const id = crypto.randomUUID();
     const now = date || new Date().toISOString();
+    // The people the caller named by ID. The scoped read drops an ID the
+    // caller does not own, as it drops an editor mention below.
+    const linked = body.mentionContactIds?.length
+      ? contactRepo
+          .findManyOwned(scope, body.mentionContactIds)
+          .filter((row) => row.deletedAt == null && row.id !== contactId)
+      : [];
 
     const result = sqlite.transaction(() => {
       const res = db
@@ -339,9 +351,24 @@ export const interactionService = {
           date: now,
           duration: duration || null,
           source: source || null,
+          // The note draws these people as it draws the ones AI finds.
+          mentions: linked.length
+            ? JSON.stringify(
+                linked.map((row) => ({
+                  contactId: row.id,
+                  name: String(row.name),
+                  isGhost: row.isGhost === 1,
+                })),
+              )
+            : null,
         })
         .returning()
         .get();
+
+      const insertLinked = sqlite.prepare(
+        "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
+      );
+      for (const row of linked) insertLinked.run(id, row.id);
 
       if (content) {
         // Tolerate any attributes between data-type and data-id — TipTap does
@@ -421,6 +448,7 @@ export const interactionService = {
     if (
       content &&
       !body.skipMentions &&
+      !body.mentionContactIds?.length &&
       process.env.DISABLE_BACKGROUND_JOBS !== "true"
     ) {
       setTimeout(() => {

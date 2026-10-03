@@ -101,6 +101,8 @@ export const apiTokens = sqliteTable("api_tokens", {
   lastUsedAt: text("lastUsedAt"),
   expiresAt: text("expiresAt"),
   revokedAt: text("revokedAt"),
+  /** 1 for a token that may read and call the read-only MCP tools only. */
+  readOnly: integer("readOnly").notNull().default(0),
 });
 
 /** invitations — a signup link an admin hands out. */

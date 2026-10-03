@@ -613,6 +613,18 @@ const TOKEN_EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
   { value: 0, label: "Never" },
 ];
 
+/**
+ * What a new token may do. A read-only token reads, and its MCP client sees
+ * only the tools that change nothing. Read and write is the default, which
+ * is what every token was before the choice existed.
+ */
+type TokenAccess = "write" | "read";
+
+const TOKEN_ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
+  { value: "write", label: "Read and write" },
+  { value: "read", label: "Read only" },
+];
+
 type TokenState = "active" | "revoked" | "expired";
 
 /** What a token is doing now, from the two timestamps that can end it. */
@@ -655,6 +667,7 @@ const TokenRow = ({
             {token.name}
           </span>
           <TokenStateBadge state={state} />
+          {token.readOnly && <Badge tone="primary">read-only</Badge>}
         </p>
         <p className="text-xs text-on-surface-variant font-mono truncate">
           {token.tokenPrefix}…
@@ -702,6 +715,7 @@ const CreateTokenModal = ({
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(90);
+  const [access, setAccess] = useState<TokenAccess>("write");
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
 
   const create = useMutation({
@@ -709,6 +723,7 @@ const CreateTokenModal = ({
       createApiToken({
         name: name.trim(),
         expiresInDays: expiresInDays || null,
+        readOnly: access === "read",
       }),
     onSuccess: (token) => {
       setCreated(token);
@@ -724,6 +739,7 @@ const CreateTokenModal = ({
     window.setTimeout(() => {
       setName("");
       setExpiresInDays(90);
+      setAccess("write");
       setCreated(null);
       create.reset();
     }, 200);
@@ -743,7 +759,10 @@ const CreateTokenModal = ({
             <code className="font-mono text-on-surface">
               Authorization: Bearer …
             </code>
-            . It acts as your account and reaches only your data
+            .{" "}
+            {created.readOnly
+              ? "It acts as your account, reaches only your data, and can only read"
+              : "It acts as your account and reaches only your data"}
           </p>
           <SecretReveal value={created.token} label="Token" />
           <div className="flex justify-end">
@@ -787,6 +806,21 @@ const CreateTokenModal = ({
                 Prefer a date you will remember to renew
               </p>
             )}
+          </div>
+          <div className="space-y-1.5">
+            <span className={SETTINGS_LABEL}>Access</span>
+            <Segmented
+              label="Access"
+              className="sm:w-fit"
+              value={access}
+              options={TOKEN_ACCESS_OPTIONS}
+              onChange={setAccess}
+            />
+            <p className="text-xs text-on-surface-variant text-pretty">
+              {access === "read"
+                ? "It can search and read your data, and cannot change anything. An MCP client sees only the read-only tools"
+                : "It can read and change your contacts, notes, lists, and follow-ups"}
+            </p>
           </div>
           <div className="flex justify-end">
             <SaveButton busy={create.isPending} disabled={!name.trim()}>

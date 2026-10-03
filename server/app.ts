@@ -45,6 +45,7 @@ import { mapViewsRouter } from "./routes/mapViews.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import {
   attachPrincipal,
+  guardReadOnlyToken,
   isAuthRequired,
   requireAdmin,
   requireAuth,
@@ -253,6 +254,11 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // produce, including the errors. `cacheControl.ts` says why each prefix is
   // on the list.
   app.use([...NO_STORE_PREFIXES], noStore);
+
+  // A read-only token reads, and talks to the MCP server. Mounted before the
+  // auth router, so the preference routes there, which a token may write to,
+  // are covered too.
+  app.use(["/api", "/uploads"], guardReadOnlyToken);
 
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —

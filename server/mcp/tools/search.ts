@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { Request } from "express";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
-import { searchService } from "../../services/searchService.ts";
+import { PHASE1_LIMIT, searchService } from "../../services/searchService.ts";
 import { searchInteractions } from "../../services/interactionSearchService.ts";
 import {
   matchesFacet,
@@ -39,14 +39,18 @@ export function registerSearchTools(
           .describe(
             "Natural language query across names, notes, and background",
           ),
+        // The search ranks at most PHASE1_LIMIT matches, and the filters
+        // below narrow those. A larger limit would promise what it cannot give.
         limit: z
           .number()
           .int()
           .min(1)
-          .max(50)
+          .max(PHASE1_LIMIT)
           .default(20)
           .optional()
-          .describe("Maximum results to return (default 20, max 50)"),
+          .describe(
+            `Maximum results to return (default 20, max ${PHASE1_LIMIT})`,
+          ),
         role: z.string().optional().describe("Filter by job title or role"),
         company: z.string().optional().describe("Filter by company"),
         location: z.string().optional().describe("Filter by location"),

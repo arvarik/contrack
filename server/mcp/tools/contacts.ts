@@ -15,10 +15,72 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
 import { contactService } from "../../services/contactService.ts";
 import { relationshipService } from "../../services/relationshipService.ts";
-import { mcpService } from "../../services/mcpService.ts";
+import { mcpService, type ContactMatch } from "../../services/mcpService.ts";
+import type { ContactPayload } from "../../repositories/types.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
+import { normalizePhone } from "../../utils/nlp/phone.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
+
+/**
+ * What list_contacts returns for each contact. The row holds more, such as
+ * the research record and the search fields, which cost a client tokens and
+ * tell it nothing. get_contact returns the whole profile.
+ */
+const LIST_FIELDS =
+  "id,name,headline,role,company,location,industry,isTracked,cadenceDays,lastContactedAt,nextFollowUpAt,isArchived,addedAt,updatedAt";
+
+/**
+ * create_contact's refusal of an email or phone a contact already has. The
+ * message names the contact, because some clients show their model the
+ * message and nothing else.
+ */
+function duplicateError(matches: ContactMatch[]): AppError {
+  const held = matches.map(
+    (m) =>
+      `${m.name} (${m.id}${m.isArchived ? ", archived" : ""}) has ${m.matched}`,
+  );
+  return new AppError(
+    `A contact already has this email or phone: ${held.join("; ")}. Change that contact with update_contact, or set allowDuplicate to create another.`,
+    409,
+    { code: "DUPLICATE_CONTACT", details: { matches } },
+  );
+}
+
+/** One email, phone or tag, with the fields the contact form keeps. */
+interface Entry {
+  value: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+
+/**
+ * A contact's emails, phones or tags with `add` put on the end and `remove`
+ * taken out. `key` says when two are the same one: an email or a tag without
+ * regard to case, a phone by its digits. updateContact saves the whole list,
+ * as the contact form does, so every entry the caller did not name stays.
+ * When the primary one goes, the first one left becomes primary.
+ */
+function edit(
+  entries: Entry[],
+  key: (value: string) => string,
+  add: string[] = [],
+  remove: string[] = [],
+): Entry[] {
+  const gone = new Set(remove.map(key));
+  const kept = entries.filter((entry) => !gone.has(key(entry.value)));
+  for (const value of add) {
+    if (!kept.some((entry) => key(entry.value) === key(value))) {
+      kept.push({ value: value.trim() });
+    }
+  }
+  if (kept.length > 0 && !kept.some((entry) => entry.isPrimary)) {
+    kept[0] = { ...kept[0], isPrimary: true };
+  }
+  return kept;
+}
+
+const lower = (value: string) => value.trim().toLowerCase();
 
 export function registerContactTools(
   server: McpServer,
@@ -77,6 +139,30 @@ export function registerContactTools(
         role: z.string().optional().describe("Filter contacts by role"),
         company: z.string().optional().describe("Filter contacts by company"),
         industry: z.string().optional().describe("Filter contacts by industry"),
+        location: z
+          .string()
+          .optional()
+          .describe("Filter contacts by location, a partial match"),
+        tag: z
+          .string()
+          .optional()
+          .describe("Filter by a tag, without regard to case"),
+        list: z
+          .string()
+          .optional()
+          .describe("Filter by a list's ID or its whole name"),
+        email: z
+          .string()
+          .email()
+          .optional()
+          .describe(
+            "Only the contacts with this email, without regard to case",
+          ),
+        phone: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Only the contacts with this phone number, by its digits"),
         updatedSince: z
           .string()
           .optional()
@@ -98,11 +184,17 @@ export function registerContactTools(
       const contacts = mcpService.queryContacts(scope, {
         limit,
         offset,
+        fields: LIST_FIELDS,
         role: params.role,
         company: params.company,
         industry: params.industry,
         updatedSince: params.updatedSince,
         tracked: params.tracked,
+        location: params.location,
+        tag: params.tag,
+        list: params.list,
+        email: params.email,
+        phone: params.phone,
       });
       const nextCursor =
         contacts.length === limit ? String(offset + contacts.length) : null;
@@ -157,12 +249,26 @@ export function registerContactTools(
           .array(z.object({ tag: z.string() }))
           .optional()
           .describe("Tags to attach"),
+        allowDuplicate: z
+          .boolean()
+          .optional()
+          .describe(
+            "Create the contact even when a contact already has one of its emails or phones",
+          ),
       },
       annotations: {
         idempotentHint: false,
       },
     },
-    trackedTool(onError, async (body) => {
+    trackedTool(onError, async ({ allowDuplicate, ...body }) => {
+      if (!allowDuplicate) {
+        const matches = mcpService.findByEmailOrPhone(
+          scope,
+          (body.emails ?? []).map((e) => e.email),
+          (body.phones ?? []).map((p) => p.phone),
+        );
+        if (matches.length > 0) throw duplicateError(matches);
+      }
       // No `autoEnrich`: "Enrich new contacts automatically" researches the
       // contacts a person adds, not the ones an MCP client adds.
       const contact = contactService.createContact(scope, body);
@@ -209,12 +315,99 @@ export function registerContactTools(
               .describe(
                 "How often to keep up, in days: 30, 60, 90, 180 or 365",
               ),
+            addEmails: z
+              .array(z.string().email())
+              .optional()
+              .describe("Emails to add. The contact keeps its others"),
+            removeEmails: z
+              .array(z.string())
+              .optional()
+              .describe("Emails to remove, without regard to case"),
+            addPhones: z
+              .array(z.string().min(1))
+              .optional()
+              .describe("Phone numbers to add. The contact keeps its others"),
+            removePhones: z
+              .array(z.string())
+              .optional()
+              .describe("Phone numbers to remove, matched by their digits"),
+            addTags: z
+              .array(z.string().trim().min(1))
+              .optional()
+              .describe("Tags to add. The contact keeps its others"),
+            removeTags: z
+              .array(z.string())
+              .optional()
+              .describe("Tags to remove, without regard to case"),
           })
           .describe("Fields to update on the contact"),
       },
     },
     trackedTool(onError, async ({ id, fields }) => {
-      const updated = contactService.updateContact(scope, id, fields);
+      const {
+        addEmails,
+        removeEmails,
+        addPhones,
+        removePhones,
+        addTags,
+        removeTags,
+        ...scalars
+      } = fields;
+      const body: ContactPayload = { ...scalars };
+
+      if (
+        addEmails ||
+        removeEmails ||
+        addPhones ||
+        removePhones ||
+        addTags ||
+        removeTags
+      ) {
+        const current = contactService.getContactById(scope, id);
+        if (!current) throw new NotFoundError("Contact", id);
+        if (addEmails || removeEmails) {
+          body.emails = edit(
+            current.emails.map((e) => ({
+              value: e.email,
+              label: e.label ?? undefined,
+              isPrimary: e.isPrimary,
+            })),
+            lower,
+            addEmails,
+            removeEmails,
+          ).map(({ value, label, isPrimary }) => ({
+            email: value,
+            label,
+            isPrimary,
+          }));
+        }
+        if (addPhones || removePhones) {
+          body.phones = edit(
+            current.phones.map((p) => ({
+              value: p.phone,
+              label: p.label ?? undefined,
+              isPrimary: p.isPrimary,
+            })),
+            normalizePhone,
+            addPhones,
+            removePhones,
+          ).map(({ value, label, isPrimary }) => ({
+            phone: value,
+            label,
+            isPrimary,
+          }));
+        }
+        if (addTags || removeTags) {
+          body.tags = edit(
+            current.tags.map((t) => ({ value: t.tag })),
+            lower,
+            addTags,
+            removeTags,
+          ).map(({ value }) => ({ tag: value }));
+        }
+      }
+
+      const updated = contactService.updateContact(scope, id, body);
       if (!updated) {
         throw new NotFoundError("Contact", id);
       }

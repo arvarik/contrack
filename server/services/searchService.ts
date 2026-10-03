@@ -81,9 +81,10 @@ export const searchCoalescer = new RequestCoalescer();
 /**
  * Maximum candidates to hydrate and send in Phase 1.
  * Keeps the instant payload small (~30 full contact objects ≈ 40KB)
- * while still providing comprehensive results.
+ * while still providing comprehensive results. Exported for the MCP
+ * search_people tool, which cannot return more matches than this.
  */
-const PHASE1_LIMIT = 30;
+export const PHASE1_LIMIT = 30;
 
 /**
  * Maximum candidates sent to the LLM reranker.

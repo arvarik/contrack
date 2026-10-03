@@ -13,7 +13,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
 import { contactService } from "../../services/contactService.ts";
 import { interactionService } from "../../services/interactionService.ts";
+import { contactRepo } from "../../repositories/contactRepository.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
+import { pastDateSchema } from "../../utils/validators.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
 
@@ -80,18 +82,46 @@ export function registerInteractionTools(
           .describe(
             "Interaction type (e.g. note, meeting, email, call, message)",
           ),
-        title: z.string().min(1).describe("Summary title of the interaction"),
+        title: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Summary title of the interaction"),
         content: z
           .string()
           .optional()
           .describe("Notes, discussion details, or email body"),
-        date: z
-          .string()
+        // The REST route's rule: an interaction has happened. A future date
+        // would make the contact look caught up with until that day.
+        date: pastDateSchema
           .optional()
-          .describe("Date/time in ISO 8601 format (defaults to now)"),
+          .describe(
+            "When it happened, in ISO 8601: a day (2026-09-14) or a date and time. Not in the future. Defaults to now",
+          ),
+        mentionContactIds: z
+          .array(z.string().min(1))
+          .optional()
+          .describe(
+            "The IDs of the other contacts in it. Each one shows it on their timeline. When given, no AI reads the text for names",
+          ),
       },
     },
     trackedTool(onError, async (body) => {
+      // Every ID must be a contact in the account, or nothing is logged. The
+      // service drops an unknown ID quietly, as the note editor wants, and a
+      // client should hear about a wrong ID instead.
+      const mentionIds = [...new Set(body.mentionContactIds ?? [])].filter(
+        (id) => id !== body.contactId,
+      );
+      const found = new Set(
+        contactRepo
+          .findManyOwned(scope, mentionIds)
+          .filter((row) => row.deletedAt == null && row.canonicalId == null)
+          .map((row) => row.id),
+      );
+      const missing = mentionIds.find((id) => !found.has(id));
+      if (missing) throw new NotFoundError("Contact", missing);
+
       const created = interactionService.createInteraction(
         scope,
         body.contactId,
@@ -100,6 +130,7 @@ export function registerInteractionTools(
           title: body.title,
           content: body.content,
           date: body.date,
+          mentionContactIds: mentionIds.length ? mentionIds : undefined,
         },
       );
 

@@ -4,7 +4,9 @@
  * Implements:
  * - list_tags
  * - list_lists
+ * - create_list
  * - add_to_list
+ * - remove_from_list
  *
  * @module server/mcp/tools/taxonomy
  */
@@ -14,6 +16,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
 import { mcpService } from "../../services/mcpService.ts";
 import { listService } from "../../services/listService.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
 
@@ -74,6 +77,48 @@ export function registerTaxonomyTools(
   );
 
   server.registerTool(
+    "create_list",
+    {
+      description: MCP_TOOL_DESCRIPTIONS.create_list,
+      inputSchema: {
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(60)
+          .describe("The list's name, up to 60 characters"),
+      },
+      annotations: {
+        idempotentHint: false,
+      },
+    },
+    trackedTool(onError, async ({ name }) => {
+      // The app allows two lists with one name. A client that asks for a
+      // list it already made would make a second one, so it is refused here.
+      const taken = (
+        listService.getAllLists(scope) as { id: string; name: string }[]
+      ).find((list) => list.name.toLowerCase() === name.toLowerCase());
+      if (taken) {
+        throw new AppError(
+          `A list named "${taken.name}" already exists (${taken.id}). Use add_to_list with that ID.`,
+          409,
+          { code: "DUPLICATE_LIST", details: { listId: taken.id } },
+        );
+      }
+      const list = listService.createList(scope, name);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Created list "${list.name}" (${list.id})`,
+          },
+        ],
+        structuredContent: list as unknown as Record<string, unknown>,
+      };
+    }),
+  );
+
+  server.registerTool(
     "add_to_list",
     {
       description: MCP_TOOL_DESCRIPTIONS.add_to_list,
@@ -94,13 +139,48 @@ export function registerTaxonomyTools(
         content: [
           {
             type: "text" as const,
-            text: `Added ${contactIds.length} contact(s) to list ${listId}`,
+            // The count of rows written: a contact already in the list adds
+            // nothing, and saying so keeps the client's picture right.
+            text: `Added ${added} contact(s) to list ${listId}`,
           },
         ],
         structuredContent: {
           success: true,
           listId,
           addedCount: added,
+          requestedCount: contactIds.length,
+        },
+      };
+    }),
+  );
+
+  server.registerTool(
+    "remove_from_list",
+    {
+      description: MCP_TOOL_DESCRIPTIONS.remove_from_list,
+      inputSchema: {
+        listId: z.string().min(1).describe("List ID to remove contacts from"),
+        contactIds: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Array of contact IDs to remove from the list"),
+      },
+      annotations: {
+        idempotentHint: true,
+      },
+    },
+    trackedTool(onError, async ({ listId, contactIds }) => {
+      const removed = listService.bulkRemoveMembers(scope, listId, contactIds);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Removed ${removed} contact(s) from list ${listId}`,
+          },
+        ],
+        structuredContent: {
+          listId,
+          removedCount: removed,
           requestedCount: contactIds.length,
         },
       };

@@ -1,5 +1,5 @@
 /**
- * server/mcp/tools/index.ts — Registry aggregator for all 15 MCP tools.
+ * server/mcp/tools/index.ts — Registry aggregator for every MCP tool.
  *
  * @module server/mcp/tools
  */
