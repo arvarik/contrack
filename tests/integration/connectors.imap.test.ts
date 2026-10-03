@@ -409,6 +409,10 @@ describe("IMAP Adapter Integration", () => {
       .prepare("DELETE FROM contact_emails WHERE contactId = ?")
       .run(contactId);
     sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(contactId);
+    // What the writes recorded and queued. Both name the owner, and both
+    // keys restrict the delete of the account.
+    sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
+    sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
   });
 });

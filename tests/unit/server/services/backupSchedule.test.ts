@@ -5,6 +5,9 @@
 // The schedule guard used `!== undefined`, so Compose users got Number("")=0
 // and the disable branch: default 24h snapshots silently OFF. Found by the
 // independent v1.5.4 review; pinned here so it cannot come back.
+//
+// The scheduled backup is a job now. `startBackupSchedule` answers with the
+// gap the job runs at, or null when the schedule is off.
 // =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -12,7 +15,7 @@ import { startBackupSchedule } from "../../../../server/services/backupService.t
 
 const saved: Record<string, string | undefined> = {};
 const KEYS = ["BACKUP_INTERVAL_HOURS", "DISABLE_BACKGROUND_JOBS"];
-let handle: NodeJS.Timeout | null = null;
+let handle: number | null = null;
 
 beforeEach(() => {
   for (const key of KEYS) {
@@ -23,7 +26,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  if (handle) clearInterval(handle);
   handle = null;
   for (const key of KEYS) {
     if (saved[key] === undefined) delete process.env[key];
@@ -61,13 +63,9 @@ describe("startBackupSchedule", () => {
 
   it("honours an explicit interval", () => {
     process.env.BACKUP_INTERVAL_HOURS = "6";
-    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
     handle = startBackupSchedule();
     expect(handle).not.toBeNull();
-    expect(setIntervalSpy).toHaveBeenCalledWith(
-      expect.any(Function),
-      6 * 3_600_000,
-    );
+    expect(handle).toBe(6 * 3_600_000);
   });
 
   it("stays off under DISABLE_BACKGROUND_JOBS regardless", () => {

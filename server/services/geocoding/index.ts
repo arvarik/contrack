@@ -2,8 +2,6 @@ import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { queueGeocode } from "./queue.ts";
 
-const STARTUP_DELAY_MS = 2000;
-
 /**
  * Contacts with an address and no pin, across every account.
  *
@@ -24,20 +22,26 @@ export function contactsAwaitingGeocode(): { id: string; location: string }[] {
     .all() as { id: string; location: string }[];
 }
 
-export function startRetroactiveGeocoding(): void {
-  setTimeout(() => {
-    const ungeocoded = contactsAwaitingGeocode();
+/**
+ * Queue every contact that has an address and no pin. The start-up job
+ * `geocode.startup` (server/jobs/geocoding.ts) runs it once, shortly after
+ * boot.
+ *
+ * @returns how many contacts were queued.
+ */
+export function queueRetroactiveGeocoding(): number {
+  const ungeocoded = contactsAwaitingGeocode();
 
-    if (ungeocoded.length > 0) {
-      log.info(
-        "Geocode",
-        `Queuing ${ungeocoded.length} contact(s) for startup geocoding (cache will deduplicate)`,
-      );
-      for (const c of ungeocoded) {
-        queueGeocode(c.id, c.location);
-      }
+  if (ungeocoded.length > 0) {
+    log.info(
+      "Geocode",
+      `Queuing ${ungeocoded.length} contact(s) for startup geocoding (cache will deduplicate)`,
+    );
+    for (const c of ungeocoded) {
+      queueGeocode(c.id, c.location);
     }
-  }, STARTUP_DELAY_MS);
+  }
+  return ungeocoded.length;
 }
 
 export { queueGeocode };

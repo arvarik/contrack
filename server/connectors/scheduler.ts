@@ -1,12 +1,16 @@
 /**
  * server/connectors/scheduler.ts — Background sync scheduler for connectors.
  *
- * Runs every 60 seconds when background jobs are enabled:
+ * One tick, which the recurring job `connectors.tick` runs every 60 seconds
+ * when background jobs are enabled (server/jobs/connectors.ts):
  * - Selects due active connectors (nextRunAt <= now)
  * - Limits execution to CONNECTOR_SYNC_CONCURRENCY (default 2)
  * - Restricts to at most one connector per owner per tick
  * - Runs each sync inside runWithContext with owner scope
  * - Respects shutdown via AbortSignal
+ *
+ * A tick starts the syncs and returns. They run on, under these limits, and
+ * stopConnectorScheduler aborts them at shutdown.
  *
  * @module server/connectors/scheduler
  */
@@ -18,20 +22,23 @@ import { scopeForOwnerId } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { runNow } from "./service.ts";
 
-let timer: NodeJS.Timeout | null = null;
 let abortController: AbortController | null = null;
 
 const activeRuns = new Set<string>();
 const activeOwners = new Set<string>();
 const runningPromises = new Set<Promise<void>>();
 
+/**
+ * `running` is true from the first tick until stopConnectorScheduler, the
+ * time in which a sync may be in flight.
+ */
 export function getSchedulerState(): {
   running: boolean;
   activeRunsCount: number;
   activeOwnersCount: number;
 } {
   return {
-    running: timer !== null,
+    running: abortController !== null,
     activeRunsCount: activeRuns.size,
     activeOwnersCount: activeOwners.size,
   };
@@ -122,34 +129,11 @@ export async function tickScheduler(): Promise<void> {
   }
 }
 
-export function startConnectorScheduler(): void {
-  if (timer !== null) return;
-
-  abortController = new AbortController();
-  log.info("Connectors", "Connector background scheduler started (tick: 60s)");
-
-  // Run initial tick on next microtask
-  setImmediate(() => {
-    tickScheduler().catch((err) =>
-      log.error("Connectors", "Error in initial scheduler tick", {
-        error: err,
-      }),
-    );
-  });
-
-  timer = setInterval(() => {
-    tickScheduler().catch((err) =>
-      log.error("Connectors", "Error in scheduler tick", { error: err }),
-    );
-  }, 60_000);
-}
-
+/**
+ * Shutdown: abort the syncs in flight and wait up to five seconds for them.
+ * The job runner stops the ticks themselves.
+ */
 export async function stopConnectorScheduler(): Promise<void> {
-  if (timer) {
-    clearInterval(timer);
-    timer = null;
-  }
-
   if (abortController) {
     abortController.abort();
     abortController = null;

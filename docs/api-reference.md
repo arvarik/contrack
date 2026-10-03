@@ -231,11 +231,12 @@ send `Cache-Control: no-store`. Uploaded files send
 
 ## Health
 
-| Endpoint       | What it does                                                                                                                                                                                                                                                                                        | Access |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "tenancy", "fts" }, "vec", "expects": { "tenancy", "fts" } }`. `schema` is what the database is on, and `expects` is what this build wants. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
+| Endpoint       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                   | Access |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "migration", "expects" }, "vec" }`. `schema.migration` is the last migration the database applied, such as `0002_events_and_jobs`, and `schema.expects` is the last one this build holds. They are equal when an upgrade is complete. `vec` is the sqlite-vec version. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
 
-For sizes, queues and backups, use `GET /api/admin/health`.
+For sizes, queues, backups and the version of each search index, use
+`GET /api/admin/health`.
 
 ## Authentication
 
@@ -1124,6 +1125,7 @@ password: an account with a temporary password gets
 | `POST /api/admin/mail/test`                | Send a test message to `to`, or to you. Answers `{ sentTo }`. `502 MAIL_SEND_FAILED` with the reason.                                                                                      | admin  |
 | `GET /api/admin/audit`                     | The audit log, newest first: `{ entries, nextBefore }`. `limit`, `before` and `action` (a comma list of known actions).                                                                    | admin  |
 | `GET /api/admin/health`                    | The instance's state: uptime, schema versions, database and WAL size, the last backup, the queues, index coverage per account, cache tiers and the AI provider state. It holds no secrets. | admin  |
+| `GET /api/admin/jobs`                      | The background jobs: `{ recurring, failed }`. Each recurring job with `every` in milliseconds, its last run, its result and its next run, then the jobs that failed in the last day.       | admin  |
 
 `PUT /api/admin/settings` takes `registrationOpen`, `sessionTtlDays`,
 `instanceName` (up to 60 characters, an empty string clears it),

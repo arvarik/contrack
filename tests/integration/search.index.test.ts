@@ -4,6 +4,7 @@ import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { sqlite } from "../../server/db.ts";
+import { recordIndexVersion } from "../../server/db/runner.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
 import {
@@ -67,7 +68,7 @@ describe("search index lifecycle", () => {
     expect(lexicalSearch(scope(), "Alice").map((r) => r.contactId)).toEqual([
       "active",
     ]);
-    sqlite.pragma("user_version = 1");
+    recordIndexVersion(sqlite, "contacts_fts", 1);
     installSearchIndex(sqlite);
     expect(lexicalSearch(scope(), "Alice").map((r) => r.contactId)).toEqual([
       "active",
@@ -175,7 +176,7 @@ describe("search index lifecycle", () => {
       CREATE VIRTUAL TABLE contacts_fts USING fts5(contactId UNINDEXED, name,
         company, role, headline, location, about, industry, tags, extras,
         searchExpansion, ownerTok, prefix='2 3 4');`);
-    sqlite.pragma("user_version = 5");
+    recordIndexVersion(sqlite, "contacts_fts", 5);
     installSearchIndex(sqlite);
     expect(ids("Legacy")).toEqual(["old"]);
   });
@@ -183,7 +184,7 @@ describe("search index lifecycle", () => {
   it("uses stable contact rowids after migration and repeated installation", () => {
     insert("one");
     insert("two");
-    sqlite.pragma("user_version = 1");
+    recordIndexVersion(sqlite, "contacts_fts", 1);
     installSearchIndex(sqlite);
     installSearchIndex(sqlite);
     const rows = sqlite

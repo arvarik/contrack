@@ -31,6 +31,7 @@ const OWNED_TABLES = [
   "dedupe_exclusions",
   "dedupe_merge_log",
   "ai_invocations",
+  "events",
 ];
 
 /**
@@ -62,6 +63,7 @@ const REQUIRED_TRIGGERS = [
   "lists_owner_required",
   "dedupe_merge_log_owner_required",
   "ai_invocations_owner_required",
+  "events_owner_required",
   "interactions_owner_fill",
   "interactions_owner_check",
   "action_items_owner_fill",

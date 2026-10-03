@@ -661,6 +661,11 @@ export function purgeOwner(ownerId: string): void {
       "connector_runs",
       "connectors",
       "oauth_states",
+      // What the account's writes recorded, and the background work done for
+      // it. `jobs` is not an owned table, because an instance job has no
+      // owner, but an account's jobs name it, and both keys restrict.
+      "events",
+      "jobs",
     ]) {
       sqlite.prepare(`DELETE FROM ${table} WHERE ownerId = ?`).run(ownerId);
     }

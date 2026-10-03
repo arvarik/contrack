@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
 
 interface ListRow {
   id: string;
@@ -174,9 +175,25 @@ export const listService = {
       .get(id, scope.ownerId) as { id: string; name: string } | undefined;
     if (!existing) return null;
 
-    sqlite
-      .prepare("DELETE FROM lists WHERE id = ? AND ownerId = ?")
-      .run(id, scope.ownerId);
+    sqlite.transaction(() => {
+      // The members go with the list, by cascade. Read first, so the event
+      // can say who left it.
+      const members = (
+        sqlite
+          .prepare("SELECT contactId FROM list_members WHERE listId = ?")
+          .all(id) as { contactId: string }[]
+      ).map((row) => row.contactId);
+      sqlite
+        .prepare("DELETE FROM lists WHERE id = ? AND ownerId = ?")
+        .run(id, scope.ownerId);
+      if (members.length > 0) {
+        recordEvent(scope, "list.members_changed", id, {
+          added: [],
+          removed: members,
+        });
+      }
+    })();
+    dispatchEvents();
     return existing;
   },
 
@@ -190,11 +207,20 @@ export const listService = {
       .get(contactId, scope.ownerId);
     if (!contact) throw new NotFoundError("Contact");
 
-    sqlite
-      .prepare(
-        "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
-      )
-      .run(listId, contactId);
+    sqlite.transaction(() => {
+      const added = sqlite
+        .prepare(
+          "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
+        )
+        .run(listId, contactId).changes;
+      if (added > 0) {
+        recordEvent(scope, "list.members_changed", listId, {
+          added: [contactId],
+          removed: [],
+        });
+      }
+    })();
+    dispatchEvents();
     return true;
   },
 
@@ -209,9 +235,18 @@ export const listService = {
     if (!contactRepo.findOwned(scope, contactId))
       throw new NotFoundError("Contact");
 
-    sqlite
-      .prepare("DELETE FROM list_members WHERE listId = ? AND contactId = ?")
-      .run(listId, contactId);
+    sqlite.transaction(() => {
+      const removed = sqlite
+        .prepare("DELETE FROM list_members WHERE listId = ? AND contactId = ?")
+        .run(listId, contactId).changes;
+      if (removed > 0) {
+        recordEvent(scope, "list.members_changed", listId, {
+          added: [],
+          removed: [contactId],
+        });
+      }
+    })();
+    dispatchEvents();
     return true;
   },
 
@@ -232,15 +267,24 @@ export const listService = {
     );
     if (usable.length !== unique.length) throw new NotFoundError("Contact");
 
-    let count = 0;
+    const added: string[] = [];
     const insertFn = sqlite.transaction(() => {
       const stmt = sqlite.prepare(
         "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
       );
-      for (const row of usable) count += stmt.run(listId, row.id).changes;
+      for (const row of usable) {
+        if (stmt.run(listId, row.id).changes > 0) added.push(row.id);
+      }
+      if (added.length > 0) {
+        recordEvent(scope, "list.members_changed", listId, {
+          added,
+          removed: [],
+        });
+      }
     });
     insertFn();
-    return count;
+    dispatchEvents();
+    return added.length;
   },
 
   /**
@@ -257,13 +301,22 @@ export const listService = {
     const owned = contactRepo.findManyOwned(scope, unique);
     if (owned.length !== unique.length) throw new NotFoundError("Contact");
 
-    let count = 0;
+    const removed: string[] = [];
     sqlite.transaction(() => {
       const stmt = sqlite.prepare(
         "DELETE FROM list_members WHERE listId = ? AND contactId = ?",
       );
-      for (const row of owned) count += stmt.run(listId, row.id).changes;
+      for (const row of owned) {
+        if (stmt.run(listId, row.id).changes > 0) removed.push(row.id);
+      }
+      if (removed.length > 0) {
+        recordEvent(scope, "list.members_changed", listId, {
+          added: [],
+          removed,
+        });
+      }
     })();
-    return count;
+    dispatchEvents();
+    return removed.length;
   },
 };

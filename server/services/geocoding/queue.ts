@@ -1,5 +1,5 @@
 import { db } from "../../db.ts";
-import * as schema from "../../../src/db/schema.ts";
+import * as schema from "../../db/schema.ts";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import {

@@ -82,6 +82,22 @@ the change. Say why in the pull request.
   predicate an index seek; `npm run lint:tenant` scans the server's SQL.
 - **Lint**: `npm run lint` (Oxlint, `tsc --noEmit`, the tenant lint) and
   `npm run knip`.
+- **Migrations** (`db.migrations.test.ts`): a new database ends at the last
+  migration with the schema of `tests/fixtures/schema/v2.0-d67c8a9.sql` plus
+  what later migrations add, byte for byte. A database built from that
+  fixture upgrades to the same schema and keeps its FTS index. A migration
+  that throws keeps nothing. `server/db/schema.ts` names every table and
+  column. A new migration adds the name of each object it creates to
+  `ADDED_SINCE_FIXTURE`. `tenancy.schema.test.ts` boots the same database
+  twice and checks that the second boot changes nothing.
+- **Events** (`events.test.ts`): a rename through `PATCH` and through `PUT`
+  gets the same reactions, an event in a transaction that rolls back is
+  never dispatched, and a subscriber that throws runs again without undoing
+  the write.
+- **Jobs** (`jobs.test.ts`): `runJobNow` runs with background jobs off, a
+  `running` row is queued again at boot, a failing job retries and then ends
+  `failed`, and two accounts' jobs take turns. `pollJobs(now)` takes the
+  clock as an argument, so a retry an hour out needs no waiting.
 
 ## 6. The browser suite
 

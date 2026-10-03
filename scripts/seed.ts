@@ -1,5 +1,5 @@
 import "../server/utils/loadEnv.ts";
-import * as schema from "../src/db/schema.ts";
+import * as schema from "../server/db/schema.ts";
 // The server's own database module, not a private connection: this resolves
 // DATA_DIR identically to the app AND runs migrations on import, so seeding
 // a brand-new data directory works instead of dying on "no such table".

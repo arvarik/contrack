@@ -14,6 +14,11 @@
 // Config (env):
 //   BACKUP_INTERVAL_HOURS — schedule cadence (default 24; 0 disables schedule)
 //   BACKUP_KEEP           — rotation depth (default 7 most recent)
+//
+// The schedule is two jobs (server/jobs/backups.ts): the startup snapshot,
+// 15 seconds after boot, and the scheduled backup, every interval. The
+// interval is a setting that can change at run time, and
+// `rescheduleBackups` moves the next run when it does.
 // =============================================================================
 
 import fs from "fs";
@@ -28,6 +33,7 @@ import {
   backupKeep,
   registerBackupIntervalChangeListener,
 } from "./lifecycleSettings.ts";
+import { nextRunOf, scheduleNextRun } from "../jobs/runner.ts";
 
 export const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 
@@ -352,45 +358,49 @@ function warnAboutStaleBackups(intervalHours: number): void {
   }
 }
 
-let backupScheduleTimer: NodeJS.Timeout | null = null;
-let startupSnapshotTimeout: NodeJS.Timeout | null = null;
+/** The job kind of the scheduled backup (server/jobs/backups.ts). */
+export const SCHEDULED_BACKUP_JOB = "backup.scheduled";
 
-/** Returns the active schedule timer handle, or null. */
-export function getActiveBackupTimer(): NodeJS.Timeout | null {
-  return backupScheduleTimer;
+/**
+ * The gap between scheduled backups, in milliseconds, or null when the
+ * interval setting turns them off (0, or a value that is not a number).
+ * Read each time a backup is scheduled, so a changed setting applies to the
+ * next one.
+ */
+export function backupIntervalMs(): number | null {
+  const hours = backupIntervalHours().value;
+  return Number.isFinite(hours) && hours > 0 ? hours * 3_600_000 : null;
 }
 
 /**
- * Reschedule the recurring backup timer.
- * Keeps the timer handle in the module, clears it before starting a new one,
- * runs on boot and after the setting changes, and does nothing when
+ * Move the next scheduled backup to one interval from now, or cancel it when
+ * the interval is off. Runs when the setting changes. Does nothing when
  * DISABLE_BACKGROUND_JOBS is true.
+ *
+ * @returns when the next scheduled backup runs, in epoch milliseconds, or
+ *   null when there is none.
  */
-export function rescheduleBackups(): NodeJS.Timeout | null {
-  if (backupScheduleTimer) {
-    clearInterval(backupScheduleTimer);
-    backupScheduleTimer = null;
-  }
-
+export function rescheduleBackups(): number | null {
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
 
   const hours = backupIntervalHours().value;
-  if (!Number.isFinite(hours) || hours <= 0) {
+  const every = backupIntervalMs();
+  if (every === null) {
     log.info("Backup", `Scheduled backups disabled (interval=${hours})`);
+    scheduleNextRun(SCHEDULED_BACKUP_JOB, null);
     return null;
   }
 
-  const run = () =>
-    runBackup().catch((err) =>
-      log.warn("Backup", `Scheduled backup failed: ${getErrorMessage(err)}`),
-    );
-
   warnAboutStaleBackups(hours);
-
-  backupScheduleTimer = setInterval(run, hours * 3_600_000);
-  backupScheduleTimer.unref();
+  const next = Date.now() + every;
+  scheduleNextRun(SCHEDULED_BACKUP_JOB, next);
   log.info("Backup", `Scheduled backups every ${hours}h (keep ${keepCount()})`);
-  return backupScheduleTimer;
+  return next;
+}
+
+/** When the next scheduled backup runs, or null when none is queued. */
+export function nextBackupRun(): string | null {
+  return nextRunOf(SCHEDULED_BACKUP_JOB);
 }
 
 // Automatically reschedule whenever the interval setting changes.
@@ -399,33 +409,30 @@ registerBackupIntervalChangeListener(() => {
 });
 
 /**
- * Start the recurring backup schedule on boot (startup snapshot + interval).
- * Returns the interval handle, or null when disabled.
+ * Boot: say when the backups seem to have stopped, and how often they run.
+ * The runs themselves are jobs, which the runner schedules: the startup
+ * snapshot 15 seconds after boot (so migrations and backfills settle first),
+ * and the scheduled backup every interval.
+ *
+ * @returns the gap between scheduled backups in milliseconds, or null when
+ *   they are off or background jobs are.
  */
-export function startBackupSchedule(): NodeJS.Timeout | null {
+export function startBackupSchedule(): number | null {
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
 
-  const run = () =>
-    runBackup().catch((err) =>
-      log.warn("Backup", `Scheduled backup failed: ${getErrorMessage(err)}`),
-    );
+  const hours = backupIntervalHours().value;
+  const every = backupIntervalMs();
+  if (every === null) {
+    log.info("Backup", `Scheduled backups disabled (interval=${hours})`);
+    return null;
+  }
 
-  // Startup snapshot shortly after boot (let migrations/backfills settle).
-  if (startupSnapshotTimeout) clearTimeout(startupSnapshotTimeout);
-  startupSnapshotTimeout = setTimeout(run, 15_000);
-  startupSnapshotTimeout.unref();
-
-  return rescheduleBackups();
+  warnAboutStaleBackups(hours);
+  log.info("Backup", `Scheduled backups every ${hours}h (keep ${keepCount()})`);
+  return every;
 }
 
-/** Stop all backup timers (used for test teardown). */
+/** Cancel the next scheduled backup. Nothing runs until it is rescheduled. */
 export function stopBackupSchedule(): void {
-  if (backupScheduleTimer) {
-    clearInterval(backupScheduleTimer);
-    backupScheduleTimer = null;
-  }
-  if (startupSnapshotTimeout) {
-    clearTimeout(startupSnapshotTimeout);
-    startupSnapshotTimeout = null;
-  }
+  scheduleNextRun(SCHEDULED_BACKUP_JOB, null);
 }

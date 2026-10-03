@@ -9,7 +9,7 @@
 // If you modify anything here, verify the frontend counterpart stays in sync.
 // =============================================================================
 
-import type * as schema from "../../src/db/schema.ts";
+import type * as schema from "../db/schema.ts";
 
 // =============================================================================
 // Row types — inferred from Drizzle schema (read-side)

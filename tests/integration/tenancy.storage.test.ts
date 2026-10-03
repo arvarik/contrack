@@ -21,6 +21,7 @@ import {
   vecTableDdl,
 } from "../../server/db.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
+import { recordIndexVersion } from "../../server/db/runner.ts";
 import { rebuildSearchEmbeddingTable } from "../../server/services/search/vectorIndex.ts";
 import { rebuildDedupeEmbeddingTable } from "../../server/services/dedupe/embeddings.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
@@ -151,7 +152,7 @@ describe("the cost of a contact update", () => {
     })();
 
     // Force the versioned rebuild gate, which is the path an upgrade takes.
-    sqlite.pragma("user_version = 0");
+    recordIndexVersion(sqlite, "contacts_fts", 0);
     const started = performance.now();
     installSearchIndex(sqlite);
     const elapsed = performance.now() - started;

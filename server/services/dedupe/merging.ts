@@ -1,6 +1,6 @@
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { sqlite, db } from "../../db.ts";
-import * as schema from "../../../src/db/schema.ts";
+import * as schema from "../../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
@@ -8,6 +8,7 @@ import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
+import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type { ContactRow, MergeSnapshotData } from "./types.ts";
 
 /**
@@ -649,9 +650,15 @@ export function executeMerge(
       "soft",
       JSON.stringify(snapshotData),
     );
+
+    recordEvent(scope, "contact.merged", primaryId, {
+      duplicateId,
+      mergedBy,
+    });
   });
 
   mergeTxn();
+  dispatchEvents();
   scheduleSearchIndex(primaryId);
   log.info(
     "DedupeService",

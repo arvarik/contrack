@@ -8,7 +8,8 @@
 // again, and an incremental sync sends only the contacts that changed, so
 // most of those URLs would stay for good.
 //
-// This sweep runs once per boot, a few seconds after the start. It copies each
+// This sweep runs once per boot, a few seconds after the start, as the
+// start-up job `connectors.photoSweep` (server/jobs/connectors.ts). It copies each
 // stored Google photo into the owner's uploads and points the contact at the
 // copy. A photo that Google no longer serves (an expired URL, a 404) is
 // cleared, and the contact shows its generated avatar, rather than keep a
@@ -23,9 +24,6 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { isTransientImageError } from "../utils/remoteImage.ts";
 import { saveContactPhoto } from "./ingest.ts";
-
-/** How long after boot the sweep starts, so it never competes with startup. */
-const STARTUP_DELAY_MS = 5_000;
 
 /** The photo host of the Google People API: lh3 to lh6, and others. */
 const GOOGLE_PHOTO = "https://%.googleusercontent.com/%";
@@ -77,22 +75,17 @@ export async function localizeStoredGooglePhotos(): Promise<PhotoSweepResult> {
   return result;
 }
 
-/** Run the sweep once, shortly after boot. Failures only log. */
-export function startStoredPhotoSweep(): void {
-  setTimeout(() => {
-    localizeStoredGooglePhotos()
-      .then(({ saved, cleared, deferred }) => {
-        if (saved + cleared + deferred > 0)
-          log.info(
-            "Connectors",
-            `Stored Google photos: ${saved} copied into uploads, ${cleared} cleared, ${deferred} left for the next start`,
-          );
-      })
-      .catch((err) =>
-        log.warn(
-          "Connectors",
-          `The stored photo sweep failed: ${getErrorMessage(err)}`,
-        ),
-      );
-  }, STARTUP_DELAY_MS).unref();
+/**
+ * Run the sweep once and say what it did. A failure of the whole sweep
+ * throws, so the job that runs it records the failure.
+ */
+export async function sweepStoredPhotos(): Promise<PhotoSweepResult> {
+  const result = await localizeStoredGooglePhotos();
+  const { saved, cleared, deferred } = result;
+  if (saved + cleared + deferred > 0)
+    log.info(
+      "Connectors",
+      `Stored Google photos: ${saved} copied into uploads, ${cleared} cleared, ${deferred} left for the next start`,
+    );
+  return result;
 }

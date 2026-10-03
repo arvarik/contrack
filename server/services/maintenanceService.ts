@@ -11,9 +11,12 @@
 // things and it only becomes visible once it is a problem. `walHealth.ts` has
 // the reasoning.
 //
-// The `setInterval` is managed here rather than in `server.ts`, with `server.ts`
-// calling `startDailyMaintenance()`, so integration tests can test maintenance
-// without booting the full HTTP server or Vite instance.
+// Two more tables grow with use: `events`, which every write adds to, and
+// `jobs`, where every finished run stays for the admin route (the connector
+// tick alone adds 1,440 rows a day).
+//
+// The sweep runs as the recurring job `maintenance.daily`, at start and every
+// day after (server/jobs/maintenance.ts).
 // =============================================================================
 
 import { sqlite } from "../db.ts";
@@ -22,6 +25,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { cleanupOldInvocations } from "./aiStatsService.ts";
 import { runWalMaintenance } from "./walHealth.ts";
 import { isoWeekStart } from "../../shared/dates.ts";
+import { registeredSubscriberIds } from "../events/index.ts";
 
 /** How long each kind of row is kept. */
 export const AUDIT_RETENTION_DAYS = 90;
@@ -37,6 +41,15 @@ export const IMPORT_RETENTION_DAYS = 30;
 export const AUTH_LINK_RETENTION_DAYS = 30;
 export const SCORE_SNAPSHOT_RETENTION_WEEKS = 26;
 export const CONNECTOR_RUN_RETENTION_DAYS = 90;
+/** Events are kept this long, and longer while a subscriber has not read them. */
+export const EVENT_RETENTION_DAYS = 30;
+/**
+ * A finished job is kept a day, which is the window the admin route shows,
+ * and the newest run of each kind stays whatever its age. A failed one is
+ * kept a month, for whoever comes to ask why.
+ */
+export const DONE_JOB_RETENTION_DAYS = 1;
+export const FAILED_JOB_RETENTION_DAYS = 30;
 
 export interface MaintenanceCounts {
   auditRows: number;
@@ -54,6 +67,10 @@ export interface MaintenanceCounts {
   expiredOAuthStates: number;
   /** Pruned connector runs older than 90 days. */
   oldConnectorRuns: number;
+  /** Events older than 30 days that every subscriber has read. */
+  oldEvents: number;
+  /** Finished jobs past retention. */
+  oldJobs: number;
   /** Pages the checkpoint moved back into the database. */
   walPagesCheckpointed: number;
 }
@@ -87,6 +104,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
     prunedScoreSnapshots: 0,
     expiredOAuthStates: 0,
     oldConnectorRuns: 0,
+    oldEvents: 0,
+    oldJobs: 0,
     walPagesCheckpointed: 0,
   };
 
@@ -181,6 +200,33 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `DELETE FROM connector_runs WHERE startedAt < datetime('now', ?)`,
       )
       .run(`-${CONNECTOR_RUN_RETENTION_DAYS} days`).changes;
+
+    counts.oldEvents = sweepEvents();
+
+    counts.oldJobs =
+      sqlite
+        .prepare(
+          // The instance's queue, every account's jobs in it.
+          // tenant-lint: allow instance sweep
+          `DELETE FROM jobs AS old
+            WHERE old.status IN ('done', 'cancelled')
+              AND datetime(old.finishedAt) < datetime('now', ?)
+              AND EXISTS (
+                SELECT 1 FROM jobs AS newer
+                 WHERE newer.kind = old.kind
+                   AND newer.status IN ('done', 'failed')
+                   AND newer.finishedAt > old.finishedAt
+              )`,
+        )
+        .run(`-${DONE_JOB_RETENTION_DAYS} days`).changes +
+      sqlite
+        .prepare(
+          // tenant-lint: allow instance sweep
+          `DELETE FROM jobs
+            WHERE status = 'failed'
+              AND datetime(finishedAt) < datetime('now', ?)`,
+        )
+        .run(`-${FAILED_JOB_RETENTION_DAYS} days`).changes;
   } catch (err) {
     log.warn(
       "Maintenance",
@@ -204,7 +250,9 @@ export function runDailyMaintenance(): MaintenanceCounts {
     counts.oldImports +
     counts.prunedScoreSnapshots +
     counts.expiredOAuthStates +
-    counts.oldConnectorRuns;
+    counts.oldConnectorRuns +
+    counts.oldEvents +
+    counts.oldJobs;
   if (total > 0) {
     log.info(
       "Maintenance",
@@ -218,29 +266,41 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `${counts.oldImports} old imports, ` +
         `${counts.prunedScoreSnapshots} old score snapshots, ` +
         `${counts.expiredOAuthStates} expired oauth states, ` +
-        `${counts.oldConnectorRuns} old connector runs`,
+        `${counts.oldConnectorRuns} old connector runs, ` +
+        `${counts.oldEvents} old events, ` +
+        `${counts.oldJobs} old jobs`,
     );
   }
   return counts;
 }
 
 /**
- * Run the sweep now and every twenty-four hours after that.
- *
- * Gated by DISABLE_BACKGROUND_JOBS, which is the switch a Docker image or a
- * test harness sets to keep a booted instance from touching anything. The
- * interval is unrefed so it never holds the process open on its own.
- *
- * @returns the interval, or null when background jobs are off
+ * Delete the events older than EVENT_RETENTION_DAYS that every subscriber
+ * has read. The cursors that count are those of the subscribers this process
+ * registered, so the cursor of a subscriber that no longer exists cannot keep
+ * events for ever. With none registered, every cursor counts.
  */
-export function startDailyMaintenance(): ReturnType<typeof setInterval> | null {
-  if (process.env.DISABLE_BACKGROUND_JOBS === "true") {
-    return null;
-  }
-  runDailyMaintenance();
-  const timer = setInterval(runDailyMaintenance, 24 * 60 * 60 * 1000);
-  // Fake timers in a test may not implement unref, and a missing unref costs
-  // a test nothing.
-  timer.unref?.();
-  return timer;
+function sweepEvents(): number {
+  const ids = registeredSubscriberIds();
+  const { passed } = (
+    ids.length > 0
+      ? sqlite
+          .prepare(
+            `SELECT MIN(lastEventId) AS passed FROM event_cursors
+              WHERE subscriber IN (${ids.map(() => "?").join(", ")})`,
+          )
+          .get(...ids)
+      : sqlite
+          .prepare("SELECT MIN(lastEventId) AS passed FROM event_cursors")
+          .get()
+  ) as { passed: number | null };
+  return sqlite
+    .prepare(
+      // Every account's events: the sweep serves the instance.
+      // tenant-lint: allow instance sweep
+      `DELETE FROM events
+        WHERE createdAt < datetime('now', ?)
+          AND id <= COALESCE(?, (SELECT MAX(id) FROM events))`,
+    )
+    .run(`-${EVENT_RETENTION_DAYS} days`, passed).changes;
 }

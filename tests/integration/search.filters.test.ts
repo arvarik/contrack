@@ -489,6 +489,10 @@ describe("Ask takes facets from the request and the question", () => {
       const drop = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
       for (const id of [...orbit.createdIds, ...pine.createdIds]) drop.run(id);
       sqlite.prepare("DELETE FROM contacts WHERE ownerId = ?").run(other);
+      // What the writes recorded and queued. Both name the owner, and both
+      // keys restrict the delete of the account.
+      sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(other);
+      sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(other);
       sqlite.prepare("DELETE FROM users WHERE id = ?").run(other);
     }
   });

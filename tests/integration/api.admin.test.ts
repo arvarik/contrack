@@ -49,7 +49,7 @@ import { auditService } from "../../server/services/auditService.ts";
 import { mailService } from "../../server/services/mailService.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
 import {
-  getActiveBackupTimer,
+  nextBackupRun,
   stopBackupSchedule,
 } from "../../server/services/backupService.ts";
 import {
@@ -2047,12 +2047,14 @@ describe("instance lifecycle and integration settings (P4)", () => {
   it("restarts the backup timer on schedule change and retains only one active timer after multiple changes", async () => {
     delete process.env.DISABLE_BACKGROUND_JOBS;
 
+    // The schedule is the one queued run of the backup job, so the "timer"
+    // here is that run's time.
     // Update interval first time
     const res1 = await as(admin)(
       request(app).put("/api/admin/settings").send({ backupIntervalHours: 12 }),
     );
     expect(res1.status).toBe(200);
-    const timer1 = getActiveBackupTimer();
+    const timer1 = nextBackupRun();
     expect(timer1).not.toBeNull();
 
     // Update interval second time
@@ -2060,13 +2062,13 @@ describe("instance lifecycle and integration settings (P4)", () => {
       request(app).put("/api/admin/settings").send({ backupIntervalHours: 6 }),
     );
     expect(res2.status).toBe(200);
-    const timer2 = getActiveBackupTimer();
+    const timer2 = nextBackupRun();
     expect(timer2).not.toBeNull();
     // Previous timer was cleared and replaced
     expect(timer2).not.toBe(timer1);
 
     stopBackupSchedule();
-    expect(getActiveBackupTimer()).toBeNull();
+    expect(nextBackupRun()).toBeNull();
   });
 
   it("manages integrations, seals the Google OAuth client secret, and never returns it in any response", async () => {

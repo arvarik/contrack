@@ -10,10 +10,6 @@
     "tests/**/*.{ts,tsx}",
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  // Drizzle reads this file's exports as the schema. An export that nothing
-  // imports is still a table, and removing one makes the next
-  // `npm run db:generate` write a DROP TABLE for it.
-  "ignore": ["src/db/schema.ts"],
   // Only dead code is checked. Dependencies and duplicate exports are not.
   "rules": {
     "duplicates": "off",
