@@ -13,6 +13,7 @@ const {
   HEAT_END_ZOOM,
   HEAT_FADE_ZOOM,
   HEAT_PINS_ZOOM,
+  countNear,
   heatGradient,
   heatIntensity,
   heatPaint,
@@ -216,6 +217,31 @@ describe("heatPaint", () => {
       ["heatmap-density"],
       ...stops.flatMap((stop) => [stop.density, stop.color]),
     ]);
+  });
+});
+
+describe("countNear", () => {
+  it("counts the people within the radius, and projects only those in its box", () => {
+    // One pixel a degree, north up, and the pointer at (0, 0).
+    const project = vi.fn(([lng, lat]: number[]) => ({ x: lng, y: -lat }));
+    const map = {
+      project,
+      unproject: ([x, y]: number[]) => ({ lng: x, lat: -y }),
+    };
+    const people = [
+      person(0, 0),
+      person(-20, 20), // 28 px away
+      person(-30, 30), // in the box, 42 px away
+      person(0, 100), // outside the box
+    ];
+    const near = countNear(
+      map as unknown as Parameters<typeof countNear>[0],
+      people,
+      { x: 0, y: 0 },
+      32,
+    );
+    expect(near).toBe(2);
+    expect(project).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -73,6 +73,7 @@ import {
   HEAT_SOURCE_ID,
   heatIntensity,
   heatPaint,
+  useHeatReadout,
   useHeatStops,
   useHeatUnderLabels,
   useZoomAtLeast,
@@ -86,8 +87,9 @@ registerPmtilesProtocol();
 
 export const CONTACTS_SOURCE_ID = "contacts";
 
-/** Clusters split into single pins past this zoom. */
-const CLUSTER_MAX_ZOOM = 14;
+// The source's last zoom, clustered too, so its overzoomed tiles keep people
+// on one point a stack at every zoom. MapLibre warns about it once.
+const CLUSTER_MAX_ZOOM = 18;
 
 /** Pins closer than this many pixels join one cluster. */
 const CLUSTER_RADIUS = 50;
@@ -136,6 +138,8 @@ type Card =
       id: string;
       mode: "focus" | "hover" | "pinned" | "sheet";
       padding?: PaddingOptions;
+      /** A requested card's asker, which Escape gives focus back to. */
+      from?: HTMLElement | null;
     }
   | { kind: "cluster"; cluster: ClusterFeature; padding?: PaddingOptions };
 
@@ -219,6 +223,8 @@ export const ContactMap = ({
   onMapReady,
   loading = false,
   onCardAction,
+  highlightedId = null,
+  cardRequest = null,
   layer = "pins",
   children,
 }: ContactMapProps) => {
@@ -457,6 +463,22 @@ export const ContactMap = ({
     clusterLeavesCache.current.clear();
     setClusterLeaves((prev) => (prev.size ? new Map() : prev));
   }, [contacts, setCard]);
+  // A caller's card, pinned as Space pins it. Each request asks once, so
+  // new contacts do not open it again.
+  const asked = useRef<{ id: string } | null>(null);
+  useEffect(() => {
+    if (!cardRequest || cardRequest === asked.current) return;
+    asked.current = cardRequest;
+    if (!hoverCard || !byId.has(cardRequest.id)) return;
+    const from = document.activeElement;
+    setCard({
+      kind: "contact",
+      id: cardRequest.id,
+      mode: "pinned",
+      padding: room(),
+      from: from instanceof HTMLElement && from !== document.body ? from : null,
+    });
+  }, [byId, cardRequest, hoverCard, room, setCard]);
   // A card or a stack belongs to a pin, and the heat takes the pins away.
   useEffect(() => {
     if (drawPins) return;
@@ -483,6 +505,7 @@ export const ContactMap = ({
       if (!open) return setStack(null);
       setCard(null);
       if (open.kind !== "contact" || open.mode === "hover") return;
+      if (open.from) return open.from.focus();
       const pin = wrapperRef.current?.querySelector<HTMLElement>(
         `[data-contact-id="${CSS.escape(open.id)}"]`,
       );
@@ -586,6 +609,11 @@ export const ContactMap = ({
       );
   }, [card, clusterLeaves, byId]);
 
+  // The open contact's pin wears a halo, and so do a card's and a list row's.
+  // While the open contact is on the map, the other pins step back.
+  const cardOwner = card?.kind === "contact" ? card.id : null;
+  const dimming = selectedId !== null && byId.has(selectedId);
+
   return (
     <div
       ref={wrapperRef}
@@ -595,11 +623,9 @@ export const ContactMap = ({
       className="contact-map relative w-full h-full overflow-hidden bg-surface-container-low"
     >
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm">
-          <span className="text-primary font-bold animate-pulse">
-            Scanning geospatial data...
-          </span>
-        </div>
+        <p className="pointer-events-none absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-surface-container-lowest px-4 py-2 text-sm font-semibold text-on-surface-variant shadow-md">
+          Loading contacts…
+        </p>
       )}
       {showBasemapError && (
         <p
@@ -669,6 +695,7 @@ export const ContactMap = ({
             data={collection}
             cluster
             clusterRadius={CLUSTER_RADIUS}
+            maxzoom={CLUSTER_MAX_ZOOM}
             clusterMaxZoom={CLUSTER_MAX_ZOOM}
           >
             <Layer {...PRESENCE_LAYER} />
@@ -691,10 +718,14 @@ export const ContactMap = ({
           {drawPins &&
             features.map((feature) => {
               if (feature.kind === "cluster") {
-                const leaves = clusterLeaves.get(feature.clusterId) || [];
+                const known = clusterLeaves.get(feature.clusterId);
+                const leaves = known || [];
                 const selectedInCluster = selectedIds
                   ? leaves.filter((id) => selectedIds.has(id)).length
                   : 0;
+                const halo = [selectedId, cardOwner, highlightedId].some(
+                  (id) => id !== null && leaves.includes(id),
+                );
 
                 return (
                   <ClusterMarker
@@ -707,18 +738,27 @@ export const ContactMap = ({
                       card?.kind === "cluster" &&
                       card.cluster.clusterId === feature.clusterId
                     }
+                    halo={halo}
+                    dimmed={
+                      dimming && !!known && !halo && selectedInCluster === 0
+                    }
                   />
                 );
               }
               const contact = byId.get(feature.id);
               if (!contact) return null;
+              const multi = selectedIds?.has(contact.id) ?? false;
+              const marked =
+                contact.id === cardOwner || contact.id === highlightedId;
               return (
                 <ContactMarker
                   key={feature.key}
                   contact={contact}
                   selected={contact.id === selectedId}
-                  multiSelected={
-                    selectedIds ? selectedIds.has(contact.id) : false
+                  multiSelected={multi}
+                  marked={marked}
+                  dimmed={
+                    dimming && contact.id !== selectedId && !marked && !multi
                   }
                   onSelect={select}
                   onCard={onPin}
@@ -761,6 +801,7 @@ export const ContactMap = ({
           {children}
         </MapGL>
       )}
+      {!drawPins && map && <HeatReadoutLabel map={map} contacts={contacts} />}
       {card?.kind === "contact" && card.mode === "sheet" && cardContact && (
         <MapPeekSheet
           contact={cardContact}
@@ -771,6 +812,35 @@ export const ContactMap = ({
     </div>
   );
 };
+
+/** "About N people here" by a pointer over the heat, toward the map's middle. */
+function HeatReadoutLabel({
+  map,
+  contacts,
+}: {
+  map: MapLibreMap;
+  contacts: MapContact[];
+}) {
+  const readout = useHeatReadout(map, contacts);
+  if (!readout) return null;
+  const { count, x, y } = readout;
+  const { clientWidth, clientHeight } = map.getContainer();
+  const side = (at: number, size: number) =>
+    at > size / 2 ? "calc(-100% - 12px)" : "12px";
+  return (
+    <p
+      aria-hidden="true"
+      style={{
+        left: x,
+        top: y,
+        translate: `${side(x, clientWidth)} ${side(y, clientHeight)}`,
+      }}
+      className="pointer-events-none absolute z-[3] whitespace-nowrap rounded-lg bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-on-surface shadow-md"
+    >
+      About {count} {count === 1 ? "person" : "people"} here
+    </p>
+  );
+}
 
 /**
  * Keep the world covering the container as the container changes size.
