@@ -162,6 +162,35 @@
         }
       }
     },
+    "/api/admin/jobs": {
+      "get": {
+        "summary": "Every recurring background job with its last and next run, and the jobs that failed in the last 24 hours. Admin only",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recurring": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/RecurringJob" }
+                    },
+                    "failed": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/FailedJob" }
+                    }
+                  },
+                  "required": ["recurring", "failed"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/tokens": {
       "get": {
         "summary": "The account's tokens, newest first, revoked and expired ones included",
@@ -4257,6 +4286,18 @@
         ],
         "additionalProperties": false
       },
+      "FailedJob": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string" },
+          "ownerId": { "type": ["string", "null"] },
+          "lastError": { "type": ["string", "null"] },
+          "finishedAt": { "type": ["string", "null"] }
+        },
+        "required": ["id", "kind", "ownerId", "lastError", "finishedAt"],
+        "additionalProperties": false
+      },
       "Interaction": {
         "type": "object",
         "properties": {
@@ -4388,6 +4429,31 @@
           "contactAvatarUrl",
           "contactThemeColor"
         ],
+        "additionalProperties": false
+      },
+      "RecurringJob": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string" },
+          "every": {
+            "anyOf": [
+              { "type": "number", "exclusiveMinimum": 0 },
+              { "type": "null" }
+            ]
+          },
+          "lastRunAt": { "type": ["string", "null"] },
+          "lastStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["queued", "running", "done", "failed", "cancelled"]
+              },
+              { "type": "null" }
+            ]
+          },
+          "nextRunAt": { "type": ["string", "null"] }
+        },
+        "required": ["kind", "every", "lastRunAt", "lastStatus", "nextRunAt"],
         "additionalProperties": false
       },
       "ScoreBreakdown": {

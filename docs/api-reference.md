@@ -5,10 +5,10 @@ write scripts and tools against your own instance.
 
 The routes with a contract are also in [`openapi.json`](openapi.json), an
 OpenAPI 3.1 file with the JSON Schema of each request and answer. They are the
-contacts, notes, follow-ups, lists, tags and personal tokens, and the
-read-only query routes. `npm run api:openapi` writes the file from
-`shared/contracts/`, and a test fails when it is out of date. This page stays
-the reference for every route, for signing in and for errors.
+contacts, notes, follow-ups, lists, tags and personal tokens, the read-only
+query routes and the background jobs route. `npm run api:openapi` writes the
+file from `shared/contracts/`, and a test fails when it is out of date. This
+page stays the reference for every route, for signing in and for errors.
 
 ## Conventions
 

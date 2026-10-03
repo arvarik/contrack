@@ -206,8 +206,9 @@ contract, so they cannot disagree.
   answer of a contracted route against it, and its status too, so an
   undeclared or a missing field fails the test that caused it.
 - **What has a contract.** The contacts, notes, follow-ups, lists, tags and
-  personal tokens, and the read-only query routes beside them (`/api/query/contacts`,
-  `/api/industries`, `/api/timeline`). `UNCONTRACTED` in `index.ts` lists
+  personal tokens, the read-only query routes beside them
+  (`/api/query/contacts`, `/api/industries`, `/api/timeline`), and the
+  background jobs route (`GET /api/admin/jobs`). `UNCONTRACTED` in `index.ts` lists
   every other route in the manifest, and `UNCONTRACTED_CEILING` stops the list
   from growing: a new route gets a contract. The request schemas that were in
   `server/utils/validators.ts` are in the same folder already, as named

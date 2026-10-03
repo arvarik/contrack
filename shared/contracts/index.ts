@@ -14,6 +14,7 @@
 import { actionItemRoutes } from "./actionItems.ts";
 import { contactRoutes } from "./contacts.ts";
 import { interactionRoutes } from "./interactions.ts";
+import { jobRoutes } from "./jobs.ts";
 import { listRoutes } from "./lists.ts";
 import { queryRoutes } from "./query.ts";
 import type { RouteContract } from "./route.ts";
@@ -33,6 +34,7 @@ export const CONTRACTS: readonly RouteContract[] = [
   ...Object.values(actionItemRoutes),
   ...Object.values(contactRoutes),
   ...Object.values(interactionRoutes),
+  ...Object.values(jobRoutes),
   ...Object.values(listRoutes),
   ...Object.values(queryRoutes),
   ...Object.values(tagRoutes),
