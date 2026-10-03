@@ -17,21 +17,7 @@ import {
   isAuthRequired,
 } from "./server/middleware/auth.ts";
 import { countUsers } from "./server/services/authService.ts";
-import { startBackupSchedule } from "./server/services/backupService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
-import {
-  backfillEmbeddings,
-  ensureDedupeEmbeddingStore,
-} from "./server/services/dedupe/embeddings.ts";
-import {
-  backfillSearchEmbeddings,
-  ensureEmbeddingStore,
-} from "./server/services/search/vectorIndex.ts";
-import { initBuiltinEmbedder } from "./server/ai/embedder.ts";
-import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
-import { initCrossEncoder } from "./server/ai/reranker.ts";
-import { migrateResearchOff } from "./server/services/aiSettingsService.ts";
-import { warmStarterQuestions } from "./server/services/search/starterQuestions.ts";
 import {
   mailLinkOrigin,
   validatePublicUrl,
@@ -44,13 +30,16 @@ import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
 import { stopConnectorScheduler } from "./server/connectors/scheduler.ts";
 import { dispatchEvents, registerSubscribers } from "./server/events/index.ts";
-import { CONTACT_SUBSCRIBERS } from "./server/events/contactSubscribers.ts";
+import {
+  moduleJobs,
+  moduleSubscribers,
+  runModuleStarts,
+} from "./server/modules/index.ts";
 import {
   registerJobs,
   startJobRunner,
   stopJobRunner,
 } from "./server/jobs/runner.ts";
-import { JOBS } from "./server/jobs/index.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
@@ -125,11 +114,12 @@ async function startServer() {
   assertNoLegacyAuthToken();
 
   // ── Events and jobs ─────────────────────────────────────────────────────
-  // The reactions to writes and the background work this process knows.
-  // Both registrations are idempotent, and the services register their own
-  // subscribers as well, so a test or a script that writes runs them too.
-  registerSubscribers(CONTACT_SUBSCRIBERS);
-  registerJobs(JOBS);
+  // The reactions to writes and the background work that the modules
+  // declare (server/modules/). Both registrations are idempotent, and the
+  // services register their own subscribers as well, so a test or a script
+  // that writes runs them too.
+  registerSubscribers(moduleSubscribers());
+  registerJobs(moduleJobs());
   // Boot catches up from the cursors: the reactions to writes that the last
   // process committed and did not get to.
   dispatchEvents();
@@ -225,78 +215,12 @@ async function startServer() {
     return;
   }
 
-  // ── Ask Contrack starter questions ───────────────────────────────────────
-  // Every account's pool of "Try asking" questions, built one account per
-  // turn of the event loop, so the first open of Ask after a deploy reads
-  // a pool that is ready. A request that comes first builds its own.
-  warmStarterQuestions().catch((err) =>
-    log.warn("Server", `Starter questions failed: ${getErrorMessage(err)}`),
-  );
-
-  // ── Data lifecycle ───────────────────────────────────────────────────────
-  // The snapshots are jobs. This says at boot when the newest verified one
-  // is too old, which is the only place an operator finds out that the
-  // backups they think they have stopped some time ago.
-  startBackupSchedule();
-
-  // ── Web search switch ───────────────────────────────────────────────────
-  // Research turned off the old way, with the research model set to Off,
-  // moves to the "Allow web search" switch, which keeps a pinned model.
-  try {
-    migrateResearchOff();
-  } catch (err) {
-    log.warn(
-      "Server",
-      `Web search switch migration failed: ${getErrorMessage(err)}`,
-    );
-  }
-
-  // Initialize search index queue to recover any ungracefully interrupted jobs
-  initSearchIndexQueue();
-
-  // ── Local embedding model for Ask Contrack v3 ───────────────────────────
-  // Load the Transformers.js model, then backfill search embeddings.
-  // Non-blocking — the server is fully usable while this runs.
-  initBuiltinEmbedder()
-    .then(() => {
-      // The search cross-encoder loads on the same worker, once, so no
-      // person's first question pays for it. Its job takes its turn beside
-      // the backfill's, and a failure only logs: search keeps its fused
-      // order without it.
-      void initCrossEncoder();
-      log.info(
-        "Server",
-        "Local embedding model ready — starting search embedding backfill...",
-      );
-      // Reconcile the vector store with the configured embeddings capability
-      // (rebuilds + re-embeds when the model changed), then fill any gaps.
-      return ensureEmbeddingStore().then(() => backfillSearchEmbeddings());
-    })
-    .then((count) => {
-      if (count > 0)
-        log.info(
-          "Server",
-          `Search embedding backfill complete: ${count} contacts embedded locally`,
-        );
-      initSearchIndexQueue();
-      // Dedupe shares the embeddings capability, so it can only run once a
-      // backend is ready. Reconcile it (rebuilding if the model changed) and
-      // fill any gaps — previously this only ran when the store was entirely
-      // empty, so a partial index could never repair itself.
-      return ensureDedupeEmbeddingStore().then(() => backfillEmbeddings());
-    })
-    .then((count) => {
-      if (count > 0)
-        log.info(
-          "Server",
-          `Dedupe embedding backfill complete: ${count} contacts embedded`,
-        );
-    })
-    .catch((err) => {
-      log.warn("Server", `Embedding init/backfill failed: ${err.message}`);
-      // The backfill persists unfinished jobs before it calls the embedding model.
-      initSearchIndexQueue();
-    });
+  // ── Start-up work ────────────────────────────────────────────────────────
+  // Each module's own, in the order of server/modules/index.ts: the search
+  // module warms the starter questions and loads the local models, the
+  // data-lifecycle module checks the age of the newest backup, and the ai
+  // module moves an old research setting. None of it holds the server up.
+  runModuleStarts();
 }
 
 // =============================================================================
