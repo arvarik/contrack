@@ -18,44 +18,40 @@ A contact is on the map when it has a pin. Contrack places the pin from the cont
 ## Pins, clusters and stacks
 
 - **A pin** is the contact's picture. Select it to open the contact over the right side of the map. Select the map, or press `Esc`, to close the contact.
-- **A cluster** is a circle with a number. It holds contacts that are too close to tell apart at this zoom. Select it to zoom in until it splits.
-- **A stack** is a cluster that never splits, because its people share one place, such as a city. Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. `Esc` closes the list.
+- **A cluster** is a circle with a number. It holds contacts that are too close to tell apart at this zoom. Point at it to see up to five of its people, the ones with the most logged interactions first. Select it to zoom in until it splits.
+- **A stack** is a cluster that never splits, because its people share one place, such as a city. Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. The list marks the open contact and stays open, so you can go through the people. `Esc` closes the list.
 
 When the map opens a contact, it moves the pin to the middle of the part of the map that you can still see.
 
 ## The hover card
 
-Point at a pin, or move to it with `Tab`, to see its card. The card shows:
+Point at a pin to see its card after a moment. The next pin's card opens at once, so you can move from pin to pin. The card shows:
 
-- the name, the role and company, and the location
-- the score, for example "Score 72", or "Not tracked"
-- the last contact, for example "Last contact 3 weeks ago", or "Never"
-- the local time where the person is
-- up to three tags, and the lists that the contact is in
+- the name, the role and company, and the score when you track the contact, for example "Score 72"
+- the location and the local time there
+- the most urgent fact: a follow-up that is overdue or due this week, else the last contact, for example "Last contact 3 weeks ago"
+- up to three tags and the first list, and how many more there are
 
-To act from the card, move to the pin and press `Space`. The card stays open, and the keyboard moves into it. The card has four buttons:
+Move the pointer into the card to use its buttons: **Open contact**, **Log interaction**, **Add follow-up**, **Add to list** and **Adjust pin**. A button closes the card. The card closes a moment after the pointer leaves it.
 
-- **Open contact**
-- **Log interaction**, which opens the **Log an interaction** dialog
-- **Add to list**
-- **Add follow-up**, which adds a follow-up for this contact
+The card stays inside the part of the map that you can see. It opens away from the toolbar, the bottom line, the open contact and **Map insights**, and it changes side when the map moves.
 
-In an open card, select the score chip to see how Contrack calculated the score (see [How the score works](pulse.md#how-the-score-works)). `Esc` closes the card and puts the focus back on the pin.
+With the keyboard, move to a pin with `Tab` to see its card, and press `Space` to move into its buttons. `Esc` closes the card and puts the focus back on the pin. A second `Esc` closes the open contact.
 
-On a phone, a tap on a pin opens the contact. There is no hover card.
+On a phone, the first tap on a pin shows its card at the bottom of the map, with the same buttons. Tap the pin again, or tap **Open**, to open the contact. Tap the map to close the card.
 
 ## Filter the map
 
-Type in **Filter contacts** at the top left, or press `/` to go there. Words match the name, company, role, location, industry and tags. The page address keeps your filter, so you can share the link.
+Type in **Filter contacts** at the top left, or press `/` to go there. Words match the name, company, role, location, industry and tags. A facet becomes a pill when a space follows it, or when you pick it from the list under the box. The page address keeps your filter, so you can share the link, and it keeps it while a contact is open.
 
 The filter reads every [facet](search.md#facets): `role:`, `company:`, `location:`, `industry:`, `tag:`, `list:`, `score:`, `updated:`, `contacted:`, `tracked:`, `missing:` and `near:`. A value with a space goes in double quotes, for example `industry:"Venture Capital"`.
 
 To find the people around a place:
 
 1. Type `near:` and a place, for example `near:Paris` or `near:London/50km`. With no distance, the distance is 25 km.
-2. Press `Enter`. The pill says "(resolving…)" while Contrack looks up the place. The pill turns red when Contrack finds no such place.
+2. Type a space, or press `Enter`. The pill says "(resolving…)" while Contrack looks up the place. The pill turns red when Contrack finds no such place, and `Enter` tries again.
 
-When nobody matches, the toolbar says, for example, "0 of 240 match" and offers **Clear filters**.
+When nobody matches, the toolbar says, for example, "0 of 240 match" and offers **Clear filters**, which clears the whole filter. The **X** in the box clears the filter text and all its pills.
 
 ### Go to a place
 
@@ -97,7 +93,7 @@ A saved view keeps the map's position, zoom, filter and layer under a name.
 
 To go back to a view, open **Views** and choose it. While a view is active, the menu shows its name. Each view in the menu has a rename button and a delete button. You can keep up to 100 views.
 
-A view has its own link, so you can bookmark it. When you change the filter or the layer, the map leaves the view.
+A view has its own link, so you can bookmark it. When you change the filter or the layer, the map leaves the view. A link to a view that was deleted opens the map without it, and says so.
 
 ## Map insights
 
@@ -197,14 +193,14 @@ The map opens where you left it in this browser, also after a reload. This posit
 | `L`     | Lasso select                  |
 | `Esc`   | Clear selection or close card |
 | `Enter` | Open contact                  |
-| `Space` | Pin card                      |
+| `Space` | Card actions                  |
 
 `Tab` moves to the pins. When the map has focus, the arrow keys pan it. `/`, `F`, `I` and `L` are single-key shortcuts, so the **Single-key shortcuts** switch in **Settings → Keyboard** turns them off. See [Keyboard shortcuts](keyboard-shortcuts.md).
 
 ## On a phone
 
 - The toolbar becomes three buttons: **Filters**, **Fit all** and **Insights**. **Filters** opens a sheet with the filter, **Go to**, the **Map layer** switch, **Saved views** and **Select all in view**.
-- A tap on a pin opens the contact over the whole map. When you close the contact, its pin is in the middle of the map.
+- A tap on a pin shows its card at the bottom. A second tap opens the contact over the whole map. When you close the contact, its pin is in the middle of the map.
 - Pinch to zoom. The map does not rotate.
 - Box and lasso selection do not work with a finger. Use **Select all in view**.
 

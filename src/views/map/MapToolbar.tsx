@@ -2,7 +2,7 @@
  * MapToolbar — Top-left filter toolbar and mobile sheet for MapView.
  *
  * Provides:
- * - Search & facet filter input powered by `useQueryTokenizer`
+ * - Search & facet filter input powered by `useMapFilter`
  * - Facet pills for locked filters (including `list:`, `near:`)
  * - Autocomplete dropdown for facet prefixes (including `list:` and `tag:`)
  * - "Go to" place search mode with `flyTo` zoom 10 and inline error
@@ -38,8 +38,7 @@ import {
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
 import { ViewsMenu } from "./ViewsMenu";
-import type { FacetFilter } from "../../../shared/searchFacets";
-import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
+import type { MapFilter } from "./useMapFilter";
 import { prefersReducedMotion } from "./flyTo";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
@@ -61,15 +60,7 @@ const TOGGLE_OFF =
 
 interface MapToolbarProps {
   map: MapLibreMap | null;
-  rawInput: string;
-  setRawInput: (v: string) => void;
-  tokenizer: ReturnType<typeof useQueryTokenizer>;
-  effectiveFilters: FacetFilter[];
-  totalCount: number;
-  matchCount: number;
-  hasActiveFilter: boolean;
-  resolveNearFilters: () => Promise<void>;
-  clearFilters: () => void;
+  filter: MapFilter;
   layer: MapLayer;
   onLayerChange: (nextLayer: MapLayer) => void;
   views?: MapView[];
@@ -94,15 +85,7 @@ interface MapToolbarProps {
 
 export const MapToolbar: React.FC<MapToolbarProps> = ({
   map,
-  rawInput,
-  setRawInput,
-  tokenizer,
-  effectiveFilters,
-  totalCount,
-  matchCount,
-  hasActiveFilter,
-  resolveNearFilters,
-  clearFilters,
+  filter,
   layer,
   onLayerChange,
   views = [],
@@ -197,22 +180,22 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               <input
                 ref={isMobile ? undefined : inputRef}
                 type="text"
-                value={rawInput}
-                onChange={(e) => setRawInput(e.target.value)}
+                value={filter.rawInput}
+                onChange={(e) => filter.setRawInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    resolveNearFilters();
+                    filter.commit();
                   }
                 }}
                 placeholder="Filter contacts… (/)"
                 aria-label="Filter contacts"
                 className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />
-              {rawInput && (
+              {filter.rawInput && (
                 <button
                   type="button"
-                  onClick={() => setRawInput("")}
+                  onClick={() => filter.setRawInput("")}
                   aria-label="Clear filter text"
                   className="state-layer absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
                 >
@@ -310,34 +293,34 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       )}
 
       {/* Facet Pills */}
-      {mode === "filter" && effectiveFilters.length > 0 && (
+      {mode === "filter" && filter.effectiveFilters.length > 0 && (
         <div className="w-full">
           <FacetPills
-            filters={effectiveFilters}
-            onRemove={tokenizer.removeFilter}
+            filters={filter.effectiveFilters}
+            onRemove={filter.removeFacet}
           />
         </div>
       )}
 
       {/* Autocomplete Dropdown */}
-      {mode === "filter" && tokenizer.parsed.activePrefix && (
+      {mode === "filter" && filter.parsed.activePrefix && (
         <div className="relative w-full z-20">
           <FacetAutocomplete
-            field={tokenizer.parsed.activePrefix.field}
-            partial={tokenizer.parsed.activePrefix.partial}
-            onSelect={(f) => tokenizer.addFilter(f)}
+            field={filter.parsed.activePrefix.field}
+            partial={filter.parsed.activePrefix.partial}
+            onSelect={filter.addFacet}
             onDismiss={() => {}}
           />
         </div>
       )}
 
       {/* 0 of N match empty state */}
-      {hasActiveFilter && matchCount === 0 && (
+      {filter.hasActiveFilter && filter.matchCount === 0 && (
         <div className="flex items-center justify-between text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
-          <span>0 of {totalCount} match</span>
+          <span>0 of {filter.totalCount} match</span>
           <button
             type="button"
-            onClick={clearFilters}
+            onClick={filter.clearFilters}
             className="text-primary hover:underline font-semibold cursor-pointer ml-2"
           >
             Clear filters
@@ -456,6 +439,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       {/* Desktop Toolbar */}
       {!cramped && (
         <div
+          data-map-chrome="top"
           className="absolute top-4 left-4 z-10 w-[calc(100%-2rem)] max-w-[520px] hidden lg:flex flex-col gap-2 p-2 rounded-2xl glass-panel shadow-xl border border-outline-variant/20"
           style={
             roomWidth !== null
@@ -469,7 +453,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
       {/* Mobile Toolbar Button */}
       {!cramped && (
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden">
+        <div
+          data-map-chrome="top"
+          className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden"
+        >
           <button
             type="button"
             onClick={() => setIsMobileSheetOpen(true)}
@@ -478,9 +465,9 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span>Filters</span>
-            {hasActiveFilter && (
+            {filter.hasActiveFilter && (
               <span className="inline-flex items-center justify-center bg-primary text-on-primary rounded-full text-xs font-semibold px-1.5 min-w-[18px] h-[18px]">
-                {effectiveFilters.length || 1}
+                {filter.effectiveFilters.length || 1}
               </span>
             )}
           </button>

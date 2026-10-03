@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen, fireEvent, within } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MapHoverCard } from "../../../../src/views/map/MapHoverCard";
 import type { MapContact } from "../../../../shared/geo";
 
@@ -13,136 +11,71 @@ vi.mock("@vis.gl/react-maplibre", () => ({
   ),
 }));
 
+afterEach(cleanup);
+
+/** A day `days` before today, as the date a follow-up is stored with. */
+const daysAgo = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const contact: MapContact = {
+  id: "c1",
+  name: "Rowan Vale",
+  company: "Northwind Partners",
+  role: "Partner",
+  location: "London, UK",
+  avatarUrl: null,
+  isTracked: true,
+  lat: 51.5074,
+  lng: -0.1278,
+  relationshipScore: 85,
+  lastContactedAt: "2026-06-01T12:00:00.000Z",
+  nextFollowUpAt: daysAgo(3),
+  tags: ["fintech", "advisor", "london", "angel", "climate"],
+  lists: [
+    { id: "l1", name: "Investors" },
+    { id: "l2", name: "Board" },
+    { id: "l3", name: "Mentors" },
+  ],
+};
+
+const renderCard = (mode: "focus" | "hover", onAction = vi.fn()) =>
+  render(
+    <MapHoverCard
+      contact={contact}
+      mode={mode}
+      onAction={onAction}
+      onPointerEnter={() => {}}
+      onPointerLeave={() => {}}
+    />,
+  );
+
 describe("MapHoverCard", () => {
-  let queryClient: QueryClient;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+  it("leads with what is due, and gives the keyboard a hint but no buttons", () => {
+    renderCard("focus");
+    const card = screen.getByRole("tooltip");
+    expect(card.textContent).toContain("Partner at Northwind Partners");
+    expect(card.textContent).toContain("Follow-up 3 days overdue");
+    expect(card.textContent).toContain("+2");
+    expect(card.textContent).toContain("+2 lists");
+    expect(card.textContent).toContain("Space for actions · Enter to open");
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  const contact: MapContact = {
-    id: "c1",
-    name: "Ada Lovelace",
-    company: "Babbage & Co",
-    role: "Lead Mathematician",
-    location: "London, UK",
-    avatarUrl: null,
-    isTracked: true,
-    lat: 51.5074,
-    lng: -0.1278,
-    relationshipScore: 85,
-    lastContactedAt: "2026-06-01T12:00:00.000Z",
-    tags: ["math", "pioneer", "computing"],
-    lists: [{ id: "l1", name: "Innovators" }],
-  };
-
-  const renderCard = (props: {
-    pinned: boolean;
-    onClose?: () => void;
-    onOpen?: (id: string) => void;
-    onLogNote?: (id: string) => void;
-    onAddToList?: (id: string) => void;
-    onFollowUp?: (id: string) => void;
-  }) => {
-    return render(
-      <MemoryRouter>
-        <QueryClientProvider client={queryClient}>
-          <MapHoverCard
-            contact={contact}
-            pinned={props.pinned}
-            onClose={props.onClose || vi.fn()}
-            onOpen={props.onOpen}
-            onLogNote={props.onLogNote}
-            onAddToList={props.onAddToList}
-            onFollowUp={props.onFollowUp}
-          />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    );
-  };
-
-  it("renders tooltip state with no interactive buttons", () => {
-    renderCard({ pinned: false });
-
-    // In tooltip state, role is tooltip
-    expect(screen.getByRole("tooltip")).toBeDefined();
-    expect(screen.queryByRole("dialog")).toBeNull();
-
-    // Contains facts: name, role at company, score text
-    expect(screen.getByText("Ada Lovelace")).toBeDefined();
-    expect(
-      screen.getByText("Lead Mathematician at Babbage & Co"),
-    ).toBeDefined();
-    expect(screen.getByText("Score 85")).toBeDefined();
-
-    // No action buttons in tooltip state
-    const buttons = screen.queryAllByRole("button");
-    expect(buttons).toHaveLength(0);
-  });
-
-  it("renders pinned state with dialog role and exactly four action buttons", () => {
-    const onOpen = vi.fn();
-    const onLogNote = vi.fn();
-    const onAddToList = vi.fn();
-    const onFollowUp = vi.fn();
-
-    renderCard({
-      pinned: true,
-      onOpen,
-      onLogNote,
-      onAddToList,
-      onFollowUp,
-    });
-
-    // In pinned state, role is dialog
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toBeDefined();
-
-    // Contains heading with name
-    expect(screen.getByRole("heading", { name: "Ada Lovelace" })).toBeDefined();
-
-    // Check the four action buttons: Open, Log note, Add to list, Follow-up
-    // (Plus ScoreBreakdown trigger button which is present when score is interactive)
-    const openBtn = screen.getByRole("button", { name: /open contact/i });
-    const logNoteBtn = screen.getByRole("button", { name: /log interaction/i });
-    const addToListBtn = screen.getByRole("button", { name: /add to list/i });
-    const followUpBtn = screen.getByRole("button", { name: /add follow-up/i });
-
-    // Exactly four in the action row
-    expect(within(openBtn.parentElement!).getAllByRole("button")).toHaveLength(
-      4,
-    );
-
-    // Verify button clicks
-    fireEvent.click(openBtn);
-    expect(onOpen).toHaveBeenCalledWith("c1");
-
-    fireEvent.click(logNoteBtn);
-    expect(onLogNote).toHaveBeenCalledWith("c1");
-
-    fireEvent.click(addToListBtn);
-    expect(onAddToList).toHaveBeenCalledWith("c1");
-
-    fireEvent.click(followUpBtn);
-    expect(onFollowUp).toHaveBeenCalledWith("c1");
-  });
-
-  it("renders local time for known coordinates", () => {
-    // London: 51.5074, -0.1278
-    renderCard({ pinned: false });
-
-    // e.g. "14:05 · GMT+1" or "14:05 · GMT"
-    expect(screen.getByText(/^\d{2}:\d{2} · GMT/)).toBeDefined();
-  });
-
-  it("closes on Escape key press in pinned mode", () => {
-    const onClose = vi.fn();
-    renderCard({ pinned: true, onClose });
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+  it("runs each of its five actions", () => {
+    const onAction = vi.fn();
+    renderCard("hover", onAction);
+    const card = screen.getByRole("dialog", { name: "Rowan Vale" });
+    for (const button of card.querySelectorAll("button"))
+      fireEvent.click(button);
+    expect(onAction.mock.calls.map(([action]) => action)).toEqual([
+      "open",
+      "log",
+      "followUp",
+      "list",
+      "adjust",
+    ]);
   });
 });

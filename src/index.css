@@ -1318,6 +1318,10 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
   border-left-color: var(--color-surface-container-lowest);
 }
+.contact-map .map-card .maplibregl-popup-content {
+  padding: 0.875rem 1rem;
+  border-radius: 1rem;
+}
 
 /*
  * The credit sits on top of the zoom buttons, and opens there as a card no

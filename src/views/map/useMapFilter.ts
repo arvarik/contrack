@@ -1,14 +1,6 @@
 /**
- * useMapFilter — Filter state and execution for MapView.
- *
- * Synchronizes search query with the URL `?q=` parameter, integrates
- * `useQueryTokenizer` for facet pills (including `list:` and `near:`), resolves
- * `near:` coordinates via `/api/geo/search` on Enter, and filters MapContact
- * rows using `matchesFacet` and `scoreContactMatch`.
- *
- * Overdue is a filter of its own, pressed on the map's bottom line rather
- * than typed: no facet filters by follow-up. It narrows whatever the query
- * leaves, and Clear filters clears it with the query.
+ * The map's filter. The text is the whole filter: its facets are the pills,
+ * and the URL's `?q=` and a saved view hold the same text.
  *
  * @module views/map/useMapFilter
  */
@@ -21,252 +13,160 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { searchPlace } from "../../api/geo";
 import { scoreContactMatch } from "../../lib/contactMatch";
 import { isPastDay } from "../../../shared/dates";
+import { formatFacet } from "../../../shared/facetQuery";
 import { matchesFacet, type FacetFilter } from "../../../shared/searchFacets";
 import type { MapContact } from "../../../shared/geo";
-import { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
+import {
+  parseQuery,
+  withFacet,
+  withoutFacet,
+} from "../../hooks/useQueryTokenizer";
 
-interface NearResolution {
-  status: "resolving" | "resolved" | "error";
-  point?: { lat: number; lng: number; km: number };
-  error?: string;
-}
+/** A query that arrives whole ends in a space, so its last facet is a pill. */
+const asTyped = (query: string) => (query.trim() ? `${query.trim()} ` : "");
 
-export function useMapFilter(
-  contacts: MapContact[],
-  options?: {
-    onClearActiveView?: () => void;
-  },
-) {
+const facetKey = (filter: FacetFilter) => formatFacet(filter).toLowerCase();
+const placeKey = (filter: FacetFilter) => filter.value.trim().toLowerCase();
+const PLACE_QUERY = ["geo", "place"] as const;
+
+export function useMapFilter(contacts: MapContact[]) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const urlQ = searchParams.get("q") ?? "";
+  const [rawInput, setRawInput] = useState(() => asTyped(urlQ));
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  // The `q` the input and the URL last agreed on, so neither echoes the other.
+  const syncedQ = useRef(urlQ);
 
-  // Local input state initialized from URL
-  const [rawInput, setRawInputState] = useState(
-    () => searchParams.get("q") ?? "",
-  );
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isInternalUpdateRef = useRef(false);
-
-  // Only the people whose follow-up's day has passed.
-  const [overdueOnly, setOverdueOnlyState] = useState(false);
-  const setOverdueOnly = useCallback(
-    (next: boolean) => {
-      setOverdueOnlyState(next);
-      options?.onClearActiveView?.();
-    },
-    [options],
-  );
-
-  // Near resolution cache by "value" or "value/km"
-  const [nearResolutions, setNearResolutions] = useState<
-    Record<string, NearResolution>
-  >({});
-
-  // Cleanup debounce on unmount
-  useEffect(
-    () => () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    },
-    [],
-  );
-
-  // Sync URL → local state for external navigation events (e.g. back/forward)
+  // A link, a saved view, or Back and Forward sets the input.
   useEffect(() => {
-    if (isInternalUpdateRef.current) {
-      isInternalUpdateRef.current = false;
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    const urlQ = searchParams.get("q") ?? "";
-    setRawInputState((prev) => (prev === urlQ ? prev : urlQ));
-  }, [searchParams]);
+    if (urlQ === syncedQ.current) return;
+    syncedQ.current = urlQ;
+    setRawInput(asTyped(urlQ));
+  }, [urlQ]);
 
-  // Debounce local state → URL params (200ms)
-  const syncQueryToUrl = useCallback(
-    (val: string) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        isInternalUpdateRef.current = true;
-        setSearchParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            if (val.trim()) {
-              next.set("q", val);
-              next.delete("view");
-            } else {
-              next.delete("q");
-            }
-            return next;
-          },
-          { replace: true },
-        );
-      }, 200);
-    },
-    [setSearchParams],
-  );
-
-  const setRawInput = useCallback(
-    (val: string, optionsOverride?: { syncUrl?: boolean } | boolean) => {
-      setRawInputState(val);
-      const shouldSync =
-        typeof optionsOverride === "boolean"
-          ? optionsOverride
-          : (optionsOverride?.syncUrl ?? true);
-      if (!shouldSync) {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        return;
-      }
-      options?.onClearActiveView?.();
-      syncQueryToUrl(val);
-    },
-    [syncQueryToUrl, options],
-  );
-
-  // Tokenizer
-  const tokenizer = useQueryTokenizer(rawInput, setRawInput);
-  const { parsed, removeFilter } = tokenizer;
-
-  // Resolve near filters
-  const resolveNearFilters = useCallback(async () => {
-    const nearFilters = parsed.filters.filter((f) => f.field === "near");
-    if (nearFilters.length === 0) return;
-
-    for (const filter of nearFilters) {
-      const key = `${filter.value.toLowerCase()}/${filter.km ?? 25}`;
-      const existing = nearResolutions[key];
-      if (existing?.status === "resolved") continue;
-
-      setNearResolutions((prev) => ({
-        ...prev,
-        [key]: { status: "resolving" },
-      }));
-
-      try {
-        const result = await searchPlace(filter.value);
-        setNearResolutions((prev) => ({
-          ...prev,
-          [key]: {
-            status: "resolved",
-            point: {
-              lat: result.lat,
-              lng: result.lng,
-              km: filter.km ?? 25,
-            },
-          },
-        }));
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Nothing found for that place";
-        setNearResolutions((prev) => ({
-          ...prev,
-          [key]: {
-            status: "error",
-            error: message,
-          },
-        }));
-      }
-    }
-  }, [parsed.filters, nearResolutions]);
-
-  // Automatically resolve near filters that arrived from initial URL / bookmark
-  const hasCheckedInitialNear = useRef(false);
+  // Typing reaches the URL 200 ms after the last key, and leaves the view.
   useEffect(() => {
-    if (!hasCheckedInitialNear.current) {
-      hasCheckedInitialNear.current = true;
-      const hasNear = parsed.filters.some((f) => f.field === "near");
-      if (hasNear) {
-        resolveNearFilters();
-      }
-    }
-  }, [parsed.filters, resolveNearFilters]);
+    const q = rawInput.trim();
+    if (q === syncedQ.current) return;
+    const timer = setTimeout(() => {
+      syncedQ.current = q;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (q) next.set("q", q);
+          else next.delete("q");
+          next.delete("view");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [rawInput, setSearchParams]);
 
-  // Merge near resolutions into effective filters
-  const effectiveFilters: FacetFilter[] = useMemo(() => {
-    return parsed.filters.map((filter) => {
-      if (filter.field !== "near") return filter;
-      const key = `${filter.value.toLowerCase()}/${filter.km ?? 25}`;
-      const res = nearResolutions[key];
-      if (!res) return filter;
-      if (res.status === "resolving") return { ...filter, resolving: true };
-      if (res.status === "error") return { ...filter, error: res.error };
-      if (res.status === "resolved" && res.point) {
-        return { ...filter, point: res.point };
-      }
-      return filter;
-    });
-  }, [parsed.filters, nearResolutions]);
+  const parsed = useMemo(() => parseQuery(rawInput), [rawInput]);
 
-  // Deferred freeText so typing remains fluid
+  // A `near:` place is looked up as soon as its pill forms.
+  const places = useMemo(
+    () => [
+      ...new Set(
+        parsed.filters.filter((f) => f.field === "near").map(placeKey),
+      ),
+    ],
+    [parsed.filters],
+  );
+  const lookups = useQueries({
+    queries: places.map((place) => ({
+      queryKey: [...PLACE_QUERY, place],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        searchPlace(place, signal),
+      staleTime: Infinity,
+      retry: false,
+    })),
+    combine: (results) =>
+      results.map(({ data, error }) =>
+        data ? { lat: data.lat, lng: data.lng } : error ? error.message : null,
+      ),
+  });
+
+  const effectiveFilters = useMemo(
+    () =>
+      parsed.filters.map((filter): FacetFilter => {
+        if (filter.field !== "near") return filter;
+        const found = lookups[places.indexOf(placeKey(filter))];
+        if (typeof found === "string")
+          return { ...filter, error: found || "Nothing found for that place" };
+        if (!found) return { ...filter, resolving: true };
+        return { ...filter, point: { ...found, km: filter.km ?? 25 } };
+      }),
+    [parsed.filters, places, lookups],
+  );
+
   const deferredFreeText = useDeferredValue(parsed.freeText);
-
-  // Apply filters
   const filteredContacts = useMemo(() => {
     const now = new Date();
-    return contacts.filter((contact) => {
-      if (overdueOnly && !isPastDay(contact.nextFollowUpAt, now)) return false;
-      // 1. Facets
-      for (const filter of effectiveFilters) {
-        if (!matchesFacet(contact, filter)) return false;
-      }
-      // 2. Free text scoring
-      if (deferredFreeText) {
-        if (scoreContactMatch(contact, deferredFreeText) <= 0) return false;
-      }
-      return true;
-    });
+    return contacts.filter(
+      (contact) =>
+        (!overdueOnly || isPastDay(contact.nextFollowUpAt, now)) &&
+        effectiveFilters.every((filter) => matchesFacet(contact, filter)) &&
+        (!deferredFreeText || scoreContactMatch(contact, deferredFreeText) > 0),
+    );
   }, [contacts, effectiveFilters, deferredFreeText, overdueOnly]);
 
-  // Clear all filters
-  const clearFilters = useCallback(() => {
-    setRawInputState("");
-    setOverdueOnlyState(false);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Read first, then call, so the dependency is the function and not
-    // all of `options`.
-    const onClear = options?.onClearActiveView;
-    onClear?.();
-    isInternalUpdateRef.current = true;
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("q");
-        next.delete("view");
-        return next;
-      },
-      { replace: true },
-    );
-    // Remove all locked filters
-    for (let i = parsed.filters.length - 1; i >= 0; i--) {
-      removeFilter(i);
-    }
-  }, [
-    parsed.filters.length,
-    removeFilter,
-    setSearchParams,
-    options?.onClearActiveView,
-  ]);
-
-  const hasActiveFilter = Boolean(
-    rawInput.trim() ||
-    parsed.filters.length > 0 ||
-    parsed.freeText ||
-    overdueOnly,
+  /** Add a facet in place of the one being typed, unless it is a pill. */
+  const addFacet = useCallback(
+    (filter: FacetFilter) => {
+      const key = facetKey(filter);
+      if (!parsed.filters.some((f) => facetKey(f) === key))
+        setRawInput(withFacet(rawInput, filter));
+    },
+    [parsed.filters, rawInput],
   );
+
+  const removeFacet = useCallback(
+    (index: number) => {
+      const filter = parsed.filters[index];
+      if (filter) setRawInput(withoutFacet(rawInput, filter));
+    },
+    [parsed.filters, rawInput],
+  );
+
+  const queryClient = useQueryClient();
+  /** Enter makes the last token a pill and asks again for a place not found. */
+  const commit = useCallback(() => {
+    if (rawInput.trim() && !/\s$/.test(rawInput)) setRawInput(`${rawInput} `);
+    void queryClient.refetchQueries({
+      queryKey: PLACE_QUERY,
+      type: "active",
+      predicate: (query) => query.state.status === "error",
+    });
+  }, [queryClient, rawInput]);
+
+  const clearFilters = useCallback(() => {
+    setOverdueOnly(false);
+    setRawInput("");
+  }, []);
 
   return {
     rawInput,
     setRawInput,
-    tokenizer,
+    parsed,
     effectiveFilters,
     filteredContacts,
     totalCount: contacts.length,
     matchCount: filteredContacts.length,
-    hasActiveFilter,
-    resolveNearFilters,
+    hasActiveFilter: Boolean(rawInput.trim()) || overdueOnly,
+    addFacet,
+    removeFacet,
+    commit,
     clearFilters,
     overdueOnly,
     setOverdueOnly,
   };
 }
+
+export type MapFilter = ReturnType<typeof useMapFilter>;

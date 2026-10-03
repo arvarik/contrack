@@ -53,10 +53,17 @@ import { LiveStatus } from "../../components/ui/LiveStatus";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import type { MapLayer } from "../../api/mapViews";
 import { ClusterMarker } from "./ClusterMarker";
-import { ContactMarker } from "./ContactMarker";
-import { MapHoverCard } from "./MapHoverCard";
+import { ContactMarker, type PinEvent } from "./ContactMarker";
+import {
+  ClusterPreview,
+  MapHoverCard,
+  MapPeekSheet,
+  type CardAction,
+} from "./MapHoverCard";
 import { STACK_LIMIT, StackPopup, type ContactStack } from "./StackPopup";
 import { prefersReducedMotion } from "./flyTo";
+import { cardPadding } from "./insets";
+import { useHoverCard } from "./useHoverCard";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";
 import {
@@ -122,8 +129,19 @@ const BLANK_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
  */
 const DEFAULT_VIEW = { longitude: -95, latitude: 20, zoom: 1 };
 
-/** Where a pin reports its hover when the map draws no card. */
-const noPreview = () => {};
+/** A pin's card (a tooltip, a hover card, pinned, or a phone's sheet), or a cluster's preview. */
+type Card =
+  | {
+      kind: "contact";
+      id: string;
+      mode: "focus" | "hover" | "pinned" | "sheet";
+      padding?: PaddingOptions;
+    }
+  | { kind: "cluster"; cluster: ClusterFeature; padding?: PaddingOptions };
+
+/** A pinned card and a sheet stay until closed on purpose. */
+const stays = (card: Card | null) =>
+  card?.kind === "contact" && (card.mode === "pinned" || card.mode === "sheet");
 
 interface ContactMapProps {
   contacts: MapContact[];
@@ -170,9 +188,8 @@ interface ContactMapProps {
   onMapReady?: (map: MapLibreMap) => void;
   /** The contacts are still loading. */
   loading?: boolean;
-  onLogNote?: (id: string) => void;
-  onAddToList?: (id: string) => void;
-  onFollowUp?: (id: string) => void;
+  /** A card's button other than Open, which opens the contact. */
+  onCardAction?: (action: Exclude<CardAction, "open">, id: string) => void;
   layer?: MapLayer;
   /**
    * Rendered inside the map, after the pins. A caller that needs one marker
@@ -197,9 +214,7 @@ export const ContactMap = ({
   label = "Contact map",
   onMapReady,
   loading = false,
-  onLogNote,
-  onAddToList,
-  onFollowUp,
+  onCardAction,
   layer = "pins",
   children,
 }: ContactMapProps) => {
@@ -296,57 +311,91 @@ export const ContactMap = ({
   const [styledMap, setStyledMap] = useState<MapLibreMap | null>(null);
   const features = useClusterFeatures(map ?? styledMap, CONTACTS_SOURCE_ID);
 
-  // Hover & pin card state
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [pinnedId, setPinnedId] = useState<string | null>(null);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    card,
+    current: openCard,
+    set: setCard,
+    show: showCard,
+    hide: hideCard,
+    keep: keepCard,
+  } = useHoverCard<Card>();
+  // The pin Escape gives focus back to, which must not open its tooltip again.
+  const refocused = useRef<string | null>(null);
+  const room = useCallback(
+    () => (wrapperRef.current ? cardPadding(wrapperRef.current) : undefined),
+    [],
+  );
+  const handleCloseCard = useCallback(() => setCard(null), [setCard]);
 
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    };
-  }, []);
-
-  const handlePreview = useCallback((id: string | null) => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (!id) {
-      setHoveredId(null);
-      return;
-    }
-    const delay =
-      typeof process !== "undefined" && process.env?.NODE_ENV === "test"
-        ? 0
-        : 150;
-    if (delay === 0) {
-      setHoveredId(id);
-    } else {
-      hoverTimerRef.current = setTimeout(() => {
-        setHoveredId(id);
-      }, delay);
-    }
-  }, []);
-
-  const handlePinCard = useCallback(
+  const select = useCallback(
     (id: string) => {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-      if (pinnedId === id) {
-        onSelect(id);
-      } else {
-        setPinnedId(id);
-      }
+      setCard(null);
+      onSelect(id);
     },
-    [pinnedId, onSelect],
+    [onSelect, setCard],
   );
 
-  const handleCloseCard = useCallback(() => {
-    setPinnedId(null);
-    setHoveredId(null);
-  }, []);
+  // A card that stays ignores the mouse, and a leave closes only its own card.
+  const onPin = useCallback(
+    (id: string, event: PinEvent) => {
+      const open = openCard.current;
+      const mine = open?.kind === "contact" && open.id === id ? open : null;
+      if (!hoverCard) {
+        if (event === "tap") onSelect(id);
+      } else if (event === "tap") {
+        if (mine?.mode === "sheet") select(id);
+        else setCard({ kind: "contact", id, mode: "sheet" });
+      } else if (event === "space") {
+        if (mine?.mode === "pinned") select(id);
+        else setCard({ kind: "contact", id, mode: "pinned", padding: room() });
+      } else if (event === "focus") {
+        if (refocused.current === id) refocused.current = null;
+        else if (!mine)
+          showCard({ kind: "contact", id, mode: "focus", padding: room() });
+      } else if (stays(open)) {
+        return;
+      } else if (event === "enter") {
+        showCard({ kind: "contact", id, mode: "hover", padding: room() });
+      } else if (!open || mine) {
+        hideCard();
+      }
+    },
+    [hideCard, hoverCard, onSelect, openCard, room, select, setCard, showCard],
+  );
 
-  const activeCardId = pinnedId ?? (hoverCard ? hoveredId : null);
-  const activeCardContact = activeCardId
-    ? (byId.get(activeCardId) ?? null)
-    : null;
+  const onCluster = useCallback(
+    (cluster: ClusterFeature, event: PinEvent) => {
+      const open = openCard.current;
+      if (stays(open)) return;
+      if (event === "enter" || event === "focus")
+        showCard({ kind: "cluster", cluster, padding: room() });
+      else if (open?.kind !== "contact") hideCard();
+    },
+    [hideCard, openCard, room, showCard],
+  );
+
+  const onCardPointer = useCallback(
+    (inside: boolean) => {
+      if (inside) keepCard();
+      else if (!stays(openCard.current)) hideCard();
+    },
+    [hideCard, keepCard, openCard],
+  );
+
+  const cardContact =
+    card?.kind === "contact" ? (byId.get(card.id) ?? null) : null;
+  const runAction = useCallback(
+    (action: CardAction) => {
+      const id = cardContact?.id;
+      if (!id) return;
+      if (action === "open") select(id);
+      else {
+        setCard(null);
+        onCardAction?.(action, id);
+      }
+    },
+    [cardContact?.id, onCardAction, select, setCard],
+  );
   const [stack, setStack] = useState<ContactStack | null>(null);
 
   // Per-cluster leaves cache for displaying "X of Y selected"
@@ -396,9 +445,14 @@ export const ContactMap = ({
     };
   }, [map, features]);
 
-  // A stack lists who was in the cluster when it opened. New data, or a
-  // zoom that dissolves the cluster, makes that list stale.
-  useEffect(() => setStack(null), [contacts]);
+  // New data makes a stack's list, a card and the cluster ids stale: MapLibre
+  // can give an old id to a new group.
+  useEffect(() => {
+    setStack(null);
+    setCard(null);
+    clusterLeavesCache.current.clear();
+    setClusterLeaves(new Map());
+  }, [contacts, setCard]);
   // A card or a stack belongs to a pin, and the heat takes the pins away.
   useEffect(() => {
     if (drawPins) return;
@@ -413,6 +467,29 @@ export const ContactMap = ({
       setStack(null);
     }
   }, [features, stack]);
+
+  // Escape closes the card, or else the stack, and nothing under it. Focus
+  // goes back to the pin, and the tooltip stays shut.
+  useEffect(() => {
+    if (!card && !stack) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      const open = openCard.current;
+      if (!open) return setStack(null);
+      setCard(null);
+      if (open.kind !== "contact" || open.mode === "hover") return;
+      const pin = wrapperRef.current?.querySelector<HTMLElement>(
+        `[data-contact-id="${CSS.escape(open.id)}"]`,
+      );
+      if (pin && pin !== document.activeElement) {
+        refocused.current = open.id;
+        pin.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [card, stack, openCard, setCard]);
 
   const handleError = useCallback(
     (event: ErrorEvent) => {
@@ -448,6 +525,7 @@ export const ContactMap = ({
     async (cluster: ClusterFeature) => {
       const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
       if (!map || !source) return;
+      setCard(null);
       const zoom = await source.getClusterExpansionZoom(cluster.clusterId);
       if (zoom <= CLUSTER_MAX_ZOOM) {
         map.easeTo({
@@ -473,10 +551,36 @@ export const ContactMap = ({
         latitude: cluster.latitude,
         contacts: listed,
         total: cluster.count,
+        padding: room(),
       });
     },
-    [map, byId],
+    [map, byId, setCard, room],
   );
+
+  // A previewed cluster that no zoom can split, which a click lists instead.
+  const [stackId, setStackId] = useState<number | null>(null);
+  useEffect(() => {
+    const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
+    if (card?.kind !== "cluster" || !source) return;
+    const { clusterId } = card.cluster;
+    source.getClusterExpansionZoom(clusterId).then(
+      (zoom) => setStackId(zoom > CLUSTER_MAX_ZOOM ? clusterId : null),
+      () => {},
+    );
+  }, [card, map]);
+
+  // The cluster's people for its preview, the ones with the most history first.
+  const clusterMembers = useMemo(() => {
+    if (card?.kind !== "cluster") return [];
+    return (clusterLeaves.get(card.cluster.clusterId) ?? [])
+      .map((id) => byId.get(id))
+      .filter((c): c is MapContact => Boolean(c))
+      .sort(
+        (a, b) =>
+          (b.interactionCount ?? 0) - (a.interactionCount ?? 0) ||
+          a.name.localeCompare(b.name),
+      );
+  }, [card, clusterLeaves, byId]);
 
   return (
     <div
@@ -505,12 +609,8 @@ export const ContactMap = ({
         <LiveStatus
           label="Map card"
           message={
-            activeCardContact
-              ? [
-                  activeCardContact.name,
-                  activeCardContact.company,
-                  activeCardContact.location,
-                ]
+            card?.kind === "contact" && card.mode === "focus" && cardContact
+              ? [cardContact.name, cardContact.company, cardContact.location]
                   .filter(Boolean)
                   .join(". ")
               : ""
@@ -598,6 +698,11 @@ export const ContactMap = ({
                     cluster={feature}
                     selectedCount={selectedInCluster}
                     onExpand={expandCluster}
+                    onCard={hoverCard ? onCluster : undefined}
+                    described={
+                      card?.kind === "cluster" &&
+                      card.cluster.clusterId === feature.clusterId
+                    }
                   />
                 );
               }
@@ -611,34 +716,53 @@ export const ContactMap = ({
                   multiSelected={
                     selectedIds ? selectedIds.has(contact.id) : false
                   }
-                  onSelect={onSelect}
-                  onPreview={hoverCard ? handlePreview : noPreview}
-                  onPinCard={handlePinCard}
-                  hasActiveCard={activeCardId === contact.id}
+                  onSelect={select}
+                  onCard={onPin}
+                  described={
+                    card?.kind === "contact" &&
+                    card.mode === "focus" &&
+                    card.id === contact.id
+                  }
                 />
               );
             })}
-          {activeCardContact && !stack && (
-            <MapHoverCard
-              contact={activeCardContact}
-              pinned={pinnedId !== null}
-              onClose={handleCloseCard}
-              onOpen={onSelect}
-              onLogNote={onLogNote}
-              onAddToList={onAddToList}
-              onFollowUp={onFollowUp}
-              map={map}
-            />
-          )}
           {stack && (
             <StackPopup
               stack={stack}
+              selectedId={selectedId}
               onSelect={onSelect}
               onClose={() => setStack(null)}
             />
           )}
+          {card?.kind === "contact" && card.mode !== "sheet" && cardContact && (
+            <MapHoverCard
+              key={card.id}
+              contact={cardContact}
+              mode={card.mode}
+              padding={card.padding}
+              onAction={runAction}
+              onPointerEnter={() => onCardPointer(true)}
+              onPointerLeave={() => onCardPointer(false)}
+            />
+          )}
+          {card?.kind === "cluster" && (
+            <ClusterPreview
+              key={card.cluster.clusterId}
+              cluster={card.cluster}
+              members={clusterMembers}
+              stacked={stackId === card.cluster.clusterId}
+              padding={card.padding}
+            />
+          )}
           {children}
         </MapGL>
+      )}
+      {card?.kind === "contact" && card.mode === "sheet" && cardContact && (
+        <MapPeekSheet
+          contact={cardContact}
+          onAction={runAction}
+          onClose={handleCloseCard}
+        />
       )}
     </div>
   );

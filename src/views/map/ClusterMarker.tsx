@@ -2,13 +2,16 @@
  * A group of contacts too close to tell apart at this zoom.
  *
  * A button with the count, named for what a click does: "12 contacts, zoom
- * in". The click zooms to the level where the group splits.
+ * in". The click zooms to the level where the group splits. A hover or focus
+ * previews who is in it.
  *
  * @module views/map/ClusterMarker
  */
 import { memo } from "react";
 import { Marker } from "@vis.gl/react-maplibre";
 import type { ClusterFeature } from "./useClusterFeatures";
+import type { PinEvent } from "./ContactMarker";
+import { clusterCardId } from "./MapHoverCard";
 
 /** The cluster's accessible name. */
 function clusterLabel(count: number, selected = 0): string {
@@ -23,12 +26,17 @@ interface ClusterMarkerProps {
   cluster: ClusterFeature;
   selectedCount?: number;
   onExpand: (cluster: ClusterFeature) => void;
+  onCard?: (cluster: ClusterFeature, event: PinEvent) => void;
+  /** The preview is open, and describes the cluster. */
+  described?: boolean;
 }
 
 export const ClusterMarker = memo(function ClusterMarker({
   cluster,
   selectedCount = 0,
   onExpand,
+  onCard,
+  described = false,
 }: ClusterMarkerProps) {
   const hasSelected = selectedCount > 0;
 
@@ -46,7 +54,16 @@ export const ClusterMarker = memo(function ClusterMarker({
       <button
         type="button"
         aria-label={clusterLabel(cluster.count, selectedCount)}
+        aria-describedby={
+          described ? clusterCardId(cluster.clusterId) : undefined
+        }
         onClick={() => onExpand(cluster)}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch") onCard?.(cluster, "enter");
+        }}
+        onPointerLeave={() => onCard?.(cluster, "leave")}
+        onFocus={() => onCard?.(cluster, "focus")}
+        onBlur={() => onCard?.(cluster, "blur")}
         className={`flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform hover:-translate-y-1 ${
           hasSelected ? "ring-2 ring-primary" : "ring-1 ring-outline-variant"
         }`}

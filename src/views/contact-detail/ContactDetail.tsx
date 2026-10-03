@@ -12,7 +12,7 @@ export const ContactDetail = () => {
   const isArchived = location.pathname.startsWith("/settings/archived");
   const isOverlayActive = isMapActive || isArchived;
 
-  const back = backTarget(location.pathname, location.state);
+  const back = backTarget(location.pathname, location.state, location.search);
 
   const handleClose = () => navigate(back.to);
 

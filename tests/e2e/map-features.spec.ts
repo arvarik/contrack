@@ -354,15 +354,15 @@ test.describe("map features - filters and place search", () => {
     await expect(openBtn).toBeVisible();
     await expect(openBtn).toBeFocused();
 
-    // Press Escape to close the card
+    // Escape closes the card and gives the focus back to the pin, and that
+    // focus does not open the card again as a tooltip.
     await page.keyboard.press("Escape");
     await expect(
       page.getByRole("dialog", { name: "Ada Lovelace" }),
     ).toHaveCount(0);
-    await expect(page.getByRole("tooltip")).toHaveCount(0);
-
-    // Focus returns to the pin
     await expect(adaPin).toBeFocused();
+    await page.waitForTimeout(600);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
   });
 
   test("is accessible with card pinned and follow-up modal open", async ({
@@ -431,52 +431,39 @@ test.describe("map features - filters and place search", () => {
     ).toBeVisible();
   });
 
-  test("saves a view named Virginia, reloads, and choosing it restores filter and updates URL", async ({
+  test("saves a view with a facet, and choosing it after a reload filters the map again", async ({
     page,
   }) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
-
-    // Type a filter
     const filterInput = page.getByRole("textbox", { name: "Filter contacts" });
-    await filterInput.fill("Virginia");
+    await filterInput.fill("company:Babbage ");
 
-    // Open Views menu and click Save current view
     await page.getByRole("button", { name: "Saved views" }).click();
-    const saveMenuItem = page.getByRole("menuitem", {
-      name: "Save current view…",
-    });
-    await expect(saveMenuItem).toBeVisible();
-    await saveMenuItem.click();
-
-    // Fill view name in the dialog and submit
+    await page.getByRole("menuitem", { name: "Save current view…" }).click();
     const saveModal = page.getByRole("dialog", { name: "Save current view" });
-    await expect(saveModal).toBeVisible();
-    await saveModal.getByLabel("View name").fill("Virginia");
+    await saveModal.getByLabel("View name").fill("Babbage");
     await saveModal.getByRole("button", { name: "Save view" }).click();
-
-    // Modal closes
     await expect(saveModal).toHaveCount(0);
 
-    // Reload /map fresh
     await page.goto("/map");
-    await expect(map).toBeVisible();
     await expect(filterInput).toHaveValue("");
-
-    // Open Saved views menu and select Virginia
     await page.getByRole("button", { name: "Saved views" }).click();
-    // Exact: "Rename Virginia" and "Delete Virginia" are items too.
-    const virginiaItem = page.getByRole("menuitem", {
-      name: "Virginia",
-      exact: true,
-    });
-    await expect(virginiaItem).toBeVisible();
-    await virginiaItem.click();
+    // Exact: "Rename Babbage" and "Delete Babbage" are items too.
+    await page.getByRole("menuitem", { name: "Babbage", exact: true }).click();
 
-    // URL now contains ?view= and filter input shows the saved query
+    // The view stores its query trimmed, and its facet is a pill again.
     await expect(page).toHaveURL(/[?&]view=/);
-    await expect(filterInput).toHaveValue("Virginia");
+    await expect(
+      page.getByRole("button", { name: /^company:\s*Babbage$/ }),
+    ).toBeVisible();
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+    await expect(
+      map.getByRole("button", { name: "Grace Hopper, US Navy" }),
+    ).toHaveCount(0);
   });
 
   test("is accessible with views menu open and save view modal open", async ({

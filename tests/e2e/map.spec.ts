@@ -245,10 +245,13 @@ test.describe("map", () => {
       await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
       const list = page.getByRole("list", { name: "People at this place" });
       await expect(list.getByRole("button")).toHaveCount(2);
-      await list
-        .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
-        .click();
+      const alan = list.getByRole("button", {
+        name: "Alan Turing, Same Place Ltd",
+      });
+      await alan.click();
       await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+      // The list stays, and marks the open contact.
+      await expect(alan).toHaveAttribute("aria-current", "true");
       // Restore pane preference for subsequent tests
       await page.keyboard.press("i");
     } finally {
@@ -668,6 +671,10 @@ test.describe("map", () => {
     });
     expect(stacking.card).toBeGreaterThan(stacking.pin);
     expect(stacking.pin).toBeGreaterThanOrEqual(1);
+
+    // The pointer can cross from the pin into the card and use a button.
+    await card.getByRole("button", { name: "Log interaction" }).click();
+    await expect(page.getByRole("dialog", { name: /Log/ })).toBeVisible();
   });
 
   test("keeps the toolbar and the bottom line clear of an open contact", async ({
@@ -915,7 +922,7 @@ const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
 test.describe("map on a phone", () => {
   test.use({ ...PHONE });
 
-  test("opens a contact with a tap, with no hover card, and comes back to its pin above the bar", async ({
+  test("shows a tapped pin's card, opens the contact from it, and comes back to its pin above the bar", async ({
     page,
   }) => {
     await stubBasemap(page);
@@ -928,14 +935,18 @@ test.describe("map on a phone", () => {
     });
     await expect(pin).toBeVisible();
 
+    // A finger cannot hover, so the first tap shows the card at the bottom.
     await pin.tap();
+    const card = map.getByRole("dialog", { name: "Linus Torvalds" });
+    await expect(card).toBeVisible();
+    await expect(page).toHaveURL(/\/map$/);
+    await card.getByRole("button", { name: "Open contact" }).tap();
     await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
     const overlay = page.getByRole("region", { name: "Contact", exact: true });
     await expect(
       overlay.getByRole("heading", { level: 1, name: /Linus Torvalds/ }),
     ).toBeVisible();
-    // A finger cannot hover. No card opened under the contact.
-    await expect(map.locator(".maplibregl-popup")).toHaveCount(0);
+    await expect(card).toHaveCount(0);
 
     await page.getByRole("button", { name: "Back" }).tap();
     await expect(page).toHaveURL(/\/map$/);

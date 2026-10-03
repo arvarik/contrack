@@ -1,29 +1,16 @@
 /**
- * The list that opens over a stack of pins.
- *
- * `StackPopup` lists the people in a cluster that zooming cannot split. The
- * geocoder gives everyone with the same city the same point, so past the
- * cluster zoom their pins would sit on top of each other and only the top one
- * could be clicked. The list gives each of them a button.
- *
- * It uses the app's type and colour tokens. MapLibre's popup frame takes its
- * colours from `src/index.css`, and the same file stacks a card above the
- * pins, so a card never opens under the next pin over.
- *
- * It names no anchor. MapLibre then picks the side with room, so a pin at the
- * top edge of the map gets its card below it and a pin at the right edge gets
- * it to the left, instead of a card cut off by the edge. The offset is one
- * number, which MapLibre applies in whichever direction the card opens.
+ * The list that opens over a stack of pins: people the geocoder put on one
+ * point, which no zoom can split. Each has a button, the open one marked.
  *
  * @module views/map/StackPopup
  */
-import { useEffect } from "react";
 import { Popup } from "@vis.gl/react-maplibre";
+import type { PaddingOptions } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
-import { contactPinLabel } from "./ContactMarker";
-
-/** Half the 48 px pin plus a gap, so the card clears the ring. */
-const PIN_CLEARANCE = 30;
+import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
+import { SELECTED_TINT } from "../../lib/styles";
+import { cn } from "../../lib/utils";
+import { PIN_CLEARANCE } from "./MapHoverCard";
 
 export interface ContactStack {
   clusterId: number;
@@ -33,6 +20,8 @@ export interface ContactStack {
   contacts: MapContact[];
   /** The cluster's full size, which can be more than the list holds. */
   total: number;
+  /** The part of the map the list keeps inside. */
+  padding?: PaddingOptions;
 }
 
 /** The most people one stack lists. The rest are counted, not listed. */
@@ -40,29 +29,24 @@ export const STACK_LIMIT = 50;
 
 interface StackPopupProps {
   stack: ContactStack;
+  selectedId?: string | null;
   onSelect: (id: string) => void;
   onClose: () => void;
 }
 
-export const StackPopup = ({ stack, onSelect, onClose }: StackPopupProps) => {
+export const StackPopup = ({
+  stack,
+  selectedId,
+  onSelect,
+  onClose,
+}: StackPopupProps) => {
   const hidden = stack.total - stack.contacts.length;
-
-  // Escape closes the list, wherever the focus is. On the window rather than
-  // on the list, because the list is only what the pointer opened: the key
-  // has to work before anything inside it has focus.
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   return (
     <Popup
       longitude={stack.longitude}
       latitude={stack.latitude}
       offset={PIN_CLEARANCE}
+      padding={stack.padding}
       closeButton={false}
       closeOnClick
       onClose={onClose}
@@ -81,10 +65,22 @@ export const StackPopup = ({ stack, onSelect, onClose }: StackPopupProps) => {
             <li key={contact.id}>
               <button
                 type="button"
+                aria-current={contact.id === selectedId || undefined}
                 onClick={() => onSelect(contact.id)}
-                className="state-layer w-full min-h-[44px] px-2 rounded-lg text-left text-sm font-semibold text-on-surface"
+                className={cn(
+                  "state-layer flex w-full min-h-[44px] items-center gap-2 px-2 rounded-lg text-left text-sm text-on-surface",
+                  contact.id === selectedId && SELECTED_TINT,
+                )}
               >
-                {contactPinLabel(contact)}
+                <ScoreRingAvatar contact={contact} size={28} decorative />
+                <span className="min-w-0 truncate">
+                  <span className="font-semibold">{contact.name}</span>
+                  {contact.company && (
+                    <span className="text-on-surface-variant">
+                      , {contact.company}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}
