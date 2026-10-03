@@ -108,7 +108,8 @@ import {
   type Seeded,
 } from "./tenancy/helpers.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
-import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPass.ts";
+import { setTechnique } from "../../server/services/research/index.ts";
+import type { SourceOutcome } from "../../server/services/research/evidence.ts";
 import { recordInvocation } from "../../server/services/aiStatsService.ts";
 import { runWithContext } from "../../server/tenancy/requestContext.ts";
 import {
@@ -2006,7 +2007,7 @@ describe("AI Search batches belong to the account that started them", () => {
     const batch = jobQueue.createBatch(
       A.scope,
       [{ id: subject.body.id, name: "Cooldown Subject" }],
-      "two-pass",
+      { technique: "provider-search" },
     );
     await jobQueue.processBatch(batch.id);
     expect(batch.status).toBe("complete");
@@ -2027,30 +2028,26 @@ describe("AI Search batches belong to the account that started them", () => {
     );
     // Each job answers after a moment, so the batch is running while the
     // test asks. The answer is "no page about this person": nothing to merge.
-    const execute = vi
-      .spyOn(TwoPassStrategy.prototype, "execute")
-      .mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  data: {},
-                  models: ["test-model"],
-                  latencyMs: 1,
-                  citations: [],
-                  findings: [],
-                  searchQueries: [],
-                  outcome: "no-public-info",
-                }),
-              50,
-            ),
+    const execute = vi.fn(
+      () =>
+        new Promise<SourceOutcome>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                kind: "no-match",
+                queries: [],
+                models: ["test-model"],
+                text: "",
+              }),
+            50,
           ),
-      );
+        ),
+    );
+    setTechnique({ name: "provider-search", needs: () => [], run: execute });
     const running = jobQueue.createBatch(
       A.scope,
       [{ id: zebulonId, name: ZEBULON }],
-      "two-pass",
+      { technique: "provider-search" },
     );
     const done = jobQueue.processBatch(running.id);
     expect(jobQueue.isProcessing()).toBe(true);
@@ -2068,14 +2065,24 @@ describe("AI Search batches belong to the account that started them", () => {
     // B cannot add to A's batch, and a contact already queued is not queued
     // twice.
     expect(
-      jobQueue.appendToBatch(B.scope, running.id, [
-        { id: zebulonId, name: ZEBULON },
-      ]),
+      jobQueue.appendToBatch(
+        B.scope,
+        running.id,
+        [{ id: zebulonId, name: ZEBULON }],
+        "standard",
+        { technique: "provider-search" },
+      ),
     ).toBeNull();
-    const joined = jobQueue.appendToBatch(A.scope, running.id, [
-      { id: zebulonId, name: ZEBULON },
-      { id: second.body.id, name: "Second Subject" },
-    ]);
+    const joined = jobQueue.appendToBatch(
+      A.scope,
+      running.id,
+      [
+        { id: zebulonId, name: ZEBULON },
+        { id: second.body.id, name: "Second Subject" },
+      ],
+      "standard",
+      { technique: "provider-search" },
+    );
     expect(joined?.added).toBe(1);
     expect(running.jobs.map((job) => job.contactName)).toEqual([
       ZEBULON,
@@ -2088,7 +2095,7 @@ describe("AI Search batches belong to the account that started them", () => {
       ["success", "no-public-info"],
       ["success", "no-public-info"],
     ]);
-    execute.mockRestore();
+    setTechnique(null);
     jobQueue.__resetForTests();
   }, 10_000);
 
@@ -2097,7 +2104,7 @@ describe("AI Search batches belong to the account that started them", () => {
     const batch = jobQueue.createBatch(
       A.scope,
       [{ id: zebulonId, name: ZEBULON }],
-      "two-pass",
+      { technique: "provider-search" },
     );
     expect(jobQueue.getBatch(A.scope, batch.id)?.id).toBe(batch.id);
     expect(jobQueue.getBatch(B.scope, batch.id)).toBeNull();
@@ -2117,7 +2124,7 @@ describe("GET /api/ai-search/status and /stream", () => {
     batchId = jobQueue.createBatch(
       A.scope,
       [{ id: zebulonId, name: ZEBULON }],
-      "two-pass",
+      { technique: "provider-search" },
     ).id;
   });
   afterAll(() => jobQueue.__resetForTests());

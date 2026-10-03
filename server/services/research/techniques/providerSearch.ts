@@ -1,26 +1,14 @@
-import { AppError } from "../../../utils/AppError.ts";
 // =============================================================================
-// AI Search — Two-Pass Strategy
+// Research — the provider-search technique
 // =============================================================================
-// The canonical strategy for AI Search, and the one every provider runs. Two
-// sequential calls, because Gemini cannot search and fill a response schema
-// in one request, and because the split keeps a source beside every fact:
-//
-// Pass 1 — Search: the research model searches the web and reports what the
-//          matching pages say, one fact per line with its site
-//          ("Past role: Associate, Harbor Point Partners, 2018 to 2020
-//          [finra.org]"). Returns the text, the pages it cited and the
-//          searches it ran. A deep run also asks, beside it, for a complete
-//          profile at thinking "high", and keeps the lines of both.
-//          `providerEvidence` runs it, and the combined strategy runs it
-//          beside SearXNG.
-// Pass 2 — Extraction: the quick model reads those lines into the output
-//          schema. No searching; the facts are already on the page. Gemini
-//          3.8 Flash followed the job rules more closely, but on one
-//          contact's facts it wrote dates with stray text in two runs of
-//          three and left out every job in one; Flash-Lite was steady
-//          (2026-09-26). The rules it misses are applied in code
-//          (tidyExtraction).
+// The research model searches the web with its own search tool and reports
+// what the matching pages say, one fact per line with its site ("Past role:
+// Associate, Harbor Point Partners, 2018 to 2020 [finra.org]"). It returns
+// the lines, the pages it cited and the searches it ran. A deep run also
+// asks, beside it, for a complete profile at thinking "high", and keeps the
+// lines of both. The extraction then reads the lines into fields
+// (`extract.ts`): Gemini cannot search and fill a response schema in one
+// request, and the split keeps a source beside every fact.
 //
 // No source links, no field changes. When no first ask cites a page, two
 // other forms are asked at once, because a model that chose not to search
@@ -35,14 +23,8 @@ import { AppError } from "../../../utils/AppError.ts";
 // the model's memory, and is refused too.
 // =============================================================================
 
-import { generateFor, type AIGenerateResult } from "../../../ai/gateway.ts";
+import type { AIGenerateResult } from "../../../ai/gateway.ts";
 import { resolveRedirects, toCitations } from "../../../ai/citations.ts";
-import type { HydratedContact } from "../../../repositories/types.ts";
-import type {
-  AISearchStrategy,
-  AISearchResult,
-  ResearchOptions,
-} from "../types.ts";
 import {
   attachSources,
   buildSearchPrompt,
@@ -51,18 +33,12 @@ import {
   mergeFindings,
   parseFindings,
   suggestedSearches,
-} from "../promptTemplate.ts";
-import { recordInvocation } from "../../../services/aiStatsService.ts";
+} from "../../aiSearch/promptTemplate.ts";
+import { recordInvocation } from "../../aiStatsService.ts";
 import { log } from "../../../utils/logger.ts";
-import { DEFAULT_RESEARCH_DEPTH } from "../../../../shared/researchDepth.ts";
-import {
-  createMeter,
-  extractFacts,
-  foundResult,
-  noMatchResult,
-  type Meter,
-  type SourceOutcome,
-} from "./evidence.ts";
+import { AppError } from "../../../utils/AppError.ts";
+import type { SourceOutcome } from "../evidence.ts";
+import type { ResearchRequest, Technique, TechniqueContext } from "../types.ts";
 
 /** The pages a pass cited, in the one shape the pipeline uses. */
 const sourcesOf = (result: AIGenerateResult) =>
@@ -80,25 +56,19 @@ interface Ask {
 const ASK_TIMEOUT_MS = 120_000;
 
 /**
- * Pass 1: the research model's own web search, for one contact.
+ * The research model's own web search, for one contact.
  *
  * It never throws for what the model answered. It says what came of it:
  * the fact lines of every ask that cited pages, a no-match from an ask that
  * reports a web search, or the error that explains why there is neither.
- * Only a cancelled job throws.
- *
- * @param prompt - The research prompt, from `buildSearchPrompt`.
- * @param options - The depth, and the research so far.
- * @param meter - Counts every ask, the ones that found nothing too.
+ * Only a run that stops throws.
  */
-export async function providerEvidence(
-  contact: HydratedContact,
-  prompt: string,
-  signal: AbortSignal | undefined,
-  options: ResearchOptions,
-  meter: Meter,
+async function searchWithProvider(
+  request: ResearchRequest,
+  ctx: TechniqueContext,
 ): Promise<SourceOutcome> {
-  const depth = options.depth ?? DEFAULT_RESEARCH_DEPTH;
+  const { contact, depth, history, signal } = request;
+  const prompt = buildSearchPrompt(contact, history);
   const failed = (error: unknown): SourceOutcome => ({
     kind: "failed",
     error,
@@ -108,7 +78,7 @@ export async function providerEvidence(
   // record took 6,000 thinking tokens before 800 of answer, hence the
   // 16,384.
   const asked = async ({ text, thinkingLevel }: Ask) => {
-    const result = await generateFor("research", {
+    const result = await ctx.generate("research", {
       prompt: text(),
       responseFormat: "text",
       enableSearchGrounding: true,
@@ -117,7 +87,7 @@ export async function providerEvidence(
       timeoutMs: ASK_TIMEOUT_MS,
       maxOutputTokens: 16_384,
     });
-    meter.count(result);
+    ctx.meter.count(result);
     recordInvocation({
       operation: "aiSearchGrounding",
       model: result.model,
@@ -161,7 +131,7 @@ export async function providerEvidence(
     thinkingLevel: "medium",
   };
   const complete: Ask = {
-    text: () => buildSearchPrompt(contact, options.history, "complete"),
+    text: () => buildSearchPrompt(contact, history, "complete"),
     thinkingLevel: "high",
   };
   const ask = (round: Ask[]) => Promise.allSettled(round.map(asked));
@@ -180,7 +150,7 @@ export async function providerEvidence(
   // search ran, and a second one would be paid for twice.
   if (!answers.some(cites)) {
     log.info(
-      "TwoPassStrategy",
+      "ProviderSearch",
       `${answers[0].model} ${answers.some((answer) => answer.text.trim()) ? "cited no pages" : "returned no answer"} for ${contact.name}; asking twice more, at once`,
     );
     const laterRound = await ask([led, short]);
@@ -213,7 +183,7 @@ export async function providerEvidence(
     const noMatch = noMatches.find(searched);
     if (noMatch) {
       log.info(
-        "TwoPassStrategy",
+        "ProviderSearch",
         `No page matched ${contact.name}: nothing to extract`,
       );
       return {
@@ -280,7 +250,7 @@ export async function providerEvidence(
     ),
   );
   log.info(
-    "TwoPassStrategy",
+    "ProviderSearch",
     `${contact.name} (${depth}): ${findings.length} facts from ${citations.length} pages via ${cited[0].model}; ${cited.length} of ${answers.length} asks cited pages`,
   );
   return {
@@ -298,45 +268,18 @@ export async function providerEvidence(
   };
 }
 
-export class TwoPassStrategy implements AISearchStrategy {
-  readonly name = "two-pass";
-
-  async execute(
-    contact: HydratedContact,
-    prompt: string,
-    signal?: AbortSignal,
-    options: ResearchOptions = {},
-  ): Promise<AISearchResult> {
-    signal?.throwIfAborted();
-    const startMs = Date.now();
-    const depth = options.depth ?? DEFAULT_RESEARCH_DEPTH;
-    const meter = createMeter();
-
-    // ── Pass 1: Search ────────────────────────────────────────────────
-    const searched = await providerEvidence(
-      contact,
-      prompt,
-      signal,
-      { ...options, depth },
-      meter,
-    );
-    if (searched.kind === "failed") throw searched.error;
-    if (searched.kind === "no-match")
-      return noMatchResult([searched], meter, depth, startMs);
-
-    // ── Pass 2: Extraction (fact lines → structured JSON) ─────────────
-    const read = await extractFacts(
-      contact,
-      searched.facts,
-      signal,
-      meter,
-      "quick",
-      "TwoPassStrategy",
-    );
-    log.info(
-      "TwoPassStrategy",
-      `${contact.name} (${depth}): read by ${read.model} in ${read.latencyMs}ms; ${meter.usage.calls} calls, ${meter.usage.searches} searches`,
-    );
-    return foundResult([searched], read, meter, depth, startMs);
-  }
-}
+export const providerSearch: Technique = {
+  name: "provider-search",
+  needs: () => [
+    {
+      what: "research",
+      message:
+        "AI provider is not configured for contact research. Check AI settings.",
+    },
+    {
+      what: "quick",
+      message: "Configure a quick AI model for research extraction.",
+    },
+  ],
+  run: searchWithProvider,
+};

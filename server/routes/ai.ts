@@ -18,7 +18,7 @@ import {
 } from "../ai/capabilities.ts";
 import { GEMINI_REGISTRY } from "../ai/routing/registry.ts";
 import type { DiagnosticsSnapshot } from "../ai/types.ts";
-import { getSearxngUrl } from "../services/aiSearch/strategies/searxng.ts";
+import { getSearxngUrl } from "../services/integrationSettings.ts";
 import { researchRunsLastDay } from "../services/aiStatsService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { requireAdmin } from "../middleware/auth.ts";

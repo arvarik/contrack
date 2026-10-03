@@ -37,7 +37,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
 import { relationshipService } from "./relationshipService.ts";
-import { preferredEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
+import { chooseResearch } from "./research/index.ts";
 import { DEFAULT_RESEARCH_DEPTH } from "../../shared/researchDepth.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
@@ -495,7 +495,7 @@ export const contactService = {
 
     // Auto-enrich a contact that a person added (never an import, a sync or
     // an MCP client). Whether research can run at all is
-    // preferredEnrichmentStrategy's question, asked below. aiAllowedForUser
+    // chooseResearch's question, asked below. aiAllowedForUser
     // reads both switches: the account's `aiAssist` and the admin's switch
     // for the whole instance.
     if (
@@ -514,7 +514,7 @@ export const contactService = {
         () => {
           try {
             // The account's Search with choice, at Standard depth.
-            const strategy = preferredEnrichmentStrategy(prefs.researchSource);
+            const choice = chooseResearch({}, prefs.researchSource);
             const check = jobQueue.canStartBatch(scope);
             // While this account's batch runs, the new contact joins it. A
             // batch created beside it would never run.
@@ -524,13 +524,13 @@ export const contactService = {
                 check.appendTo,
                 [{ id, name: body.name }],
                 DEFAULT_RESEARCH_DEPTH,
-                strategy,
+                choice,
               );
             } else if (check.allowed) {
               const batch = jobQueue.createBatch(
                 scope,
                 [{ id, name: body.name }],
-                strategy,
+                choice,
               );
               jobQueue.processBatch(batch.id).catch((err) => {
                 log.error(

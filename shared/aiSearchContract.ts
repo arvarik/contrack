@@ -49,6 +49,14 @@ export const aiSearchBatchSchema = z.object({
          * joins a running batch keeps its own.
          */
         strategy: z.string().max(40).optional(),
+        /**
+         * The research technique this contact runs: "provider-search",
+         * "search-and-read" or "combined". `strategy` names the same choice
+         * in its older words.
+         */
+        technique: z.string().max(40).optional(),
+        /** The web search the technique searches with, such as "searxng". */
+        webSearch: z.string().max(40).optional(),
         startedAt: z.string().optional(),
         completedAt: z.string().optional(),
         latencyMs: z.number().nonnegative().optional(),

@@ -1,14 +1,13 @@
 // =============================================================================
 // AI Search — Type Definitions
 // =============================================================================
-// Shared types for the AI Search subsystem. These define the job lifecycle,
-// batch tracking, strategy interface, and result shapes.
+// Shared types for the AI Search subsystem: the job lifecycle, batch
+// tracking, and the result a research run hands to the merge. The run itself
+// is the research layer's (`server/services/research/`).
 // =============================================================================
 
-import type { HydratedContact } from "../../repositories/types.ts";
 import type {
   ResearchFinding,
-  ResearchRecord,
   ResearchUsage,
 } from "../../../shared/researchRecord.ts";
 import type { ResearchDepth } from "../../../shared/researchDepth.ts";
@@ -25,26 +24,24 @@ export type {
 } from "../../../shared/aiSearchContract.ts";
 
 // =============================================================================
-// Strategy Interface
+// Result
 // =============================================================================
 
-/** Result from a strategy execution for one contact */
+/** What one research run found, as the merge and the research record read it */
 export interface AISearchResult {
   /** Partial update payload keyed by contact field/child table */
   data: Record<string, unknown>;
-  /** All model IDs used (two-pass = [groundingModel, extractionModel]) */
+  /** The models that ran, the first search first */
   models: string[];
-  /** Sum of token counts across all passes */
+  /** Sum of token counts across all calls */
   tokenCount?: number;
-  /** Wall-clock total across all passes */
+  /** Wall-clock total across all calls */
   latencyMs: number;
   /** The pages the research cited, with real addresses — for provenance */
   citations?: Array<{ title: string; uri: string }>;
-  /** Raw grounded text from Pass 1 */
-  groundedText?: string;
-  /** The facts Pass 1 reported, one per line, kept for the dossier */
+  /** The facts the search reported, one per line, kept for the dossier */
   findings?: ResearchFinding[];
-  /** The web searches Pass 1 ran, when the provider reports them */
+  /** The web searches that ran */
   searchQueries?: string[];
   /**
    * `"no-public-info"` when the research searched and no page was about this
@@ -55,47 +52,4 @@ export interface AISearchResult {
   depth?: ResearchDepth;
   /** What the research spent, over every call it made. */
   usage?: ResearchUsage;
-}
-
-/** How one research run should go. */
-export interface ResearchOptions {
-  /** How thoroughly to research. Default "standard". */
-  depth?: ResearchDepth;
-  /**
-   * The contact's research so far, which the prompt was built from. A deep
-   * run builds its second, complete-profile ask from it too.
-   */
-  history?: ResearchRecord | null;
-  /**
-   * How long the whole run may take, in ms, when the caller stops it then.
-   * Searching with both stops the research model's search in time to read
-   * SearXNG's facts.
-   */
-  timeoutMs?: number;
-}
-
-/**
- * Abstract strategy interface for AI Search.
- * Each strategy encapsulates a complete contact research flow.
- */
-export interface AISearchStrategy {
-  /** Human-readable strategy name for logging */
-  readonly name: string;
-
-  /**
-   * Execute AI-powered research for a single contact.
-   *
-   * @param contact - Fully hydrated contact with all child records
-   * @param prompt - Pre-built research prompt from promptTemplate
-   * @param options - The depth and the deadline. Single-pass and SearXNG
-   *   research have one depth, and ignore them.
-   * @returns Structured result with extracted data, models used, and metrics
-   * @throws Error if both passes fail (rate limit, validation, network, etc.)
-   */
-  execute(
-    contact: HydratedContact,
-    prompt: string,
-    signal?: AbortSignal,
-    options?: ResearchOptions,
-  ): Promise<AISearchResult>;
 }

@@ -10,6 +10,12 @@
 import http from "http";
 import { createApp, finalizeApp, notFoundHandler } from "../../server/app.ts";
 import { sqlite } from "../../server/db.ts";
+import {
+  research,
+  toAISearchResult,
+  type ResearchRequest,
+} from "../../server/services/research/index.ts";
+import type { AISearchResult } from "../../server/services/aiSearch/types.ts";
 
 /**
  * Build the production request pipeline exactly as server.ts does, minus
@@ -53,4 +59,19 @@ export function makeTestApp(): http.Server {
   server.listen(0, "127.0.0.1");
   server.unref();
   return server;
+}
+
+/**
+ * Research one contact with one technique, as the queue and the route do,
+ * and hand back the result as the merge reads it. Standard depth, and no
+ * research so far, unless the request says otherwise.
+ */
+export async function researchWith(
+  technique: string,
+  request: Pick<ResearchRequest, "scope" | "contact"> &
+    Partial<Omit<ResearchRequest, "scope" | "contact">>,
+): Promise<AISearchResult> {
+  return toAISearchResult(
+    await research({ depth: "standard", history: null, technique, ...request }),
+  );
 }

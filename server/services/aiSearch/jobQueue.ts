@@ -27,12 +27,16 @@ import type {
   AISearchErrorType,
 } from "./types.ts";
 import type { AIProvider } from "../../ai/provider.ts";
-import { buildSearchPrompt } from "./promptTemplate.ts";
 import { mergeSearchResult, researchHistory } from "./mergeEngine.ts";
-import { getStrategy } from "./strategies/index.ts";
+import {
+  research,
+  strategyOf,
+  toAISearchResult,
+  type ResearchChoice,
+} from "../research/index.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { withTimeout, sleep } from "../../ai/resilience.ts";
+import { sleep } from "../../ai/resilience.ts";
 import { enrichmentContact, lockEnrichment } from "./contactSnapshot.ts";
 import {
   scopeForOwnerId,
@@ -133,19 +137,6 @@ const GC_TTL_MS = 30 * 60 * 1000;
 /** Delay between sequential jobs to avoid Gemini grounding API rate limits */
 const INTER_JOB_DELAY_MS = 2_500;
 
-/**
- * Time allowed for one contact, by depth: the first asks, the two that
- * follow them at once when none cites a page, and the extraction. A search
- * ask took from 15 s to more than 80 s, and one that returned nothing took
- * as long (2026-09-26). Three asks one after the other ran past 240 s; two
- * rounds stay inside it. A deep run's ask at thinking "high" can take the
- * whole 120 s an ask has, hence its minute more.
- */
-export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
-  standard: 240_000,
-  deep: 300_000,
-};
-
 class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, OwnedBatch>();
   private processing = false;
@@ -188,7 +179,7 @@ class AISearchJobQueue extends EventEmitter {
    * The batch loop reads the job list as it goes, so a job added here runs
    * after the ones already queued. A contact already queued or running in
    * the batch is not added twice; one that finished can run again, which is
-   * a second research round. Each job keeps the depth and the strategy it
+   * a second research round. Each job keeps the depth and the technique it
    * was started with, so a start with SearXNG can join a batch that searches
    * with the research model.
    *
@@ -200,7 +191,7 @@ class AISearchJobQueue extends EventEmitter {
     batchId: string,
     contacts: Array<{ id: string; name: string }>,
     depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
-    strategy?: string,
+    choice: ResearchChoice,
   ): { batch: AISearchBatch; added: number } | null {
     const batch = this.getBatch(scope, batchId);
     if (!batch || batch.status !== "processing") return null;
@@ -222,7 +213,7 @@ class AISearchJobQueue extends EventEmitter {
         status: "queued",
         fieldsUpdated: 0,
         depth,
-        strategy: strategy ?? batch.strategy,
+        ...jobChoice(choice),
       });
       added += 1;
     }
@@ -238,7 +229,7 @@ class AISearchJobQueue extends EventEmitter {
   createBatch(
     scope: Scope,
     contacts: Array<{ id: string; name: string }>,
-    strategyName: string,
+    choice: ResearchChoice,
     depth: ResearchDepth = DEFAULT_RESEARCH_DEPTH,
   ): AISearchBatch {
     // Lazy GC: clean up old completed batches
@@ -254,12 +245,12 @@ class AISearchJobQueue extends EventEmitter {
       status: "queued" as AISearchJobStatus,
       fieldsUpdated: 0,
       depth,
-      strategy: strategyName,
+      ...jobChoice(choice),
     }));
 
     const batch: AISearchBatch = {
       id: batchId,
-      strategy: strategyName,
+      strategy: strategyOf(choice),
       jobs,
       createdAt: new Date().toISOString(),
       status: "processing",
@@ -269,7 +260,7 @@ class AISearchJobQueue extends EventEmitter {
     this.batches.set(batchId, { batch, ownerId: scope.ownerId });
     log.info(
       "AISearchQueue",
-      `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}, depth: ${depth}`,
+      `Batch ${batchId} created: ${jobs.length} job(s), technique: ${choice.technique}, depth: ${depth}`,
     );
     return batch;
   }
@@ -320,19 +311,16 @@ class AISearchJobQueue extends EventEmitter {
           this.emit(batchId, batch);
           // A contact researched before gets a second round: the prompt
           // names what is known, the sites already read, and what is missing.
-          const depth = job.depth ?? DEFAULT_RESEARCH_DEPTH;
-          const strategy = getStrategy(job.strategy ?? batch.strategy);
-          const history = researchHistory(contact);
-          const prompt = buildSearchPrompt(contact, history);
-          const result = await withTimeout(
-            (signal) =>
-              strategy.execute(contact, prompt, signal, {
-                depth,
-                history,
-                timeoutMs: RESEARCH_TIMEOUT_MS[depth],
-              }),
-            RESEARCH_TIMEOUT_MS[depth],
-            controller.signal,
+          const result = toAISearchResult(
+            await research({
+              scope,
+              contact,
+              depth: job.depth ?? DEFAULT_RESEARCH_DEPTH,
+              history: researchHistory(contact),
+              signal: controller.signal,
+              technique: job.technique,
+              webSearch: job.webSearch,
+            }),
           );
           controller.signal.throwIfAborted();
           job.status = "merging";
@@ -482,6 +470,17 @@ class AISearchJobQueue extends EventEmitter {
     this.batches.clear();
     this.processing = false;
   }
+}
+
+/** A job's fields for its choice: the technique, the web search, and the strategy that names both. */
+function jobChoice(
+  choice: ResearchChoice,
+): Pick<AISearchJob, "technique" | "webSearch" | "strategy"> {
+  return {
+    technique: choice.technique,
+    ...(choice.webSearch && { webSearch: choice.webSearch }),
+    strategy: strategyOf(choice),
+  };
 }
 
 // Singleton instance

@@ -27,14 +27,16 @@ import {
   isAnyProviderConfigured,
 } from "../../server/ai/gateway.ts";
 import { sqlite } from "../../server/db.ts";
-import { makeTestApp } from "./helpers.ts";
+import { makeTestApp, researchWith } from "./helpers.ts";
 import { enrichmentContact } from "../../server/services/aiSearch/contactSnapshot.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
-import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPass.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { parseResearchRecord } from "../../shared/researchRecord.ts";
-import { NO_MATCHING_PAGES } from "../../server/services/aiSearch/promptTemplate.ts";
+import {
+  buildSearchPrompt,
+  NO_MATCHING_PAGES,
+} from "../../server/services/aiSearch/promptTemplate.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -101,10 +103,10 @@ describe("Standard", () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
       .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
-    const result = await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(
       calls().map((call) => [call.capability, call.thinkingLevel]),
     ).toEqual([
@@ -133,14 +135,15 @@ describe("Deep", () => {
         ),
       )
       .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
-    const result = await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      undefined,
-      { depth: "deep" },
-    );
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      depth: "deep",
+    });
     const [plain, complete, read] = calls();
-    expect(plain.prompt).toBe("research prompt");
+    expect(plain.prompt).toBe(
+      buildSearchPrompt(enrichmentContact(scope(), id)),
+    );
     expect(complete.prompt).toContain("Aim for a complete profile");
     expect(calls().map((call) => call.thinkingLevel)).toEqual([
       "medium",
@@ -170,12 +173,11 @@ describe("Deep", () => {
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
       .mockResolvedValueOnce(noPages(""))
       .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
-    const result = await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      undefined,
-      { depth: "deep" },
-    );
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      depth: "deep",
+    });
     expect(result.outcome).toBe("found");
     expect(result.findings).toHaveLength(1);
     expect(calls().map((call) => call.capability)).toEqual([
@@ -192,12 +194,11 @@ describe("Deep", () => {
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
       .mockResolvedValueOnce(noPages("From memory again"))
       .mockResolvedValueOnce(extraction("{}"));
-    await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      undefined,
-      { depth: "deep" },
-    );
+    await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      depth: "deep",
+    });
     expect(calls().map((call) => call.thinkingLevel)).toEqual([
       "medium",
       "high",
@@ -251,11 +252,9 @@ describe("the no-match reply", () => {
 
   it("fails a batch job with the reason, and leaves the contact unresearched", async () => {
     vi.mocked(generateFor).mockResolvedValue(noMatch());
-    const batch = jobQueue.createBatch(
-      scope(),
-      [{ id, name: "Test Person" }],
-      "two-pass",
-    );
+    const batch = jobQueue.createBatch(scope(), [{ id, name: "Test Person" }], {
+      technique: "provider-search",
+    });
     await jobQueue.processBatch(batch.id);
     expect(batch.jobs[0]).toMatchObject({
       status: "error",
@@ -271,10 +270,10 @@ describe("the no-match reply", () => {
       .mockResolvedValueOnce(noMatch())
       .mockRejectedValue(new Error("Network 500"));
     await expect(
-      new TwoPassStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("provider-search", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toThrow("Network 500");
   });
 
@@ -282,10 +281,10 @@ describe("the no-match reply", () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(noMatch(['"Test Person" Test Company']))
       .mockRejectedValue(new Error("Network 500"));
-    const result = await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(result.outcome).toBe("no-public-info");
     expect(result.searchQueries).toEqual(['"Test Person" Test Company']);
   });
@@ -313,12 +312,11 @@ describe("the facts of several asks", () => {
         ),
       )
       .mockResolvedValueOnce(extraction("{}"));
-    const result = await new TwoPassStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      undefined,
-      { depth: "deep" },
-    );
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      depth: "deep",
+    });
     expect(result.findings).toEqual([
       {
         topic: "Current role",
@@ -352,7 +350,7 @@ describe("the depth through the API", () => {
     const deep = jobQueue.createBatch(
       scope(),
       [{ id, name: "Test Person" }],
-      "two-pass",
+      { technique: "provider-search" },
       "deep",
     );
     expect(deep.jobs[0].depth).toBe("deep");
@@ -360,7 +358,7 @@ describe("the depth through the API", () => {
     const standard = jobQueue.createBatch(
       scope(),
       [{ id, name: "Test Person" }],
-      "two-pass",
+      { technique: "provider-search" },
     );
     expect(standard.jobs[0].depth).toBe("standard");
   });

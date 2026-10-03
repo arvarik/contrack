@@ -275,11 +275,9 @@ describe("event streams", () => {
   it("sends the research batch at once, and its end when it ends", async () => {
     // A batch that is created and never run stays `processing`, so the
     // server holds the stream open after the first event.
-    const batch = jobQueue.createBatch(
-      scope(),
-      [{ id: "a", name: "Alice" }],
-      "two-pass",
-    );
+    const batch = jobQueue.createBatch(scope(), [{ id: "a", name: "Alice" }], {
+      technique: "provider-search",
+    });
 
     const stream = await open(
       "GET",

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
-import { makeTestApp } from "./helpers.ts";
+import { makeTestApp, researchWith } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
 import {
@@ -16,7 +16,6 @@ import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { contactRepo } from "../../server/repositories/contactRepository.ts";
-import { SearxngStrategy } from "../../server/services/aiSearch/strategies/searxng.ts";
 
 const app = makeTestApp();
 
@@ -207,7 +206,7 @@ describe("POST /api/ai-search", () => {
     // Without the check, the strategy searches the unreachable address and
     // fails with SEARXNG_NO_RESULTS instead.
     await expect(
-      new SearxngStrategy().execute(contact, "prompt"),
+      researchWith("search-and-read", { scope: scope(), contact }),
     ).rejects.toMatchObject({ code: "RESEARCH_OFF" });
   });
 

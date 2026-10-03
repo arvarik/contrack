@@ -32,7 +32,7 @@ import { generateFor } from "../../server/ai/gateway.ts";
 import { resolveCapability } from "../../server/ai/capabilities.ts";
 import { safeFetch } from "../../server/utils/urlSafety.ts";
 import { sqlite } from "../../server/db.ts";
-import { makeTestApp } from "./helpers.ts";
+import { makeTestApp, researchWith } from "./helpers.ts";
 import {
   deleteSetting,
   setSetting,
@@ -40,11 +40,11 @@ import {
 } from "../../server/services/settingsService.ts";
 import { enrichmentContact } from "../../server/services/aiSearch/contactSnapshot.ts";
 import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
-import { SearxngStrategy } from "../../server/services/aiSearch/strategies/searxng.ts";
+import { EXTRACTION_RESERVE_MS } from "../../server/services/research/techniques/combined.ts";
 import {
-  CombinedStrategy,
-  EXTRACTION_RESERVE_MS,
-} from "../../server/services/aiSearch/strategies/combined.ts";
+  STRATEGY_CHOICE,
+  strategyOf,
+} from "../../server/services/research/index.ts";
 import { NO_MATCHING_PAGES } from "../../server/services/aiSearch/promptTemplate.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
@@ -199,10 +199,10 @@ describe("SearXNG research", () => {
       }),
       "mock-extractor",
     );
-    const research = await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
 
     // Three searches at Standard, the clean name first, the formal one next.
     expect(queries()).toEqual([
@@ -275,12 +275,11 @@ describe("SearXNG research", () => {
       result("https://b.example/0", "Rowan Vale at Northwind", "Rowan Vale"),
     ];
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), contact.body.id),
-      "research prompt",
-      undefined,
-      { depth: "deep" },
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), contact.body.id),
+      depth: "deep",
+    });
     expect(queries()).toHaveLength(6);
     // Ten pages at Deep, and the second search's result among the first two.
     // None can be read, so the three after them are tried too.
@@ -295,10 +294,10 @@ describe("SearXNG research", () => {
   it("records no public information when SearXNG found pages and none is about the person", async () => {
     firmResults();
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    const research = await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(research).toMatchObject({
       outcome: "no-public-info",
       data: {},
@@ -313,21 +312,32 @@ describe("SearXNG research", () => {
       result("https://other.example/1", "Northwind Partners team", "Our team."),
     ];
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(safeFetch).not.toHaveBeenCalled();
     const reading = calls().find((call) => call.capability === "deep")!;
     expect(reading.prompt).toContain("SOURCE: https://other.example/1");
   });
 
+  it("searches no further once an admin clears the SearXNG address", async () => {
+    deleteSetting(SETTING_KEYS.aiSearxng);
+    await expect(
+      researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
+    ).rejects.toMatchObject({ code: "SEARXNG_NOT_CONFIGURED" });
+    expect(search).not.toHaveBeenCalled();
+  });
+
   it("fails without a model call when SearXNG returns nothing", async () => {
     await expect(
-      new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toMatchObject({ code: "SEARXNG_NO_RESULTS" });
     expect(generateFor).not.toHaveBeenCalled();
   });
@@ -339,10 +349,10 @@ describe("SearXNG research", () => {
         new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
     );
     await expect(
-      new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toMatchObject({
       code: "SEARXNG_ERROR",
       message: "SearXNG returned 403 Forbidden",
@@ -352,10 +362,10 @@ describe("SearXNG research", () => {
       throw new TypeError("fetch failed");
     });
     await expect(
-      new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toMatchObject({
       code: "SEARXNG_ERROR",
       message: "SearXNG did not answer: fetch failed",
@@ -376,10 +386,10 @@ describe("SearXNG research", () => {
     pages["https://a.example/0"] =
       "<html><body><p>The page of Greg Whitlock. Northwind Partners.</p></body></html>";
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     const reading = calls().find((call) => call.capability === "deep")!.prompt;
     // Five pages at Standard, then the sixth result by its snippet.
     expect(reading.indexOf("The page of Greg Whitlock")).toBeLessThan(
@@ -412,10 +422,10 @@ describe("SearXNG research", () => {
       "mock-reader",
     );
     byCapability.quick = reply("{}", "mock-extractor");
-    const research = await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     const reading = calls().find((call) => call.capability === "deep")!;
     expect(reading.prompt).toContain("full SOURCE address of its page");
     // The award is on the second page of the site, and the card names the
@@ -448,10 +458,10 @@ describe("SearXNG research", () => {
       pages[`https://site${index}.example/greg`] =
         `<html><body><p>Page ${index} of Greg Whitlock. Northwind Partners.</p></body></html>`;
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     const reading = calls().find((call) => call.capability === "deep")!.prompt;
     for (let index = 4; index < 8; index++)
       expect(reading).toContain(`Page ${index} of Greg Whitlock.`);
@@ -494,10 +504,10 @@ describe("SearXNG research", () => {
           "small-model",
         );
       });
-      const research = await new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      );
+      const research = await researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      });
       const readings = calls().filter((call) => call.capability === "deep");
       // Five pages of 6,000 characters: three parts, one page each.
       expect(readings).toHaveLength(3);
@@ -552,10 +562,10 @@ describe("SearXNG research", () => {
         pages[`https://site${index}.example/greg`] =
           `<html><body><p>${`Greg Whitlock at Northwind Partners, page ${index}. `.repeat(200)}</p></body></html>`;
       byCapability.deep = reply(NO_MATCHING_PAGES, "small-model");
-      await new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      );
+      await researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      });
       const read = calls()
         .filter((call) => call.capability === "deep")
         .map((call) => call.prompt)
@@ -604,10 +614,10 @@ describe("SearXNG research", () => {
       ),
     ];
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), withProfile),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), withProfile),
+    });
     const reading = calls().find((call) => call.capability === "deep")!.prompt;
     expect(reading).toContain("Own profile: Rowan Vale");
     expect(reading).toContain("News: Rowan Vale joins");
@@ -639,10 +649,10 @@ describe("SearXNG research", () => {
     pages["https://kestrel.example/greg-whitlock"] =
       "<html><body><p>Greg Whitlock, partner at Kestrel Freight, Denver.</p></body></html>";
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     const reading = calls().find((call) => call.capability === "deep")!.prompt;
     expect(reading).toContain("Associate at Northwind Partners");
     expect(reading).not.toContain("Kestrel Freight");
@@ -657,10 +667,10 @@ describe("SearXNG research", () => {
         "Greg Whitlock bought a house on Elm Street.",
       ),
     ];
-    const research = await new SearxngStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(research).toMatchObject({
       outcome: "no-public-info",
       models: ["searxng"],
@@ -680,10 +690,10 @@ describe("SearXNG research", () => {
       ),
     ];
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    await new SearxngStrategy().execute(
-      enrichmentContact(scope(), nameOnly),
-      "research prompt",
-    );
+    await researchWith("search-and-read", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), nameOnly),
+    });
     const reading = calls().find((call) => call.capability === "deep")!.prompt;
     expect(reading).toContain("Elm Street");
   });
@@ -692,10 +702,10 @@ describe("SearXNG research", () => {
     firmResults();
     byCapability.deep = reply("I could not tell.", "mock-reader");
     await expect(
-      new SearxngStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("search-and-read", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toMatchObject({ code: "SEARXNG_NO_FACTS" });
   });
 });
@@ -716,10 +726,10 @@ describe("research with both searches", () => {
     );
     byCapability.deep = reply(READ_LINES, "mock-reader");
     byCapability.quick = reply("{}", "mock-extractor");
-    const research = await new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("combined", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     const extractions = calls().filter((call) => call.capability === "quick");
     expect(extractions).toHaveLength(1);
     expect(extractions[0].prompt).toContain("Fellow, Example Society");
@@ -753,10 +763,10 @@ describe("research with both searches", () => {
       '{"location":"Austin, TX, USA"}',
       "mock-extractor",
     );
-    const research = await new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("combined", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(research.outcome).toBe("found");
     expect(research.models).toEqual([
       "searxng",
@@ -774,10 +784,10 @@ describe("research with both searches", () => {
       "- Award: Fellow, Example Society [news.example]",
     );
     byCapability.quick = reply("{}", "mock-extractor");
-    const research = await new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("combined", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(research).toMatchObject({
       outcome: "found",
       models: ["mock-flash", "mock-extractor"],
@@ -791,10 +801,10 @@ describe("research with both searches", () => {
       searchQueries: ['"Greg Whitlock" Northwind Partners'],
     });
     byCapability.deep = reply(NO_MATCHING_PAGES, "mock-reader");
-    const research = await new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-    );
+    const research = await researchWith("combined", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+    });
     expect(research).toMatchObject({
       outcome: "no-public-info",
       models: ["mock-flash", "searxng", "mock-reader"],
@@ -807,13 +817,12 @@ describe("research with both searches", () => {
     byCapability.deep = reply(READ_LINES, "mock-reader");
     byCapability.quick = reply("{}", "mock-extractor");
     researchHangs();
-    const research = await new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      undefined,
+    const research = await researchWith("combined", {
       // Half a second for each search, after the extraction's time.
-      { timeoutMs: EXTRACTION_RESERVE_MS + 500 },
-    );
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      timeoutMs: EXTRACTION_RESERVE_MS + 500,
+    });
     expect(research).toMatchObject({
       outcome: "found",
       models: ["searxng", "mock-reader", "mock-extractor"],
@@ -824,12 +833,11 @@ describe("research with both searches", () => {
   it("says which search ran out of time when neither found facts", async () => {
     researchHangs();
     await expect(
-      new CombinedStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-        undefined,
-        { timeoutMs: EXTRACTION_RESERVE_MS + 200 },
-      ),
+      researchWith("combined", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+        timeoutMs: EXTRACTION_RESERVE_MS + 200,
+      }),
     ).rejects.toMatchObject({
       code: "RESEARCH_NO_EVIDENCE",
       message: expect.stringMatching(
@@ -843,12 +851,12 @@ describe("research with both searches", () => {
     byCapability.deep = reply(READ_LINES, "mock-reader");
     researchHangs();
     const controller = new AbortController();
-    const run = new CombinedStrategy().execute(
-      enrichmentContact(scope(), id),
-      "research prompt",
-      controller.signal,
-      { timeoutMs: 120_000 },
-    );
+    const run = researchWith("combined", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      signal: controller.signal,
+      timeoutMs: 120_000,
+    });
     setTimeout(() => controller.abort(new Error("Cancelled")), 20);
     await expect(run).rejects.toThrow("Cancelled");
   });
@@ -856,10 +864,10 @@ describe("research with both searches", () => {
   it("fails with both reasons when neither search has facts or a no-match", async () => {
     byCapability.research = new Error("Network 500");
     await expect(
-      new CombinedStrategy().execute(
-        enrichmentContact(scope(), id),
-        "research prompt",
-      ),
+      researchWith("combined", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
     ).rejects.toMatchObject({
       code: "RESEARCH_NO_EVIDENCE",
       message: expect.stringMatching(
@@ -884,14 +892,14 @@ describe("choosing how to search, through the API", () => {
     const running = jobQueue.createBatch(
       scope(),
       [{ id, name: "Greg Whitlock" }],
-      "two-pass",
+      STRATEGY_CHOICE["two-pass"],
     );
     const joined = jobQueue.appendToBatch(
       scope(),
       running.id,
       [{ id: "00000000-0000-0000-0000-000000000001", name: "Second" }],
       "standard",
-      "combined",
+      STRATEGY_CHOICE.combined,
     );
     expect(joined?.batch.jobs.map((job) => job.strategy)).toEqual([
       "two-pass",
@@ -906,7 +914,7 @@ describe("choosing how to search, through the API", () => {
     const batch = jobQueue.createBatch(
       scope(),
       [{ id, name: "Greg Whitlock" }],
-      "searxng",
+      STRATEGY_CHOICE.searxng,
     );
     await jobQueue.processBatch(batch.id);
     expect(batch.jobs[0]).toMatchObject({
@@ -936,7 +944,7 @@ describe("the account's Search with choice", () => {
       .post("/api/ai-search")
       .send({ contactIds: [id], ...body });
     expect(response.status).toBe(200);
-    const strategy = created.mock.calls[0][2];
+    const strategy = strategyOf(created.mock.calls[0][2]);
     created.mockRestore();
     return strategy;
   }

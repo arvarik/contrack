@@ -1,25 +1,27 @@
 // =============================================================================
-// Unit: which research strategy runs
+// Unit: the strategies a batch start names
 // =============================================================================
-// Two-pass keeps a source beside every fact, so it is the default on every
-// provider. Single-pass stays available by name.
+// The app starts a batch with a strategy: "two-pass", "searxng" or
+// "combined". Each one stands for a technique and a web search, and a job
+// names its choice with the same strategy again.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {
-  getDefaultStrategyForProvider,
-  getStrategy,
-} from "../../../../server/services/aiSearch/strategies/index.ts";
+  STRATEGY_CHOICE,
+  strategyOf,
+} from "../../../../server/services/research/index.ts";
 
 describe("research strategies", () => {
-  it("finds single-pass by name", () => {
-    expect(getStrategy("single-pass").name).toBe("single-pass");
-  });
-
-  it("defaults every provider to two-pass, and no provider too when no SearXNG is set", () => {
-    expect(getDefaultStrategyForProvider("openai")).toBe("two-pass");
-    expect(getDefaultStrategyForProvider("anthropic")).toBe("two-pass");
-    expect(getDefaultStrategyForProvider("gemini")).toBe("two-pass");
-    expect(getDefaultStrategyForProvider(null)).toBe("two-pass");
+  it("name a technique and a web search, and a job's choice names its strategy again", () => {
+    expect(STRATEGY_CHOICE["two-pass"]).toEqual({
+      technique: "provider-search",
+    });
+    expect(STRATEGY_CHOICE.searxng).toEqual({
+      technique: "search-and-read",
+      webSearch: "searxng",
+    });
+    for (const [strategy, choice] of Object.entries(STRATEGY_CHOICE))
+      expect(strategyOf(choice)).toBe(strategy);
   });
 });

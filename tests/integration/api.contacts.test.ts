@@ -266,11 +266,10 @@ describe("the autoEnrich preference on contact creation", () => {
   it("starts a one-contact enrichment batch when autoEnrich is true", async () => {
     const { jobQueue } =
       await import("../../server/services/aiSearch/jobQueue.ts");
-    const strat =
-      await import("../../server/services/aiSearch/strategies/index.ts");
+    const strat = await import("../../server/services/research/index.ts");
     const stratSpy = vi
-      .spyOn(strat, "preferredEnrichmentStrategy")
-      .mockReturnValue("two-pass");
+      .spyOn(strat, "chooseResearch")
+      .mockReturnValue({ technique: "provider-search" });
     const batchSpy = vi.spyOn(jobQueue, "createBatch");
     const processSpy = vi
       .spyOn(jobQueue, "processBatch")
@@ -288,17 +287,17 @@ describe("the autoEnrich preference on contact creation", () => {
     expect(batchSpy).toHaveBeenCalledWith(
       expect.anything(),
       [{ id: res.body.id, name: "Auto Enrich Person" }],
-      "two-pass",
+      { technique: "provider-search" },
     );
     // The account's Search with choice, the provider's search by default.
-    expect(stratSpy).toHaveBeenCalledWith("provider");
+    expect(stratSpy).toHaveBeenCalledWith({}, "provider");
     await request(app)
       .patch("/api/auth/preferences")
       .send({ researchSource: "combined" });
     await request(app)
       .post("/api/contacts")
       .send({ name: "Auto Enrich Second" });
-    expect(stratSpy).toHaveBeenLastCalledWith("combined");
+    expect(stratSpy).toHaveBeenLastCalledWith({}, "combined");
 
     // Reset preference
     await request(app)
@@ -312,11 +311,10 @@ describe("the autoEnrich preference on contact creation", () => {
   it("adds the new contact to the account's running batch instead of starting another", async () => {
     const { jobQueue } =
       await import("../../server/services/aiSearch/jobQueue.ts");
-    const strat =
-      await import("../../server/services/aiSearch/strategies/index.ts");
+    const strat = await import("../../server/services/research/index.ts");
     const stratSpy = vi
-      .spyOn(strat, "preferredEnrichmentStrategy")
-      .mockReturnValue("two-pass");
+      .spyOn(strat, "chooseResearch")
+      .mockReturnValue({ technique: "provider-search" });
     const checkSpy = vi
       .spyOn(jobQueue, "canStartBatch")
       .mockReturnValue({ allowed: true, yours: true, appendTo: "running" });
@@ -336,7 +334,7 @@ describe("the autoEnrich preference on contact creation", () => {
       "running",
       [{ id: res.body.id, name: "Joining Person" }],
       "standard",
-      "two-pass",
+      { technique: "provider-search" },
     );
     expect(batchSpy).not.toHaveBeenCalled();
 
