@@ -43,7 +43,9 @@ import {
   useCreateList,
   useReorderLists,
   useArchiveContact,
+  useUnarchiveContact,
 } from "../../api";
+import { withUndo } from "../../lib/undoToast";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetRail, bucketFor } from "./AlphabetRail";
@@ -295,18 +297,27 @@ export const ContactList = () => {
   useProximityLift(scrollRef);
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const archiveContact = useArchiveContact();
+  const unarchiveContact = useUnarchiveContact();
   const { recentIds, recordVisit } = useRecentContacts();
   const { limit: recentLimit } = useRecentContactsLimit();
 
   // Stable archive handler — an inline closure here would defeat
   // ContactRowWrapper's React.memo (new function identity every render).
   const archiveContactMutateAsync = archiveContact.mutateAsync;
+  const unarchiveContactMutate = unarchiveContact.mutate;
   const handleArchiveContact = useCallback(
     async (contact: { id: string; name: string }) => {
       await archiveContactMutateAsync(contact.id);
-      toast.success(`Archived "${contact.name}"`);
+      toast.success(
+        `Archived "${contact.name}"`,
+        withUndo(() =>
+          unarchiveContactMutate(contact.id, {
+            onError: (err) => toast.error(`Could not undo: ${err.message}`),
+          }),
+        ),
+      );
     },
-    [archiveContactMutateAsync],
+    [archiveContactMutateAsync, unarchiveContactMutate],
   );
 
   // ── Visual flash: highlight newly created contact for 2s ────────────

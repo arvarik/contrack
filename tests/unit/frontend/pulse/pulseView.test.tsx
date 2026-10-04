@@ -26,6 +26,25 @@ import { CompositionCard } from "../../../../src/views/pulse/cards/CompositionCa
 import type { DashboardPayload } from "../../../../src/api";
 import { PAGE_TITLE, PAGE_TITLE_SUFFIX } from "../../../../src/lib/styles";
 import { CHECK_RING_REST } from "../../../../src/views/pulse/lib/pulseStyles";
+import { resetPendingDeletes } from "../../../../src/lib/pendingDeletes";
+
+/** The toasts, so a test can press Undo or end its window. */
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), {
+    success: vi.fn(() => "toast-1"),
+    error: vi.fn(),
+    dismiss: vi.fn(),
+  }),
+);
+vi.mock("sonner", () => ({ toast: toastMock }));
+/** The options of the last success toast. */
+const lastToast = () =>
+  (
+    toastMock.success.mock.calls as unknown as [
+      string,
+      { action: { onClick: () => void }; onAutoClose: () => void },
+    ][]
+  ).at(-1)![1];
 
 vi.mock("../../../../src/views/dedupe/components", () => ({
   SuggestionReviewQueue: () => (
@@ -103,7 +122,7 @@ vi.mock("../../../../src/api", () => ({
     data: mockCompletedItems,
   }),
   useCompleteActionItem: () => ({
-    mutate: mockCompleteMutate,
+    mutateAsync: mockCompleteMutate,
     isPending: false,
   }),
   useUpdateActionItem: () => ({
@@ -326,6 +345,7 @@ describe("frontend.pulse", () => {
 
   afterEach(() => {
     cleanup();
+    resetPendingDeletes();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -356,9 +376,26 @@ describe("frontend.pulse", () => {
     expect(mockCompleteMutate).not.toHaveBeenCalled();
     expect(listItems[0].className).toContain("row-selected");
 
-    // Now the row shows, and D completes it.
+    // Now the row shows, and D completes it once Undo is gone.
     fireEvent.keyDown(window, { key: "d" });
+    act(() => lastToast().onAutoClose());
     expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
+  });
+
+  it("takes a done follow-up off the queue at once, and Undo puts it back unsent", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: "d" });
+    fireEvent.keyDown(window, { key: "d" });
+    expect(screen.queryByText("Send whitepaper")).toBeNull();
+
+    act(() => lastToast().action.onClick());
+    expect(screen.getByText("Send whitepaper")).toBeDefined();
+    act(() => lastToast().onAutoClose());
+    expect(mockCompleteMutate).not.toHaveBeenCalled();
   });
 
   it("renders Inbox as one line, 'Nothing to clean up', when there is nothing to do", () => {
@@ -666,10 +703,13 @@ describe("frontend.pulse", () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
       expect(onOpenContact).toHaveBeenCalledWith("c-1");
 
-      fireEvent.click(screen.getByRole("button", { name: /done/i }));
+      const check = screen.getByRole("button", { name: /done/i });
+      fireEvent.click(check);
       await new Promise((r) => setTimeout(r, 300));
       expect(onComplete).toHaveBeenCalledWith("item-1");
       expect(onOpenContact).toHaveBeenCalledTimes(1);
+      // The row is still here, as after a write that failed: it works again.
+      expect((check as HTMLButtonElement).disabled).toBe(false);
     });
 
     it("has no Open profile button, and shows snooze only on a follow-up", () => {
@@ -1145,6 +1185,7 @@ describe("frontend.pulse", () => {
       rows[0].focus();
       fireEvent.keyDown(rows[0], { key: " " });
       await new Promise((r) => setTimeout(r, 300));
+      act(() => lastToast().onAutoClose());
       expect(mockCompleteMutate).toHaveBeenCalledWith("act-1");
       expect(screen.queryByTestId("contact-marker")).toBeNull();
     });
