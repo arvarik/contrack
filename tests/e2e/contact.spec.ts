@@ -1278,18 +1278,17 @@ test.describe("phone", () => {
     await expect(save).toBeHidden();
     await expectPageAccessible(page, testInfo, "phone-timeline");
 
-    // Focus opens it, with Save above the tab bar. Focus leaving an empty
-    // composer closes it again.
+    // Focus opens it. While the note is typed the tab bar steps aside and
+    // Save is in view. Focus leaving an empty composer closes it again, and
+    // the tab bar comes back.
     await editor.tap();
     await expect(nextAction).toBeVisible();
-    await expect(save).toBeVisible();
-    const tabBar = page.getByRole("navigation", { name: "Primary" });
-    const saveBox = (await save.boundingBox())!;
-    expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(
-      (await tabBar.boundingBox())!.y,
-    );
+    await expect(save).toBeInViewport();
+    const tabBar = page.locator("nav[data-covers-map='bottom']");
+    await expect(tabBar).toBeHidden();
     await page.getByRole("heading", { level: 2 }).first().tap();
     await expect(nextAction).toBeHidden();
+    await expect(tabBar).toBeVisible();
 
     // The sections stay under the Back bar while the page scrolls.
     const heading = contactHeading(page, "Zia Phone");

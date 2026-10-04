@@ -36,6 +36,7 @@
  *
  * @module components/ui/ActionMenu
  */
+import { useCloseRequest } from "../../hooks/useCloseRequest";
 import React, {
   useCallback,
   useId,
@@ -192,6 +193,8 @@ export const ActionMenu = ({
   );
 
   const close = useCallback(() => change(false), [change]);
+  // Android's Back closes the open list instead of leaving the page.
+  useCloseRequest(open, close);
   const placement = usePanelPlacement({
     open,
     align,

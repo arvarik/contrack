@@ -39,6 +39,7 @@
  *
  * @module components/ui/Select
  */
+import { useCloseRequest } from "../../hooks/useCloseRequest";
 import React, {
   useCallback,
   useId,
@@ -150,6 +151,8 @@ export function Select<T extends string = string>({
   const generatedId = useId();
   const listId = `${id ?? generatedId}-listbox`;
   const close = useCallback(() => setOpen(false), []);
+  // Android's Back closes the open list instead of leaving the page.
+  useCloseRequest(open, close);
   const placement = usePanelPlacement({
     open,
     align,
