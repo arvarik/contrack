@@ -273,6 +273,24 @@ test.describe("Pulse Office", () => {
     await masthead.getByRole("button", { name: "1 due today" }).click();
     await expect(page.locator('[data-card-id="up-next"]')).toBeInViewport();
     await expect(page).toHaveURL(/\/pulse$/);
+
+    // On a 320 px phone the line wraps, and no line starts with a dot: a
+    // dot is either after a word on its line, or out of sight left of it.
+    await page.setViewportSize({ width: 320, height: 800 });
+    const dots = await line.evaluate((p) => {
+      const left = p.getBoundingClientRect().left;
+      const tops = new Set<number>();
+      const lead: number[] = [];
+      for (const box of p.querySelectorAll('[aria-hidden="true"]')) {
+        const rect = box.getBoundingClientRect();
+        tops.add(Math.round(rect.top));
+        if (box.textContent?.trim() === "·" && rect.left >= left - 1)
+          lead.push(Math.round(rect.left - left));
+      }
+      return { lines: tops.size, lead };
+    });
+    expect(dots.lines).toBeGreaterThan(1);
+    for (const gap of dots.lead) expect(gap).toBeGreaterThan(8);
   });
 
   test("rows take the keyboard: Tab reaches the highlighted row, the arrows move it, Enter opens the contact", async ({

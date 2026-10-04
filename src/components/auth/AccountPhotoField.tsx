@@ -145,10 +145,13 @@ export const AccountPhotoField = ({
             className="w-full h-full object-cover rounded-full bg-surface-container-high"
             onError={() => setImgFailed(true)}
           />
+          {/* The camera says the photo is a button. A pointer shows it on
+              hover and the keyboard on focus. A finger has no hover, so on
+              a touch screen it shows at rest. */}
           <div
             className={cn(
               "absolute inset-0 bg-black/25 flex items-center justify-center",
-              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity",
+              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity",
               isDragActive && "opacity-100 bg-primary/20",
             )}
           >

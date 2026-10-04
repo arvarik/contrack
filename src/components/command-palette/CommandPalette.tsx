@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { KBD, KBD_SM, SECTION_BG, TONE_WASH } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
+import { OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
   aiResultsHeading,
@@ -328,6 +329,8 @@ export const CommandPalette = () => {
   // Global ⌘K / Ctrl+K listener.
   // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
   // Power-users can press ↑ to recall prior queries from history.
+  // A touch screen has no ⌘K: the Network header's button sends
+  // `OPEN_PALETTE_EVENT` (`openCommandPalette`), which only opens.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -335,8 +338,13 @@ export const CommandPalette = () => {
         setOpen((prev) => !prev);
       }
     };
+    const openByEvent = () => setOpen(true);
     document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    window.addEventListener(OPEN_PALETTE_EVENT, openByEvent);
+    return () => {
+      document.removeEventListener("keydown", down);
+      window.removeEventListener(OPEN_PALETTE_EVENT, openByEvent);
+    };
   }, []);
 
   const handleClose = useCallback(() => {

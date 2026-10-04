@@ -1055,19 +1055,25 @@ describe("frontend.pulse", () => {
       stubMatchMedia(true);
       renderMasthead();
       const line = mastheadLine();
-      const dots = Array.from(line.querySelectorAll('[aria-hidden="true"]'));
-      // Three dots between four items, none before the first.
-      expect(dots.map((dot) => dot.textContent)).toEqual(["·", "·", "·"]);
-      expect(line.firstChild?.textContent).toBe("2 overdue");
-      for (const dot of dots) {
+      // One box before each item: empty before the first, a dot before the
+      // three after it. The browser suite checks that the box which starts
+      // a wrapped line is out of sight.
+      const boxes = Array.from(line.querySelectorAll('[aria-hidden="true"]'));
+      expect(boxes.map((box) => box.textContent?.trim())).toEqual([
+        "",
+        "·",
+        "·",
+        "·",
+      ]);
+      for (const box of boxes.slice(1)) {
         // The dot and the item after it share one span that does not wrap.
-        const pair = dot.parentElement!;
+        const pair = box.parentElement!;
         expect(pair.className).toContain("whitespace-nowrap");
         expect(visibleText(pair)).toMatch(/^· \S/);
       }
-      expect(visibleText(dots[0].parentElement!)).toBe("· 3 due today");
+      expect(visibleText(boxes[1].parentElement!)).toBe("· 3 due today");
       expect(
-        within(dots[1].parentElement! as HTMLElement).getByRole("button", {
+        within(boxes[2].parentElement! as HTMLElement).getByRole("button", {
           name: "1 birthday this week",
         }),
       ).toBeDefined();

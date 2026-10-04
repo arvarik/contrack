@@ -17,6 +17,8 @@
  *    in the address, and Back from a contact returns to the same list.
  * 4. A settings page whose code has loaded opens from the settings list
  *    with no "Loading…" (React held it behind that for 300 ms).
+ * 5. On a phone, Back from a contact puts the same row at the same place in
+ *    the Network list. It landed about 230 px away.
  */
 import { test, expect, type Page } from "@playwright/test";
 import { ContrackInstance } from "./fixtures/instance";
@@ -290,4 +292,52 @@ test("a settings page with its code loaded opens from the list with no Loading",
     ),
   ).toBe(false);
   await page.context().close();
+});
+
+test("Back from a contact on a phone puts the same row at the same place", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: instance.baseURL,
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    reducedMotion: "reduce",
+  });
+  const page = await context.newPage();
+  await page.goto("/");
+  const list = page.locator("#contact-list");
+  await expect(list.getByText(name(0), { exact: true })).toBeVisible();
+
+  // The row at the top of the list, and how far its top is from the top.
+  const top = () =>
+    list.evaluate((scroller) => {
+      const edge = scroller.getBoundingClientRect().top;
+      const row = [...scroller.querySelectorAll("[id^=contact-row-]")].find(
+        (r) => r.getBoundingClientRect().bottom > edge,
+      );
+      return {
+        id: row?.id ?? "",
+        offset: Math.round((row?.getBoundingClientRect().top ?? 0) - edge),
+      };
+    });
+  await list.evaluate((scroller) => scroller.scrollTo(0, 3000));
+  await expect.poll(async () => (await top()).id).not.toBe("");
+  const before = await top();
+
+  // The third row down opens, and its visit grows the Recent strip above
+  // the rows.
+  const opened = list.locator("[id^=contact-row-]").nth(
+    await list.evaluate((scroller) => {
+      const rows = [...scroller.querySelectorAll("[id^=contact-row-]")];
+      const edge = scroller.getBoundingClientRect().top;
+      return rows.findIndex((r) => r.getBoundingClientRect().top > edge) + 2;
+    }),
+  );
+  await opened.tap();
+  await expect(page).toHaveURL(/\/contact\//);
+  await page.getByRole("button", { name: "Back to Network" }).tap();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(top).toEqual(before);
+  await context.close();
 });

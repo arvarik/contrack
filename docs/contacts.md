@@ -30,11 +30,14 @@ phone, a contact opens over the list.
 - **Row menu**: right-click a row for **View contact**, **Copy email** and
   **Archive**. For the list's keys, see
   [Keyboard shortcuts](keyboard-shortcuts.md#network).
+- **Command palette**: on a touch screen, the first button above the list
+  opens the [command palette](search.md#command-palette).
 
 ### Select several contacts
 
 1. Press **Select**, the square button above the list. On a touch screen,
-   you can also press and hold a row.
+   you can also press and hold a row: that row is the first one selected,
+   and the rows stay where they are.
 2. Press the rows you want. Shift-click selects every row between two rows,
    and **Select all** selects every contact the list shows.
 3. Press a button in the bar at the bottom, then **Done** or `Esc`.
@@ -73,7 +76,8 @@ A contact you add by hand starts tracked when **Track new contacts** is on in
 In a wide pane, the page shows the header, the **Details** card on the left,
 and **Timeline** and **Dossier** on the right. In a narrow pane, such as a
 phone, it shows a short header and three tabs: **Timeline**, **Details** and
-**Dossier**. Under 1024 px wide, **Back** names the page it returns to.
+**Dossier**. Under 1024 px wide, **Back** names the page it returns to, and
+returns to the same place in the list.
 
 ### The header
 
@@ -94,6 +98,10 @@ phone, it shows a short header and three tabs: **Timeline**, **Details** and
 - **Duplicate band**: shows when another contact looks like the same person.
   Press **Review match**, then **Merge contacts** or **Keep separate**. See
   [Review possible duplicates](duplicates.md#review-possible-duplicates).
+- **Quick actions**: in the narrow layout, a row of buttons ends the header.
+  **Call** and **Message** use the first phone, **Email** the first email,
+  and **Log note** opens the quick note dialog. A button shows only when the
+  contact has the phone or the email it needs.
 
 The **Contact actions** menu, the three dots, holds these items in order:
 
@@ -104,7 +112,10 @@ The **Contact actions** menu, the three dots, holds these items in order:
    [Research contacts](ai.md#research-contacts).
 3. **Copy basic details** and **Copy full details**: the name, emails and
    phones, or also the role, company, birthday and addresses.
-4. **Archive** or **Unarchive**, and **Delete**. See
+4. **Share contact**: sends the contact as a card (a `.vcf` file) through
+   your phone's share sheet, for example to Messages or to your phone's
+   contacts. Where the browser cannot share a file, it downloads the card.
+5. **Archive** or **Unarchive**, and **Delete**. See
    [Archive and trash](#archive-and-trash).
 
 ### The Details card
@@ -122,9 +133,12 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 - **Edit**: click a value, or give it focus and press `Enter`. `Enter` saves
   and `Esc` cancels. Press a row's label to change the label.
-- **Row menu**: **Make primary**, **Show on map** and **Remove**, with
-  **Undo** for 7 seconds. The first email and phone are the primary ones, and
-  the first address places the pin and says **Map pin**.
+- **Call and write**: an email and a phone are links. Press an email to write
+  to it in your mail app, and a phone to call it. To edit one, press the
+  pencil after it. The phone field opens the phone keyboard on a phone.
+- **Row menu**: **Message** (a phone), **Make primary**, **Show on map** and
+  **Remove**, with **Undo** for 7 seconds. The first email and phone are the
+  primary ones, and the first address places the pin and says **Map pin**.
 - **Order**: open a row's menu and drag the row by its handle, or press
   `Alt+↑` or `Alt+↓` (`Option` on a Mac) on the value.
 - **+ Add**: adds a value. For preferences and interests, `Enter` adds a chip

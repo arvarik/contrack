@@ -243,7 +243,9 @@ export const ActionRow = memo(
     // and its negative margin keeps the 32 px glyph from making line one
     // taller than the name, so a row with a snooze has the same rhythm as
     // a row without one. From sm it floats over the row's right edge and
-    // shows on hover or focus, so at rest the text has the whole width.
+    // shows on hover or focus, so at rest the text has the whole width. A
+    // touch screen from sm (a tablet, a phone on its side) has no hover, so
+    // there it ends line one at rest, as it does on a phone.
     const snooze = item.hasCheckAction ? (
       <ActionMenu
         label="Snooze item"
@@ -256,9 +258,14 @@ export const ActionRow = memo(
           "shrink-0",
           compact
             ? "ml-auto"
-            : "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+            : cn(
+                "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+                "pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:translate-y-0 pointer-coarse:bg-transparent pointer-coarse:opacity-100",
+              ),
         )}
-        triggerClassName={compact ? "-my-1.5" : "p-1 rounded-lg"}
+        triggerClassName={
+          compact ? "-my-1.5" : "p-1 rounded-lg pointer-coarse:-my-1.5"
+        }
       />
     ) : null;
 

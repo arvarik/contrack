@@ -59,6 +59,7 @@ function shortRecency(iso: string | null | undefined): string {
 }
 
 import { contactQuery } from "../../api/contactCache";
+import { canSlide, isPlainClick, useSlideNavigate } from "../settings/slide";
 import { timelineQuery } from "../../api/interactions";
 import { suggestionQuery } from "../../api/suggestions";
 import { keepLoadedImage } from "../../lib/keptImages";
@@ -147,12 +148,21 @@ const ContactListItemInner = ({
     if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
   }, []);
 
-  // ── Click handler (select mode) ────────────────────────────────────────────
+  // ── Click handler (select mode, and the slide) ─────────────────────────────
 
+  const slide = useSlideNavigate();
+  const to = isSelectMode ? "#" : `/contact/${contact.id}${location.search}`;
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectMode) {
       e.preventDefault();
       onToggleSelect(contact.id, e.shiftKey);
+      return;
+    }
+    // Below `lg` the contact takes the list's place, and it slides in over
+    // the list, as a settings page does. Elsewhere the link opens it.
+    if (isPlainClick(e) && canSlide()) {
+      e.preventDefault();
+      slide(to, "forward");
     }
   };
 
@@ -196,7 +206,7 @@ const ContactListItemInner = ({
       id={`${idPrefix}-${contact.id}`}
       aria-label={rowName}
       aria-current={active && !isSelectMode ? "page" : undefined}
-      to={isSelectMode ? "#" : `/contact/${contact.id}${location.search}`}
+      to={to}
       onClick={handleClick}
       tabIndex={tabIndex}
       {...(rovingIndex !== undefined && { [ROVING_INDEX_ATTR]: rovingIndex })}

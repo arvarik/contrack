@@ -218,6 +218,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           }
           labelOptions={EMAIL_LABELS}
           noun="email"
+          kind="email"
           addLabel="Add email"
           inputPlaceholder="email@example.com"
           openRequest={requestFor("workEmail")}
@@ -247,6 +248,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           }
           labelOptions={PHONE_LABELS}
           noun="phone"
+          kind="phone"
           addLabel="Add phone"
           inputPlaceholder="+1 (555) 000-0000"
         />

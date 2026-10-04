@@ -29,12 +29,25 @@ export const EditHint = () => (
 );
 
 /**
+ * What an email or a phone input tells the browser: the keyboard a phone
+ * opens (`@` and `.com`, or the digits) and what autofill offers.
+ */
+export const INPUT_KIND = {
+  email: { type: "email", inputMode: "email", autoComplete: "email" },
+  tel: { type: "tel", inputMode: "tel", autoComplete: "tel" },
+} as const;
+
+/**
  * Inline editor that retains rejected drafts and confirms completed
  * asynchronous saves.
  *
  * At rest the value is a button: a click, Enter or Space opens the input.
  * In the input, Enter saves and Escape cancels. These two keys are in the
  * "Contact" group of `lib/shortcuts`, so the shortcuts dialog lists them.
+ *
+ * With an `href` the value is a link and the pencil after it is the button.
+ * A phone number calls and an email writes on a tap, and the pencil opens
+ * the input. A tap on a number used to open "Edit phone".
  */
 export function EditableField({
   value,
@@ -42,6 +55,8 @@ export function EditableField({
   placeholder,
   className = "",
   inputLabel,
+  kind,
+  href,
 }: {
   value: string | null;
   onSave: (value: string) => unknown;
@@ -52,6 +67,10 @@ export function EditableField({
    * which is right for a single field and too vague for one row of several.
    */
   inputLabel?: string;
+  /** An email or a phone: the input's type, keyboard and autofill. */
+  kind?: keyof typeof INPUT_KIND;
+  /** Where a tap on the value goes: a `tel:` or a `mailto:` link. */
+  href?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -123,6 +142,7 @@ export function EditableField({
       <span className="inline-flex flex-col min-w-0">
         <span className="inline-flex items-center gap-1">
           <input
+            {...(kind && INPUT_KIND[kind])}
             aria-label={inputLabel ?? placeholder}
             aria-invalid={error || undefined}
             aria-busy={saving}
@@ -164,6 +184,39 @@ export function EditableField({
             Save failed. Press Enter to retry or Escape to cancel
           </span>
         )}
+      </span>
+    );
+  if (href && value)
+    return (
+      <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
+        {/* A link looks like a link: the primary ink, underlined on hover. */}
+        <a
+          href={href}
+          className={cn(
+            "hit-area min-w-0 rounded underline-offset-2 hover:underline",
+            className,
+            "text-primary",
+          )}
+        >
+          {value}
+        </a>
+        {/* The pencil at rest at every width: on a link it is the one way
+            to the input, so it cannot wait for a hover. Escape and Enter
+            give focus back to it. */}
+        <button
+          ref={button}
+          type="button"
+          onClick={begin}
+          aria-label={`Edit ${value}`}
+          title="Edit"
+          className="hit-area state-layer shrink-0 rounded p-1 text-on-surface-variant"
+        >
+          {saved ? (
+            <Check className="w-3.5 h-3.5 text-success" aria-label="Saved" />
+          ) : (
+            <Pencil aria-hidden="true" className="w-3.5 h-3.5 opacity-70" />
+          )}
+        </button>
       </span>
     );
   return (

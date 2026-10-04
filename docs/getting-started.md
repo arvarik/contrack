@@ -80,7 +80,9 @@ The sidebar on a wide screen, and the tab bar on a phone, lead to five places:
 
 - The tab bar at the bottom holds the same five places.
 - A contact opens full screen, with **Timeline**, **Details** and **Dossier**
-  tabs. **Back** at the top returns to the list.
+  tabs, and **Call**, **Message**, **Email** and **Log note** under its name.
+  It slides in over the list, and **Back** slides it out to the same place
+  in the list.
 - Dialogs rise from the bottom of the screen.
 - Pull the Network list down to refresh it.
 

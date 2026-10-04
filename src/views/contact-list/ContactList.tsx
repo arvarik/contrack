@@ -38,6 +38,7 @@ import {
   Hash,
   Radar,
   Tag,
+  Command,
 } from "lucide-react";
 import {
   useContacts,
@@ -48,7 +49,12 @@ import {
   useUnarchiveContact,
 } from "../../api";
 import { withUndo } from "../../lib/undoToast";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  measureElement,
+  observeElementOffset,
+  observeElementRect,
+  useVirtualizer,
+} from "@tanstack/react-virtual";
 import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetRail, bucketFor } from "./AlphabetRail";
 import type { Contact } from "../../types";
@@ -66,9 +72,12 @@ import { cn } from "../../lib/utils";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import {
+  restoreScrollAnchor,
   savedScroll,
+  SCROLL_ANCHOR_ATTR,
   useScrollRestoration,
 } from "../../hooks/useScrollRestoration";
+import { WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -100,6 +109,8 @@ import { useRecent } from "../../contexts/SessionContext";
 import { NAMES, TRACKED_INTRO } from "../../lib/names";
 import { ActionMenu } from "../../components/ui/ActionMenu";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
+import { openCommandPalette } from "../../lib/appEvents";
+import { settleSlide } from "../settings/slide";
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -228,8 +239,11 @@ const ContactRowWrapper = React.memo(
         role="presentation"
         onContextMenu={(e) => handleContextMenu(e, contextItems)}
         onClick={isSelectMode ? undefined : () => recordVisit(contact.id)}
+        // A press that lasts selects the row (`useLongPress`), so a finger
+        // gets no link preview (iOS), no menu, and no selected text.
         {...longPress}
         className={cn(
+          "[-webkit-touch-callout:none] pointer-coarse:select-none",
           // The flash arrives and leaves at the slow duration. Its glow is
           // mixed from the primary, so it follows the accent and the palette.
           "rounded-xl transition-all duration-(--dur-slow)",
@@ -395,12 +409,35 @@ const ContactRows = ({
     // too, or the first frame drew the top rows out of sight and showed an
     // empty list.
     initialOffset: () => savedScroll(scrollKey),
+    // Below `lg` the list is hidden while a contact is open, and a hidden
+    // list reads 0 for its height, its offset and each row. The virtualizer
+    // then drew no rows, and Back had no row to find. These three keep the
+    // last real values while the list is hidden, so the rows it showed stay
+    // drawn and in place (see `restoreScrollAnchor` below).
+    observeElementRect: (instance, onRect) =>
+      observeElementRect(instance, (rect) => {
+        if (rect.height > 0) onRect(rect);
+      }),
+    observeElementOffset: (instance, onOffset) =>
+      observeElementOffset(instance, (offset, isScrolling) => {
+        if (instance.scrollElement?.clientHeight) onOffset(offset, isScrolling);
+      }),
+    measureElement: (element, entry, instance) => {
+      const size = measureElement(element, entry, instance);
+      if (size > 0) return size;
+      const index = instance.indexFromElement(element);
+      return (
+        instance.itemSizeCache.get(instance.options.getItemKey(index)) ??
+        instance.options.estimateSize(index)
+      );
+    },
   });
 
   React.useLayoutEffect(() => {
     const list = virtualListRef.current;
     const scroller = scrollRef.current;
-    if (!list || !scroller) return;
+    // A hidden list reads 0 for every position, and its margin stays.
+    if (!list || !scroller || scroller.clientHeight === 0) return;
     const offset =
       list.getBoundingClientRect().top -
       scroller.getBoundingClientRect().top +
@@ -509,8 +546,55 @@ const ContactRows = ({
     const active = document.activeElement;
     if (active && active !== document.body) return;
     const index = filteredContacts.findIndex((c) => c.id === lastContactId);
-    if (index >= 0) focusIndex(recentCount + index);
-  }, [openId, lastContactId, filteredContacts, recentCount, focusIndex]);
+    if (index < 0) return;
+    // The row is in view already (the place came back, see below): focus it
+    // where it is. `focusIndex` scrolls, and from offsets the virtualizer
+    // read before the list came back.
+    const row = document.getElementById(`contact-row-${lastContactId}`);
+    const scroller = scrollRef.current;
+    if (row && scroller) {
+      const box = row.getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      if (box.top >= view.top && box.bottom <= view.bottom) {
+        row.focus({ preventScroll: true });
+        return;
+      }
+    }
+    focusIndex(recentCount + index);
+  }, [
+    openId,
+    lastContactId,
+    filteredContacts,
+    recentCount,
+    focusIndex,
+    scrollRef,
+  ]);
+
+  /**
+   * Back to the list on a phone puts the same row at the same place.
+   *
+   * Below `lg` the list is hidden while a contact is open, and a hidden
+   * scroller forgets its offset. The row that was at the top comes back to
+   * the top, the same distance from it (`restoreScrollAnchor`). Before
+   * paint, so the first frame is the right one, and again a frame later,
+   * after the rows have measured. With no row saved (the top showed
+   * Recent), or a row not drawn yet, the saved pixel offset comes back
+   * first, and the frame after it finds the row.
+   */
+  const previousOpen = useRef(openId);
+  useLayoutEffect(() => {
+    const wasOpen = previousOpen.current;
+    previousOpen.current = openId;
+    const scroller = scrollRef.current;
+    if (!wasOpen || openId || !scroller) return;
+    if (window.matchMedia?.(WIDE_QUERY).matches) return;
+    if (!restoreScrollAnchor(scroller, scrollKey))
+      scroller.scrollTop = savedScroll(scrollKey);
+    const frame = requestAnimationFrame(() =>
+      restoreScrollAnchor(scroller, scrollKey),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [openId, scrollKey, scrollRef]);
 
   /**
    * The open contact's row comes into view when the open id changes: a deep
@@ -654,6 +738,7 @@ const ContactRows = ({
                 <div
                   key={virtualItem.key}
                   data-index={virtualItem.index}
+                  {...{ [SCROLL_ANCHOR_ATTR]: contact.id }}
                   ref={rowVirtualizer.measureElement}
                   style={{
                     position: "absolute",
@@ -1017,8 +1102,17 @@ export const ContactList = () => {
   const showAlphabetRail =
     sortBy === "name" && !searchQuery && filteredContacts.length >= 15;
 
+  // Back from a contact slides the list in (`views/settings/slide`), and
+  // the slide waits for this: the list on screen, its rows back in place.
+  // A child's layout effects run first, so the place is back by now.
+  useLayoutEffect(() => {
+    if (!id) settleSlide(location.pathname);
+  }, [id, location.pathname]);
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    // `settings-stage`: below `lg` the list is the picture that slides when
+    // a contact opens or closes, as the settings list does.
+    <div className="settings-stage flex flex-col h-full overflow-hidden">
       {/*
         The pane is narrow, so it keeps `px-4` where a page has `PAGE_X`, and
         its title starts at the same height as every other page's.
@@ -1033,6 +1127,9 @@ export const ContactList = () => {
       <PageHeader
         title={NAMES.network.label}
         titleAs={id ? "h2" : "h1"}
+        // Select all and Done are 32 px, and the icon buttons they replace
+        // are 36. The row keeps 36 px, so select mode moves no row.
+        actionsClassName="min-h-9"
         className={cn(
           "px-4 pb-3 bg-surface-container-lowest sticky top-0 z-10",
           PAGE_TOP,
@@ -1075,7 +1172,21 @@ export const ContactList = () => {
                 for a pointer, so the row costs one word of space per action
                 and still says what it does. The gap keeps the three 44 px
                 tap boxes apart.
+
+                A touch screen has no ⌘K, so it gets one more button first:
+                the command palette, which finds a person and acts on them.
+                A mouse and a keyboard do not see it.
               */}
+              <button
+                key="palette"
+                type="button"
+                onClick={openCommandPalette}
+                className={cn(ICON_BTN, "hidden pointer-coarse:inline-flex")}
+                aria-label="Command palette"
+                title="Command palette"
+              >
+                <Command className="w-5 h-5" aria-hidden="true" />
+              </button>
               <button
                 key="select"
                 ref={selectButtonRef}
@@ -1117,6 +1228,7 @@ export const ContactList = () => {
               aria-label="Search contacts"
               id="search-input"
               type="text"
+              enterKeyHint="search"
               placeholder="Search..."
               value={inputValue}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -1162,82 +1274,89 @@ export const ContactList = () => {
         </div>
 
         {/* Filter chips: All, Tracked, then one per list. A horizontal
-            scroll row, hidden in select mode. It shows with no lists too,
-            because the Tracked chip is the way into tracking. */}
-        {!isSelectMode && (
-          <div className="relative">
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
-            <div
-              id="filter-pills-row"
-              // A scroller clips what sits outside its padding box, so the
-              // 8 px above and below give each pill's 44 px tap box room,
-              // and 4 px at each side give its focus ring room. The negative
-              // margins keep the row where it was.
-              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5 -mx-1 px-1"
-            >
-              <FilterButton
-                label="All"
-                icon={<Users className="w-3.5 h-3.5" />}
-                count={activeContactCount}
-                active={filterMode === "all"}
-                onClick={() => setFilterMode("all")}
-              />
-              {/* A tag, from a tag on the Tags settings page. The chip is
+            scroll row. It shows with no lists too, because the Tracked chip
+            is the way into tracking. In select mode it stays, faded and
+            out of reach (`inert`): the selection is of the rows it shows.
+            It used to leave, and the header lost 44 px, so a long press
+            moved every row up under the finger. */}
+        <div
+          className={cn(
+            "relative transition-opacity",
+            isSelectMode && "opacity-40",
+          )}
+          inert={isSelectMode}
+        >
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
+          <div
+            id="filter-pills-row"
+            // A scroller clips what sits outside its padding box, so the
+            // 8 px above and below give each pill's 44 px tap box room,
+            // and 4 px at each side give its focus ring room. The negative
+            // margins keep the row where it was.
+            className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5 -mx-1 px-1"
+          >
+            <FilterButton
+              label="All"
+              icon={<Users className="w-3.5 h-3.5" />}
+              count={activeContactCount}
+              active={filterMode === "all"}
+              onClick={() => setFilterMode("all")}
+            />
+            {/* A tag, from a tag on the Tags settings page. The chip is
                   there only while it filters, and pressing it shows
                   everyone again, as pressing a pressed list chip does. */}
-              {tagFilter && (
-                <FilterButton
-                  label={tagFilter}
-                  icon={<Hash className="w-3.5 h-3.5" />}
-                  count={tagContactCount}
-                  active
-                  onClick={() => setFilterMode("all")}
-                />
-              )}
+            {tagFilter && (
               <FilterButton
-                label="Tracked"
-                icon={<Radar className="w-3.5 h-3.5" />}
-                count={trackedContactCount}
-                active={filterMode === TRACKED_FILTER}
-                onClick={() =>
-                  setFilterMode(
-                    filterMode === TRACKED_FILTER ? "all" : TRACKED_FILTER,
-                  )
-                }
+                label={tagFilter}
+                icon={<Hash className="w-3.5 h-3.5" />}
+                count={tagContactCount}
+                active
+                onClick={() => setFilterMode("all")}
               />
-              {lists.map((list, idx) => (
-                <div
-                  key={list.id}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={(e) => handleDragOver(e, idx)}
-                  onDrop={() => handleDrop(idx)}
-                  onDragEnd={handleDragEnd}
-                  className={cn(
-                    "transition-all cursor-grab active:cursor-grabbing shrink-0",
-                    // The drop target's dashed line, as on the Lists page. A
-                    // solid ring read as keyboard focus.
-                    dragOverIdx === idx &&
-                      dragIdx !== idx &&
-                      "outline-2 outline-dashed outline-primary/60 rounded-xl",
-                    dragIdx === idx && "opacity-40",
-                  )}
-                >
-                  <FilterButton
-                    label={list.name}
-                    icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
-                    count={list.memberCount ?? 0}
-                    active={filterMode === list.id}
-                    onClick={() =>
-                      setFilterMode(filterMode === list.id ? "all" : list.id)
-                    }
-                  />
-                </div>
-              ))}
-              <div className="shrink-0 w-6" aria-hidden />
-            </div>
+            )}
+            <FilterButton
+              label="Tracked"
+              icon={<Radar className="w-3.5 h-3.5" />}
+              count={trackedContactCount}
+              active={filterMode === TRACKED_FILTER}
+              onClick={() =>
+                setFilterMode(
+                  filterMode === TRACKED_FILTER ? "all" : TRACKED_FILTER,
+                )
+              }
+            />
+            {lists.map((list, idx) => (
+              <div
+                key={list.id}
+                draggable
+                onDragStart={() => handleDragStart(idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDrop={() => handleDrop(idx)}
+                onDragEnd={handleDragEnd}
+                className={cn(
+                  "transition-all cursor-grab active:cursor-grabbing shrink-0",
+                  // The drop target's dashed line, as on the Lists page. A
+                  // solid ring read as keyboard focus.
+                  dragOverIdx === idx &&
+                    dragIdx !== idx &&
+                    "outline-2 outline-dashed outline-primary/60 rounded-xl",
+                  dragIdx === idx && "opacity-40",
+                )}
+              >
+                <FilterButton
+                  label={list.name}
+                  icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
+                  count={list.memberCount ?? 0}
+                  active={filterMode === list.id}
+                  onClick={() =>
+                    setFilterMode(filterMode === list.id ? "all" : list.id)
+                  }
+                />
+              </div>
+            ))}
+            <div className="shrink-0 w-6" aria-hidden />
           </div>
-        )}
+        </div>
       </PageHeader>
       <ContactRows
         filteredContacts={filteredContacts}

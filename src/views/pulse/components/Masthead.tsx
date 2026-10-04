@@ -7,8 +7,9 @@
  * line in the variant ink, so the date still leads without taking the
  * page's name. One line of facts replaces the old row of chips: "2 overdue ·
  * 2 due today · 3 birthdays this week · 12 days in a row". The items are
- * joined by the middle dot (`MetaDot`), with no commas and no closing
- * period, and one item stands alone with no dot. From `sm` up each count is
+ * joined by the middle dot, with no commas and no closing period, and one
+ * item stands alone with no dot. A line that wraps neither starts nor ends
+ * with a dot (see `line` below). From `sm` up each count is
  * a button that jumps to its card. Below `sm` the counts are plain text,
  * because the queue starts one flick down and inline 44 px tap boxes would
  * overlap across two wrapped lines. The line is text, so it wraps and
@@ -27,7 +28,6 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Ellipsis, PenLine, SlidersHorizontal, UserPlus } from "lucide-react";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
-import { MetaDot } from "../../../components/ui/MetaDot";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { NAMES } from "../../../lib/names";
@@ -68,7 +68,7 @@ export const Masthead = ({
     month: "long",
   }).format(new Date());
 
-  const line = buildDayLine(counts).map((item, index) => {
+  const items = buildDayLine(counts).map((item, index) => {
     const words =
       item.target && wide ? (
         <button
@@ -81,21 +81,38 @@ export const Masthead = ({
       ) : (
         item.text
       );
-    if (index === 0)
-      return <React.Fragment key={index}>{words}</React.Fragment>;
-    // The dot rides with the item after it: the space before the dot is
-    // the only place the line may break, so a wrapped line starts with a
-    // dot and never ends on one. A screen reader reads the line as one run
-    // of text, so the dot pauses it with a comma (`pause`).
+    // The dot rides with the item after it, in a box 1em wide, and the line
+    // may break only before a box (`wbr`). The first item has an empty box,
+    // so every line of the text starts with one. A screen reader reads the
+    // line as one run of text, so a comma pauses it where the dot is.
     return (
       <React.Fragment key={index}>
-        {" "}
+        {index > 0 && <wbr />}
         <span className="whitespace-nowrap">
-          <MetaDot pause /> {words}
+          <span
+            aria-hidden="true"
+            className="inline-block w-[1em] text-center whitespace-pre"
+          >
+            {index > 0 ? " · " : ""}
+          </span>
+          {index > 0 && <span className="sr-only">, </span>}
+          {words}
         </span>
       </React.Fragment>
     );
   });
+  /**
+   * The line. It starts 1em to the left of its box, and the box clips that
+   * strip, so the box at the start of each line of text is out of sight. A
+   * line that wraps never starts with a dot, and never ends with one. The
+   * clip reaches past the other three edges, so the counts' 44 px tap boxes
+   * and the focus ring stay whole.
+   */
+  const line = (
+    <span className="block [clip-path:inset(-1rem_-1rem_-1rem_-0.25rem)]">
+      <span className="block -ml-[1em]">{items}</span>
+    </span>
+  );
 
   return (
     <PageHeader

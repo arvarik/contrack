@@ -19,15 +19,33 @@ interface IdleWindow {
 }
 
 interface DataSavingNavigator {
-  connection?: { saveData?: boolean };
+  connection?: { saveData?: boolean; effectiveType?: string };
+}
+
+/** The connection, as the Network Information API reports it. */
+function connection(): DataSavingNavigator["connection"] {
+  if (typeof navigator === "undefined") return undefined;
+  return (navigator as Navigator & DataSavingNavigator).connection;
 }
 
 /** True when this browser was told to save data. */
 function savesData(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return (
-    (navigator as Navigator & DataSavingNavigator).connection?.saveData === true
-  );
+  return connection()?.saveData === true;
+}
+
+/**
+ * True on a connection the browser rates fast ("4g", the best of its four
+ * grades) when nobody asked it to save data.
+ *
+ * A page warmed in an idle moment costs a slow phone the bandwidth its
+ * first page needs: the map, Pulse and Ask Contrack are about 1 MB. A
+ * browser with no Network Information API (Safari, Firefox) cannot say how
+ * fast it is, and this answers false. A link still warms its page when a
+ * person points at it or presses it.
+ */
+export function onFastConnection(): boolean {
+  const info = connection();
+  return info?.effectiveType === "4g" && info.saveData !== true;
 }
 
 /** How long a task waits, at most, for an idle moment that never comes. */

@@ -77,6 +77,9 @@ search, Pulse, the map, research and the contact page.
 - Deletes go to a trash that keeps them for 30 days by default, and a write
   made with one key offers **Undo**.
 - Export to vCard, CSV or JSON. A vCard export imports back in.
+- On a phone, a contact's phone and email are one tap from a call, a text or
+  a mail, **Share contact** sends a vCard, and the Network list keeps its
+  place and opens the command palette.
 
 ### AI and research
 

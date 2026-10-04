@@ -11,8 +11,11 @@
  *    the web at the Standard or the Deep depth. Each row's hint is the time
  *    a contact takes.
  * 3. Copy basic details and Copy full details.
- * 4. Archive or Unarchive.
- * 5. Delete, last and on its own surface tone.
+ * 4. Share contact, which hands the contact's card (a vCard) to the phone's
+ *    share sheet, so it goes to Messages, Mail or the address book. A
+ *    browser that cannot share a file downloads the card instead.
+ * 5. Archive or Unarchive.
+ * 6. Delete, last and on its own surface tone.
  *
  * The enrich rows start the same background run as the Enrichment settings
  * page, for one contact (`startSearch` in `AISearchContext`). They ask for
@@ -37,6 +40,7 @@ import {
   ArchiveRestore,
   Copy,
   Palette,
+  Share2,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -47,6 +51,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { buildVCard, vCardFileName } from "../../../lib/contactLinks";
 import { isEnriching, useAISearch } from "../../../contexts/AISearchContext";
 import { depthTime } from "../../../lib/researchDepth";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
@@ -81,6 +86,39 @@ function fullDetailsText(contact: Contact): string {
     textChunks.push(`Location: ${contact.location}`);
   }
   return textChunks.join("\n");
+}
+
+/**
+ * Shares the contact as a vCard file, or downloads the file.
+ *
+ * 1. The phone's share sheet takes the file when the browser says it can
+ *    (`navigator.canShare` with `files`). The menu runs this in the tap's
+ *    own handler, so the browser still counts the tap as the reason.
+ * 2. A closed sheet is a choice and does nothing more. Another refusal, or
+ *    a browser with no file sharing (most desktops), downloads the file.
+ */
+async function shareContactCard(contact: Contact): Promise<void> {
+  const file = new File([buildVCard(contact)], vCardFileName(contact.name), {
+    type: "text/vcard",
+  });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: contact.name });
+      return;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Later, not now: Safari reads the file after the click handler returns.
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  toast.success("Contact card downloaded");
 }
 
 type ContactActionsMenuProps = Pick<
@@ -188,6 +226,12 @@ export const ContactActionsMenu = ({
       label: "Copy full details",
       icon: Copy,
       onSelect: () => copy(fullDetailsText(contact), "All details copied"),
+    },
+    {
+      id: "share",
+      label: "Share contact",
+      icon: Share2,
+      onSelect: () => void shareContactCard(contact),
     },
     {
       id: "archive",

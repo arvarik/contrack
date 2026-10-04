@@ -22,7 +22,7 @@ The box reads facets too, except `near:`. The page address keeps your search, so
 
 ## Command palette
 
-Press `Cmd+K` on any page to open the palette. Press it again, or press `Esc`, to close it. The palette opens with an empty box each time. It opens only from the keyboard, so on a phone use the Network search box or Ask Contrack.
+Press `Cmd+K` on any page to open the palette. Press it again, or press `Esc`, to close it. The palette opens with an empty box each time. On a touch screen, press **Command palette**, the first button above the Network list.
 
 The first character you type sets the mode:
 

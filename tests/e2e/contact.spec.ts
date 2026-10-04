@@ -46,10 +46,12 @@ async function ownContact(
   instance: ContrackInstance,
   name: string,
   company = "Journey Ltd",
+  more: Record<string, unknown> = {},
 ): Promise<string> {
   const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
     name,
     company,
+    ...more,
   });
   created.push({ instance, id });
   return id;
@@ -329,6 +331,11 @@ test.describe("the Network header and start panel", () => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
+    // ⌘K opens the palette under a mouse. Its button is for a touch screen.
+    await expect(
+      page.getByRole("button", { name: "Command palette" }),
+    ).toBeHidden();
+
     // Named for a screen reader, titled for a pointer, no visible text.
     for (const name of ["Select", "Import", "New"]) {
       const button = page.getByRole("button", { name, exact: true });
@@ -546,6 +553,7 @@ test.describe("the contact header", () => {
       "Enrich deeply",
       "Copy basic details",
       "Copy full details",
+      "Share contact",
       "Archive",
       "Delete",
     ]);
@@ -1427,6 +1435,138 @@ test.describe("phone", () => {
       .getByRole("button", { name: "Change avatar" })
       .boundingBox();
     expect(Math.round(pencil!.width)).toBe(24);
+  });
+
+  test("a phone and an email are one tap from a call, a text or a mail, the pencil edits, and Share sends a card", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zoe Reach", "Journey Ltd", {
+      phones: [{ phone: "+44 20 7946 0018", label: "mobile", isPrimary: true }],
+      emails: [{ email: "zoe@example.com", label: "work", isPrimary: true }],
+    });
+    // The share sheet, as a phone has one: it keeps the file it is given.
+    await page.addInitScript(() => {
+      const nav = navigator as Navigator & { shared?: string };
+      nav.canShare = () => true;
+      nav.share = async (data) => {
+        nav.shared = `${data?.files?.[0]?.name}\n${await data?.files?.[0]?.text()}`;
+      };
+    });
+    await page.goto(`/contact/${id}`);
+
+    // The header's last row reaches the primary phone and email.
+    const quick = page.getByRole("group", { name: "Quick actions" });
+    await expect(quick.getByRole("link", { name: "Call" })).toHaveAttribute(
+      "href",
+      "tel:+442079460018",
+    );
+    await expect(quick.getByRole("link", { name: "Message" })).toHaveAttribute(
+      "href",
+      "sms:+442079460018",
+    );
+    await expect(quick.getByRole("link", { name: "Email" })).toHaveAttribute(
+      "href",
+      "mailto:zoe@example.com",
+    );
+    await quick.getByRole("button", { name: "Log note" }).tap();
+    const note = page.getByRole("dialog", { name: "Log an interaction" });
+    await expect(note).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(note).toBeHidden();
+
+    // In Details a tap on a value calls or writes, and the pencil edits,
+    // with the phone's keyboard.
+    await page
+      .getByRole("radiogroup", { name: "Contact sections" })
+      .getByRole("radio", { name: "Details" })
+      .tap();
+    await expect(
+      page.getByRole("link", { name: "zoe@example.com" }),
+    ).toHaveAttribute("href", "mailto:zoe@example.com");
+    await expect(
+      page.getByRole("link", { name: "+44 20 7946 0018" }),
+    ).toHaveAttribute("href", "tel:+442079460018");
+    await page.getByRole("button", { name: "Edit +44 20 7946 0018" }).tap();
+    const phone = page.getByRole("textbox", { name: "Edit phone" });
+    await expect(phone).toHaveAttribute("type", "tel");
+    await expect(phone).toHaveAttribute("autocomplete", "tel");
+    await phone.fill("+44 20 7946 0019");
+    await phone.press("Enter");
+    await expect(
+      page.getByRole("link", { name: "+44 20 7946 0019" }),
+    ).toHaveAttribute("href", "tel:+442079460019");
+    await expect(
+      page.getByRole("button", { name: "Edit +44 20 7946 0019" }),
+    ).toBeFocused();
+
+    // Share contact hands the sheet a vCard with the new number.
+    await page.getByRole("button", { name: "Contact actions" }).tap();
+    await page.getByRole("menuitem", { name: "Share contact" }).tap();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (navigator as Navigator & { shared?: string }).shared,
+        ),
+      )
+      .toMatch(
+        /^Zoe Reach\.vcf\nBEGIN:VCARD[^]*TEL;TYPE=CELL,PREF:\+44 20 7946 0019/,
+      );
+  });
+
+  test("a long press selects the row under the finger, moves no row and opens no menu", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto("/");
+    const ada = listRow(page, seed, "Ada Lovelace");
+    await expect(ada).toBeVisible();
+    const before = (await ada.boundingBox())!;
+    const point = {
+      x: before.x + before.width / 2,
+      y: before.y + before.height / 2,
+    };
+
+    // A finger held still. Android also sends `contextmenu` while it is
+    // down, and the lift sends a click.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [point],
+    });
+    await page.waitForTimeout(700);
+    await ada.dispatchEvent("contextmenu", {
+      clientX: point.x,
+      clientY: point.y,
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+
+    const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+    await expect(bar).toContainText("1 selected");
+    await expect(ada.locator(".lucide-check-check")).toBeVisible();
+    // The header keeps its height, so the row is still under the finger.
+    expect((await ada.boundingBox())!.y).toBe(before.y);
+    await expect(
+      page.getByRole("button", { name: "View contact" }),
+    ).toBeHidden();
+
+    // A right click is still the row's menu.
+    await listRow(page, seed, "Grace Hopper").click({ button: "right" });
+    await expect(
+      page.getByRole("button", { name: "View contact" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+  });
+
+  test("a touch screen opens the command palette from the Network header", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Command palette" }).tap();
+    await expect(page.getByRole("dialog").getByRole("combobox")).toBeFocused();
   });
 
   test("the browser's Back button returns focus to the row too", async ({

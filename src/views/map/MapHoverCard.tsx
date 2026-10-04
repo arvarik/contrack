@@ -4,7 +4,12 @@
  *
  * @module views/map/MapHoverCard
  */
-import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import React, {
+  useEffect,
+  useRef,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { Popup, type PopupInstance } from "@vis.gl/react-maplibre";
 import type { PaddingOptions } from "maplibre-gl";
 import { motion } from "motion/react";
@@ -15,6 +20,7 @@ import {
   MapPin,
   MapPinPen,
   PenLine,
+  Phone,
   X,
 } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
@@ -25,6 +31,7 @@ import {
   describeLocalTime,
   timeZoneAt,
 } from "../../components/LocalTimeWeather";
+import { telHref } from "../../lib/contactLinks";
 import { formatRelative } from "../../lib/datetime";
 import { BANNER_DAYS, describeFollowUp } from "../../lib/followUp";
 import { DURATION, EASE } from "../../lib/motion";
@@ -56,6 +63,38 @@ const ACTIONS: {
 ];
 
 const MORE = "text-[11px] font-semibold text-on-surface-variant";
+
+/**
+ * The `tel:` link of the contact's primary phone, or null. A card offers
+ * Call only when there is a number to call.
+ */
+const callHref = (contact: MapContact) => {
+  const phone = contact.phones?.[0]?.phone;
+  return phone ? telHref(phone) : null;
+};
+
+/** The hover card's Call: an `IconButton` in look, a link in fact. */
+const CALL_ICON_LINK =
+  "state-layer inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl p-1.5 text-on-surface-variant hover:text-on-surface";
+
+/**
+ * One cell of the phone sheet's row of actions. The cells share the row by
+ * their words, so "Follow-up" keeps one line when Call makes the row six
+ * cells on a 375 px phone.
+ */
+const SHEET_ACTION =
+  "state-layer flex flex-auto min-w-[44px] min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl px-1 whitespace-nowrap text-[11px] font-semibold text-on-surface";
+
+/** The phone sheet's Call cell, or nothing for a contact with no phone. */
+const SheetCall = ({ contact }: { contact: MapContact }) => {
+  const call = callHref(contact);
+  return call ? (
+    <a href={call} className={SHEET_ACTION}>
+      <Phone aria-hidden="true" className="h-4 w-4" />
+      Call
+    </a>
+  ) : null;
+};
 
 export const cardId = (id: string) => `map-hover-card-${id}`;
 export const clusterCardId = (key: string) => `map-cluster-card-${key}`;
@@ -186,6 +225,7 @@ export const MapHoverCard = ({
     if (mode === "pinned") first.current?.focus();
   }, [mode, padding]);
   const tooltip = mode === "focus";
+  const call = callHref(contact);
   return (
     <Popup
       ref={popup}
@@ -210,17 +250,29 @@ export const MapHoverCard = ({
           ) : (
             <div className="-mx-2 -mb-2 flex justify-between border-t border-outline-variant/20 pt-1">
               {ACTIONS.map(({ action, label, Icon }, i) => (
-                <IconButton
-                  key={action}
-                  ref={i === 0 ? first : undefined}
-                  aria-label={label}
-                  title={label}
-                  tone="subtle"
-                  size="sm"
-                  onClick={() => onAction(action)}
-                >
-                  <Icon className="h-4 w-4" />
-                </IconButton>
+                <React.Fragment key={action}>
+                  <IconButton
+                    ref={i === 0 ? first : undefined}
+                    aria-label={label}
+                    title={label}
+                    tone="subtle"
+                    size="sm"
+                    onClick={() => onAction(action)}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </IconButton>
+                  {/* Call follows Open: the two ways to reach the person. */}
+                  {action === "open" && call && (
+                    <a
+                      href={call}
+                      aria-label="Call"
+                      title="Call"
+                      className={CALL_ICON_LINK}
+                    >
+                      <Phone aria-hidden="true" className="h-4 w-4" />
+                    </a>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           )}
@@ -230,7 +282,10 @@ export const MapHoverCard = ({
   );
 };
 
-/** A finger cannot hover, so a tap on a pin shows its card here first. */
+/**
+ * A finger cannot hover, so a tap on a pin shows its card here first. With
+ * a phone number, Call joins the row after Open.
+ */
 export const MapPeekSheet = ({
   contact,
   onAction,
@@ -262,18 +317,20 @@ export const MapPeekSheet = ({
         </IconButton>
       }
     >
-      <div className="grid grid-cols-5 gap-1 border-t border-outline-variant/20 pt-2">
+      <div className="flex gap-1 border-t border-outline-variant/20 pt-2">
         {ACTIONS.map(({ action, label, short, Icon }) => (
-          <button
-            key={action}
-            type="button"
-            aria-label={label}
-            onClick={() => onAction(action)}
-            className="state-layer flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold text-on-surface"
-          >
-            <Icon className="h-4 w-4" />
-            {short}
-          </button>
+          <React.Fragment key={action}>
+            <button
+              type="button"
+              aria-label={label}
+              onClick={() => onAction(action)}
+              className={SHEET_ACTION}
+            >
+              <Icon className="h-4 w-4" />
+              {short}
+            </button>
+            {action === "open" && <SheetCall contact={contact} />}
+          </React.Fragment>
         ))}
       </div>
     </CardBody>

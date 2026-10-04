@@ -323,7 +323,7 @@ describe("the contact header", () => {
     }
   });
 
-  it("lists the seven contact actions in order, the two enrich depths after the colour", () => {
+  it("lists the eight contact actions in order, the two enrich depths after the colour", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     const menu = screen.getByRole("menu", { name: "Contact actions" });
@@ -335,6 +335,7 @@ describe("the contact header", () => {
       `Enrich deeply, ${depthTime("deep")}`,
       "Copy basic details",
       "Copy full details",
+      "Share contact",
       "Archive",
       "Delete",
     ];

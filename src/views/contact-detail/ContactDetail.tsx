@@ -1,5 +1,8 @@
+import { useLayoutEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
+import { cn } from "../../lib/utils";
+import { settleSlide, useSlideNavigate } from "../settings/slide";
 import { ContactProfile } from "./components/ContactProfile";
 import { backTarget } from "./backTarget";
 
@@ -14,10 +17,28 @@ export const ContactDetail = () => {
 
   const back = backTarget(location.pathname, location.state, location.search);
 
-  const handleClose = () => navigate(back.to);
+  /**
+   * On the network's own route, below `lg`, the contact and the list take
+   * turns on the screen. A row slides the contact in, and Back slides it
+   * out (`views/settings/slide`). The root is the moving picture
+   * (`settings-stage`), and the slide waits until the contact has drawn.
+   * Over the map and in Settings the contact is a panel, and nothing
+   * slides.
+   */
+  const slide = useSlideNavigate();
+  const handleClose = () =>
+    isOverlayActive ? navigate(back.to) : slide(back.to, "back");
+  useLayoutEffect(() => {
+    if (!isOverlayActive) settleSlide(location.pathname);
+  }, [isOverlayActive, location.pathname]);
 
   return (
-    <div className="h-full w-full relative bg-surface md:bg-transparent">
+    <div
+      className={cn(
+        "h-full w-full relative bg-surface md:bg-transparent",
+        !isOverlayActive && "settings-stage",
+      )}
+    >
       {/* In the Back bar's height below `lg`. From `lg`, 2 px from the top:
           inside the 44 px follow-up banner when there is one, where 16 px
           left it half on the banner and half off. No fill of its own: it
