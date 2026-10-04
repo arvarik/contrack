@@ -4,6 +4,10 @@
  * Renders directly in the command palette (not a separate modal).
  * Cmd+Enter saves. Escape returns to the action sub-menu.
  *
+ * The text is a draft on disk from the first keystroke, so Escape, a click
+ * on the backdrop or ⌘K does not lose it. It is read back the next time the
+ * composer opens for the same contact, and cleared once the note is saved.
+ *
  * @module components/command-palette/InlineNoteComposer
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -15,6 +19,13 @@ import { BTN_QUIET, ICON_BTN, KBD_SM } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { chordLabel, MOD_KEY } from "../../lib/platform";
+import {
+  clearDraft,
+  draftKey,
+  readDraft,
+  writeDraft,
+} from "../../lib/composerDrafts";
+import { useAuth } from "../auth/AuthGate";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +46,12 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
   onBack,
   onComplete,
 }) => {
-  const [content, setContent] = useState("");
+  const { user } = useAuth();
+  // Apart from the contact page's draft, which holds the editor's HTML.
+  const storageKey = draftKey(user?.id, `quick:${contactId}`);
+  const [content, setContent] = useState(
+    () => readDraft(storageKey)?.html ?? "",
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const addInteraction = useAddInteraction();
 
@@ -65,6 +81,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         },
       });
 
+      clearDraft(storageKey);
       toast.success(
         `${type === "note" ? "Note" : "Call"} logged for ${contactName}`,
       );
@@ -74,7 +91,15 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         `Failed to log ${type}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-  }, [content, contactId, contactName, type, addInteraction, onComplete]);
+  }, [
+    content,
+    contactId,
+    contactName,
+    type,
+    addInteraction,
+    onComplete,
+    storageKey,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -126,7 +151,14 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
           aria-label="Note"
           ref={textareaRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => {
+            setContent(e.target.value);
+            writeDraft(storageKey, {
+              html: e.target.value,
+              followUpText: "",
+              type,
+            });
+          }}
           onKeyDown={handleKeyDown}
           placeholder={isNote ? "Type your note..." : "Call summary..."}
           className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px]"

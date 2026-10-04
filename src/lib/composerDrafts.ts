@@ -152,7 +152,7 @@ export function writeDraft(
 }
 
 /** Remove the draft under `key`. Never throws. */
-function clearDraft(key: string): void {
+export function clearDraft(key: string): void {
   try {
     localStorage.removeItem(key);
   } catch {
