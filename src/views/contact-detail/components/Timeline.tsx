@@ -68,27 +68,30 @@ import { InteractionDetailModal } from "./InteractionDetailModal";
 // Props
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface DeleteInteractionMutation {
-  /**
-   * The promise form of the delete, and not `mutate`, on purpose. The undo
-   * window can end after the contact page has closed, or while a second
-   * delete is out. React Query drops the callbacks of a `mutate` call in both
-   * cases. The promise settles in both.
-   */
-  mutateAsync: (args: { id: string; contactId: string }) => Promise<unknown>;
-}
+// The parent's mutations, as their `mutate` or `mutateAsync`: those keep one
+// identity, so the memoized tab and entries skip the parent's renders.
 
-export interface UpdateInteractionMutation {
-  mutate: (args: {
-    id: string;
-    contactId: string;
-    data: { title?: string; content?: string | null };
-  }) => void;
-}
+/**
+ * The delete's `mutateAsync`, and not `mutate`, on purpose. The undo window
+ * can end after the contact page has closed, or while a second delete is
+ * out. React Query drops the callbacks of a `mutate` call in both cases. The
+ * promise settles in both.
+ */
+export type DeleteInteraction = (args: {
+  id: string;
+  contactId: string;
+}) => Promise<unknown>;
 
-export interface PromoteGhostMutation {
-  mutate: (id: string, opts?: { onSuccess?: () => void }) => void;
-}
+export type UpdateInteraction = (args: {
+  id: string;
+  contactId: string;
+  data: { title?: string; content?: string | null };
+}) => void;
+
+export type PromoteGhost = (
+  id: string,
+  opts?: { onSuccess?: () => void },
+) => void;
 
 /** The interaction in the detail modal, and the mode the modal opens in. */
 export interface OpenedInteraction {
@@ -103,9 +106,9 @@ interface TimelineProps {
   /** The interaction in the detail modal. The tab owns it for `?interaction=`. */
   opened: OpenedInteraction | null;
   onOpenedChange: (next: OpenedInteraction | null) => void;
-  deleteInteraction: DeleteInteractionMutation;
-  updateInteraction: UpdateInteractionMutation;
-  promoteGhost: PromoteGhostMutation;
+  deleteInteraction: DeleteInteraction;
+  updateInteraction: UpdateInteraction;
+  promoteGhost: PromoteGhost;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -298,7 +301,7 @@ interface TimelineEntryProps {
   arrived: boolean;
   onOpen: (item: Interaction, editing: boolean) => void;
   onAskDelete: (item: Interaction) => void;
-  promoteGhost: PromoteGhostMutation;
+  promoteGhost: PromoteGhost;
 }
 
 const TimelineEntry = React.memo(
@@ -316,7 +319,10 @@ const TimelineEntry = React.memo(
     const [menuOpen, setMenuOpen] = useState(false);
     const { item, date } = entry;
     const { Icon, tone } = getInteractionStyle(item.type);
-    const mentions = parseMentions(item.mentions);
+    const mentions = useMemo(
+      () => parseMentions(item.mentions),
+      [item.mentions],
+    );
 
     return (
       <li
@@ -441,7 +447,7 @@ const TimelineEntry = React.memo(
                       type="button"
                       key={idx}
                       onClick={() =>
-                        promoteGhost.mutate(mention.contactId, {
+                        promoteGhost(mention.contactId, {
                           onSuccess: () =>
                             navigate(`/contact/${mention.contactId}`),
                         })
@@ -617,7 +623,7 @@ export const Timeline = ({
     setConfirming(null);
     startPendingDelete({
       id: item.id,
-      send: () => deleteInteraction.mutateAsync({ id: item.id, contactId }),
+      send: () => deleteInteraction({ id: item.id, contactId }),
     });
   };
 
@@ -663,7 +669,7 @@ export const Timeline = ({
         initialEditing={opened?.editing}
         onCompleteActionItem={(id) => completeActionItem.mutate(id)}
         onUpdateInteraction={(id, data) =>
-          updateInteraction.mutate({ id, contactId, data })
+          updateInteraction({ id, contactId, data })
         }
         onDelete={() => {
           if (!opened) return;

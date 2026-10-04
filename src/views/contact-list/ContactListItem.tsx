@@ -4,8 +4,8 @@
  * Performance:
  * - Wrapped in React.memo with a structural comparator to prevent cascade
  *   rerenders when unrelated ContactList state (flashId, contextMenu, etc.) changes.
- * - Prefetches the contact detail query on pointer enter (100ms debounce) so
- *   by the time the user clicks, the detail pane loads instantly from cache.
+ * - Prefetches what the contact page reads on pointer enter (100ms debounce)
+ *   and at once on a press, so the page draws from the cache when it opens.
  */
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -58,7 +58,9 @@ function shortRecency(iso: string | null | undefined): string {
   return `${value}${abbrev[unit] ?? ""}`;
 }
 
-import { apiFetch } from "../../api/client";
+import { contactQuery } from "../../api/contactCache";
+import { timelineQuery } from "../../api/interactions";
+import { suggestionQuery } from "../../api/suggestions";
 import { keepLoadedImage } from "../../lib/keptImages";
 
 // ---------------------------------------------------------------------------
@@ -123,25 +125,23 @@ const ContactListItemInner = ({
     [contact.id],
   );
 
-  // ── Hover prefetch ─────────────────────────────────────────────────────────
-  // Prefetch the full contact detail after 100ms hover so clicking is instant.
+  // ── Prefetch ───────────────────────────────────────────────────────────────
+  // The contact, its timeline and its duplicate banner, so the page draws
+  // whole when it opens. A pointer that rests on the row for 100ms starts it.
+  // A tap ends before that timer, so a press starts it at once. Each query
+  // keeps its own stale time, so a second press asks nothing again.
+
+  const prefetch = useCallback(() => {
+    if (isSelectMode || active) return; // already loaded or irrelevant in select mode
+    void queryClient.prefetchQuery(contactQuery(contact.id));
+    void queryClient.prefetchQuery(timelineQuery(contact.id));
+    void queryClient.prefetchQuery(suggestionQuery(contact.id));
+  }, [contact.id, isSelectMode, active, queryClient]);
 
   const handlePointerEnter = useCallback(() => {
-    if (isSelectMode || active) return; // already loaded or irrelevant in select mode
     if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
-    prefetchTimer.current = setTimeout(() => {
-      queryClient.prefetchQuery({
-        queryKey: ["contacts", contact.id],
-        queryFn: ({ signal }) =>
-          apiFetch(`/contacts/${contact.id}`, { signal }).then((r) => {
-            if (!r.ok) throw new Error("Failed to prefetch contact");
-            return r.json();
-          }),
-        // Re-use the global staleTime so we don't over-fetch
-        staleTime: 30_000,
-      });
-    }, 100);
-  }, [contact.id, isSelectMode, active, queryClient]);
+    prefetchTimer.current = setTimeout(prefetch, 100);
+  }, [prefetch]);
 
   const handlePointerLeave = useCallback(() => {
     if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
@@ -205,6 +205,7 @@ const ContactListItemInner = ({
       onFocus={onRowFocus}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
+      onPointerDown={prefetch}
       className={cn(
         listRow(selected),
         // The row rises toward the pointer (`useProximityLift` on the

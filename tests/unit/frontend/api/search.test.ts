@@ -72,29 +72,6 @@ describe("search streaming", () => {
     expect(hook.current.isSuccess).toBe(false);
   });
 
-  it("discards a partial session answer when navigation cancels the search", async () => {
-    const pending = stream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pending.response));
-    const setData = vi.fn();
-    const setPhase = vi.fn();
-    const { result: hook, unmount } = renderHook(() =>
-      useSemanticSearch({ data: null, setData, phase: "idle", setPhase }),
-    );
-    let work!: Promise<void>;
-    act(() => {
-      work = hook.current.mutate("Alice");
-    });
-    await act(async () => {
-      pending.push(result("Alice", "instant") + "\n");
-    });
-    expect(setData).toHaveBeenLastCalledWith(
-      expect.objectContaining({ matches: [{ id: "Alice", name: "Alice" }] }),
-    );
-    unmount();
-    await work;
-    expect(setData).toHaveBeenLastCalledWith(null);
-    expect(setPhase).toHaveBeenLastCalledWith("idle");
-  });
   it("ignores late responses from a replaced search", async () => {
     let answerOld!: (response: Response) => void;
     const second = stream();
@@ -134,7 +111,7 @@ describe("search streaming", () => {
     expect(hook.current.isSuccess).toBe(true);
     expect(hook.current.isError).toBe(false);
   });
-  it("cancels the reader when the component unmounts", async () => {
+  it("leaves the request running when reset is told not to cancel it", async () => {
     const pending = stream();
     let signal!: AbortSignal;
     vi.stubGlobal(
@@ -144,15 +121,22 @@ describe("search streaming", () => {
         return Promise.resolve(pending.response);
       }),
     );
-    const { result: hook, unmount } = renderHook(() => useSemanticSearch());
+    const { result: hook } = renderHook(() => useSemanticSearch());
     let work!: Promise<void>;
     act(() => {
       work = hook.current.mutate("Pending");
     });
     await waitFor(() => expect(signal).toBeTruthy());
-    unmount();
-    await work;
-    expect(signal.aborted).toBe(true);
+    act(() => hook.current.reset(false));
+    expect(signal.aborted).toBe(false);
+    expect(hook.current.submittedQuery).toBe("");
+    // Its answer still arrives, and is dropped.
+    await act(async () => {
+      pending.push(result("Pending"));
+      pending.end();
+      await work;
+    });
+    expect(hook.current.data).toBeNull();
   });
 });
 describe("the submitted question", () => {
@@ -189,17 +173,6 @@ describe("the submitted question", () => {
     act(() => hook.current.reset());
     expect(hook.current.submittedQuery).toBe("");
     expect(hook.current.data).toBeNull();
-  });
-  it("is read back from results the session kept when the hook remounts", () => {
-    const { result: hook } = renderHook(() =>
-      useSemanticSearch({
-        data: { query: "Kept", matches: [], fallback: false },
-        setData: () => {},
-        phase: "done",
-        setPhase: () => {},
-      }),
-    );
-    expect(hook.current.submittedQuery).toBe("Kept");
   });
 });
 describe("the facets a question carries", () => {

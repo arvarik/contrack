@@ -32,7 +32,9 @@ import React, {
   useRef,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
+import { AlertCircle, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../../../lib/undoToast";
 import { cn } from "../../../lib/utils";
@@ -55,25 +57,32 @@ import {
   useArchiveContact,
   useUnarchiveContact,
 } from "../../../api";
+import { ApiError } from "../../../api/client";
+import type { Contact } from "../../../types";
 
 import { AvatarPickerModal } from "../../../components/AvatarPickerModal";
 import {
   Segmented,
   type SegmentedOption,
 } from "../../../components/ui/Segmented";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { useElementWidthAtLeast } from "../../../hooks/useElementWidth";
 import { useFitsHeight } from "../../../hooks/useFitsHeight";
-import { ContactIntro, ProfileHeader } from "./ProfileHeader";
+import {
+  BackBar,
+  ContactIntro,
+  ProfileHeader,
+  ProfileHeaderSkeleton,
+} from "./ProfileHeader";
 import { useTrackShortcut } from "./useTrackShortcut";
 import { ContactTags } from "./ContactTags";
 import { DetailsCard, type DetailRequest } from "./DetailsCard";
 import type { ResearchAnchor } from "../../../lib/research";
 /**
- * Behind a tab the user has to click, so it has no business in the chunk that
- * blocks the first render of a contact.
+ * Card-shaped stand-in so switching tabs does not flash an empty pane, and
+ * the page's body while the contact loads.
  */
-/** Card-shaped stand-in so switching tabs does not flash an empty pane. */
-const DossierFallback = () => (
+const CardsFallback = () => (
   <div className="space-y-6" aria-busy="true">
     {[0, 1].map((i) => (
       <div key={i} className={cn(CARD, "space-y-3")}>
@@ -85,6 +94,10 @@ const DossierFallback = () => (
   </div>
 );
 
+/**
+ * Behind a tab the user has to click, so it has no business in the chunk that
+ * blocks the first render of a contact.
+ */
 const DossierTab = React.lazy(() =>
   import("./DossierTab").then((m) => ({ default: m.DossierTab })),
 );
@@ -104,6 +117,21 @@ interface ContactProfileProps {
   backLabel?: string;
   showNetworkButton?: boolean;
 }
+
+/** The page's outer box, the same while it loads and once it has. */
+const ROOT =
+  "h-full flex flex-col overflow-hidden w-full relative bg-surface md:bg-transparent";
+
+/**
+ * The files the timeline takes. One object, not a literal per render: the
+ * dropzone's props are memoized on it, and new ones draw the timeline again.
+ */
+const DROP_ACCEPT = {
+  "message/rfc822": [".eml"],
+  "image/*": [".png", ".jpg", ".jpeg", ".gif"],
+  "application/pdf": [".pdf"],
+  "text/*": [".txt", ".csv", ".md"],
+};
 
 /** The pane width, in px, from which Details is a column and not a tab. */
 const WIDE_CONTACT_MIN_PX = 768;
@@ -138,26 +166,43 @@ export const ContactProfile = ({
   const { mode } = usePreferences();
 
   // ── Data queries ──────────────────────────────────────────────────────
-  const { data: contact, isLoading: contactLoading } = useContact(id);
+  const { data: contact, error, isFetching, refetch } = useContact(id);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
+  /**
+   * The contact as far as it is known: the full one, or else its row in the
+   * list, which has the name, the picture, the role and the company. The row
+   * is only read, for the header while the full contact loads, and never
+   * stored as the contact.
+   */
+  const queryClient = useQueryClient();
+  const known =
+    contact ??
+    queryClient
+      .getQueryData<Contact[]>(["contacts"])
+      ?.find((row) => row.id === id);
 
   // Dynamic page title — updates as contact data loads
-  usePageTitle(contact?.name ?? null);
+  usePageTitle(known?.name ?? null);
 
   // `t` tracks or untracks this contact, as the header button does.
   useTrackShortcut(contact);
 
   // ── Mutations ─────────────────────────────────────────────────────────
-  const updateContact = useUpdateContact();
-  const addAttachment = useAddAttachment();
-  const deleteContact = useDeleteContact();
-  const restoreContact = useRestoreContact();
-  const deleteInteraction = useDeleteInteraction();
-  const updateInteraction = useUpdateInteraction();
+  // Their `mutate` and `mutateAsync` keep one identity. The result objects
+  // are new on each render, and one in a memoized child's props would draw
+  // that child again on every render of this page.
+  const { mutate: updateContact, mutateAsync: saveContact } =
+    useUpdateContact();
+  const { mutate: addAttachment } = useAddAttachment();
+  const { mutate: deleteContact } = useDeleteContact();
+  const { mutate: restoreContact } = useRestoreContact();
+  const { mutateAsync: deleteInteraction } = useDeleteInteraction();
+  const { mutate: updateInteraction } = useUpdateInteraction();
   const generateBriefing = useGenerateBriefing();
-  const promoteGhost = usePromoteGhost();
-  const archiveContact = useArchiveContact();
-  const unarchiveContact = useUnarchiveContact();
+  const { mutate: promoteGhost, isPending: promoting } = usePromoteGhost();
+  const { mutate: archiveContact, isPending: archiving } = useArchiveContact();
+  const { mutate: unarchiveContact, isPending: unarchiving } =
+    useUnarchiveContact();
 
   // ── Local state ───────────────────────────────────────────────────────
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
@@ -239,7 +284,7 @@ export const ContactProfile = ({
               : `Uploading "${file.name}"...`,
           );
 
-          addAttachment.mutate(
+          addAttachment(
             { contactId: id, file },
             {
               onSuccess: (interaction) => {
@@ -272,23 +317,22 @@ export const ContactProfile = ({
     // wraps the note composer, so a screenshot pasted into a note would
     // become an attachment.
     noPaste: true,
-    accept: {
-      "message/rfc822": [".eml"],
-      "image/*": [".png", ".jpg", ".jpeg", ".gif"],
-      "application/pdf": [".pdf"],
-      "text/*": [".txt", ".csv", ".md"],
-    },
+    accept: DROP_ACCEPT,
   });
 
   // ── Event handlers ────────────────────────────────────────────────────
-  const handleUpdate = async (field: string, val: string) => {
-    try {
-      await updateContact.mutateAsync({ id, data: { [field]: val } });
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const handleUpdate = useCallback(
+    async (field: string, val: string) => {
+      try {
+        await saveContact({ id, data: { [field]: val } });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [id, saveContact],
+  );
+  const openAvatarPicker = useCallback(() => setIsAvatarPickerOpen(true), []);
 
   // Delete confirmation — uses <Modal> instead of native confirm()
 
@@ -299,17 +343,17 @@ export const ContactProfile = ({
    * already offered an Undo toast underneath the dialog that denied one
    * existed. Same trade as the bulk path; see lib/undoToast.
    */
-  const handleDeleteContact = () => {
-    if (!id || !contact) return;
-    const name = contact.name;
-    deleteContact.mutate(id, {
+  const name = contact?.name;
+  const handleDeleteContact = useCallback(() => {
+    if (!id || name === undefined) return;
+    deleteContact(id, {
       onSuccess: ({ retentionDays }) => {
         toastUndoableDelete({
           count: 1,
           name,
           retentionDays,
           onUndo: () => {
-            restoreContact.mutate(id, {
+            restoreContact(id, {
               onSuccess: () => navigate(`/contact/${id}`),
               onError: (err) =>
                 toast.error(
@@ -326,17 +370,7 @@ export const ContactProfile = ({
           `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
         ),
     });
-  };
-
-  // ── Loading / empty states ────────────────────────────────────────────
-  if (contactLoading)
-    return (
-      <div className="p-12 text-center text-on-surface-variant animate-pulse font-headline">
-        Loading contact...
-      </div>
-    );
-  if (!contact)
-    return <div className="p-12 text-center">Contact not found</div>;
+  }, [id, name, deleteContact, restoreContact, navigate, onClose]);
 
   // ── Theme ─────────────────────────────────────────────────────────────
   // The vibe replaces the primary palette for this page only, so it has to be
@@ -346,17 +380,60 @@ export const ContactProfile = ({
   // `text-on-primary-wash`, and the app accent's ink on a vibe's wash was the
   // wrong colour.
   const themeStyles = Object.fromEntries(
-    Object.entries(vibeTokens(contact.themeColor, mode)).map(
+    Object.entries(vibeTokens(known?.themeColor, mode)).map(
       ([token, value]) => [`--color-${token}`, value],
     ),
   ) as React.CSSProperties;
+
+  // ── Error, and loading ────────────────────────────────────────────────
+  // A retry that is out shows the loading page, not the error it may clear.
+  if (!contact && error && !isFetching)
+    return (
+      <div className={ROOT}>
+        {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
+        {error instanceof ApiError && error.status === 404 ? (
+          <EmptyState icon={UserX} title="Contact not found" />
+        ) : (
+          <EmptyState
+            icon={AlertCircle}
+            tone="error"
+            title="The contact did not load"
+            body="Nothing has changed. Try again in a moment"
+            action={{ label: "Retry", onClick: () => void refetch() }}
+          />
+        )}
+      </div>
+    );
+  // The header from the list's row, and cards for the rest. The duplicate
+  // banner mounts here, so its request goes out beside the contact's, and
+  // it is in place when the page draws.
+  if (!contact)
+    return (
+      <div ref={setRoot} className={ROOT} style={themeStyles}>
+        <ProfileHeaderSkeleton
+          contact={known}
+          layout={wide ? "wide" : "narrow"}
+          onClose={onClose}
+          backLabel={backLabel}
+        />
+        <DupeBanner contactId={id} />
+        <div
+          className={cn(
+            "max-w-6xl mx-auto w-full",
+            wide ? "px-8 lg:px-10" : "px-4 pt-4",
+          )}
+        >
+          <CardsFallback />
+        </div>
+      </div>
+    );
 
   // ═══════════════════════════════════════════════════════════════════════
   // Render
   // ═══════════════════════════════════════════════════════════════════════
 
   const dossier = (
-    <Suspense fallback={<DossierFallback />}>
+    <Suspense fallback={<CardsFallback />}>
       <DossierTab
         contact={contact}
         generateBriefing={generateBriefing}
@@ -369,11 +446,7 @@ export const ContactProfile = ({
 
   return (
     <>
-      <div
-        ref={setRoot}
-        className="h-full flex flex-col overflow-hidden w-full relative bg-surface md:bg-transparent"
-        style={themeStyles}
-      >
+      <div ref={setRoot} className={ROOT} style={themeStyles}>
         <div ref={setScroller} className="flex-1 min-h-0 overflow-y-auto">
           {/* ── Profile Header ──────────────────────────────────────────── */}
           <ProfileHeader
@@ -381,15 +454,17 @@ export const ContactProfile = ({
             onUpdate={handleUpdate}
             onDelete={handleDeleteContact}
             onClose={onClose}
-            onOpenAvatarPicker={() => setIsAvatarPickerOpen(true)}
+            onOpenAvatarPicker={openAvatarPicker}
             avatarEditRef={avatarEdit}
             showNetworkButton={showNetworkButton}
             layout={wide ? "wide" : "narrow"}
             backLabel={backLabel}
             archiveContact={archiveContact}
             unarchiveContact={unarchiveContact}
+            archivePending={archiving || unarchiving}
             updateContact={updateContact}
             promoteGhost={promoteGhost}
+            promotePending={promoting}
             linkRequest={
               detailRequest?.anchor === "link" ? detailRequest.key : undefined
             }

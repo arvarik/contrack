@@ -13,6 +13,7 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 const mockBulkDeleteMutate = vi.fn();
 const mockBulkUpdateMutate = vi.fn();
+const mockBulkUpdateMutateAsync = vi.fn();
 const mockBulkAddToListMutate = vi.fn();
 
 vi.mock("../../../../src/api", () => ({
@@ -26,6 +27,7 @@ vi.mock("../../../../src/api", () => ({
   }),
   useBulkUpdateContacts: () => ({
     mutate: mockBulkUpdateMutate,
+    mutateAsync: mockBulkUpdateMutateAsync,
     isPending: false,
   }),
   useBulkAddToList: () => ({
@@ -332,6 +334,64 @@ describe("useBulkActions", () => {
       });
       expect(toastMock.success).toHaveBeenCalledWith("3 contacts, monthly");
       expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Undo", () => {
+    /** The Undo action of the last success toast. */
+    const pressUndo = () =>
+      act(() => {
+        (
+          toastMock.success.mock.calls.at(-1)![1] as {
+            action: { onClick: () => void };
+          }
+        ).action.onClick();
+      });
+
+    it("archives only the active contacts, and Undo brings back the same ones", () => {
+      queryClient.setQueryData(
+        ["contacts"],
+        [
+          { id: "c1", isArchived: false },
+          { id: "c2", isArchived: true },
+        ],
+      );
+      const { result } = renderHook(
+        () => useBulkActions({ selectedIds: new Set(["c1", "c2"]) }),
+        { wrapper },
+      );
+      act(() => result.current.handleBulkArchive());
+      act(() => mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 1 }));
+      pressUndo();
+      expect(mockBulkUpdateMutate).toHaveBeenLastCalledWith(
+        { ids: ["c1"], data: { isArchived: false } },
+        expect.anything(),
+      );
+    });
+
+    it("puts back each contact's own value after a field edit, one request a value", () => {
+      queryClient.setQueryData(
+        ["contacts"],
+        [
+          { id: "c1", company: "Acme" },
+          { id: "c2", company: null },
+          { id: "c3", company: "Acme" },
+        ],
+      );
+      mockBulkUpdateMutateAsync.mockResolvedValue({ count: 1 });
+      const { result } = renderHook(
+        () =>
+          useBulkActions({ selectedIds: new Set(["c1", "c2", "c3", "c4"]) }),
+        { wrapper },
+      );
+      act(() => result.current.handleBulkEditApply("company", "Initech"));
+      act(() => mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 4 }));
+      pressUndo();
+      // c4 is not in the cache: it keeps the new value, not a guessed one.
+      expect(mockBulkUpdateMutateAsync.mock.calls).toEqual([
+        [{ ids: ["c1", "c3"], data: { company: "Acme" } }],
+        [{ ids: ["c2"], data: { company: null } }],
+      ]);
     });
   });
 

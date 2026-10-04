@@ -71,6 +71,7 @@ import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { MetaDot } from "../../../components/ui/MetaDot";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
+import { AnimatedSkeleton } from "../../../components/ui/AnimatedSkeleton";
 import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
 import { scoreView } from "../../../../shared/scoreBand";
 
@@ -86,6 +87,12 @@ import { hasUserInteracted } from "../../../lib/userInteraction";
 
 /** The two forms of the contact page. See ContactProfile. */
 type ContactLayout = "wide" | "narrow";
+
+/** A mutation's `mutate` that takes the contact's id. */
+type ContactMutate = (
+  id: string,
+  opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+) => void;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -113,31 +120,16 @@ export interface ProfileHeaderProps {
    */
   backLabel?: string;
 
-  // Mutations passed from parent
-  archiveContact: {
-    mutate: (
-      id: string,
-      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
-    ) => void;
-    isPending: boolean;
-  };
-  unarchiveContact: {
-    mutate: (
-      id: string,
-      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
-    ) => void;
-    isPending: boolean;
-  };
-  updateContact: {
-    mutate: (args: { id: string; data: ContactUpdateData }) => void;
-  };
-  promoteGhost: {
-    mutate: (
-      id: string,
-      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
-    ) => void;
-    isPending: boolean;
-  };
+  // The parent's mutations: their `mutate`, which keeps one identity, and
+  // not the result object, which is new on each render and would draw this
+  // memoized header again each time.
+  archiveContact: ContactMutate;
+  unarchiveContact: ContactMutate;
+  /** True while an archive or a restore is out. */
+  archivePending: boolean;
+  updateContact: (args: { id: string; data: ContactUpdateData }) => void;
+  promoteGhost: ContactMutate;
+  promotePending: boolean;
   /**
    * The Research card asked for a link: a new number opens "+ link", and
    * `onLinkRequestDone` spends the request.
@@ -425,6 +417,105 @@ export const ContactIntro = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// BackBar, and the header while the contact loads
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Back, below `lg`, where the contact has the screen and the list does not
+ * show. It names the page it goes to. The bar is 56 px tall, and the narrow
+ * layout's tabs stick right under it (ContactProfile).
+ */
+export const BackBar = ({
+  onClose,
+  backLabel,
+}: Pick<ProfileHeaderProps, "backLabel"> & { onClose: () => void }) => (
+  <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center shrink-0">
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label={backLabel ? `Back to ${backLabel}` : undefined}
+      className="hit-area state-layer flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl transition-colors"
+    >
+      <ArrowLeft aria-hidden="true" className="w-5 h-5" />
+      {backLabel ?? "Back"}
+    </button>
+  </div>
+);
+
+/** The box around the avatar and the name, in both forms. */
+const headerBox = (narrow: boolean) =>
+  cn(
+    "max-w-6xl mx-auto w-full relative shrink-0",
+    narrow ? "px-4 pt-4 pb-3" : "p-8 lg:px-10 lg:pt-8 lg:pb-6",
+  );
+
+/**
+ * The header while the full contact loads. The avatar, the name, the role
+ * and the company come from the contact's row in the list, when the list
+ * has it, and a bar holds the place of the meta line. Nothing here edits:
+ * the row has empty links and addresses, and an edit writes a list back
+ * whole, so an edit from the row would wipe the contact's own.
+ */
+export const ProfileHeaderSkeleton = ({
+  contact,
+  layout = "wide",
+  onClose,
+  backLabel,
+}: Pick<ProfileHeaderProps, "layout" | "onClose" | "backLabel"> & {
+  contact?: Contact;
+}) => {
+  const narrow = layout === "narrow";
+  return (
+    <>
+      {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
+      <div className={headerBox(narrow)} aria-busy="true">
+        <div className={cn("flex items-start", narrow ? "gap-4" : "gap-6")}>
+          {contact ? (
+            <ScoreRingAvatar
+              contact={contact}
+              size={narrow ? 56 : 96}
+              ring="header"
+            />
+          ) : (
+            <AnimatedSkeleton
+              className={cn("rounded-full", narrow ? "size-14" : "size-24")}
+            />
+          )}
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            {contact ? (
+              <h1
+                className={cn(
+                  "font-extrabold font-headline tracking-tight text-on-surface py-0.5",
+                  narrow ? "text-2xl" : "text-4xl",
+                )}
+              >
+                {contact.name}
+              </h1>
+            ) : (
+              <>
+                <span className="sr-only">Loading contact</span>
+                <AnimatedSkeleton className="h-9 w-48 rounded-full" />
+              </>
+            )}
+            <p
+              className={cn(
+                "font-medium text-on-surface-variant",
+                narrow ? "text-sm" : "text-lg",
+              )}
+            >
+              {[contact?.role, contact?.company]
+                .filter(Boolean)
+                .join(narrow ? " · " : " at ")}
+            </p>
+            <AnimatedSkeleton className="h-4 w-2/3 max-w-sm rounded-full" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -440,8 +531,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   backLabel,
   archiveContact,
   unarchiveContact,
+  archivePending,
   updateContact,
   promoteGhost,
+  promotePending,
   linkRequest,
   onLinkRequestDone,
 }) => {
@@ -499,7 +592,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
    * The server works out its platform and handle from the host.
    */
   const addSocialLink = (url: string) => {
-    updateContact.mutate({
+    updateContact({
       id: contact.id,
       data: {
         socialLinks: [...linkPayload(contact.socialLinks || []), { url }],
@@ -510,7 +603,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const removeSocialLink = (id: string) => {
     const before = contact.socialLinks || [];
     const after = before.filter((s) => s.id !== id);
-    updateContact.mutate({
+    updateContact({
       id: contact.id,
       data: { socialLinks: linkPayload(after) },
     });
@@ -519,7 +612,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       action: {
         label: "Undo",
         onClick: () =>
-          updateContact.mutate({
+          updateContact({
             id: contact.id,
             data: { socialLinks: linkPayload(before) },
           }),
@@ -613,24 +706,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
   return (
     <>
-      {/*
-        Back, below `lg`, where the contact has the screen and the list does
-        not show. It names the page it goes to. The bar is 56 px tall, and the
-        narrow layout's tabs stick right under it (ContactProfile).
-      */}
-      {onClose && (
-        <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={backLabel ? `Back to ${backLabel}` : undefined}
-            className="hit-area state-layer flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl transition-colors"
-          >
-            <ArrowLeft aria-hidden="true" className="w-5 h-5" />
-            {backLabel ?? "Back"}
-          </button>
-        </div>
-      )}
+      {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
 
       {/*
         The next follow-up, when it is late, today or within the week, in
@@ -654,12 +730,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         </motion.div>
       )}
 
-      <div
-        className={cn(
-          "max-w-6xl mx-auto w-full relative shrink-0",
-          narrow ? "px-4 pt-4 pb-3" : "p-8 lg:px-10 lg:pt-8 lg:pb-6",
-        )}
-      >
+      <div className={headerBox(narrow)}>
         <section
           className={cn(
             "flex flex-row items-start",
@@ -799,18 +870,16 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      promoteGhost.mutate(contact.id, {
+                      promoteGhost(contact.id, {
                         onSuccess: () =>
                           toast.success(`${contact.name} promoted to network!`),
                       });
                     }}
-                    disabled={promoteGhost.isPending}
+                    disabled={promotePending}
                     className="btn-secondary"
                   >
                     <Sparkles aria-hidden="true" className="w-4 h-4" />
-                    {promoteGhost.isPending
-                      ? "Promoting…"
-                      : "Promote to contact"}
+                    {promotePending ? "Promoting…" : "Promote to contact"}
                   </button>
                 )}
 
@@ -825,6 +894,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   onDelete={onDelete}
                   archiveContact={archiveContact}
                   unarchiveContact={unarchiveContact}
+                  archivePending={archivePending}
                   updateContact={updateContact}
                 />
               </div>
@@ -905,16 +975,16 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  promoteGhost.mutate(contact.id, {
+                  promoteGhost(contact.id, {
                     onSuccess: () =>
                       toast.success(`${contact.name} promoted to network!`),
                   });
                 }}
-                disabled={promoteGhost.isPending}
+                disabled={promotePending}
                 className="btn-secondary mt-3"
               >
                 <Sparkles aria-hidden="true" className="w-4 h-4" />
-                {promoteGhost.isPending ? "Promoting…" : "Promote to contact"}
+                {promotePending ? "Promoting…" : "Promote to contact"}
               </button>
             )}
 

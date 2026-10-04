@@ -39,9 +39,7 @@ interface DetailsCardProps {
   contact: Contact;
   contactId: string;
   onUpdate: (field: string, val: string) => void;
-  updateContact: {
-    mutate: (args: { id: string; data: ContactUpdateData }) => void;
-  };
+  updateContact: (args: { id: string; data: ContactUpdateData }) => void;
   /**
    * The Research card asked for a detail: "city" opens Location's add form
    * and "workEmail" opens Email's, labelled work. `onDetailRequestDone`
@@ -143,7 +141,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   }));
 
   const saveInterests = (next: ContactUpdateData["interests"]) =>
-    updateContact.mutate({ id: contactId, data: { interests: next } });
+    updateContact({ id: contactId, data: { interests: next } });
 
   const addInterest = (text: string) =>
     saveInterests([
@@ -170,7 +168,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
         <MultiValueField
           items={addressItems}
           onSave={(updated) =>
-            updateContact.mutate({
+            updateContact({
               id: contactId,
               data: {
                 addresses: updated.map((a, i) => ({
@@ -207,7 +205,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             label: e.label || "personal",
           }))}
           onSave={(updated) =>
-            updateContact.mutate({
+            updateContact({
               id: contactId,
               data: {
                 emails: updated.map((e, i) => ({
@@ -236,7 +234,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             label: p.label || "mobile",
           }))}
           onSave={(updated) =>
-            updateContact.mutate({
+            updateContact({
               id: contactId,
               data: {
                 phones: updated.map((p, i) => ({

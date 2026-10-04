@@ -139,18 +139,24 @@ test.describe("Pulse Office", () => {
     await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
     await expect(items.nth(1)).toContainText("Task Two Today");
 
-    // Press D to mark item 2 done
+    // Press D to mark item 2 done. The row leaves at once, and the write
+    // goes when the toast's Undo window ends.
     await page.keyboard.press("d");
+    await expect(page.getByText("Follow-up done")).toBeVisible();
+    await expect(page.getByText("Task Two Today")).toBeHidden();
 
     // Confirm through API that item2 is completed
     await expect
-      .poll(async () => {
-        const completed = await instance.api<Array<{ id: string }>>(
-          "GET",
-          "/action-items/completed",
-        );
-        return completed.some((i) => i.id === item2.id);
-      })
+      .poll(
+        async () => {
+          const completed = await instance.api<Array<{ id: string }>>(
+            "GET",
+            "/action-items/completed",
+          );
+          return completed.some((i) => i.id === item2.id);
+        },
+        { timeout: 20_000 },
+      )
       .toBe(true);
   });
 

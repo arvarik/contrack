@@ -18,7 +18,13 @@ import {
   it,
   vi,
 } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -194,6 +200,21 @@ describe("the ring in the row", () => {
     expect(ring.getAttribute("data-score-band")).toBe("untracked");
     expect(ring.querySelector("svg")).toBeNull();
     expect(ring.closest("[title]")).toBeNull();
+  });
+});
+
+describe("the prefetch", () => {
+  // A tap ends before the 100 ms hover timer, so a phone never prefetched,
+  // and the timeline was never prefetched at all.
+  it("starts loading the contact and its timeline on a press", () => {
+    const prefetch = vi
+      .spyOn(QueryClient.prototype, "prefetchQuery")
+      .mockResolvedValue();
+    fireEvent.pointerDown(mount(makeContact()));
+    const keys = prefetch.mock.calls.map(([options]) => options.queryKey);
+    expect(keys).toContainEqual(["contacts", "c1"]);
+    expect(keys).toContainEqual(["timeline", "c1"]);
+    prefetch.mockRestore();
   });
 });
 

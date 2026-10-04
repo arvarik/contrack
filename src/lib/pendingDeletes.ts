@@ -23,6 +23,9 @@
  * `pagehide`. Those requests use `keepalive`, so the browser finishes them
  * after the page is gone.
  *
+ * Completing a follow-up on Pulse waits the same way. No route reopens a
+ * follow-up, so its `PATCH .../complete` is the write the window holds.
+ *
  * @module lib/pendingDeletes
  */
 import { useSyncExternalStore } from "react";
@@ -51,6 +54,7 @@ interface PendingDelete {
   toastId?: string | number;
   errorMessage?: string;
   flushUrl?: string;
+  flushMethod?: string;
 }
 
 /**
@@ -154,7 +158,7 @@ function flushPendingDeletes(): void {
     const url = entry.flushUrl ?? `/interactions/${encodeURIComponent(id)}`;
     send(id, entry, () =>
       apiFetch(url, {
-        method: "DELETE",
+        method: entry.flushMethod ?? "DELETE",
         keepalive: true,
       }),
     );
@@ -175,6 +179,8 @@ interface PendingDeleteOptions {
   errorMessage?: string;
   /** Optional endpoint URL for pagehide keepalive delete. Defaults to `/interactions/${id}`. */
   flushUrl?: string;
+  /** Optional method of that request. Defaults to DELETE. */
+  flushMethod?: string;
 }
 
 /**
@@ -187,6 +193,7 @@ export function startPendingDelete({
   message = "Interaction deleted",
   errorMessage,
   flushUrl,
+  flushMethod,
 }: PendingDeleteOptions): void {
   if (entries.has(id)) return;
   if (!listening && typeof window !== "undefined") {
@@ -199,6 +206,7 @@ export function startPendingDelete({
     send: request,
     errorMessage,
     flushUrl,
+    flushMethod,
   };
   entries.set(id, entry);
   // Each callback holds this entry. A late callback of an old toast then

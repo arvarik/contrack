@@ -32,6 +32,7 @@ import {
 } from "../../../../src/contexts/DedupeContext";
 import { SuggestionReviewQueue } from "../../../../src/views/dedupe/components/SuggestionReviewQueue";
 import { ManualMerge } from "../../../../src/views/dedupe/components/ManualMerge";
+import { useUndoClusterMerge } from "../../../../src/api/suggestions";
 
 /** The account's Motion row. Nothing else here reads the preferences. */
 let mockMotion: "system" | "reduced" = "system";
@@ -545,5 +546,52 @@ describe("the manual merge", () => {
     );
     expect(toSteps).toHaveLength(1);
     expect(toSteps[0].options).toEqual({ block: "nearest", behavior: "auto" });
+  });
+});
+
+// =============================================================================
+// Undo of a cluster merge
+// =============================================================================
+// → merges a whole cluster with one key, one merge per duplicate. Undo reads
+// the merges from the log, whose times are to the second, and undoes them
+// last first: each merge changed the primary the next one started from.
+// =============================================================================
+
+describe("Undo of a cluster merge", () => {
+  it("undoes each duplicate's open merge, the last merge first", async () => {
+    const undone: string[] = [];
+    const log = (id: string, duplicateId: string, undoneAt: string | null) => ({
+      id,
+      primaryId: "p",
+      duplicateId,
+      undoneAt,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") undone.push(url);
+        if (url.startsWith("/api/dedupe/merge-log?"))
+          return Response.json({
+            // Merged in the same second, so the log lists a before b.
+            entries: [
+              log("old-a", "a", "2026-09-01T00:00:00.000Z"),
+              log("log-a", "a", null),
+              log("log-b", "b", null),
+              { ...log("log-c", "c", null), primaryId: "q" },
+            ],
+          });
+        return Response.json({ success: true, conflicts: [] });
+      }),
+    );
+    const { result } = renderHook(() => useUndoClusterMerge(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    await act(() => result.current("p", ["a", "b"]));
+    expect(undone).toEqual([
+      "/api/dedupe/merge-log/log-b/undo",
+      "/api/dedupe/merge-log/log-a/undo",
+    ]);
   });
 });

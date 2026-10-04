@@ -89,6 +89,7 @@ type ContactActionsMenuProps = Pick<
   | "onDelete"
   | "archiveContact"
   | "unarchiveContact"
+  | "archivePending"
   | "updateContact"
 >;
 
@@ -97,6 +98,7 @@ export const ContactActionsMenu = ({
   onDelete,
   archiveContact,
   unarchiveContact,
+  archivePending,
   updateContact,
 }: ContactActionsMenuProps) => {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -118,12 +120,12 @@ export const ContactActionsMenu = ({
 
   const toggleArchive = () => {
     if (contact.isArchived) {
-      unarchiveContact.mutate(contact.id, {
+      unarchiveContact(contact.id, {
         onSuccess: () => toast.success(`${contact.name} restored to network`),
         onError: failed,
       });
     } else {
-      archiveContact.mutate(contact.id, {
+      archiveContact(contact.id, {
         onSuccess: () => toast.success(`${contact.name} archived`),
         onError: failed,
       });
@@ -192,7 +194,7 @@ export const ContactActionsMenu = ({
       label: contact.isArchived ? "Unarchive" : "Archive",
       icon: contact.isArchived ? ArchiveRestore : Archive,
       onSelect: toggleArchive,
-      disabled: archiveContact.isPending || unarchiveContact.isPending,
+      disabled: archivePending,
     },
     {
       id: "delete",
@@ -211,7 +213,7 @@ export const ContactActionsMenu = ({
         onClose={closePicker}
         currentVibeId={contact.themeColor}
         onSelect={(vibeId) =>
-          updateContact.mutate({ id: contact.id, data: { themeColor: vibeId } })
+          updateContact({ id: contact.id, data: { themeColor: vibeId } })
         }
         returnFocusTo={trigger}
       />

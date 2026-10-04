@@ -6,11 +6,11 @@
  * consumer, so `Sidebar` and `App` would re-render on each one even though
  * they only read `lastContactId`. Two contexts keep the two apart:
  *   - RecentContext  → `lastContactId` (Sidebar + App)
- *   - AISearchSessionContext → AI-search transcript fields (SearchView only)
+ *   - AISearchSessionContext → the Ask page's search (SearchView only)
  *
- * Provider values are also memoized with `useMemo` so an outer-tree re-render
+ * The recent value is memoized with `useMemo` so an outer-tree re-render
  * (e.g. parent state change unrelated to either context) does NOT recreate
- * the value reference and re-fire all consumers.
+ * the value reference and re-fire its consumers.
  */
 import React, {
   createContext,
@@ -20,7 +20,7 @@ import React, {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { SemanticSearchResult } from "../types";
+import { useSemanticSearch } from "../api/search";
 
 // =============================================================================
 // RecentContext — last-viewed-contact cursor (network list scroll restore)
@@ -40,18 +40,18 @@ export function useRecent(): RecentContextValue {
 }
 
 // =============================================================================
-// AISearchSessionContext — transcript of the current AI search session
+// AISearchSessionContext — the Ask page's search, which outlives the page
 // =============================================================================
-
-type SearchPhase = "idle" | "instant" | "enriching" | "done";
 
 interface AISearchSessionValue {
   lastAISearchQuery: string;
   setLastAISearchQuery: Dispatch<SetStateAction<string>>;
-  lastAISearchData: SemanticSearchResult | null;
-  setLastAISearchData: Dispatch<SetStateAction<SemanticSearchResult | null>>;
-  lastAISearchPhase: SearchPhase;
-  setLastAISearchPhase: Dispatch<SetStateAction<SearchPhase>>;
+  /**
+   * The search itself, held here rather than in the page, so a question
+   * asked on Ask is still answered after the reader leaves, and the answer
+   * is on screen when they come back.
+   */
+  semanticSearch: ReturnType<typeof useSemanticSearch>;
 }
 
 const AISearchSessionContext = createContext<AISearchSessionValue | null>(null);
@@ -80,23 +80,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── AI Search Session (wide, high-churn) ────────────────────────────
+  // Not memoized: the search is a new object on every render, and this
+  // provider renders when it changes.
   const [lastAISearchQuery, setLastAISearchQuery] = useState("");
-  const [lastAISearchData, setLastAISearchData] =
-    useState<SemanticSearchResult | null>(null);
-  const [lastAISearchPhase, setLastAISearchPhase] =
-    useState<SearchPhase>("idle");
-
-  const aiSearchValue = useMemo<AISearchSessionValue>(
-    () => ({
-      lastAISearchQuery,
-      setLastAISearchQuery,
-      lastAISearchData,
-      setLastAISearchData,
-      lastAISearchPhase,
-      setLastAISearchPhase,
-    }),
-    [lastAISearchQuery, lastAISearchData, lastAISearchPhase],
-  );
+  const semanticSearch = useSemanticSearch();
+  const aiSearchValue: AISearchSessionValue = {
+    lastAISearchQuery,
+    setLastAISearchQuery,
+    semanticSearch,
+  };
 
   return (
     <RecentContext.Provider value={recentValue}>

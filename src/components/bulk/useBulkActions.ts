@@ -5,21 +5,21 @@
  * - Soft delete (with undo toast)
  * - Track and untrack (with undo toast), and the cadence, in the words
  *   `describeCadence` gives it ("3 contacts, quarterly")
- * - Archive
+ * - Archive (with undo toast)
  * - Add to list
  * - Color / vibe update
- * - Field edit
+ * - Field edit (with undo toast)
  * - CSV export to clipboard
  * - Add-to-list and bulk-edit modal open/close states
  *
  * @module components/bulk/useBulkActions
  */
 import { useState, useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { describeCadence } from "../../../shared/cadence";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../lib/clipboard";
-import { toastUndoableDelete, UNDO_DURATION_MS } from "../../lib/undoToast";
+import { toastUndoableDelete, withUndo } from "../../lib/undoToast";
 import {
   useBulkDeleteContacts,
   useBulkRestoreContacts,
@@ -47,6 +47,12 @@ interface ContactLike {
  * chip reads Untrack before the first row is chosen.
  */
 export type SelectionTracked = "all" | "none" | "mixed";
+
+/** The list cache by id: what a write is about to replace. */
+const cachedById = (client: QueryClient) =>
+  new Map(
+    (client.getQueryData<Contact[]>(["contacts"]) ?? []).map((c) => [c.id, c]),
+  );
 
 interface UseBulkActionsOptions {
   selectedIds: Set<string> | string[];
@@ -155,26 +161,21 @@ export function useBulkActions({
               next
                 ? `Tracking ${say(count)}`
                 : `Stopped tracking ${say(count)}`,
-              {
-                duration: UNDO_DURATION_MS,
-                action: {
-                  label: "Undo",
-                  onClick: () =>
-                    bulkUpdate.mutate(
-                      { ids, data: { isTracked: !next } },
-                      {
-                        onSuccess: ({ count: undone }) =>
-                          toast.success(
-                            next
-                              ? `Stopped tracking ${say(undone)}`
-                              : `Tracking ${say(undone)} again, at the default cadence`,
-                          ),
-                        onError: (err) =>
-                          toast.error(`Could not undo: ${reason(err)}`),
-                      },
-                    ),
-                },
-              },
+              withUndo(() =>
+                bulkUpdate.mutate(
+                  { ids, data: { isTracked: !next } },
+                  {
+                    onSuccess: ({ count: undone }) =>
+                      toast.success(
+                        next
+                          ? `Stopped tracking ${say(undone)}`
+                          : `Tracking ${say(undone)} again, at the default cadence`,
+                      ),
+                    onError: (err) =>
+                      toast.error(`Could not undo: ${reason(err)}`),
+                  },
+                ),
+              ),
             );
             onComplete?.();
           },
@@ -213,14 +214,27 @@ export function useBulkActions({
     [getIds, bulkUpdate, onComplete],
   );
 
+  /** Archive the selection. Undo brings back the ones this archived. */
   const handleBulkArchive = useCallback(() => {
-    const ids = getIds();
+    const cached = cachedById(queryClient);
+    const ids = getIds().filter((id) => !cached.get(id)?.isArchived);
     if (ids.length === 0) return;
     bulkUpdate.mutate(
       { ids, data: { isArchived: true } },
       {
         onSuccess: ({ count }) => {
-          toast.success(`Archived ${count} contact${count !== 1 ? "s" : ""}`);
+          toast.success(
+            `Archived ${say(count)}`,
+            withUndo(() =>
+              bulkUpdate.mutate(
+                { ids, data: { isArchived: false } },
+                {
+                  onError: (err) =>
+                    toast.error(`Could not undo: ${reason(err)}`),
+                },
+              ),
+            ),
+          );
           onComplete?.();
         },
         onError: (err) =>
@@ -229,7 +243,7 @@ export function useBulkActions({
           ),
       },
     );
-  }, [getIds, bulkUpdate, onComplete]);
+  }, [getIds, bulkUpdate, onComplete, queryClient]);
 
   const handleBulkAddToList = useCallback(
     (listId: string) => {
@@ -278,15 +292,38 @@ export function useBulkActions({
     [getIds, bulkUpdate, onComplete],
   );
 
+  /**
+   * One value for one field on every selected contact. Undo puts back each
+   * contact's own value: the ids are grouped by the value the edit replaced,
+   * one request a group. A contact the list cache does not hold keeps the
+   * new value, rather than lose the old one to a guess.
+   */
   const handleBulkEditApply = useCallback(
     (field: string, value: string | number) => {
       const ids = getIds();
       if (ids.length === 0) return;
+      const cached = cachedById(queryClient);
+      const before = new Map<unknown, string[]>();
+      for (const id of ids) {
+        const contact = cached.get(id);
+        if (!contact) continue;
+        const old = contact[field as keyof Contact] ?? null;
+        before.set(old, [...(before.get(old) ?? []), id]);
+      }
+      const restore = () =>
+        Promise.all(
+          [...before].map(([old, group]) =>
+            bulkUpdate.mutateAsync({
+              ids: group,
+              data: { [field]: old } as ContactUpdateData,
+            }),
+          ),
+        ).catch((err) => toast.error(`Could not undo: ${reason(err)}`));
       bulkUpdate.mutate(
         { ids, data: { [field]: value } as ContactUpdateData },
         {
           onSuccess: ({ count }) => {
-            toast.success(`Updated ${count} contact${count !== 1 ? "s" : ""}`);
+            toast.success(`Updated ${say(count)}`, withUndo(restore));
             setIsBulkEditOpen(false);
             onComplete?.();
           },
@@ -297,7 +334,7 @@ export function useBulkActions({
         },
       );
     },
-    [getIds, bulkUpdate, onComplete],
+    [getIds, bulkUpdate, onComplete, queryClient],
   );
 
   const handleExportCSV = useCallback(() => {

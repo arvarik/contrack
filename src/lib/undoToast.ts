@@ -29,6 +29,15 @@ import { toast } from "sonner";
  */
 export const UNDO_DURATION_MS = 10_000;
 
+/**
+ * The options of a toast for a write that Undo reverses: the Undo action,
+ * on screen as long as a deletion's.
+ */
+export const withUndo = (onUndo: () => void) => ({
+  duration: UNDO_DURATION_MS,
+  action: { label: "Undo", onClick: onUndo },
+});
+
 interface UndoableDeleteOptions {
   /** How many contacts went to Trash. */
   count: number;

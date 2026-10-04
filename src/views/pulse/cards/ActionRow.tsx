@@ -155,10 +155,14 @@ export const ActionRow = memo(
       }
     }, [isSelected, focusOnSelect]);
 
+    // The check shows done while it animates. The row then leaves the
+    // queue, or stays when the write did not happen, and a row that stays
+    // must work again.
     const complete = () => {
       if (isCompleting) return;
       setIsCompleting(true);
       completeTimerRef.current = setTimeout(() => {
+        setIsCompleting(false);
         onComplete?.(item.id);
       }, 280);
     };

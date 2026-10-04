@@ -30,6 +30,10 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
+import {
+  startPendingDelete,
+  useHiddenPendingIds,
+} from "../../lib/pendingDeletes";
 import { PAGE_TOP, PAGE_X } from "../../lib/styles";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { cn } from "../../lib/utils";
@@ -98,6 +102,27 @@ const PulseOffice = () => {
 
   const completeAction = useCompleteActionItem();
   const updateAction = useUpdateActionItem();
+  /** Follow-ups done this session, in their undo window or after it. */
+  const hiddenIds = useHiddenPendingIds();
+
+  // No route reopens a follow-up, so Undo works by waiting: the row leaves
+  // the queue at once, and the request goes when the toast's Undo is gone
+  // (`lib/pendingDeletes`). Stable, so the queue's element below survives a
+  // render that changed nothing it shows.
+  const completeAsync = completeAction.mutateAsync;
+  const handleComplete = useCallback(
+    (id: string) =>
+      startPendingDelete({
+        id,
+        send: () => completeAsync(id),
+        message: "Follow-up done",
+        errorMessage:
+          "Could not complete the follow-up. It is back in the queue",
+        flushUrl: `/action-items/${encodeURIComponent(id)}/complete`,
+        flushMethod: "PATCH",
+      }),
+    [completeAsync],
+  );
 
   // Customize mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -281,16 +306,18 @@ const PulseOffice = () => {
     if (!dashboard) {
       return buildUpNextQueue({});
     }
+    const open = <T extends { id: string }>(items: T[]) =>
+      items.filter((item) => !hiddenIds.has(item.id));
     return buildUpNextQueue({
-      overdue: dashboard.overdue,
-      dueToday: dashboard.dueToday,
-      upcoming: dashboard.upcoming,
+      overdue: open(dashboard.overdue),
+      dueToday: open(dashboard.dueToday),
+      upcoming: open(dashboard.upcoming),
       birthdays: upcomingBirthdays,
       catchUp: dashboard.catchUp,
       catchUpCount: dashboard.tracking.catchUpCount,
       contactScores,
     });
-  }, [dashboard, upcomingBirthdays, contactScores]);
+  }, [dashboard, upcomingBirthdays, contactScores, hiddenIds]);
 
   // Selected index in Up Next
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -380,7 +407,7 @@ const PulseOffice = () => {
       } else if (key === "d") {
         if (item?.hasCheckAction) {
           e.preventDefault();
-          completeAction.mutate(item.id);
+          handleComplete(item.id);
         }
       } else if (key === "s") {
         if (item?.hasCheckAction) {
@@ -400,7 +427,7 @@ const PulseOffice = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [singleKey, completeAction, updateAction, handleToggleCustomize]);
+  }, [singleKey, handleComplete, updateAction, handleToggleCustomize]);
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
@@ -417,13 +444,8 @@ const PulseOffice = () => {
     card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, []);
 
-  // The queue's handlers, stable, so the card's element below survives a
-  // render that changed nothing it shows.
-  const completeMutate = completeAction.mutate;
-  const handleComplete = useCallback(
-    (id: string) => completeMutate(id),
-    [completeMutate],
-  );
+  // Stable, so the card's element below survives a render that changed
+  // nothing it shows.
   const handleOpenContact = useCallback(
     (contactId: string) => navigate(`/contact/${contactId}`),
     [navigate],

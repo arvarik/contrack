@@ -46,6 +46,7 @@ vi.mock("../../../../src/api", () => {
     useCreateList: mutation,
     useReorderLists: mutation,
     useArchiveContact: mutation,
+    useUnarchiveContact: mutation,
     useCreateContact: () => ({ mutateAsync: createContact, isPending: false }),
     useParseContactText: () => ({ mutateAsync: parse, isPending: false }),
     useBulkDeleteContacts: mutation,

@@ -24,6 +24,7 @@ import {
   useMergeSuggestion,
   useMergeCluster,
   useMergeClusters,
+  useUndoClusterMerge,
   useDismissSuggestion,
 } from "../../../api";
 import { ContactCard } from "./shared/ContactCard";
@@ -44,6 +45,7 @@ import { activateOnKey, radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import { isTypingTarget } from "../../../lib/keyboard";
+import { withUndo } from "../../../lib/undoToast";
 
 // =============================================================================
 // Lightweight Union-Find for frontend cluster grouping
@@ -215,6 +217,7 @@ export const SuggestionReviewQueue = () => {
   const mergeSuggestion = useMergeSuggestion();
   const mergeCluster = useMergeCluster();
   const mergeClusters = useMergeClusters();
+  const undoClusterMerge = useUndoClusterMerge();
   const dismissSuggestion = useDismissSuggestion();
   const navigate = useNavigate();
   const singleKeys = useSingleKeyShortcuts();
@@ -376,19 +379,26 @@ export const SuggestionReviewQueue = () => {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             const cluster = clusters[focusedIndex];
+            const primaryId = cluster.bestPrimaryId;
+            const duplicateIds = cluster.contacts
+              .map((c) => c.id)
+              .filter((id) => id !== primaryId);
+            // One key merged it, so one press undoes it.
+            const undo = withUndo(() =>
+              undoClusterMerge(primaryId, duplicateIds).catch((err: unknown) =>
+                toast.error(
+                  `Could not undo: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+              ),
+            );
             // One cluster call, not a per-suggestion loop — see
             // handleBatchMerge for the overlap failure the loop caused.
             mergeCluster
-              .mutateAsync({
-                primaryId: cluster.bestPrimaryId,
-                duplicateIds: cluster.contacts
-                  .map((c) => c.id)
-                  .filter((id) => id !== cluster.bestPrimaryId),
-              })
+              .mutateAsync({ primaryId, duplicateIds })
               .then((r) =>
                 r.failed === 0
-                  ? toast.success("Merged")
-                  : toast.warning(`Merged with ${r.failed} failure(s)`),
+                  ? toast.success("Merged", undo)
+                  : toast.warning(`Merged with ${r.failed} failure(s)`, undo),
               )
               .catch((err: unknown) =>
                 toast.error(
@@ -437,6 +447,7 @@ export const SuggestionReviewQueue = () => {
     clusters,
     focusedIndex,
     mergeCluster,
+    undoClusterMerge,
     dismissSuggestion,
     toggleSelect,
     singleKeys,

@@ -94,7 +94,7 @@ const drawCard = (
         contact={{ ...ADA, ...over } as unknown as Contact}
         contactId="c1"
         onUpdate={onUpdate}
-        updateContact={{ mutate }}
+        updateContact={mutate}
         {...props}
       />
     </MemoryRouter>,

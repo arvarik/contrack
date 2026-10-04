@@ -186,3 +186,28 @@ describe("the keys, with focus in the palette's search box", () => {
     expect(onCatchMeUp).not.toHaveBeenCalled();
   });
 });
+
+describe("the quick note", () => {
+  const note = () => screen.getByLabelText("Note") as HTMLTextAreaElement;
+  const openNote = () =>
+    fireEvent.click(screen.getByRole("button", { name: /Log note/ }));
+
+  it("keeps the text when the palette closes, and forgets it once saved", async () => {
+    mount();
+    openNote();
+    fireEvent.change(note(), { target: { value: "Met at the café" } });
+    // Escape, the backdrop and ⌘K all unmount the menu.
+    cleanup();
+
+    mount();
+    openNote();
+    expect(note().value).toBe("Met at the café");
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1));
+    cleanup();
+
+    mount();
+    openNote();
+    expect(note().value).toBe("");
+  });
+});

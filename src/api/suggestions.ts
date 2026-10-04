@@ -11,10 +11,17 @@ import { corvidReact } from "../lib/corvid";
  * - `useDismissSuggestion`    — Dismiss + add exclusion
  * - `useMergeLog`             — Recent merge audit log
  * - `useUndoMerge`            — Undo a soft merge
+ * - `useUndoClusterMerge`     — Undo every merge of one cluster merge
  *
  * @module api/suggestions
  */
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import {
+  queryOptions,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   PersistedDedupeSuggestion,
   MergeLogEntry,
@@ -63,9 +70,9 @@ export const usePendingSuggestions = () =>
   });
 
 /** Check if a specific contact has a pending suggestion (for detail page banner). */
-export const useSuggestionForContact = (contactId: string | undefined) =>
-  useQuery({
-    queryKey: suggestionKeys.forContact(contactId!),
+export const suggestionQuery = (contactId: string) =>
+  queryOptions({
+    queryKey: suggestionKeys.forContact(contactId),
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestion-for/${contactId}`, {
         signal,
@@ -74,22 +81,25 @@ export const useSuggestionForContact = (contactId: string | undefined) =>
       const data = await res.json();
       return data.suggestion ?? null;
     },
-    enabled: !!contactId,
     staleTime: 30_000,
   });
 
+export const useSuggestionForContact = (contactId: string | undefined) =>
+  useQuery({ ...suggestionQuery(contactId ?? ""), enabled: !!contactId });
+
+const mergeLogQuery = queryOptions({
+  queryKey: suggestionKeys.mergeLog,
+  queryFn: async ({ signal }) => {
+    const res = await apiFetch(`/dedupe/merge-log?limit=100`, { signal });
+    if (!res.ok) throw new Error("Failed to fetch merge log");
+    const data = await res.json();
+    return data.entries as MergeLogEntry[];
+  },
+  staleTime: 15_000,
+});
+
 /** Recent merge audit log. */
-export const useMergeLog = () =>
-  useQuery({
-    queryKey: suggestionKeys.mergeLog,
-    queryFn: async ({ signal }) => {
-      const res = await apiFetch(`/dedupe/merge-log?limit=100`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch merge log");
-      const data = await res.json();
-      return data.entries as MergeLogEntry[];
-    },
-    staleTime: 15_000,
-  });
+export const useMergeLog = () => useQuery(mergeLogQuery);
 
 // =============================================================================
 // Mutations
@@ -173,4 +183,37 @@ export const useUndoMerge = () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
+};
+
+/**
+ * Undo a cluster merge, which is one merge per duplicate.
+ *
+ * The merge answers with no merge-log ids, so they are read from the log:
+ * a duplicate has one entry that is not undone. They are undone last merge
+ * first, because each merge changed the primary the next one started from.
+ * The log cannot give that order: its times are to the second.
+ */
+export const useUndoClusterMerge = () => {
+  const qc = useQueryClient();
+  const { mutateAsync: undo } = useUndoMerge();
+  return useCallback(
+    async (primaryId: string, duplicateIds: string[]) => {
+      const log = await qc.fetchQuery({ ...mergeLogQuery, staleTime: 0 });
+      const ids = duplicateIds
+        .flatMap(
+          (duplicateId) =>
+            log.find(
+              (e) =>
+                e.primaryId === primaryId &&
+                e.duplicateId === duplicateId &&
+                !e.undoneAt,
+            )?.id ?? [],
+        )
+        .reverse();
+      if (ids.length === 0)
+        throw new Error("The merge is no longer in the log");
+      for (const id of ids) await undo(id);
+    },
+    [qc, undo],
+  );
 };
