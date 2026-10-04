@@ -1,0 +1,31 @@
+{
+  "name": "Contrack",
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "26.10.0"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "ONNXRUNTIME_NODE_INSTALL": "skip"
+  },
+  "postCreateCommand": "npm ci && npm run db:seed",
+  "forwardPorts": [3210],
+  "portsAttributes": {
+    "3210": {
+      "label": "Contrack",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "oxc.oxc-vscode",
+        "esbenp.prettier-vscode",
+        "vitest.explorer",
+        "ms-playwright.playwright"
+      ]
+    }
+  }
+}

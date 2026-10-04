@@ -2,14 +2,15 @@
 // Unit: every place that names a Node version names the same one
 // =============================================================================
 // v2 runs on Node 26.10 or later, and nothing is left on Node 22. The version
-// is written down in six places, and they drifted before: the Docker image,
-// CI and the docs each said 22 on their own. This test reads all six.
+// is written down in seven places, and they drifted before: the Docker image,
+// CI and the docs each said 22 on their own. This test reads all seven.
 //
 //   .nvmrc           the pin for CI (setup-node) and for nvm and fnm
 //   .tool-versions   the same pin for mise and asdf
 //   engines          the floor npm reports to anyone installing
 //   devEngines       the floor npm enforces before install, ci and run
 //   Dockerfile       the image's Node line, on Debian 13 (trixie)
+//   devcontainer     the version a dev container or a Codespace installs
 //   @types/node      the types, which must be for the same major
 // =============================================================================
 
@@ -48,6 +49,16 @@ describe("the Node version", () => {
       `node:${MAJOR}-trixie`,
       `node:${MAJOR}-trixie-slim`,
     ]);
+  });
+
+  // The pin itself, not a major: the Node images for dev containers trail
+  // the Node releases, and their 26 image still carried 26.8, which npm
+  // refuses before `npm ci` runs.
+  it("is the exact version the dev container installs", () => {
+    const devcontainer = JSON.parse(read(".devcontainer/devcontainer.json"));
+    expect(
+      devcontainer.features["ghcr.io/devcontainers/features/node:1"],
+    ).toEqual({ version: PIN });
   });
 
   it("is what CI installs", () => {
