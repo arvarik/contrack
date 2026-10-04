@@ -222,8 +222,10 @@ export const ContactListModals = ({
               name="name"
               type="text"
               // A phone capitalizes each word of a name as it is typed.
+              // Autofill stays off on this form: it is another person's
+              // details, and autofill would offer the owner's own.
               autoCapitalize="words"
-              autoComplete="name"
+              autoComplete="off"
               defaultValue={(pd?.name as string) || ""}
               className={cn(FORM_INPUT, formInputHighlight(!!pd?.name))}
               placeholder="Jane Doe"
@@ -266,7 +268,7 @@ export const ContactListModals = ({
                 id="new-contact-email"
                 name="email"
                 type="email"
-                autoComplete="email"
+                autoComplete="off"
                 defaultValue={
                   (pd?.emails?.[0]?.email as string) ||
                   (pd?.email as string) ||
@@ -287,7 +289,7 @@ export const ContactListModals = ({
                 id="new-contact-phone"
                 name="phone"
                 type="tel"
-                autoComplete="tel"
+                autoComplete="off"
                 defaultValue={
                   (pd?.phones?.[0]?.phone as string) ||
                   (pd?.phone as string) ||

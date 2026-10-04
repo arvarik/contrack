@@ -30,11 +30,12 @@ export const EditHint = () => (
 
 /**
  * What an email or a phone input tells the browser: the keyboard a phone
- * opens (`@` and `.com`, or the digits) and what autofill offers.
+ * opens (`@` and `.com`, or the digits). Autofill is off: these are another
+ * person's details, and autofill would offer the owner's own.
  */
 export const INPUT_KIND = {
-  email: { type: "email", inputMode: "email", autoComplete: "email" },
-  tel: { type: "tel", inputMode: "tel", autoComplete: "tel" },
+  email: { type: "email", inputMode: "email", autoComplete: "off" },
+  tel: { type: "tel", inputMode: "tel", autoComplete: "off" },
 } as const;
 
 /**

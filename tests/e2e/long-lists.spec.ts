@@ -322,8 +322,22 @@ test("Back from a contact on a phone puts the same row at the same place", async
       };
     });
   await list.evaluate((scroller) => scroller.scrollTo(0, 3000));
-  await expect.poll(async () => (await top()).id).not.toBe("");
-  const before = await top();
+  // The rows and the strip above them still settle after a scroll, which
+  // moves them: wait for two readings a quarter second apart that agree,
+  // so the baseline is the list at rest.
+  let before = { id: "", offset: Number.NaN };
+  await expect
+    .poll(
+      async () => {
+        const now = await top();
+        const settled =
+          now.id !== "" && now.id === before.id && now.offset === before.offset;
+        before = now;
+        return settled;
+      },
+      { intervals: [250] },
+    )
+    .toBe(true);
 
   // The third row down opens, and its visit grows the Recent strip above
   // the rows.

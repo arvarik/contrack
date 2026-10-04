@@ -1490,7 +1490,7 @@ test.describe("phone", () => {
     await page.getByRole("button", { name: "Edit +44 20 7946 0018" }).tap();
     const phone = page.getByRole("textbox", { name: "Edit phone" });
     await expect(phone).toHaveAttribute("type", "tel");
-    await expect(phone).toHaveAttribute("autocomplete", "tel");
+    await expect(phone).toHaveAttribute("autocomplete", "off");
     await phone.fill("+44 20 7946 0019");
     await phone.press("Enter");
     await expect(
