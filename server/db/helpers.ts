@@ -16,12 +16,14 @@ import type Database from "better-sqlite3";
  */
 export const SCORE_COLUMNS = ["relationshipScore", "scoreDirty"] as const;
 
-/** Every `contacts` column except {@link SCORE_COLUMNS}, quoted for DDL. */
+/** The pin, placed by the geocoder or dragged by hand. Neither is an edit. */
+export const PIN_COLUMNS = ["lat", "lng", "geoSource"] as const;
+
+/** Every `contacts` column but the score and the pin, quoted for DDL. */
 export function contactEditColumns(db: Database.Database): string[] {
+  const notEdits: readonly string[] = [...SCORE_COLUMNS, ...PIN_COLUMNS];
   const columns = db.pragma("table_info(contacts)") as { name: string }[];
-  return columns
-    .map((c) => c.name)
-    .filter((name) => !(SCORE_COLUMNS as readonly string[]).includes(name));
+  return columns.map((c) => c.name).filter((name) => !notEdits.includes(name));
 }
 
 /**

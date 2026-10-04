@@ -5,7 +5,13 @@
  */
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MapInsightsPane } from "../../../../src/views/map/MapInsightsPane";
 import type { MapStats } from "../../../../src/views/map/mapStats";
 import type { MapContact } from "../../../../shared/geo";
@@ -155,40 +161,80 @@ describe("MapInsightsPane", () => {
     expect(onToggle).toHaveBeenLastCalledWith(true);
   });
 
-  it("filters by a bar in the summary, quoting a value with a space", () => {
+  it("filters by a bar, quoting a value with a space, and a bar that is on removes its pill", () => {
     const onApplyFacet = vi.fn();
-    renderPane({ onApplyFacet });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Filter by industry: Computing (2)" }),
-    );
-    expect(onApplyFacet).toHaveBeenCalledWith("industry:Computing");
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Filter by company: Babbage & Co (1)",
-      }),
-    );
+    const onRemoveFacet = vi.fn();
+    // The pill as typed, in its own case, is still the bar's.
+    renderPane({
+      onApplyFacet,
+      onRemoveFacet,
+      activeFilters: [{ field: "industry", value: "computing" }],
+    });
+    const company = screen.getByRole("button", {
+      name: "Filter by company: Babbage & Co (1)",
+    });
+    expect(company.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(company);
     expect(onApplyFacet).toHaveBeenCalledWith('company:"Babbage & Co"');
+
+    const industry = screen.getByRole("button", {
+      name: "Filter by industry: Computing (2)",
+    });
+    expect(industry.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(industry);
+    expect(onRemoveFacet).toHaveBeenCalledWith(0);
+    expect(onApplyFacet).toHaveBeenCalledTimes(1);
     expect(screen.getByText("2 people")).toBeTruthy();
   });
 
-  it("lists the people in view, and flies to the one pressed", () => {
+  it("lists the overdue first and then by name, points at a pin, and flies to the one pressed", () => {
     const onSelectContact = vi.fn();
-    renderPane({ onSelectContact });
+    const onHighlightContact = vi.fn();
+    const rowan: MapContact = {
+      id: "c3",
+      name: "Rowan Vale",
+      company: "Northwind Partners",
+      location: "Reading, UK",
+      avatarUrl: null,
+      isTracked: true,
+      lat: 51.45,
+      lng: -0.97,
+      nextFollowUpAt: "2020-01-15",
+    };
+    renderPane({
+      onSelectContact,
+      onHighlightContact,
+      inViewContacts: [people[1], rowan, people[0]],
+    });
     fireEvent.click(screen.getByRole("radio", { name: "People" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
-    );
+    const list = screen.getByRole("list", { name: "People in view" });
+    const rows = within(list).getAllByRole("button");
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+      "Rowan Vale, Northwind Partners, overdue",
+      "Ada Lovelace, Babbage & Co",
+      "Alan Turing, Codebreakers Ltd",
+    ]);
+
+    fireEvent.mouseEnter(rows[0]);
+    expect(onHighlightContact).toHaveBeenLastCalledWith("c3");
+    fireEvent.mouseLeave(list);
+    expect(onHighlightContact).toHaveBeenLastCalledWith(null);
+    fireEvent.click(rows[1]);
     expect(onSelectContact).toHaveBeenCalledWith(people[0]);
   });
 
-  it("says so when nobody is in view", () => {
-    renderPane({
-      stats: { ...stats, inView: 0, topIndustries: [], topCompanies: [] },
-      inViewContacts: [],
-    });
-    expect(
-      screen.getByRole("heading", { level: 3, name: "No one in view" }),
-    ).toBeTruthy();
+  it("says why nobody is in view", () => {
+    const nobody = { ...stats, inView: 0, matching: 0 };
+    for (const [empty, words] of [
+      ["loading", "Loading contacts…"],
+      ["failed", "Could not load contacts"],
+      ["none", "No one is on the map yetAdd a location to a contact"],
+      [undefined, "No one in viewZoom out or clear the filters"],
+    ] as const) {
+      renderPane({ stats: nobody, inViewContacts: [], empty });
+      expect(screen.getByRole("complementary").textContent).toContain(words);
+      cleanup();
+    }
   });
 
   it("opens in a bottom sheet below lg", () => {

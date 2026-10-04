@@ -777,7 +777,7 @@ describe("the page", () => {
     random.mockRestore();
   });
 
-  it("counts every match of a question of facets, links the rest, and saves the count", async () => {
+  it("counts every match of a question of facets, links the rest and the map, and saves the count", async () => {
     // The server names the Network query only when the list can read it.
     const sent = stubFetch((s) => {
       const asked = String(s.body?.query);
@@ -795,10 +795,14 @@ describe("the page", () => {
     renderView();
     const seeAll = () =>
       screen.queryByRole("link", { name: "See all in Network" });
+    const onMap = () =>
+      screen.getByRole("link", { name: "Show on map" }).getAttribute("href");
 
     ask("tag:investor");
     expect(await screen.findByText("3 of 1,501 matches")).toBeTruthy();
     expect(seeAll()?.getAttribute("href")).toBe("/?q=tag%3Ainvestor");
+    // The map shows every match of facets, and else the people listed.
+    expect(onMap()).toBe("/map?q=tag%3Ainvestor");
     await waitFor(() =>
       expect(
         sent.find((s) => s.url.includes("/search/history") && s.body)?.body,
@@ -817,6 +821,7 @@ describe("the page", () => {
     );
     expect(screen.getByText("3 of 1,501 matches")).toBeTruthy();
     expect(seeAll()).toBeNull();
+    expect(onMap()).toBe("/map?people=contact-0,contact-1,contact-2");
 
     // A list that holds every match has nothing more to open.
     ask("tag:rare");

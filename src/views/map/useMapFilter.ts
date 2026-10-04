@@ -1,6 +1,7 @@
 /**
  * The map's filter. The text is the whole filter: its facets are the pills,
- * and the URL's `?q=` and a saved view hold the same text.
+ * and the URL's `?q=` and a saved view hold the same text. Ask's "Show on
+ * map" adds `?people=`, the ids of the people it found.
  *
  * @module views/map/useMapFilter
  */
@@ -29,13 +30,20 @@ import {
 /** A query that arrives whole ends in a space, so its last facet is a pill. */
 const asTyped = (query: string) => (query.trim() ? `${query.trim()} ` : "");
 
-const facetKey = (filter: FacetFilter) => formatFacet(filter).toLowerCase();
+/** Two facets that format alike, in any case, are one pill. */
+export const facetKey = (filter: FacetFilter) =>
+  formatFacet(filter).toLowerCase();
 const placeKey = (filter: FacetFilter) => filter.value.trim().toLowerCase();
 const PLACE_QUERY = ["geo", "place"] as const;
 
 export function useMapFilter(contacts: MapContact[]) {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlQ = searchParams.get("q") ?? "";
+  const peopleParam = searchParams.get("people");
+  const people = useMemo(
+    () => (peopleParam ? new Set(peopleParam.split(",")) : null),
+    [peopleParam],
+  );
   const [rawInput, setRawInput] = useState(() => asTyped(urlQ));
   const [overdueOnly, setOverdueOnly] = useState(false);
   // The `q` the input and the URL last agreed on, so neither echoes the other.
@@ -111,11 +119,12 @@ export function useMapFilter(contacts: MapContact[]) {
     const now = new Date();
     return contacts.filter(
       (contact) =>
+        (!people || people.has(contact.id)) &&
         (!overdueOnly || isPastDay(contact.nextFollowUpAt, now)) &&
         effectiveFilters.every((filter) => matchesFacet(contact, filter)) &&
         (!deferredFreeText || scoreContactMatch(contact, deferredFreeText) > 0),
     );
-  }, [contacts, effectiveFilters, deferredFreeText, overdueOnly]);
+  }, [contacts, people, effectiveFilters, deferredFreeText, overdueOnly]);
 
   /** Add a facet in place of the one being typed, unless it is a pill. */
   const addFacet = useCallback(
@@ -146,10 +155,24 @@ export function useMapFilter(contacts: MapContact[]) {
     });
   }, [queryClient, rawInput]);
 
+  const clearPeople = useCallback(
+    () =>
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("people");
+          return next;
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  );
+
   const clearFilters = useCallback(() => {
     setOverdueOnly(false);
     setRawInput("");
-  }, []);
+    clearPeople();
+  }, [clearPeople]);
 
   return {
     rawInput,
@@ -159,11 +182,13 @@ export function useMapFilter(contacts: MapContact[]) {
     filteredContacts,
     totalCount: contacts.length,
     matchCount: filteredContacts.length,
-    hasActiveFilter: Boolean(rawInput.trim()) || overdueOnly,
+    hasActiveFilter: Boolean(rawInput.trim()) || overdueOnly || !!people,
     addFacet,
     removeFacet,
     commit,
     clearFilters,
+    people,
+    clearPeople,
     overdueOnly,
     setOverdueOnly,
   };

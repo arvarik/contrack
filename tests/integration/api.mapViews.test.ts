@@ -57,35 +57,37 @@ describe("Map Views API (/api/map/views)", () => {
     });
   });
 
-  it("GET /api/map/views returns views sorted by sortOrder ASC, name ASC", async () => {
-    await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "B View",
-          query: "tag:vip",
-          layer: "pins",
-          bounds: [-10, 40, 10, 60],
-        }),
-    );
-    await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "A View",
-          query: "near:Paris",
-          layer: "heat",
-          bounds: [2, 48, 3, 49],
-        }),
-    );
+  it("lists views in their order, and a PATCH of sortOrder moves one there", async () => {
+    const make = (name: string) =>
+      asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({ name, bounds: [-10, 40, 10, 60] }),
+      );
+    await make("B View");
+    await make("A View");
+    const last = await make("C View");
+    const order = async () =>
+      (await asUser(alice)(request(app).get("/api/map/views"))).body.views.map(
+        (v: { name: string; sortOrder: number }) => [v.name, v.sortOrder],
+      );
+    expect(await order()).toEqual([
+      ["B View", 0],
+      ["A View", 1],
+      ["C View", 2],
+    ]);
 
-    const res = await asUser(alice)(request(app).get("/api/map/views"));
-    expect(res.status).toBe(200);
-    expect(res.body.views).toHaveLength(2);
-    expect(res.body.views[0].name).toBe("B View");
-    expect(res.body.views[0].sortOrder).toBe(0);
-    expect(res.body.views[1].name).toBe("A View");
-    expect(res.body.views[1].sortOrder).toBe(1);
+    // The others keep their order around the view that moved.
+    await asUser(alice)(
+      request(app)
+        .patch(`/api/map/views/${last.body.id}`)
+        .send({ sortOrder: 0 }),
+    );
+    expect(await order()).toEqual([
+      ["C View", 0],
+      ["B View", 1],
+      ["A View", 2],
+    ]);
   });
 
   it("PATCH /api/map/views/:id updates allowed fields", async () => {
@@ -155,6 +157,8 @@ describe("Map Views API (/api/map/views)", () => {
       [-10, -95, 10, 60], // south out of range
       [-10, 50, 10, 95], // north out of range
       [-10, 60, 10, 50], // south >= north
+      [170, -20, -170, 20], // west east of east, which fitBounds cannot show
+      [5, 50, 5, 60], // west >= east
     ];
 
     for (const bounds of badBoundsCases) {
@@ -164,56 +168,37 @@ describe("Map Views API (/api/map/views)", () => {
           bounds,
         }),
       );
-      expect(res.status).toBe(400);
+      expect(res.status, JSON.stringify(bounds)).toBe(400);
     }
   });
 
-  it("rejects invalid name, query, and layer with 400 Bad Request", async () => {
-    // Empty name
-    let res = await asUser(alice)(
+  it("refuses a bad name or query with 400 VALIDATION_ERROR, on create and on change", async () => {
+    const created = await asUser(alice)(
       request(app)
         .post("/api/map/views")
-        .send({
-          name: "",
-          bounds: [0, 0, 1, 1],
-        }),
+        .send({ name: "Valid Name", bounds: [0, 0, 1, 1] }),
     );
-    expect(res.status).toBe(400);
-
-    // Name > 60 chars
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "a".repeat(61),
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
-
-    // Query > 200 chars
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "Valid Name",
-          query: "q".repeat(201),
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
-
-    // Invalid layer
-    res = await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "Valid Name",
-          layer: "satellite",
-          bounds: [0, 0, 1, 1],
-        }),
-    );
-    expect(res.status).toBe(400);
+    // A number used to reach `.trim()` and answer 500.
+    for (const body of [
+      { name: "" },
+      { name: "a".repeat(61) },
+      { name: 123 },
+      { name: "Valid Name", query: "q".repeat(201) },
+      { name: "Valid Name", query: 7 },
+    ]) {
+      const post = await asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({ bounds: [0, 0, 1, 1], ...body }),
+      );
+      const patch = await asUser(alice)(
+        request(app).patch(`/api/map/views/${created.body.id}`).send(body),
+      );
+      for (const res of [post, patch]) {
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      }
+    }
   });
 
   it("enforces 100-view cap with 409 TOO_MANY_VIEWS", async () => {

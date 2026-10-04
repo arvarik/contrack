@@ -38,8 +38,8 @@ const FIXTURE = path.resolve(
 );
 
 /**
- * What the migrations after the fixture add, by name. A new migration adds
- * the name of each table, index and trigger it creates.
+ * What the migrations after the fixture add or remake, by name. A new
+ * migration adds the name of each table, index and trigger it creates or changes.
  */
 const ADDED_SINCE_FIXTURE = [
   "schema_migrations",
@@ -51,6 +51,10 @@ const ADDED_SINCE_FIXTURE = [
   "jobs",
   "idx_jobs_due",
   "idx_jobs_dedupe",
+  // 0003_map_pins remakes these
+  "contacts_auto_updated_at",
+  "contacts_score_dirty",
+  "geocode_cache",
 ];
 
 interface MasterRow {
@@ -121,9 +125,8 @@ describe("a new database", () => {
     );
     // Byte for byte: the baseline moved the old boot code, and a changed
     // character in any statement shows here.
-    expect(
-      actual.filter((row) => !ADDED_SINCE_FIXTURE.includes(row.name)),
-    ).toEqual(fixtureRows());
+    const kept = (row: MasterRow) => !ADDED_SINCE_FIXTURE.includes(row.name);
+    expect(actual.filter(kept)).toEqual(fixtureRows().filter(kept));
   });
 });
 

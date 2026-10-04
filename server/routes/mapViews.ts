@@ -1,8 +1,13 @@
 import { Router } from "express";
-import { mapViewService } from "../services/mapViewService.ts";
+import {
+  mapViewCreateSchema,
+  mapViewService,
+  mapViewUpdateSchema,
+} from "../services/mapViewService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
+import { validateBody } from "../utils/validators.ts";
 
 export const mapViewsRouter = Router();
 
@@ -18,6 +23,7 @@ mapViewsRouter.get(
 
 mapViewsRouter.post(
   "/",
+  validateBody(mapViewCreateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const view = mapViewService.createMapView(scopeOf(req), req.body);
@@ -31,6 +37,7 @@ mapViewsRouter.post(
 
 mapViewsRouter.patch(
   "/:id",
+  validateBody(mapViewUpdateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const view = mapViewService.updateMapView(

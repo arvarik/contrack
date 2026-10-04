@@ -199,7 +199,9 @@ test.describe("map", () => {
       });
       await bar.click();
       await expect(
-        page.getByRole("button", { name: /^industry:\s*Venture Capital$/ }),
+        page.getByRole("button", {
+          name: "Remove filter industry: Venture Capital",
+        }),
       ).toBeVisible();
       await expect(page.getByText(/^0 of \d+ match$/)).toHaveCount(0);
       // The two are all the filter leaves, so they are all the bar counts.
@@ -242,7 +244,9 @@ test.describe("map", () => {
       await insights.click();
       await expect(insights).toHaveAttribute("aria-expanded", "false");
 
-      await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
+      await page
+        .getByRole("button", { name: "2 contacts at one place, list them" })
+        .click();
       const list = page.getByRole("list", { name: "People at this place" });
       await expect(list.getByRole("button")).toHaveCount(2);
       const alan = list.getByRole("button", {

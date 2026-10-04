@@ -195,6 +195,7 @@ export { TENANCY_SCHEMA_VERSION } from "./db/indexes.ts";
 export {
   contactEditColumns,
   deleteRetiredSettings,
+  PIN_COLUMNS,
   RETIRED_SETTING_KEYS,
   SCORE_COLUMNS,
 } from "./db/helpers.ts";

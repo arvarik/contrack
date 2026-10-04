@@ -4,7 +4,6 @@ import { makeTestApp } from "./helpers.ts";
 
 vi.mock("../../server/services/geocoding/provider.ts", () => ({
   geocodeWithFallback: vi.fn(),
-  INTER_REQUEST_DELAY_MS: 0,
 }));
 
 import { geocodeWithFallback } from "../../server/services/geocoding/provider.ts";
@@ -19,38 +18,31 @@ describe("GET /api/geo/search", () => {
   });
 
   it("first call hits provider and caches; second call is cached: true", async () => {
-    vi.mocked(geocodeWithFallback).mockResolvedValueOnce({
+    const LONDON = {
       lat: 51.5074,
       lng: -0.1278,
       provider: "Nominatim",
+      displayName: "London, Greater London, England, United Kingdom",
+    };
+    vi.mocked(geocodeWithFallback).mockResolvedValueOnce({
+      status: "found",
+      ...LONDON,
     });
 
     const res1 = await request(app).get("/api/geo/search?q=London");
     expect(res1.status).toBe(200);
-    expect(res1.body).toMatchObject({
-      query: "London",
-      lat: 51.5074,
-      lng: -0.1278,
-      provider: "Nominatim",
-      cached: false,
-    });
+    expect(res1.body).toEqual({ query: "London", ...LONDON, cached: false });
     expect(geocodeWithFallback).toHaveBeenCalledTimes(1);
 
-    // Second call for the same place should use cache
+    // Second call for the same place should use cache, the name included.
     const res2 = await request(app).get("/api/geo/search?q=London");
     expect(res2.status).toBe(200);
-    expect(res2.body).toMatchObject({
-      query: "London",
-      lat: 51.5074,
-      lng: -0.1278,
-      provider: "Nominatim",
-      cached: true,
-    });
+    expect(res2.body).toEqual({ query: "London", ...LONDON, cached: true });
     expect(geocodeWithFallback).toHaveBeenCalledTimes(1);
   });
 
   it("returns 404 NO_RESULT when place is not found and caches the failure", async () => {
-    vi.mocked(geocodeWithFallback).mockResolvedValue(null);
+    vi.mocked(geocodeWithFallback).mockResolvedValue({ status: "none" });
 
     const res1 = await request(app).get("/api/geo/search?q=AtlantisNotFound");
     expect(res1.status).toBe(404);
@@ -62,6 +54,19 @@ describe("GET /api/geo/search", () => {
     expect(res2.status).toBe(404);
     expect(res2.body.error.code).toBe("NO_RESULT");
     expect(geocodeWithFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 503 when Nominatim gives no answer, and caches nothing", async () => {
+    vi.mocked(geocodeWithFallback).mockResolvedValue({ status: "error" });
+
+    for (let i = 0; i < 2; i++) {
+      const res = await request(app).get("/api/geo/search?q=Porto");
+      expect(res.status).toBe(503);
+      expect(res.body.error.code).toBe("GEOCODER_UNAVAILABLE");
+      expect(res.body.error.message).toMatch(/busy or unavailable/);
+    }
+    // Not remembered as "nothing found": the second search asked again.
+    expect(geocodeWithFallback).toHaveBeenCalledTimes(2);
   });
 
   it("returns 400 when query is 1 character or missing", async () => {
@@ -76,6 +81,7 @@ describe("GET /api/geo/search", () => {
 
   it("enforces 30 requests per minute rate limit and returns 429 on the 31st request", async () => {
     vi.mocked(geocodeWithFallback).mockResolvedValue({
+      status: "found",
       lat: 48.8566,
       lng: 2.3522,
       provider: "Nominatim",

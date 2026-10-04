@@ -1,12 +1,6 @@
 /**
- * The map's data, shared by the server that sends it and the client that
- * draws it.
- *
- * `GET /api/contacts/map` returns one row per placed contact. The route keeps
- * that row shape, and the client turns the rows into a GeoJSON
- * FeatureCollection here, because MapLibre clusters a GeoJSON source and
- * nothing else. A row whose coordinates cannot be drawn is dropped at this
- * boundary, so the map never receives one.
+ * The map's rows and their GeoJSON source. The Map page builds the rows from
+ * `GET /api/contacts?view=slim`. `GET /api/contacts/map` is for API clients.
  *
  * @module shared/geo
  */
@@ -27,7 +21,7 @@ export interface MapStyleUrls {
  */
 export type GeoSource = "geocoder" | "manual" | null;
 
-/** One row of `GET /api/contacts/map` and the projection of a slim row. */
+/** One placed contact, as `toMapContacts` projects a slim row. */
 export interface MapContact {
   id: string;
   name: string;
@@ -130,7 +124,7 @@ export function haversineKm(
 }
 
 /**
- * Build the map source from the route's rows.
+ * Build the map source from the map's rows.
  *
  * GeoJSON orders a position longitude first. The contact id is the feature
  * id and the `id` property, because MapLibre keeps properties through
@@ -158,4 +152,15 @@ export function toFeatureCollection(
     });
   }
   return { type: "FeatureCollection", features };
+}
+
+/** A place `GET /api/geo/search` found. */
+export interface PlaceSearchResult {
+  query: string;
+  lat: number;
+  lng: number;
+  provider: string;
+  cached: boolean;
+  /** The place the geocoder matched, for example "Lisbon, Portugal". */
+  displayName?: string;
 }

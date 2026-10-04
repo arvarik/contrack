@@ -20,10 +20,14 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { isValidLatLng } from "../../../shared/geo";
-import { useSetContactLocation } from "../../api";
+import { useContact, useSetContactLocation } from "../../api";
+import { searchPlace } from "../../api/geo";
 import { Modal } from "../../components/ui/Modal";
+import { FORM_INPUT } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import { ContactMap } from "./ContactMap";
 import { contactPinLabel, pinAvatarSrc } from "./ContactMarker";
+import { flyToContact } from "./flyTo";
 import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
 
@@ -66,15 +70,27 @@ const noSelect = () => {};
 
 interface AdjustPinModalProps {
   contact: MiniMapContact;
+  /** True when the contact has address text. Left out, the dialog reads it. */
+  hasAddress?: boolean;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export const AdjustPinModal = ({
   contact,
+  hasAddress: known,
   isOpen,
   onClose,
 }: AdjustPinModalProps) => {
+  // The map's rows carry no address rows, so the contact itself is read.
+  const { data: detail } = useContact(
+    known === undefined ? contact.id : undefined,
+  );
+  const hasAddress =
+    known ??
+    [detail?.location, ...(detail?.addresses ?? []).map((a) => a.address)].some(
+      (text) => text?.trim(),
+    );
   const placed = isValidLatLng(contact.lat, contact.lng);
   const start: PinPosition | null = placed
     ? { latitude: contact.lat as number, longitude: contact.lng as number }
@@ -85,6 +101,10 @@ export const AdjustPinModal = ({
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const hintId = useId();
   const save = useSetContactLocation();
+  // With no pin, the search starts from the address the geocoder could not place.
+  const [place, setPlace] = useState(placed ? "" : (contact.location ?? ""));
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<string | null>(null);
 
   // A reopened dialog starts from the pin as it is now, not from the last
   // drag that was cancelled.
@@ -128,21 +148,48 @@ export const AdjustPinModal = ({
 
   const busy = save.isPending;
 
-  const onSave = async () => {
+  // `mutate`: a failed save is the mutation's toast, not a rejection.
+  const onSave = () => {
     if (!pin || !moved || busy) return;
-    await save.mutateAsync({
-      id: contact.id,
-      data: { lat: pin.latitude, lng: pin.longitude },
-    });
-    toast.success("Pin saved");
-    onClose();
+    save.mutate(
+      { id: contact.id, data: { lat: pin.latitude, lng: pin.longitude } },
+      {
+        onSuccess: () => {
+          toast.success("Pin saved");
+          onClose();
+        },
+      },
+    );
   };
 
-  const onRegeocode = async () => {
+  const onRegeocode = () => {
     if (busy) return;
-    await save.mutateAsync({ id: contact.id, data: { regeocode: true } });
-    toast.success("The geocoder will place the pin from the address");
-    onClose();
+    save.mutate(
+      { id: contact.id, data: { regeocode: true } },
+      {
+        onSuccess: () => {
+          toast.success("The geocoder will place the pin from the address");
+          onClose();
+        },
+      },
+    );
+  };
+
+  /** Move the pin and the map to a place found by name. Save still writes it. */
+  const onFind = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (finding || place.trim().length < 2) return;
+    setFinding(true);
+    setFindError(null);
+    try {
+      const found = await searchPlace(place);
+      setPin({ latitude: found.lat, longitude: found.lng });
+      if (map) flyToContact(map, { longitude: found.lng, latitude: found.lat });
+    } catch (error) {
+      setFindError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFinding(false);
+    }
   };
 
   return (
@@ -158,6 +205,38 @@ export const AdjustPinModal = ({
             ? "Drag the pin, tap or click the map, or move the pin with the arrow keys"
             : "Tap or click the map to place the pin"}
         </p>
+        <form
+          role="search"
+          aria-label="Place search"
+          onSubmit={onFind}
+          className="flex gap-2"
+        >
+          <input
+            type="search"
+            value={place}
+            onChange={(event) => {
+              setPlace(event.target.value);
+              setFindError(null);
+            }}
+            placeholder="Find a place, for example Lisbon"
+            aria-label="Find a place"
+            maxLength={120}
+            className={cn(FORM_INPUT, "min-w-0")}
+          />
+          <button
+            type="submit"
+            disabled={finding || place.trim().length < 2}
+            className="btn-secondary shrink-0"
+          >
+            {finding && <Loader2 className="w-4 h-4 animate-spin" />}
+            Find
+          </button>
+        </form>
+        {findError && (
+          <p role="alert" className="text-sm text-error">
+            {findError}
+          </p>
+        )}
         <div className="h-[480px] max-h-[50dvh] w-full overflow-hidden rounded-2xl border border-surface-container-highest">
           <ContactMap
             contacts={[]}
@@ -218,7 +297,7 @@ export const AdjustPinModal = ({
           {pin ? formatPin(pin) : "No pin on the map yet"}
         </output>
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
-          {placed && (
+          {placed && hasAddress && (
             <button
               type="button"
               onClick={onRegeocode}

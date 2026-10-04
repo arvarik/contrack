@@ -2,17 +2,18 @@ import { sqlite } from "../../db.ts";
 
 export const FAILURE_TTL_DAYS = 7;
 
-// The baseline migration creates geocode_cache, and server/db.ts has run it
-// by the time this module loads.
+// The migrations create geocode_cache, and server/db.ts has run them by the
+// time this module loads.
 const cacheStmts = {
   get: sqlite.prepare(
-    `SELECT lat, lng, provider, success, createdAt FROM geocode_cache WHERE key = ?`,
+    `SELECT lat, lng, provider, success, createdAt, displayName FROM geocode_cache WHERE key = ?`,
   ),
   upsert: sqlite.prepare(`
-    INSERT INTO geocode_cache (key, lat, lng, provider, success)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO geocode_cache (key, lat, lng, provider, success, displayName)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET lat = excluded.lat, lng = excluded.lng,
-      provider = excluded.provider, success = excluded.success, createdAt = CURRENT_TIMESTAMP
+      provider = excluded.provider, success = excluded.success,
+      displayName = excluded.displayName, createdAt = CURRENT_TIMESTAMP
   `),
 };
 
@@ -31,11 +32,15 @@ interface CacheEntry {
   provider: string;
   success: number;
   createdAt: string;
+  displayName: string | null;
 }
 
-export function getCachedGeocode(
-  key: string,
-): { lat: number; lng: number; provider: string } | null {
+export function getCachedGeocode(key: string): {
+  lat: number;
+  lng: number;
+  provider: string;
+  displayName?: string;
+} | null {
   const row = cacheStmts.get.get(key) as CacheEntry | undefined;
   if (!row) return null;
 
@@ -44,6 +49,7 @@ export function getCachedGeocode(
       lat: row.lat,
       lng: row.lng,
       provider: row.provider || "Nominatim",
+      displayName: row.displayName ?? undefined,
     };
   }
 
@@ -71,6 +77,14 @@ export function cacheGeocode(
   lng: number | null,
   provider: string,
   success: boolean,
+  displayName?: string,
 ): void {
-  cacheStmts.upsert.run(key, lat, lng, provider, success ? 1 : 0);
+  cacheStmts.upsert.run(
+    key,
+    lat,
+    lng,
+    provider,
+    success ? 1 : 0,
+    displayName ?? null,
+  );
 }

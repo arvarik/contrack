@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { route } from "./route.ts";
-import { dateSchema, INTERNAL, okSchema } from "./common.ts";
+import { dateSchema, idsSchema, INTERNAL, okSchema } from "./common.ts";
 
 // =============================================================================
 // Request bodies
@@ -17,6 +17,16 @@ import { dateSchema, INTERNAL, okSchema } from "./common.ts";
 const actionItemCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
   dueAt: dateSchema,
+});
+
+/** The most contacts one bulk follow-up may name. The map's dialog says so first. */
+export const MAX_BULK_ACTION_ITEMS = 500;
+
+const actionItemBulkCreateSchema = actionItemCreateSchema.extend({
+  contactIds: idsSchema.refine(
+    (ids) => ids.length <= MAX_BULK_ACTION_ITEMS,
+    `At most ${MAX_BULK_ACTION_ITEMS} contacts at a time`,
+  ),
 });
 
 const actionItemUpdateSchema = z
@@ -83,6 +93,15 @@ export const actionItemRoutes = {
     method: "GET",
     path: "/api/action-items/count",
     summary: "How many pending follow-ups are due today or overdue",
+    response: z.strictObject({ count: z.number().int() }),
+  }),
+  bulkCreate: route({
+    method: "POST",
+    path: "/api/action-items/bulk",
+    summary:
+      "Add the same follow-up to many contacts. One unknown id writes nothing",
+    status: 201,
+    body: actionItemBulkCreateSchema,
     response: z.strictObject({ count: z.number().int() }),
   }),
   update: route({

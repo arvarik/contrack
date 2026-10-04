@@ -15,7 +15,7 @@ import type {
   ContactRow,
   ChildRecordsPayload,
 } from "../repositories/types.ts";
-import { queueGeocode } from "./geocoding/index.ts";
+import { pinState, queueGeocode, type PinState } from "./geocoding/index.ts";
 import {
   processBase64Avatar,
   isBase64DataUri,
@@ -31,6 +31,7 @@ import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
+import { AppError } from "../utils/AppError.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
 // The reactions to a contact write: the search index, the dedupe vector and
 // the duplicate check, the geocoder, the score, the owner's caches and
@@ -238,51 +239,6 @@ function purgeContactSearchArtifacts(id: string): void {
 // Geocoding triggers
 // ---------------------------------------------------------------------------
 
-/** The address a contact shows, and who placed the pin. */
-interface PinState {
-  location: string | null;
-  primaryAddress: string | null;
-  /**
-   * The address the contact page shows: the primary address row when there
-   * are rows, else the legacy `location` field. The page shows `location` as
-   * an address row until the list is first edited, and that first edit sends
-   * the same text back as a row. Comparing this, and not the two fields one
-   * by one, is what keeps that edit from moving a pin.
-   */
-  shown: string | null;
-  /** True when a person placed the pin. The geocoder leaves it alone. */
-  manual: boolean;
-}
-
-/**
- * What the contact shows for an address, and whether a person placed the pin.
- *
- * Read before and after a write, inside its transaction, so the write can be
- * asked one question: did it change the address the pin stands for?
- */
-function pinStateOf(scope: Scope, id: string): PinState {
-  const row = sqlite
-    .prepare(
-      `SELECT location, geoSource FROM contacts WHERE id = ? AND ownerId = ?`,
-    )
-    .get(id, scope.ownerId) as
-    { location: string | null; geoSource: string | null } | undefined;
-  const address = sqlite
-    .prepare(
-      `SELECT address FROM contact_addresses WHERE contactId = ?
-        ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1`,
-    )
-    .get(id) as { address: string | null } | undefined;
-  const location = row?.location || null;
-  const primaryAddress = address?.address || null;
-  return {
-    location,
-    primaryAddress,
-    shown: primaryAddress ?? location,
-    manual: row?.geoSource === "manual",
-  };
-}
-
 /**
  * Hand a pin back to the geocoder when the write moved its address.
  *
@@ -301,7 +257,7 @@ function pinStateOf(scope: Scope, id: string): PinState {
  */
 function releaseMovedPin(scope: Scope, id: string, before: PinState): boolean {
   if (!before.manual) return false;
-  const after = pinStateOf(scope, id);
+  const after = pinState(scope.ownerId, id);
   if (after.shown === before.shown) return false;
   sqlite
     .prepare(
@@ -355,6 +311,7 @@ type SlimContactRow = Pick<
   | "nextFollowUpAt"
   | "lat"
   | "lng"
+  | "geoSource"
   | "relationshipScore"
   | "isTracked"
   | "trackedAt"
@@ -615,7 +572,7 @@ export const contactService = {
     const changed = changedFields(updateData, body as Record<string, unknown>);
 
     const txn = sqlite.transaction(() => {
-      const pinBefore = pinStateOf(scope, id);
+      const pinBefore = pinState(scope.ownerId, id);
       applyTrackingRules(scope, [id], body as Record<string, unknown>);
       db.update(schema.contacts)
         .set(updateData)
@@ -671,7 +628,7 @@ export const contactService = {
     // same fields, and so gets the same reactions.
     const changed = changedFields(update);
     const write = sqlite.transaction(() => {
-      const pinBefore = pinStateOf(scope, id);
+      const pinBefore = pinState(scope.ownerId, id);
       applyTrackingRules(scope, [id], body);
       db.update(schema.contacts)
         .set(update)
@@ -869,12 +826,18 @@ export const contactService = {
    * `geoSource = 'manual'` is what keeps the geocoder off it from now on: the
    * startup sweep leaves the row alone, and a later edit to the contact
    * queues nothing unless it changes the address the pin was read from.
+   * The edit trigger skips pin columns, so a person's move stamps updatedAt here.
    */
   setLocation(scope: Scope, id: string, lat: number, lng: number) {
     assertOwnedContact(scope, id);
     sqlite.transaction(() => {
       db.update(schema.contacts)
-        .set({ lat, lng, geoSource: "manual" })
+        .set({
+          lat,
+          lng,
+          geoSource: "manual",
+          updatedAt: new Date().toISOString(),
+        })
         .where(
           and(
             eq(schema.contacts.id, id),
@@ -902,9 +865,18 @@ export const contactService = {
    *
    * The geocoder call here is the request itself, not a reaction to it, so
    * it stays in this function. The event's subscribers drop the caches.
+   * A contact with no address text keeps its pin, and the request is refused.
    */
   regeocode(scope: Scope, id: string) {
     assertOwnedContact(scope, id);
+    const text = pinState(scope.ownerId, id).shown;
+    if (!text) {
+      throw new AppError(
+        "This contact has no address to place the pin from. Add an address, or place the pin by hand",
+        400,
+        { code: "NO_ADDRESS" },
+      );
+    }
     sqlite.transaction(() => {
       db.update(schema.contacts)
         .set({ lat: null, lng: null, geoSource: null })
@@ -921,9 +893,7 @@ export const contactService = {
       });
     })();
     dispatchEvents();
-    const pin = pinStateOf(scope, id);
-    const text = pin.location ?? pin.primaryAddress;
-    if (text) queueGeocode(id, text);
+    queueGeocode(id, text);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -934,7 +904,7 @@ export const contactService = {
           FROM contacts
           WHERE ownerId = ? AND lat IS NOT NULL AND lng IS NOT NULL
             AND (isArchived = 0 OR isArchived IS NULL)
-            AND deletedAt IS NULL
+            AND deletedAt IS NULL AND canonicalId IS NULL
             AND (isGhost = 0 OR isGhost IS NULL)`,
       )
       .all(scope.ownerId);
@@ -962,7 +932,7 @@ export const contactService = {
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday,
+             lat, lng, geoSource, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday,
              -- The last run's outcome, for the Enrichment page's "Found
              -- nothing" filter, without sending every record's JSON.
              CASE WHEN json_valid(aiResearch)

@@ -4,51 +4,51 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 // Nominatim's usage policy allows at most one request a second.
 export const INTER_REQUEST_DELAY_MS = 1100;
 
-export interface GeoResult {
-  lat: number;
-  lng: number;
-  provider: string;
+/** What a lookup got: a place, nothing, or no answer (busy, down or offline). */
+export type GeoOutcome =
+  | {
+      status: "found";
+      lat: number;
+      lng: number;
+      provider: string;
+      displayName?: string;
+    }
+  | { status: "none" }
+  | { status: "error" };
+
+/**
+ * When the next Nominatim call may start. The queue and the place search both
+ * wait for it, so the whole server keeps to one call a second.
+ */
+let nextTurnAt = 0;
+
+async function takeTurn(): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, nextTurnAt);
+  nextTurnAt = at + INTER_REQUEST_DELAY_MS;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
 }
 
 /**
- * Resolve an address with Nominatim (OpenStreetMap), the one geocoder.
- *
- * The fallback is to a broader address, not to another provider. When a query
- * finds nothing, the first comma-separated part is dropped and the rest is
- * tried, up to four queries, with the rate-limit pause between them.
+ * Resolve an address with Nominatim. Nothing found drops the first comma part
+ * and tries the rest, up to four queries. No answer stops at once.
  */
 export async function geocodeWithFallback(
   location: string,
-): Promise<GeoResult | null> {
-  let searchStr = location;
-
-  for (let fallback = 0; fallback < 4 && searchStr.length > 0; fallback++) {
-    try {
-      const result = await geocodeSingle(searchStr);
-      if (result) return { ...result, provider: "Nominatim" };
-
-      const parts = searchStr.split(",");
-      if (parts.length <= 1) break;
-      searchStr = parts.slice(1).join(",").trim();
-
-      if (fallback < 3) {
-        await new Promise((r) => setTimeout(r, INTER_REQUEST_DELAY_MS));
-      }
-    } catch (err: unknown) {
-      log.error(
-        "Geocode",
-        `API error for "${searchStr}": ${getErrorMessage(err)}`,
-      );
-      break;
-    }
+): Promise<GeoOutcome> {
+  let query = location;
+  for (let step = 0; step < 4 && query.length > 0; step++) {
+    const outcome = await geocodeSingle(query);
+    if (outcome.status !== "none") return outcome;
+    const parts = query.split(",");
+    if (parts.length <= 1) break;
+    query = parts.slice(1).join(",").trim();
   }
-
-  return null;
+  return { status: "none" };
 }
 
-async function geocodeSingle(
-  query: string,
-): Promise<{ lat: number; lng: number } | null> {
+async function geocodeSingle(query: string): Promise<GeoOutcome> {
+  await takeTurn();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
@@ -68,14 +68,21 @@ async function geocodeSingle(
         "Geocode",
         `Nominatim returned HTTP ${res.status} for "${query}"`,
       );
-      return null;
+      return { status: "error" };
     }
-    const data = await res.json();
-    if (data?.[0]) {
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    }
+    const hit = (await res.json())?.[0];
+    if (!hit) return { status: "none" };
+    return {
+      status: "found",
+      lat: parseFloat(hit.lat),
+      lng: parseFloat(hit.lon),
+      provider: "Nominatim",
+      displayName: hit.display_name,
+    };
+  } catch (err: unknown) {
+    log.error("Geocode", `API error for "${query}": ${getErrorMessage(err)}`);
+    return { status: "error" };
   } finally {
     clearTimeout(timeoutId);
   }
-  return null;
 }

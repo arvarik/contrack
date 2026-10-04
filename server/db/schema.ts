@@ -1233,6 +1233,8 @@ export const geocodeCache = sqliteTable("geocode_cache", {
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
+  /** The place the answer names (0003_map_pins). */
+  displayName: text("displayName"),
 });
 
 // =============================================================================

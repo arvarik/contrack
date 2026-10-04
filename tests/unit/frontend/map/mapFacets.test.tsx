@@ -80,13 +80,15 @@ const rows = toMapContacts([
 ] as never);
 
 /** The filter over `rows`, opened at `/map?q=<query>`, and the address. */
-function renderFilter(query = "") {
+function renderFilter(query = "", more = "") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/map?q=${encodeURIComponent(query)}`]}>
+      <MemoryRouter
+        initialEntries={[`/map?q=${encodeURIComponent(query)}${more}`]}
+      >
         {children}
       </MemoryRouter>
     </QueryClientProvider>
@@ -139,6 +141,15 @@ describe("the map's filter", () => {
     expect(result.current.filter.parsed.filters).toEqual([]);
     expect(ids(result)).toEqual(["vc", "fintech"]);
     await waitFor(() => expect(result.current.search).toBe(""));
+  });
+
+  it("keeps only the people Ask sent, until that filter is removed", async () => {
+    const result = renderFilter("", "&people=fintech,gone");
+    expect(ids(result)).toEqual(["fintech"]);
+    expect(result.current.filter.hasActiveFilter).toBe(true);
+    act(() => result.current.filter.clearPeople());
+    await waitFor(() => expect(ids(result)).toEqual(["vc", "fintech"]));
+    expect(result.current.search).not.toContain("people");
   });
 
   it("looks up a near: place once, as soon as its pill forms", async () => {

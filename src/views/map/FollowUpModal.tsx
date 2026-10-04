@@ -1,20 +1,15 @@
 /**
- * FollowUpModal — Creates follow-up action items in bulk or for an individual contact.
- *
- * Provides:
- * - Title input for the action item
- * - Due date presets: Tomorrow, 3 days, Next week, or a custom date picker
- * - Cap at 100 contacts with an informative toast
- * - Invalidation of actionItems, dashboard, and contacts queries
+ * FollowUpModal — one follow-up for each selected contact, sent as one
+ * request that saves all of them or none.
  *
  * @module views/map/FollowUpModal
  */
 import React, { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Calendar } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { apiFetch } from "../../api/client";
+import { useBulkCreateActionItems } from "../../api/actionItems";
+import { MAX_BULK_ACTION_ITEMS } from "../../../shared/contracts/actionItems";
 import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";
@@ -64,8 +59,9 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   const [preset, setPreset] = useState<DueDatePreset>("tomorrow");
   const [customDate, setCustomDate] = useState(() => getPresetDate("tomorrow"));
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const queryClient = useQueryClient();
+  const bulkCreate = useBulkCreateActionItems();
+  const count = contactIds.length;
+  const tooMany = count > MAX_BULK_ACTION_ITEMS;
 
   const handleClose = () => {
     if (isSubmitting) return;
@@ -77,35 +73,18 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || isSubmitting) return;
+    if (!title.trim() || tooMany || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       const dueAt = preset === "pick" ? customDate : getPresetDate(preset);
-      const targetIds = contactIds.slice(0, 100);
-
-      if (contactIds.length > 100) {
-        toast.info("Follow-ups capped at 100 contacts");
-      }
-
-      await Promise.all(
-        targetIds.map(async (id) => {
-          const res = await apiFetch(`/contacts/${id}/action-items`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: title.trim(),
-              dueAt,
-            }),
-          });
-          if (!res.ok) {
-            throw new Error(`Failed to create follow-up for contact ${id}`);
-          }
-        }),
-      );
-
+      const { count: added } = await bulkCreate.mutateAsync({
+        contactIds,
+        title: title.trim(),
+        dueAt,
+      });
       toast.success(
-        `Added follow-up for ${targetIds.length} contact${targetIds.length !== 1 ? "s" : ""}`,
+        `Added follow-up for ${added} contact${added !== 1 ? "s" : ""}`,
       );
       handleClose();
       onSuccess?.();
@@ -113,14 +92,10 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to add follow-up: ${message}`);
     } finally {
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
       setIsSubmitting(false);
     }
   };
 
-  const count = contactIds.length;
   const modalTitle =
     count === 1 ? "Add follow-up" : `Add follow-up (${count} selected)`;
 
@@ -187,6 +162,13 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
           </div>
         )}
 
+        {tooMany && (
+          <p className="text-xs text-error font-medium">
+            A follow-up can go to {MAX_BULK_ACTION_ITEMS} people at a time.
+            Select fewer people to add it
+          </p>
+        )}
+
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
           <button
             type="button"
@@ -198,14 +180,12 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || !title.trim()}
+            disabled={isSubmitting || !title.trim() || tooMany}
             className="btn-primary"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>
-              {count === 1
-                ? "Add follow-up"
-                : `Add to ${Math.min(count, 100)} contacts`}
+              {count === 1 ? "Add follow-up" : `Add to ${count} contacts`}
             </span>
           </button>
         </div>

@@ -149,18 +149,21 @@ letters like the others. The list is one `Tab` stop. See
 
 These work on the **Map** page, also while a contact is open over the map.
 `Enter` and `Space` work on a pin that has focus: `Enter` opens the contact,
-and `Space` moves into its card's buttons. See
+and `Space` moves into its card's buttons. The single keys do nothing while a
+menu is open or a dialog has the focus. See
 [Select contacts on the map](map.md#select-contacts-on-the-map).
 
-| Keys    | What it does                  | Single key |
-| ------- | ----------------------------- | ---------- |
-| `/`     | Focus search                  | Yes        |
-| `F`     | Fit all in view               | Yes        |
-| `I`     | Toggle insights pane          | Yes        |
-| `L`     | Lasso select                  | Yes        |
-| `Esc`   | Clear selection or close card | No         |
-| `Enter` | Open contact                  | No         |
-| `Space` | Card actions                  | No         |
+| Keys    | What it does                   | Single key |
+| ------- | ------------------------------ | ---------- |
+| `/`     | Focus search                   | Yes        |
+| `F`     | Fit all in view                | Yes        |
+| `I`     | Toggle insights pane           | Yes        |
+| `L`     | Lasso select                   | Yes        |
+| `Esc`   | Clear selection or close card  | No         |
+| `Enter` | Open contact                   | No         |
+| `Space` | Card actions                   | No         |
+| `⌥ ↑`   | Move a view up, in **Views**   | No         |
+| `⌥ ↓`   | Move a view down, in **Views** | No         |
 
 ## Contact
 

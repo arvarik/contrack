@@ -58,7 +58,7 @@ const ACTIONS: {
 const MORE = "text-[11px] font-semibold text-on-surface-variant";
 
 export const cardId = (id: string) => `map-hover-card-${id}`;
-export const clusterCardId = (id: number) => `map-cluster-card-${id}`;
+export const clusterCardId = (key: string) => `map-cluster-card-${key}`;
 
 /** The most urgent fact: a follow-up due within the week, or the last contact. */
 function statusOf(contact: MapContact) {
@@ -302,7 +302,7 @@ export const ClusterPreview = ({
       {...popupProps}
     >
       <div
-        id={clusterCardId(cluster.clusterId)}
+        id={clusterCardId(cluster.key)}
         role="tooltip"
         className="w-60 space-y-2 font-body"
       >

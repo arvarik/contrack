@@ -1323,6 +1323,18 @@ html[data-text-scale="large"] {
   border-radius: 1rem;
 }
 
+/* The pin of the open contact, of an open card or of a list row: a halo.
+   While a contact is open the other pins step back until pointed at. */
+.contact-map .map-pin[data-halo] {
+  box-shadow:
+    0 0 0 4px var(--color-primary),
+    0 0 0 10px color-mix(in oklab, var(--color-primary) 30%, transparent),
+    0 4px 12px rgb(0 0 0 / 0.2);
+}
+.contact-map .map-pin[data-dimmed]:not(:hover, :focus-visible) {
+  opacity: 0.45;
+}
+
 /*
  * The credit sits on top of the zoom buttons, and opens there as a card no
  * wider than 13rem, which wraps its words onto a second line. At the foot

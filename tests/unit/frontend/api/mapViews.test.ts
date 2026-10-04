@@ -1,10 +1,16 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, it, expect, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   fetchMapViews,
   createMapView,
   updateMapView,
-  deleteMapView,
+  useDeleteMapView,
   type MapBounds,
+  type MapView,
 } from "../../../../src/api/mapViews";
 import * as client from "../../../../src/api/client";
 
@@ -12,6 +18,7 @@ vi.mock("../../../../src/api/client", () => ({
   apiJson: vi.fn(),
   jsonBody: vi.fn((body) => ({ body: JSON.stringify(body) })),
 }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -59,6 +66,11 @@ describe("api/mapViews client functions", () => {
       [0, 50, 10, 40],
       /South latitude must be less than north latitude/,
     ],
+    [
+      "the west east of the east",
+      [170, -20, -170, 20],
+      /West longitude must be less than east longitude/,
+    ],
   ])(
     "refuses to create a map view with %s, and sends nothing",
     async (_label, bounds, message) => {
@@ -91,13 +103,42 @@ describe("api/mapViews client functions", () => {
     expect(client.apiJson).not.toHaveBeenCalled();
   });
 
-  it("deletes map view", async () => {
-    vi.mocked(client.apiJson).mockResolvedValueOnce({ success: true });
-    const res = await deleteMapView("v1");
-    expect(res).toEqual({ success: true });
-    expect(client.apiJson).toHaveBeenCalledWith(
-      "/map/views/v1",
-      expect.objectContaining({ method: "DELETE" }),
-    );
+  it("deletes a view, and the toast's Undo saves it again as it was", async () => {
+    const view: MapView = {
+      id: "v1",
+      name: "London",
+      query: "tag:vip",
+      layer: "heat",
+      bounds: [-0.5, 51.3, 0.2, 51.7],
+      sortOrder: 3,
+      createdAt: "2026-09-19T00:00:00.000Z",
+      updatedAt: "2026-09-19T00:00:00.000Z",
+    };
+    vi.mocked(client.apiJson).mockResolvedValue({ success: true });
+    const queryClient = new QueryClient();
+    const { result } = renderHook(() => useDeleteMapView(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    });
+
+    await act(() => result.current.mutateAsync(view));
+    expect(client.apiJson).toHaveBeenCalledWith("/map/views/v1", {
+      method: "DELETE",
+    });
+
+    const [message, options] = vi.mocked(toast.success).mock.calls[0];
+    expect(message).toBe('View "London" deleted');
+    const undo = options?.action as { label: string; onClick: () => void };
+    expect(undo.label).toBe("Undo");
+    undo.onClick();
+    expect(client.apiJson).toHaveBeenLastCalledWith("/map/views", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "London",
+        query: "tag:vip",
+        layer: "heat",
+        bounds: [-0.5, 51.3, 0.2, 51.7],
+      }),
+    });
   });
 });

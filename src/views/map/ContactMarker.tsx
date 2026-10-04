@@ -11,8 +11,9 @@
  *
  * @module views/map/ContactMarker
  */
-import { memo, useRef, useState } from "react";
+import { memo, useId, useRef, useState } from "react";
 import { Marker } from "@vis.gl/react-maplibre";
+import { isPastDay } from "../../../shared/dates";
 import type { MapContact } from "../../../shared/geo";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
@@ -50,18 +51,35 @@ export type PinEvent = "enter" | "leave" | "focus" | "blur" | "space" | "tap";
 
 interface ContactMarkerProps {
   contact: MapContact;
+  /** The open contact's pin, which wears the halo. */
   selected: boolean;
   multiSelected?: boolean;
+  /** Its card is open, or a list row points at it: the halo too. */
+  marked?: boolean;
+  /** Another contact is open, so this pin steps back. */
+  dimmed?: boolean;
   onSelect: (id: string) => void;
   onCard: (id: string, event: PinEvent) => void;
   /** The pin's card is open as a tooltip, which then describes the pin. */
   described?: boolean;
 }
 
+/** The red dot of an overdue follow-up, and what a screen reader hears. */
+export const OverdueDot = ({ id, label }: { id: string; label: string }) => (
+  <span
+    id={id}
+    className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-error ring-2 ring-surface-container-lowest"
+  >
+    <span className="sr-only">{label}</span>
+  </span>
+);
+
 export const ContactMarker = memo(function ContactMarker({
   contact,
   selected,
   multiSelected = false,
+  marked = false,
+  dimmed = false,
   onSelect,
   onCard,
   described = false,
@@ -71,21 +89,31 @@ export const ContactMarker = memo(function ContactMarker({
   // The last press. A tap's focus and click are not a mouse's.
   const press = useRef<{ type: string; x: number; y: number } | null>(null);
   const { id } = contact;
+  // Overdue by the bottom line's rule: a red dot, and the pin's description.
+  const overdue = isPastDay(contact.nextFollowUpAt);
+  const overdueId = useId();
 
-  const isHighlighted = selected || multiSelected;
+  const halo = selected || marked;
+  const raised = halo || multiSelected;
 
   return (
     <Marker
       longitude={contact.lng}
       latitude={contact.lat}
       anchor="center"
-      style={{ zIndex: isHighlighted ? 2 : 1 }}
+      style={{ zIndex: raised ? 2 : 1 }}
     >
       <button
         type="button"
         aria-label={contactPinLabel(contact)}
-        aria-describedby={described ? cardId(id) : undefined}
+        aria-describedby={
+          [overdue && overdueId, described && cardId(id)]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         data-contact-id={id}
+        data-halo={halo || undefined}
+        data-dimmed={dimmed || undefined}
         onClick={() => {
           if (press.current?.type !== "touch") onSelect(id);
         }}
@@ -129,13 +157,13 @@ export const ContactMarker = memo(function ContactMarker({
           onCard(id, "blur");
         }}
         className={cn(
-          "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
+          "map-pin relative block w-12 h-12 rounded-full cursor-pointer",
           "bg-surface-container-lowest shadow-md",
-          isHighlighted
+          raised
             ? "ring-4 ring-primary -translate-y-1 shadow-lg"
             : "ring-[3px] ring-primary",
-          // The lift on hover and on selection runs at the base duration.
-          "transition-transform hover:-translate-y-1",
+          // The lift and the dimming run at the base duration.
+          "transition-[translate,opacity] hover:-translate-y-1",
         )}
       >
         <img
@@ -143,8 +171,9 @@ export const ContactMarker = memo(function ContactMarker({
           alt=""
           draggable={false}
           onError={() => setBroken(true)}
-          className="w-full h-full object-cover"
+          className="w-full h-full rounded-full object-cover"
         />
+        {overdue && <OverdueDot id={overdueId} label="Follow-up overdue" />}
       </button>
     </Marker>
   );

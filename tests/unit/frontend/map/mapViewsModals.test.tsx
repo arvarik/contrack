@@ -69,6 +69,24 @@ describe("SaveViewModal", () => {
     });
   });
 
+  it("says that a view does not save the overdue filter or Ask's people", () => {
+    const props = { isOpen: true, onClose: vi.fn(), onSave: vi.fn() };
+    const { rerender } = render(
+      <SaveViewModal {...props} currentLayer="pins" />,
+    );
+    expect(screen.queryByText(/overdue filter/)).toBeNull();
+
+    rerender(
+      <SaveViewModal {...props} currentLayer="pins" overdueOnly fromAsk />,
+    );
+    expect(
+      screen.getByText("The overdue filter is not saved with the view"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("The people from Ask are not saved with the view"),
+    ).toBeTruthy();
+  });
+
   it("displays server rejection error message", async () => {
     const handleSave = vi
       .fn()
@@ -181,11 +199,12 @@ describe("ViewsMenu actions", () => {
     },
   ];
 
-  it("handles rename, delete, and save actions", () => {
+  it("handles rename, delete, save and update actions", () => {
     const handleSelectView = vi.fn();
     const handleOpenSave = vi.fn();
     const handleStartRename = vi.fn();
     const handleDeleteView = vi.fn();
+    const handleUpdateView = vi.fn();
 
     render(
       <ViewsMenu
@@ -195,10 +214,17 @@ describe("ViewsMenu actions", () => {
         onOpenSaveModal={handleOpenSave}
         onStartRename={handleStartRename}
         onDeleteView={handleDeleteView}
+        lastView={mockViews[0]}
+        onUpdateView={handleUpdateView}
       />,
     );
 
     const trigger = screen.getByRole("button", { name: "Saved views" });
+    fireEvent.click(trigger);
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Update “Alpha View” to this map" }),
+    );
+    expect(handleUpdateView).toHaveBeenCalledWith(mockViews[0]);
     fireEvent.click(trigger);
 
     // Click Rename button
@@ -225,6 +251,39 @@ describe("ViewsMenu actions", () => {
     });
     fireEvent.click(saveMenuItem);
     expect(handleOpenSave).toHaveBeenCalled();
+  });
+
+  it("moves a view by a drag, or by Alt and an arrow", () => {
+    const views = [
+      mockViews[0],
+      { ...mockViews[0], id: "view-2", name: "Beta View", sortOrder: 1 },
+    ];
+    const onMoveView = vi.fn();
+    render(
+      <ViewsMenu
+        views={views}
+        activeViewId={null}
+        onSelectView={vi.fn()}
+        onOpenSaveModal={vi.fn()}
+        onStartRename={vi.fn()}
+        onDeleteView={vi.fn()}
+        onMoveView={onMoveView}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Saved views" }));
+    const alpha = screen.getByRole("menuitem", { name: "Alpha View" });
+    const beta = screen.getByRole("menuitem", { name: "Beta View" });
+
+    fireEvent.keyDown(alpha, { key: "ArrowDown", altKey: true });
+    expect(onMoveView).toHaveBeenLastCalledWith(views[0], 1);
+    // The first view cannot move up.
+    fireEvent.keyDown(alpha, { key: "ArrowUp", altKey: true });
+    expect(onMoveView).toHaveBeenCalledTimes(1);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "" };
+    fireEvent.dragStart(beta.parentElement!, { dataTransfer });
+    fireEvent.drop(alpha.parentElement!, { dataTransfer });
+    expect(onMoveView).toHaveBeenLastCalledWith(views[1], 0);
   });
 
   // `role="menu"` promises the arrows. They move between the items, wrap at

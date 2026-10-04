@@ -1,6 +1,7 @@
 import { apiJson, jsonBody } from "./client";
 import { corvidReact } from "../lib/corvid";
 import { actionItemRoutes } from "../../shared/contracts/actionItems";
+import type { BodyOf } from "../../shared/contracts/route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ActionItem } from "../types";
 
@@ -21,6 +22,24 @@ export const useUrgentActionItemCount = () => {
       apiJson(actionItemRoutes.count, `/action-items/count`, { signal }),
     // We poll this occasionally or rely on invalidation from mutations
     staleTime: 1000 * 60 * 5, // 5 mins
+  });
+};
+
+/** One follow-up for each contact, in one request that saves all or none. */
+export const useBulkCreateActionItems = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BodyOf<typeof actionItemRoutes.bulkCreate>) =>
+      apiJson(
+        actionItemRoutes.bulkCreate,
+        "/action-items/bulk",
+        jsonBody(body),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
   });
 };
 

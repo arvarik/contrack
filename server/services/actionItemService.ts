@@ -16,7 +16,9 @@ import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
+import { NotFoundError } from "../utils/AppError.ts";
 import type { Scope } from "../tenancy/scope.ts";
+import { contactRepo } from "../repositories/contactRepository.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
 
 /**
@@ -149,6 +151,44 @@ export const actionItemService = {
       `Created "${title}" for contact ${contactId} due ${dueAt}`,
     );
     return findOwnedItem(scope, id);
+  },
+
+  /**
+   * The same action item for many contacts, in one transaction. One id the
+   * scope cannot use refuses the whole call, as `bulkAddMembers` does.
+   */
+  createMany(
+    scope: Scope,
+    contactIds: string[],
+    title: string,
+    dueAt: string,
+  ): number {
+    const unique = [...new Set(contactIds)];
+    const usable = contactRepo
+      .findManyOwned(scope, unique)
+      .filter((row) => row.deletedAt == null && row.canonicalId == null);
+    if (usable.length !== unique.length) throw new NotFoundError("Contact");
+
+    const insert = sqlite.prepare(
+      "INSERT INTO action_items (id, contactId, ownerId, title, dueAt) VALUES (?, ?, ?, ?, ?)",
+    );
+    sqlite.transaction(() => {
+      for (const { id: contactId } of usable) {
+        const id = crypto.randomUUID();
+        insert.run(id, contactId, scope.ownerId, title, dueAt);
+        recordEvent(scope, "action_item.created", id, {
+          contactId,
+          interactionId: null,
+        });
+      }
+    })();
+    dispatchEvents();
+
+    log.info(
+      "ActionItems",
+      `Created "${title}" for ${usable.length} contacts due ${dueAt}`,
+    );
+    return usable.length;
   },
 
   /**

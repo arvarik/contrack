@@ -3,12 +3,14 @@
  *
  * Provides:
  * - Search & facet filter input powered by `useMapFilter`
- * - Facet pills for locked filters (including `list:`, `near:`)
+ * - Facet pills for locked filters (including `list:`, `near:`), and "Clear
+ *   all" beside them while any filter is on, the overdue filter too
  * - Autocomplete dropdown for facet prefixes (including `list:` and `tag:`)
- * - "Go to" place search mode with `flyTo` zoom 10 and inline error
+ * - "Go to" place search mode with `flyTo` zoom 10, a toast naming the
+ *   place it found, and the server's own words inline when it fails
  * - "Fit all" button, which the page fits (F does the same)
  * - Mobile filter sheet via Modal below `lg` breakpoint
- * - "0 of N match" empty state with "Clear filters" button
+ * - "0 of N match" empty state
  * - "Select" menu (box, lasso, all in view) as an `ActionMenu`, so it reads
  *   and behaves like every other menu in the app
  *
@@ -37,12 +39,12 @@ import {
 } from "../../components/ui/ActionMenu";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
-import { ViewsMenu } from "./ViewsMenu";
+import { ViewsMenu, type ViewsMenuProps } from "./ViewsMenu";
 import type { MapFilter } from "./useMapFilter";
 import { prefersReducedMotion } from "./flyTo";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
-import { SELECTED_TINT } from "../../lib/styles";
+import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -69,6 +71,8 @@ interface MapToolbarProps {
   onOpenSaveModal?: () => void;
   onStartRename?: (view: MapView) => void;
   onDeleteView?: (view: MapView) => void;
+  /** Update and move, for the Views menu. */
+  viewEdits?: Pick<ViewsMenuProps, "lastView" | "onUpdateView" | "onMoveView">;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   /**
    * How much map an open contact leaves at the toolbar's left, in px. Null
@@ -94,6 +98,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onOpenSaveModal,
   onStartRename,
   onDeleteView,
+  viewEdits,
   inputRef: externalInputRef,
   room = null,
   onFitAll,
@@ -137,7 +142,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
   // Go to place search
   const handleGoTo = useCallback(async () => {
-    if (!map || !gotoQuery.trim()) return;
+    // The place search needs two characters, as the pin dialog's Find does.
+    if (!map || gotoQuery.trim().length < 2) return;
     setGotoLoading(true);
     setGotoError(null);
     try {
@@ -156,12 +162,17 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           padding,
         });
       }
+      if (res.displayName) toast(`Showing ${res.displayName}`);
       setGotoQuery("");
       setGotoError(null);
       setMode("filter");
       setIsMobileSheetOpen(false);
-    } catch {
-      setGotoError("Nothing found for that place");
+    } catch (error) {
+      // The server says which: nothing found, a busy geocoder, no server.
+      setGotoError(
+        (error instanceof Error && error.message) ||
+          "Nothing found for that place",
+      );
     } finally {
       setGotoLoading(false);
     }
@@ -292,13 +303,38 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Facet Pills */}
-      {mode === "filter" && filter.effectiveFilters.length > 0 && (
-        <div className="w-full">
-          <FacetPills
-            filters={filter.effectiveFilters}
-            onRemove={filter.removeFacet}
-          />
+      {/* Facet Pills, and Clear all while a filter is on: text, pills or
+          the overdue filter on the bottom line */}
+      {mode === "filter" && filter.hasActiveFilter && (
+        <div className="flex items-end gap-2 w-full">
+          <div className="flex-1 min-w-0">
+            <FacetPills
+              filters={filter.effectiveFilters}
+              onRemove={filter.removeFacet}
+            />
+            {filter.people && (
+              <button
+                type="button"
+                onClick={filter.clearPeople}
+                aria-label="Remove filter: the people from Ask"
+                className={cn(
+                  "hit-area state-layer group mx-4 mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold cursor-pointer",
+                  TONE_WASH.primary,
+                )}
+              >
+                {filter.people.size} people from Ask
+                <X className="w-3 h-3 opacity-40 group-hover:opacity-100" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={filter.clearFilters}
+            aria-label="Clear all filters"
+            className="hit-area shrink-0 px-1 py-0.5 text-xs font-semibold text-primary hover:underline cursor-pointer"
+          >
+            Clear all
+          </button>
         </div>
       )}
 
@@ -314,17 +350,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* 0 of N match empty state */}
+      {/* 0 of N match empty state. Clear all is beside the pills. */}
       {filter.hasActiveFilter && filter.matchCount === 0 && (
-        <div className="flex items-center justify-between text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
-          <span>0 of {filter.totalCount} match</span>
-          <button
-            type="button"
-            onClick={filter.clearFilters}
-            className="text-primary hover:underline font-semibold cursor-pointer ml-2"
-          >
-            Clear filters
-          </button>
+        <div className="text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
+          0 of {filter.totalCount} match
         </div>
       )}
 
@@ -349,6 +378,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 onOpenSaveModal={onOpenSaveModal}
                 onStartRename={onStartRename ?? (() => {})}
                 onDeleteView={onDeleteView ?? (() => {})}
+                {...viewEdits}
               />
             )}
 
@@ -408,6 +438,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             }}
             onStartRename={onStartRename ?? (() => {})}
             onDeleteView={onDeleteView ?? (() => {})}
+            {...viewEdits}
           />
         </div>
       )}

@@ -357,6 +357,7 @@ const slimContactSchema = z
       nextFollowUpAt: true,
       lat: true,
       lng: true,
+      geoSource: true,
       relationshipScore: true,
       isTracked: true,
       trackedAt: true,

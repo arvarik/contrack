@@ -10,8 +10,9 @@
  * throttled to one read per animation frame. The loaded tiles cover a little
  * more than the viewport, and a feature near a tile edge is in more than one
  * tile, so the result is deduplicated by `cluster_id` for a cluster and by
- * contact id for a point. State changes only when the set of features or a
- * position changes, so a pan does not re-render every marker.
+ * contact id for a point. Past the cluster zoom, points at one spot are one
+ * stack. State changes only when the set of features or a position changes,
+ * so a pan does not re-render every marker.
  *
  * @module views/map/useClusterFeatures
  */
@@ -21,7 +22,10 @@ import type { Map as MapLibreMap, MapSourceDataEvent } from "maplibre-gl";
 export interface ClusterFeature {
   kind: "cluster";
   key: string;
-  clusterId: number;
+  /** MapLibre's id. A stack of points past the cluster zoom has none. */
+  clusterId?: number;
+  /** A stack's people. A cluster's come from MapLibre. */
+  ids?: string[];
   count: number;
   longitude: number;
   latitude: number;
@@ -68,34 +72,40 @@ export function toVisibleFeatures(
   features: readonly QueriedFeature[],
 ): VisibleFeature[] {
   const seen = new Set<string>();
-  const result: VisibleFeature[] = [];
+  const result = new Map<string, VisibleFeature>();
   for (const feature of features) {
     const point = pointOf(feature);
     const properties = feature.properties ?? {};
     if (!point) continue;
     if (properties.cluster) {
       const clusterId = Number(properties.cluster_id);
-      if (!Number.isFinite(clusterId)) continue;
       const key = `cluster:${clusterId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({
-        kind: "cluster",
-        key,
-        clusterId,
-        count: Number(properties.point_count) || 0,
-        ...point,
-      });
-    } else {
-      const id = properties.id;
-      if (typeof id !== "string" || !id) continue;
-      const key = `point:${id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({ kind: "point", key, id, ...point });
+      if (!Number.isFinite(clusterId) || result.has(key)) continue;
+      const count = Number(properties.point_count) || 0;
+      result.set(key, { kind: "cluster", key, clusterId, count, ...point });
+      continue;
     }
+    const id = properties.id;
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    // One tile decodes one spot to one position, so equal is exact here.
+    const at = `${point.longitude},${point.latitude}`;
+    const spot = result.get(`at:${at}`);
+    const ids = spot?.kind === "point" ? [spot.id] : (spot?.ids ?? []);
+    result.set(
+      `at:${at}`,
+      ids.length
+        ? {
+            kind: "cluster",
+            key: `stack:${at}`,
+            ids: [...ids, id],
+            count: ids.length + 1,
+            ...point,
+          }
+        : { kind: "point", key: `point:${id}`, id, ...point },
+    );
   }
-  return result;
+  return [...result.values()];
 }
 
 /** True when both lists hold the same features at the same positions. */

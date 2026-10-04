@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   HistoryIcon,
+  MapPin,
   RotateCw,
   SearchX,
 } from "lucide-react";
@@ -507,6 +508,19 @@ export const SearchView = () => {
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* A list of facets shows every match, and AI's
+                          answer shows its people. */}
+                      <Link
+                        to={
+                          networkQuery
+                            ? `/map?q=${encodeURIComponent(networkQuery)}`
+                            : `/map?people=${results.map((m) => m.id).join(",")}`
+                        }
+                        className={BTN_QUIET}
+                      >
+                        <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+                        Show on map
+                      </Link>
                       {/* The rest of a list of facets, where it can be
                           sorted and acted on. */}
                       {networkQuery && total > results.length && (

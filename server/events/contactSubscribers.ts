@@ -39,7 +39,7 @@ import { scopeForOwnerId } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { scheduleSearchIndex } from "../services/search/indexQueue.ts";
 import { generateAndStoreEmbedding } from "../services/dedupe/embeddings.ts";
-import { queueGeocode } from "../services/geocoding/index.ts";
+import { pinState, queueGeocode } from "../services/geocoding/index.ts";
 import { relationshipService } from "../services/relationshipService.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
@@ -110,8 +110,6 @@ const addedOneByOne = (payload: EventPayload<"contact.created">) =>
 
 interface ContactFacts {
   name: string | null;
-  location: string | null;
-  geoSource: string | null;
   isGhost: number | null;
   isArchived: number | null;
   deletedAt: string | null;
@@ -121,21 +119,10 @@ interface ContactFacts {
 function contactFacts(event: AnyDomainEvent): ContactFacts | undefined {
   return sqlite
     .prepare(
-      `SELECT name, location, geoSource, isGhost, isArchived, deletedAt
+      `SELECT name, isGhost, isArchived, deletedAt
          FROM contacts WHERE id = ? AND ownerId = ?`,
     )
     .get(event.subjectId, event.ownerId) as ContactFacts | undefined;
-}
-
-/** The address the contact page shows first: the primary, else the first. */
-function primaryAddress(contactId: string): string | null {
-  const row = sqlite
-    .prepare(
-      `SELECT address FROM contact_addresses WHERE contactId = ?
-        ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1`,
-    )
-    .get(contactId) as { address: string | null } | undefined;
-  return row?.address || null;
 }
 
 /**
@@ -229,30 +216,15 @@ const geocode: Subscriber = {
   id: "contacts.geocode",
   types: ["contact.created", "contact.updated"],
   handle(event) {
-    let text: string | null = null;
-    if (event.type === "contact.created") {
-      if (event.payload.origin === "mention") return;
-      const facts = contactFacts(event);
-      if (!facts) return;
-      // An import reads the location field and not the address rows, as it
-      // always has.
-      text =
-        facts.location ||
-        (event.payload.origin === "import"
-          ? null
-          : primaryAddress(event.subjectId));
-    } else if (event.type === "contact.updated") {
-      const { changed } = event.payload;
-      if (!touches(changed, ADDRESS_FIELDS)) return;
-      const facts = contactFacts(event);
-      if (!facts || facts.geoSource === "manual") return;
-      text =
-        (changed.includes("location") ? facts.location : null) ||
-        (changed.includes("addresses")
-          ? primaryAddress(event.subjectId)
-          : null);
-    }
-    if (text) queueGeocode(event.subjectId, text);
+    if (event.type === "contact.created" && event.payload.origin === "mention")
+      return;
+    if (
+      event.type === "contact.updated" &&
+      !touches(event.payload.changed, ADDRESS_FIELDS)
+    )
+      return;
+    const pin = pinState(event.ownerId, event.subjectId);
+    if (pin.shown && !pin.manual) queueGeocode(event.subjectId, pin.shown);
   },
 };
 
