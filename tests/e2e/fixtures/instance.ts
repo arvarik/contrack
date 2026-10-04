@@ -35,6 +35,8 @@ export interface InstanceOptions {
    * Applied last, so a value here wins over the defaults below.
    */
   env?: Record<string, string>;
+  /** Set PUBLIC_URL to this instance's own address, which OAuth needs. */
+  publicUrl?: boolean;
 }
 
 /** A free TCP port on the loopback interface. */
@@ -107,6 +109,7 @@ export class ContrackInstance {
         // The local embedding model would otherwise be fetched into the
         // developer's cache. Nothing in this suite embeds anything.
         TRANSFORMERS_CACHE: path.join(dataDir, ".cache"),
+        PUBLIC_URL: options.publicUrl ? baseURL : "",
         ...options.env,
       },
     });

@@ -103,7 +103,77 @@ export const apiTokens = sqliteTable("api_tokens", {
   revokedAt: text("revokedAt"),
   /** 1 for a token that may read and call the read-only MCP tools only. */
   readOnly: integer("readOnly").notNull().default(0),
+  /** `personal`, or `oauth` for an app a person approved (oauth_* tables). */
+  kind: text("kind").notNull().default("personal"),
+  /** The oauth_clients id of an `oauth` grant. */
+  clientId: text("clientId"),
 });
+
+/**
+ * oauth_clients — the apps that may ask for an OAuth grant. A registered
+ * client's id is `ctc_…`. A client with a metadata document uses its URL.
+ */
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  source: text("source").notNull(),
+  name: text("name").notNull(),
+  /** JSON array of the exact redirect URIs. */
+  redirectUris: text("redirectUris").notNull(),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  lastUsedAt: text("lastUsedAt"),
+  /** A metadata document is read again after this. */
+  staleAt: text("staleAt"),
+});
+
+/** oauth_requests — one sign-in from the authorize link to the code. */
+export const oauthRequests = sqliteTable(
+  "oauth_requests",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("clientId")
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    redirectUri: text("redirectUri").notNull(),
+    state: text("state"),
+    codeChallenge: text("codeChallenge").notNull(),
+    wantsWrite: integer("wantsWrite").notNull(),
+    userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
+    readOnly: integer("readOnly"),
+    codeHash: text("codeHash").unique(),
+    grantId: text("grantId"),
+    usedAt: text("usedAt"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    expiresAt: text("expiresAt").notNull(),
+  },
+  (table) => [index("idx_oauth_requests_expires").on(table.expiresAt)],
+);
+
+/** oauth_tokens — a grant's access and refresh tokens, as SHA-256. */
+export const oauthTokens = sqliteTable(
+  "oauth_tokens",
+  {
+    tokenHash: text("tokenHash").primaryKey(),
+    grantId: text("grantId")
+      .notNull()
+      .references(() => apiTokens.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    /** The refresh token this one replaced. */
+    parentHash: text("parentHash"),
+    expiresAt: text("expiresAt").notNull(),
+    usedAt: text("usedAt"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [
+    index("idx_oauth_tokens_grant").on(table.grantId),
+    index("idx_oauth_tokens_parent").on(table.parentHash),
+  ],
+);
 
 /** invitations — a signup link an admin hands out. */
 export const invitations = sqliteTable("invitations", {

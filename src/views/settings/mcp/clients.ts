@@ -10,6 +10,8 @@
  */
 
 export type McpClientId =
+  | "claude"
+  | "chatgpt"
   | "claude-code"
   | "claude-desktop"
   | "cursor"
@@ -24,14 +26,24 @@ interface McpClientSetup {
   /** The text to copy: a command, or a part of a config file. */
   code: string;
   /** Names the copy button and the toast: "command", "config". */
-  codeKind: "command" | "config" | "check";
+  codeKind: "command" | "config" | "check" | "address";
   /** A link that adds the server in one press. */
   install?: { href: string; label: string };
 }
 
+/**
+ * How a client signs in. `token`: a personal token only. `either`: a token,
+ * or OAuth in the browser when this Contrack offers it. `oauth`: OAuth only,
+ * from the vendor's servers, so it needs a public https address.
+ */
+type McpSignIn = "token" | "either" | "oauth";
+
 export interface McpClient {
   id: McpClientId;
   label: string;
+  signIn: McpSignIn;
+  /** What to do after the setup when the client signs in with OAuth. */
+  oauthStep?: string;
   setup: (endpoint: string, token: string | null) => McpClientSetup;
 }
 
@@ -51,6 +63,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "claude-code",
     label: "Claude Code",
+    signIn: "either",
+    oauthStep:
+      "Then run /mcp in Claude Code, choose contrack, and choose Authenticate",
     setup: (url, token) => ({
       steps:
         "Run this in a terminal. Every project on this computer then has Contrack, and /mcp lists it",
@@ -61,8 +76,37 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     }),
   },
   {
+    id: "claude",
+    label: "Claude",
+    signIn: "oauth",
+    setup: (url) => ({
+      steps:
+        "In Claude, open Customize, then Connectors, and select Add custom connector. Paste this address and select Add. Claude then asks you to sign in to Contrack. It works on claude.ai, in Claude Desktop and in the Claude app on your phone. On a Team or Enterprise plan, an Owner adds it for the organization",
+      codeKind: "address",
+      code: url,
+      install: {
+        label: "Open Claude connectors",
+        href: "https://claude.ai/customize/connectors",
+      },
+    }),
+  },
+  {
+    id: "chatgpt",
+    label: "ChatGPT",
+    signIn: "oauth",
+    setup: (url) => ({
+      steps:
+        "In ChatGPT, turn on developer mode in the settings, then add a connector with this address and OAuth sign-in. ChatGPT then asks you to sign in to Contrack",
+      codeKind: "address",
+      code: url,
+    }),
+  },
+  {
     id: "claude-desktop",
-    label: "Claude Desktop",
+    label: "Claude Desktop (local)",
+    signIn: "either",
+    oauthStep:
+      "The first time Claude Desktop starts it, mcp-remote opens Contrack in your browser to sign in",
     setup: (url, token) => ({
       steps:
         "In Claude Desktop, open Settings, then Developer, then Edit Config. Add this to claude_desktop_config.json and restart Claude. It starts the mcp-remote bridge, which needs Node.js",
@@ -88,6 +132,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "cursor",
     label: "Cursor",
+    signIn: "either",
+    oauthStep:
+      "The first time Cursor connects, it opens Contrack in your browser to sign in",
     setup: (url, token) => {
       const server = { url, headers: headers(token) };
       return {
@@ -105,6 +152,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "vscode",
     label: "VS Code",
+    signIn: "either",
+    oauthStep:
+      "The first time VS Code starts the server, it opens Contrack in your browser to sign in",
     setup: (url, token) => {
       const server = { type: "http", url, headers: headers(token) };
       return {
@@ -122,6 +172,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "codex",
     label: "Codex",
+    signIn: "token",
     setup: (url, token) => ({
       steps: token
         ? "Run this in a terminal. Codex reads the token from CONTRACK_TOKEN, so put the export line in your shell profile too"
@@ -135,6 +186,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "gemini",
     label: "Gemini CLI",
+    signIn: "either",
+    oauthStep:
+      "Then run /mcp auth contrack in Gemini CLI to sign in to Contrack in your browser",
     setup: (url, token) => ({
       steps:
         "Run this in a terminal. Every project on this computer then has Contrack",
@@ -148,6 +202,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "other",
     label: "Other",
+    signIn: "token",
     setup: (url, token) => ({
       steps: token
         ? "Any MCP client that speaks Streamable HTTP connects to the address above, with the token as Authorization: Bearer. This call checks that the server answers"

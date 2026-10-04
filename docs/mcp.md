@@ -19,10 +19,12 @@ talk to it. It works as your account and sees only your data.
    Contrack's address with `/api/mcp` after it, such as
    `http://localhost:3210/api/mcp`. When `PUBLIC_URL` is set, the page uses
    it. When the address works only on this computer, the page says so.
-2. **Where do you use it?**: Claude Code, Claude Desktop, Cursor, VS Code,
-   Codex, Gemini CLI, or another client.
-3. **Give it access**, when your Contrack asks people to sign in. Select
-   **Create a token for** the client, as **Read and write** or **Read only**.
+2. **Where do you use it?**: Claude Code, Claude, ChatGPT, Claude Desktop,
+   Cursor, VS Code, Codex, Gemini CLI, or another client.
+3. **Give it access**, when your Contrack asks people to sign in. When OAuth
+   is on, a client can **Sign in with the browser**, and you copy no token.
+   Otherwise, or with **Use a token**, select **Create a token for** the
+   client, as **Read and write** or **Read only**.
    The token lasts 90 days and is named after the client. It fills in the
    setup, and the page shows it only once. **Use a token I have** takes a
    token you made before. The page never saves a token.
@@ -69,6 +71,51 @@ a script stopped.
 When your Contrack does not ask anyone to sign in, a client connects without a
 token, and **Settings → Account** is not shown. See
 [Accounts and sign-in](accounts.md#turn-on-sign-in).
+
+## Connect Claude or ChatGPT
+
+Claude on the web, Claude Desktop, the Claude app on your phone, and ChatGPT
+connect by address and sign in with OAuth. You copy no token. They connect
+from the internet, so your Contrack needs sign-in on, `PUBLIC_URL` set to its
+`https` address, and that address open to the internet. See
+[Claude on the web, Claude on your phone, and ChatGPT](self-hosting.md#claude-on-the-web-claude-on-your-phone-and-chatgpt).
+
+In Claude:
+
+1. Open **Customize → Connectors**, and select **Add custom connector**.
+2. Paste `https://<your address>/api/mcp` and select **Add**. Keep **Use
+   Claude's published identity** if Claude asks.
+3. Claude opens Contrack. Sign in if you are not signed in.
+4. Contrack shows the app, where you go back to, and the account. Choose
+   **Read and write** or **Read only**, and select **Allow**.
+
+On a Team or Enterprise plan, an Owner adds the connector for the
+organization. Once added, it works in Claude on the web, in Claude Desktop
+and on your phone.
+
+In ChatGPT, turn on developer mode in the settings, add a connector with the
+same address and OAuth sign-in, and approve it the same way.
+
+### What an app sees, and how to disconnect it
+
+- An approved app shows in **Settings → Account → API tokens** with an
+  **app** badge and the host it signs in from. **Disconnect** stops it at
+  once. Connect it again from the app to use it again.
+- **Read only** gives the app the read-only tools only, as a read-only token
+  does.
+- The consent page says when an app named itself, which any app can do, and
+  when its details come from its own web address, which a name cannot fake.
+  It always says where your browser goes after you choose.
+- An app's access token lasts an hour and works on `/api/mcp` only. Its
+  refresh token lasts 30 days from its last use and works once. If a used
+  refresh token comes back after its replacement was used, someone else has
+  it, and Contrack disconnects the app.
+
+Claude Code, Cursor, VS Code, Gemini CLI and the Claude Desktop config can
+sign in with OAuth too, when it is on. On **Settings → MCP and API**, choose
+**Sign in with the browser** instead of **Use a token**. The command then has
+no token, and the client opens Contrack in your browser the first time it
+connects.
 
 ## Connect a client
 

@@ -37,6 +37,13 @@ import {
   type User,
 } from "../services/authService.ts";
 import { resolveToken, TOKEN_PREFIX } from "../services/apiTokenService.ts";
+import {
+  isAccessToken,
+  OAUTH_SCOPES,
+  oauthIssuer,
+  resolveAccessToken,
+  resourceMetadataUrl,
+} from "../services/oauthService.ts";
 import { primaryAdminId, sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
@@ -272,6 +279,17 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
 }
 
 /**
+ * True for the MCP endpoint, however the client spells it. Express matches
+ * paths without regard to case or a trailing slash, so this must too. It
+ * reads `originalUrl`, because a middleware mounted on `/api` sees a `path`
+ * with that prefix taken off.
+ */
+function isMcpPath(req: Request): boolean {
+  const path = req.originalUrl.split("?")[0].toLowerCase();
+  return path.replace(/\/+$/, "") === "/api/mcp";
+}
+
+/**
  * Resolve the caller and hang it on the request. Runs for every request,
  * including the pre-auth ones, so `/api/auth/status` can report who you are.
  *
@@ -300,6 +318,23 @@ export function attachPrincipal(
         via: "token",
         tokenId: user.tokenId,
         readOnly: user.readOnly,
+      };
+      return next();
+    }
+  }
+
+  // 1b. An app's OAuth access token, which reaches the MCP endpoint and
+  //     nothing else. On any other path it identifies nobody, so the request
+  //     gets the same 401 as a wrong token.
+  if (presented && isAccessToken(presented) && isMcpPath(req)) {
+    const grant = resolveAccessToken(presented);
+    if (grant) {
+      req.principal = {
+        kind: "user",
+        user: grant.user,
+        via: "token",
+        tokenId: grant.grantId,
+        readOnly: grant.readOnly,
       };
       return next();
     }
@@ -394,11 +429,22 @@ export function requireAuth(
 ): void {
   if (isAuthenticated(req)) return next();
   const sentToken = req.headers.authorization?.startsWith("Bearer ") === true;
+  // On the MCP endpoint, with OAuth on, the challenge also says where the
+  // OAuth metadata is (RFC 9728 §5.1). That is how Claude, ChatGPT and the
+  // editors find the sign-in page from the address alone.
+  const issuer = isMcpPath(req) ? oauthIssuer() : null;
   res.setHeader(
     "WWW-Authenticate",
-    sentToken
-      ? 'Bearer realm="contrack", error="invalid_token"'
-      : 'Bearer realm="contrack"',
+    [
+      'Bearer realm="contrack"',
+      ...(issuer
+        ? [
+            `resource_metadata="${resourceMetadataUrl(issuer)}"`,
+            `scope="${OAUTH_SCOPES.join(" ")}"`,
+          ]
+        : []),
+      ...(sentToken ? ['error="invalid_token"'] : []),
+    ].join(", "),
   );
   next(
     new AppError(

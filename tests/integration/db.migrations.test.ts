@@ -55,6 +55,14 @@ const ADDED_SINCE_FIXTURE = [
   "contacts_auto_updated_at",
   "contacts_score_dirty",
   "geocode_cache",
+  // 0004_oauth, and api_tokens gains two columns
+  "oauth_clients",
+  "oauth_requests",
+  "idx_oauth_requests_expires",
+  "oauth_tokens",
+  "idx_oauth_tokens_grant",
+  "idx_oauth_tokens_parent",
+  "api_tokens",
 ];
 
 interface MasterRow {

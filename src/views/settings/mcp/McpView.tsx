@@ -314,10 +314,18 @@ const TokenStep = ({
   );
 };
 
+type SignInMethod = "browser" | "token";
+
+const METHOD_OPTIONS: readonly SegmentedOption<SignInMethod>[] = [
+  { value: "browser", label: "Sign in with the browser" },
+  { value: "token", label: "Use a token" },
+];
+
 export const McpView: React.FC = () => {
-  const { authRequired, publicUrl } = useAuth();
+  const { authRequired, publicUrl, mcpOAuth } = useAuth();
   const [clientId, setClientId] = useState<McpClientId>("claude-code");
   const [token, setToken] = useState("");
+  const [method, setMethod] = useState<SignInMethod>("browser");
 
   const origin =
     publicUrl ?? (typeof window !== "undefined" ? window.location.origin : "");
@@ -325,11 +333,25 @@ export const McpView: React.FC = () => {
   const onlyHere = !publicUrl && isLoopbackHost(new URL(origin).hostname);
 
   const client = MCP_CLIENTS.find((c) => c.id === clientId) ?? MCP_CLIENTS[0];
-  const missingToken = authRequired && !token;
+  // How this client signs in here. An app that connects from its vendor's
+  // servers needs OAuth and a public https address. A local client may sign
+  // in with the browser when OAuth is on, or with a token.
+  const reachable = mcpOAuth && publicUrl?.startsWith("https://") === true;
+  const blocked = client.signIn === "oauth" && !reachable;
+  const viaBrowser =
+    mcpOAuth &&
+    (client.signIn === "oauth" ||
+      (client.signIn === "either" && method === "browser"));
+  const viaToken = authRequired && !viaBrowser;
+  const missingToken = viaToken && !token;
   const setup = client.setup(
     endpointUrl,
-    authRequired ? token || "<your-token>" : null,
+    viaToken ? token || "<your-token>" : null,
   );
+  const steps =
+    viaBrowser && client.oauthStep
+      ? `${setup.steps}. ${client.oauthStep}`
+      : setup.steps;
   const codeName = `${client.label} ${setup.codeKind}`;
 
   return (
@@ -378,53 +400,117 @@ export const McpView: React.FC = () => {
             <ClientPicker value={clientId} onChange={setClientId} />
           </div>
 
-          {authRequired && (
-            <div id="token" className="space-y-2 scroll-mt-20">
-              <h3 className={cn(STEP_HEADING, "flex items-center gap-1.5")}>
-                <KeyRound className="w-4 h-4 text-primary" aria-hidden="true" />
-                Give it access
-              </h3>
-              <TokenStep client={client} token={token} onToken={setToken} />
-            </div>
-          )}
-
-          <div id="setup" className="space-y-3 scroll-mt-20">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h3 className={STEP_HEADING}>Add it to {client.label}</h3>
-                <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
-                  {setup.steps}
-                  {missingToken && ". Create a token above to fill it in"}
+          {blocked ? (
+            <div
+              id="setup"
+              className="flex items-start gap-3 rounded-xl bg-surface-container-highest p-4"
+            >
+              <Info
+                className="w-4 h-4 text-primary shrink-0 mt-0.5"
+                aria-hidden="true"
+              />
+              <div className="space-y-1 text-sm text-on-surface text-pretty">
+                <p className="font-semibold">
+                  {client.label} needs a public https address
+                </p>
+                <p className="text-on-surface-variant">
+                  {client.label} connects to Contrack from the internet and
+                  signs in with OAuth. To use it,{" "}
+                  {authRequired
+                    ? "set PUBLIC_URL to the https address people open from anywhere"
+                    : "turn sign-in on with AUTH_REQUIRED=true, and set PUBLIC_URL to the https address people open from anywhere"}
                 </p>
               </div>
-              <CopyButton
-                text={setup.code}
-                label={`Copy ${codeName}`}
-                what={codeName}
-              />
             </div>
-            {setup.install &&
-              (missingToken ? (
-                <button type="button" disabled className="btn-primary w-fit">
-                  <ExternalLink className="w-4 h-4" aria-hidden="true" />
-                  {setup.install.label}
-                </button>
-              ) : (
-                <a href={setup.install.href} className="btn-primary w-fit">
-                  <ExternalLink className="w-4 h-4" aria-hidden="true" />
-                  {setup.install.label}
-                </a>
-              ))}
-            <pre id={`snippet-${client.id}`} className={CODE_BOX}>
-              <code>{setup.code}</code>
-            </pre>
-            {!authRequired && (
-              <p className="text-xs text-on-surface-variant text-pretty">
-                This Contrack asks nobody to sign in, so a client needs no
-                token. Anyone who can reach the address can use it
-              </p>
-            )}
-          </div>
+          ) : (
+            <>
+              {authRequired && (
+                <div id="token" className="space-y-3 scroll-mt-20">
+                  <h3 className={cn(STEP_HEADING, "flex items-center gap-1.5")}>
+                    <KeyRound
+                      className="w-4 h-4 text-primary"
+                      aria-hidden="true"
+                    />
+                    Give it access
+                  </h3>
+                  {mcpOAuth && client.signIn === "either" && (
+                    <Segmented
+                      label="How it signs in"
+                      className="sm:w-fit"
+                      value={method}
+                      options={METHOD_OPTIONS}
+                      onChange={setMethod}
+                    />
+                  )}
+                  {viaBrowser ? (
+                    <p className="text-sm text-on-surface-variant text-pretty">
+                      No token to copy. {client.label} opens Contrack in your
+                      browser, and you sign in there and choose Read and write
+                      or Read only. It then shows in Account, where you can
+                      disconnect it
+                    </p>
+                  ) : (
+                    <TokenStep
+                      client={client}
+                      token={token}
+                      onToken={setToken}
+                    />
+                  )}
+                </div>
+              )}
+
+              <div id="setup" className="space-y-3 scroll-mt-20">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className={STEP_HEADING}>Add it to {client.label}</h3>
+                    <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+                      {steps}
+                      {missingToken && ". Create a token above to fill it in"}
+                    </p>
+                  </div>
+                  <CopyButton
+                    text={setup.code}
+                    label={`Copy ${codeName}`}
+                    what={codeName}
+                  />
+                </div>
+                {setup.install &&
+                  (missingToken ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="btn-primary w-fit"
+                    >
+                      <ExternalLink className="w-4 h-4" aria-hidden="true" />
+                      {setup.install.label}
+                    </button>
+                  ) : (
+                    <a
+                      href={setup.install.href}
+                      target={
+                        setup.install.href.startsWith("https:")
+                          ? "_blank"
+                          : undefined
+                      }
+                      rel="noreferrer"
+                      className="btn-primary w-fit"
+                    >
+                      <ExternalLink className="w-4 h-4" aria-hidden="true" />
+                      {setup.install.label}
+                    </a>
+                  ))}
+                <pre id={`snippet-${client.id}`} className={CODE_BOX}>
+                  <code>{setup.code}</code>
+                </pre>
+                {!authRequired && (
+                  <p className="text-xs text-on-surface-variant text-pretty">
+                    This Contrack asks nobody to sign in, so a client needs no
+                    token. Anyone who can reach the address can use it
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </section>
 

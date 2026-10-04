@@ -120,6 +120,10 @@ search, Pulse, the map, research and the contact page.
 - **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS
   Code, Codex and Gemini CLI. It makes a token for the client and fills in
   the command, the config or a one-press install link.
+- Claude on the web, Claude Desktop, the Claude phone app and ChatGPT
+  connect by address and sign in with OAuth, with a consent page that offers
+  read only. Approved apps show in the token list, where one press
+  disconnects them. OAuth needs sign-in on and an https `PUBLIC_URL`.
 - Each tool has a title and hints that say whether it reads, adds, or can
   overwrite. Results leave out the fields only the server reads, and a
   refused call answers with its code and what to do next.

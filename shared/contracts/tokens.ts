@@ -28,6 +28,11 @@ const apiTokenSchema = z
     revokedAt: z.string().nullable(),
     /** True for a token that may only read. */
     readOnly: z.boolean(),
+    /**
+     * `personal` for a token the person made. `oauth` for an app they
+     * approved, whose `tokenPrefix` is the host it signs in from.
+     */
+    kind: z.enum(["personal", "oauth"]),
   })
   .meta({ id: "ApiToken" });
 

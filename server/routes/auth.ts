@@ -101,6 +101,7 @@ import {
   AVATAR_MIME_EXTENSIONS,
 } from "../utils/avatarProcessor.ts";
 import { mailLinkOrigin } from "../utils/publicOrigin.ts";
+import { oauthIssuer } from "../services/oauthService.ts";
 import {
   renderPasswordResetEmail,
   renderMagicLinkEmail,
@@ -247,6 +248,9 @@ router.get("/status", (req, res) => {
     // MCP settings page builds the address a client connects to from it, so
     // a client on another machine gets the public name, not localhost.
     publicUrl: mailLinkOrigin(),
+    // Whether an MCP client can sign in with OAuth here (oauthService.ts):
+    // sign-in is on, and PUBLIC_URL is https or a loopback http address.
+    mcpOAuth: authRequired && oauthIssuer() !== null,
     // What this instance calls itself, or "" when nobody has named it.
     //
     // Read-only here and unauthenticated on purpose: it has to reach the

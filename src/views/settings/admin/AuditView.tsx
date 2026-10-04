@@ -89,6 +89,21 @@ const LOOK: Record<
     tone: "neutral",
     label: "Token revoked",
   },
+  "auth.oauth.granted": {
+    icon: Terminal,
+    tone: "primary",
+    label: "App connected",
+  },
+  "auth.oauth.denied": {
+    icon: Terminal,
+    tone: "neutral",
+    label: "App refused",
+  },
+  "auth.oauth.refresh_reused": {
+    icon: ShieldAlert,
+    tone: "warning",
+    label: "App sign-in reused, app disconnected",
+  },
   "user.created": { icon: UserPlus, tone: "success", label: "Account created" },
   "user.invited": { icon: MailPlus, tone: "primary", label: "Invited" },
   "user.invitation.accepted": {
