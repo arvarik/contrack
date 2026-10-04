@@ -80,6 +80,7 @@ const PulseOffice = () => {
     data: dashboard,
     isLoading: isDashboardLoading,
     isError,
+    refetch,
   } = useDashboard();
 
   const aiAllowed = useAiAllowed();
@@ -530,7 +531,9 @@ const PulseOffice = () => {
     ],
   );
 
-  if (isError) {
+  // Only with nothing to show: a failed background refetch keeps the data
+  // already on screen, and React Query still reports the error beside it.
+  if (isError && !dashboard) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
         <EmptyState
@@ -538,6 +541,7 @@ const PulseOffice = () => {
           tone="error"
           title="System disconnected"
           body="Failed to load the relationship pulse dashboard"
+          action={{ label: "Try again", onClick: () => void refetch() }}
         />
       </div>
     );

@@ -52,6 +52,10 @@ export default defineConfig({
             {
               name: "vendor-tiptap",
               test: /\/node_modules\/(@tiptap|prosemirror)/,
+              // TipTap's own dependencies stay out: through them the group
+              // took `@floating-ui/dom`, which `InfoTip` uses on every page,
+              // and every page preloaded the editor to get it.
+              includeDependenciesRecursively: false,
             },
             {
               name: "vendor-maplibre",

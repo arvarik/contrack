@@ -367,7 +367,7 @@ export const dedupeService = {
         }
       }
 
-      let autoMergedCount = 0;
+      const merged: RawPair[] = [];
       const autoMergeIds = [
         ...new Set(autoMergePairs.flatMap((p) => [p.idA, p.idB])),
       ];
@@ -399,7 +399,7 @@ export const dedupeService = {
             pair.reasoning,
             rid,
           );
-          autoMergedCount++;
+          merged.push(pair);
         } catch (err: unknown) {
           log.warn(
             "DedupeService",
@@ -409,28 +409,34 @@ export const dedupeService = {
         }
       }
 
-      if (autoMergePairs.length > 0) {
-        storeSuggestions(
-          scope,
-          autoMergePairs.filter((_, i) => i < autoMergedCount),
-          "auto_merged",
-        );
-      }
+      if (merged.length > 0) storeSuggestions(scope, merged, "auto_merged");
       if (pendingPairs.length > 0) {
         storeSuggestions(scope, pendingPairs, "pending");
       }
 
       log.info(
         "DedupeService",
-        `[${rid}] Persisted: ${autoMergedCount} auto-merged, ${pendingPairs.length} pending suggestions`,
+        `[${rid}] Persisted: ${merged.length} auto-merged, ${pendingPairs.length} pending suggestions`,
       );
 
       dedupeQueue.update(scanId, {
-        autoMerged: autoMergedCount,
+        autoMerged: merged.length,
         pendingSuggestions: pendingPairs.length,
       });
 
-      dedupeQueue.complete(scanId, clusters);
+      // The results hold only what is left to review. A group merged above
+      // is done, and offering it again put one of its contacts, now hidden,
+      // forward as a primary.
+      const mergedIds = new Set(merged.flatMap((p) => [p.idA, p.idB]));
+      dedupeQueue.complete(
+        scanId,
+        clusters.filter(
+          (c) =>
+            !c.pairs.every(
+              (p) => mergedIds.has(p.contactIdA) && mergedIds.has(p.contactIdB),
+            ),
+        ),
+      );
     } catch (err: unknown) {
       log.error(
         "DedupeService",

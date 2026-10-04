@@ -7,7 +7,7 @@ import { contactRepo } from "../../repositories/contactRepository.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
-import { NotFoundError } from "../../utils/AppError.ts";
+import { ConflictError, NotFoundError } from "../../utils/AppError.ts";
 import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type { ContactRow, MergeSnapshotData } from "./types.ts";
 
@@ -109,6 +109,12 @@ export function executeMerge(
 
   if (!primary) {
     throw new NotFoundError("Primary contact", primaryId);
+  }
+
+  // A primary that was merged away is hidden, and the duplicate would hide
+  // with it: neither would show, and nothing would point at a live contact.
+  if (primary.canonicalId) {
+    throw new ConflictError("The primary contact was already merged");
   }
 
   if (!duplicate) {
