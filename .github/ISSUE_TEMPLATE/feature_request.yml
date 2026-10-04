@@ -1,0 +1,45 @@
+name: Feature request
+description: Ask for something Contrack does not do yet
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. Search the [issues](https://github.com/arvarik/contrack/issues?q=is%3Aissue) and the [ideas](https://github.com/arvarik/contrack/discussions/categories/ideas) first. A rough idea that needs talk can start in Discussions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What do you try to do, and what stops you today?
+      placeholder: Each Monday I want to see who I met last week, but I have to open each contact.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How Contrack could solve it. A sketch or an example from another app helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now instead
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Contacts and notes
+        - Pulse and tracking
+        - Search and Ask Contrack
+        - Map
+        - Duplicates
+        - Import, connectors and export
+        - AI and research
+        - Accounts and administration
+        - MCP and API
+        - Install and self-hosting
+        - Other
+    validations:
+      required: true

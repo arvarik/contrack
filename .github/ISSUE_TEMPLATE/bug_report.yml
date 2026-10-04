@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Contrack does not work the way the docs say
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. Search the [issues](https://github.com/arvarik/contrack/issues?q=is%3Aissue) first, because the problem may be known.
+
+        **Do not report a security problem here.** The [security policy](https://github.com/arvarik/contrack/security/policy) says how to report one privately.
+
+        Remove names, email addresses, phone numbers and keys from everything you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Say what you saw. Add a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings, Import
+        2. Drop a vCard file with 200 contacts
+        3. Select Import
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Contrack version
+      description: The image tag you run, such as `2.0.0`, or the commit of a native install (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you run Contrack
+      options:
+        - Docker image from ghcr.io
+        - Docker Compose, built from source
+        - Native install (Node.js)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI provider
+      options:
+        - None, AI is off
+        - Gemini
+        - OpenAI
+        - Anthropic
+        - An OpenAI-compatible server (Ollama, vLLM, LM Studio or other)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 141 on macOS 26, server on Debian 13
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log lines
+      description: The lines around the error. Every error response has a request id, and the server log repeats it.
+      render: text

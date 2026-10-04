@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/arvarik/contrack/discussions/categories/q-a
+    about: Help with installing, configuring or using Contrack
+  - name: Share an idea
+    url: https://github.com/arvarik/contrack/discussions/categories/ideas
+    about: A rough idea that needs talk before it is a feature request
+  - name: Report a security problem
+    url: https://github.com/arvarik/contrack/security/policy
+    about: Report it privately, never in a public issue
