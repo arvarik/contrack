@@ -17,9 +17,11 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
+  useLayoutEffect,
 } from "react";
 import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
+  AlertCircle,
   Search,
   Users,
   Upload,
@@ -253,6 +255,452 @@ const ContactRowWrapper = React.memo(
 );
 
 // ---------------------------------------------------------------------------
+// ContactRows — the scroller: Recent, the virtual rows and the letter rail
+// ---------------------------------------------------------------------------
+
+interface ContactRowsProps {
+  /** What the scroller shows above Recent: loading, empty states, the count. */
+  children: React.ReactNode;
+  filteredContacts: Contact[];
+  /** The Recent strip, or none while a search, a filter or a load hides it. */
+  recentContacts: Contact[];
+  openId: string | undefined;
+  flashId: string | null;
+  isSelectMode: boolean;
+  selectedIds: Set<string>;
+  toggleSelect: (id: string, extend?: boolean) => void;
+  enterSelectMode: () => void;
+  handleContextMenu: ContactRowWrapperProps["handleContextMenu"];
+  recordVisit: (id: string) => void;
+  archiveContact: ContactRowWrapperProps["archiveContact"];
+  /** Where the scroll position is saved, and whether to put it back yet. */
+  scrollKey: string;
+  ready: boolean;
+  onRefresh: () => Promise<void>;
+  /** The room the bulk bar takes under the last row. */
+  barRoom: number;
+  showAlphabetRail: boolean;
+}
+
+/**
+ * The list's scroller, and all that changes as it scrolls.
+ *
+ * The virtualizer renders the component that holds it on each scroll. In
+ * ContactList that was the whole page: the header, its menus, the chips and
+ * the dialogs. Here a scroll renders this and the rows it brings in. The
+ * page's content above the rows comes as `children`, the same elements on
+ * each of these renders, so React skips them.
+ */
+const ContactRows = ({
+  children,
+  filteredContacts,
+  recentContacts,
+  openId,
+  flashId,
+  isSelectMode,
+  selectedIds,
+  toggleSelect,
+  enterSelectMode,
+  handleContextMenu,
+  recordVisit,
+  archiveContact,
+  scrollKey,
+  ready,
+  onRefresh,
+  barRoom,
+  showAlphabetRail,
+}: ContactRowsProps) => {
+  const scrollRef = useScrollRestoration<HTMLDivElement>(scrollKey, ready);
+  const {
+    containerRef: pullRef,
+    isPulling,
+    pullProgress,
+    isRefreshing,
+    pullDistance,
+  } = usePullToRefresh(onRefresh, {
+    disabled: typeof window !== "undefined" && window.innerWidth >= 768,
+  });
+  // The rows rise toward the pointer. Nothing renders while it moves.
+  useProximityLift(scrollRef);
+
+  // Merge containerRefs — both pullRef and scrollRef point to the same element
+  const listScrollRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+      (pullRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    },
+    [scrollRef, pullRef],
+  );
+
+  const { density, metrics } = useListDensity();
+
+  /**
+   * The rows' navigate. `useNavigate` gives a new function on each change of
+   * path, so opening a contact drew every row again. This one keeps one
+   * identity and calls the latest.
+   */
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useLayoutEffect(() => {
+    navigateRef.current = navigate;
+  });
+  const navigateRows = useCallback(
+    (path: string) => navigateRef.current(path),
+    [],
+  );
+
+  /**
+   * Who the list itself shows. A Recent copy takes the selected look only
+   * for a contact missing from it, a ghost or one a filter leaves out, so the
+   * open contact is marked somewhere, and in one place.
+   */
+  const listedIds = useMemo(
+    () => new Set(filteredContacts.map((c) => c.id)),
+    [filteredContacts],
+  );
+
+  // ── Virtualization ──────────────────────────────────────────────────
+  /**
+   * How far the virtual list starts below the top of the scroll container.
+   *
+   * The "Recent" block and the pull-to-refresh indicator live inside the same
+   * scroller, above the virtual list. Without telling the virtualizer about
+   * that gap, its offsets are correct *relative to its own container* — so
+   * rows render in the right place — but `scrollToIndex` computes a scrollTop
+   * as if the list began at the top of the scroller, and every jump lands
+   * short by exactly the height of whatever is above it. That is invisible
+   * until something actually jumps, which is why the alphabet rail is what
+   * surfaced it.
+   */
+  const virtualListRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const rowVirtualizer = useVirtualizer({
+    count: filteredContacts.length,
+    getItemKey: React.useCallback(
+      (index) => filteredContacts[index].id,
+      [filteredContacts],
+    ),
+    getScrollElement: () => scrollRef.current,
+    scrollMargin,
+    // A jump to a row stops above the bulk bar, not under it.
+    scrollPaddingEnd: barRoom,
+    // Only an estimate — rows are measured for real by `measureElement`
+    // below — but it must track density or the scrollbar jumps as the user
+    // scrolls into rows that have not been measured yet.
+    estimateSize: () => metrics.rowHeight,
+    overscan: 5, // Render 5 items outside viewport for smooth scrolling
+    // The list is built anew on each return to the Network page, and the
+    // scroller is put back where it was before paint. The rows start there
+    // too, or the first frame drew the top rows out of sight and showed an
+    // empty list.
+    initialOffset: () => savedScroll(scrollKey),
+  });
+
+  React.useLayoutEffect(() => {
+    const list = virtualListRef.current;
+    const scroller = scrollRef.current;
+    if (!list || !scroller) return;
+    const offset =
+      list.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+    setScrollMargin((previous) =>
+      Math.abs(previous - offset) > 1 ? offset : previous,
+    );
+    // Recomputed whenever the block above the list can change height: the
+    // page's content above it, which is new `children` on each render of
+    // the page, the Recent rows, their density and the pull.
+  }, [children, recentContacts.length, density, pullDistance, scrollRef]);
+
+  // ── Alphabet rail ───────────────────────────────────────────────────
+  /** Bucket → index of its first contact. Rebuilt only when the list changes. */
+  const bucketIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!showAlphabetRail) return map;
+    filteredContacts.forEach((contact, i) => {
+      const bucket = bucketFor(contact.name);
+      if (!map.has(bucket)) map.set(bucket, i);
+    });
+    return map;
+  }, [filteredContacts, showAlphabetRail]);
+
+  /**
+   * Which letter is at the top of the viewport, for the rail's highlight.
+   *
+   * Derived from the virtualizer's own first visible item rather than from a
+   * scroll listener, so it cannot drift out of step with what is rendered.
+   */
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const activeBucket = showAlphabetRail
+    ? (() => {
+        const first = virtualItems.find(
+          (item) => item.end > (rowVirtualizer.scrollOffset ?? 0),
+        );
+        const contact = first ? filteredContacts[first.index] : undefined;
+        return contact ? bucketFor(contact.name) : null;
+      })()
+    : null;
+
+  const jumpToIndex = useCallback(
+    (index: number) => {
+      // By index, never by offset: offsets for unmeasured rows are estimates,
+      // and jumping to one lands in the wrong place.
+      rowVirtualizer.scrollToIndex(index, { align: "start" });
+    },
+    [rowVirtualizer],
+  );
+
+  // ── Roving Tab stop ─────────────────────────────────────────────────
+  // The Recent rows and the full list are one list to the keyboard: Recent
+  // first, then everyone. Arrow Down from the last recent contact carries on
+  // into the list rather than stopping at an invisible seam.
+  const recentCount = recentContacts.length;
+  const rowAt = (index: number) =>
+    index < recentCount
+      ? { contact: recentContacts[index], elementId: "recent-contact" }
+      : {
+          contact: filteredContacts[index - recentCount],
+          elementId: "contact-row",
+        };
+  const openIndex = openId
+    ? filteredContacts.findIndex((c) => c.id === openId)
+    : -1;
+  const roving = useRovingList({
+    count: recentCount + filteredContacts.length,
+    selectedIndex: openIndex >= 0 ? recentCount + openIndex : -1,
+    getLabel: (index) => rowAt(index).contact?.name ?? "",
+    getElement: (index) => {
+      const { contact, elementId } = rowAt(index);
+      return contact
+        ? document.getElementById(`${elementId}-${contact.id}`)
+        : null;
+    },
+    scrollToIndex: (index) => {
+      if (index < recentCount) {
+        document
+          .getElementById(`recent-contact-${recentContacts[index].id}`)
+          ?.scrollIntoView({ block: "nearest" });
+      } else {
+        rowVirtualizer.scrollToIndex(index - recentCount, { align: "auto" });
+      }
+    },
+    isRendered: (index) =>
+      index < recentCount ||
+      virtualItems.some((item) => item.index === index - recentCount),
+  });
+
+  /**
+   * Back from a contact puts focus on the row it was opened from.
+   *
+   * On a phone, and on a tablet in portrait, the list and the contact take
+   * turns on screen. Leaving the contact removes the element that had focus,
+   * so focus fell to the document and the next Tab started from the top of
+   * the page. Only when focus really was lost: a sidebar link that navigated
+   * here keeps its own focus.
+   */
+  const { lastContactId } = useRecent();
+  const previousId = useRef(openId);
+  const { focusIndex } = roving;
+  useEffect(() => {
+    const wasOpen = previousId.current;
+    previousId.current = openId;
+    if (!wasOpen || openId) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const index = filteredContacts.findIndex((c) => c.id === lastContactId);
+    if (index >= 0) focusIndex(recentCount + index);
+  }, [openId, lastContactId, filteredContacts, recentCount, focusIndex]);
+
+  /**
+   * The open contact's row comes into view when the open id changes: a deep
+   * link to `/contact/:id`, the palette, a Pulse row. Its tint was off
+   * screen. `auto` scrolls the least that shows it, and nothing when it
+   * shows already. Once per id, so a person who scrolls away is left there,
+   * and not at all when the row was opened from the list itself, which is
+   * where the person is looking. A frame late, because the Recent strip's
+   * height reaches the virtualizer's margin in the commit after the
+   * contacts arrive, and a jump before it lands short.
+   */
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (openIndex < 0 || scrolledTo.current === openId) return;
+    if (scrollRef.current?.contains(document.activeElement)) {
+      scrolledTo.current = openId;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      scrolledTo.current = openId;
+      rowVirtualizer.scrollToIndex(openIndex, { align: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [openId, openIndex, rowVirtualizer, scrollRef]);
+
+  /*
+    Contact list.
+
+    The wrapper exists so the alphabet rail can be positioned against the
+    *visible* list area. Rendered inside the scroller, an absolutely
+    positioned rail resolves its `top-0 bottom-0` against the full scroll
+    height and then scrolls away with the content — so it both disappears
+    and maps pointer positions against a box thousands of pixels tall.
+  */
+  return (
+    <div className="relative flex-1 min-h-0">
+      {/*
+        The scroller is right-to-left and its content is left-to-right
+        again. That one trick moves the scrollbar to the left edge, away
+        from the letter rail on the right: the two used to share the same
+        strip, and a thumb aimed at "M" landed on the bar. Only the box
+        flips. The `dir="ltr"` child puts every row back the way it reads.
+        The thumb shows only while the pointer is over the list or the
+        keyboard is in it (`scrollbar-on-hover`), so it does not sit
+        against the sidebar all the time.
+
+        With the rail on screen the scroller keeps a 2 rem gutter on the
+        right. Rows end before it, so a selected row's tint and the hover
+        layer stop short of the letters instead of running under them.
+
+        The top padding is 4 px, the room the first row's focus ring needs,
+        and the header's own bottom padding is the rest of the space under
+        the chips. Two full paddings left 34 px of nothing above the first
+        row, where the rows themselves are 8 px apart.
+
+        While the bulk bar shows, the bottom padding is its room (see
+        `measureBar`), and so is the scroll padding a focused row keeps.
+      */}
+      <div
+        ref={listScrollRef}
+        id="contact-list"
+        dir="rtl"
+        {...roving.containerProps}
+        className={cn(
+          "h-full overflow-y-auto scrollbar-on-hover px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
+          showAlphabetRail && "pr-8",
+        )}
+        style={
+          barRoom
+            ? { paddingBottom: barRoom, scrollPaddingBottom: barRoom }
+            : undefined
+        }
+      >
+        <div dir="ltr" className="space-y-2">
+          {/* Pull-to-refresh indicator — mobile only */}
+          <PullIndicator
+            isPulling={isPulling}
+            isRefreshing={isRefreshing}
+            progress={pullProgress}
+            pullDistance={pullDistance}
+          />
+
+          {children}
+
+          {/* ── Recent contacts strip ─────────────────────────────────────── */}
+          {recentCount > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 px-1 mb-2">
+                <Clock className="w-3 h-3 text-on-surface-variant" />
+                <span className={LABEL}>Recent</span>
+              </div>
+              {/* 8 px apart, like the rows of the list under it. */}
+              <div className="space-y-2">
+                {recentContacts.map((contact, index) => {
+                  const item = roving.getItemProps(index);
+                  return (
+                    <ContactListItem
+                      key={`recent-${contact.id}`}
+                      idPrefix="recent-contact"
+                      contact={contact}
+                      density={density}
+                      active={openId === contact.id}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(contact.id)}
+                      showSelection={!listedIds.has(contact.id)}
+                      onToggleSelect={toggleSelect}
+                      rovingIndex={index}
+                      tabIndex={item.tabIndex}
+                      onRowKeyDown={item.onKeyDown}
+                      onRowFocus={item.onFocus}
+                    />
+                  );
+                })}
+              </div>
+              {/* Where Recent ends and everyone begins. A hairline said
+                    it, and this app divides a surface with words and
+                    space, not lines. */}
+              <div className="flex items-center gap-1.5 px-1 mt-5">
+                <Users className="w-3 h-3 text-on-surface-variant" />
+                <span className={LABEL}>All contacts</span>
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={virtualListRef}
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const contact = filteredContacts[virtualItem.index];
+              const item = roving.getItemProps(recentCount + virtualItem.index);
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+                    paddingBottom: "8px", // Replaces space-y-2
+                  }}
+                >
+                  <ContactRowWrapper
+                    contact={contact}
+                    density={density}
+                    active={openId === contact.id}
+                    isFlashing={flashId === contact.id}
+                    isSelectMode={isSelectMode}
+                    isSelected={selectedIds.has(contact.id)}
+                    onToggleSelect={toggleSelect}
+                    onEnterSelectMode={enterSelectMode}
+                    handleContextMenu={handleContextMenu}
+                    recordVisit={recordVisit}
+                    archiveContact={archiveContact}
+                    navigate={navigateRows}
+                    rovingIndex={recentCount + virtualItem.index}
+                    tabIndex={item.tabIndex}
+                    onRowKeyDown={item.onKeyDown}
+                    onRowFocus={item.onFocus}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {showAlphabetRail && (
+        <AlphabetRail
+          index={bucketIndex}
+          activeBucket={activeBucket}
+          onJump={jumpToIndex}
+        />
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // ContactList — Main component
 // ---------------------------------------------------------------------------
 
@@ -280,21 +728,6 @@ export const ContactList = () => {
   // ── UX hooks ────────────────────────────────────────────────────────
   usePageTitle(NAMES.network.title);
   const scrollKey = `contact-list:${filters.filterMode}:${filters.searchQuery}`;
-  const scrollRef = useScrollRestoration<HTMLDivElement>(scrollKey, !isLoading);
-  const {
-    containerRef: pullRef,
-    isPulling,
-    pullProgress,
-    isRefreshing,
-    pullDistance,
-  } = usePullToRefresh(
-    async () => {
-      await refetch();
-    },
-    { disabled: typeof window !== "undefined" && window.innerWidth >= 768 },
-  );
-  // The rows rise toward the pointer. Nothing renders while it moves.
-  useProximityLift(scrollRef);
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const archiveContact = useArchiveContact();
   const unarchiveContact = useUnarchiveContact();
@@ -322,15 +755,6 @@ export const ContactList = () => {
 
   // ── Visual flash: highlight newly created contact for 2s ────────────
   const [flashId, setFlashId] = useState<string | null>(null);
-
-  // Merge containerRefs — both pullRef and scrollRef point to the same element
-  const listScrollRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-      (pullRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    },
-    [scrollRef, pullRef],
-  );
 
   // ── Modal visibility state ──────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -537,15 +961,6 @@ export const ContactList = () => {
         .slice(0, recentLimit) as typeof contacts,
     [recentIds, contacts, recentLimit],
   );
-  /**
-   * Who the list itself shows. A Recent copy takes the selected look only
-   * for a contact missing from it, a ghost or one a filter leaves out, so the
-   * open contact is marked somewhere, and in one place.
-   */
-  const listedIds = useMemo(
-    () => new Set(filteredContacts.map((c) => c.id)),
-    [filteredContacts],
-  );
 
   // ── The bulk bar's room ─────────────────────────────────────────────
   // The bar floats over the end of the list. While it shows, the scroller
@@ -573,9 +988,6 @@ export const ContactList = () => {
   const doneButtonRef = useRef<HTMLButtonElement>(null);
   useSwapFocus(isSelectMode, doneButtonRef, selectButtonRef);
 
-  // ── Density ─────────────────────────────────────────────────────────
-  const { density, metrics } = useListDensity();
-
   // ── The search's count ──────────────────────────────────────────────
   /**
    * How many rows a search leaves, said where the results start: in the
@@ -599,202 +1011,11 @@ export const ContactList = () => {
     1000,
   );
 
-  // ── Virtualization ──────────────────────────────────────────────────
-  /**
-   * How far the virtual list starts below the top of the scroll container.
-   *
-   * The "Recent" block and the pull-to-refresh indicator live inside the same
-   * scroller, above the virtual list. Without telling the virtualizer about
-   * that gap, its offsets are correct *relative to its own container* — so
-   * rows render in the right place — but `scrollToIndex` computes a scrollTop
-   * as if the list began at the top of the scroller, and every jump lands
-   * short by exactly the height of whatever is above it. That is invisible
-   * until something actually jumps, which is why the alphabet rail is what
-   * surfaced it.
-   */
-  const virtualListRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  const rowVirtualizer = useVirtualizer({
-    count: filteredContacts.length,
-    getItemKey: React.useCallback(
-      (index) => filteredContacts[index].id,
-      [filteredContacts],
-    ),
-    getScrollElement: () => scrollRef.current,
-    scrollMargin,
-    // A jump to a row stops above the bulk bar, not under it.
-    scrollPaddingEnd: barRoom,
-    // Only an estimate — rows are measured for real by `measureElement`
-    // below — but it must track density or the scrollbar jumps as the user
-    // scrolls into rows that have not been measured yet.
-    estimateSize: () => metrics.rowHeight,
-    overscan: 5, // Render 5 items outside viewport for smooth scrolling
-    // The list is built anew on each return to the Network page, and the
-    // scroller is put back where it was before paint. The rows start there
-    // too, or the first frame drew the top rows out of sight and showed an
-    // empty list.
-    initialOffset: () => savedScroll(scrollKey),
-  });
-
-  React.useLayoutEffect(() => {
-    const list = virtualListRef.current;
-    const scroller = scrollRef.current;
-    if (!list || !scroller) return;
-    const offset =
-      list.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top +
-      scroller.scrollTop;
-    setScrollMargin((previous) =>
-      Math.abs(previous - offset) > 1 ? offset : previous,
-    );
-    // Recomputed whenever the block above the list can change height: the
-    // Recent row count, its preference, the density of those rows, and
-    // whether a search collapses the section entirely.
-  }, [
-    recentContacts.length,
-    recentLimit,
-    density,
-    searchQuery,
-    showMatchCount,
-    filterMode,
-    isLoading,
-    pullDistance,
-    scrollRef,
-  ]);
-
   // ── Alphabet rail ───────────────────────────────────────────────────
   // Only meaningful when the list is actually alphabetical, and only worth
   // the screen width once scrolling is a chore.
   const showAlphabetRail =
     sortBy === "name" && !searchQuery && filteredContacts.length >= 15;
-
-  /** Bucket → index of its first contact. Rebuilt only when the list changes. */
-  const bucketIndex = useMemo(() => {
-    const map = new Map<string, number>();
-    if (!showAlphabetRail) return map;
-    filteredContacts.forEach((contact, i) => {
-      const bucket = bucketFor(contact.name);
-      if (!map.has(bucket)) map.set(bucket, i);
-    });
-    return map;
-  }, [filteredContacts, showAlphabetRail]);
-
-  /**
-   * Which letter is at the top of the viewport, for the rail's highlight.
-   *
-   * Derived from the virtualizer's own first visible item rather than from a
-   * scroll listener, so it cannot drift out of step with what is rendered.
-   */
-  const virtualItems = rowVirtualizer.getVirtualItems();
-  const activeBucket = showAlphabetRail
-    ? (() => {
-        const first = virtualItems.find(
-          (item) => item.end > (rowVirtualizer.scrollOffset ?? 0),
-        );
-        const contact = first ? filteredContacts[first.index] : undefined;
-        return contact ? bucketFor(contact.name) : null;
-      })()
-    : null;
-
-  const jumpToIndex = useCallback(
-    (index: number) => {
-      // By index, never by offset: offsets for unmeasured rows are estimates,
-      // and jumping to one lands in the wrong place.
-      rowVirtualizer.scrollToIndex(index, { align: "start" });
-    },
-    [rowVirtualizer],
-  );
-
-  // ── Roving Tab stop ─────────────────────────────────────────────────
-  // The Recent rows and the full list are one list to the keyboard: Recent
-  // first, then everyone. Arrow Down from the last recent contact carries on
-  // into the list rather than stopping at an invisible seam.
-  const recentCount =
-    !isLoading && !searchQuery && filterMode === "all"
-      ? recentContacts.length
-      : 0;
-  const rowAt = (index: number) =>
-    index < recentCount
-      ? { contact: recentContacts[index], elementId: "recent-contact" }
-      : {
-          contact: filteredContacts[index - recentCount],
-          elementId: "contact-row",
-        };
-  const openIndex = id ? filteredContacts.findIndex((c) => c.id === id) : -1;
-  const roving = useRovingList({
-    count: recentCount + filteredContacts.length,
-    selectedIndex: openIndex >= 0 ? recentCount + openIndex : -1,
-    getLabel: (index) => rowAt(index).contact?.name ?? "",
-    getElement: (index) => {
-      const { contact, elementId } = rowAt(index);
-      return contact
-        ? document.getElementById(`${elementId}-${contact.id}`)
-        : null;
-    },
-    scrollToIndex: (index) => {
-      if (index < recentCount) {
-        document
-          .getElementById(`recent-contact-${recentContacts[index].id}`)
-          ?.scrollIntoView({ block: "nearest" });
-      } else {
-        rowVirtualizer.scrollToIndex(index - recentCount, { align: "auto" });
-      }
-    },
-    isRendered: (index) =>
-      index < recentCount ||
-      virtualItems.some((item) => item.index === index - recentCount),
-  });
-
-  /**
-   * Back from a contact puts focus on the row it was opened from.
-   *
-   * On a phone, and on a tablet in portrait, the list and the contact take
-   * turns on screen. Leaving the contact removes the element that had focus,
-   * so focus fell to the document and the next Tab started from the top of
-   * the page. Only when focus really was lost: a sidebar link that navigated
-   * here keeps its own focus.
-   */
-  const { lastContactId } = useRecent();
-  const previousId = useRef(id);
-  const { focusIndex } = roving;
-  useEffect(() => {
-    const wasOpen = previousId.current;
-    previousId.current = id;
-    if (!wasOpen || id) return;
-    const active = document.activeElement;
-    if (active && active !== document.body) return;
-    const index = filteredContacts.findIndex((c) => c.id === lastContactId);
-    if (index >= 0) focusIndex(recentCount + index);
-  }, [id, lastContactId, filteredContacts, recentCount, focusIndex]);
-
-  /**
-   * The open contact's row comes into view when the open id changes: a deep
-   * link to `/contact/:id`, the palette, a Pulse row. Its tint was off
-   * screen. `auto` scrolls the least that shows it, and nothing when it
-   * shows already. Once per id, so a person who scrolls away is left there,
-   * and not at all when the row was opened from the list itself, which is
-   * where the person is looking. A frame late, because the Recent strip's
-   * height reaches the virtualizer's margin in the commit after the
-   * contacts arrive, and a jump before it lands short.
-   */
-  const scrolledTo = useRef<string | null>(null);
-  useEffect(() => {
-    if (!id) {
-      scrolledTo.current = null;
-      return;
-    }
-    if (openIndex < 0 || scrolledTo.current === id) return;
-    if (scrollRef.current?.contains(document.activeElement)) {
-      scrolledTo.current = id;
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      scrolledTo.current = id;
-      rowVirtualizer.scrollToIndex(openIndex, { align: "auto" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [id, openIndex, rowVirtualizer, scrollRef]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1018,273 +1239,152 @@ export const ContactList = () => {
           </div>
         )}
       </PageHeader>
-      {/*
-        Contact list.
-
-        The wrapper exists so the alphabet rail can be positioned against the
-        *visible* list area. Rendered inside the scroller, an absolutely
-        positioned rail resolves its `top-0 bottom-0` against the full scroll
-        height and then scrolls away with the content — so it both disappears
-        and maps pointer positions against a box thousands of pixels tall.
-      */}
-      <div className="relative flex-1 min-h-0">
-        {/*
-          The scroller is right-to-left and its content is left-to-right
-          again. That one trick moves the scrollbar to the left edge, away
-          from the letter rail on the right: the two used to share the same
-          strip, and a thumb aimed at "M" landed on the bar. Only the box
-          flips. The `dir="ltr"` child puts every row back the way it reads.
-          The thumb shows only while the pointer is over the list or the
-          keyboard is in it (`scrollbar-on-hover`), so it does not sit
-          against the sidebar all the time.
-
-          With the rail on screen the scroller keeps a 2 rem gutter on the
-          right. Rows end before it, so a selected row's tint and the hover
-          layer stop short of the letters instead of running under them.
-
-          The top padding is 4 px, the room the first row's focus ring needs,
-          and the header's own bottom padding is the rest of the space under
-          the chips. Two full paddings left 34 px of nothing above the first
-          row, where the rows themselves are 8 px apart.
-
-          While the bulk bar shows, the bottom padding is its room (see
-          `measureBar`), and so is the scroll padding a focused row keeps.
-        */}
-        <div
-          ref={listScrollRef}
-          id="contact-list"
-          dir="rtl"
-          {...roving.containerProps}
-          className={cn(
-            "h-full overflow-y-auto scrollbar-on-hover px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
-            showAlphabetRail && "pr-8",
-          )}
-          style={
-            barRoom
-              ? { paddingBottom: barRoom, scrollPaddingBottom: barRoom }
-              : undefined
-          }
-        >
-          <div dir="ltr" className="space-y-2">
-            {/* Pull-to-refresh indicator — mobile only */}
-            <PullIndicator
-              isPulling={isPulling}
-              isRefreshing={isRefreshing}
-              progress={pullProgress}
-              pullDistance={pullDistance}
-            />
-
-            {isLoading && (
-              <div className="px-2 py-3 space-y-1">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
-                    style={{ animationDelay: `${i * 60}ms` }}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
-                      <div className="h-3 bg-surface-container rounded-full w-2/5" />
-                    </div>
-                  </div>
-                ))}
+      <ContactRows
+        filteredContacts={filteredContacts}
+        recentContacts={
+          // Recent shows on the plain list: not while loading, searching or
+          // filtering.
+          !isLoading && !searchQuery && filterMode === "all"
+            ? recentContacts
+            : []
+        }
+        openId={id}
+        flashId={flashId}
+        isSelectMode={isSelectMode}
+        selectedIds={selectedIds}
+        toggleSelect={toggleSelect}
+        enterSelectMode={enterSelectMode}
+        handleContextMenu={handleContextMenu}
+        recordVisit={recordVisit}
+        archiveContact={handleArchiveContact}
+        scrollKey={scrollKey}
+        ready={!isLoading}
+        onRefresh={async () => {
+          await refetch();
+        }}
+        barRoom={barRoom}
+        showAlphabetRail={showAlphabetRail}
+      >
+        {isLoading && (
+          <div className="px-2 py-3 space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
+                  <div className="h-3 bg-surface-container rounded-full w-2/5" />
+                </div>
               </div>
-            )}
+            ))}
+          </div>
+        )}
 
-            {/*
+        {/*
+          A failed load. The connection banner speaks only when the server
+          cannot be reached, so a 500 left the list blank.
+        */}
+        {!isLoading && isError && activeContactCount === 0 && (
+          <EmptyState
+            icon={AlertCircle}
+            tone="error"
+            title="Your contacts did not load"
+            body="Nothing has changed. Try again in a moment"
+            action={{ label: "Retry", onClick: () => void refetch() }}
+            level={id ? 3 : 2}
+          />
+        )}
+
+        {/*
           Empty state: 0 contacts total (onboarding).
 
           Gated on `!isError` because a failed fetch also produces zero
-          contacts, and telling someone their network is empty when the server
-          merely went away is the most alarming thing this app could say. The
-          ConnectionBanner explains that case instead.
+          contacts, and telling someone their network is empty when the
+          server merely went away is the most alarming thing this app could
+          say. The error state above says what happened instead.
         */}
-            {/*
-            Import leads. Nobody builds a personal CRM by typing four hundred
-            people in by hand: they arrive with an export from Apple, Google
-            or LinkedIn. Adding one by hand stays on the header's + button.
-          */}
-            {!isLoading && !isError && activeContactCount === 0 && (
-              <EmptyState
-                illustration={
-                  <CorvidMark size={64} className="text-primary/60" />
-                }
-                title="Your network is empty"
-                body="Bring in the people you already have, or add one by hand"
-                action={{
-                  label: "Import",
-                  icon: Upload,
-                  onClick: () => setIsImportOpen(true),
-                }}
-                level={id ? 3 : 2}
-              />
-            )}
-
-            {/* Empty state: search/filter has no results */}
-            {!isLoading &&
-              activeContactCount > 0 &&
-              filteredContacts.length === 0 &&
-              (searchQuery ? (
-                <EmptyState
-                  icon={SearchX}
-                  title={`Nobody matches "${searchQuery}"`}
-                  body="Try fewer letters, or search a company or a tag"
-                  action={{
-                    label: "Clear search",
-                    onClick: () => setSearchQuery(""),
-                  }}
-                  level={id ? 3 : 2}
-                />
-              ) : filterMode === TRACKED_FILTER ? (
-                <EmptyState
-                  icon={Radar}
-                  title="Nobody is tracked yet"
-                  body={TRACKED_INTRO}
-                  action={{
-                    label: "Choose people",
-                    onClick: () => navigate("/settings/tracked"),
-                  }}
-                  level={id ? 3 : 2}
-                />
-              ) : tagFilter ? (
-                <EmptyState
-                  icon={Tag}
-                  title={`Nobody has the tag "${tagFilter}"`}
-                  action={{
-                    label: "Show everyone",
-                    onClick: () => setFilterMode("all"),
-                  }}
-                  level={id ? 3 : 2}
-                />
-              ) : (
-                <EmptyState
-                  icon={ListPlus}
-                  title="No contacts in this list"
-                  body="Add people from their contact page, or select several and choose List"
-                  level={id ? 3 : 2}
-                />
-              ))}
-
-            {/* The search's count, where the results start. */}
-            {showMatchCount && (
-              <div className="flex items-center gap-1.5 px-1">
-                <Search
-                  className="w-3 h-3 text-on-surface-variant"
-                  aria-hidden="true"
-                />
-                <span className={cn(LABEL, "tabular-nums")}>
-                  {matchCount} {matchCount === 1 ? "match" : "matches"}
-                </span>
-              </div>
-            )}
-
-            {/* ── Recent contacts strip ─────────────────────────────────────── */}
-            {!isLoading &&
-              !searchQuery &&
-              filterMode === "all" &&
-              recentContacts.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 px-1 mb-2">
-                    <Clock className="w-3 h-3 text-on-surface-variant" />
-                    <span className={LABEL}>Recent</span>
-                  </div>
-                  {/* 8 px apart, like the rows of the list under it. */}
-                  <div className="space-y-2">
-                    {recentContacts.map((contact, index) => {
-                      const item = roving.getItemProps(index);
-                      return (
-                        <ContactListItem
-                          key={`recent-${contact.id}`}
-                          idPrefix="recent-contact"
-                          contact={contact}
-                          density={density}
-                          active={id === contact.id}
-                          isSelectMode={isSelectMode}
-                          isSelected={selectedIds.has(contact.id)}
-                          showSelection={!listedIds.has(contact.id)}
-                          onToggleSelect={toggleSelect}
-                          rovingIndex={index}
-                          tabIndex={item.tabIndex}
-                          onRowKeyDown={item.onKeyDown}
-                          onRowFocus={item.onFocus}
-                        />
-                      );
-                    })}
-                  </div>
-                  {/* Where Recent ends and everyone begins. A hairline said
-                      it, and this app divides a surface with words and
-                      space, not lines. */}
-                  <div className="flex items-center gap-1.5 px-1 mt-5">
-                    <Users className="w-3 h-3 text-on-surface-variant" />
-                    <span className={LABEL}>All contacts</span>
-                  </div>
-                </div>
-              )}
-
-            <div
-              ref={virtualListRef}
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualItems.map((virtualItem) => {
-                const contact = filteredContacts[virtualItem.index];
-                const item = roving.getItemProps(
-                  recentCount + virtualItem.index,
-                );
-                return (
-                  <div
-                    key={virtualItem.key}
-                    data-index={virtualItem.index}
-                    ref={rowVirtualizer.measureElement}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                      paddingBottom: "8px", // Replaces space-y-2
-                    }}
-                  >
-                    <ContactRowWrapper
-                      contact={contact}
-                      density={density}
-                      active={id === contact.id}
-                      isFlashing={flashId === contact.id}
-                      isSelectMode={isSelectMode}
-                      isSelected={selectedIds.has(contact.id)}
-                      onToggleSelect={toggleSelect}
-                      onEnterSelectMode={enterSelectMode}
-                      handleContextMenu={handleContextMenu}
-                      recordVisit={recordVisit}
-                      archiveContact={handleArchiveContact}
-                      navigate={navigate}
-                      rovingIndex={recentCount + virtualItem.index}
-                      tabIndex={item.tabIndex}
-                      onRowKeyDown={item.onKeyDown}
-                      onRowFocus={item.onFocus}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Context menu — portal-rendered, shared across all rows */}
-            <ContextMenu {...contextMenu} onClose={closeContextMenu} />
-          </div>
-        </div>
-
-        {showAlphabetRail && (
-          <AlphabetRail
-            index={bucketIndex}
-            activeBucket={activeBucket}
-            onJump={jumpToIndex}
+        {/*
+          Import leads. Nobody builds a personal CRM by typing four hundred
+          people in by hand: they arrive with an export from Apple, Google
+          or LinkedIn. Adding one by hand stays on the header's + button.
+        */}
+        {!isLoading && !isError && activeContactCount === 0 && (
+          <EmptyState
+            illustration={<CorvidMark size={64} className="text-primary/60" />}
+            title="Your network is empty"
+            body="Bring in the people you already have, or add one by hand"
+            action={{
+              label: "Import",
+              icon: Upload,
+              onClick: () => setIsImportOpen(true),
+            }}
+            level={id ? 3 : 2}
           />
         )}
-      </div>
+
+        {/* Empty state: search/filter has no results */}
+        {!isLoading &&
+          activeContactCount > 0 &&
+          filteredContacts.length === 0 &&
+          (searchQuery ? (
+            <EmptyState
+              icon={SearchX}
+              title={`Nobody matches "${searchQuery}"`}
+              body="Try fewer letters, or search a company or a tag"
+              action={{
+                label: "Clear search",
+                onClick: () => setSearchQuery(""),
+              }}
+              level={id ? 3 : 2}
+            />
+          ) : filterMode === TRACKED_FILTER ? (
+            <EmptyState
+              icon={Radar}
+              title="Nobody is tracked yet"
+              body={TRACKED_INTRO}
+              action={{
+                label: "Choose people",
+                onClick: () => navigate("/settings/tracked"),
+              }}
+              level={id ? 3 : 2}
+            />
+          ) : tagFilter ? (
+            <EmptyState
+              icon={Tag}
+              title={`Nobody has the tag "${tagFilter}"`}
+              action={{
+                label: "Show everyone",
+                onClick: () => setFilterMode("all"),
+              }}
+              level={id ? 3 : 2}
+            />
+          ) : (
+            <EmptyState
+              icon={ListPlus}
+              title="No contacts in this list"
+              body="Add people from their contact page, or select several and choose List"
+              level={id ? 3 : 2}
+            />
+          ))}
+
+        {/* The search's count, where the results start. */}
+        {showMatchCount && (
+          <div className="flex items-center gap-1.5 px-1">
+            <Search
+              className="w-3 h-3 text-on-surface-variant"
+              aria-hidden="true"
+            />
+            <span className={cn(LABEL, "tabular-nums")}>
+              {matchCount} {matchCount === 1 ? "match" : "matches"}
+            </span>
+          </div>
+        )}
+      </ContactRows>
+      {/* Context menu — portal-rendered, shared across all rows */}
+      <ContextMenu {...contextMenu} onClose={closeContextMenu} />
       <AnimatePresence>
         {isSelectMode && (
           <BulkActionToolbar

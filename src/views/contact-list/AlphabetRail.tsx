@@ -55,7 +55,7 @@ interface AlphabetRailProps {
   onJump: (index: number) => void;
 }
 
-export const AlphabetRail = ({
+const AlphabetRailInner = ({
   index,
   activeBucket,
   onJump,
@@ -252,3 +252,7 @@ export const AlphabetRail = ({
     </div>
   );
 };
+
+// The list renders on each scroll. The rail draws again only when the letter
+// at the top changes.
+export const AlphabetRail = React.memo(AlphabetRailInner);
