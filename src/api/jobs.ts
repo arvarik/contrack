@@ -4,41 +4,16 @@
  * Backs the Background jobs card on Settings → Administration → Instance
  * health: every recurring job with its last run and its next, and the jobs
  * that failed in the last 24 hours. The route is class `admin` and answers a
- * member with `403 ADMIN_REQUIRED`.
+ * member with `403 ADMIN_REQUIRED`. The types come from its contract in
+ * `shared/contracts/jobs.ts`.
  *
  * @module api/jobs
  */
 import { useQuery } from "@tanstack/react-query";
 import { apiJson } from "./client";
+import { jobRoutes } from "../../shared/contracts/jobs";
 
-/** Where a job is in its life. */
-export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
-
-/** A job that runs by itself, every `every` milliseconds. */
-export interface RecurringJob {
-  kind: string;
-  /** Milliseconds between runs, or null when the job is switched off. */
-  every: number | null;
-  lastRunAt: string | null;
-  lastStatus: JobStatus | null;
-  nextRunAt: string | null;
-}
-
-/** A job that ended without doing its work, with the reason. */
-interface FailedJob {
-  id: string;
-  kind: string;
-  /** The account it worked for, or null for the instance's own work. */
-  ownerId: string | null;
-  lastError: string | null;
-  finishedAt: string | null;
-}
-
-export interface BackgroundJobs {
-  recurring: RecurringJob[];
-  /** The last 24 hours, newest first. */
-  failed: FailedJob[];
-}
+export type { JobStatus, RecurringJob } from "../../shared/contracts/jobs";
 
 /**
  * Refetched every fifteen seconds, like the rest of the health page: a run
@@ -47,7 +22,8 @@ export interface BackgroundJobs {
 export const useBackgroundJobs = () =>
   useQuery({
     queryKey: ["admin", "jobs"] as const,
-    queryFn: ({ signal }) => apiJson<BackgroundJobs>("/admin/jobs", { signal }),
+    queryFn: ({ signal }) =>
+      apiJson(jobRoutes.overview, "/admin/jobs", { signal }),
     staleTime: 5_000,
     refetchInterval: 15_000,
   });

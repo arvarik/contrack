@@ -1,13 +1,8 @@
-import { idsSchema } from "../utils/validators.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { listService } from "../services/listService.ts";
-import {
-  validateBody,
-  listCreateSchema,
-  listUpdateSchema,
-} from "../utils/validators.ts";
-import { z } from "zod";
+import { validateBody } from "../utils/validators.ts";
+import { listRoutes } from "../../shared/contracts/lists.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
@@ -26,7 +21,7 @@ router.get(
 
 router.post(
   "/",
-  validateBody(listCreateSchema),
+  validateBody(listRoutes.create.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const { name, icon } = req.body;
@@ -39,11 +34,7 @@ router.post(
 
 router.put(
   "/reorder",
-  validateBody(
-    z.object({
-      orderedIds: z.array(z.string().trim().min(1).max(200)).max(5000),
-    }),
-  ),
+  validateBody(listRoutes.reorder.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = listService.reorderLists(scopeOf(req), req.body.orderedIds);
@@ -57,7 +48,7 @@ router.put(
 
 router.patch(
   "/:id",
-  validateBody(listUpdateSchema),
+  validateBody(listRoutes.update.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = listService.updateList(
@@ -114,7 +105,7 @@ router.delete(
 
 router.post(
   "/:id/members",
-  validateBody(z.object({ contactId: z.string().trim().min(1).max(200) })),
+  validateBody(listRoutes.addMember.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     listService.addMember(
@@ -149,7 +140,7 @@ router.delete(
 
 router.post(
   "/:id/members/bulk",
-  validateBody(z.object({ contactIds: idsSchema })),
+  validateBody(listRoutes.addMembers.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = listService.bulkAddMembers(

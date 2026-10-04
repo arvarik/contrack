@@ -1,6 +1,7 @@
 import { invalidateContactViews } from "./contactCache";
-import { apiFetch } from "./client";
+import { apiJson, jsonBody } from "./client";
 import { INTERACTION_SEARCH_KEY } from "./search";
+import { interactionRoutes } from "../../shared/contracts/interactions";
 /**
  * Interaction API Hooks — React Query hooks for timeline and interaction operations.
  *
@@ -34,11 +35,10 @@ function invalidateInteractionSearch(client: QueryClient): void {
 export const useTimeline = (contactId: string | undefined) => {
   return useQuery({
     queryKey: ["timeline", contactId],
-    queryFn: async ({ signal }): Promise<Interaction[]> => {
-      const res = await apiFetch(`/contacts/${contactId}/timeline`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch timeline");
-      return res.json();
-    },
+    queryFn: ({ signal }): Promise<Interaction[]> =>
+      apiJson(interactionRoutes.timeline, `/contacts/${contactId}/timeline`, {
+        signal,
+      }),
     enabled: !!contactId,
     staleTime: STALE_TIMES.timeline,
   });
@@ -47,21 +47,18 @@ export const useTimeline = (contactId: string | undefined) => {
 export const useAddInteraction = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       contactId,
       data,
     }: {
       contactId: string;
       data: Partial<Interaction>;
-    }): Promise<Interaction> => {
-      const res = await apiFetch(`/contacts/${contactId}/interactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to add interaction");
-      return res.json();
-    },
+    }): Promise<Interaction> =>
+      apiJson(
+        interactionRoutes.create,
+        `/contacts/${contactId}/interactions`,
+        jsonBody(data),
+      ),
     // A conversation written down: the corvid calls, without a sound.
     onSuccess: () => corvidReact("caw"),
     onSettled: (_data, _error, { contactId }) => {
@@ -75,18 +72,8 @@ export const useAddInteraction = () => {
 export const useDeleteInteraction = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      id,
-    }: {
-      id: string;
-      contactId: string;
-    }): Promise<{ success: boolean; message: string }> => {
-      const res = await apiFetch(`/interactions/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete interaction");
-      return res.json();
-    },
+    mutationFn: ({ id }: { id: string; contactId: string }) =>
+      apiJson(interactionRoutes.delete, `/interactions/${id}`),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
@@ -98,22 +85,15 @@ export const useDeleteInteraction = () => {
 export const useUpdateInteraction = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       data,
     }: {
       id: string;
       contactId: string;
       data: { title?: string; content?: string | null };
-    }): Promise<Interaction> => {
-      const res = await apiFetch(`/interactions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update interaction");
-      return res.json();
-    },
+    }): Promise<Interaction> =>
+      apiJson(interactionRoutes.update, `/interactions/${id}`, jsonBody(data)),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
@@ -134,13 +114,11 @@ export const useAddAttachment = () => {
     }): Promise<Interaction> => {
       const formData = new FormData();
       formData.append("attachment", file);
-
-      const res = await apiFetch(`/contacts/${contactId}/attachments`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Failed to upload attachment");
-      return res.json();
+      return apiJson(
+        interactionRoutes.attach,
+        `/contacts/${contactId}/attachments`,
+        { body: formData },
+      );
     },
     onSuccess: (_data, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
@@ -155,11 +133,10 @@ export const useGenerateBriefing = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (contactId: string): Promise<string[]> => {
-      const res = await apiFetch(`/contacts/${contactId}/briefing`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to generate briefing");
-      const data = await res.json();
+      const data = await apiJson(
+        interactionRoutes.briefing,
+        `/contacts/${contactId}/briefing`,
+      );
       return data.points;
     },
     onSuccess: (_, contactId) => {
@@ -173,13 +150,11 @@ export const useGenerateBriefing = () => {
 export const usePromoteGhost = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (contactId: string): Promise<Contact> => {
-      const res = await apiFetch(`/contacts/${contactId}/promote`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to promote ghost contact");
-      return res.json();
-    },
+    mutationFn: async (contactId: string): Promise<Contact> =>
+      (await apiJson(
+        interactionRoutes.promote,
+        `/contacts/${contactId}/promote`,
+      )) as Contact,
     onSuccess: () => {
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["timeline"] });

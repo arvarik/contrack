@@ -8,36 +8,13 @@ import {
 } from "../../../../src/lib/birthday.ts";
 
 describe("pulse.birthdays parseBirthday", () => {
-  it("parses YYYY-MM-DD", () => {
-    expect(parseBirthday("1990-05-14")).toEqual({
-      year: 1990,
-      month: 5,
-      day: 14,
-    });
-  });
-
-  it("parses MM-DD without year", () => {
-    expect(parseBirthday("05-14")).toEqual({
-      year: null,
-      month: 5,
-      day: 14,
-    });
-  });
-
-  it("parses May 14 without year", () => {
-    expect(parseBirthday("May 14")).toEqual({
-      year: null,
-      month: 5,
-      day: 14,
-    });
-  });
-
-  it("parses May 14, 1990 with year", () => {
-    expect(parseBirthday("May 14, 1990")).toEqual({
-      year: 1990,
-      month: 5,
-      day: 14,
-    });
+  it.each([
+    ["1990-05-14", 1990],
+    ["05-14", null],
+    ["May 14", null],
+    ["May 14, 1990", 1990],
+  ])("parses %s", (text, year) => {
+    expect(parseBirthday(text)).toEqual({ year, month: 5, day: 14 });
   });
 
   it("ignores unparseable strings", () => {

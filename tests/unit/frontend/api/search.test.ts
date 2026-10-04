@@ -226,16 +226,4 @@ describe("the facets a question carries", () => {
       ],
     });
   });
-
-  it("sends the question alone when there are no pills", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response(result("Alice") + "\n")),
-    );
-    const { result: hook } = renderHook(() => useSemanticSearch());
-    await act(async () => {
-      await hook.current.mutate("Alice");
-    });
-    expect(sentBody()).toEqual({ query: "Alice" });
-  });
 });

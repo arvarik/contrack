@@ -99,24 +99,17 @@ describe("NLP Names & Nicknames", () => {
       expect(check("Anton Kovacs", "Anton P. Kovacs")).toBe(true);
     });
 
-    it("refuses a dropped first name", () => {
+    it.each([
       // Somebody who goes by their middle name, or somebody else. Either way
       // the surname alone is not enough to merge on.
-      expect(check("Peter Kovacs", "Anton Peter Kovacs")).toBe(false);
-    });
-
-    it("refuses two different middle names", () => {
+      ["a dropped first name", "Peter Kovacs", "Anton Peter Kovacs"],
       // The lengths are equal, so neither is an extension of the other. This
       // is the father-and-son shape.
-      expect(check("Robert Lee Smith", "Robert Ann Smith")).toBe(false);
-    });
-
-    it("refuses a different surname", () => {
-      expect(check("Anton Kovacs", "Anton Peter Zeller")).toBe(false);
-    });
-
-    it("refuses a different first name", () => {
-      expect(check("Marta Kovacs", "Anton Peter Kovacs")).toBe(false);
+      ["two different middle names", "Robert Lee Smith", "Robert Ann Smith"],
+      ["a different surname", "Anton Kovacs", "Anton Peter Zeller"],
+      ["a different first name", "Marta Kovacs", "Anton Peter Kovacs"],
+    ])("refuses %s", (_what, a, b) => {
+      expect(check(a, b)).toBe(false);
     });
 
     it("refuses a single token on either side", () => {

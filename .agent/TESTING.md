@@ -26,6 +26,14 @@ unit test that renders React starts with the comment
   trigger. `makeTestApp()` in `tests/integration/helpers.ts` mounts the real
   app from `createApp()`, and the test calls it with supertest. Tenancy suites are
   `tests/integration/tenancy.*.test.ts`.
+- **The response check**: `makeTestApp()` parses every 2xx JSON answer of a
+  route with a contract in `shared/contracts/` with its `response` schema,
+  and compares the status with the contract's. A mismatch fails the test
+  that caused it when the test ends, with the route and the Zod issues, even
+  when the test never read the body. So every integration test that uses
+  `makeTestApp()` is a contract test too. A test that builds its own app with
+  `createApp()`, such as the rate limit tests, skips the check. The check
+  lives in the test app only: production never parses an answer.
 - **Eval**: a quality number with a committed baseline.
 - **e2e**: a journey a person takes in the built app, an axe scan, or a
   measurement in the browser. Use the fixtures in `tests/e2e/fixtures/`
@@ -80,6 +88,11 @@ the change. Say why in the pull request.
 - **Tenancy**: every `scoped` route has a case in
   `tenancy.isolation.test.ts`; `tenancy.queryPlans.test.ts` keeps the owner
   predicate an index seek; `npm run lint:tenant` scans the server's SQL.
+- **Contracts** (`tests/integration/contracts.test.ts`): every manifest route
+  has a contract or a line in `UNCONTRACTED`, never both, and the list's
+  length equals `UNCONTRACTED_CEILING`. A change that contracts a route
+  lowers the number, so the list only shrinks. A second test fails when
+  `docs/openapi.json` differs from what `npm run api:openapi` writes.
 - **Lint**: `npm run lint` (Oxlint, `tsc --noEmit`, the tenant lint) and
   `npm run knip`.
 - **Migrations** (`db.migrations.test.ts`): a new database ends at the last
@@ -120,8 +133,28 @@ when `DOCS_SCREENSHOTS=1` is set. Otherwise they go to `test-results/`.
 - A bug fix comes with a test that failed before the fix.
 - No retries. The integration project has none, on purpose: a flaky test is a
   bug to find.
-- A new route needs a manifest row, and a scoped route needs an isolation
-  case.
+- A new route needs a manifest row and a contract, and a scoped route needs
+  an isolation case.
+- A new test covers the happy path and the one failure that guards data. The
+  suite stays small on purpose.
+
+### When a unit test goes
+
+A unit test goes when one of these holds:
+
+1. Another test asserts the same behaviour through a public interface: an
+   integration test, an e2e journey or a more public unit test. Open that
+   owner before you delete, and name it in the pull request. Two audits once
+   deleted both copies.
+2. It tests a test-only seam or dead code. The seam goes with it, and a test
+   that needed the seam goes through the public interface instead.
+3. It replays the implementation, or mirrors a constant back to itself.
+
+Near duplicates become one `it.each` that keeps every assertion. Keep a test
+whatever it overlaps when it guards tenancy, security, the route manifest, a
+source scan, an eval gate, a migration or an upgrade, or when it names a
+fixed bug. No coverage measure may fall to less than one point above its
+floor.
 
 ## 8. Reporting results
 

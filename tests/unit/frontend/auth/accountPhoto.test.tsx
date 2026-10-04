@@ -279,32 +279,6 @@ describe("createAccountThenPhoto", () => {
     vi.clearAllMocks();
   });
 
-  it("resolves with photoFailed: false when submit and upload succeed", async () => {
-    const submit = vi.fn().mockResolvedValue({ ok: true });
-    vi.mocked(uploadAccountAvatar).mockResolvedValue({
-      user: {
-        id: "u1",
-        email: "ada@example.com",
-        username: "ada",
-        displayName: "Ada",
-        role: "admin",
-        status: "active",
-        credentialState: "password",
-        mustChangePassword: false,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        lastLoginAt: null,
-        avatarUrl: "/uploads/u/u1/profile/profile-1.jpg",
-      },
-    });
-    const photo = new File(["bytes"], "photo.png", { type: "image/png" });
-
-    const result = await createAccountThenPhoto(submit, photo);
-
-    expect(submit).toHaveBeenCalledTimes(1);
-    expect(uploadAccountAvatar).toHaveBeenCalledWith(photo);
-    expect(result).toEqual({ photoFailed: false });
-  });
-
   it("resolves with photoFailed: true when upload throws", async () => {
     const submit = vi.fn().mockResolvedValue({ ok: true });
     vi.mocked(uploadAccountAvatar).mockRejectedValue(

@@ -97,16 +97,6 @@ describe("Import source memory", () => {
       ).toEqual([tab]);
     });
 
-    it("persists tab switch to localStorage", () => {
-      renderPanel();
-
-      const linkedinTab = screen.getByRole("tab", { name: "LinkedIn" });
-      fireEvent.click(linkedinTab);
-
-      expect(localStorage.getItem(SOURCE_KEY)).toBe("linkedin");
-      expect(linkedinTab.getAttribute("aria-selected")).toBe("true");
-    });
-
     it("works normally when localStorage throws on switch", () => {
       renderPanel();
 

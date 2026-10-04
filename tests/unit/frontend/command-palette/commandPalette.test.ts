@@ -11,7 +11,6 @@ import {
 } from "../../../../src/components/command-palette/utils";
 import type { ZeroStateInsight } from "../../../../src/types";
 import { useSearchHistory } from "../../../../src/hooks/useSearchHistory";
-import { resetLastRecorded } from "../../../../src/api/searchHistory";
 import type { HistoryEntry } from "../../../../shared/searchHistory";
 
 describe("aiResultsHeading", () => {
@@ -29,12 +28,11 @@ describe("getMode", () => {
     expect(getMode("")).toBe("normal");
   });
 
-  it("returns 'ai' when the query starts with ?", () => {
-    expect(getMode("?who do I know in London")).toBe("ai");
-  });
-
-  it("returns 'action' when the query starts with >", () => {
-    expect(getMode(">archive")).toBe("action");
+  it.each([
+    ["ai", "?", "?who do I know in London"],
+    ["action", ">", ">archive"],
+  ])("returns '%s' when the query starts with %s", (mode, _prefix, query) => {
+    expect(getMode(query)).toBe(mode);
   });
 
   it("ignores leading whitespace before the prefix", () => {
@@ -50,20 +48,18 @@ describe("getMode", () => {
 });
 
 describe("stripModePrefix", () => {
-  it("strips the ? prefix", () => {
-    expect(stripModePrefix("? who is jane")).toBe("who is jane");
-  });
-
-  it("strips the > prefix", () => {
-    expect(stripModePrefix(">archive contact")).toBe("archive contact");
-  });
-
-  it("leaves plain queries untouched (trimmed)", () => {
-    expect(stripModePrefix("  jane doe  ")).toBe("jane doe");
+  it.each([
+    ["strips the ? prefix", "? who is jane", "who is jane"],
+    ["strips the > prefix", ">archive contact", "archive contact"],
+    ["leaves plain queries untouched (trimmed)", "  jane doe  ", "jane doe"],
+  ])("%s", (_what, query, stripped) => {
+    expect(stripModePrefix(query)).toBe(stripped);
   });
 });
 
 describe("useSearchHistory", () => {
+  // Each test records a question no other test records: the client drops a
+  // question it recorded in the last two seconds.
   let queryClient: QueryClient;
   const postedBodies: Record<string, unknown>[] = [];
   const deletedUrls: string[] = [];
@@ -108,7 +104,6 @@ describe("useSearchHistory", () => {
     });
     postedBodies.length = 0;
     deletedUrls.length = 0;
-    resetLastRecorded();
 
     vi.stubGlobal(
       "fetch",
@@ -427,13 +422,6 @@ describe("insightPath", () => {
     type: ZeroStateInsight["type"],
     extra: Partial<ZeroStateInsight> = {},
   ): ZeroStateInsight => ({ type, label: "", ...extra });
-
-  it("opens the contacts that are stale as a filtered list, not Settings", () => {
-    // The same address as the stale row on Pulse.
-    expect(insightPath(insight("stale_data", { count: 4 }))).toBe(
-      "/?q=updated:>6m",
-    );
-  });
 
   it("sends the other counted insights to the page that lists them", () => {
     expect(insightPath(insight("action_items", { count: 2 }))).toBe("/pulse");

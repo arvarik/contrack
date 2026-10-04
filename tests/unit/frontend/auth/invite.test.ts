@@ -11,15 +11,12 @@
 // These are the pure parts of that journey. The rest is rendering.
 // @vitest-environment jsdom
 // =============================================================================
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  __resetInvitationToken,
   groupSecret,
   JOIN_PATH,
   JOIN_TOKEN_PARAM,
   parseUrlSecret,
-  takeInvitationToken,
-  takeUrlSecret,
   urlWithoutSecret,
   RESET_PASSWORD_PATH,
   SIGNIN_LINK_PATH,
@@ -104,8 +101,15 @@ describe("invitation links", () => {
 });
 
 describe("taking the invitation out of the address bar", () => {
-  beforeEach(() => {
-    __resetInvitationToken();
+  // The reads are memoised for the life of the page, so each test loads a
+  // fresh copy of the module, the way a new page does.
+  type Credentials = typeof import("../../../../src/lib/credentials");
+  let takeInvitationToken: Credentials["takeInvitationToken"];
+  let takeUrlSecret: Credentials["takeUrlSecret"];
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ takeInvitationToken, takeUrlSecret } =
+      await import("../../../../src/lib/credentials"));
     window.history.replaceState({}, "", "/");
   });
 

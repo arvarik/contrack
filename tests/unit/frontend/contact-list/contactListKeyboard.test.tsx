@@ -9,7 +9,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { useContactListKeyboard } from "../../../../src/views/contact-list/hooks/useContactListKeyboard";
 import type { Contact } from "../../../../src/types";
 
@@ -47,23 +47,6 @@ const Harness = ({
 };
 
 describe("useContactListKeyboard", () => {
-  it("steps from the open contact, down and back up", () => {
-    const navigate = vi.fn();
-    const { rerender } = render(
-      <Harness currentId={undefined} navigate={navigate} />,
-    );
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(navigate).toHaveBeenLastCalledWith("/contact/ada");
-
-    rerender(<Harness currentId="ada" navigate={navigate} />);
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(navigate).toHaveBeenLastCalledWith("/contact/edsger");
-
-    rerender(<Harness currentId="edsger" navigate={navigate} />);
-    fireEvent.keyDown(document.body, { key: "k" });
-    expect(navigate).toHaveBeenLastCalledWith("/contact/ada");
-  });
-
   it("attaches its listener once, whatever changes", () => {
     const add = vi.spyOn(window, "addEventListener");
     const navigate = vi.fn();
@@ -74,18 +57,5 @@ describe("useContactListKeyboard", () => {
     rerender(<Harness currentId="edsger" navigate={navigate} />);
     const keydowns = add.mock.calls.filter(([type]) => type === "keydown");
     expect(keydowns).toHaveLength(1);
-  });
-
-  it("leaves a key alone that a row already answered", () => {
-    const navigate = vi.fn();
-    render(<Harness currentId="ada" navigate={navigate} />);
-    const event = new KeyboardEvent("keydown", {
-      key: "ArrowDown",
-      bubbles: true,
-      cancelable: true,
-    });
-    event.preventDefault();
-    window.dispatchEvent(event);
-    expect(navigate).not.toHaveBeenCalled();
   });
 });

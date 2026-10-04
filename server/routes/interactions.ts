@@ -6,11 +6,9 @@ import path from "path";
 import multer from "multer";
 import { log } from "../utils/logger.ts";
 import { interactionService } from "../services/interactionService.ts";
-import {
-  validateBody,
-  interactionCreateSchema,
-  interactionUpdateSchema,
-} from "../utils/validators.ts";
+import { contactService } from "../services/contactService.ts";
+import { parseQuery, validateBody } from "../utils/validators.ts";
+import { interactionRoutes } from "../../shared/contracts/interactions.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
@@ -82,7 +80,7 @@ router.get(
 router.post(
   "/contacts/:id/interactions",
   requireContact,
-  validateBody(interactionCreateSchema),
+  validateBody(interactionRoutes.create.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const result = interactionService.createInteraction(
@@ -133,14 +131,15 @@ router.post(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const updated = interactionService.promoteGhost(
-      scopeOf(req),
-      String(req.params.id),
-    );
+    const scope = scopeOf(req);
+    const id = String(req.params.id);
+    const updated = interactionService.promoteGhost(scope, id);
     if (!updated) throw new AppError("Contact not found", 404);
 
     log.info("API", `[${rid}] Promoted ghost contact: ${updated.name}`);
-    res.json(updated);
+    // The whole contact, as every other contact route answers. The service
+    // returns the bare row, with its flags as 0 and 1.
+    res.json(contactService.getContactById(scope, id));
   }),
 );
 
@@ -172,7 +171,7 @@ router.post(
 
 router.patch(
   "/interactions/:id",
-  validateBody(interactionUpdateSchema),
+  validateBody(interactionRoutes.update.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
@@ -208,16 +207,10 @@ router.get(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const rawLimit = req.query.limit;
-    if (
-      rawLimit !== undefined &&
-      (typeof rawLimit !== "string" ||
-        !/^\d+$/.test(rawLimit) ||
-        Number(rawLimit) < 1 ||
-        Number(rawLimit) > 200)
-    )
-      throw new AppError("limit must be an integer from 1 to 200", 400);
-    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+    const { limit } = parseQuery(
+      interactionRoutes.relationships.query,
+      req.query,
+    );
 
     const rows = interactionService.getRelationships(
       scopeOf(req),

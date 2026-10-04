@@ -160,6 +160,12 @@ Dates are ISO 8601: a day, such as `2026-11-03`, or a date and time.
 `log_interaction` refuses a date in the future, because an interaction has
 already happened. A follow-up can be due on any date.
 
+A tool checks each field with the rule of the REST route that does the same
+write, from the same contract in `shared/contracts/`. For example, a contact
+name has 1 to 300 characters, `add_to_list` takes up to 5,000 contact IDs, and
+`search_notes` takes a day, or an ISO 8601 date and time with `Z` or an
+offset, for `from` and `to`.
+
 When a client connects, the server also sends instructions for its model.
 They say where contact IDs come from, to check for a contact with
 `list_contacts` before `create_contact`, and how to write dates.

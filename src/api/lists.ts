@@ -1,5 +1,6 @@
 import { invalidateContactViews } from "./contactCache";
-import { apiFetch } from "./client";
+import { apiJson, jsonBody } from "./client";
+import { listRoutes } from "../../shared/contracts/lists";
 /**
  * List Management API Hooks — React Query hooks for contact lists.
  *
@@ -16,11 +17,8 @@ import { type Contact, type ContactList } from "../types";
 export const useLists = () => {
   return useQuery({
     queryKey: ["lists"],
-    queryFn: async ({ signal }): Promise<ContactList[]> => {
-      const res = await apiFetch(`/lists`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch lists");
-      return res.json();
-    },
+    queryFn: ({ signal }): Promise<ContactList[]> =>
+      apiJson(listRoutes.all, `/lists`, { signal }),
     staleTime: STALE_TIMES.lists,
   });
 };
@@ -28,18 +26,8 @@ export const useLists = () => {
 export const useCreateList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: {
-      name: string;
-      icon: string;
-    }): Promise<ContactList> => {
-      const res = await apiFetch(`/lists`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create list");
-      return res.json();
-    },
+    mutationFn: (data: { name: string; icon: string }): Promise<ContactList> =>
+      apiJson(listRoutes.create, `/lists`, jsonBody(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
@@ -50,11 +38,7 @@ export const useCreateList = () => {
 export const useDeleteList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiFetch(`/lists/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete list");
-      return res.json();
-    },
+    mutationFn: (id: string) => apiJson(listRoutes.delete, `/lists/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
@@ -66,21 +50,14 @@ export const useDeleteList = () => {
 export const useUpdateList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       data,
     }: {
       id: string;
       data: { name?: string; icon?: string };
-    }) => {
-      const res = await apiFetch(`/lists/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update list");
-      return res.json() as Promise<ContactList>;
-    },
+    }): Promise<ContactList> =>
+      apiJson(listRoutes.update, `/lists/${id}`, jsonBody(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
@@ -92,11 +69,10 @@ export const useUpdateList = () => {
 export const useListContacts = (listId: string | null) => {
   return useQuery({
     queryKey: ["list-contacts", listId],
-    queryFn: async ({ signal }): Promise<Contact[]> => {
-      const res = await apiFetch(`/lists/${listId}/contacts`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch list contacts");
-      return res.json();
-    },
+    queryFn: async ({ signal }): Promise<Contact[]> =>
+      (await apiJson(listRoutes.contacts, `/lists/${listId}/contacts`, {
+        signal,
+      })) as Contact[],
     enabled: !!listId,
     staleTime: STALE_TIMES.listContacts,
   });
@@ -105,15 +81,8 @@ export const useListContacts = (listId: string | null) => {
 export const useReorderLists = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (orderedIds: string[]) => {
-      const res = await apiFetch(`/lists/reorder`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderedIds }),
-      });
-      if (!res.ok) throw new Error("Failed to reorder lists");
-      return res.json();
-    },
+    mutationFn: (orderedIds: string[]) =>
+      apiJson(listRoutes.reorder, `/lists/reorder`, jsonBody({ orderedIds })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
@@ -124,21 +93,18 @@ export const useReorderLists = () => {
 export const useAddToList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       listId,
       contactId,
     }: {
       listId: string;
       contactId: string;
-    }) => {
-      const res = await apiFetch(`/lists/${listId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactId }),
-      });
-      if (!res.ok) throw new Error("Failed to add to list");
-      return res.json();
-    },
+    }) =>
+      apiJson(
+        listRoutes.addMember,
+        `/lists/${listId}/members`,
+        jsonBody({ contactId }),
+      ),
     onMutate: async ({ listId, contactId }) => {
       await queryClient.cancelQueries({ queryKey: ["contacts"] });
       await queryClient.cancelQueries({ queryKey: ["contacts", contactId] });
@@ -197,19 +163,14 @@ export const useAddToList = () => {
 export const useRemoveFromList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       listId,
       contactId,
     }: {
       listId: string;
       contactId: string;
-    }) => {
-      const res = await apiFetch(`/lists/${listId}/members/${contactId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to remove from list");
-      return res.json();
-    },
+    }) =>
+      apiJson(listRoutes.removeMember, `/lists/${listId}/members/${contactId}`),
     onMutate: async ({ listId, contactId }) => {
       await queryClient.cancelQueries({ queryKey: ["contacts"] });
       await queryClient.cancelQueries({ queryKey: ["contacts", contactId] });
@@ -260,21 +221,18 @@ export const useRemoveFromList = () => {
 export const useBulkAddToList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       listId,
       contactIds,
     }: {
       listId: string;
       contactIds: string[];
-    }): Promise<{ success: boolean; count: number }> => {
-      const res = await apiFetch(`/lists/${listId}/members/bulk`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds }),
-      });
-      if (!res.ok) throw new Error("Failed to bulk add to list");
-      return res.json();
-    },
+    }) =>
+      apiJson(
+        listRoutes.addMembers,
+        `/lists/${listId}/members/bulk`,
+        jsonBody({ contactIds }),
+      ),
     onSuccess: () => {
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["lists"] });

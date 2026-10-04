@@ -22,7 +22,9 @@ import {
   type TrashedContact,
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
-import { apiFetch } from "./client";
+import { contactRoutes } from "../../shared/contracts/contacts";
+import type { BodyOf } from "../../shared/contracts/route";
+import { apiFetch, apiJson, jsonBody } from "./client";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth
@@ -32,13 +34,13 @@ import { apiFetch } from "./client";
  */
 export const fetchContactsSlim = async (context?: {
   signal?: AbortSignal;
-}): Promise<Contact[]> => {
-  const res = await apiFetch("/contacts?view=slim", {
+}): Promise<Contact[]> =>
+  // The slim view sends `SlimContact` rows: emails and phones as bare values,
+  // and empty child arrays. The views read them as Contacts, so the type is
+  // kept here at the fetch.
+  (await apiJson(contactRoutes.list, "/contacts?view=slim", {
     signal: context?.signal,
-  });
-  const data: Contact[] = await res.json();
-  return data;
-};
+  })) as Contact[];
 
 export const useContacts = () => {
   return useQuery({
@@ -168,10 +170,10 @@ export const useSlimContactsForSearch = () => {
 export const useContact = (id: string | undefined) => {
   return useQuery({
     queryKey: ["contacts", id],
-    queryFn: async ({ signal }): Promise<Contact> => {
-      const res = await apiFetch(`/contacts/${id}`, { signal });
-      return res.json();
-    },
+    queryFn: async ({ signal }): Promise<Contact> =>
+      (await apiJson(contactRoutes.get, `/contacts/${id}`, {
+        signal,
+      })) as Contact,
     enabled: !!id,
     staleTime: STALE_TIMES.contactDetail,
   });
@@ -219,10 +221,10 @@ export const useMapContacts = () => {
 export const useArchivedContacts = () => {
   return useQuery({
     queryKey: ["contacts", "archived"],
-    queryFn: async ({ signal }): Promise<Contact[]> => {
-      const res = await apiFetch("/contacts/archived", { signal });
-      return res.json();
-    },
+    queryFn: async ({ signal }): Promise<Contact[]> =>
+      (await apiJson(contactRoutes.archived, "/contacts/archived", {
+        signal,
+      })) as Contact[],
     staleTime: STALE_TIMES.archived,
   });
 };
@@ -230,14 +232,12 @@ export const useArchivedContacts = () => {
 export const useCreateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: ContactUpdateData): Promise<Contact> => {
-      const res = await apiFetch("/contacts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
+    mutationFn: async (data: ContactUpdateData): Promise<Contact> =>
+      (await apiJson(
+        contactRoutes.create,
+        "/contacts",
+        jsonBody(data),
+      )) as Contact,
     onSuccess: () => {
       // Somebody new: the corvid hops.
       corvidReact("hop");
@@ -269,14 +269,15 @@ export const useUpdateContact = () => {
       id: string;
       data: ContactUpdateData;
     }): Promise<Contact> =>
-      writeContactInOrder(id, async () => {
-        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-        return res.json();
-      }),
+      writeContactInOrder(
+        id,
+        async () =>
+          (await apiJson(
+            contactRoutes.replace,
+            `/contacts/${encodeURIComponent(id)}`,
+            jsonBody(data),
+          )) as Contact,
+      ),
     onSuccess: (contact) => {
       queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
@@ -292,7 +293,7 @@ export const useUpdateContact = () => {
  * The body of `PATCH /api/contacts/:id/location`: a pin a person dropped, or
  * a request to hand the pin back to the geocoder.
  */
-type ContactLocationInput = { lat: number; lng: number } | { regeocode: true };
+type ContactLocationInput = BodyOf<typeof contactRoutes.location>;
 
 /**
  * Move a contact's pin by hand, or hand it back to the geocoder.
@@ -313,17 +314,15 @@ export const useSetContactLocation = () => {
       id: string;
       data: ContactLocationInput;
     }): Promise<Contact> =>
-      writeContactInOrder(id, async () => {
-        const res = await apiFetch(
-          `/contacts/${encodeURIComponent(id)}/location`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-          },
-        );
-        return res.json();
-      }),
+      writeContactInOrder(
+        id,
+        async () =>
+          (await apiJson(
+            contactRoutes.location,
+            `/contacts/${encodeURIComponent(id)}/location`,
+            jsonBody(data),
+          )) as Contact,
+      ),
     onSuccess: (contact) => {
       queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
@@ -365,18 +364,19 @@ export const useSetTracked = () => {
       isTracked,
       cadenceDays,
     }: SetTrackedInput): Promise<Contact> =>
-      writeContactInOrder(id, async () => {
-        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            cadenceDays === undefined
-              ? { isTracked }
-              : { isTracked, cadenceDays },
-          ),
-        });
-        return res.json();
-      }),
+      writeContactInOrder(
+        id,
+        async () =>
+          (await apiJson(
+            contactRoutes.patch,
+            `/contacts/${encodeURIComponent(id)}`,
+            jsonBody(
+              cadenceDays === undefined
+                ? { isTracked }
+                : { isTracked, cadenceDays },
+            ),
+          )) as Contact,
+      ),
     onMutate: ({ id, isTracked, cadenceDays }) =>
       patchContactCaches(queryClient, id, {
         isTracked,
@@ -410,14 +410,15 @@ export const useSetCadence = () => {
       id: string;
       cadenceDays: number;
     }): Promise<Contact> =>
-      writeContactInOrder(id, async () => {
-        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cadenceDays }),
-        });
-        return res.json();
-      }),
+      writeContactInOrder(
+        id,
+        async () =>
+          (await apiJson(
+            contactRoutes.patch,
+            `/contacts/${encodeURIComponent(id)}`,
+            jsonBody({ cadenceDays }),
+          )) as Contact,
+      ),
     onMutate: ({ id, cadenceDays }) =>
       patchContactCaches(queryClient, id, { cadenceDays }),
     onSuccess: (contact) => {
@@ -508,14 +509,8 @@ export const useBulkRestoreContacts = () => {
 export const useDeleteContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (
-      id: string,
-    ): Promise<{ success: boolean; retentionDays: number }> => {
-      const res = await apiFetch(`/contacts/${id}`, {
-        method: "DELETE",
-      });
-      return res.json();
-    },
+    mutationFn: (id: string) =>
+      apiJson(contactRoutes.delete, `/contacts/${id}`),
     onSettled: (_data, error, id) => {
       if (!error) {
         queryClient.removeQueries({ queryKey: ["contacts", id] });
@@ -530,14 +525,12 @@ export const useDeleteContact = () => {
 export const useArchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiFetch(`/contacts/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isArchived: true }),
-      });
-      return res.json();
-    },
+    mutationFn: (id: string) =>
+      apiJson(
+        contactRoutes.replace,
+        `/contacts/${id}`,
+        jsonBody({ isArchived: true }),
+      ),
     onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ["contacts", id] });
       invalidateContactViews(queryClient);
@@ -549,14 +542,12 @@ export const useArchiveContact = () => {
 export const useUnarchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiFetch(`/contacts/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isArchived: false }),
-      });
-      return res.json();
-    },
+    mutationFn: (id: string) =>
+      apiJson(
+        contactRoutes.replace,
+        `/contacts/${id}`,
+        jsonBody({ isArchived: false }),
+      ),
     onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ["contacts", id] });
       invalidateContactViews(queryClient);
@@ -568,16 +559,12 @@ export const useUnarchiveContact = () => {
 export const useBulkDeleteContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (
-      ids: string[],
-    ): Promise<{ success: boolean; count: number; retentionDays: number }> => {
-      const res = await apiFetch("/contacts/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      return res.json();
-    },
+    mutationFn: (ids: string[]) =>
+      apiJson(
+        contactRoutes.bulkDelete,
+        "/contacts/bulk-delete",
+        jsonBody({ ids }),
+      ),
     onSettled: () => {
       invalidateContactViews(queryClient);
     },
@@ -587,20 +574,12 @@ export const useBulkDeleteContacts = () => {
 export const useBulkUpdateContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      ids,
-      data,
-    }: {
-      ids: string[];
-      data: ContactUpdateData;
-    }): Promise<{ success: boolean; count: number }> => {
-      const res = await apiFetch("/contacts/bulk-update", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, data }),
-      });
-      return res.json();
-    },
+    mutationFn: ({ ids, data }: { ids: string[]; data: ContactUpdateData }) =>
+      apiJson(
+        contactRoutes.bulkUpdate,
+        "/contacts/bulk-update",
+        jsonBody({ ids, data }),
+      ),
     onSettled: () => {
       invalidateContactViews(queryClient);
     },
@@ -619,11 +598,13 @@ export const useUploadAvatar = () => {
     }): Promise<Contact> => {
       const formData = new FormData();
       formData.append("avatar", file);
-      const res = await apiFetch(`/contacts/${contactId}/avatar`, {
-        method: "POST",
-        body: formData,
-      });
-      return res.json();
+      return (await apiJson(
+        contactRoutes.avatar,
+        `/contacts/${contactId}/avatar`,
+        {
+          body: formData,
+        },
+      )) as Contact;
     },
     onSuccess: (_data, { contactId }) => {
       invalidateContactViews(queryClient);
@@ -641,14 +622,12 @@ export const useSetDicebearAvatar = () => {
     }: {
       contactId: string;
       avatarUrl: string;
-    }): Promise<Contact> => {
-      const res = await apiFetch(`/contacts/${contactId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatarUrl }),
-      });
-      return res.json();
-    },
+    }): Promise<Contact> =>
+      (await apiJson(
+        contactRoutes.replace,
+        `/contacts/${contactId}`,
+        jsonBody({ avatarUrl }),
+      )) as Contact,
     onSuccess: (_data, { contactId }) => {
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });

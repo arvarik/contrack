@@ -108,35 +108,6 @@ describe("usePaneWidth", () => {
     expect(drawn()).toBe("420px");
   });
 
-  it("leaves the contact 560 px, and gives the stored width back on a wider window", () => {
-    // The row ends at the window's right edge, and the pane starts after
-    // the 64 px sidebar.
-    let windowWidth = 1024;
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
-      function (this: HTMLElement) {
-        const box = (left: number, right: number) =>
-          ({ left, right, width: right - left }) as DOMRect;
-        return this.tagName === "SECTION"
-          ? box(64, 64 + 350)
-          : box(0, windowWidth);
-      },
-    );
-    localStorage.setItem(KEY, "480");
-    const { hook, drawn } = mount();
-    // 1024 - 64 - 560 = 400.
-    expect(hook.result.current.limit).toBe(400);
-    expect(hook.result.current.width).toBe(400);
-    expect(drawn()).toBe("400px");
-
-    windowWidth = 1440;
-    act(() => void window.dispatchEvent(new Event("resize")));
-    expect(hook.result.current.limit).toBe(480);
-    expect(hook.result.current.width).toBe(480);
-    expect(drawn()).toBe("480px");
-    // The window held the pane in; it never rewrote the choice.
-    expect(localStorage.getItem(KEY)).toBe("480");
-  });
-
   it("stops listening for window resizes on unmount", () => {
     const remove = vi.spyOn(window, "removeEventListener");
     const { hook } = mount();

@@ -4,7 +4,6 @@ import {
 } from "../services/aiSearch/contactSnapshot.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { requireContact } from "../services/contactGuard.ts";
-import { idsSchema } from "../utils/validators.ts";
 import { Router, type Request } from "express";
 import multer from "multer";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
@@ -14,14 +13,8 @@ import { contactService } from "../services/contactService.ts";
 import { trashRetentionDays } from "../services/lifecycleSettings.ts";
 import { relationshipService } from "../services/relationshipService.ts";
 import { parseContactRecord } from "../ai/aiService.ts";
-import {
-  validateBody,
-  contactCreateSchema,
-  contactUpdateSchema,
-  contactBulkCreateSchema,
-  contactLocationSchema,
-  type ContactLocationInput,
-} from "../utils/validators.ts";
+import { parseQuery, validateBody } from "../utils/validators.ts";
+import { contactRoutes } from "../../shared/contracts/contacts.ts";
 import { z } from "zod";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
@@ -49,10 +42,7 @@ import {
   researchDepthSchema,
   type ResearchDepth,
 } from "../../shared/researchDepth.ts";
-import {
-  contactRepo,
-  RELATION_REGISTRY,
-} from "../repositories/contactRepository.ts";
+import { contactRepo } from "../repositories/contactRepository.ts";
 import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
 
 // Avatars go to uploads/u/<ownerId>/avatars/ now, so there is no one directory
@@ -123,7 +113,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const scope = scopeOf(req);
-    const view = req.query.view as string;
+    const { view } = parseQuery(contactRoutes.list.query, req.query);
 
     if (view === "slim") {
       const results = contactService.getSlimContacts(scope);
@@ -189,7 +179,7 @@ router.get(
 
 router.post(
   "/contacts",
-  validateBody(contactCreateSchema),
+  validateBody(contactRoutes.create.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
@@ -243,7 +233,7 @@ function doneFrame(record: ImportRecord, repeated: boolean) {
 
 router.post(
   "/contacts/bulk",
-  validateBody(contactBulkCreateSchema),
+  validateBody(contactRoutes.bulkCreate.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     // Captured once, before the SSE stream starts and before any background
@@ -439,7 +429,7 @@ router.post(
 
 router.post(
   "/contacts/bulk-delete",
-  validateBody(z.object({ ids: idsSchema })),
+  validateBody(contactRoutes.bulkDelete.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = contactService.bulkDeleteContacts(scopeOf(req), req.body.ids);
@@ -457,18 +447,7 @@ router.post(
 
 router.put(
   "/contacts/bulk-update",
-  validateBody(
-    z.object({
-      ids: idsSchema,
-      data: contactUpdateSchema.refine(
-        (data) => !Object.keys(RELATION_REGISTRY).some((key) => key in data),
-        {
-          message:
-            "Bulk edits support profile fields only. Edit contact details on each contact.",
-        },
-      ),
-    }),
-  ),
+  validateBody(contactRoutes.bulkUpdate.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const scope = scopeOf(req);
@@ -492,7 +471,7 @@ router.put(
 
 router.put(
   "/contacts/:id",
-  validateBody(contactUpdateSchema),
+  validateBody(contactRoutes.replace.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = contactService.updateContact(
@@ -511,7 +490,7 @@ router.put(
 
 router.patch(
   "/contacts/:id",
-  validateBody(contactUpdateSchema),
+  validateBody(contactRoutes.patch.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const childKeys = [
@@ -573,11 +552,11 @@ router.delete(
 router.patch(
   "/contacts/:id/location",
   requireContact,
-  validateBody(contactLocationSchema),
+  validateBody(contactRoutes.location.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);
-    const body = req.body as ContactLocationInput;
+    const body = req.body as z.output<typeof contactRoutes.location.body>;
     const updated =
       "regeocode" in body
         ? contactService.regeocode(scopeOf(req), id)
@@ -625,9 +604,12 @@ router.post(
  * Quota-aware: Returns 429 if grounding RPD is exhausted.
  * Returns 503 if AI provider is not configured.
  */
-/** The single enrichment's body: nothing, or the depth, the technique and the web search. */
-const enrichBodySchema = z.preprocess(
-  (body) => body ?? {},
+/**
+ * The single enrichment's body: nothing, or the depth, the technique and the
+ * web search. The contract gives the shape, and the technique and the web
+ * search are then checked against the registries this server holds.
+ */
+const enrichBodySchema = contactRoutes.enrich.body.pipe(
   researchChoiceSchema.extend({ depth: researchDepthSchema.optional() }),
 );
 

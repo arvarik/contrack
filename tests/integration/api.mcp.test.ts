@@ -689,7 +689,7 @@ describe("MCP Server (/api/mcp)", () => {
     await client.close();
   });
 
-  it("refuses bad dates and limits, and log_interaction links mentionContactIds", async () => {
+  it("refuses bad dates, limits and cadences, and log_interaction links mentionContactIds", async () => {
     const client = await makeConnectedClient(tokenA);
     const [owner, other] = seedA.contactIds;
     for (const [name, args] of [
@@ -702,6 +702,8 @@ describe("MCP Server (/api/mcp)", () => {
         { contactId: owner, title: "Call", dueAt: "next Friday" },
       ],
       ["search_people", { query: "Contact", limit: 31 }],
+      // A tracked contact with no cadence never comes due again.
+      ["update_contact", { id: owner, fields: { cadenceDays: null } }],
     ] as const) {
       const res = await client.callTool({ name, arguments: args });
       expect(res.isError, name).toBe(true);

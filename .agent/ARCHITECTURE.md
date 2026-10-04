@@ -28,37 +28,39 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 
 ## 2. Layout
 
-| Folder                 | Holds                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `server/routes/`       | Thin Express routers. Validate with zod, delegate, wrap in `asyncHandler`                         |
-| `server/services/`     | Business logic, including `search/`, `dedupe/`, `research/`, `aiSearch/`, `geocoding/`            |
-| `server/repositories/` | Contact hydration and query helpers                                                               |
-| `server/ai/`           | Capabilities, gateway, work queue, adapters, prompt safety                                        |
-| `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                            |
-| `server/mcp/`          | The MCP server: tools, resources, prompts                                                         |
-| `server/tenancy/`      | `Scope`, the request context, `ROUTE_MANIFEST`                                                    |
-| `server/middleware/`   | Auth, rate limits, AI switches, uploads guard, errors, cache headers                              |
-| `server/workers/`      | The CPU worker that runs the local models                                                         |
-| `server/utils/`        | `AppError`, validators, `aiCache`, `secretBox`, `urlSafety`, paths, logger                        |
-| `server/db.ts`         | The connection, the call to the migration runner and the index installers, every-boot steps       |
-| `server/db/`           | `runner.ts`, `migrations/`, `indexes.ts` (derived structures and their versions), `schema.ts`     |
-| `server/modules/`      | One module per area: routers, MCP tools, jobs, subscribers. `index.ts` is the mount order         |
-| `server/events/`       | `recordEvent`, the dispatcher and its cursors, the subscribers                                    |
-| `server/jobs/`         | The job runner, `runJobNow`, the recurring and start-up jobs                                      |
-| `shared/`              | Code both sides import: facets, score bands, research records, MCP tool list                      |
-| `src/api/`             | React Query hooks, one file per domain                                                            |
-| `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `ai-search/`, `map/`, `settings/`, `dedupe/` |
-| `src/components/`      | Shared UI: `ui/` primitives, `layout/`, `command-palette/`, `brand/` (the corvid), `auth/`        |
-| `src/lib/`             | Tokens (`styles.ts`), names, shortcuts, theme, the corvid's motion                                |
-| `scripts/`             | Seeds, model fetch, eval recorders, brand icons, password reset                                   |
-| `tests/`               | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/`                                             |
+| Folder                 | Holds                                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `server/routes/`       | Thin Express routers. Validate with zod, delegate, wrap in `asyncHandler`                                                         |
+| `server/services/`     | Business logic, including `search/`, `dedupe/`, `research/`, `aiSearch/`, `geocoding/`                                            |
+| `server/repositories/` | Contact hydration and query helpers                                                                                               |
+| `server/ai/`           | Capabilities, gateway, work queue, adapters, prompt safety                                                                        |
+| `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                                                            |
+| `server/mcp/`          | The MCP server: tools, resources, prompts                                                                                         |
+| `server/tenancy/`      | `Scope`, the request context, `ROUTE_MANIFEST`                                                                                    |
+| `server/middleware/`   | Auth, rate limits, AI switches, uploads guard, errors, cache headers                                                              |
+| `server/workers/`      | The CPU worker that runs the local models                                                                                         |
+| `server/utils/`        | `AppError`, validators, `aiCache`, `secretBox`, `urlSafety`, paths, logger                                                        |
+| `server/db.ts`         | The connection, the call to the migration runner and the index installers, every-boot steps                                       |
+| `server/db/`           | `runner.ts`, `migrations/`, `indexes.ts` (derived structures and their versions), `schema.ts`                                     |
+| `server/modules/`      | One module per area: routers, MCP tools, jobs, subscribers. `index.ts` is the mount order                                         |
+| `server/events/`       | `recordEvent`, the dispatcher and its cursors, the subscribers                                                                    |
+| `server/jobs/`         | The job runner, `runJobNow`, the recurring and start-up jobs                                                                      |
+| `shared/`              | Code both sides import: the API contracts and event payloads (`contracts/`), facets, score bands, research records, MCP tool list |
+| `src/api/`             | React Query hooks, one file per domain                                                                                            |
+| `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `ai-search/`, `map/`, `settings/`, `dedupe/`                                 |
+| `src/components/`      | Shared UI: `ui/` primitives, `layout/`, `command-palette/`, `brand/` (the corvid), `auth/`                                        |
+| `src/lib/`             | Tokens (`styles.ts`), names, shortcuts, theme, the corvid's motion                                                                |
+| `scripts/`             | Seeds, model fetch, eval recorders, brand icons, password reset                                                                   |
+| `tests/`               | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/`                                                                             |
 
 ## 3. A request
 
 1. A component calls a hook in `src/api/`. Never fetch in a `useEffect`.
-2. The route validates its input with zod: the body through
-   `validateBody(schema)`, and params and query with the schemas in
-   `server/utils/validators.ts` or its own.
+2. The route validates its input with the Zod schemas in
+   `shared/contracts/`: the body through `validateBody(schema)`, and the
+   query through `parseQuery(schema, req.query)`
+   (`server/utils/validators.ts`). A contracted route reads both from its
+   `route()` entry, and `src/api/` calls it with `apiJson(contract, path)`.
 3. The route calls a service and returns JSON. Business logic stays out of
    routes.
 4. A service throws an `AppError` subclass (`NotFoundError`,
@@ -241,9 +243,13 @@ measured in CI without keys.
 - Log with `log.info` for state changes, `log.warn` for retries and
   degradation, `log.error` for failures. Never `console.log` in app code, and
   never an empty `.catch(() => {})`.
+- A new route gets a contract in `shared/contracts/` beside its manifest row.
+  A response schema is strict and lists every field the route sends: every
+  integration test checks the answers against it. After a contract change,
+  run `npm run api:openapi` and commit `docs/openapi.json`.
 
 ## 10. Commands
 
 `npm run dev` (port 3210), `npm run build`, `npm test`, `npm run lint`,
-`npm run knip`, `npm run test:e2e`, `npm run db:new <name>`,
+`npm run knip`, `npm run api:openapi`, `npm run test:e2e`, `npm run db:new <name>`,
 `npm run models:fetch`, `npm run brand:icons`. `CONTRIBUTING.md` explains each.

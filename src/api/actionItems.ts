@@ -1,27 +1,24 @@
-import { apiFetch } from "./client";
+import { apiJson, jsonBody } from "./client";
 import { corvidReact } from "../lib/corvid";
+import { actionItemRoutes } from "../../shared/contracts/actionItems";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ActionItem } from "../types";
 
 export const useCompletedActionItems = () => {
   return useQuery({
     queryKey: ["actionItems", "completed"],
-    queryFn: async ({ signal }): Promise<ActionItem[]> => {
-      const res = await apiFetch(`/action-items/completed`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch completed action items");
-      return res.json();
-    },
+    queryFn: ({ signal }): Promise<ActionItem[]> =>
+      apiJson(actionItemRoutes.completed, `/action-items/completed`, {
+        signal,
+      }),
   });
 };
 
 export const useUrgentActionItemCount = () => {
   return useQuery({
     queryKey: ["actionItems", "urgentCount"],
-    queryFn: async ({ signal }): Promise<{ count: number }> => {
-      const res = await apiFetch(`/action-items/count`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch urgent count");
-      return res.json();
-    },
+    queryFn: ({ signal }) =>
+      apiJson(actionItemRoutes.count, `/action-items/count`, { signal }),
     // We poll this occasionally or rely on invalidation from mutations
     staleTime: 1000 * 60 * 5, // 5 mins
   });
@@ -30,21 +27,14 @@ export const useUrgentActionItemCount = () => {
 export const useUpdateActionItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       data,
     }: {
       id: string;
       data: { title?: string; dueAt?: string };
-    }): Promise<ActionItem> => {
-      const res = await apiFetch(`/action-items/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update action item");
-      return res.json();
-    },
+    }): Promise<ActionItem> =>
+      apiJson(actionItemRoutes.update, `/action-items/${id}`, jsonBody(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["actionItems"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -60,13 +50,8 @@ export const useUpdateActionItem = () => {
 export const useCompleteActionItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string): Promise<ActionItem> => {
-      const res = await apiFetch(`/action-items/${id}/complete`, {
-        method: "PATCH",
-      });
-      if (!res.ok) throw new Error("Failed to complete action item");
-      return res.json();
-    },
+    mutationFn: (id: string): Promise<ActionItem> =>
+      apiJson(actionItemRoutes.complete, `/action-items/${id}/complete`),
     onSuccess: () => {
       // Done: the corvid on its perch nods.
       corvidReact("nod");

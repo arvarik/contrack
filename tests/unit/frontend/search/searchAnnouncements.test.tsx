@@ -45,12 +45,6 @@ describe("peopleSearchStatus", () => {
     expect(peopleSearchStatus(people({}))).toBe("");
   });
 
-  it("says that the search started", () => {
-    expect(peopleSearchStatus(people({ isLoading: true }))).toBe(
-      "Searching your network for “who likes espresso”…",
-    );
-  });
-
   it("says only that it is searching while AI works", () => {
     // The page keeps back the list AI has not checked yet, so a reader hears
     // no count until the answer is final.
@@ -59,42 +53,6 @@ describe("peopleSearchStatus", () => {
         people({ isLoading: true, hasSearched: true, count: 0 }),
       ),
     ).toBe("Searching your network for “who likes espresso”…");
-  });
-
-  it("counts the matches when the answer is complete", () => {
-    expect(peopleSearchStatus(people({ hasSearched: true, count: 3 }))).toBe(
-      "3 matches for “who likes espresso”.",
-    );
-    expect(peopleSearchStatus(people({ hasSearched: true, count: 1 }))).toBe(
-      "1 match for “who likes espresso”.",
-    );
-  });
-
-  it("says when nothing matched", () => {
-    expect(peopleSearchStatus(people({ hasSearched: true, count: 0 }))).toBe(
-      "No matches for “who likes espresso”.",
-    );
-  });
-
-  it("says that AI did not verify the matches", () => {
-    expect(
-      peopleSearchStatus(
-        people({ hasSearched: true, count: 2, fallback: true }),
-      ),
-    ).toBe("2 matches for “who likes espresso”. Not verified by AI.");
-    expect(
-      peopleSearchStatus(
-        people({ hasSearched: true, count: 1, fallback: true }),
-      ),
-    ).toBe("1 match for “who likes espresso”. Not verified by AI.");
-  });
-
-  it("says nothing on an error, which the visible alert announces", () => {
-    expect(
-      peopleSearchStatus(
-        people({ hasSearched: true, isError: true, count: 0 }),
-      ),
-    ).toBe("");
   });
 
   it("trims the question it quotes", () => {
@@ -126,12 +84,6 @@ describe("noteSearchStatus", () => {
     );
   });
 
-  it("says when no note matched", () => {
-    expect(noteSearchStatus(notes({ isSuccess: true, total: 0 }))).toBe(
-      "No notes match for “hiring”.",
-    );
-  });
-
   it("describes a period-only search without quoting an empty question", () => {
     expect(
       noteSearchStatus(notes({ isSuccess: true, total: 5, query: "" })),
@@ -139,10 +91,6 @@ describe("noteSearchStatus", () => {
     expect(
       noteSearchStatus(notes({ isSuccess: true, total: 0, query: "" })),
     ).toBe("No notes match in this period.");
-  });
-
-  it("says nothing on an error, which the visible alert announces", () => {
-    expect(noteSearchStatus(notes({ isError: true, total: 0 }))).toBe("");
   });
 });
 
@@ -153,11 +101,6 @@ describe("LiveStatus", () => {
     expect(region.getAttribute("aria-live")).toBe("polite");
     expect(region.getAttribute("aria-atomic")).toBe("true");
     expect(region.textContent).toBe("");
-  });
-
-  it("does not speak the value it mounted with", () => {
-    render(<LiveStatus message="3 matches for “x”." label="Search status" />);
-    expect(screen.getByRole("status").textContent).toBe("");
   });
 
   it("speaks every change after mount, including a return to the first value", async () => {

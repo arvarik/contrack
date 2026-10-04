@@ -16,11 +16,8 @@ import { requireContact } from "../services/contactGuard.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "../services/actionItemService.ts";
-import {
-  validateBody,
-  actionItemCreateSchema,
-  actionItemUpdateSchema,
-} from "../utils/validators.ts";
+import { validateBody } from "../utils/validators.ts";
+import { actionItemRoutes } from "../../shared/contracts/actionItems.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
@@ -66,7 +63,7 @@ router.get(
 
 router.patch(
   "/action-items/:id",
-  validateBody(actionItemUpdateSchema),
+  validateBody(actionItemRoutes.update.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = actionItemService.update(
@@ -139,7 +136,7 @@ router.get(
 router.post(
   "/contacts/:id/action-items",
   requireContact,
-  validateBody(actionItemCreateSchema),
+  validateBody(actionItemRoutes.create.body),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const { title, dueAt } = req.body;
