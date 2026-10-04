@@ -16,7 +16,11 @@ import { corvidReact } from "../lib/corvid";
  * @module api/dedupe
  */
 import { useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { DedupeScanMode, DedupeScanProgress } from "../types";
 import { suggestionKeys } from "./suggestions";
 
@@ -303,6 +307,19 @@ export const useMergeContacts = () => {
 // =============================================================================
 
 /**
+ * After a cluster merge: the contacts reload, and the review queue and its
+ * badge drop the suggestions the server resolved.
+ */
+function afterClusterMerge(queryClient: QueryClient): void {
+  // Two records made one: the corvid tidies its own feathers.
+  corvidReact("preen");
+  queryClient.invalidateQueries({ queryKey: ["contacts"] });
+  queryClient.invalidateQueries({ queryKey: suggestionKeys.pending });
+  queryClient.invalidateQueries({ queryKey: suggestionKeys.count });
+  queryClient.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
+}
+
+/**
  * Merge all duplicate contacts in a cluster into a single primary contact.
  * The server merges each duplicate sequentially and isolates per-duplicate errors.
  */
@@ -321,16 +338,7 @@ export const useMergeCluster = () => {
         `/contacts/merge-cluster`,
         jsonBody({ primaryId, duplicateIds }),
       ),
-    onSuccess: () => {
-      // Two records made one: the corvid tidies its own feathers.
-      corvidReact("preen");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      // The server resolves the pending suggestions this merge satisfied; the
-      // review queue and its badge must drop them without a reload.
-      queryClient.invalidateQueries({ queryKey: suggestionKeys.pending });
-      queryClient.invalidateQueries({ queryKey: suggestionKeys.count });
-      queryClient.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
-    },
+    onSuccess: () => afterClusterMerge(queryClient),
   });
 };
 
@@ -347,10 +355,6 @@ export const useMergeClusters = () => {
         `/contacts/merge-clusters`,
         jsonBody({ clusters }),
       ),
-    onSuccess: () => {
-      // Two records made one: the corvid tidies its own feathers.
-      corvidReact("preen");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
+    onSuccess: () => afterClusterMerge(queryClient),
   });
 };

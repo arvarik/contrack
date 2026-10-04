@@ -1,4 +1,5 @@
 import { apiJson } from "./client";
+import { refreshContact } from "./contactCache";
 import { contactRoutes } from "../../shared/contracts/contacts";
 import { useAuth } from "../components/auth/AuthGate";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
@@ -77,13 +78,9 @@ export const useEnrichContact = () => {
       // code the server actually sent.
       apiJson(contactRoutes.enrich, `/contacts/${contactId}/enrich`),
     onSuccess: (data, contactId) => {
-      // Invalidate contact data so the UI refreshes with new fields
-      qc.invalidateQueries({ queryKey: ["contacts"] });
-      qc.invalidateQueries({ queryKey: ["contacts", contactId] });
+      void refreshContact(qc, contactId);
       // Invalidate grounding capacity (we just used one)
       qc.invalidateQueries({ queryKey: enrichmentKeys.groundingCapacity });
-      // Invalidate zero-state (stale data count may have changed)
-      qc.invalidateQueries({ queryKey: ["zeroState"] });
 
       toast.success(
         data.fieldsUpdated > 0

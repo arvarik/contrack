@@ -18,6 +18,7 @@ import type { MapContact } from "../../../../shared/geo";
 
 vi.mock("../../../../src/api/geo", () => ({
   searchPlace: vi.fn(),
+  GEO_STATUS_KEY: ["geo", "status"],
 }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { info: vi.fn() }) }));
 

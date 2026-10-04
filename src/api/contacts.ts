@@ -1,8 +1,11 @@
 import { toast } from "sonner";
 import {
+  contactQuery,
   followPin,
   invalidateContactViews,
   patchContactCaches,
+  refreshContact,
+  storeContact,
   writeContactInOrder,
 } from "./contactCache";
 /**
@@ -169,17 +172,8 @@ export const useSlimContactsForSearch = () => {
   });
 };
 
-export const useContact = (id: string | undefined) => {
-  return useQuery({
-    queryKey: ["contacts", id],
-    queryFn: async ({ signal }): Promise<Contact> =>
-      (await apiJson(contactRoutes.get, `/contacts/${id}`, {
-        signal,
-      })) as Contact,
-    enabled: !!id,
-    staleTime: STALE_TIMES.contactDetail,
-  });
-};
+export const useContact = (id: string | undefined) =>
+  useQuery({ ...contactQuery(id ?? ""), enabled: !!id });
 
 /** Exported for the map filter's tests. */
 export const toMapContacts = (contacts: SlimContacts): MapContact[] =>
@@ -283,16 +277,14 @@ export const useUpdateContact = () => {
           )) as Contact,
       ),
     onSuccess: (contact, { data }) => {
-      queryClient.setQueryData(["contacts", contact.id], contact);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
-      );
       // A new address can move the pin after the answer has left the server.
       if ("location" in data || "addresses" in data)
         followPin(queryClient, contact);
     },
     onError: (error) => toast.error(`Could not save contact: ${error.message}`),
-    onSettled: () => invalidateContactViews(queryClient),
+    // After an error too: a write that timed out may still have landed.
+    onSettled: (contact, _error, { id }) =>
+      refreshContact(queryClient, contact ?? id),
   });
 };
 
@@ -326,10 +318,7 @@ export const useSetContactLocation = () => {
           )) as Contact,
       ),
     onSuccess: (contact, { data }) => {
-      queryClient.setQueryData(["contacts", contact.id], contact);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
-      );
+      storeContact(queryClient, contact);
       void queryClient.invalidateQueries({ queryKey: GEO_STATUS_KEY });
       if ("regeocode" in data && !isValidLatLng(contact.lat, contact.lng))
         followPin(queryClient, contact);
@@ -387,16 +376,13 @@ export const useSetTracked = () => {
     onSuccess: (contact, { isTracked }) => {
       // Tracked: the corvid cocks its head at them. It keeps an eye out now.
       if (isTracked) corvidReact("cock");
-      queryClient.setQueryData(["contacts", contact.id], contact);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
-      );
     },
     onError: (error, _input, rollback) => {
       rollback?.();
       toast.error(`Could not change tracking: ${error.message}`);
     },
-    onSettled: () => invalidateContactViews(queryClient),
+    onSettled: (contact, _error, { id }) =>
+      refreshContact(queryClient, contact ?? id),
   });
 };
 
@@ -422,17 +408,12 @@ export const useSetCadence = () => {
       ),
     onMutate: ({ id, cadenceDays }) =>
       patchContactCaches(queryClient, id, { cadenceDays }),
-    onSuccess: (contact) => {
-      queryClient.setQueryData(["contacts", contact.id], contact);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
-      );
-    },
     onError: (error, _input, rollback) => {
       rollback?.();
       toast.error(`Could not change the cadence: ${error.message}`);
     },
-    onSettled: () => invalidateContactViews(queryClient),
+    onSettled: (contact, _error, { id }) =>
+      refreshContact(queryClient, contact ?? id),
   });
 };
 
@@ -483,7 +464,6 @@ export const useRestoreContact = () => {
       // Back from the trash: a nod.
       corvidReact("nod");
       invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
 };
@@ -502,7 +482,6 @@ export const useBulkRestoreContacts = () => {
     },
     onSuccess: () => {
       invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
 };
@@ -518,7 +497,6 @@ export const useDeleteContact = () => {
         queryClient.removeQueries({ queryKey: ["timeline", id] });
       }
       invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
 };
@@ -532,11 +510,7 @@ export const useArchiveContact = () => {
         `/contacts/${id}`,
         jsonBody({ isArchived: true }),
       ),
-    onSettled: (_data, _error, id) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", id] });
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["contacts", "archived"] });
-    },
+    onSettled: () => invalidateContactViews(queryClient),
   });
 };
 
@@ -549,11 +523,7 @@ export const useUnarchiveContact = () => {
         `/contacts/${id}`,
         jsonBody({ isArchived: false }),
       ),
-    onSettled: (_data, _error, id) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", id] });
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["contacts", "archived"] });
-    },
+    onSettled: () => invalidateContactViews(queryClient),
   });
 };
 
@@ -607,10 +577,7 @@ export const useUploadAvatar = () => {
         },
       )) as Contact;
     },
-    onSuccess: (_data, { contactId }) => {
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
-    },
+    onSuccess: (contact) => void refreshContact(queryClient, contact),
   });
 };
 
@@ -629,9 +596,6 @@ export const useSetDicebearAvatar = () => {
         `/contacts/${contactId}`,
         jsonBody({ avatarUrl }),
       )) as Contact,
-    onSuccess: (_data, { contactId }) => {
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
-    },
+    onSuccess: (contact) => void refreshContact(queryClient, contact),
   });
 };
