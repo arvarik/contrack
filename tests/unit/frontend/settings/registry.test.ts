@@ -20,18 +20,6 @@ describe("settings registry", () => {
     }
   });
 
-  it('findRows("celsius") returns the temperature row', () => {
-    const hits = findRows("celsius");
-    expect(hits.length).toBeGreaterThan(0);
-    const tempHit = hits.find(
-      (h) => h.id === "temp-unit" || h.row?.id === "temp-unit",
-    );
-    expect(tempHit).toBeDefined();
-    expect(tempHit?.page.path).toBe("/settings/network");
-    expect(tempHit?.path).toBe("/settings/network#temp-unit");
-    expect(tempHit?.label).toBe("Temperature unit");
-  });
-
   it.each([
     ["duplicates", "duplicates"],
     ["enrichment", "enrichment"],

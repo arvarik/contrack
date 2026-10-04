@@ -44,6 +44,7 @@ export const OWNED_TABLES = [
   "map_views",
   "search_passages",
   "search_passage_state",
+  "events",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
@@ -72,6 +73,7 @@ export const OWNED_SCHEMA_KEYS = [
   "connectorLinks",
   "upcomingEvents",
   "mapViews",
+  "events",
 ];
 
 /** The only reasons an allow comment may give. */

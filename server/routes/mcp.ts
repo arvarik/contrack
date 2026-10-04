@@ -12,7 +12,11 @@ import { log } from "../utils/logger.ts";
 import { mcpService } from "../services/mcpService.ts";
 import { searchInteractions } from "../services/interactionSearchService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { parseInteractionSearchQuery } from "../utils/validators.ts";
+import {
+  parseInteractionSearchQuery,
+  parseQuery,
+} from "../utils/validators.ts";
+import { queryRoutes } from "../../shared/contracts/query.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { buildMcpServer } from "../mcp/server.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
@@ -68,17 +72,8 @@ router.get(
   "/query/contacts",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-
-    const options = {
-      // Cap limit/offset — unbounded values previously reached SQL directly.
-      limit: Math.min(parseInt(req.query.limit as string) || 50, 200),
-      offset: Math.max(parseInt(req.query.offset as string) || 0, 0),
-      fields: req.query.fields as string,
-      role: req.query.role as string,
-      company: req.query.company as string,
-      industry: req.query.industry as string,
-    };
-
+    // The contract caps limit and offset, so no value reaches SQL unbounded.
+    const options = parseQuery(queryRoutes.contacts.query, req.query);
     const rows = mcpService.queryContacts(scopeOf(req), options);
 
     log.debug(
@@ -148,10 +143,10 @@ router.get(
   "/timeline",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const since = req.query.since as string;
-    const type = req.query.type as string;
-
+    const { limit, since, type } = parseQuery(
+      queryRoutes.timeline.query,
+      req.query,
+    );
     const rows = mcpService.getGlobalTimeline(scopeOf(req), limit, since, type);
 
     log.debug("API", `[${rid}] GET /api/timeline → ${rows.length} entries`);

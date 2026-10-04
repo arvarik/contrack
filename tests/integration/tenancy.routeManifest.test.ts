@@ -125,13 +125,14 @@ describe("route manifest", () => {
     // A cheap tripwire: the admin surface grew from fourteen classified rows
     // to twenty-nine guarded ones in Phase 3, and to thirty with the health
     // route in quality story S9, to thirty-eight with the instance AI
-    // switch, and to thirty-nine with the web search switch. A route added
-    // without a decision moves this number.
+    // switch, to thirty-nine with the web search switch, and to forty with
+    // the background jobs. A route added without a decision moves this
+    // number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(39);
+    expect(admin).toHaveLength(40);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
-    ).toHaveLength(23);
+    ).toHaveLength(24);
 
     // The three token routes act on the caller's own account, so a token
     // cannot reach them and neither can the implicit local owner.

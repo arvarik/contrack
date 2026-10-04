@@ -9,8 +9,7 @@ import "./server/utils/loadEnv.ts";
 import http from "node:http";
 
 import { log } from "./server/utils/logger.ts";
-import { refreshPlannerStats, sqlite } from "./server/db.ts";
-import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
+import { sqlite } from "./server/db.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { serveClient } from "./server/serveClient.ts";
 import {
@@ -18,27 +17,7 @@ import {
   isAuthRequired,
 } from "./server/middleware/auth.ts";
 import { countUsers } from "./server/services/authService.ts";
-import { startBackupSchedule } from "./server/services/backupService.ts";
-import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
-import {
-  relationshipService,
-  ensureWeeklySnapshot,
-} from "./server/services/relationshipService.ts";
-import { startDailyMaintenance } from "./server/services/maintenanceService.ts";
-import {
-  backfillEmbeddings,
-  ensureDedupeEmbeddingStore,
-} from "./server/services/dedupe/embeddings.ts";
-import {
-  backfillSearchEmbeddings,
-  ensureEmbeddingStore,
-} from "./server/services/search/vectorIndex.ts";
-import { initBuiltinEmbedder } from "./server/ai/embedder.ts";
-import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
-import { initCrossEncoder } from "./server/ai/reranker.ts";
-import { migrateResearchOff } from "./server/services/aiSettingsService.ts";
-import { warmStarterQuestions } from "./server/services/search/starterQuestions.ts";
 import {
   mailLinkOrigin,
   validatePublicUrl,
@@ -49,11 +28,18 @@ import { DATA_DIR } from "./server/utils/paths.ts";
 import { mailService } from "./server/services/mailService.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
+import { stopConnectorScheduler } from "./server/connectors/scheduler.ts";
+import { dispatchEvents, registerSubscribers } from "./server/events/index.ts";
 import {
-  startConnectorScheduler,
-  stopConnectorScheduler,
-} from "./server/connectors/scheduler.ts";
-import { startStoredPhotoSweep } from "./server/connectors/photoSweep.ts";
+  moduleJobs,
+  moduleSubscribers,
+  runModuleStarts,
+} from "./server/modules/index.ts";
+import {
+  registerJobs,
+  startJobRunner,
+  stopJobRunner,
+} from "./server/jobs/runner.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
@@ -126,6 +112,17 @@ async function startServer() {
   // name 1.x used would otherwise boot with no token at all, and an operator
   // who believes their instance is protected would have no way to find out.
   assertNoLegacyAuthToken();
+
+  // ── Events and jobs ─────────────────────────────────────────────────────
+  // The reactions to writes and the background work that the modules
+  // declare (server/modules/). Both registrations are idempotent, and the
+  // services register their own subscribers as well, so a test or a script
+  // that writes runs them too.
+  registerSubscribers(moduleSubscribers());
+  registerJobs(moduleJobs());
+  // Boot catches up from the cursors: the reactions to writes that the last
+  // process committed and did not get to.
+  dispatchEvents();
 
   // AI keys saved in Settings before 2.0 are plain text in app_settings, and
   // so in every backup. Seal them once, the way other stored secrets are.
@@ -204,7 +201,13 @@ async function startServer() {
 
   registerShutdownHandlers(server);
 
-  if (process.env.DISABLE_BACKGROUND_JOBS === "true") {
+  // ── Background jobs ─────────────────────────────────────────────────────
+  // One runner for the scheduled work (server/jobs/): the connector tick,
+  // the score sweeps, backups, the daily maintenance sweep, the trash purge,
+  // the model catalogs, the planner statistics, and the start-up geocoding
+  // and photo sweep. At boot it queues again what a restart stopped, even
+  // with background jobs off, and runs nothing more in that case.
+  if (!startJobRunner()) {
     log.info(
       "Server",
       "Background maintenance and embedding backfills are disabled.",
@@ -212,163 +215,12 @@ async function startServer() {
     return;
   }
 
-  startRetroactiveGeocoding();
-  startConnectorScheduler();
-  startStoredPhotoSweep();
-
-  // ── Ask Contrack starter questions ───────────────────────────────────────
-  // Every account's pool of "Try asking" questions, built one account per
-  // turn of the event loop, so the first open of Ask after a deploy reads
-  // a pool that is ready. A request that comes first builds its own.
-  warmStarterQuestions().catch((err) =>
-    log.warn("Server", `Starter questions failed: ${getErrorMessage(err)}`),
-  );
-
-  // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
-  startBackupSchedule();
-  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
-    const runTrashPurge = () => {
-      try {
-        contactService.purgeExpiredTrash();
-      } catch (err) {
-        log.warn("Server", `Trash purge failed: ${getErrorMessage(err)}`);
-      }
-    };
-    runTrashPurge();
-    setInterval(runTrashPurge, 24 * 60 * 60 * 1000);
-  }
-
-  // ── Daily maintenance ────────────────────────────────────────────────────
-  // One sweep for every table that accumulates rows no request removes: audit
-  // entries past retention, expired sessions, tokens revoked a month ago,
-  // invitations that died a month ago, and AI invocations outside the stats
-  // window. Before Phase 3 the invocation cleanup ran once at boot and the
-  // session sweep was boot-only, so an instance left running for a year swept
-  // twice. Reached only when DISABLE_BACKGROUND_JOBS is unset, because the
-  // early return above has already sent that case home.
-  // The gate and the schedule both live in the service, so a test can reach
-  // them. The early return above already covers this case, and the second
-  // gate costs nothing.
-  try {
-    startDailyMaintenance();
-  } catch (err) {
-    log.warn("Server", `Daily maintenance failed: ${getErrorMessage(err)}`);
-  }
-
-  // ── Web search switch ───────────────────────────────────────────────────
-  // Research turned off the old way, with the research model set to Off,
-  // moves to the "Allow web search" switch, which keeps a pinned model.
-  try {
-    migrateResearchOff();
-  } catch (err) {
-    log.warn(
-      "Server",
-      `Web search switch migration failed: ${getErrorMessage(err)}`,
-    );
-  }
-
-  // ── AI model catalogs ───────────────────────────────────────────────────
-  // Populate the per-provider model lists that the AI page offers,
-  // so the dropdowns are filled on first open rather than after a manual
-  // refresh.
-  // Only providers whose cache is missing or older than the TTL are fetched,
-  // and every failure is swallowed — discovery is never on a critical path.
-  const refreshModelCatalogs = () =>
-    import("./server/services/aiSettingsService.ts")
-      .then(({ refreshStaleModelCaches }) => refreshStaleModelCaches())
-      .catch((err) =>
-        log.warn("Server", `AI model discovery failed: ${err.message}`),
-      );
-  refreshModelCatalogs();
-  setInterval(refreshModelCatalogs, 24 * 60 * 60 * 1000);
-
-  // Query-planner statistics refresh. SQLite recommends a periodic
-  // `PRAGMA optimize` for connections that stay open for days — it re-runs
-  // ANALYZE only for tables whose shape drifted, so the common case is a
-  // no-op. Each drain of the search index runs it as well (see
-  // `refreshPlannerStats`), and shutdown runs it too.
-  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
-    setInterval(refreshPlannerStats, 24 * 60 * 60 * 1000).unref();
-  }
-
-  // ── Relationship scoring ────────────────────────────────────────────────
-  // Two sweeps, both per owner and both yielding between batches so requests
-  // are never starved by a long synchronous scoring pass.
-  //
-  // Hourly reads `contacts.scoreDirty`, which the database sets through
-  // triggers on contacts, interactions and action items, so it does work in
-  // proportion to what changed rather than to how many contacts exist. Daily
-  // reads everything, because recency decays with the clock and no trigger can
-  // see that. Startup runs the incremental one: on a first boot after the
-  // upgrade every row is marked, so it is a full pass exactly once.
-  const runSweep = (kind: "stale" | "all") => () =>
-    (kind === "all"
-      ? relationshipService.recomputeAll()
-      : relationshipService.recomputeStale()
-    ).catch((err) =>
-      log.warn("Server", `Relationship score sweep failed: ${err.message}`),
-    );
-  runSweep("stale")()
-    .then(() => {
-      try {
-        ensureWeeklySnapshot();
-      } catch (err) {
-        log.warn(
-          "Server",
-          `Weekly score snapshot failed: ${getErrorMessage(err)}`,
-        );
-      }
-    })
-    .catch(() => {});
-  setInterval(runSweep("stale"), 60 * 60 * 1000);
-  setInterval(runSweep("all"), 24 * 60 * 60 * 1000);
-
-  // Initialize search index queue to recover any ungracefully interrupted jobs
-  initSearchIndexQueue();
-
-  // ── Local embedding model for Ask Contrack v3 ───────────────────────────
-  // Load the Transformers.js model, then backfill search embeddings.
-  // Non-blocking — the server is fully usable while this runs.
-  initBuiltinEmbedder()
-    .then(() => {
-      // The search cross-encoder loads on the same worker, once, so no
-      // person's first question pays for it. Its job takes its turn beside
-      // the backfill's, and a failure only logs: search keeps its fused
-      // order without it.
-      void initCrossEncoder();
-      log.info(
-        "Server",
-        "Local embedding model ready — starting search embedding backfill...",
-      );
-      // Reconcile the vector store with the configured embeddings capability
-      // (rebuilds + re-embeds when the model changed), then fill any gaps.
-      return ensureEmbeddingStore().then(() => backfillSearchEmbeddings());
-    })
-    .then((count) => {
-      if (count > 0)
-        log.info(
-          "Server",
-          `Search embedding backfill complete: ${count} contacts embedded locally`,
-        );
-      initSearchIndexQueue();
-      // Dedupe shares the embeddings capability, so it can only run once a
-      // backend is ready. Reconcile it (rebuilding if the model changed) and
-      // fill any gaps — previously this only ran when the store was entirely
-      // empty, so a partial index could never repair itself.
-      return ensureDedupeEmbeddingStore().then(() => backfillEmbeddings());
-    })
-    .then((count) => {
-      if (count > 0)
-        log.info(
-          "Server",
-          `Dedupe embedding backfill complete: ${count} contacts embedded`,
-        );
-    })
-    .catch((err) => {
-      log.warn("Server", `Embedding init/backfill failed: ${err.message}`);
-      // The backfill persists unfinished jobs before it calls the embedding model.
-      initSearchIndexQueue();
-    });
+  // ── Start-up work ────────────────────────────────────────────────────────
+  // Each module's own, in the order of server/modules/index.ts: the search
+  // module warms the starter questions and loads the local models, the
+  // data-lifecycle module checks the age of the newest backup, and the ai
+  // module moves an old research setting. None of it holds the server up.
+  runModuleStarts();
 }
 
 // =============================================================================
@@ -397,6 +249,11 @@ function registerShutdownHandlers(server: import("http").Server): void {
     shuttingDown = true;
     log.info("Server", `${signal} received — draining connections`);
 
+    // Start no more jobs, and abort the connector syncs in flight. A job
+    // still running when the process exits is queued again at the next boot.
+    stopJobRunner().catch((err) => {
+      log.warn("Server", `Job runner shutdown error: ${getErrorMessage(err)}`);
+    });
     stopConnectorScheduler().catch((err) => {
       log.warn(
         "Server",

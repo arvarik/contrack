@@ -78,6 +78,10 @@ describe("connectors ingestStream", () => {
       .run(ownerId);
     sqlite.prepare("DELETE FROM contacts WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM connectors WHERE ownerId = ?").run(ownerId);
+    // What the writes recorded and queued. Both name the owner, and both
+    // keys restrict the delete of the account.
+    sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
+    sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
   });
 

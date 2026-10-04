@@ -10,15 +10,11 @@
 // =============================================================================
 
 import { Router } from "express";
-import { z } from "zod";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { validateBody } from "../utils/validators.ts";
 import { tagService } from "../services/tagService.ts";
-
-const renameTagSchema = z.object({
-  to: z.string().trim().min(1, "Tag name cannot be empty").max(100),
-});
+import { tagRoutes } from "../../shared/contracts/tags.ts";
 
 const router = Router();
 
@@ -33,7 +29,7 @@ router.get(
 
 router.patch(
   "/tags/:tag",
-  validateBody(renameTagSchema),
+  validateBody(tagRoutes.rename.body),
   asyncHandler(async (req, res) => {
     const scope = scopeOf(req);
     const fromTag = String(req.params.tag);

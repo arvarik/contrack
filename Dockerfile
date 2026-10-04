@@ -54,14 +54,13 @@ COPY --from=builder /app/dist ./dist
 # MODEL_DOWNLOADS=false keeps it from downloading anything else.
 COPY --from=builder /app/models ./models
 
-# Copy backend and database configurations. The server imports shared/ at
-# runtime (the MCP tools, connectors, dates, geo), so it ships too; without it
-# the image failed at boot with ERR_MODULE_NOT_FOUND.
+# Copy the backend. The database schema and its migrations live in
+# server/db/. The server imports shared/ at runtime (the MCP tools,
+# connectors, dates, geo), so it ships too; without it the image failed at
+# boot with ERR_MODULE_NOT_FOUND.
 COPY server/ ./server/
 COPY shared/ ./shared/
-COPY src/db/ ./src/db/
-COPY drizzle/ ./drizzle/
-COPY server.ts drizzle.config.ts ./
+COPY server.ts ./
 # The documented password recovery, `docker exec -it contrack node
 # scripts/reset-password.ts <username>`, runs this file. The image had no
 # scripts/, so the command could not work in a container.

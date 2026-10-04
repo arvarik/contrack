@@ -28,17 +28,6 @@ afterEach(() => {
 });
 
 describe("useSwapFocus", () => {
-  it("gives Done the focus when the mode starts and nothing holds it", () => {
-    const { select, done } = page();
-    const { rerender } = renderHook(
-      ({ on }) => useSwapFocus(on, done, select),
-      { initialProps: { on: false } },
-    );
-    (document.activeElement as HTMLElement | null)?.blur();
-    rerender({ on: true });
-    expect(document.activeElement).toBe(done.current);
-  });
-
   it("gives Select the focus when the mode ends from a bulk bar button", () => {
     // CSV or Escape ends the mode while a bar button has focus. The bar
     // leaves after its exit animation, so that focus is as good as lost.

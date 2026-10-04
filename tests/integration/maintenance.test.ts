@@ -12,8 +12,9 @@
 // advanced clock are the same comparison from the statement's point of view,
 // and this way the assertion is about the SQL that ships.
 //
-// The interval itself is tested with fake timers, because "it runs daily" is
-// a claim about scheduling that no amount of calling the function proves.
+// The schedule is tested through the job runner, with the clock passed to
+// the poll, because "it runs daily" is a claim about scheduling that no
+// amount of calling the function proves.
 // =============================================================================
 
 import {
@@ -29,8 +30,15 @@ import crypto from "node:crypto";
 import { sqlite } from "../../server/db.ts";
 import { resetAccounts, localOwnerId } from "./tenancy/helpers.ts";
 import {
+  nextRunOf,
+  pollJobs,
+  registerJobs,
+  scheduleDeclaredJobs,
+  startJobRunner,
+} from "../../server/jobs/runner.ts";
+import { MAINTENANCE_JOBS } from "../../server/jobs/maintenance.ts";
+import {
   runDailyMaintenance,
-  startDailyMaintenance,
   AUDIT_RETENTION_DAYS,
   REVOKED_TOKEN_RETENTION_DAYS,
   DEAD_INVITATION_RETENTION_DAYS,
@@ -554,6 +562,27 @@ describe("the daily sweep", () => {
       )
       .run(contactId, owner);
     insertScoreSnapshot(owner, contactId, "2020-01-06", 80);
+    // An event past retention that every cursor has read, and a finished job
+    // that a newer run of its kind replaced.
+    sqlite
+      .prepare(
+        `INSERT INTO events (ownerId, type, subjectType, subjectId, payload, createdAt)
+         VALUES (?, 'list.members_changed', 'list', 'old-list', '{"added":[],"removed":[]}', ?)`,
+      )
+      .run(owner, daysAgo(31));
+    sqlite.exec(
+      "UPDATE event_cursors SET lastEventId = (SELECT MAX(id) FROM events)",
+    );
+    for (const [id, finishedAt] of [
+      ["job-old", daysAgo(2)],
+      ["job-new", daysAgo(0)],
+    ]) {
+      sqlite
+        .prepare(
+          `INSERT INTO jobs (id, kind, status, finishedAt) VALUES (?, 'maintenance.daily', 'done', ?)`,
+        )
+        .run(id, finishedAt);
+    }
 
     expect(runDailyMaintenance()).toEqual({
       auditRows: 1,
@@ -567,6 +596,8 @@ describe("the daily sweep", () => {
       prunedScoreSnapshots: 1,
       expiredOAuthStates: 1,
       oldConnectorRuns: 1,
+      oldEvents: 1,
+      oldJobs: 1,
       // The sweep also checkpoints the write-ahead log, and how many pages
       // that moves depends on everything written before this test ran.
       // `expect.any` keeps the shape exhaustive, so a field added later still
@@ -590,6 +621,8 @@ describe("the daily sweep", () => {
     expect(
       sqlite.prepare("SELECT COUNT(*) as n FROM score_snapshots").get(),
     ).toEqual({ n: 0 });
+    expect(ids("events")).toEqual([]);
+    expect(ids("jobs")).toEqual(["job-new"]);
   });
 
   it("changes nothing on an instance with nothing to remove", () => {
@@ -606,6 +639,8 @@ describe("the daily sweep", () => {
       prunedScoreSnapshots: 0,
       expiredOAuthStates: 0,
       oldConnectorRuns: 0,
+      oldEvents: 0,
+      oldJobs: 0,
       walPagesCheckpointed: expect.any(Number),
     });
     expect(ids("audit_log")).toEqual(["new"]);
@@ -613,39 +648,44 @@ describe("the daily sweep", () => {
 });
 
 describe("the schedule", () => {
-  it("sweeps at once and again a day later", () => {
-    vi.useFakeTimers();
+  const HOUR = 60 * 60 * 1000;
+
+  beforeEach(() => {
+    registerJobs(MAINTENANCE_JOBS);
+  });
+
+  it("sweeps at once and again a day later", async () => {
     insertAudit("first", daysAgo(AUDIT_RETENTION_DAYS + 1));
 
-    const timer = startDailyMaintenance();
-    expect(timer).not.toBeNull();
+    // What boot does: the declared sweep is queued to run at once.
+    const boot = Date.now();
+    scheduleDeclaredJobs(boot);
+    expect(nextRunOf("maintenance.daily")).not.toBeNull();
+    await pollJobs(boot);
     // The boot pass took the first row.
     expect(ids("audit_log")).toEqual([]);
 
     // A second row ages while the process runs. Nothing removes it until the
-    // interval comes round.
+    // day comes round.
     insertAudit("second", daysAgo(AUDIT_RETENTION_DAYS + 1));
-    vi.advanceTimersByTime(23 * 60 * 60 * 1000);
+    await pollJobs(boot + 23 * HOUR);
     expect(ids("audit_log")).toEqual(["second"]);
 
-    vi.advanceTimersByTime(60 * 60 * 1000);
+    await pollJobs(boot + 24 * HOUR + 60_000);
     expect(ids("audit_log")).toEqual([]);
-
-    if (timer) clearInterval(timer);
   });
 
-  it("does nothing at all when background jobs are off", () => {
-    vi.useFakeTimers();
+  it("does nothing at all when background jobs are off", async () => {
     process.env.DISABLE_BACKGROUND_JOBS = "true";
     insertAudit("kept", daysAgo(AUDIT_RETENTION_DAYS + 1));
 
-    const timer = startDailyMaintenance();
-    expect(timer).toBeNull();
+    const boot = Date.now();
+    expect(startJobRunner()).toBe(false);
     // No boot pass.
     expect(ids("audit_log")).toEqual(["kept"]);
 
-    // And no interval was left behind to take it later.
-    vi.advanceTimersByTime(3 * 24 * 60 * 60 * 1000);
+    // And nothing was queued to take it later.
+    await pollJobs(boot + 3 * 24 * HOUR);
     expect(ids("audit_log")).toEqual(["kept"]);
   });
 });

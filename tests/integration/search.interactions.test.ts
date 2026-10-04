@@ -14,6 +14,7 @@ import { makeTestApp } from "./helpers.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { sqlite } from "../../server/db.ts";
+import { recordIndexVersion } from "../../server/db/runner.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
 import { searchInteractions } from "../../server/services/interactionSearchService.ts";
 import type { InteractionSearchResult } from "../../src/types.ts";
@@ -219,7 +220,7 @@ describe("the note index follows every write", () => {
     note(id, "Before", "hiring");
     sqlite.prepare("DELETE FROM interactions_fts").run();
     expect((await search({ q: "hiring" })).body.total).toBe(0);
-    sqlite.pragma("user_version = 1");
+    recordIndexVersion(sqlite, "contacts_fts", 1);
     installSearchIndex(sqlite);
     expect(ftsCount()).toBe(1);
     expect((await search({ q: "hiring" })).body.total).toBe(1);

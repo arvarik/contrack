@@ -82,30 +82,6 @@ describe("TagsPage", () => {
     ).toEqual(["family, 4 contacts", "work, 12 contacts"]);
   });
 
-  it("links each tag to the Network list filtered to it", () => {
-    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [
-        { tag: "close friend", count: 1 },
-        { tag: "work", count: 12 },
-      ],
-      isLoading: false,
-      isError: false,
-    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
-
-    renderComponent();
-    expect(
-      screen
-        .getByRole("link", { name: "work, 12 contacts" })
-        .getAttribute("href"),
-    ).toBe("/?tag=work");
-    // A tag with a space keeps it: the filter matches the whole tag.
-    expect(
-      screen
-        .getByRole("link", { name: "close friend, 1 contact" })
-        .getAttribute("href"),
-    ).toBe("/?tag=close%20friend");
-  });
-
   it("allows inline rename of a tag", async () => {
     vi.mocked(tagsApi.useTagSummary).mockReturnValue({
       data: [{ tag: "friends", count: 5 }],

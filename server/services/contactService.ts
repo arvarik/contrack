@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
-import * as schema from "../../src/db/schema.ts";
+import * as schema from "../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import {
   contactRepo,
@@ -15,11 +15,7 @@ import type {
   ContactRow,
   ChildRecordsPayload,
 } from "../repositories/types.ts";
-import {
-  geocodeText,
-  PRIMARY_ADDRESS_SQL,
-  queueGeocode,
-} from "./geocoding/index.ts";
+import { pinState, queueGeocode, type PinState } from "./geocoding/index.ts";
 import {
   processBase64Avatar,
   isBase64DataUri,
@@ -28,76 +24,60 @@ import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
-import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
-import {
-  scheduleSearchIndex,
-  removeFromIndexQueue,
-} from "./search/indexQueue.ts";
+import { removeFromIndexQueue } from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
-import { dedupeService } from "./dedupe/index.ts";
 import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
-import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
-import { relationshipService } from "./relationshipService.ts";
-import { chooseResearch } from "./research/index.ts";
-import { DEFAULT_RESEARCH_DEPTH } from "../../shared/researchDepth.ts";
-import { jobQueue } from "./aiSearch/jobQueue.ts";
-import { runWithContext } from "../tenancy/requestContext.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
 import { AppError } from "../utils/AppError.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
+// The reactions to a contact write: the search index, the dedupe vector and
+// the duplicate check, the geocoder, the score, the owner's caches and
+// auto-enrichment. They register when this module loads, so every process
+// that writes a contact through this service runs them.
+import "../events/contactSubscribers.ts";
 
 // ---------------------------------------------------------------------------
-// Incremental Dedupe — Debounce Map
+// Events
+// ---------------------------------------------------------------------------
+// Every write below records an event inside its transaction and calls
+// dispatchEvents() after the transaction returns, before it reads its answer.
+// The follow-up work is the subscribers' (server/events/
+// contactSubscribers.ts), and they decide from the event, so every path that
+// sets a field gets the same reactions.
 // ---------------------------------------------------------------------------
 
-/** Pending timers for incremental dedupe checks. */
-const _dedupeTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-/** Debounce window for incremental checks (ms). */
-const DEDUPE_DEBOUNCE_MS = 5_000;
+/**
+ * The request names of the fields an update writes: the columns it sets,
+ * without the two this service derives (`updatedAt`, `phoneticHash`), and
+ * the relations the body replaces.
+ */
+function changedFields(
+  update: Record<string, unknown>,
+  body: Record<string, unknown> = {},
+): string[] {
+  const columns = Object.keys(update).filter(
+    (key) => key !== "updatedAt" && key !== "phoneticHash",
+  );
+  const relations = Object.keys(RELATION_REGISTRY).filter((key) =>
+    Array.isArray(body[key]),
+  );
+  return [...columns, ...relations];
+}
 
 /**
- * Fields that trigger local search re-indexing
- * when mutated. Defined once to prevent updateContact and patchContact diverging.
+ * Dispatch the events of a write that touched many contacts with the AI
+ * cache in batch mode, so the invalidations collapse into one per tier.
  */
-const SEARCH_TRIGGER_FIELDS = [
-  "name",
-  "company",
-  "role",
-  "location",
-  "industry",
-  "headline",
-  "about",
-  "preferences",
-] as const;
-
-/**
- * Schedule a debounced incremental dedupe check for a contact.
- * If called multiple times for the same contact within 5s, only the last fires.
- */
-export function scheduleIncrementalDedupe(contactId: string) {
-  // Integration tests set this to avoid 5s debounce timers outliving a file.
-  if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
-  // Clear any pending timer
-  const existing = _dedupeTimers.get(contactId);
-  if (existing) clearTimeout(existing);
-
-  const timer = setTimeout(() => {
-    _dedupeTimers.delete(contactId);
-    const rid = crypto.randomUUID().slice(0, 8);
-    dedupeService
-      .incrementalDedupeCheck(contactId, rid)
-      .catch((err) =>
-        log.warn(
-          "ContactService",
-          `Incremental dedupe for ${contactId} failed: ${getErrorMessage(err)}`,
-        ),
-      );
-  }, DEDUPE_DEBOUNCE_MS);
-
-  _dedupeTimers.set(contactId, timer);
+function dispatchAsBatch(): void {
+  aiCache.enterBatchMode();
+  try {
+    dispatchEvents();
+  } finally {
+    aiCache.exitBatchMode();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -228,24 +208,6 @@ function applyTrackingRules(
 }
 
 /**
- * Invalidate the caches that depend on one owner's contact data.
- *
- * Deliberately NOT invalidateAll(): the content-addressed tiers (queryParse,
- * mentions) hash their own input text and are unaffected by contact
- * mutations — flushing them on every edit made repeat searches pay full AI
- * cost for nothing.
- *
- * Since 2f each of the four tiers below is owner-keyed, so one account's edit
- * drops one account's entries. It used to flush every tier whole, which made
- * one person adding a contact cost everybody else on the instance a fresh
- * search, briefing and insight through a paid provider.
- */
-function invalidateOwnerCaches(scope: Scope) {
-  for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"])
-    aiCache.invalidateForOwner(tier, scope.ownerId);
-}
-
-/**
  * Remove a contact's search artifacts (vec0 embeddings + dedupe metadata).
  * FTS rows are handled by the trash-aware triggers. vec0 tables don't support
  * FK cascading, so this must run on every soft delete and hard delete.
@@ -277,58 +239,32 @@ function purgeContactSearchArtifacts(id: string): void {
 // Geocoding triggers
 // ---------------------------------------------------------------------------
 
-/** The address a contact shows, and who placed the pin. */
-interface PinState {
-  /**
-   * The text the pin stands for (`geocodeText`). The list's first edit sends
-   * `location` back as the same address row, which leaves this unchanged.
-   */
-  shown: string | null;
-  /** True when a person placed the pin. The geocoder leaves it alone. */
-  manual: boolean;
-}
-
-/** Read before and after a write: did it change the text the pin stands for? */
-function pinStateOf(scope: Scope, id: string): PinState {
-  const row = sqlite
-    .prepare(
-      `SELECT location, geoSource, ${PRIMARY_ADDRESS_SQL} AS primaryAddress
-         FROM contacts WHERE id = ? AND ownerId = ?`,
-    )
-    .get(id, scope.ownerId) as
-    | {
-        location: string | null;
-        geoSource: string | null;
-        primaryAddress: string | null;
-      }
-    | undefined;
-  return {
-    shown: geocodeText(row?.primaryAddress ?? null, row?.location ?? null),
-    manual: row?.geoSource === "manual",
-  };
-}
-
 /**
- * Queue the geocoder after a write that touched the address fields. A pin a
- * person placed goes back to the geocoder only when its text changed.
+ * Hand a pin back to the geocoder when the write moved its address.
+ *
+ * A pin placed by hand is not the geocoder's to move. The write may change
+ * anything else about the contact and the pin stays where the person put it.
+ * Only a change to the address the contact shows hands the pin back: the
+ * address moved from under it, so `geoSource` is cleared, and the
+ * `contacts.geocode` subscriber queues the new text after the commit. Until
+ * the geocoder answers, the old coordinates stand.
+ *
+ * Runs inside the write's transaction, after the change. The release is part
+ * of the write: the subscriber runs after the commit, when the address before
+ * the write can no longer be read.
+ *
+ * @returns true when the pin was handed back.
  */
-function regeocodeAfterWrite(
-  scope: Scope,
-  id: string,
-  before: PinState,
-  touched: boolean,
-): void {
-  if (!touched) return;
-  const after = pinStateOf(scope, id);
-  if (before.manual) {
-    if (after.shown === before.shown) return;
-    sqlite
-      .prepare(
-        `UPDATE contacts SET geoSource = NULL WHERE id = ? AND ownerId = ?`,
-      )
-      .run(id, scope.ownerId);
-  }
-  if (after.shown) queueGeocode(id, after.shown);
+function releaseMovedPin(scope: Scope, id: string, before: PinState): boolean {
+  if (!before.manual) return false;
+  const after = pinState(scope.ownerId, id);
+  if (after.shown === before.shown) return false;
+  sqlite
+    .prepare(
+      `UPDATE contacts SET geoSource = NULL WHERE id = ? AND ownerId = ?`,
+    )
+    .run(id, scope.ownerId);
+  return true;
 }
 
 /** Permanently delete a contact row (children cascade; embeddings purged). */
@@ -425,86 +361,16 @@ export const contactService = {
         .values({ ...values, ownerId: scope.ownerId })
         .run();
       contactRepo.insertChildRecords(id, body, source);
+      recordEvent(scope, "contact.created", id, {
+        origin: source === "manual" ? "manual" : "connector",
+        autoEnrich: options.autoEnrich === true,
+      });
     });
     txn();
+    // The geocoder, the dedupe vector, the search index, the duplicate check,
+    // auto-enrichment and the caches.
+    dispatchEvents();
 
-    const text = pinStateOf(scope, id).shown;
-    if (text) queueGeocode(id, text);
-
-    // Fire-and-forget: generate embedding in the background
-    generateAndStoreEmbedding(id).catch((err) =>
-      log.warn(
-        "ContactService",
-        `Background embedding for ${id} failed: ${getErrorMessage(err)}`,
-      ),
-    );
-
-    scheduleSearchIndex(id);
-
-    const prefs = getPreferences(scope.ownerId);
-
-    // Fire-and-forget: incremental dedupe check (debounced)
-    if (prefs.dedupeOnCreate) {
-      scheduleIncrementalDedupe(id);
-    }
-
-    // Auto-enrich a contact that a person added (never an import, a sync or
-    // an MCP client). Whether research can run at all is
-    // chooseResearch's question, asked below. aiAllowedForUser
-    // reads both switches: the account's `aiAssist` and the admin's switch
-    // for the whole instance.
-    if (
-      options.autoEnrich &&
-      prefs.autoEnrich &&
-      aiAllowedForUser(scope.ownerId) &&
-      !body.isGhost &&
-      !body.isArchived
-    ) {
-      runWithContext(
-        {
-          requestId: `enrich-${crypto.randomUUID().slice(0, 8)}`,
-          principal: null,
-          scope,
-        },
-        () => {
-          try {
-            // The account's web search engine, at Standard depth.
-            const choice = chooseResearch({}, prefs.webSearchEngine);
-            const check = jobQueue.canStartBatch(scope);
-            // While this account's batch runs, the new contact joins it. A
-            // batch created beside it would never run.
-            if (check.appendTo) {
-              jobQueue.appendToBatch(
-                scope,
-                check.appendTo,
-                [{ id, name: body.name }],
-                DEFAULT_RESEARCH_DEPTH,
-                choice,
-              );
-            } else if (check.allowed) {
-              const batch = jobQueue.createBatch(
-                scope,
-                [{ id, name: body.name }],
-                choice,
-              );
-              jobQueue.processBatch(batch.id).catch((err) => {
-                log.error(
-                  "ContactService",
-                  `Auto-enrich batch ${batch.id} processing error: ${getErrorMessage(err)}`,
-                );
-              });
-            }
-          } catch (err) {
-            log.warn(
-              "ContactService",
-              `Auto-enrich for ${id} failed to schedule: ${getErrorMessage(err)}`,
-            );
-          }
-        },
-      );
-    }
-
-    invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -566,6 +432,12 @@ export const contactService = {
           .values({ ...values, ownerId: scope.ownerId })
           .run();
         contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
+        // Under the row's savepoint, so a row that fails takes its event
+        // with it.
+        recordEvent(scope, "contact.created", id, {
+          origin: "import",
+          autoEnrich: false,
+        });
         return id;
       });
 
@@ -589,8 +461,6 @@ export const contactService = {
             );
             continue;
           }
-          const text = pinStateOf(scope, id).shown;
-          if (text) queueGeocode(id, text);
           createdIds.push(id);
           count++;
           if (importId)
@@ -601,9 +471,9 @@ export const contactService = {
         if (importId) importService.markImported(scope, importId);
       });
       txn();
+      // Inside the cache's batch mode, so the rows' invalidations are one.
+      dispatchEvents();
       onProgress?.(total, total, "Complete");
-
-      invalidateOwnerCaches(scope);
     } finally {
       aiCache.exitBatchMode();
     }
@@ -629,12 +499,16 @@ export const contactService = {
       );
       const deleteFn = sqlite.transaction(() => {
         for (const id of owned) {
-          count += trashStmt.run(now, id, scope.ownerId).changes;
+          const moved = trashStmt.run(now, id, scope.ownerId).changes;
+          count += moved;
           purgeContactSearchArtifacts(id);
+          if (moved > 0) {
+            recordEvent(scope, "contact.deleted", id, { permanent: false });
+          }
         }
       });
       deleteFn();
-      invalidateOwnerCaches(scope);
+      dispatchEvents();
     } finally {
       aiCache.exitBatchMode();
     }
@@ -651,6 +525,7 @@ export const contactService = {
     try {
       const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const update = buildContactUpdate(data);
+      const changed = changedFields(update);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
       // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
@@ -667,13 +542,19 @@ export const contactService = {
             WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
         for (const id of owned) {
-          if (stmt.run(...values, id, scope.ownerId).changes)
+          if (stmt.run(...values, id, scope.ownerId).changes) {
             changedIds.push(id);
+            if (changed.length > 0) {
+              recordEvent(scope, "contact.updated", id, {
+                changed,
+                bulk: true,
+              });
+            }
+          }
         }
       });
       updateFn();
-      for (const id of changedIds) scheduleSearchIndex(id);
-      invalidateOwnerCaches(scope);
+      dispatchEvents();
     } finally {
       aiCache.exitBatchMode();
     }
@@ -682,15 +563,16 @@ export const contactService = {
 
   updateContact(scope: Scope, id: string, body: ContactPayload) {
     assertOwnedContact(scope, id);
-    const pinBefore = pinStateOf(scope, id);
     // Recompute phoneticHash if name changed
     const updateData = buildContactUpdate(body);
     if (body.name) {
       updateData.phoneticHash = doubleMetaphone(body.name).primary;
     }
     redrawDefaultAvatar(scope, id, body, updateData);
+    const changed = changedFields(updateData, body as Record<string, unknown>);
 
     const txn = sqlite.transaction(() => {
+      const pinBefore = pinState(scope.ownerId, id);
       applyTrackingRules(scope, [id], body as Record<string, unknown>);
       db.update(schema.contacts)
         .set(updateData)
@@ -713,74 +595,27 @@ export const contactService = {
           } as ChildRecordsPayload);
         }
       }
+
+      const released = releaseMovedPin(scope, id, pinBefore);
+      if (changed.length > 0) {
+        recordEvent(scope, "contact.updated", id, {
+          changed: released ? [...changed, "geoSource"] : changed,
+          bulk: false,
+        });
+      }
     });
     txn();
-
-    // A contact that just became tracked is scored now, so the ring is right
-    // on the read that follows and not after the hourly sweep.
-    if (body.isTracked === true) relationshipService.computeScore(id);
-
-    // Before the read, so an address the cache knows comes back with its pin.
-    regeocodeAfterWrite(
-      scope,
-      id,
-      pinBefore,
-      body.location !== undefined || body.addresses !== undefined,
-    );
+    // Before the read below: the score of a contact that was just tracked is
+    // on the answer, not an hour later.
+    dispatchEvents();
 
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
-
-    // Fire-and-forget: recompute embedding if key fields changed
-    const embeddingFields = [
-      "name",
-      "company",
-      "role",
-      "location",
-      "industry",
-      "headline",
-    ];
-    if (embeddingFields.some((f) => body[f] !== undefined)) {
-      generateAndStoreEmbedding(id).catch((err) =>
-        log.warn(
-          "ContactService",
-          `Background embedding update for ${id} failed: ${getErrorMessage(err)}`,
-        ),
-      );
-    }
-
-    if (
-      SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined) ||
-      body.tags !== undefined ||
-      body.interests !== undefined
-    ) {
-      scheduleSearchIndex(id);
-    }
-
-    // Fire-and-forget: incremental dedupe if identity fields changed
-    const dedupeFields = [
-      "name",
-      "firstName",
-      "lastName",
-      "company",
-      "role",
-      "location",
-    ];
-    const prefs = getPreferences(scope.ownerId);
-    if (
-      prefs.dedupeOnCreate &&
-      dedupeFields.some((f) => body[f] !== undefined)
-    ) {
-      scheduleIncrementalDedupe(id);
-    }
-
-    invalidateOwnerCaches(scope);
     return updated;
   },
 
   patchContact(scope: Scope, id: string, body: Record<string, unknown>) {
     assertOwnedContact(scope, id);
-    const pinBefore = pinStateOf(scope, id);
     const update = buildContactUpdate(body);
     // The same as updateContact: dedupe's phonetic blocking reads this hash,
     // and a rename by PATCH used to leave the old one behind.
@@ -788,7 +623,12 @@ export const contactService = {
       update.phoneticHash = doubleMetaphone(body.name).primary;
     }
     redrawDefaultAvatar(scope, id, body, update);
+    // A PATCH carries no child arrays, so `location` is the one address
+    // field it can move. It records the same event as a PUT that sets the
+    // same fields, and so gets the same reactions.
+    const changed = changedFields(update);
     const write = sqlite.transaction(() => {
+      const pinBefore = pinState(scope.ownerId, id);
       applyTrackingRules(scope, [id], body);
       db.update(schema.contacts)
         .set(update)
@@ -799,25 +639,19 @@ export const contactService = {
           ),
         )
         .run();
+      const released = releaseMovedPin(scope, id, pinBefore);
+      if (changed.length > 0) {
+        recordEvent(scope, "contact.updated", id, {
+          changed: released ? [...changed, "geoSource"] : changed,
+          bulk: false,
+        });
+      }
     });
     write();
-    if (body.isTracked === true) relationshipService.computeScore(id);
-
-    // A PATCH carries no child arrays, so `location` is the one address
-    // field it can move.
-    regeocodeAfterWrite(scope, id, pinBefore, body.location !== undefined);
-
-    // Fire-and-forget: recompute search embedding if searchable fields changed
-    // NOTE: FTS5 is already updated by the contacts_au trigger, but the
-    // vector embedding must be refreshed explicitly.
-    if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
-      scheduleSearchIndex(id);
-    }
+    dispatchEvents();
 
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
-
-    invalidateOwnerCaches(scope);
     return updated;
   },
 
@@ -833,17 +667,20 @@ export const contactService = {
     if (existing.deletedAt) return true; // already in trash — idempotent
 
     const now = new Date().toISOString();
-    db.update(schema.contacts)
-      .set({ deletedAt: now, isArchived: 1, updatedAt: now })
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
-    purgeContactSearchArtifacts(id);
-    invalidateOwnerCaches(scope);
+    sqlite.transaction(() => {
+      db.update(schema.contacts)
+        .set({ deletedAt: now, isArchived: 1, updatedAt: now })
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+      purgeContactSearchArtifacts(id);
+      recordEvent(scope, "contact.deleted", id, { permanent: false });
+    })();
+    dispatchEvents();
     return true;
   },
 
@@ -853,25 +690,25 @@ export const contactService = {
     if (!existing || !existing.deletedAt) return null;
 
     // Clearing deletedAt makes the contacts_au trigger reinsert the FTS row.
-    db.update(schema.contacts)
-      .set({
-        deletedAt: null,
-        isArchived: 0,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
+    // The event's subscribers rebuild the vectors the delete purged.
+    sqlite.transaction(() => {
+      db.update(schema.contacts)
+        .set({
+          deletedAt: null,
+          isArchived: 0,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+      recordEvent(scope, "contact.restored", id, {});
+    })();
+    dispatchEvents();
 
-    // Fire-and-forget: regenerate the purged embeddings.
-    scheduleSearchIndex(id);
-    generateAndStoreEmbedding(id).catch(() => {});
-
-    invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -895,8 +732,14 @@ export const contactService = {
   purgeTrashedContact(scope: Scope, id: string) {
     const existing = contactRepo.findOwned(scope, id);
     if (!existing?.deletedAt) return false; // only trashed rows can be purged
-    const ok = hardDeleteContact(scope, id);
-    if (ok) invalidateOwnerCaches(scope);
+    const ok = sqlite.transaction(() => {
+      const deleted = hardDeleteContact(scope, id);
+      if (deleted) {
+        recordEvent(scope, "contact.deleted", id, { permanent: true });
+      }
+      return deleted;
+    })();
+    dispatchEvents();
     return ok;
   },
 
@@ -921,15 +764,16 @@ export const contactService = {
     // not of whoever happens to trigger the daily job.
     const txn = sqlite.transaction(() => {
       for (const row of expired) {
-        hardDeleteContact(scopeForOwnerId(row.ownerId), row.id);
+        const scope = scopeForOwnerId(row.ownerId);
+        if (hardDeleteContact(scope, row.id)) {
+          recordEvent(scope, "contact.deleted", row.id, { permanent: true });
+        }
       }
     });
     txn();
-    // The sweep spans accounts, so each owner it touched loses its own
-    // entries. One flush in one scope would leave every other account holding
-    // a search result that still names a contact this job deleted.
-    for (const ownerId of new Set(expired.map((row) => row.ownerId)))
-      invalidateOwnerCaches(scopeForOwnerId(ownerId));
+    // The sweep spans accounts, and each event names its own owner, so each
+    // owner it touched loses its own cache entries, once.
+    dispatchAsBatch();
     log.info(
       "ContactService",
       `Purged ${expired.length} trashed contact(s) older than ${days} days`,
@@ -954,20 +798,25 @@ export const contactService = {
       if (oldPath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
-    db.update(schema.contacts)
-      .set({ avatarUrl, updatedAt: new Date().toISOString() })
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
+    sqlite.transaction(() => {
+      db.update(schema.contacts)
+        .set({ avatarUrl, updatedAt: new Date().toISOString() })
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+      recordEvent(scope, "contact.updated", id, {
+        changed: ["avatarUrl"],
+        bulk: false,
+      });
+    })();
+    dispatchEvents();
 
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
-
-    invalidateOwnerCaches(scope);
     return updated;
   },
 
@@ -977,29 +826,50 @@ export const contactService = {
    * `geoSource = 'manual'` is what keeps the geocoder off it from now on: the
    * startup sweep leaves the row alone, and a later edit to the contact
    * queues nothing unless it changes the address the pin was read from.
+   * The edit trigger skips pin columns, so a person's move stamps updatedAt here.
    */
   setLocation(scope: Scope, id: string, lat: number, lng: number) {
     assertOwnedContact(scope, id);
-    db.update(schema.contacts)
-      .set({ lat, lng, geoSource: "manual" })
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
-    invalidateOwnerCaches(scope);
+    sqlite.transaction(() => {
+      db.update(schema.contacts)
+        .set({
+          lat,
+          lng,
+          geoSource: "manual",
+          updatedAt: new Date().toISOString(),
+        })
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+      recordEvent(scope, "contact.updated", id, {
+        changed: ["lat", "lng", "geoSource"],
+        bulk: false,
+      });
+    })();
+    dispatchEvents();
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
   /**
-   * Hand the pin back to the geocoder: clear it and queue the address text.
+   * Hand the pin back to the geocoder.
+   *
+   * The coordinates go first, so the contact leaves the map until the
+   * geocoder answers rather than sitting on a pin that is nobody's decision
+   * any more. The geocoder then reads the same text it read the first time.
+   * A cached answer lands before this returns. A new one lands when the
+   * queue drains.
+   *
+   * The geocoder call here is the request itself, not a reaction to it, so
+   * it stays in this function. The event's subscribers drop the caches.
    * A contact with no address text keeps its pin, and the request is refused.
    */
   regeocode(scope: Scope, id: string) {
     assertOwnedContact(scope, id);
-    const text = pinStateOf(scope, id).shown;
+    const text = pinState(scope.ownerId, id).shown;
     if (!text) {
       throw new AppError(
         "This contact has no address to place the pin from. Add an address, or place the pin by hand",
@@ -1007,17 +877,23 @@ export const contactService = {
         { code: "NO_ADDRESS" },
       );
     }
-    db.update(schema.contacts)
-      .set({ lat: null, lng: null, geoSource: null })
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
+    sqlite.transaction(() => {
+      db.update(schema.contacts)
+        .set({ lat: null, lng: null, geoSource: null })
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+      recordEvent(scope, "contact.updated", id, {
+        changed: ["lat", "lng", "geoSource"],
+        bulk: false,
+      });
+    })();
+    dispatchEvents();
     queueGeocode(id, text);
-    invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -1212,6 +1088,4 @@ export const contactService = {
     if (!contact) return null;
     return contactRepo.hydrate(contact);
   },
-
-  scheduleIncrementalDedupe,
 };

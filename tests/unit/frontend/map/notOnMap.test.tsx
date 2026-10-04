@@ -13,7 +13,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { NotOnMapContact } from "../../../../shared/geo";
+import type { NotOnMapContact } from "../../../../shared/contracts/geo";
 import { NotOnMap } from "../../../../src/views/map/NotOnMap";
 
 const ROWAN: NotOnMapContact = {

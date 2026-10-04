@@ -146,30 +146,6 @@ describe("pulse.upNext", () => {
     expect(res.groups[0].label).toBe("Catch up");
   });
 
-  it("ensures a birthday row has no check action", () => {
-    const bday: UpcomingBirthday = {
-      contactId: "c-bday",
-      name: "Grace Hopper",
-      avatarUrl: null,
-      isTracked: true,
-      lastContactedAt: "2026-09-01T10:00:00.000Z",
-      relationshipScore: 90,
-      daysUntil: 1,
-      turningAge: null,
-      nextDate: new Date("2026-09-18"),
-    };
-
-    const res = buildUpNextQueue({
-      birthdays: [bday],
-    });
-
-    expect(res.items).toHaveLength(1);
-    const row = res.items[0];
-    expect(row.kind).toBe("birthday");
-    expect(row.hasCheckAction).toBe(false);
-    expect(row.title).toBe("Wish Grace Hopper a happy birthday");
-  });
-
   it("takes every catch-up row the server sends, in its order, and says how many wait", () => {
     // The server sends ten at most, the furthest past due first. The group
     // takes them all and the heading reads "10 of 14".

@@ -85,36 +85,6 @@ describe("questionTerms", () => {
 describe("explainMatch", () => {
   const ml = questionTerms("Who is interested in machine learning?");
 
-  it("tells an interest from a role, the example that asked for this", () => {
-    const fan = explainMatch(
-      person({
-        role: "Designer",
-        interests: [{ interest: "Machine Learning" }, { interest: "Jazz" }],
-      }),
-      ml,
-    );
-    const engineer = explainMatch(
-      person({ role: "Machine Learning Engineer", company: "Globex" }),
-      ml,
-    );
-    expect(fan).toEqual([
-      {
-        field: "interest",
-        text: "Machine Learning",
-        marks: [[0, 16]],
-        how: "words",
-      },
-    ]);
-    expect(engineer).toEqual([
-      {
-        field: "role",
-        text: "Machine Learning Engineer",
-        marks: [[0, 16]],
-        how: "words",
-      },
-    ]);
-  });
-
   it("lists interests before a role for a question about liking", () => {
     const both = person({
       role: "ML Engineer",

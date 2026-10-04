@@ -18,6 +18,7 @@ import { mcpService } from "../../services/mcpService.ts";
 import { listService } from "../../services/listService.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
+import { listRoutes } from "../../../shared/contracts/lists.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
 
 export function registerTaxonomyTools(
@@ -81,12 +82,10 @@ export function registerTaxonomyTools(
     {
       description: MCP_TOOL_DESCRIPTIONS.create_list,
       inputSchema: {
-        name: z
-          .string()
-          .trim()
-          .min(1)
-          .max(60)
-          .describe("The list's name, up to 60 characters"),
+        // The REST route's rule for a list name.
+        name: listRoutes.create.body.shape.name.describe(
+          "The list's name, up to 60 characters",
+        ),
       },
       annotations: {
         idempotentHint: false,
@@ -124,10 +123,10 @@ export function registerTaxonomyTools(
       description: MCP_TOOL_DESCRIPTIONS.add_to_list,
       inputSchema: {
         listId: z.string().min(1).describe("List ID to add contacts to"),
-        contactIds: z
-          .array(z.string().min(1))
-          .min(1)
-          .describe("Array of contact IDs to add to the list"),
+        // `POST /api/lists/:id/members/bulk` reads the same list of IDs.
+        contactIds: listRoutes.addMembers.body.shape.contactIds.describe(
+          "Array of contact IDs to add to the list",
+        ),
       },
       annotations: {
         idempotentHint: true,

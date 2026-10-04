@@ -4,7 +4,7 @@ import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { emailText } from "../utils/emailText.ts";
 import { db, sqlite } from "../db.ts";
-import * as schema from "../../src/db/schema.ts";
+import * as schema from "../db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 import {
@@ -24,6 +24,10 @@ import { storeSuggestion } from "./dedupe/suggestions.ts";
 import { SharedWork } from "../ai/workQueue.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
 import { isAnyProviderConfigured } from "../ai/gateway.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
+// A ghost made from a note and a promoted ghost are contact writes, so the
+// contact reactions register wherever this service can run.
+import "../events/contactSubscribers.ts";
 
 // =============================================================================
 // Interaction Payload Types
@@ -187,6 +191,10 @@ async function runMentionExtraction(
           })
           .returning()
           .get();
+        recordEvent(scope, "contact.created", ghostId, {
+          origin: "mention",
+          autoEnrich: false,
+        });
 
         if (resolution.kind === "review") {
           // Into the same queue as a duplicate, because that is what it is:
@@ -245,7 +253,12 @@ async function runMentionExtraction(
           insertMention.run(interactionId, mention.contactId);
         }
       }
+      recordEvent(scope, "interaction.updated", interactionId, {
+        contactId,
+        changed: ["mentions"],
+      });
     })();
+    dispatchEvents();
   } catch (e: unknown) {
     log.error(
       "AI Service",
@@ -365,6 +378,8 @@ export const interactionService = {
         .returning()
         .get();
 
+      recordEvent(scope, "interaction.created", id, { contactId });
+
       const insertLinked = sqlite.prepare(
         "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
       );
@@ -418,6 +433,7 @@ export const interactionService = {
 
       // Atomically create an action item if provided alongside the interaction
       if (body.actionItem && body.actionItem.title && body.actionItem.dueAt) {
+        const actionItemId = crypto.randomUUID();
         sqlite
           .prepare(
             `
@@ -426,13 +442,17 @@ export const interactionService = {
         `,
           )
           .run(
-            crypto.randomUUID(),
+            actionItemId,
             contactId,
             scope.ownerId,
             id,
             body.actionItem.title,
             body.actionItem.dueAt,
           );
+        recordEvent(scope, "action_item.created", actionItemId, {
+          contactId,
+          interactionId: id,
+        });
         log.info(
           "Interactions",
           `Created action item "${body.actionItem.title}" alongside interaction`,
@@ -441,6 +461,7 @@ export const interactionService = {
 
       return res;
     })();
+    dispatchEvents();
     // Schedule background ghost-contact extraction — never blocks the response.
     // The scope is captured here and passed in. AsyncLocalStorage does survive
     // a timer, but rule 7 wants the owner to be an argument of the job rather
@@ -527,17 +548,28 @@ export const interactionService = {
     const contact = contactRepo.findOwned(scope, contactId);
     if (!contact) return null;
 
-    return db
-      .update(schema.contacts)
-      .set({ isGhost: 0, updatedAt: new Date().toISOString() })
-      .where(
-        and(
-          eq(schema.contacts.id, contactId),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .returning()
-      .get();
+    const promoted = sqlite.transaction(() => {
+      const row = db
+        .update(schema.contacts)
+        .set({ isGhost: 0, updatedAt: new Date().toISOString() })
+        .where(
+          and(
+            eq(schema.contacts.id, contactId),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .returning()
+        .get();
+      if (row) {
+        recordEvent(scope, "contact.updated", contactId, {
+          changed: ["isGhost"],
+          bulk: false,
+        });
+      }
+      return row;
+    })();
+    dispatchEvents();
+    return promoted;
   },
 
   async handleAttachment(
@@ -579,6 +611,7 @@ export const interactionService = {
         })
         .returning()
         .get();
+      recordEvent(scope, "interaction.created", interaction.id, { contactId });
       db.update(schema.contacts)
         .set({
           lastContactedAt: now,
@@ -595,6 +628,7 @@ export const interactionService = {
         .run();
       return interaction;
     })();
+    dispatchEvents();
     aiCache.invalidate("briefing", ownerKey(scope, contactId));
     aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(contactId);
@@ -634,25 +668,34 @@ export const interactionService = {
 
     if (Object.keys(updates).length === 0) return existing;
 
+    const changed = Object.keys(updates);
     updates.updatedAt = new Date().toISOString();
 
-    const updated = db
-      .update(schema.interactions)
-      .set(updates)
-      .where(
-        and(
-          eq(schema.interactions.id, id),
-          eq(schema.interactions.ownerId, scope.ownerId),
-        ),
-      )
-      .returning()
-      .get();
+    const updated = sqlite.transaction(() => {
+      const row = db
+        .update(schema.interactions)
+        .set(updates)
+        .where(
+          and(
+            eq(schema.interactions.id, id),
+            eq(schema.interactions.ownerId, scope.ownerId),
+          ),
+        )
+        .returning()
+        .get();
 
-    sqlite
-      .prepare(
-        "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
-      )
-      .run(existing.contactId, scope.ownerId);
+      sqlite
+        .prepare(
+          "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
+        )
+        .run(existing.contactId, scope.ownerId);
+      recordEvent(scope, "interaction.updated", id, {
+        contactId: existing.contactId,
+        changed,
+      });
+      return row;
+    })();
+    dispatchEvents();
     aiCache.invalidate("briefing", ownerKey(scope, existing.contactId));
     aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(existing.contactId);
@@ -694,7 +737,11 @@ export const interactionService = {
           existing.contactId,
           scope.ownerId,
         );
+      recordEvent(scope, "interaction.deleted", id, {
+        contactId: existing.contactId,
+      });
     })();
+    dispatchEvents();
     aiCache.invalidate("briefing", ownerKey(scope, existing.contactId));
     aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(existing.contactId);

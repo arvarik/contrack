@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { MapPinOff } from "lucide-react";
-import type { NotOnMapContact } from "../../../shared/geo";
+import type { NotOnMapContact } from "../../../shared/contracts/geo";
 import { useGeoStatus } from "../../api/geo";
 import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { Modal } from "../../components/ui/Modal";

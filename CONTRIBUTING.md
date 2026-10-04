@@ -53,8 +53,9 @@ npm run dev            # http://localhost:3210, with hot reload
 | `npm run test:contract`         | Call real provider APIs. Each block skips without its key        |
 | `npm run lint`                  | Oxlint, `tsc --noEmit` and the tenant lint                       |
 | `npm run knip`                  | Find files, exports and types that nothing uses                  |
+| `npm run api:openapi`           | Write `docs/openapi.json` from the route contracts               |
 | `npm run format`                | Format with Prettier. CI runs `format:check`                     |
-| `npm run db:generate`           | Write a Drizzle migration after a schema change                  |
+| `npm run db:new <name>`         | Start the next schema migration from the template                |
 | `npm run db:enrich -- --apply`  | Make a test network of 5,000 people. Stop the server first       |
 | `npm run brand:icons`           | Redraw every icon and brand file from the corvid's paths         |
 | `npm run docs:wiki -- <folder>` | Write the docs as a GitHub wiki                                  |
@@ -79,9 +80,9 @@ A pre-commit hook runs Oxlint and Prettier on the staged files.
 These break most often. `.agent/ARCHITECTURE.md` and `.agent/STYLE.md` have
 the full lists.
 
-- **Routes are thin.** Validate with zod, wrap the handler in `asyncHandler`,
-  and call a service. A service throws an `AppError` subclass, never a plain
-  `Error`.
+- **Routes are thin.** Validate with the route's contract, wrap the handler in
+  `asyncHandler`, and call a service. A service throws an `AppError`
+  subclass, never a plain `Error`.
 - **Accounts stay apart.** A function that touches owned data takes a `Scope`,
   and the id and the owner go in the same SQL statement. Another account's row
   answers `404`. Every route has a row in `server/tenancy/routeManifest.ts`, a
@@ -104,6 +105,32 @@ the full lists.
 - **Types are strict.** `any` is an error. Narrow `unknown` instead.
 - **Errors are logged.** Use `log.info`, `log.warn` and `log.error`. No
   `console.log` in app code and no empty `.catch(() => {})`.
+
+## Add a route
+
+A route has a contract: one Zod schema for what it reads and one for what it
+answers. [API contract](docs/architecture.md#api-contract) explains who reads
+it.
+
+1. Add the route's row to `server/tenancy/routeManifest.ts`.
+2. In `shared/contracts/<area>.ts`, declare it with `route()`: its method, its
+   path as the manifest writes it, a one-line `summary`, its `query` or
+   `body`, and its `response`. A response object is a `z.strictObject` that
+   lists every field the route sends. Add a new area's routes to `CONTRACTS`
+   in `shared/contracts/index.ts`.
+3. In the route, check the body with `validateBody(contract.body)` and the
+   query with `parseQuery(contract.query, req.query)`.
+4. In `src/api/`, call it with `apiJson(contract, path, init)`. The answer
+   takes the contract's type, and the method comes from the contract.
+5. Run `npm run api:openapi` and commit `docs/openapi.json`.
+6. Add a line to `docs/api-reference.md`. A scoped route also needs a case in
+   `tests/integration/tenancy.isolation.test.ts`.
+
+Every integration test that uses `makeTestApp()` checks a contracted route's
+answers against its contract, so a field the contract does not declare fails
+the test that sent it. `UNCONTRACTED` in `shared/contracts/index.ts` lists the
+older routes with no contract yet. Take a route off that list when you give
+it a contract, and lower `UNCONTRACTED_CEILING` by one in the same change.
 
 ## Tests
 
@@ -128,14 +155,43 @@ with its own floor for `server/`. `.agent/TESTING.md` has the rest.
 
 - **Docs** are flat pages in `docs/`, listed in `docs/README.md`, with
   screenshots of fictional data in `docs/images/`. Tests fail on a broken link
-  or anchor, and when `configuration.md`, `api-reference.md` or
-  `keyboard-shortcuts.md` misses a variable, a route or a shortcut.
-- **A schema change** edits `src/db/schema.ts`, runs `npm run db:generate`, and
-  commits the migration in `drizzle/`. The server applies it on start.
-  Virtual tables and triggers live in `server/db.ts`. Bump
-  `FTS_SCHEMA_VERSION` when the full-text columns or triggers change. A new
-  owned table needs `ownerId`, the owner triggers and an index that leads with
-  `ownerId`.
+  or anchor, when `configuration.md`, `api-reference.md` or
+  `keyboard-shortcuts.md` misses a variable, a route or a shortcut, and when
+  `openapi.json` is not what `npm run api:openapi` writes.
+- **A schema change** is a new migration. `npm run db:new <name>` writes
+  `server/db/migrations/NNNN_<name>.ts` and adds it to the list. Write the
+  SQL in its `up(db)`, mirror each new table and column in
+  `server/db/schema.ts`, and add each new object name to
+  `ADDED_SINCE_FIXTURE` in `tests/integration/db.migrations.test.ts`. The
+  server applies each migration once, in order, when it starts. Never edit a
+  migration that has shipped. Write a new one.
+  - The FTS tables, the vector stores and their triggers are rebuilt from
+    code, not migrated. Raise their version in `server/db/indexes.ts`, for
+    example `FTS_SCHEMA_VERSION` when the full-text columns or triggers
+    change.
+  - A new owned table needs `ownerId`, a `<table>_owner_required` trigger in
+    its migration, and an index that leads with `ownerId`. Its name goes in
+    `OWNED_TABLES` in `server/db.ts` and `scripts/tenant-lint.mjs`, and in the
+    delete loop of `purgeOwner`.
+  - A new `contacts` column also rebuilds the `contacts_auto_updated_at` and
+    `contacts_score_dirty` triggers with the new column list
+    (`contactEditColumns`). `tests/integration/scoring.incremental.test.ts`
+    fails until it does.
+- **A new feature** is a folder in `server/modules/` whose `index.ts` exports
+  `defineModule({ id, routers, mcpTools, jobs, subscribers, onStart })`, and
+  one line in `server/modules/index.ts`. The list order is the order the
+  routers mount in. Each route still needs its row in
+  `server/tenancy/routeManifest.ts` and its contract (see
+  [Add a route](#add-a-route)).
+- **Background work** is a job, never a new `setInterval`. Declare it with
+  `defineJob({ kind, run, every, atStart })` and list it in its module. A
+  job runs only when `DISABLE_BACKGROUND_JOBS` is not `true`, so a test calls
+  `runJobNow` or `pollJobs` (`server/jobs/runner.ts`).
+- **A reaction to a write** is a subscriber: `{ id, types, handle }` listed in
+  its module. The write records the event inside its transaction with
+  `recordEvent`, and calls `dispatchEvents()` after it. A new event type gets
+  its payload schema in `shared/contracts/events.ts`. A handler schedules
+  work and returns. Never rename a subscriber's id after it ships.
 - **Brand files** in `public/` and `docs/brand/` are generated from
   `src/assets/corvidPaths.ts` and the rig. Change the source, run
   `npm run brand:icons`, and commit what it writes. Never edit a generated

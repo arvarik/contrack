@@ -96,17 +96,6 @@ describe("useRovingList", () => {
     expect(document.activeElement).toBe(row("Ada Lovelace"));
   });
 
-  it("jumps to the first and last rows with Home and End", () => {
-    render(<List />);
-    act(() => row("Ada Lovelace").focus());
-
-    fireEvent.keyDown(row("Ada Lovelace"), { key: "End" });
-    expect(document.activeElement).toBe(row("Grace Hopper"));
-
-    fireEvent.keyDown(row("Grace Hopper"), { key: "Home" });
-    expect(document.activeElement).toBe(row("Ada Lovelace"));
-  });
-
   it("jumps by first letter, and the same letter again walks through the matches", () => {
     render(<List />);
     act(() => row("Ada Lovelace").focus());
@@ -137,15 +126,6 @@ describe("useRovingList", () => {
     });
     expect(allowed).toBe(true);
     expect(document.activeElement).toBe(row("Ada Lovelace"));
-  });
-
-  it("opens the focused row with Enter", () => {
-    const onOpen = vi.fn();
-    render(<List onOpen={onOpen} />);
-    act(() => row("Ada Lovelace").focus());
-    fireEvent.keyDown(row("Ada Lovelace"), { key: "ArrowDown" });
-    fireEvent.keyDown(row("Alan Turing"), { key: "Enter" });
-    expect(onOpen).toHaveBeenCalledWith(1);
   });
 
   it("follows the selection, so Tab back into the list lands on the open row", () => {

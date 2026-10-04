@@ -1,6 +1,11 @@
 /**
  * server/mcp/tools/index.ts — Registry aggregator for every MCP tool.
  *
+ * Each feature module lists its tool groups (`mcpTools` in
+ * server/modules/), and this registers every group of every module, in the
+ * order of server/modules/index.ts. A new tool group is a line in its
+ * module, not an edit here.
+ *
  * @module server/mcp/tools
  */
 
@@ -8,12 +13,7 @@ import type { Request } from "express";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../../tenancy/scope.ts";
 import type { ErrorTracker } from "../errors.ts";
-import { registerContactTools } from "./contacts.ts";
-import { registerSearchTools } from "./search.ts";
-import { registerInteractionTools } from "./interactions.ts";
-import { registerActionItemTools } from "./actions.ts";
-import { registerPulseTools } from "./pulse.ts";
-import { registerTaxonomyTools } from "./taxonomy.ts";
+import { MODULES } from "../../modules/index.ts";
 
 export function registerAllTools(
   server: McpServer,
@@ -21,10 +21,9 @@ export function registerAllTools(
   req: Request,
   onError: ErrorTracker,
 ): void {
-  registerContactTools(server, scope, onError);
-  registerSearchTools(server, scope, req, onError);
-  registerInteractionTools(server, scope, onError);
-  registerActionItemTools(server, scope, onError);
-  registerPulseTools(server, scope, onError);
-  registerTaxonomyTools(server, scope, onError);
+  for (const feature of MODULES) {
+    for (const register of feature.mcpTools) {
+      register({ server, scope, req, onError });
+    }
+  }
 }

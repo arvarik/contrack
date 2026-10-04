@@ -9,7 +9,10 @@ import {
 } from "../../../../src/views/map/FollowUpModal";
 import * as client from "../../../../src/api/client";
 import { toast } from "sonner";
-import { MAX_BULK_ACTION_ITEMS } from "../../../../shared/actionItems";
+import {
+  actionItemRoutes,
+  MAX_BULK_ACTION_ITEMS,
+} from "../../../../shared/contracts/actionItems";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -44,10 +47,9 @@ describe("FollowUpModal", () => {
   };
 
   it("adds the follow-up to every selected contact in one request", async () => {
-    const apiFetchSpy = vi.spyOn(client, "apiFetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ count: 2 }),
-    } as Response);
+    const apiJsonSpy = vi
+      .spyOn(client, "apiJson")
+      .mockResolvedValue({ count: 2 });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const onSuccess = vi.fn();
     const onClose = vi.fn();
@@ -65,11 +67,11 @@ describe("FollowUpModal", () => {
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     // All or none: one retry cannot add a second follow-up to anyone.
-    expect(apiFetchSpy).toHaveBeenCalledTimes(1);
-    expect(apiFetchSpy).toHaveBeenCalledWith(
+    expect(apiJsonSpy).toHaveBeenCalledTimes(1);
+    expect(apiJsonSpy).toHaveBeenCalledWith(
+      actionItemRoutes.bulkCreate,
       "/action-items/bulk",
       expect.objectContaining({
-        method: "POST",
         body: JSON.stringify({
           contactIds: ["c1", "c2"],
           title: "Review proposal",
@@ -85,7 +87,7 @@ describe("FollowUpModal", () => {
   });
 
   it("says so, and sends nothing, past the most one request may name", () => {
-    const apiFetchSpy = vi.spyOn(client, "apiFetch");
+    const apiJsonSpy = vi.spyOn(client, "apiJson");
     const count = MAX_BULK_ACTION_ITEMS + 1;
     renderComponent({
       isOpen: true,
@@ -105,6 +107,6 @@ describe("FollowUpModal", () => {
       }).textContent,
     ).toContain("Select fewer people");
     fireEvent.submit(submit.closest("form")!);
-    expect(apiFetchSpy).not.toHaveBeenCalled();
+    expect(apiJsonSpy).not.toHaveBeenCalled();
   });
 });

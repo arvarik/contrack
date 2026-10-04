@@ -5,10 +5,11 @@
 // gated instance.
 //
 // It used to answer `{ status: "ok" }` and this file asserted exactly that:
-// no versions, no counts, no configuration. Extra F4 adds the three schema
+// no versions, no counts, no configuration. Extra F4 adds the schema
 // versions so an operator can confirm a migration ran without opening the
 // database, and that is a deliberate widening of what an unauthenticated
-// caller is told.
+// caller is told. Since the migration ledger, that is the last migration the
+// database applied and the last one the build holds.
 //
 // The guard did not go away, it moved. The payload is asserted key by key, so
 // a count, a name, a setting or an account added here later fails this file
@@ -19,8 +20,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
-import { TENANCY_SCHEMA_VERSION } from "../../server/db.ts";
-import { FTS_SCHEMA_VERSION } from "../../server/services/search/ftsIndex.ts";
+import { MIGRATIONS } from "../../server/db/migrations/index.ts";
 
 const app = makeTestApp();
 
@@ -41,16 +41,10 @@ describe("GET /healthz", () => {
   it("reports the schema this database is on, beside what the build expects", async () => {
     const res = await request(app).get("/healthz");
 
-    // The pair is the point. One number alone cannot tell an operator whether
+    // The pair is the point. One value alone cannot tell an operator whether
     // the migration they just ran finished.
-    expect(res.body.schema).toEqual({
-      tenancy: TENANCY_SCHEMA_VERSION,
-      fts: FTS_SCHEMA_VERSION,
-    });
-    expect(res.body.expects).toEqual({
-      tenancy: TENANCY_SCHEMA_VERSION,
-      fts: FTS_SCHEMA_VERSION,
-    });
+    const last = MIGRATIONS[MIGRATIONS.length - 1].id;
+    expect(res.body.schema).toEqual({ migration: last, expects: last });
     expect(res.body.vec).toMatch(/^v?\d+\.\d+\.\d+/);
   });
 
@@ -58,13 +52,12 @@ describe("GET /healthz", () => {
     const res = await request(app).get("/healthz");
 
     // Exact, not a subset. An unauthenticated endpoint must not describe the
-    // instance, and a fifth key here would be somebody deciding otherwise
+    // instance, and a fourth key here would be somebody deciding otherwise
     // without anybody noticing.
-    expect(Object.keys(res.body).sort()).toEqual([
+    expect(Object.keys(res.body).sort()).toEqual(["schema", "status", "vec"]);
+    expect(Object.keys(res.body.schema).sort()).toEqual([
       "expects",
-      "schema",
-      "status",
-      "vec",
+      "migration",
     ]);
 
     const text = JSON.stringify(res.body).toLowerCase();

@@ -245,6 +245,8 @@ export function resetAccounts(): void {
   // local owner owns every row written with auth off, which is why a plain
   // DELETE FROM users no longer works on its own.
   sqlite.exec(`
+    DELETE FROM events;
+    DELETE FROM jobs;
     DELETE FROM upcoming_events;
     DELETE FROM connector_links;
     DELETE FROM connector_runs;

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Loader2, Calendar } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { useBulkCreateActionItems } from "../../api/actionItems";
-import { MAX_BULK_ACTION_ITEMS } from "../../../shared/actionItems";
+import { MAX_BULK_ACTION_ITEMS } from "../../../shared/contracts/actionItems";
 import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";

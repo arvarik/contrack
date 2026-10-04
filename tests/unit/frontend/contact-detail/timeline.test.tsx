@@ -84,6 +84,13 @@ function makeItem(
     content: null,
     date,
     duration: null,
+    fileUrl: null,
+    fileName: null,
+    fileType: null,
+    source: null,
+    mentions: null,
+    updatedAt: date,
+    ownerId: "owner-1",
     ...overrides,
   };
 }

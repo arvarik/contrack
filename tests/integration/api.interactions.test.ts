@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
-import { MAX_BULK_ACTION_ITEMS } from "../../shared/actionItems.ts";
+import { MAX_BULK_ACTION_ITEMS } from "../../shared/contracts/actionItems.ts";
 
 const app = makeTestApp();
 

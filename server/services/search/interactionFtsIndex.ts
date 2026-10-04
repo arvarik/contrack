@@ -128,8 +128,9 @@ export function registerNoteTextFunction(sqlite: Database.Database): void {
  * interaction that has no row yet.
  *
  * Runs inside the transaction `installSearchIndex` opens, and under the same
- * version gate: `rebuilt` is true when `PRAGMA user_version` disagreed with
- * FTS_SCHEMA_VERSION, and then the table is dropped and filled again.
+ * version gate: `rebuilt` is true when the recorded `contacts_fts` version
+ * disagreed with FTS_SCHEMA_VERSION, and then the table is dropped and filled
+ * again.
  *
  * @returns how many rows the backfill wrote
  */

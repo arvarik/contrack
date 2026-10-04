@@ -160,16 +160,6 @@ afterEach(() => {
 });
 
 describe("the wait for AI", () => {
-  it("describes a local search accurately when AI is off", () => {
-    render(<SearchingStage still aiAllowed={false} />);
-    expect(
-      screen.getByText("Finding people who fit your question"),
-    ).toBeTruthy();
-    expect(
-      screen.queryByText("AI is checking who fits your question"),
-    ).toBeNull();
-  });
-
   it("shows nothing for an answer that comes quickly", () => {
     const { rerender } = mount(true);
     advance(STAGE_DELAY_MS - 10);

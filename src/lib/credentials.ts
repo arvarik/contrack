@@ -117,8 +117,3 @@ export function takeUrlSecret(path: string, param = "token"): string | null {
 export function takeInvitationToken(): string | null {
   return takeUrlSecret(JOIN_PATH, JOIN_TOKEN_PARAM);
 }
-
-/** Forget memoised reads. Test seam. */
-export function __resetInvitationToken(): void {
-  takenSecrets.clear();
-}

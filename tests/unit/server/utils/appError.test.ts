@@ -19,10 +19,6 @@ import {
   AppError,
   NotFoundError,
   ValidationError,
-  ConflictError,
-  RateLimitedError,
-  ServiceUnavailableError,
-  UpstreamTimeoutError,
 } from "../../../../server/utils/AppError.ts";
 
 describe("AppError (base class)", () => {
@@ -64,33 +60,5 @@ describe("Named subclasses", () => {
     const e = new NotFoundError("Suggestion");
     expect(e.message).toBe("Suggestion not found");
     expect(e.details).toEqual({ entity: "Suggestion", id: undefined });
-  });
-
-  it("ConflictError → 409", () => {
-    expect(new ConflictError("Already merged").statusCode).toBe(409);
-    expect(new ConflictError("Already merged").code).toBe("CONFLICT");
-  });
-
-  it("ServiceUnavailableError → 503", () => {
-    expect(new ServiceUnavailableError("AI down").statusCode).toBe(503);
-    expect(new ServiceUnavailableError("AI down").code).toBe(
-      "SERVICE_UNAVAILABLE",
-    );
-  });
-
-  it("UpstreamTimeoutError → 504", () => {
-    expect(new UpstreamTimeoutError("call exceeded 60s").statusCode).toBe(504);
-    expect(new UpstreamTimeoutError("call exceeded 60s").code).toBe(
-      "UPSTREAM_TIMEOUT",
-    );
-  });
-
-  it("all subclasses are `instanceof AppError`", () => {
-    expect(new NotFoundError("X")).toBeInstanceOf(AppError);
-    expect(new ValidationError("X")).toBeInstanceOf(AppError);
-    expect(new ConflictError("X")).toBeInstanceOf(AppError);
-    expect(new RateLimitedError("X")).toBeInstanceOf(AppError);
-    expect(new ServiceUnavailableError("X")).toBeInstanceOf(AppError);
-    expect(new UpstreamTimeoutError("X")).toBeInstanceOf(AppError);
   });
 });

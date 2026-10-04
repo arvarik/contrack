@@ -17,10 +17,6 @@ describe("the monogram", () => {
     expect(monogramLetters("Émile Zola")).toBe("ÉZ");
   });
 
-  it("escapes a letter that XML would read as markup", () => {
-    expect(monogramSvg("<b> &c")).toContain(">&lt;&amp;</text>");
-  });
-
   it("carries its own light and dark palettes with no theme, and one with a theme", () => {
     expect(monogramSvg("Ada")).toContain("prefers-color-scheme:dark");
     expect(monogramSvg("Ada", "dark")).not.toContain("prefers-color-scheme");

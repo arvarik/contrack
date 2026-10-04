@@ -22,10 +22,12 @@ import fs from "fs";
 import {
   OWNED_TABLES,
   VEC_VERSION,
-  readTenancyVersion,
   sqlite,
   TENANCY_SCHEMA_VERSION,
 } from "../db.ts";
+import { indexVersions } from "../db/indexes.ts";
+import { LATEST_MIGRATION } from "../db/migrations/index.ts";
+import { appliedMigrations } from "../db/runner.ts";
 import { ai } from "../ai/index.ts";
 import { capabilityTarget } from "../ai/capabilities.ts";
 import { getProvider } from "../ai/providerRegistry.ts";
@@ -46,12 +48,17 @@ interface Account {
 }
 
 export interface SchemaVersions {
-  /** The tenancy migration this database has reached, and the one we expect. */
+  /** The tenancy version this database has reached, and the one we expect. */
   tenancy: number;
   tenancyExpected: number;
-  /** The FTS schema in `PRAGMA user_version`, and the one we expect. */
+  /** The version the FTS tables are built at, and the one we expect. */
   fts: number;
   ftsExpected: number;
+  /** The last migration this database applied, and the last this build holds. */
+  migration: string | null;
+  migrationExpected: string;
+  /** Every derived structure in schema_migrations: its version and ours. */
+  indexes: { id: string; version: number; expected: number }[];
   /** The sqlite-vec build this process loaded. */
   vec: string;
   /** False when a migration has not finished, which explains a lot of things. */
@@ -189,16 +196,24 @@ function rowCounts(): Record<string, number> {
   return counts;
 }
 
+/** Every version in schema_migrations, beside the one this build expects. */
 function schemaVersions(): SchemaVersions {
-  const tenancy = readTenancyVersion();
-  const fts = Number(sqlite.pragma("user_version", { simple: true }) ?? 0);
+  const indexes = indexVersions(sqlite);
+  const versionOf = (id: string) =>
+    indexes.find((index) => index.id === id)?.version ?? 0;
+  const migration = appliedMigrations(sqlite).at(-1) ?? null;
   return {
-    tenancy,
+    tenancy: versionOf("tenancy"),
     tenancyExpected: TENANCY_SCHEMA_VERSION,
-    fts,
+    fts: versionOf("contacts_fts"),
     ftsExpected: FTS_SCHEMA_VERSION,
+    migration,
+    migrationExpected: LATEST_MIGRATION,
+    indexes,
     vec: VEC_VERSION,
-    upToDate: tenancy >= TENANCY_SCHEMA_VERSION && fts >= FTS_SCHEMA_VERSION,
+    upToDate:
+      migration === LATEST_MIGRATION &&
+      indexes.every((index) => index.version === index.expected),
   };
 }
 

@@ -122,14 +122,11 @@ export function useDeleteConnector() {
       id: string;
       deleteImported?: boolean;
     }) => {
-      const res = await apiFetch(`/connectors/${encodeURIComponent(id)}`, {
+      await apiFetch(`/connectors/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deleteImported: Boolean(deleteImported) }),
       });
-      if (!res.ok && res.status !== 204) {
-        throw new Error("Failed to delete connector");
-      }
       return { id, deleteImported };
     },
     onSuccess: (_data, variables) => {

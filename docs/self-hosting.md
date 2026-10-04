@@ -267,9 +267,13 @@ git pull && docker compose up -d --build
 git pull && npm install && npm run models:fetch && npm run build
 ```
 
-After the start, `/healthz` shows the schema versions of the database
-(`schema`) beside the versions that the build expects (`expects`). They match
-when the upgrade is complete.
+After the start, `/healthz` shows the last migration that the database applied
+(`schema.migration`) beside the last migration that the build holds
+(`schema.expects`). They match when the upgrade is complete. A migration that
+fails stops the start, keeps nothing it changed, and names itself in the log.
+From this release on, a build refuses to start on a database that a newer
+build has migrated: restore the backup that you took before the upgrade. The
+release before the migration ledger does not check, and starts.
 
 ## Offline installs
 
@@ -303,6 +307,11 @@ lists the folders and the order in which the server reads them.
 - **Settings → Administration → Instance health** shows the database and its
   write-ahead log, the last backup, the job queues, the search index, the AI
   provider for each task, and the AI cache. It refreshes every 15 seconds.
+  - Its **Background jobs** card lists each recurring job (the connector
+    sync, the score sweeps, the backup, the daily sweep, the trash purge, the
+    model lists and the planner statistics) with its last run, its result
+    and its next run, and the jobs that failed in the last 24 hours with
+    their errors. `JOB_CONCURRENCY` sets how many jobs run at once.
 - The server writes its log to standard output: the terminal, or
   `docker logs contrack`. Each line has the time, the level and the area, such
   as `[WARN] [Auth]`.

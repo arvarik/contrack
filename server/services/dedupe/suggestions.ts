@@ -19,7 +19,7 @@
 
 import crypto from "crypto";
 import { sqlite, db } from "../../db.ts";
-import * as schema from "../../../src/db/schema.ts";
+import * as schema from "../../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";

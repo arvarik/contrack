@@ -18,8 +18,8 @@ import { requireAdmin, requirePasswordCurrent } from "../middleware/auth.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { validateBody } from "../utils/validators.ts";
 import {
-  validateBody,
   adminCreateUserSchema,
   adminSettingsSchema,
   adminIntegrationsSchema,
@@ -28,7 +28,7 @@ import {
   adminUpdateUserSchema,
   adminMailSchema,
   auditQuerySchema,
-} from "../utils/validators.ts";
+} from "../../shared/contracts/admin.ts";
 import {
   getLifecycleSettings,
   setTrashRetentionDays,

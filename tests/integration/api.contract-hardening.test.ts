@@ -233,16 +233,27 @@ describe("API and UI data contracts", () => {
   });
 
   it("caps the MCP query route at 200 rows", async () => {
-    // Unbounded values used to reach SQL directly.
+    // Unbounded values used to reach SQL directly. A negative limit read as no
+    // limit at all, and now reads as one row.
     const owner = localOwnerId();
     sqlite.transaction(() => {
-      for (let i = 0; i < 201; i++)
+      for (let i = 0; i < 201; i++) {
         sqlite
           .prepare("INSERT INTO contacts(id,name,ownerId) VALUES (?,?,?)")
           .run(`cap-${i}`, `Capped ${i}`, owner);
+        sqlite
+          .prepare(
+            "INSERT INTO interactions(id,contactId,type,title,ownerId) VALUES (?,?,?,?,?)",
+          )
+          .run(`cap-note-${i}`, `cap-${i}`, "note", `Note ${i}`, owner);
+      }
     })();
     const page = (query: Record<string, number>) =>
       request(app).get("/api/query/contacts").query(query);
     expect((await page({ limit: 999_999_999 })).body).toHaveLength(200);
+    expect((await page({ limit: -1 })).body).toHaveLength(1);
+    expect(
+      (await request(app).get("/api/timeline").query({ limit: -1 })).body,
+    ).toHaveLength(1);
   });
 });

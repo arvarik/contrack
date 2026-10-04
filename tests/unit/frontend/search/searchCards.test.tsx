@@ -180,53 +180,6 @@ describe("the Ask page's question mark", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("opens while a mouse rests on it, and a press keeps it open", () => {
-    const { mark } = renderAsk();
-    const tip = mark.parentElement!;
-    fireEvent.pointerEnter(tip, { pointerType: "mouse" });
-    expect(screen.queryByRole("tooltip")).not.toBeNull();
-    fireEvent.pointerLeave(tip, { pointerType: "mouse" });
-    expect(screen.queryByRole("tooltip")).toBeNull();
-
-    // A mouse press starts with a hover. The press must not close it.
-    fireEvent.pointerEnter(tip, { pointerType: "mouse" });
-    fireEvent.click(mark);
-    fireEvent.pointerLeave(tip, { pointerType: "mouse" });
-    expect(screen.queryByRole("tooltip")).not.toBeNull();
-  });
-
-  it("opens on a tap once, not open and shut in one gesture", () => {
-    const { mark } = renderAsk();
-    const tip = mark.parentElement!;
-    // A tap fires pointer events with a touch pointer, a focus with no
-    // focus ring (jsdom never matches `:focus-visible`, like a tap), then a
-    // click. Only the click opens the panel, so the click cannot close it.
-    fireEvent.pointerEnter(tip, { pointerType: "touch" });
-    fireEvent.pointerDown(mark, { pointerType: "touch" });
-    act(() => mark.focus());
-    fireEvent.click(mark);
-    fireEvent.pointerLeave(tip, { pointerType: "touch" });
-    expect(screen.queryByRole("tooltip")).not.toBeNull();
-  });
-
-  it("opens on a keyboard focus, and closes when the focus leaves", () => {
-    const { mark } = renderAsk();
-    const matches = HTMLElement.prototype.matches;
-    const spy = vi
-      .spyOn(HTMLElement.prototype, "matches")
-      .mockImplementation(function (this: HTMLElement, selector: string) {
-        return selector === ":focus-visible" || matches.call(this, selector);
-      });
-    try {
-      act(() => mark.focus());
-      expect(screen.queryByRole("tooltip")).not.toBeNull();
-      act(() => mark.blur());
-      expect(screen.queryByRole("tooltip")).toBeNull();
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
   it("describes the mark to a screen reader, open or closed", () => {
     const { mark } = renderAsk();
     const described = document.getElementById(

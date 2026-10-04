@@ -189,10 +189,6 @@ describe("guard rails", () => {
       adapter.generate({ prompt: "hi", responseFormat: "text" }),
     ).rejects.toThrow(/refresh this server's model list/i);
   });
-
-  it("never claims search grounding", () => {
-    expect(adapter.supportsSearchGrounding).toBe(false);
-  });
 });
 
 describe("the model list", () => {

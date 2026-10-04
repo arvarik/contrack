@@ -50,22 +50,25 @@ flowchart LR
 
 ## Repository layout
 
-| Folder                                              | What it holds                                                                                                                                   |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/`, `lib/`, and `db/schema.ts` (the Drizzle schema). |
-| `shared/`                                           | Code that the server and the browser both run: facets, search history, dates, cadence, score bands, vCard and the MCP tool list.                |
-| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                    |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                |
-| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                   |
-| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                 |
-| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                 |
-| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                           |
-| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                             |
-| `server/db.ts`, `server/app.ts`                     | The database setup, migrations and triggers; the Express app that `server.ts` starts.                                                           |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.  |
-| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                          |
-| `drizzle/`, `public/`                               | The SQL migrations that `npm run db:generate` writes; icons, fonts and the web manifest.                                                        |
+| Folder                                              | What it holds                                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/` and `lib/`.                                                                             |
+| `shared/`                                           | Code that the server and the browser both run: the API contracts and event payloads (`contracts/`), facets, search history, dates, cadence, score bands, vCard and the MCP tool list. |
+| `server/modules/`                                   | One module for each area: its routers, MCP tools, jobs and event subscribers, and the ordered list that the core reads.                                                               |
+| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                                                          |
+| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                                                      |
+| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                                                      |
+| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                                                         |
+| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                                       |
+| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                                       |
+| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                                                                 |
+| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                                   |
+| `server/db/`                                        | The migrations and their runner, the derived indexes and their versions, and the Drizzle schema.                                                                                      |
+| `server/events/`, `server/jobs/`                    | The event log and its dispatcher; the job runner.                                                                                                                                     |
+| `server/db.ts`, `server/app.ts`                     | The connection and the steps that run on every boot; the Express app that `server.ts` starts.                                                                                         |
+| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                                        |
+| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                                |
+| `public/`                                           | Icons, fonts and the web manifest.                                                                                                                                                    |
 
 ## A request from click to database
 
@@ -91,8 +94,9 @@ This is the path of one edit, from a click to a saved row.
    8. `Cache-Control: no-store` for four prefixes.
    9. The `/api/auth` router, then `requireAuth` and `requirePasswordCurrent`.
    10. The uploads guard and the static files, then the API routers.
-4. The route checks its input with a Zod schema (`validateBody` in
-   `server/utils/validators.ts`), reads `scopeOf(req)`, and calls a service.
+4. The route checks its input with a Zod schema from `shared/contracts/`
+   (`validateBody` or `parseQuery` in `server/utils/validators.ts`), reads
+   `scopeOf(req)`, and calls a service.
 5. The service does the work. Every read and write takes the Scope and names
    the owner in the same SQL statement as the id.
 6. SQLite triggers update the derived data in the same transaction: the
@@ -140,12 +144,13 @@ This is the path of one edit, from a click to a saved row.
 
 ## Backend
 
-| Layer              | Folder                                                          | Rule                                                                             |
-| ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Route              | `server/routes/`                                                | Validate the request, read the Scope, call a service, answer. No business logic. |
-| Service            | `server/services/`, `server/connectors/`, `server/ai/services/` | The work itself. Take a Scope as the first argument.                             |
-| Repository and SQL | `server/repositories/`, and prepared statements in services     | Name the owner in every statement on an owned table.                             |
-| Database           | `server/db.ts`                                                  | The schema, the triggers and the virtual tables.                                 |
+| Layer              | Folder                                                          | Rule                                                                                                    |
+| ------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Module             | `server/modules/`                                               | One folder for each area. It lists its routers, MCP tools, jobs and event subscribers.                  |
+| Route              | `server/routes/`                                                | Validate the request, read the Scope, call a service, answer. No business logic.                        |
+| Service            | `server/services/`, `server/connectors/`, `server/ai/services/` | The work itself. Take a Scope as the first argument.                                                    |
+| Repository and SQL | `server/repositories/`, and prepared statements in services     | Name the owner in every statement on an owned table.                                                    |
+| Database           | `server/db.ts`, `server/db/`                                    | The connection, the migrations, the derived indexes and the schema. A schema change is a new migration. |
 
 - **Errors.** A service throws an `AppError` (`server/utils/AppError.ts`) or a
   subclass: `NotFoundError`, `ValidationError`, `ConflictError`,
@@ -158,20 +163,68 @@ This is the path of one edit, from a click to a saved row.
   An unknown error answers `500 INTERNAL` with a generic message, and only a
   server outside production adds the stack. An unknown `/api` path answers
   `404 ROUTE_NOT_FOUND`.
-- **Validation.** `server/utils/validators.ts` holds the shared Zod schemas and
-  `validateBody(schema)`, which replaces `req.body` with the parsed value or
-  throws a `ValidationError`. Routes parse query strings with Zod too, such as
-  `parseInteractionSearchQuery`. The schemas cap names, child arrays (100
-  items) and id lists (5,000 ids).
+- **Validation.** The request schemas live in `shared/contracts/`.
+  `server/utils/validators.ts` runs them: `validateBody(schema)` replaces
+  `req.body` with the parsed value or throws a `ValidationError`, and
+  `parseQuery(schema, req.query)` reads a query string the same way.
+  `parseInteractionSearchQuery` reads the note search's query. The schemas
+  cap names, child arrays (100 items) and id lists (5,000 ids).
 
 For the envelope and the codes, see [Conventions](api-reference.md#conventions).
 
+## API contract
+
+A route's contract is one Zod schema for each thing it reads and for what it
+answers. The server, the app, the MCP tools and the OpenAPI file read the same
+contract, so they cannot disagree.
+
+- **Where.** `shared/contracts/<area>.ts` declares each route with
+  `route({ method, path, summary, status, query, body, response })`
+  (`shared/contracts/route.ts`). The path is written as the route manifest
+  writes it, such as `/api/contacts/:id`. `shared/contracts/index.ts` collects
+  the contracts in `CONTRACTS`, and `contractFor("GET /api/contacts/:id")`
+  finds one.
+- **The server** validates a request with its contract's `body` or `query`.
+  It never parses its own answer: the tests check the answers.
+- **The app** takes its types from the contracts. `src/types.ts` re-exports
+  `Contact`, `Interaction`, `ActionItem`, `ContactList` and their parts under
+  the names the views use. `apiJson(contract, path, init)` in
+  `src/api/client.ts` sends the contract's method and types the answer by its
+  `response`. `apiJson<T>(path, init)` still works for a route with no
+  contract.
+- **The MCP tools** build their inputs from the same field schemas, plus
+  fields of their own such as `allowDuplicate` and `mentionContactIds`. A tool
+  checks a name, a date or an id list exactly as the REST route that does the
+  same write.
+- **The OpenAPI file.** `npm run api:openapi` (`scripts/openapi.ts`) writes
+  `docs/openapi.json`, OpenAPI 3.1, version `1.0.0`, from the contracts with
+  `z.toJSONSchema`. A test fails when the committed file is out of date.
+- **Answers are strict.** A response schema lists every field the server
+  sends, internal columns such as `ownerId` included, and has no transforms
+  and no defaults. Every integration test that builds its app with
+  `makeTestApp()` (`tests/integration/helpers.ts`) checks each 2xx JSON
+  answer of a contracted route against it, and its status too, so an
+  undeclared or a missing field fails the test that caused it.
+- **What has a contract.** The contacts, notes, follow-ups, lists, tags and
+  personal tokens, the read-only query routes beside them
+  (`/api/query/contacts`, `/api/industries`, `/api/timeline`), and the
+  background jobs route (`GET /api/admin/jobs`). `UNCONTRACTED` in `index.ts` lists
+  every other route in the manifest, and `UNCONTRACTED_CEILING` stops the list
+  from growing: a new route gets a contract. The request schemas that were in
+  `server/utils/validators.ts` are in the same folder already, as named
+  exports, those of routes with no contract yet included. A few of those
+  routes still check a body that their route file writes itself.
+- **Paths stay `/api`.** A breaking change to a route adds a new path beside
+  the old one. There is no `/api/v1`.
+
 ## Data model
 
-The Drizzle schema is `src/db/schema.ts`. At boot, `server/db.ts` runs the
-Drizzle migrations, then creates the tables, virtual tables and triggers that
-the migrations do not hold. To change the schema, edit `schema.ts` and run
-`npm run db:generate`.
+The Drizzle schema is `server/db/schema.ts`. It names every table and column
+that the migrations create, and `tests/integration/db.migrations.test.ts`
+holds the two equal. At boot, `server/db.ts` applies the migrations in
+`server/db/migrations/` that the database has not run, then installs the
+derived indexes. [Migrations, events and jobs](#migrations-events-and-jobs)
+says how.
 
 | Group            | Tables                                                                                                                                                                                                                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,9 +248,10 @@ the migrations do not hold. To change the schema, edit `schema.ts` and run
 | `search_passage_vectors` | vec0 | One int8 vector for each passage, partitioned by `ownerId`.                                                                                                                                       |
 | `contact_embeddings`     | vec0 | One vector for each contact, for duplicate detection. Its width follows the embeddings model.                                                                                                     |
 
-`PRAGMA user_version` holds the full-text schema version, 6. A new version
-rebuilds both FTS tables once at boot. A new embeddings model rebuilds the
-vector tables and embeds every contact again.
+`schema_migrations` records the version of each derived index: `contacts_fts`
+is 6, and covers `interactions_fts` too. A new version rebuilds both FTS
+tables once at boot. A new embeddings model rebuilds the vector tables and
+embeds every contact again.
 
 The triggers that matter:
 
@@ -214,6 +268,122 @@ The triggers that matter:
 - **Stamps and derived columns.** Triggers stamp `updatedAt`, and set or clear
   `trackedAt` with `isTracked`. `nextFollowUpAt` is always the earliest due
   date of the open follow-ups. Writes set `scoreDirty` for the hourly sweep.
+
+## Migrations, events and jobs
+
+### Migrations
+
+A schema change is a numbered file in `server/db/migrations/`, and
+`server/db/migrations/index.ts` lists the files in order. At boot,
+`runMigrations` in `server/db/runner.ts` applies each listed migration that
+has no row in `schema_migrations`.
+
+- A migration and its row commit in one transaction. A migration that throws
+  keeps nothing, and the boot stops with an error that names it.
+- A database that holds a migration this build does not have refuses to
+  start. A newer build wrote it.
+- `0001_baseline` holds the boot code of 2.0 up to `d67c8a9`, in the order it
+  ran. A new database runs it to build its schema. A database from `d67c8a9`
+  runs it once and ends with the same schema.
+  `tests/fixtures/schema/v2.0-d67c8a9.sql` is that schema, and the migration
+  test compares the stored SQL of every table, index and trigger with it.
+- `npm run db:new <name>` writes the next file from a template and adds it to
+  the list. A migration writes its own SQL and imports no service.
+- The derived structures are rebuilt from code, not migrated: the FTS tables,
+  the vector stores, the passage index and the triggers that feed them.
+  `server/db/indexes.ts` runs their installers on every boot, after the
+  migrations, and records the version of each as an `index` row in
+  `schema_migrations`. A new version rebuilds the structure.
+- Four steps run on every boot, after the installers, because live code
+  needs them: the `nextFollowUpAt` backfill, the check that every owned table
+  has `ownerId`, `ANALYZE` with `PRAGMA optimize`, and the phonetic hash of
+  new ghost contacts.
+- Drizzle stays for typed queries. An older database keeps its
+  `__drizzle_migrations` table, and nothing reads it.
+
+### Events
+
+A write records what it changed in its own transaction.
+`recordEvent(scope, type, subjectId, payload)` (`server/events/record.ts`)
+inserts one row in `events`. A write that rolls back leaves no row, and a
+crash after the commit loses nothing.
+
+- `shared/contracts/events.ts` holds the types and their payload schemas:
+  `contact.created`, `contact.updated` (with `changed`, the names of the
+  fields the write set), `contact.deleted`, `contact.restored`,
+  `contact.merged`, `interaction.created`, `interaction.updated`,
+  `interaction.deleted`, `action_item.created`, `action_item.updated`,
+  `action_item.completed`, `action_item.deleted` and `list.members_changed`.
+  A payload holds ids and field names, never a name or an email.
+- After its transaction, and before it reads its own answer, the write calls
+  `dispatchEvents()` (`server/events/dispatcher.ts`). The dispatcher gives
+  each subscriber the events of its types that it has not seen, in order,
+  from the subscriber's cursor in `event_cursors`. At boot it catches up
+  from the cursors.
+- A subscriber is synchronous and short. It schedules work, such as the
+  search index queue or a job, and returns. A subscriber that throws runs
+  again at the next dispatch, three times at most, and then skips that event
+  with an error log. A throw never undoes the write.
+- A new subscriber starts from now. Never rename the id of a subscriber that
+  has shipped: the new id would skip every event before it.
+- The reactions to a contact write are subscribers
+  (`server/events/contactSubscribers.ts`): the search index, the dedupe
+  vector, the duplicate check, the geocoder, the score, the owner's AI caches
+  and auto-enrichment. Each one decides from the event, so every write path
+  that records the event gets the same reactions. An import
+  (`origin: "import"`) and a bulk edit (`bulk: true`) skip the per-row work,
+  as they did before.
+- The write paths that record events are `contactService`,
+  `interactionService`, `actionItemService`, `listService` and the merge in
+  `dedupe/merging.ts`. Some writers do not record one yet, and keep their own
+  follow-up calls: the ghost contacts a connector adds, tag edits
+  (`tagService`), the research merge (`aiSearch/mergeEngine.ts`), and the list
+  memberships a merge or an undo moves.
+- Daily maintenance deletes events older than 30 days that every cursor has
+  passed.
+
+### Jobs
+
+Background work is a row in `jobs`, and `server/jobs/runner.ts` runs it.
+
+- A kind is declared once with
+  `defineJob({ kind, run, every, atStart, maxAttempts })`, and a module lists
+  it. `every` makes the job recurring. `atStart` runs it when the server
+  starts, at once or after a delay.
+- With background jobs on, the runner polls every second and runs at most
+  `JOB_CONCURRENCY` jobs at once, 2 by default. It takes turns between
+  accounts, and the instance's own jobs take one turn together. An account's
+  job runs in that account's scope.
+- A job that throws runs again after a wait that starts at 30 seconds and
+  doubles, up to its `maxAttempts` (3 by default). Then it ends `failed`,
+  with its error.
+- At boot, a row left `running` goes back to the queue, because the process
+  that ran it is gone.
+- A recurring kind keeps one queued row through `dedupeKey`, and that row
+  survives a restart. A finished run stays for the health page until
+  maintenance removes it.
+- `runJobNow(kind, payload)` runs a job in the calling process, also when
+  `DISABLE_BACKGROUND_JOBS=true`. `enqueueJob` puts one in the queue.
+- `GET /api/admin/jobs` and the Background jobs card on Instance health show
+  each recurring job and the jobs that failed in the last 24 hours.
+
+### Modules
+
+Each area of the server is a module: a folder in `server/modules/` whose
+`index.ts` exports
+`defineModule({ id, routers, mcpTools, jobs, subscribers, onStart })`.
+`server/modules/index.ts` holds the ordered list.
+
+- `createApp()` mounts every module's routers in list order, after the auth
+  middleware. Express matches in mount order, so the order is part of the
+  behaviour: the `mcp` module mounts before the `contacts` module, or
+  `GET /contacts/:id` would capture `GET /contacts/action-items`.
+- `registerAllTools` registers every module's MCP tools.
+- `server.ts` registers every module's jobs and subscribers, starts the job
+  runner, and runs each module's `onStart` work, such as the search module
+  loading the local models.
+- The route manifest, the migration list, the auth router and the middleware
+  stay central. They hold for every module.
 
 ## Accounts and isolation
 
@@ -469,22 +639,29 @@ For the settings a person sees, see [The AI page](ai.md#the-ai-page).
 
 ## Background work
 
-`server.ts` starts this work after the server listens.
-`DISABLE_BACKGROUND_JOBS=true` skips all of it, which the integration tests use.
+The work below is a job (see [Jobs](#jobs)), except the last row, which is
+the search module's start-up work. `server.ts` starts the job runner and the
+start-up work after the server listens. `DISABLE_BACKGROUND_JOBS=true` starts
+neither, which the integration tests use. The runner still puts back in the
+queue a job that a restart stopped.
 
-| Work                                                                                                                                                                                                          | When                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Geocode contacts that have an address and no pin, one Nominatim request every 1.1 seconds                                                                                                                     | At start                                                       |
-| Copy stored Google photo URLs into uploads                                                                                                                                                                    | Once, a few seconds after start                                |
-| Sync the due connectors, 2 at a time and one for each account                                                                                                                                                 | Every 60 seconds                                               |
-| Take a database snapshot, check it, and rotate old ones                                                                                                                                                       | Every 24 hours by default                                      |
-| Purge trashed contacts after the retention period, 30 days by default                                                                                                                                         | At start, then daily                                           |
-| Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs), and checkpoint the WAL | At start, then daily                                           |
-| Refresh the model lists of the AI providers                                                                                                                                                                   | At start, then daily                                           |
-| Run `PRAGMA optimize`                                                                                                                                                                                         | Daily, at shutdown, and after each search index drain          |
-| Score the contacts marked dirty                                                                                                                                                                               | At start, then hourly                                          |
-| Score every tracked contact and take the weekly snapshot                                                                                                                                                      | Daily. The snapshot is also taken at start when it is missing. |
-| Load the local models, rebuild the vector tables when the model changed, and fill missing vectors for search and duplicates                                                                                   | At start                                                       |
+| Work                                                                                                                                                                                                                                     | Job                                  | When                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Geocode contacts that have an address and no pin, one Nominatim request every 1.1 seconds                                                                                                                                                | `geocode.startup`                    | Once, 2 seconds after start                                                                |
+| Copy stored Google photo URLs into uploads                                                                                                                                                                                               | `connectors.photoSweep`              | Once, 5 seconds after start                                                                |
+| Sync the due connectors, 2 at a time and one for each account                                                                                                                                                                            | `connectors.tick`                    | At start, then every minute                                                                |
+| Take a database snapshot, check it, and rotate old ones                                                                                                                                                                                  | `backup.startup`, `backup.scheduled` | 15 seconds after start, then every 24 hours by default                                     |
+| Purge trashed contacts after the retention period, 30 days by default                                                                                                                                                                    | `contacts.trashPurge`                | At start, then daily                                                                       |
+| Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs, old events, finished jobs), and checkpoint the WAL | `maintenance.daily`                  | At start, then daily                                                                       |
+| Refresh the model lists of the AI providers                                                                                                                                                                                              | `ai.modelCatalogs`                   | At start, then daily                                                                       |
+| Run `PRAGMA optimize`                                                                                                                                                                                                                    | `database.plannerStats`              | Daily. Shutdown and each search index drain run it too.                                    |
+| Score the contacts marked dirty, and take this week's snapshot when it is missing                                                                                                                                                        | `scores.stale`                       | At start, then hourly                                                                      |
+| Score every tracked contact and take the weekly snapshot                                                                                                                                                                                 | `scores.all`                         | Daily                                                                                      |
+| Check one contact for duplicates, when "Check for duplicates" is on                                                                                                                                                                      | `dedupe.check`                       | 5 seconds after the contact is added, or after its name, company, role or location changes |
+| Load the local models, rebuild the vector tables when the model changed, and fill missing vectors for search and duplicates                                                                                                              | Search start-up                      | At start                                                                                   |
+
+A recurring job keeps its next run across a restart, so a server that
+restarts every day still runs its daily jobs.
 
 The embedding backfills take turns between accounts in rounds of 200
 contacts. On `SIGTERM` or `SIGINT` the server stops taking connections, lets
@@ -523,6 +700,7 @@ seconds.
 | `npm run test:e2e`      | Playwright journeys in `tests/e2e/`, including the accessibility checks.                                           |
 | `npm run test:contract` | Optional live checks against the configured AI providers. They can cost money.                                     |
 | `npm run knip`          | Files, exports and types in `src/` that nothing uses.                                                              |
+| `npm run api:openapi`   | Writes `docs/openapi.json` from the route contracts. A test fails when the committed file differs.                 |
 
 CI runs the lint, the format check, the tests with coverage, a production
 build and the Playwright journeys. For the workflow, see the

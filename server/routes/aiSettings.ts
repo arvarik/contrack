@@ -12,7 +12,7 @@ import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { requireAdmin, requirePasswordCurrent } from "../middleware/auth.ts";
-import { searxngUrlSchema } from "../utils/validators.ts";
+import { searxngUrlSchema } from "../../shared/contracts/aiSettings.ts";
 import { webSearchEngineSchema } from "../../shared/webSearchEngine.ts";
 import { auditService } from "../services/auditService.ts";
 import {

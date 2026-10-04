@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { sqlite, db } from "../db.ts";
-import * as schema from "../../src/db/schema.ts";
+import * as schema from "../db/schema.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 

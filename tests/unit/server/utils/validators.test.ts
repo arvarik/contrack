@@ -17,9 +17,9 @@ import { describe, it, expect } from "vitest";
 import {
   dateSchema,
   pastDateSchema,
-  interactionCreateSchema,
-  contactCreateSchema,
-} from "../../../../server/utils/validators.ts";
+} from "../../../../shared/contracts/common.ts";
+import { interactionCreateSchema } from "../../../../shared/contracts/interactions.ts";
+import { contactCreateSchema } from "../../../../shared/contracts/contacts.ts";
 
 const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 const HOUR = 60 * 60 * 1000;

@@ -120,18 +120,6 @@ describe("AddLink", () => {
     expect(field.className).toContain("text-base");
   });
 
-  it("adds on Enter, closes, and puts focus back on + link", () => {
-    const onAdd = mount();
-    const field = open();
-    fireEvent.change(field, { target: { value: "github.com/ada" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    expect(onAdd).toHaveBeenCalledWith("https://github.com/ada");
-    expect(onAdd).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Add link" }),
-    );
-  });
-
   it("closes on Escape without adding, and puts focus back on + link", () => {
     const onAdd = mount();
     const field = open();

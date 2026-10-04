@@ -28,14 +28,8 @@ interface MapViewState {
   zoom: number;
 }
 
-/** The two methods this module uses: `localStorage`, or a stand-in in a test. */
-export interface ViewStore {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
-
 /** `localStorage`, or null where reading it throws (a locked-down browser). */
-function defaultStore(): ViewStore | null {
+function viewStore(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
@@ -61,9 +55,8 @@ function isMapViewState(value: unknown): value is MapViewState {
 }
 
 /** The last view written, or null when there is none worth opening on. */
-export function readLastView(
-  store: ViewStore | null = defaultStore(),
-): MapViewState | null {
+export function readLastView(): MapViewState | null {
+  const store = viewStore();
   if (!store) return null;
   try {
     const raw = store.getItem(LAST_VIEW_KEY);
@@ -80,10 +73,8 @@ export function readLastView(
  * of zoom is finer than a wheel step, so the string stays short and the
  * reopened map is the same map.
  */
-export function writeLastView(
-  view: MapViewState,
-  store: ViewStore | null = defaultStore(),
-): void {
+export function writeLastView(view: MapViewState): void {
+  const store = viewStore();
   if (!store || !isMapViewState(view)) return;
   const compact: MapViewState = {
     longitude: Number(view.longitude.toFixed(6)),

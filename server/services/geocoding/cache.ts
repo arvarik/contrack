@@ -2,26 +2,8 @@ import { sqlite } from "../../db.ts";
 
 export const FAILURE_TTL_DAYS = 7;
 
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS geocode_cache (
-    key       TEXT PRIMARY KEY,
-    lat       REAL,
-    lng       REAL,
-    provider  TEXT NOT NULL,
-    success   INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    displayName TEXT
-  );
-`);
-
-// A cache made before display names has no column for them.
-const cacheCols = sqlite.pragma("table_info(geocode_cache)") as {
-  name: string;
-}[];
-if (!cacheCols.some((c) => c.name === "displayName")) {
-  sqlite.exec("ALTER TABLE geocode_cache ADD COLUMN displayName TEXT");
-}
-
+// The migrations create geocode_cache, and server/db.ts has run them by the
+// time this module loads.
 const cacheStmts = {
   get: sqlite.prepare(
     `SELECT lat, lng, provider, success, createdAt, displayName FROM geocode_cache WHERE key = ?`,

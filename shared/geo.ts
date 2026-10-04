@@ -164,20 +164,3 @@ export interface PlaceSearchResult {
   /** The place the geocoder matched, for example "Lisbon, Portugal". */
   displayName?: string;
 }
-
-/** Why a contact with an address has no pin: no answer yet, or nothing found. */
-export type NotOnMapReason = "pending" | "not-found";
-
-/** One row of `GET /api/geo/status`, with what the pin dialog needs. */
-export interface NotOnMapContact {
-  id: string;
-  name: string;
-  company: string | null;
-  avatarUrl: string | null;
-  /** The address text the geocoder reads. */
-  location: string;
-  isTracked: boolean;
-  lat: null;
-  lng: null;
-  reason: NotOnMapReason;
-}

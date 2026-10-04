@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { NotOnMapContact, PlaceSearchResult } from "../../shared/geo";
+import type { PlaceSearchResult } from "../../shared/geo";
+import { geoRoutes } from "../../shared/contracts/geo";
 import { apiJson } from "./client";
 
 export async function searchPlace(
@@ -20,9 +21,5 @@ export const useGeoStatus = () =>
   useQuery({
     queryKey: GEO_STATUS_KEY,
     queryFn: async ({ signal }) =>
-      (
-        await apiJson<{ contacts: NotOnMapContact[] }>("/geo/status", {
-          signal,
-        })
-      ).contacts,
+      (await apiJson(geoRoutes.status, "/geo/status", { signal })).contacts,
   });

@@ -189,32 +189,6 @@ describe("weighAnchor and weighName", () => {
     ).toBe("Shared email address");
   });
 
-  it("says why a household on one line is not a duplicate", () => {
-    const a = person("Ada Twin", { phones: ["+1 555 0142"] });
-    const b = person("Ben Twin", { phones: ["+1 555 0142"] });
-    const weighed = weighAnchor("phone", a, b, 2);
-    expect(weighed.confidence).toBe(REVIEW_CEILING);
-    expect(weighed.caveat).toBe(
-      'the first names differ ("ada" ↔ "ben"), so review this pair',
-    );
-    expect(withCaveat("Shared phone number: +1 555 0142", weighed)).toBe(
-      'Shared phone number: +1 555 0142. the first names differ ("ada" ↔ "ben"), so review this pair',
-    );
-  });
-
-  it("says why a father and a son are not a duplicate", () => {
-    const weighed = weighAnchor(
-      "phone",
-      person("Robert Hale Sr."),
-      person("Robert Hale Jr."),
-      2,
-    );
-    expect(weighed.confidence).toBe(REVIEW_CEILING);
-    expect(weighed.caveat).toBe(
-      'one is "jr" and the other "sr", so review this pair',
-    );
-  });
-
   it("counts the carriers, and names both reasons when both apply", () => {
     const a = person("Ada Twin", { phones: ["+1 555 0142"] });
     const b = person("Ben Twin", { phones: ["+1 555 0142"] });

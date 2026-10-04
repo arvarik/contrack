@@ -15,9 +15,13 @@ import { contactService } from "../../services/contactService.ts";
 import { interactionService } from "../../services/interactionService.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
-import { pastDateSchema } from "../../utils/validators.ts";
+import { interactionRoutes } from "../../../shared/contracts/interactions.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
+
+// The REST body of the same write. A logged interaction is checked exactly as
+// `POST /api/contacts/:id/interactions` checks one.
+const logBody = interactionRoutes.create.body.shape;
 
 export function registerInteractionTools(
   server: McpServer,
@@ -76,28 +80,20 @@ export function registerInteractionTools(
           .string()
           .min(1)
           .describe("ID of the contact this interaction is with"),
-        type: z
-          .string()
+        type: logBody.type
           .default("note")
           .describe(
             "Interaction type (e.g. note, meeting, email, call, message)",
           ),
-        title: z
-          .string()
-          .trim()
-          .min(1)
-          .describe("Summary title of the interaction"),
-        content: z
-          .string()
-          .optional()
-          .describe("Notes, discussion details, or email body"),
+        title: logBody.title.describe("Summary title of the interaction"),
+        content: logBody.content.describe(
+          "Notes, discussion details, or email body",
+        ),
         // The REST route's rule: an interaction has happened. A future date
         // would make the contact look caught up with until that day.
-        date: pastDateSchema
-          .optional()
-          .describe(
-            "When it happened, in ISO 8601: a day (2026-09-14) or a date and time. Not in the future. Defaults to now",
-          ),
+        date: logBody.date.describe(
+          "When it happened, in ISO 8601: a day (2026-09-14) or a date and time. Not in the future. Defaults to now",
+        ),
         mentionContactIds: z
           .array(z.string().min(1))
           .optional()
@@ -129,7 +125,8 @@ export function registerInteractionTools(
           type: body.type || "note",
           title: body.title,
           content: body.content,
-          date: body.date,
+          // A null date is no date, as on the REST route: the note takes now.
+          date: body.date ?? undefined,
           mentionContactIds: mentionIds.length ? mentionIds : undefined,
         },
       );

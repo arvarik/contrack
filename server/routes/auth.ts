@@ -17,12 +17,12 @@ import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
+import { validateBody } from "../utils/validators.ts";
 import {
-  validateBody,
   acceptInvitationSchema,
   registerSchema,
-  tokenCreateSchema,
-} from "../utils/validators.ts";
+} from "../../shared/contracts/auth.ts";
+import { tokenRoutes } from "../../shared/contracts/tokens.ts";
 import { auditService } from "../services/auditService.ts";
 import { acceptInvitation } from "../services/invitationService.ts";
 import {
@@ -898,7 +898,7 @@ router.post(
   requireSession,
   requirePasswordCurrent,
   tokenLimiter,
-  validateBody(tokenCreateSchema),
+  validateBody(tokenRoutes.create.body),
   asyncHandler(async (req, res) => {
     res.status(201).json(createToken(currentUser(req)!, req.body, ipOf(req)));
   }),

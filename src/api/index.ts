@@ -11,3 +11,4 @@ export * from "./actionItems";
 export * from "./dashboard";
 export * from "./suggestions";
 export * from "./aiStats";
+export * from "./jobs";

@@ -19,8 +19,14 @@ import {
   type FacetContact,
 } from "../../../shared/searchFacets.ts";
 import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
+import { queryRoutes } from "../../../shared/contracts/query.ts";
 import { trackedTool, type ErrorTracker } from "../errors.ts";
 import { aiAllowedFor } from "../../middleware/aiAllowed.ts";
+
+// The query of `GET /api/interactions/search`, the REST twin of search_notes.
+// The tool's dates, type and limit are checked exactly as that route checks
+// them.
+const notesQuery = queryRoutes.searchNotes.query.shape;
 
 export function registerSearchTools(
   server: McpServer,
@@ -157,24 +163,18 @@ export function registerSearchTools(
     {
       description: MCP_TOOL_DESCRIPTIONS.search_notes,
       inputSchema: {
-        query: z.string().describe("Search keywords in notes and interactions"),
-        from: z
-          .string()
-          .optional()
-          .describe("Start date (YYYY-MM-DD or ISO timestamp)"),
-        to: z
-          .string()
-          .optional()
-          .describe("End date (YYYY-MM-DD or ISO timestamp)"),
-        type: z
-          .string()
-          .optional()
-          .describe("Interaction type (e.g. note, meeting, email, call)"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(50)
+        query: notesQuery.q
+          .unwrap()
+          .describe("Search keywords in notes and interactions"),
+        from: notesQuery.from.describe(
+          "Start date (YYYY-MM-DD or ISO timestamp)",
+        ),
+        to: notesQuery.to.describe("End date (YYYY-MM-DD or ISO timestamp)"),
+        type: notesQuery.type.describe(
+          "Interaction type (e.g. note, meeting, email, call)",
+        ),
+        limit: notesQuery.limit
+          .unwrap()
           .default(20)
           .optional()
           .describe("Maximum notes to return (default 20, max 50)"),

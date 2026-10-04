@@ -21,27 +21,6 @@ import { validatePublicUrl } from "./utils/publicOrigin.ts";
 import { trustProxyHops } from "./utils/trustProxy.ts";
 import path from "path";
 
-import { linkPreviewRouter } from "./routes/linkPreview.ts";
-import { searchRouter } from "./routes/search.ts";
-import { listsRouter } from "./routes/lists.ts";
-import { contactsRouter } from "./routes/contacts.ts";
-import { connectorsRouter } from "./routes/connectors.ts";
-import { importsRouter } from "./routes/imports.ts";
-import { interactionsRouter } from "./routes/interactions.ts";
-import { dedupeRouter } from "./routes/dedupe/index.ts";
-import { mcpRouter } from "./routes/mcp.ts";
-import { tagsRouter } from "./routes/tags.ts";
-import { actionItemsRouter } from "./routes/actionItems.ts";
-import { dashboardRouter } from "./routes/dashboard.ts";
-import { aiSearchRouter } from "./routes/aiSearch.ts";
-import { aiRouter } from "./routes/ai.ts";
-import { aiStatsRouter } from "./routes/aiStats.ts";
-import { logosRouter } from "./routes/logos.ts";
-import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
-import { aiSettingsRouter } from "./routes/aiSettings.ts";
-import { avatarRouter } from "./routes/avatar.ts";
-import { geoRouter } from "./routes/geo.ts";
-import { mapViewsRouter } from "./routes/mapViews.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import {
   attachPrincipal,
@@ -62,8 +41,8 @@ import {
 } from "./middleware/cacheControl.ts";
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
-import { adminRouter } from "./routes/admin.ts";
 import { healthRouter } from "./routes/health.ts";
+import { mountModules } from "./modules/index.ts";
 import {
   countPasswordAccounts,
   reconcileOwnership,
@@ -299,35 +278,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }),
   );
 
-  // Instance administration: accounts, invitations, the audit log. Every
-  // route inside carries requireAdmin itself, so that the manifest test can
-  // see the guard in each route's stack.
-  app.use("/api/admin", adminRouter);
-
-  app.use("/api", avatarRouter);
-  app.use("/api/link-preview", linkPreviewRouter);
-  app.use("/api/search", searchRouter);
-  app.use("/api/lists", listsRouter);
-  // mcpRouter first: it registers the literal GET /contacts/action-items,
-  // which contactsRouter's GET /contacts/:id would otherwise capture as an
-  // id and answer with a 404. Express matches in mount order.
-  app.use("/api", mcpRouter);
-  app.use("/api", tagsRouter);
-  app.use("/api", contactsRouter);
-  app.use("/api/connectors", connectorsRouter);
-  app.use("/api", importsRouter);
-  app.use("/api", interactionsRouter);
-  app.use("/api", dedupeRouter);
-  app.use("/api", actionItemsRouter);
-  app.use("/api", dashboardRouter);
-  app.use("/api", aiSearchRouter);
-  app.use("/api", dataLifecycleRouter);
-  app.use("/api/settings/ai", aiSettingsRouter);
-  app.use("/api/ai/stats", aiStatsRouter);
-  app.use("/api/ai", aiRouter);
-  app.use("/api/logos", logosRouter);
-  app.use("/api/geo", geoRouter);
-  app.use("/api/map/views", mapViewsRouter);
+  // Every feature's routers, in the order of server/modules/index.ts.
+  // Express matches in mount order, so that list's order is part of the
+  // behaviour: the mcp module mounts before the contacts module. The admin
+  // module comes first, and every route in it carries requireAdmin itself, so
+  // that the manifest test can see the guard in each route's stack.
+  mountModules(app);
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
   // Exposes hit/miss counters and entry counts for all aiCache tiers.

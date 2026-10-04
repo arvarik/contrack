@@ -1,0 +1,4840 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Contrack API",
+    "version": "1.0.0",
+    "description": "The routes with a contract in shared/contracts/. `npm run api:openapi` writes this file from them, so change a contract rather than the file. docs/api-reference.md describes every route, how to authenticate and the error envelope."
+  },
+  "paths": {
+    "/api/action-items": {
+      "get": {
+        "summary": "Every pending follow-up, soonest due first",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/QueuedActionItem" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/action-items/{id}": {
+      "patch": {
+        "summary": "Change a follow-up's title or due date",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "dueAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ActionItem" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a follow-up",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/action-items/{id}/complete": {
+      "patch": {
+        "summary": "Mark a follow-up done. Done twice is still done",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ActionItem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/action-items/bulk": {
+      "post": {
+        "summary": "Add the same follow-up to many contacts. One unknown id writes nothing",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "dueAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                      }
+                    ]
+                  },
+                  "contactIds": {
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": ["title", "dueAt", "contactIds"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "count": { "type": "integer" } },
+                  "required": ["count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/action-items/completed": {
+      "get": {
+        "summary": "The 50 follow-ups done most recently",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/QueuedActionItem" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/action-items/count": {
+      "get": {
+        "summary": "How many pending follow-ups are due today or overdue",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "count": { "type": "integer" } },
+                  "required": ["count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/jobs": {
+      "get": {
+        "summary": "Every recurring background job with its last and next run, and the jobs that failed in the last 24 hours. Admin only",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recurring": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/RecurringJob" }
+                    },
+                    "failed": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/FailedJob" }
+                    }
+                  },
+                  "required": ["recurring", "failed"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/tokens": {
+      "get": {
+        "summary": "The account's tokens, newest first, revoked and expired ones included",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ApiToken" }
+                    }
+                  },
+                  "required": ["tokens"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Mint a token. The plaintext is in this answer and nowhere else",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+                  "expiresInDays": {
+                    "anyOf": [
+                      { "type": "integer", "minimum": 1, "maximum": 3650 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "readOnly": { "type": "boolean" }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "token": { "type": "string" },
+                    "tokenPrefix": { "type": "string" },
+                    "expiresAt": { "type": ["string", "null"] },
+                    "readOnly": { "type": "boolean" }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "token",
+                    "tokenPrefix",
+                    "expiresAt",
+                    "readOnly"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/tokens/{id}": {
+      "delete": {
+        "summary": "Stop a token working. Its row stays, for its owner to see",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": { "type": "boolean", "const": true }
+                  },
+                  "required": ["revoked"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts": {
+      "get": {
+        "summary": "Every contact in the network. `view=slim` answers the list view rows instead of whole contacts",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "description": "\"slim\" for the list view rows",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Contact" }
+                    },
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/SlimContact" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a contact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "firstName": { "type": ["string", "null"] },
+                  "lastName": { "type": ["string", "null"] },
+                  "headline": { "type": ["string", "null"] },
+                  "role": { "type": ["string", "null"] },
+                  "company": { "type": ["string", "null"] },
+                  "location": { "type": ["string", "null"] },
+                  "lat": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -90, "maximum": 90 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "lng": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -180, "maximum": 180 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "industry": { "type": ["string", "null"] },
+                  "about": { "type": ["string", "null"] },
+                  "aiSummary": { "type": ["string", "null"] },
+                  "aiBackground": { "type": ["string", "null"] },
+                  "aiBriefing": { "type": ["string", "null"] },
+                  "aiBriefingAt": { "type": ["string", "null"] },
+                  "avatarUrl": { "type": ["string", "null"] },
+                  "themeColor": { "type": ["string", "null"] },
+                  "preferences": { "type": ["string", "null"] },
+                  "birthday": { "type": ["string", "null"] },
+                  "pronouns": { "type": ["string", "null"] },
+                  "website": { "type": ["string", "null"] },
+                  "cadenceDays": {
+                    "anyOf": [
+                      { "type": "integer", "exclusiveMinimum": 0 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "isGhost": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isArchived": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isTracked": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "nextFollowUpAt": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                          }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "emails": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "email",
+                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["email"]
+                        }
+                      ]
+                    }
+                  },
+                  "phones": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "phone": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["phone"]
+                        }
+                      ]
+                    }
+                  },
+                  "addresses": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "address": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["address"]
+                        }
+                      ]
+                    }
+                  },
+                  "socialLinks": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "anyOf": [
+                                { "type": "string", "format": "uri" },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "platform": { "type": ["string", "null"] },
+                            "handle": { "type": ["string", "null"] }
+                          },
+                          "required": ["url"]
+                        }
+                      ]
+                    }
+                  },
+                  "education": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "school": { "type": "string", "minLength": 1 },
+                        "degree": { "type": ["string", "null"] },
+                        "fieldOfStudy": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "description": { "type": ["string", "null"] }
+                      },
+                      "required": ["school"]
+                    }
+                  },
+                  "experience": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "company": { "type": "string", "minLength": 1 },
+                        "role": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "isCurrent": {
+                          "anyOf": [
+                            { "type": "boolean" },
+                            {
+                              "type": "string",
+                              "enum": ["0", "1", "true", "false"]
+                            }
+                          ]
+                        },
+                        "description": { "type": ["string", "null"] },
+                        "location": { "type": ["string", "null"] }
+                      },
+                      "required": ["company"]
+                    }
+                  },
+                  "sources": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "platform": { "type": "string", "minLength": 1 },
+                            "externalId": { "type": ["string", "null"] },
+                            "connectedOn": { "type": ["string", "null"] },
+                            "rawData": { "type": ["string", "null"] }
+                          },
+                          "required": ["platform"]
+                        }
+                      ]
+                    }
+                  },
+                  "tags": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string", "minLength": 1, "maxLength": 100 },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tag": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          },
+                          "required": ["tag"]
+                        }
+                      ]
+                    }
+                  },
+                  "interests": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "interest": { "type": "string", "minLength": 1 },
+                            "isAiGenerated": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    },
+                                    { "type": "number", "const": 0 },
+                                    { "type": "number", "const": 1 }
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            }
+                          },
+                          "required": ["interest"]
+                        }
+                      ]
+                    }
+                  },
+                  "attributes": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "value": { "type": "string" }
+                      },
+                      "required": ["name", "value"]
+                    }
+                  }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}": {
+      "get": {
+        "summary": "One contact with every child record",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Change a contact. Each child array sent replaces the one stored",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "firstName": { "type": ["string", "null"] },
+                  "lastName": { "type": ["string", "null"] },
+                  "headline": { "type": ["string", "null"] },
+                  "role": { "type": ["string", "null"] },
+                  "company": { "type": ["string", "null"] },
+                  "location": { "type": ["string", "null"] },
+                  "lat": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -90, "maximum": 90 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "lng": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -180, "maximum": 180 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "industry": { "type": ["string", "null"] },
+                  "about": { "type": ["string", "null"] },
+                  "aiSummary": { "type": ["string", "null"] },
+                  "aiBackground": { "type": ["string", "null"] },
+                  "aiBriefing": { "type": ["string", "null"] },
+                  "aiBriefingAt": { "type": ["string", "null"] },
+                  "avatarUrl": { "type": ["string", "null"] },
+                  "themeColor": { "type": ["string", "null"] },
+                  "preferences": { "type": ["string", "null"] },
+                  "birthday": { "type": ["string", "null"] },
+                  "pronouns": { "type": ["string", "null"] },
+                  "website": { "type": ["string", "null"] },
+                  "cadenceDays": {
+                    "anyOf": [
+                      { "type": "integer", "exclusiveMinimum": 0 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "isGhost": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isArchived": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isTracked": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "nextFollowUpAt": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                          }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "emails": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "email",
+                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["email"]
+                        }
+                      ]
+                    }
+                  },
+                  "phones": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "phone": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["phone"]
+                        }
+                      ]
+                    }
+                  },
+                  "addresses": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "address": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["address"]
+                        }
+                      ]
+                    }
+                  },
+                  "socialLinks": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "anyOf": [
+                                { "type": "string", "format": "uri" },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "platform": { "type": ["string", "null"] },
+                            "handle": { "type": ["string", "null"] }
+                          },
+                          "required": ["url"]
+                        }
+                      ]
+                    }
+                  },
+                  "education": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "school": { "type": "string", "minLength": 1 },
+                        "degree": { "type": ["string", "null"] },
+                        "fieldOfStudy": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "description": { "type": ["string", "null"] }
+                      },
+                      "required": ["school"]
+                    }
+                  },
+                  "experience": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "company": { "type": "string", "minLength": 1 },
+                        "role": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "isCurrent": {
+                          "anyOf": [
+                            { "type": "boolean" },
+                            {
+                              "type": "string",
+                              "enum": ["0", "1", "true", "false"]
+                            }
+                          ]
+                        },
+                        "description": { "type": ["string", "null"] },
+                        "location": { "type": ["string", "null"] }
+                      },
+                      "required": ["company"]
+                    }
+                  },
+                  "sources": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "platform": { "type": "string", "minLength": 1 },
+                            "externalId": { "type": ["string", "null"] },
+                            "connectedOn": { "type": ["string", "null"] },
+                            "rawData": { "type": ["string", "null"] }
+                          },
+                          "required": ["platform"]
+                        }
+                      ]
+                    }
+                  },
+                  "tags": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string", "minLength": 1, "maxLength": 100 },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tag": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          },
+                          "required": ["tag"]
+                        }
+                      ]
+                    }
+                  },
+                  "interests": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "interest": { "type": "string", "minLength": 1 },
+                            "isAiGenerated": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    },
+                                    { "type": "number", "const": 0 },
+                                    { "type": "number", "const": 1 }
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            }
+                          },
+                          "required": ["interest"]
+                        }
+                      ]
+                    }
+                  },
+                  "attributes": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "value": { "type": "string" }
+                      },
+                      "required": ["name", "value"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Change a contact's profile fields. A body with a child array is refused",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "firstName": { "type": ["string", "null"] },
+                  "lastName": { "type": ["string", "null"] },
+                  "headline": { "type": ["string", "null"] },
+                  "role": { "type": ["string", "null"] },
+                  "company": { "type": ["string", "null"] },
+                  "location": { "type": ["string", "null"] },
+                  "lat": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -90, "maximum": 90 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "lng": {
+                    "anyOf": [
+                      { "type": "number", "minimum": -180, "maximum": 180 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "industry": { "type": ["string", "null"] },
+                  "about": { "type": ["string", "null"] },
+                  "aiSummary": { "type": ["string", "null"] },
+                  "aiBackground": { "type": ["string", "null"] },
+                  "aiBriefing": { "type": ["string", "null"] },
+                  "aiBriefingAt": { "type": ["string", "null"] },
+                  "avatarUrl": { "type": ["string", "null"] },
+                  "themeColor": { "type": ["string", "null"] },
+                  "preferences": { "type": ["string", "null"] },
+                  "birthday": { "type": ["string", "null"] },
+                  "pronouns": { "type": ["string", "null"] },
+                  "website": { "type": ["string", "null"] },
+                  "cadenceDays": {
+                    "anyOf": [
+                      { "type": "integer", "exclusiveMinimum": 0 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "isGhost": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isArchived": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "isTracked": {
+                    "anyOf": [
+                      { "type": "boolean" },
+                      { "type": "string", "enum": ["0", "1", "true", "false"] }
+                    ]
+                  },
+                  "nextFollowUpAt": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                          }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "emails": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "email",
+                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["email"]
+                        }
+                      ]
+                    }
+                  },
+                  "phones": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "phone": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["phone"]
+                        }
+                      ]
+                    }
+                  },
+                  "addresses": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "address": { "type": "string", "minLength": 1 },
+                            "label": { "type": ["string", "null"] },
+                            "isPrimary": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["address"]
+                        }
+                      ]
+                    }
+                  },
+                  "socialLinks": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "anyOf": [
+                                { "type": "string", "format": "uri" },
+                                { "type": "string", "minLength": 1 }
+                              ]
+                            },
+                            "platform": { "type": ["string", "null"] },
+                            "handle": { "type": ["string", "null"] }
+                          },
+                          "required": ["url"]
+                        }
+                      ]
+                    }
+                  },
+                  "education": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "school": { "type": "string", "minLength": 1 },
+                        "degree": { "type": ["string", "null"] },
+                        "fieldOfStudy": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "description": { "type": ["string", "null"] }
+                      },
+                      "required": ["school"]
+                    }
+                  },
+                  "experience": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "company": { "type": "string", "minLength": 1 },
+                        "role": { "type": ["string", "null"] },
+                        "startDate": { "type": ["string", "null"] },
+                        "endDate": { "type": ["string", "null"] },
+                        "isCurrent": {
+                          "anyOf": [
+                            { "type": "boolean" },
+                            {
+                              "type": "string",
+                              "enum": ["0", "1", "true", "false"]
+                            }
+                          ]
+                        },
+                        "description": { "type": ["string", "null"] },
+                        "location": { "type": ["string", "null"] }
+                      },
+                      "required": ["company"]
+                    }
+                  },
+                  "sources": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "platform": { "type": "string", "minLength": 1 },
+                            "externalId": { "type": ["string", "null"] },
+                            "connectedOn": { "type": ["string", "null"] },
+                            "rawData": { "type": ["string", "null"] }
+                          },
+                          "required": ["platform"]
+                        }
+                      ]
+                    }
+                  },
+                  "tags": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string", "minLength": 1, "maxLength": 100 },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tag": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          },
+                          "required": ["tag"]
+                        }
+                      ]
+                    }
+                  },
+                  "interests": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "interest": { "type": "string", "minLength": 1 },
+                            "isAiGenerated": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    },
+                                    { "type": "number", "const": 0 },
+                                    { "type": "number", "const": 1 }
+                                  ]
+                                },
+                                { "type": "null" }
+                              ]
+                            }
+                          },
+                          "required": ["interest"]
+                        }
+                      ]
+                    }
+                  },
+                  "attributes": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "value": { "type": "string" }
+                      },
+                      "required": ["name", "value"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Move a contact to the trash",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "retentionDays": { "type": "integer" }
+                  },
+                  "required": ["success", "retentionDays"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/action-items": {
+      "get": {
+        "summary": "A contact's follow-ups, pending first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ActionItem" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a follow-up to a contact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "dueAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                      }
+                    ]
+                  }
+                },
+                "required": ["title", "dueAt"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ActionItem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/attachments": {
+      "post": {
+        "summary": "Attach a file as the multipart field `attachment`, up to 50 MB. An .eml becomes an email interaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/avatar": {
+      "post": {
+        "summary": "Upload a photo as the multipart field `avatar`: JPEG, PNG, GIF, WebP or AVIF, up to 10 MB",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/briefing": {
+      "post": {
+        "summary": "A short AI briefing on a contact, from its notes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "points": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": ["points"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/enrich": {
+      "post": {
+        "summary": "Research one contact now and merge what it finds",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "technique": { "type": "string", "maxLength": 40 },
+                  "webSearch": { "type": "string", "maxLength": 40 },
+                  "depth": { "type": "string", "enum": ["standard", "deep"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "fieldsUpdated": { "type": "integer" },
+                    "outcome": {
+                      "type": "string",
+                      "enum": ["added", "nothing-new", "no-public-info"]
+                    },
+                    "latencyMs": { "type": "number" },
+                    "models": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "tokenCount": { "type": "number" }
+                  },
+                  "required": [
+                    "success",
+                    "fieldsUpdated",
+                    "outcome",
+                    "latencyMs",
+                    "models",
+                    "tokenCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/interactions": {
+      "post": {
+        "summary": "Log an interaction. `actionItem` adds a follow-up in the same write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "minLength": 1 },
+                  "title": { "type": "string", "minLength": 1 },
+                  "content": { "type": ["string", "null"] },
+                  "date": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                          }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "duration": {
+                    "anyOf": [
+                      { "type": "number", "minimum": 0, "maximum": 525600 },
+                      { "type": "null" }
+                    ]
+                  },
+                  "source": { "type": ["string", "null"] },
+                  "isViaId": { "type": ["string", "null"] },
+                  "isViaName": { "type": ["string", "null"] },
+                  "actionItem": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string", "minLength": 1 },
+                      "dueAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                          }
+                        ]
+                      }
+                    },
+                    "required": ["title", "dueAt"]
+                  }
+                },
+                "required": ["type", "title"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/location": {
+      "patch": {
+        "summary": "Place the pin by hand, or hand it back to the geocoder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "lat": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "lng": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      }
+                    },
+                    "required": ["lat", "lng"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "regeocode": { "type": "boolean", "const": true }
+                    },
+                    "required": ["regeocode"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/promote": {
+      "post": {
+        "summary": "Make a ghost contact a full contact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Contact" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/relationships": {
+      "get": {
+        "summary": "The contacts that share notes with this one, most shared first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 200, 50 when absent",
+            "schema": { "type": "string", "pattern": "^\\d+$" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string" },
+                      "company": { "type": ["string", "null"] },
+                      "avatarUrl": { "type": ["string", "null"] },
+                      "themeColor": { "type": ["string", "null"] },
+                      "role": { "type": ["string", "null"] },
+                      "isGhost": { "type": ["integer", "null"] },
+                      "sharedInteractions": { "type": "integer" }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "company",
+                      "avatarUrl",
+                      "themeColor",
+                      "role",
+                      "isGhost",
+                      "sharedInteractions"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/score": {
+      "get": {
+        "summary": "Why a tracked contact scores what it scores",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ScoreBreakdown" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/{id}/timeline": {
+      "get": {
+        "summary": "A contact's timeline, newest first: its notes and the notes that mention it",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TimelineEntry" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/action-items": {
+      "get": {
+        "summary": "The contacts due for contact: a follow-up date that has come, or a tracked contact past its cadence",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Contact" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/archived": {
+      "get": {
+        "summary": "The archived contacts, newest change first",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Contact" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/bulk": {
+      "post": {
+        "summary": "Import contacts. A known X-Import-Id answers 200 with the first run's counts and writes nothing. With Accept: text/event-stream the answer is a stream of progress events instead",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "maxItems": 5000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "firstName": { "type": ["string", "null"] },
+                    "lastName": { "type": ["string", "null"] },
+                    "headline": { "type": ["string", "null"] },
+                    "role": { "type": ["string", "null"] },
+                    "company": { "type": ["string", "null"] },
+                    "location": { "type": ["string", "null"] },
+                    "lat": {
+                      "anyOf": [
+                        { "type": "number", "minimum": -90, "maximum": 90 },
+                        { "type": "null" }
+                      ]
+                    },
+                    "lng": {
+                      "anyOf": [
+                        { "type": "number", "minimum": -180, "maximum": 180 },
+                        { "type": "null" }
+                      ]
+                    },
+                    "industry": { "type": ["string", "null"] },
+                    "about": { "type": ["string", "null"] },
+                    "aiSummary": { "type": ["string", "null"] },
+                    "aiBackground": { "type": ["string", "null"] },
+                    "aiBriefing": { "type": ["string", "null"] },
+                    "aiBriefingAt": { "type": ["string", "null"] },
+                    "avatarUrl": { "type": ["string", "null"] },
+                    "themeColor": { "type": ["string", "null"] },
+                    "preferences": { "type": ["string", "null"] },
+                    "birthday": { "type": ["string", "null"] },
+                    "pronouns": { "type": ["string", "null"] },
+                    "website": { "type": ["string", "null"] },
+                    "cadenceDays": {
+                      "anyOf": [
+                        { "type": "integer", "exclusiveMinimum": 0 },
+                        { "type": "null" }
+                      ]
+                    },
+                    "isGhost": {
+                      "anyOf": [
+                        { "type": "boolean" },
+                        {
+                          "type": "string",
+                          "enum": ["0", "1", "true", "false"]
+                        }
+                      ]
+                    },
+                    "isArchived": {
+                      "anyOf": [
+                        { "type": "boolean" },
+                        {
+                          "type": "string",
+                          "enum": ["0", "1", "true", "false"]
+                        }
+                      ]
+                    },
+                    "isTracked": {
+                      "anyOf": [
+                        { "type": "boolean" },
+                        {
+                          "type": "string",
+                          "enum": ["0", "1", "true", "false"]
+                        }
+                      ]
+                    },
+                    "nextFollowUpAt": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                            }
+                          ]
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "emails": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "email",
+                                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                  },
+                                  { "type": "string", "minLength": 1 }
+                                ]
+                              },
+                              "label": { "type": ["string", "null"] },
+                              "isPrimary": {
+                                "anyOf": [
+                                  { "type": "boolean" },
+                                  {
+                                    "type": "string",
+                                    "enum": ["0", "1", "true", "false"]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": ["email"]
+                          }
+                        ]
+                      }
+                    },
+                    "phones": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "phone": { "type": "string", "minLength": 1 },
+                              "label": { "type": ["string", "null"] },
+                              "isPrimary": {
+                                "anyOf": [
+                                  { "type": "boolean" },
+                                  {
+                                    "type": "string",
+                                    "enum": ["0", "1", "true", "false"]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": ["phone"]
+                          }
+                        ]
+                      }
+                    },
+                    "addresses": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "address": { "type": "string", "minLength": 1 },
+                              "label": { "type": ["string", "null"] },
+                              "isPrimary": {
+                                "anyOf": [
+                                  { "type": "boolean" },
+                                  {
+                                    "type": "string",
+                                    "enum": ["0", "1", "true", "false"]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": ["address"]
+                          }
+                        ]
+                      }
+                    },
+                    "socialLinks": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "url": {
+                                "anyOf": [
+                                  { "type": "string", "format": "uri" },
+                                  { "type": "string", "minLength": 1 }
+                                ]
+                              },
+                              "platform": { "type": ["string", "null"] },
+                              "handle": { "type": ["string", "null"] }
+                            },
+                            "required": ["url"]
+                          }
+                        ]
+                      }
+                    },
+                    "education": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "school": { "type": "string", "minLength": 1 },
+                          "degree": { "type": ["string", "null"] },
+                          "fieldOfStudy": { "type": ["string", "null"] },
+                          "startDate": { "type": ["string", "null"] },
+                          "endDate": { "type": ["string", "null"] },
+                          "description": { "type": ["string", "null"] }
+                        },
+                        "required": ["school"]
+                      }
+                    },
+                    "experience": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "company": { "type": "string", "minLength": 1 },
+                          "role": { "type": ["string", "null"] },
+                          "startDate": { "type": ["string", "null"] },
+                          "endDate": { "type": ["string", "null"] },
+                          "isCurrent": {
+                            "anyOf": [
+                              { "type": "boolean" },
+                              {
+                                "type": "string",
+                                "enum": ["0", "1", "true", "false"]
+                              }
+                            ]
+                          },
+                          "description": { "type": ["string", "null"] },
+                          "location": { "type": ["string", "null"] }
+                        },
+                        "required": ["company"]
+                      }
+                    },
+                    "sources": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "platform": { "type": "string", "minLength": 1 },
+                              "externalId": { "type": ["string", "null"] },
+                              "connectedOn": { "type": ["string", "null"] },
+                              "rawData": { "type": ["string", "null"] }
+                            },
+                            "required": ["platform"]
+                          }
+                        ]
+                      }
+                    },
+                    "tags": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "tag": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              }
+                            },
+                            "required": ["tag"]
+                          }
+                        ]
+                      }
+                    },
+                    "interests": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          { "type": "string" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "interest": { "type": "string", "minLength": 1 },
+                              "isAiGenerated": {
+                                "anyOf": [
+                                  {
+                                    "anyOf": [
+                                      { "type": "boolean" },
+                                      {
+                                        "type": "string",
+                                        "enum": ["0", "1", "true", "false"]
+                                      },
+                                      { "type": "number", "const": 0 },
+                                      { "type": "number", "const": 1 }
+                                    ]
+                                  },
+                                  { "type": "null" }
+                                ]
+                              }
+                            },
+                            "required": ["interest"]
+                          }
+                        ]
+                      }
+                    },
+                    "attributes": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string", "minLength": 1 },
+                          "value": { "type": "string" }
+                        },
+                        "required": ["name", "value"]
+                      }
+                    }
+                  },
+                  "required": ["name"]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": { "type": "boolean", "const": true },
+                        "count": { "type": "integer" },
+                        "failed": { "type": "integer" },
+                        "importId": { "type": "string" }
+                      },
+                      "required": ["success", "count", "failed", "importId"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": { "type": "boolean", "const": true },
+                        "repeated": { "type": "boolean", "const": true },
+                        "importId": { "type": "string" },
+                        "status": {
+                          "type": "string",
+                          "enum": ["running", "imported", "complete", "failed"]
+                        },
+                        "count": { "type": "integer" },
+                        "failed": { "type": "integer" }
+                      },
+                      "required": [
+                        "success",
+                        "repeated",
+                        "importId",
+                        "status",
+                        "count",
+                        "failed"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": { "type": "boolean", "const": true },
+                        "count": { "type": "integer" },
+                        "failed": { "type": "integer" },
+                        "importId": { "type": "string" }
+                      },
+                      "required": ["success", "count", "failed", "importId"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": { "type": "boolean", "const": true },
+                        "repeated": { "type": "boolean", "const": true },
+                        "importId": { "type": "string" },
+                        "status": {
+                          "type": "string",
+                          "enum": ["running", "imported", "complete", "failed"]
+                        },
+                        "count": { "type": "integer" },
+                        "failed": { "type": "integer" }
+                      },
+                      "required": [
+                        "success",
+                        "repeated",
+                        "importId",
+                        "status",
+                        "count",
+                        "failed"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/bulk-delete": {
+      "post": {
+        "summary": "Move contacts to the trash",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": ["ids"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "count": { "type": "integer" },
+                    "retentionDays": { "type": "integer" }
+                  },
+                  "required": ["success", "count", "retentionDays"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/bulk-update": {
+      "put": {
+        "summary": "Change the same profile fields on many contacts",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      },
+                      "firstName": { "type": ["string", "null"] },
+                      "lastName": { "type": ["string", "null"] },
+                      "headline": { "type": ["string", "null"] },
+                      "role": { "type": ["string", "null"] },
+                      "company": { "type": ["string", "null"] },
+                      "location": { "type": ["string", "null"] },
+                      "lat": {
+                        "anyOf": [
+                          { "type": "number", "minimum": -90, "maximum": 90 },
+                          { "type": "null" }
+                        ]
+                      },
+                      "lng": {
+                        "anyOf": [
+                          { "type": "number", "minimum": -180, "maximum": 180 },
+                          { "type": "null" }
+                        ]
+                      },
+                      "industry": { "type": ["string", "null"] },
+                      "about": { "type": ["string", "null"] },
+                      "aiSummary": { "type": ["string", "null"] },
+                      "aiBackground": { "type": ["string", "null"] },
+                      "aiBriefing": { "type": ["string", "null"] },
+                      "aiBriefingAt": { "type": ["string", "null"] },
+                      "avatarUrl": { "type": ["string", "null"] },
+                      "themeColor": { "type": ["string", "null"] },
+                      "preferences": { "type": ["string", "null"] },
+                      "birthday": { "type": ["string", "null"] },
+                      "pronouns": { "type": ["string", "null"] },
+                      "website": { "type": ["string", "null"] },
+                      "cadenceDays": {
+                        "anyOf": [
+                          { "type": "integer", "exclusiveMinimum": 0 },
+                          { "type": "null" }
+                        ]
+                      },
+                      "isGhost": {
+                        "anyOf": [
+                          { "type": "boolean" },
+                          {
+                            "type": "string",
+                            "enum": ["0", "1", "true", "false"]
+                          }
+                        ]
+                      },
+                      "isArchived": {
+                        "anyOf": [
+                          { "type": "boolean" },
+                          {
+                            "type": "string",
+                            "enum": ["0", "1", "true", "false"]
+                          }
+                        ]
+                      },
+                      "isTracked": {
+                        "anyOf": [
+                          { "type": "boolean" },
+                          {
+                            "type": "string",
+                            "enum": ["0", "1", "true", "false"]
+                          }
+                        ]
+                      },
+                      "nextFollowUpAt": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d))|(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?)$"
+                              }
+                            ]
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "emails": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "email": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "email",
+                                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                    },
+                                    { "type": "string", "minLength": 1 }
+                                  ]
+                                },
+                                "label": { "type": ["string", "null"] },
+                                "isPrimary": {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["email"]
+                            }
+                          ]
+                        }
+                      },
+                      "phones": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "phone": { "type": "string", "minLength": 1 },
+                                "label": { "type": ["string", "null"] },
+                                "isPrimary": {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["phone"]
+                            }
+                          ]
+                        }
+                      },
+                      "addresses": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "address": { "type": "string", "minLength": 1 },
+                                "label": { "type": ["string", "null"] },
+                                "isPrimary": {
+                                  "anyOf": [
+                                    { "type": "boolean" },
+                                    {
+                                      "type": "string",
+                                      "enum": ["0", "1", "true", "false"]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["address"]
+                            }
+                          ]
+                        }
+                      },
+                      "socialLinks": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "url": {
+                                  "anyOf": [
+                                    { "type": "string", "format": "uri" },
+                                    { "type": "string", "minLength": 1 }
+                                  ]
+                                },
+                                "platform": { "type": ["string", "null"] },
+                                "handle": { "type": ["string", "null"] }
+                              },
+                              "required": ["url"]
+                            }
+                          ]
+                        }
+                      },
+                      "education": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "school": { "type": "string", "minLength": 1 },
+                            "degree": { "type": ["string", "null"] },
+                            "fieldOfStudy": { "type": ["string", "null"] },
+                            "startDate": { "type": ["string", "null"] },
+                            "endDate": { "type": ["string", "null"] },
+                            "description": { "type": ["string", "null"] }
+                          },
+                          "required": ["school"]
+                        }
+                      },
+                      "experience": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "company": { "type": "string", "minLength": 1 },
+                            "role": { "type": ["string", "null"] },
+                            "startDate": { "type": ["string", "null"] },
+                            "endDate": { "type": ["string", "null"] },
+                            "isCurrent": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                {
+                                  "type": "string",
+                                  "enum": ["0", "1", "true", "false"]
+                                }
+                              ]
+                            },
+                            "description": { "type": ["string", "null"] },
+                            "location": { "type": ["string", "null"] }
+                          },
+                          "required": ["company"]
+                        }
+                      },
+                      "sources": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "platform": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "externalId": { "type": ["string", "null"] },
+                                "connectedOn": { "type": ["string", "null"] },
+                                "rawData": { "type": ["string", "null"] }
+                              },
+                              "required": ["platform"]
+                            }
+                          ]
+                        }
+                      },
+                      "tags": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "tag": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                }
+                              },
+                              "required": ["tag"]
+                            }
+                          ]
+                        }
+                      },
+                      "interests": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            { "type": "string" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "interest": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "isAiGenerated": {
+                                  "anyOf": [
+                                    {
+                                      "anyOf": [
+                                        { "type": "boolean" },
+                                        {
+                                          "type": "string",
+                                          "enum": ["0", "1", "true", "false"]
+                                        },
+                                        { "type": "number", "const": 0 },
+                                        { "type": "number", "const": 1 }
+                                      ]
+                                    },
+                                    { "type": "null" }
+                                  ]
+                                }
+                              },
+                              "required": ["interest"]
+                            }
+                          ]
+                        }
+                      },
+                      "attributes": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": { "type": "string", "minLength": 1 },
+                            "value": { "type": "string" }
+                          },
+                          "required": ["name", "value"]
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["ids", "data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "count": { "type": "integer" }
+                  },
+                  "required": ["success", "count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/map": {
+      "get": {
+        "summary": "The contacts with a pin, for the map",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MapContact" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/merge": {
+      "post": {
+        "summary": "Merge one contact into another",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "primaryId": { "type": "string", "minLength": 1 },
+                  "duplicateId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["primaryId", "duplicateId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "contact": { "$ref": "#/components/schemas/Contact" }
+                  },
+                  "required": ["success", "contact"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/merge-cluster": {
+      "post": {
+        "summary": "Merge up to ten contacts into one",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "primaryId": { "type": "string", "minLength": 1 },
+                  "duplicateIds": {
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                },
+                "required": ["primaryId", "duplicateIds"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "merged": { "type": "integer" },
+                    "failed": { "type": "integer" },
+                    "contact": {
+                      "anyOf": [
+                        { "$ref": "#/components/schemas/Contact" },
+                        { "type": "null" }
+                      ]
+                    }
+                  },
+                  "required": ["success", "merged", "failed", "contact"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/merge-clusters": {
+      "post": {
+        "summary": "Merge many clusters in one call, up to 250 merges in all",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clusters": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "primaryId": { "type": "string" },
+                        "duplicateIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["clusters"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "primaryId": { "type": "string" },
+                          "merged": { "type": "integer" },
+                          "failed": { "type": "integer" }
+                        },
+                        "required": ["primaryId", "merged", "failed"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "totalMerged": { "type": "integer" },
+                    "totalFailed": { "type": "integer" }
+                  },
+                  "required": ["results", "totalMerged", "totalFailed"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/geo/status": {
+      "get": {
+        "summary": "The contacts with an address and no pin, and why each has none",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NotOnMapContact"
+                      }
+                    }
+                  },
+                  "required": ["contacts"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/industries": {
+      "get": {
+        "summary": "Every industry the contacts name, A to Z",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/interactions/{id}": {
+      "patch": {
+        "summary": "Change an interaction's title or content",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "content": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an interaction and its attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/interactions/search": {
+      "get": {
+        "summary": "Search the notes. A date phrase in `q` is applied as a filter. Answers the hits alone",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 500 }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 40 }
+          },
+          {
+            "name": "contactId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 100 }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["relevance", "date"] }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["auto", "all", "any"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 5000 }
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 64 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "contactId": { "type": "string" },
+                      "type": { "type": "string" },
+                      "title": { "type": "string" },
+                      "date": { "type": "string" },
+                      "excerpt": { "type": ["string", "null"] },
+                      "highlights": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "prefixItems": [
+                                { "type": "integer" },
+                                { "type": "integer" }
+                              ],
+                              "items": false,
+                              "minItems": 2,
+                              "maxItems": 2
+                            }
+                          },
+                          "excerpt": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "prefixItems": [
+                                { "type": "integer" },
+                                { "type": "integer" }
+                              ],
+                              "items": false,
+                              "minItems": 2,
+                              "maxItems": 2
+                            }
+                          }
+                        },
+                        "required": ["title", "excerpt"],
+                        "additionalProperties": false
+                      },
+                      "contact": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "name": { "type": "string" },
+                          "avatarUrl": { "type": ["string", "null"] },
+                          "themeColor": { "type": ["string", "null"] },
+                          "company": { "type": ["string", "null"] },
+                          "role": { "type": ["string", "null"] }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "avatarUrl",
+                          "themeColor",
+                          "company",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "contactName": { "type": "string" }
+                    },
+                    "required": [
+                      "id",
+                      "contactId",
+                      "type",
+                      "title",
+                      "date",
+                      "excerpt",
+                      "highlights",
+                      "contact",
+                      "contactName"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists": {
+      "get": {
+        "summary": "Every list, in the person's order",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/List" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Make a list. Its icon is a star unless the body names one",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+                  "icon": { "type": "string" }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/List" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{id}": {
+      "patch": {
+        "summary": "Rename a list or change its icon",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+                  "icon": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/List" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a list. Its contacts stay. A list that is already gone answers the same",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "message": { "type": "string" }
+                  },
+                  "required": ["success", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{id}/contacts": {
+      "get": {
+        "summary": "The contacts in a list, newest first",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Contact" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{id}/members": {
+      "post": {
+        "summary": "Add a contact to a list",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contactId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": ["contactId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{id}/members/{contactId}": {
+      "delete": {
+        "summary": "Take a contact out of a list",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "contactId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{id}/members/bulk": {
+      "post": {
+        "summary": "Add many contacts to a list. `count` is how many were not in it",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contactIds": {
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": ["contactIds"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "count": { "type": "integer" }
+                  },
+                  "required": ["success", "count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/reorder": {
+      "put": {
+        "summary": "Put the lists in a new order. Name each list exactly once",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderedIds": {
+                    "maxItems": 5000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": ["orderedIds"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/query/contacts": {
+      "get": {
+        "summary": "Contacts as raw rows, newest first. Trashed, merged and ghost contacts are left out",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 200, 50 when absent",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip, 0 when absent",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "description": "The columns to keep, by name, separated by commas",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "description": "Contacts whose role contains this",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "company",
+            "in": "query",
+            "required": false,
+            "description": "Contacts whose company contains this",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "description": "Contacts in exactly this industry",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string" },
+                      "firstName": { "type": ["string", "null"] },
+                      "lastName": { "type": ["string", "null"] },
+                      "headline": { "type": ["string", "null"] },
+                      "role": { "type": ["string", "null"] },
+                      "company": { "type": ["string", "null"] },
+                      "location": { "type": ["string", "null"] },
+                      "birthday": { "type": ["string", "null"] },
+                      "preferences": { "type": ["string", "null"] },
+                      "avatarUrl": { "type": ["string", "null"] },
+                      "addedAt": { "type": "string" },
+                      "updatedAt": { "type": "string" },
+                      "cadenceDays": { "type": ["integer", "null"] },
+                      "lastContactedAt": { "type": ["string", "null"] },
+                      "nextFollowUpAt": { "type": ["string", "null"] },
+                      "themeColor": { "type": ["string", "null"] },
+                      "about": { "type": ["string", "null"] },
+                      "pronouns": { "type": ["string", "null"] },
+                      "industry": { "type": ["string", "null"] },
+                      "website": { "type": ["string", "null"] },
+                      "lat": { "type": ["number", "null"] },
+                      "lng": { "type": ["number", "null"] },
+                      "aiBriefing": { "type": ["string", "null"] },
+                      "aiBackground": { "type": ["string", "null"] },
+                      "aiSummary": { "type": ["string", "null"] },
+                      "aiHydratedAt": { "type": ["string", "null"] },
+                      "aiBriefingAt": { "type": ["string", "null"] },
+                      "isGhost": { "type": ["integer", "null"] },
+                      "isArchived": { "type": ["integer", "null"] },
+                      "relationshipScore": { "type": "number" },
+                      "searchExpansion": {
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true,
+                        "type": ["string", "null"]
+                      },
+                      "deletedAt": {
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true,
+                        "type": ["string", "null"]
+                      },
+                      "canonicalId": {
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true,
+                        "type": ["string", "null"]
+                      },
+                      "phoneticHash": {
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true,
+                        "type": ["string", "null"]
+                      },
+                      "geoSource": {
+                        "anyOf": [
+                          { "type": "string", "enum": ["geocoder", "manual"] },
+                          { "type": "null" }
+                        ]
+                      },
+                      "isTracked": { "type": "integer" },
+                      "trackedAt": { "type": ["string", "null"] },
+                      "aiResearch": { "type": ["string", "null"] },
+                      "ownerId": {
+                        "type": "string",
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true
+                      },
+                      "scoreDirty": {
+                        "type": "integer",
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tags": {
+      "get": {
+        "summary": "Every tag the contacts hold, A to Z",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tags/{tag}": {
+      "patch": {
+        "summary": "Rename a tag on every contact. Renaming onto a tag that exists merges the two",
+        "parameters": [
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": { "type": "string", "minLength": 1, "maxLength": 100 }
+                },
+                "required": ["to"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "affected": { "type": "integer" } },
+                  "required": ["affected"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a tag from every contact",
+        "parameters": [
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "affected": { "type": "integer" } },
+                  "required": ["affected"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tags/summary": {
+      "get": {
+        "summary": "Every tag with the number of contacts that hold it",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": { "type": "string" },
+                          "count": { "type": "integer" }
+                        },
+                        "required": ["tag", "count"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["tags"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/timeline": {
+      "get": {
+        "summary": "The whole timeline, newest first",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 200, 50 when absent",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Entries on or after this date",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Entries of exactly this type",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "contactId": { "type": "string" },
+                      "type": { "type": "string" },
+                      "title": { "type": "string" },
+                      "content": { "type": ["string", "null"] },
+                      "date": { "type": "string" },
+                      "duration": { "type": ["string", "null"] },
+                      "fileUrl": { "type": ["string", "null"] },
+                      "fileName": { "type": ["string", "null"] },
+                      "fileType": { "type": ["string", "null"] },
+                      "source": { "type": ["string", "null"] },
+                      "mentions": { "type": ["string", "null"] },
+                      "updatedAt": { "type": "string" },
+                      "ownerId": {
+                        "type": "string",
+                        "description": "Internal. May be removed in a later version.",
+                        "deprecated": true
+                      },
+                      "contactName": { "type": "string" },
+                      "contactAvatar": { "type": ["string", "null"] },
+                      "contactThemeColor": { "type": ["string", "null"] }
+                    },
+                    "required": [
+                      "id",
+                      "contactId",
+                      "type",
+                      "title",
+                      "content",
+                      "date",
+                      "duration",
+                      "fileUrl",
+                      "fileName",
+                      "fileType",
+                      "source",
+                      "mentions",
+                      "updatedAt",
+                      "ownerId",
+                      "contactName",
+                      "contactAvatar",
+                      "contactThemeColor"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "contactId": { "type": "string" },
+          "interactionId": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "dueAt": { "type": "string" },
+          "completedAt": { "type": ["string", "null"] },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          }
+        },
+        "required": [
+          "id",
+          "contactId",
+          "interactionId",
+          "title",
+          "dueAt",
+          "completedAt",
+          "createdAt",
+          "updatedAt",
+          "ownerId"
+        ],
+        "additionalProperties": false
+      },
+      "ApiToken": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "tokenPrefix": { "type": "string" },
+          "createdAt": { "type": "string" },
+          "lastUsedAt": { "type": ["string", "null"] },
+          "expiresAt": { "type": ["string", "null"] },
+          "revokedAt": { "type": ["string", "null"] },
+          "readOnly": { "type": "boolean" }
+        },
+        "required": [
+          "id",
+          "name",
+          "tokenPrefix",
+          "createdAt",
+          "lastUsedAt",
+          "expiresAt",
+          "revokedAt",
+          "readOnly"
+        ],
+        "additionalProperties": false
+      },
+      "Contact": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "firstName": { "type": ["string", "null"] },
+          "lastName": { "type": ["string", "null"] },
+          "headline": { "type": ["string", "null"] },
+          "role": { "type": ["string", "null"] },
+          "company": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] },
+          "birthday": { "type": ["string", "null"] },
+          "preferences": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "addedAt": { "type": "string" },
+          "updatedAt": { "type": "string" },
+          "cadenceDays": { "type": ["integer", "null"] },
+          "lastContactedAt": { "type": ["string", "null"] },
+          "nextFollowUpAt": { "type": ["string", "null"] },
+          "themeColor": { "type": ["string", "null"] },
+          "about": { "type": ["string", "null"] },
+          "pronouns": { "type": ["string", "null"] },
+          "industry": { "type": ["string", "null"] },
+          "website": { "type": ["string", "null"] },
+          "lat": { "type": ["number", "null"] },
+          "lng": { "type": ["number", "null"] },
+          "aiBriefing": { "type": ["string", "null"] },
+          "aiBackground": { "type": ["string", "null"] },
+          "aiSummary": { "type": ["string", "null"] },
+          "aiHydratedAt": { "type": ["string", "null"] },
+          "aiBriefingAt": { "type": ["string", "null"] },
+          "isGhost": { "type": "boolean" },
+          "isArchived": { "type": "boolean" },
+          "relationshipScore": { "type": "number" },
+          "searchExpansion": {
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true,
+            "type": ["string", "null"]
+          },
+          "deletedAt": {
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true,
+            "type": ["string", "null"]
+          },
+          "canonicalId": {
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true,
+            "type": ["string", "null"]
+          },
+          "phoneticHash": {
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true,
+            "type": ["string", "null"]
+          },
+          "geoSource": {
+            "anyOf": [
+              { "type": "string", "enum": ["geocoder", "manual"] },
+              { "type": "null" }
+            ]
+          },
+          "isTracked": { "type": "boolean" },
+          "trackedAt": { "type": ["string", "null"] },
+          "aiResearch": { "type": ["string", "null"] },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          },
+          "scoreDirty": {
+            "type": "integer",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "email": { "type": "string" },
+                "label": { "type": "string" },
+                "isPrimary": { "type": "boolean" },
+                "sortOrder": { "type": "integer" },
+                "source": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "email",
+                "label",
+                "isPrimary",
+                "sortOrder",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "phone": { "type": "string" },
+                "label": { "type": "string" },
+                "isPrimary": { "type": "boolean" },
+                "sortOrder": { "type": "integer" },
+                "source": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "phone",
+                "label",
+                "isPrimary",
+                "sortOrder",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "socialLinks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "platform": { "type": "string" },
+                "url": { "type": "string" },
+                "handle": { "type": ["string", "null"] },
+                "source": { "type": ["string", "null"] }
+              },
+              "required": ["id", "platform", "url", "handle", "source"],
+              "additionalProperties": false
+            }
+          },
+          "education": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "school": { "type": "string" },
+                "degree": { "type": ["string", "null"] },
+                "fieldOfStudy": { "type": ["string", "null"] },
+                "startDate": { "type": ["string", "null"] },
+                "endDate": { "type": ["string", "null"] },
+                "description": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "school",
+                "degree",
+                "fieldOfStudy",
+                "startDate",
+                "endDate",
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "experience": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "company": { "type": "string" },
+                "role": { "type": ["string", "null"] },
+                "startDate": { "type": ["string", "null"] },
+                "endDate": { "type": ["string", "null"] },
+                "isCurrent": { "type": "boolean" },
+                "description": { "type": ["string", "null"] },
+                "location": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "company",
+                "role",
+                "startDate",
+                "endDate",
+                "isCurrent",
+                "description",
+                "location"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "platform": { "type": "string" },
+                "externalId": { "type": ["string", "null"] },
+                "connectedOn": { "type": ["string", "null"] },
+                "importedAt": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "platform",
+                "externalId",
+                "connectedOn",
+                "importedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "tag": { "type": "string" }
+              },
+              "required": ["id", "tag"],
+              "additionalProperties": false
+            }
+          },
+          "interests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "interest": { "type": "string" },
+                "isAiGenerated": { "type": ["integer", "null"] }
+              },
+              "required": ["id", "interest", "isAiGenerated"],
+              "additionalProperties": false
+            }
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "value": { "type": "string" }
+              },
+              "required": ["id", "name", "value"],
+              "additionalProperties": false
+            }
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "address": { "type": "string" },
+                "label": { "type": "string" },
+                "isPrimary": { "type": "boolean" },
+                "sortOrder": { "type": "integer" },
+                "source": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "address",
+                "label",
+                "isPrimary",
+                "sortOrder",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "icon": { "type": "string" }
+              },
+              "required": ["id", "name", "icon"],
+              "additionalProperties": false
+            }
+          },
+          "interactionCount": { "type": "integer" }
+        },
+        "required": [
+          "id",
+          "name",
+          "firstName",
+          "lastName",
+          "headline",
+          "role",
+          "company",
+          "location",
+          "birthday",
+          "preferences",
+          "avatarUrl",
+          "addedAt",
+          "updatedAt",
+          "cadenceDays",
+          "lastContactedAt",
+          "nextFollowUpAt",
+          "themeColor",
+          "about",
+          "pronouns",
+          "industry",
+          "website",
+          "lat",
+          "lng",
+          "aiBriefing",
+          "aiBackground",
+          "aiSummary",
+          "aiHydratedAt",
+          "aiBriefingAt",
+          "isGhost",
+          "isArchived",
+          "relationshipScore",
+          "searchExpansion",
+          "deletedAt",
+          "canonicalId",
+          "phoneticHash",
+          "geoSource",
+          "isTracked",
+          "trackedAt",
+          "aiResearch",
+          "ownerId",
+          "scoreDirty",
+          "emails",
+          "phones",
+          "socialLinks",
+          "education",
+          "experience",
+          "sources",
+          "tags",
+          "interests",
+          "attributes",
+          "addresses",
+          "lists",
+          "interactionCount"
+        ],
+        "additionalProperties": false
+      },
+      "FailedJob": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string" },
+          "ownerId": { "type": ["string", "null"] },
+          "lastError": { "type": ["string", "null"] },
+          "finishedAt": { "type": ["string", "null"] }
+        },
+        "required": ["id", "kind", "ownerId", "lastError", "finishedAt"],
+        "additionalProperties": false
+      },
+      "Interaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "contactId": { "type": "string" },
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "content": { "type": ["string", "null"] },
+          "date": { "type": "string" },
+          "duration": { "type": ["string", "null"] },
+          "fileUrl": { "type": ["string", "null"] },
+          "fileName": { "type": ["string", "null"] },
+          "fileType": { "type": ["string", "null"] },
+          "source": { "type": ["string", "null"] },
+          "mentions": { "type": ["string", "null"] },
+          "updatedAt": { "type": "string" },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          }
+        },
+        "required": [
+          "id",
+          "contactId",
+          "type",
+          "title",
+          "content",
+          "date",
+          "duration",
+          "fileUrl",
+          "fileName",
+          "fileType",
+          "source",
+          "mentions",
+          "updatedAt",
+          "ownerId"
+        ],
+        "additionalProperties": false
+      },
+      "List": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "icon": { "type": "string" },
+          "sortOrder": { "type": "integer" },
+          "createdAt": { "type": "string" },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          },
+          "memberCount": { "type": "integer" }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "sortOrder",
+          "createdAt",
+          "ownerId",
+          "memberCount"
+        ],
+        "additionalProperties": false
+      },
+      "MapContact": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "company": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] },
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "geoSource": {
+            "anyOf": [
+              { "type": "string", "enum": ["geocoder", "manual"] },
+              { "type": "null" }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "company",
+          "avatarUrl",
+          "location",
+          "lat",
+          "lng",
+          "geoSource"
+        ],
+        "additionalProperties": false
+      },
+      "NotOnMapContact": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "company": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "location": { "type": "string" },
+          "isTracked": { "type": "boolean" },
+          "lat": { "type": "null" },
+          "lng": { "type": "null" },
+          "reason": { "type": "string", "enum": ["pending", "not-found"] }
+        },
+        "required": [
+          "id",
+          "name",
+          "company",
+          "avatarUrl",
+          "location",
+          "isTracked",
+          "lat",
+          "lng",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "QueuedActionItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "contactId": { "type": "string" },
+          "interactionId": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "dueAt": { "type": "string" },
+          "completedAt": { "type": ["string", "null"] },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          },
+          "contactName": { "type": "string" },
+          "contactCompany": { "type": ["string", "null"] },
+          "contactAvatarUrl": { "type": ["string", "null"] },
+          "contactThemeColor": { "type": ["string", "null"] }
+        },
+        "required": [
+          "id",
+          "contactId",
+          "interactionId",
+          "title",
+          "dueAt",
+          "completedAt",
+          "createdAt",
+          "updatedAt",
+          "ownerId",
+          "contactName",
+          "contactCompany",
+          "contactAvatarUrl",
+          "contactThemeColor"
+        ],
+        "additionalProperties": false
+      },
+      "RecurringJob": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string" },
+          "every": {
+            "anyOf": [
+              { "type": "number", "exclusiveMinimum": 0 },
+              { "type": "null" }
+            ]
+          },
+          "lastRunAt": { "type": ["string", "null"] },
+          "lastStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["queued", "running", "done", "failed", "cancelled"]
+              },
+              { "type": "null" }
+            ]
+          },
+          "nextRunAt": { "type": ["string", "null"] }
+        },
+        "required": ["kind", "every", "lastRunAt", "lastStatus", "nextRunAt"],
+        "additionalProperties": false
+      },
+      "ScoreBreakdown": {
+        "type": "object",
+        "properties": {
+          "score": { "type": "number" },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "recency",
+                    "frequency",
+                    "depth",
+                    "reciprocity",
+                    "momentum"
+                  ]
+                },
+                "label": { "type": "string" },
+                "value": { "type": "number" },
+                "weight": { "type": "number" },
+                "detail": { "type": "string" }
+              },
+              "required": ["key", "label", "value", "weight", "detail"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["score", "components"],
+        "additionalProperties": false
+      },
+      "SlimContact": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "firstName": { "type": ["string", "null"] },
+          "lastName": { "type": ["string", "null"] },
+          "company": { "type": ["string", "null"] },
+          "avatarUrl": { "type": ["string", "null"] },
+          "themeColor": { "type": ["string", "null"] },
+          "isGhost": { "type": "boolean" },
+          "isArchived": { "type": "boolean" },
+          "addedAt": { "type": "string" },
+          "updatedAt": { "type": "string" },
+          "role": { "type": ["string", "null"] },
+          "headline": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] },
+          "industry": { "type": ["string", "null"] },
+          "pronouns": { "type": ["string", "null"] },
+          "cadenceDays": { "type": ["integer", "null"] },
+          "lastContactedAt": { "type": ["string", "null"] },
+          "nextFollowUpAt": { "type": ["string", "null"] },
+          "lat": { "type": ["number", "null"] },
+          "lng": { "type": ["number", "null"] },
+          "geoSource": {
+            "anyOf": [
+              { "type": "string", "enum": ["geocoder", "manual"] },
+              { "type": "null" }
+            ]
+          },
+          "relationshipScore": { "type": "number" },
+          "isTracked": { "type": "boolean" },
+          "trackedAt": { "type": ["string", "null"] },
+          "aiHydratedAt": { "type": ["string", "null"] },
+          "birthday": { "type": ["string", "null"] },
+          "researchOutcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["added", "nothing-new", "no-public-info"]
+              },
+              { "type": "null" }
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "tag": { "type": "string" }
+              },
+              "required": ["id", "tag"],
+              "additionalProperties": false
+            }
+          },
+          "lists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "icon": { "type": "string" },
+                "sortOrder": { "type": "integer" }
+              },
+              "required": ["id", "name", "icon", "sortOrder"],
+              "additionalProperties": false
+            }
+          },
+          "interactionCount": { "type": "integer" },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "email": { "type": "string" } },
+              "required": ["email"],
+              "additionalProperties": false
+            }
+          },
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "phone": { "type": "string" } },
+              "required": ["phone"],
+              "additionalProperties": false
+            }
+          },
+          "socialLinkCount": { "type": "integer" },
+          "socialLinks": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "education": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "experience": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "sources": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "addresses": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "interests": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          },
+          "attributes": {
+            "type": "array",
+            "prefixItems": [],
+            "items": false,
+            "maxItems": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "firstName",
+          "lastName",
+          "company",
+          "avatarUrl",
+          "themeColor",
+          "isGhost",
+          "isArchived",
+          "addedAt",
+          "updatedAt",
+          "role",
+          "headline",
+          "location",
+          "industry",
+          "pronouns",
+          "cadenceDays",
+          "lastContactedAt",
+          "nextFollowUpAt",
+          "lat",
+          "lng",
+          "geoSource",
+          "relationshipScore",
+          "isTracked",
+          "trackedAt",
+          "aiHydratedAt",
+          "birthday",
+          "researchOutcome",
+          "tags",
+          "lists",
+          "interactionCount",
+          "emails",
+          "phones",
+          "socialLinkCount",
+          "socialLinks",
+          "education",
+          "experience",
+          "sources",
+          "addresses",
+          "interests",
+          "attributes"
+        ],
+        "additionalProperties": false
+      },
+      "TimelineEntry": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "contactId": { "type": "string" },
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "content": { "type": ["string", "null"] },
+          "date": { "type": "string" },
+          "duration": { "type": ["string", "null"] },
+          "fileUrl": { "type": ["string", "null"] },
+          "fileName": { "type": ["string", "null"] },
+          "fileType": { "type": ["string", "null"] },
+          "source": { "type": ["string", "null"] },
+          "mentions": { "type": ["string", "null"] },
+          "updatedAt": { "type": "string" },
+          "ownerId": {
+            "type": "string",
+            "description": "Internal. May be removed in a later version.",
+            "deprecated": true
+          },
+          "isViaName": { "type": ["string", "null"] },
+          "isViaId": { "type": ["string", "null"] },
+          "actionItems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "dueAt": { "type": "string" },
+                "completedAt": { "type": ["string", "null"] }
+              },
+              "required": ["id", "title", "dueAt", "completedAt"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "contactId",
+          "type",
+          "title",
+          "content",
+          "date",
+          "duration",
+          "fileUrl",
+          "fileName",
+          "fileType",
+          "source",
+          "mentions",
+          "updatedAt",
+          "ownerId",
+          "isViaName",
+          "isViaId",
+          "actionItems"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}
