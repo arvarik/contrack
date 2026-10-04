@@ -32,6 +32,7 @@ vi.mock("../../../../src/api", () => {
     useCreateList: mutation,
     useReorderLists: mutation,
     useArchiveContact: mutation,
+    useUnarchiveContact: mutation,
     useCreateContact: mutation,
     useParseContactText: mutation,
     useBulkDeleteContacts: mutation,
