@@ -70,9 +70,9 @@ export const usePendingSuggestions = () =>
   });
 
 /** Check if a specific contact has a pending suggestion (for detail page banner). */
-export const useSuggestionForContact = (contactId: string | undefined) =>
-  useQuery({
-    queryKey: suggestionKeys.forContact(contactId!),
+export const suggestionQuery = (contactId: string) =>
+  queryOptions({
+    queryKey: suggestionKeys.forContact(contactId),
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestion-for/${contactId}`, {
         signal,
@@ -81,9 +81,11 @@ export const useSuggestionForContact = (contactId: string | undefined) =>
       const data = await res.json();
       return data.suggestion ?? null;
     },
-    enabled: !!contactId,
     staleTime: 30_000,
   });
+
+export const useSuggestionForContact = (contactId: string | undefined) =>
+  useQuery({ ...suggestionQuery(contactId ?? ""), enabled: !!contactId });
 
 const mergeLogQuery = queryOptions({
   queryKey: suggestionKeys.mergeLog,

@@ -12,6 +12,7 @@ import { interactionRoutes } from "../../shared/contracts/interactions";
  * @module api/interactions
  */
 import {
+  queryOptions,
   useQuery,
   useMutation,
   useQueryClient,
@@ -32,17 +33,19 @@ function invalidateInteractionSearch(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: [...INTERACTION_SEARCH_KEY] });
 }
 
-export const useTimeline = (contactId: string | undefined) => {
-  return useQuery({
+/** One contact's timeline, as the contact page reads it. */
+export const timelineQuery = (contactId: string) =>
+  queryOptions({
     queryKey: ["timeline", contactId],
     queryFn: ({ signal }): Promise<Interaction[]> =>
       apiJson(interactionRoutes.timeline, `/contacts/${contactId}/timeline`, {
         signal,
       }),
-    enabled: !!contactId,
     staleTime: STALE_TIMES.timeline,
   });
-};
+
+export const useTimeline = (contactId: string | undefined) =>
+  useQuery({ ...timelineQuery(contactId ?? ""), enabled: !!contactId });
 
 export const useAddInteraction = () => {
   const queryClient = useQueryClient();

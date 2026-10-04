@@ -181,10 +181,12 @@ function makeProps(
     onUpdate: vi.fn(),
     onDelete: vi.fn(),
     onOpenAvatarPicker: vi.fn(),
-    archiveContact: { mutate: vi.fn(), isPending: false },
-    unarchiveContact: { mutate: vi.fn(), isPending: false },
-    updateContact: { mutate: vi.fn() },
-    promoteGhost: { mutate: vi.fn(), isPending: false },
+    archiveContact: vi.fn(),
+    unarchiveContact: vi.fn(),
+    archivePending: false,
+    updateContact: vi.fn(),
+    promoteGhost: vi.fn(),
+    promotePending: false,
     ...overrides,
   };
 }
@@ -430,7 +432,7 @@ describe("the contact header", () => {
   it("removes a tag, puts it back from the undo, and adds one, through the contact update", () => {
     const props = makeProps();
     mount(<ProfileHeader {...props} />);
-    const update = props.updateContact.mutate as ReturnType<typeof vi.fn>;
+    const update = props.updateContact as ReturnType<typeof vi.fn>;
 
     fireEvent.click(
       screen.getByRole("button", { name: "Remove tag tech-lead" }),
@@ -474,7 +476,7 @@ describe("the contact header", () => {
 
     fireEvent.keyDown(blue, { key: "ArrowRight" });
     const emerald = within(group).getByRole("radio", { name: "Emerald" });
-    expect(props.updateContact.mutate).toHaveBeenCalledWith({
+    expect(props.updateContact).toHaveBeenCalledWith({
       id: "c1",
       data: { themeColor: "emerald" },
     });
@@ -587,7 +589,7 @@ describe("the contact actions", () => {
     const props = makeProps();
     mount(<ProfileHeader {...props} />);
     chooseAction("Archive");
-    const mutate = props.archiveContact.mutate as ReturnType<typeof vi.fn>;
+    const mutate = props.archiveContact as ReturnType<typeof vi.fn>;
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     const opts = mutate.mock.calls[0][1];
     opts.onSuccess();
@@ -602,7 +604,7 @@ describe("the contact actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Unarchive" }));
-    const mutate = props.unarchiveContact.mutate as ReturnType<typeof vi.fn>;
+    const mutate = props.unarchiveContact as ReturnType<typeof vi.fn>;
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
       "Thomas Walker restored to network",
@@ -620,7 +622,7 @@ describe("the contact actions", () => {
     const props = makeProps({ contact: makeContact({ isGhost: true }) });
     mount(<ProfileHeader {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Promote to contact" }));
-    const mutate = props.promoteGhost.mutate as ReturnType<typeof vi.fn>;
+    const mutate = props.promoteGhost as ReturnType<typeof vi.fn>;
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
@@ -632,7 +634,7 @@ describe("the contact actions", () => {
     const writeText = stubClipboard();
     const props = makeProps();
     mount(<ProfileHeader {...props} />);
-    const update = props.updateContact.mutate as ReturnType<typeof vi.fn>;
+    const update = props.updateContact as ReturnType<typeof vi.fn>;
 
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for ThomasWalker" }),
@@ -791,7 +793,7 @@ describe("+ link", () => {
     const field = screen.getByRole("textbox", { name: "New link" });
     fireEvent.change(field, { target: { value: "github.com/thomaswalker" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    expect(props.updateContact.mutate).toHaveBeenCalledWith({
+    expect(props.updateContact).toHaveBeenCalledWith({
       id: "c1",
       data: {
         socialLinks: [
@@ -873,7 +875,7 @@ describe("+ link", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "This contact already has that link",
     );
-    expect(props.updateContact.mutate).not.toHaveBeenCalled();
+    expect(props.updateContact).not.toHaveBeenCalled();
   });
 
   it("shows for a contact with no place, time or links yet", () => {

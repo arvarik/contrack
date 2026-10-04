@@ -22,10 +22,10 @@ import { DROPZONE_INPUT } from "../../../lib/styles";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 import {
   Timeline,
-  type DeleteInteractionMutation,
+  type DeleteInteraction,
   type OpenedInteraction,
-  type PromoteGhostMutation,
-  type UpdateInteractionMutation,
+  type PromoteGhost,
+  type UpdateInteraction,
 } from "./Timeline";
 
 /**
@@ -60,9 +60,9 @@ export interface TimelineTabProps {
   getInputProps: () => DropzoneInputProps;
 
   // Mutations passed from parent
-  deleteInteraction: DeleteInteractionMutation;
-  updateInteraction: UpdateInteractionMutation;
-  promoteGhost: PromoteGhostMutation;
+  deleteInteraction: DeleteInteraction;
+  updateInteraction: UpdateInteraction;
+  promoteGhost: PromoteGhost;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

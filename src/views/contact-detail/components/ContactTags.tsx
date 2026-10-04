@@ -16,9 +16,7 @@ import { ContactListsSection } from "./ContactListsSection";
 
 interface ContactTagsProps {
   contact: Contact;
-  updateContact: {
-    mutate: (args: { id: string; data: ContactUpdateData }) => void;
-  };
+  updateContact: (args: { id: string; data: ContactUpdateData }) => void;
   className?: string;
 }
 
@@ -35,7 +33,7 @@ export const ContactTags = ({
   }));
 
   const addTag = (text: string) => {
-    updateContact.mutate({
+    updateContact({
       id: contact.id,
       data: {
         tags: [
@@ -49,7 +47,7 @@ export const ContactTags = ({
   const removeTag = (chip: Chip) => {
     const before = contact.tags || [];
     const after = before.filter((tag) => tag.id !== chip.id);
-    updateContact.mutate({
+    updateContact({
       id: contact.id,
       data: { tags: after.map((tag) => ({ tag: tag.tag })) },
     });
@@ -58,7 +56,7 @@ export const ContactTags = ({
       action: {
         label: "Undo",
         onClick: () =>
-          updateContact.mutate({
+          updateContact({
             id: contact.id,
             data: { tags: before.map((tag) => ({ tag: tag.tag })) },
           }),

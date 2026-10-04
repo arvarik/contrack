@@ -145,11 +145,9 @@ function makeProps(overrides: Partial<TimelineTabProps> = {}) {
     isDragActive: false,
     getRootProps: () => ({}),
     getInputProps: () => ({}),
-    deleteInteraction: {
-      mutateAsync: vi.fn(() => Promise.resolve({ success: true })),
-    },
-    updateInteraction: { mutate: vi.fn() },
-    promoteGhost: { mutate: vi.fn() },
+    deleteInteraction: vi.fn(() => Promise.resolve({ success: true })),
+    updateInteraction: vi.fn(),
+    promoteGhost: vi.fn(),
     ...overrides,
   } satisfies TimelineTabProps;
 }
@@ -274,11 +272,8 @@ describe("the groups", () => {
     expect(within(entry("sqlite")!).getByAltText("photo.png")).toBeTruthy();
 
     fireEvent.click(aug.getByTitle("Promote Grace to contact"));
-    expect(props.promoteGhost.mutate).toHaveBeenCalledWith(
-      "g1",
-      expect.any(Object),
-    );
-    const [, options] = vi.mocked(props.promoteGhost.mutate).mock.calls[0];
+    expect(props.promoteGhost).toHaveBeenCalledWith("g1", expect.any(Object));
+    const [, options] = vi.mocked(props.promoteGhost).mock.calls[0];
     act(() => options?.onSuccess?.());
     // The promoted contact opens.
     expect(screen.getByTestId("where").textContent).toBe("/contact/g1");
@@ -363,7 +358,7 @@ describe("an entry", () => {
 
     fireEvent.change(field, { target: { value: "Coffee with Alan" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(props.updateInteraction.mutate).toHaveBeenCalledWith({
+    expect(props.updateInteraction).toHaveBeenCalledWith({
       id: "aug",
       contactId: "c1",
       data: {
@@ -389,7 +384,7 @@ describe("delete", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(entry("call")).not.toBeNull();
     expect(toastMock.success).not.toHaveBeenCalled();
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
   });
 
   it("hides the entry on confirm, offers Undo, sends nothing yet, and focuses the next title", async () => {
@@ -405,7 +400,7 @@ describe("delete", () => {
         action: expect.objectContaining({ label: "Undo" }),
       }),
     );
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Monday note" }),
     );
@@ -432,7 +427,7 @@ describe("delete", () => {
     act(() => options.onDismiss());
     act(() => options.onAutoClose());
     act(() => vi.advanceTimersByTime(FALLBACK_MS));
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
   });
 
   it("sends the delete once when the toast closes, even after the page has closed", async () => {
@@ -443,8 +438,8 @@ describe("delete", () => {
 
     await act(async () => options.onAutoClose());
     act(() => options.onDismiss());
-    expect(props.deleteInteraction.mutateAsync).toHaveBeenCalledTimes(1);
-    expect(props.deleteInteraction.mutateAsync).toHaveBeenCalledWith({
+    expect(props.deleteInteraction).toHaveBeenCalledTimes(1);
+    expect(props.deleteInteraction).toHaveBeenCalledWith({
       id: "call",
       contactId: "c1",
     });
@@ -465,9 +460,7 @@ describe("delete", () => {
 
   it("shows the entry again with an error when the delete fails", async () => {
     await mount({
-      deleteInteraction: {
-        mutateAsync: vi.fn(() => Promise.reject(new Error("HTTP 500"))),
-      },
+      deleteInteraction: vi.fn(() => Promise.reject(new Error("HTTP 500"))),
     });
     confirmDelete("Call with Ada");
     act(() => lastToast().onAutoClose());
@@ -483,14 +476,14 @@ describe("delete", () => {
     confirmDelete("Call with Ada");
 
     act(() => vi.advanceTimersByTime(FALLBACK_MS - 1));
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(1));
-    expect(props.deleteInteraction.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(props.deleteInteraction).toHaveBeenCalledTimes(1);
     expect(toastMock.dismiss).toHaveBeenCalledWith("toast-1");
 
     // The toast's own close then comes too late to send a second request.
     act(() => lastToast().onDismiss());
-    expect(props.deleteInteraction.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(props.deleteInteraction).toHaveBeenCalledTimes(1);
   });
 
   it("sends every waiting delete with keepalive when the page is hidden", async () => {
@@ -513,7 +506,7 @@ describe("delete", () => {
     expect(toastMock.dismiss).toHaveBeenCalledWith("toast-1");
 
     act(() => options.onDismiss());
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(entry("call")).toBeNull();
   });
@@ -553,7 +546,7 @@ describe("delete", () => {
       ),
     );
     expect(entry("call")).not.toBeNull();
-    expect(props.deleteInteraction.mutateAsync).not.toHaveBeenCalled();
+    expect(props.deleteInteraction).not.toHaveBeenCalled();
   });
 });
 
