@@ -85,7 +85,7 @@
     "gender-detection-from-name": "^1.11.4",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.546.0",
-    "morgan": "^1.10.1",
+    "morgan": "^1.12.1",
     "motion": "^12.23.24",
     "multer": "^2.1.1",
     "openai": "^7.3.0",
