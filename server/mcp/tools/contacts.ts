@@ -11,25 +11,23 @@
  */
 
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Scope } from "../../tenancy/scope.ts";
+import type { McpToolContext } from "../../modules/module.ts";
 import { contactService } from "../../services/contactService.ts";
 import { relationshipService } from "../../services/relationshipService.ts";
 import { mcpService, type ContactMatch } from "../../services/mcpService.ts";
 import type { ContactPayload } from "../../repositories/types.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { normalizePhone } from "../../utils/nlp/phone.ts";
-import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
 import { contactRoutes } from "../../../shared/contracts/contacts.ts";
-import { trackedTool, type ErrorTracker } from "../errors.ts";
+import { answer, count, cursorInput, offsetOf } from "../tool.ts";
+import { CONTACT_SUMMARY_FIELDS, contactProfile } from "../views.ts";
 
 /**
  * What list_contacts returns for each contact. The row holds more, such as
  * the research record and the search fields, which cost a client tokens and
  * tell it nothing. get_contact returns the whole profile.
  */
-const LIST_FIELDS =
-  "id,name,headline,role,company,location,industry,isTracked,cadenceDays,lastContactedAt,nextFollowUpAt,isArchived,addedAt,updatedAt";
+const LIST_FIELDS = CONTACT_SUMMARY_FIELDS.join(",");
 
 /**
  * create_contact's refusal of an email or phone a contact already has. The
@@ -91,105 +89,76 @@ const lower = (value: string) => value.trim().toLowerCase();
 const createBody = contactRoutes.create.body.shape;
 const updateBody = contactRoutes.replace.body.shape;
 
-export function registerContactTools(
-  server: McpServer,
-  scope: Scope,
-  onError: ErrorTracker,
-): void {
-  server.registerTool(
+export function registerContactTools({ tool, scope }: McpToolContext): void {
+  tool(
     "get_contact",
     {
-      description: MCP_TOOL_DESCRIPTIONS.get_contact,
-      inputSchema: {
-        id: z.string().min(1).describe("The contact ID to look up"),
-      },
-      annotations: {
-        readOnlyHint: true,
-      },
+      id: z.string().min(1).describe("The contact ID to look up"),
     },
-    trackedTool(onError, async ({ id }) => {
+    async ({ id }) => {
       const contact = contactService.getContactById(scope, id);
       if (!contact) {
         throw new NotFoundError("Contact", id);
       }
-      const scoreExplanation = relationshipService.explainScore(id);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Contact: ${contact.name} (${contact.role ?? "No role"} at ${contact.company ?? "No company"})`,
-          },
-        ],
-        structuredContent: {
-          contact,
-          scoreExplanation,
-        },
-      };
-    }),
+      const work = [contact.role, contact.company].filter(Boolean).join(" at ");
+      return answer(work ? `${contact.name}, ${work}` : contact.name, {
+        contact: contactProfile(contact),
+        scoreExplanation: relationshipService.explainScore(id),
+      });
+    },
   );
 
-  server.registerTool(
+  tool(
     "list_contacts",
     {
-      description: MCP_TOOL_DESCRIPTIONS.list_contacts,
-      inputSchema: {
-        cursor: z
-          .string()
-          .optional()
-          .describe("Pagination offset cursor as a string"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(100)
-          .default(50)
-          .optional()
-          .describe("Maximum contacts to return (default 50, max 100)"),
-        role: z.string().optional().describe("Filter contacts by role"),
-        company: z.string().optional().describe("Filter contacts by company"),
-        industry: z.string().optional().describe("Filter contacts by industry"),
-        location: z
-          .string()
-          .optional()
-          .describe("Filter contacts by location, a partial match"),
-        tag: z
-          .string()
-          .optional()
-          .describe("Filter by a tag, without regard to case"),
-        list: z
-          .string()
-          .optional()
-          .describe("Filter by a list's ID or its whole name"),
-        email: z
-          .string()
-          .email()
-          .optional()
-          .describe(
-            "Only the contacts with this email, without regard to case",
-          ),
-        phone: z
-          .string()
-          .min(1)
-          .optional()
-          .describe("Only the contacts with this phone number, by its digits"),
-        updatedSince: z
-          .string()
-          .optional()
-          .describe("Filter contacts updated at or after this ISO timestamp"),
-        tracked: z
-          .boolean()
-          .optional()
-          .describe(
-            "true for the people the account keeps up with, false for everyone else",
-          ),
-      },
-      annotations: {
-        readOnlyHint: true,
-      },
+      cursor: cursorInput,
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(50)
+        .optional()
+        .describe("Maximum contacts to return (default 50, max 100)"),
+      role: z.string().optional().describe("Filter contacts by role"),
+      company: z.string().optional().describe("Filter contacts by company"),
+      industry: z.string().optional().describe("Filter contacts by industry"),
+      location: z
+        .string()
+        .optional()
+        .describe("Filter contacts by location, a partial match"),
+      tag: z
+        .string()
+        .optional()
+        .describe("Filter by a tag, without regard to case"),
+      list: z
+        .string()
+        .optional()
+        .describe("Filter by a list's ID or its whole name"),
+      email: z
+        .string()
+        .email()
+        .optional()
+        .describe("Only the contacts with this email, without regard to case"),
+      phone: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Only the contacts with this phone number, by its digits"),
+      updatedSince: z
+        .string()
+        .optional()
+        .describe("Filter contacts updated at or after this ISO timestamp"),
+      tracked: z
+        .boolean()
+        .optional()
+        .describe(
+          "true for the people the account keeps up with, false for everyone else",
+        ),
     },
-    trackedTool(onError, async (params) => {
+    async (params) => {
       const limit = params.limit ?? 50;
-      const offset = params.cursor ? parseInt(params.cursor, 10) || 0 : 0;
+      const offset = offsetOf(params.cursor);
       const contacts = mcpService.queryContacts(scope, {
         limit,
         offset,
@@ -207,69 +176,55 @@ export function registerContactTools(
       });
       const nextCursor =
         contacts.length === limit ? String(offset + contacts.length) : null;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Retrieved ${contacts.length} contacts`,
-          },
-        ],
-        structuredContent: {
-          contacts,
-          nextCursor,
-        },
-      };
-    }),
+      return answer(count(contacts.length, "contact"), {
+        contacts,
+        nextCursor,
+      });
+    },
   );
 
-  server.registerTool(
+  tool(
     "create_contact",
     {
-      description: MCP_TOOL_DESCRIPTIONS.create_contact,
-      inputSchema: {
-        name: createBody.name.describe("Full name of the contact"),
-        headline: createBody.headline.describe("Professional headline"),
-        role: createBody.role.describe("Job title or role"),
-        company: createBody.company.describe("Company or organization"),
-        location: createBody.location.describe("Location or city"),
-        about: createBody.about.describe("Bio or background notes"),
-        industry: createBody.industry.describe("Industry"),
-        emails: z
-          .array(
-            z.object({
-              email: z.string().email(),
-              label: z.string().optional(),
-              isPrimary: z.boolean().optional(),
-            }),
-          )
-          .optional()
-          .describe("Email addresses"),
-        phones: z
-          .array(
-            z.object({
-              phone: z.string(),
-              label: z.string().optional(),
-              isPrimary: z.boolean().optional(),
-            }),
-          )
-          .optional()
-          .describe("Phone numbers"),
-        tags: z
-          .array(z.object({ tag: z.string() }))
-          .optional()
-          .describe("Tags to attach"),
-        allowDuplicate: z
-          .boolean()
-          .optional()
-          .describe(
-            "Create the contact even when a contact already has one of its emails or phones",
-          ),
-      },
-      annotations: {
-        idempotentHint: false,
-      },
+      name: createBody.name.describe("Full name of the contact"),
+      headline: createBody.headline.describe("Professional headline"),
+      role: createBody.role.describe("Job title or role"),
+      company: createBody.company.describe("Company or organization"),
+      location: createBody.location.describe("Location or city"),
+      about: createBody.about.describe("Bio or background notes"),
+      industry: createBody.industry.describe("Industry"),
+      emails: z
+        .array(
+          z.object({
+            email: z.string().email(),
+            label: z.string().optional(),
+            isPrimary: z.boolean().optional(),
+          }),
+        )
+        .optional()
+        .describe("Email addresses"),
+      phones: z
+        .array(
+          z.object({
+            phone: z.string(),
+            label: z.string().optional(),
+            isPrimary: z.boolean().optional(),
+          }),
+        )
+        .optional()
+        .describe("Phone numbers"),
+      tags: z
+        .array(z.object({ tag: z.string() }))
+        .optional()
+        .describe("Tags to attach"),
+      allowDuplicate: z
+        .boolean()
+        .optional()
+        .describe(
+          "Create the contact even when a contact already has one of its emails or phones",
+        ),
     },
-    trackedTool(onError, async ({ allowDuplicate, ...body }) => {
+    async ({ allowDuplicate, ...body }) => {
       if (!allowDuplicate) {
         const matches = mcpService.findByEmailOrPhone(
           scope,
@@ -284,76 +239,66 @@ export function registerContactTools(
       if (!contact) {
         throw new AppError("Failed to create contact", 500);
       }
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Created contact: ${contact.name} (${contact.id})`,
-          },
-        ],
-        structuredContent: contact as unknown as Record<string, unknown>,
-      };
-    }),
+      return answer(
+        `Created contact ${contact.name} (${contact.id})`,
+        contactProfile(contact),
+      );
+    },
   );
 
-  server.registerTool(
+  tool(
     "update_contact",
     {
-      description: MCP_TOOL_DESCRIPTIONS.update_contact,
-      inputSchema: {
-        id: z.string().min(1).describe("Contact ID to update"),
-        fields: z
-          .object({
-            name: updateBody.name,
-            role: updateBody.role,
-            company: updateBody.company,
-            location: updateBody.location,
-            headline: updateBody.headline,
-            about: updateBody.about,
-            industry: updateBody.industry,
-            themeColor: updateBody.themeColor,
-            isTracked: z
-              .boolean()
-              .optional()
-              .describe("Keep up with this person (true) or stop (false)"),
-            // The REST rule without its null: a tracked contact with no
-            // cadence never comes due, so a model may not clear it.
-            cadenceDays: createBody.cadenceDays
-              .unwrap()
-              .unwrap()
-              .optional()
-              .describe(
-                "How often to keep up, in days: 30, 60, 90, 180 or 365",
-              ),
-            addEmails: z
-              .array(z.string().email())
-              .optional()
-              .describe("Emails to add. The contact keeps its others"),
-            removeEmails: z
-              .array(z.string())
-              .optional()
-              .describe("Emails to remove, without regard to case"),
-            addPhones: z
-              .array(z.string().min(1))
-              .optional()
-              .describe("Phone numbers to add. The contact keeps its others"),
-            removePhones: z
-              .array(z.string())
-              .optional()
-              .describe("Phone numbers to remove, matched by their digits"),
-            addTags: z
-              .array(z.string().trim().min(1))
-              .optional()
-              .describe("Tags to add. The contact keeps its others"),
-            removeTags: z
-              .array(z.string())
-              .optional()
-              .describe("Tags to remove, without regard to case"),
-          })
-          .describe("Fields to update on the contact"),
-      },
+      id: z.string().min(1).describe("Contact ID to update"),
+      fields: z
+        .object({
+          name: updateBody.name,
+          role: updateBody.role,
+          company: updateBody.company,
+          location: updateBody.location,
+          headline: updateBody.headline,
+          about: updateBody.about,
+          industry: updateBody.industry,
+          themeColor: updateBody.themeColor,
+          isTracked: z
+            .boolean()
+            .optional()
+            .describe("Keep up with this person (true) or stop (false)"),
+          // The REST rule without its null: a tracked contact with no
+          // cadence never comes due, so a model may not clear it.
+          cadenceDays: createBody.cadenceDays
+            .unwrap()
+            .unwrap()
+            .optional()
+            .describe("How often to keep up, in days: 30, 60, 90, 180 or 365"),
+          addEmails: z
+            .array(z.string().email())
+            .optional()
+            .describe("Emails to add. The contact keeps its others"),
+          removeEmails: z
+            .array(z.string())
+            .optional()
+            .describe("Emails to remove, without regard to case"),
+          addPhones: z
+            .array(z.string().min(1))
+            .optional()
+            .describe("Phone numbers to add. The contact keeps its others"),
+          removePhones: z
+            .array(z.string())
+            .optional()
+            .describe("Phone numbers to remove, matched by their digits"),
+          addTags: z
+            .array(z.string().trim().min(1))
+            .optional()
+            .describe("Tags to add. The contact keeps its others"),
+          removeTags: z
+            .array(z.string())
+            .optional()
+            .describe("Tags to remove, without regard to case"),
+        })
+        .describe("Fields to update on the contact"),
     },
-    trackedTool(onError, async ({ id, fields }) => {
+    async ({ id, fields }) => {
       const {
         addEmails,
         removeEmails,
@@ -421,15 +366,10 @@ export function registerContactTools(
       if (!updated) {
         throw new NotFoundError("Contact", id);
       }
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Updated contact: ${updated.name} (${updated.id})`,
-          },
-        ],
-        structuredContent: updated as unknown as Record<string, unknown>,
-      };
-    }),
+      return answer(
+        `Updated contact ${updated.name} (${updated.id})`,
+        contactProfile(updated),
+      );
+    },
   );
 }

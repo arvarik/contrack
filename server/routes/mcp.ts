@@ -1,5 +1,5 @@
 // =============================================================================
-// Routes — MCP: the read-only surface for an MCP client or a personal token
+// Routes — MCP: the MCP endpoint, and the query routes a token reads
 // =============================================================================
 // Mounted in server/app.ts at /api, before contactsRouter so that
 // GET /api/contacts/action-items reaches this file rather than
@@ -20,6 +20,7 @@ import { queryRoutes } from "../../shared/contracts/query.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { buildMcpServer } from "../mcp/server.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
+import { mcpOriginGuard } from "../middleware/hostGuard.ts";
 
 export const mcpRateLimit = createRateLimiter({
   windowMs: 60_000,
@@ -36,6 +37,7 @@ const router = Router();
 
 router.post(
   "/mcp",
+  mcpOriginGuard,
   mcpRateLimit,
   asyncHandler(async (req, res) => {
     const scope = scopeOf(req);

@@ -381,14 +381,34 @@ export function isAuthenticated(req: Request): boolean {
  *
  * The /api/auth/* endpoints are mounted BEFORE this in app.ts so sign-in and
  * status stay reachable.
+ *
+ * A 401 carries `WWW-Authenticate: Bearer`, which is how an MCP client or a
+ * script learns that a token is what it lacks (RFC 6750). A token that was
+ * sent and refused gets its own message, because "Authentication required"
+ * tells somebody holding a revoked token nothing.
  */
 export function requireAuth(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void {
   if (isAuthenticated(req)) return next();
-  next(new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }));
+  const sentToken = req.headers.authorization?.startsWith("Bearer ") === true;
+  res.setHeader(
+    "WWW-Authenticate",
+    sentToken
+      ? 'Bearer realm="contrack", error="invalid_token"'
+      : 'Bearer realm="contrack"',
+  );
+  next(
+    new AppError(
+      sentToken
+        ? "This token is not valid. It may be revoked or expired. Create a new one in Settings, Account, API tokens."
+        : "Authentication required. Sign in, or send a token as Authorization: Bearer <token>.",
+      401,
+      { code: "UNAUTHORIZED" },
+    ),
+  );
 }
 
 /**

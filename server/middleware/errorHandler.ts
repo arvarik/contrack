@@ -232,13 +232,21 @@ export function errorHandler(
  * 404 catch-all for unknown API routes. Mount this AFTER all route routers
  * but BEFORE the error middleware. Without it, unknown `/api/*` paths fall
  * through to the SPA index.html which is confusing for API clients.
+ *
+ * `/.well-known/*` is for programs too. An MCP client looks there for the
+ * OAuth metadata, and the SPA's HTML in place of a 404 makes it fail on a
+ * parse error rather than move on.
  */
 export function notFoundHandler(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  if (req.path === "/api" || req.path.startsWith("/api/")) {
+  if (
+    req.path === "/api" ||
+    req.path.startsWith("/api/") ||
+    req.path.startsWith("/.well-known/")
+  ) {
     return next(
       new AppError(`Unknown API endpoint: ${req.method} ${req.path}`, 404, {
         code: "ROUTE_NOT_FOUND",

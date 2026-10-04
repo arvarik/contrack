@@ -1,24 +1,16 @@
 /**
  * tests/integration/api.mcp.test.ts — Integration tests for the MCP Server.
  *
- * Tests:
- * - SDK Client connection over StreamableHTTPClientTransport
- * - Server initialization and tool listing matching shared/mcpTools.ts
- * - search_people finds a seeded person
- * - get_contact returns the contact, and a score explanation once tracked
- * - list_contacts with filtering and cursor pagination
- * - log_interaction and get_timeline
- * - search_notes
- * - list_action_items, create_action_item, complete_action_item
- * - get_pulse dashboard payload
- * - list_tags, list_lists, add_to_list
- * - Multi-tenant isolation: Account B token cannot get Account A contact (NOT_FOUND error)
- * - 401 when unauthenticated
- * - 120/min rate limiting (429 on 121st call)
- * - Resources: contrack://pulse and contrack://contacts/{id}
- * - Prompts: catch_me_up and weekly_review
- * - A read-only token: only the read tools, and REST refuses its writes
- * - Duplicate checks, list and tag edits, follow-up changes, input checks
+ * Tests, through the SDK client over Streamable HTTP:
+ * - tools/list: every tool in shared/mcpTools.ts, with its title and hints,
+ *   and a read-only token sees only the read tools
+ * - every tool reads and writes through the services, and answers with
+ *   the same JSON in the text and in structuredContent
+ * - results leave out the columns only the server reads
+ * - a refusal is an `isError` result with its code and the next step
+ * - resources, and the prompts with a contact named and completed
+ * - over plain HTTP: the 401 challenge, the Origin check, the rate limit,
+ *   `/.well-known` as JSON, and the Host guard while sign-in is off
  *
  * @module tests/integration/api.mcp.test
  */
@@ -40,52 +32,97 @@ import {
 } from "./tenancy/helpers.ts";
 import { createToken } from "../../server/services/apiTokenService.ts";
 import { getUserById } from "../../server/services/authService.ts";
-import { MCP_TOOLS } from "../../shared/mcpTools.ts";
+import { MCP_TOOLS, mcpToolAnnotations } from "../../shared/mcpTools.ts";
 import { __resetMcpRateLimit } from "../../server/routes/mcp.ts";
+
+/** What the tests read from a tool's structured result. */
+type Data = Record<string, unknown> & {
+  id: string;
+  dueAt: string;
+  nextCursor: string | null;
+  removedCount: number;
+  contact: Record<string, unknown>;
+  contacts: { id: string }[];
+  matches: Record<string, unknown>[];
+  emails: { email: string; isPrimary: boolean }[];
+  tags: { tag: string }[];
+  timeline: { title: string }[];
+  hits: { title: string }[];
+  actionItems: { id: string }[];
+  error: { code: string };
+};
+
+/** Columns only the server reads. No tool may send one. */
+const INTERNAL = ["ownerId", "phoneticHash", "searchExpansion", "scoreDirty"];
 
 describe("MCP Server (/api/mcp)", () => {
   let server: http.Server;
-  let serverPort: number;
-  let endpointUrl: URL;
-
+  let endpoint: URL;
   let actorA: Actor;
-  let actorB: Actor;
+  let seedA: Seeded;
   let tokenA: string;
   let tokenB: string;
-  let seedA: Seeded;
+  let a: Client;
+
+  const tokenFor = (actor: Actor, readOnly = false) =>
+    createToken(
+      getUserById(actor.user.id)!,
+      { name: "Test", readOnly },
+      "127.0.0.1",
+    ).token;
+
+  async function connect(token: string): Promise<Client> {
+    const client = new Client({ name: "mcp-test-client", version: "1.0.0" });
+    await client.connect(
+      new StreamableHTTPClientTransport(endpoint, {
+        requestInit: { headers: { Authorization: `Bearer ${token}` } },
+      }),
+    );
+    return client;
+  }
+
+  /** Call a tool and keep the parts the tests read. */
+  async function call(
+    client: Client,
+    name: string,
+    args: Record<string, unknown> = {},
+  ): Promise<{ data: Data; text: string; isError: boolean }> {
+    const res = await client.callTool({ name, arguments: args });
+    const text = (res.content as { text: string }[])[0].text;
+    return {
+      data: res.structuredContent as Data,
+      text,
+      isError: res.isError === true,
+    };
+  }
+
+  /** A call that must succeed: its structured result. */
+  async function ok(name: string, args: Record<string, unknown> = {}) {
+    const res = await call(a, name, args);
+    expect(res.isError, `${name}: ${res.text}`).toBe(false);
+    return res.data;
+  }
+
+  const mcpPost = (body: object) =>
+    request(server)
+      .post("/api/mcp")
+      .set("Accept", "application/json, text/event-stream")
+      .send({ jsonrpc: "2.0", id: 1, ...body });
 
   beforeAll(async () => {
     resetAccounts();
     process.env.AUTH_REQUIRED = "true";
-
     server = makeTestApp();
     if (!server.listening) {
       await new Promise((resolve) => server.once("listening", resolve));
     }
-    const addr = server.address() as AddressInfo;
-    serverPort = addr.port;
-    endpointUrl = new URL(`http://127.0.0.1:${serverPort}/api/mcp`);
+    const port = (server.address() as AddressInfo).port;
+    endpoint = new URL(`http://127.0.0.1:${port}/api/mcp`);
 
-    actorA = await createActor(server, {
-      username: "alice",
-      email: "alice@example.com",
-    });
-    actorB = await createActor(server, {
-      username: "bob",
-      email: "bob@example.com",
-    });
-
-    tokenA = createToken(
-      getUserById(actorA.user.id)!,
-      { name: "Token A" },
-      "127.0.0.1",
-    ).token;
-    tokenB = createToken(
-      getUserById(actorB.user.id)!,
-      { name: "Token B" },
-      "127.0.0.1",
-    ).token;
-
+    actorA = await createActor(server, { username: "alice" });
+    const actorB = await createActor(server, { username: "bob" });
+    tokenA = tokenFor(actorA);
+    tokenB = tokenFor(actorB);
     seedA = await seedOwner(server, actorA, {
       contacts: 3,
       interactions: 2,
@@ -93,558 +130,177 @@ describe("MCP Server (/api/mcp)", () => {
       lists: 1,
     });
     await seedOwner(server, actorB, { contacts: 2 });
+    a = await connect(tokenA);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    await a.close();
     process.env.AUTH_REQUIRED = "";
     resetAccounts();
     __resetMcpRateLimit();
   });
 
-  async function makeConnectedClient(token: string) {
-    const transport = new StreamableHTTPClientTransport(endpointUrl, {
-      requestInit: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-    const client = new Client({ name: "mcp-test-client", version: "1.0.0" });
-    await client.connect(transport);
-    return client;
-  }
-
-  it("initializes and lists tools matching shared/mcpTools.ts", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const toolList = await client.listTools();
-    const serverToolNames = toolList.tools.map((t) => t.name).sort();
-    const expectedToolNames = MCP_TOOLS.map((t) => t.name)
-      .slice()
-      .sort();
-
-    expect(serverToolNames).toEqual(expectedToolNames);
-    expect(toolList.tools).toHaveLength(18);
-
-    await client.close();
-  });
-
-  it("search_people finds a seeded person", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const res = await client.callTool({
-      name: "search_people",
-      arguments: { query: "Alice" },
-    });
-
-    expect(res.isError).toBeFalsy();
-    const structured = (
-      res as { structuredContent?: { matches: Array<{ name: string }> } }
-    ).structuredContent;
-    expect(structured?.matches.length).toBeGreaterThan(0);
-    expect(
-      structured?.matches.some((m) => m.name.toLowerCase().includes("alice")),
-    ).toBe(true);
-
-    await client.close();
-  });
-
-  it("list_contacts pages through the contacts with a cursor", async () => {
-    const client = await makeConnectedClient(tokenA);
-    type Page = {
-      structuredContent?: {
-        contacts: { id: string }[];
-        nextCursor: string | null;
-      };
-    };
-
-    const first = (await client.callTool({
-      name: "list_contacts",
-      arguments: { limit: 2 },
-    })) as Page;
-    expect(first.structuredContent?.contacts).toHaveLength(2);
-    expect(first.structuredContent?.nextCursor).toBeTruthy();
-
-    const second = (await client.callTool({
-      name: "list_contacts",
-      arguments: { limit: 2, cursor: first.structuredContent!.nextCursor! },
-    })) as Page;
-    expect(second.structuredContent?.nextCursor).toBeNull();
-
-    // Two pages with no overlap are the three contacts seeded for A.
-    const ids = [
-      ...first.structuredContent!.contacts,
-      ...second.structuredContent!.contacts,
-    ].map((c) => c.id);
-    expect(ids.sort()).toEqual([...seedA.contactIds].sort());
-
-    await client.close();
-  });
-
-  it("get_contact has no score explanation for an untracked contact, and writes nothing", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const contactId = seedA.contactIds[1];
-    const snapshot = () =>
-      sqlite
-        .prepare(
-          `SELECT relationshipScore, scoreDirty, updatedAt FROM contacts WHERE id = ?`,
-        )
-        .get(contactId);
-    const before = snapshot();
-
-    const res = await client.callTool({
-      name: "get_contact",
-      arguments: { id: contactId },
-    });
-
-    expect(res.isError).toBeFalsy();
-    const structured = (
-      res as {
-        structuredContent?: {
-          contact: { id: string; isTracked: boolean };
-          scoreExplanation: unknown;
-        };
-      }
-    ).structuredContent;
-    expect(structured?.contact.id).toBe(contactId);
-    expect(structured?.contact.isTracked).toBe(false);
-    expect(structured?.scoreExplanation).toBeNull();
-    expect(snapshot()).toEqual(before);
-
-    await client.close();
-  });
-
-  it("update_contact can track a contact, and get_contact then explains its score", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const contactId = seedA.contactIds[1];
-
-    const updated = await client.callTool({
-      name: "update_contact",
-      arguments: {
-        id: contactId,
-        fields: { isTracked: true, cadenceDays: 30 },
-      },
-    });
-    expect(updated.isError).toBeFalsy();
-    const contact = (
-      updated as {
-        structuredContent?: {
-          isTracked: boolean;
-          cadenceDays: number;
-          trackedAt: string | null;
-        };
-      }
-    ).structuredContent;
-    expect(contact?.isTracked).toBe(true);
-    expect(contact?.cadenceDays).toBe(30);
-    expect(typeof contact?.trackedAt).toBe("string");
-
-    const res = await client.callTool({
-      name: "get_contact",
-      arguments: { id: contactId },
-    });
-    const structured = (
-      res as { structuredContent?: { scoreExplanation: { score: number } } }
-    ).structuredContent;
-    expect(typeof structured?.scoreExplanation?.score).toBe("number");
-
-    // Back to untracked, so the other tests see the seed they expect.
-    await client.callTool({
-      name: "update_contact",
-      arguments: { id: contactId, fields: { isTracked: false } },
-    });
-    await client.close();
-  });
-
-  it("list_contacts filters by tracked", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const contactId = seedA.contactIds[2];
-    await client.callTool({
-      name: "update_contact",
-      arguments: { id: contactId, fields: { isTracked: true } },
-    });
-
-    const tracked = await client.callTool({
-      name: "list_contacts",
-      arguments: { tracked: true },
-    });
-    const trackedRows = (
-      tracked as {
-        structuredContent?: { contacts: { id: string; isTracked: number }[] };
-      }
-    ).structuredContent?.contacts;
-    expect(trackedRows?.map((c) => c.id)).toEqual([contactId]);
-
-    const untracked = await client.callTool({
-      name: "list_contacts",
-      arguments: { tracked: false },
-    });
-    const untrackedRows = (
-      untracked as { structuredContent?: { contacts: { id: string }[] } }
-    ).structuredContent?.contacts;
-    expect(untrackedRows?.some((c) => c.id === contactId)).toBe(false);
-    expect(untrackedRows?.length).toBeGreaterThan(0);
-
-    await client.callTool({
-      name: "update_contact",
-      arguments: { id: contactId, fields: { isTracked: false } },
-    });
-    await client.close();
-  });
-
-  it("log_interaction writes an interaction that appears in get_timeline", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const contactId = seedA.contactIds[0];
-    const logRes = await client.callTool({
-      name: "log_interaction",
-      arguments: {
-        contactId,
-        type: "meeting",
-        title: "Q3 Strategic Sync",
-        content: "Discussed roadmap and milestones.",
-      },
-    });
-
-    expect(logRes.isError).toBeFalsy();
-
-    const timelineRes = await client.callTool({
-      name: "get_timeline",
-      arguments: { contactId },
-    });
-
-    expect(timelineRes.isError).toBeFalsy();
-    const structured = (res: unknown) =>
-      (res as { structuredContent?: { timeline: Array<{ title: string }> } })
-        .structuredContent;
-    const items = structured(timelineRes)?.timeline ?? [];
-    expect(items.some((item) => item.title === "Q3 Strategic Sync")).toBe(true);
-
-    await client.close();
-  });
-
-  it("search_notes finds the logged interaction", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const res = await client.callTool({
-      name: "search_notes",
-      arguments: { query: "Strategic" },
-    });
-
-    expect(res.isError).toBeFalsy();
-    const structured = (
-      res as { structuredContent?: { hits: Array<{ title: string }> } }
-    ).structuredContent;
-    expect(structured?.hits.some((h) => h.title.includes("Strategic"))).toBe(
-      true,
+  it("lists every tool with its title and hints, and names itself", async () => {
+    const { tools } = await a.listTools();
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      MCP_TOOLS.map((t) => t.name).sort(),
     );
-
-    await client.close();
-  });
-
-  it("list_action_items, create_action_item, and complete_action_item", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const contactId = seedA.contactIds[0];
-    const createRes = await client.callTool({
-      name: "create_action_item",
-      arguments: {
-        contactId,
-        title: "Follow up on proposal",
-        dueAt: new Date(Date.now() + 86400000).toISOString(),
-      },
-    });
-    expect(createRes.isError).toBeFalsy();
-    const createdItem = (createRes as { structuredContent?: { id: string } })
-      .structuredContent;
-    expect(createdItem?.id).toBeDefined();
-
-    const listRes = await client.callTool({
-      name: "list_action_items",
-      arguments: { due: "all" },
-    });
-    expect(listRes.isError).toBeFalsy();
-    const items = (
-      listRes as { structuredContent?: { actionItems: Array<{ id: string }> } }
-    ).structuredContent?.actionItems;
-    expect(items?.some((i) => i.id === createdItem?.id)).toBe(true);
-
-    const completeRes = await client.callTool({
-      name: "complete_action_item",
-      arguments: { id: createdItem!.id },
-    });
-    expect(completeRes.isError).toBeFalsy();
-    expect(
-      (completeRes as { structuredContent?: { completedAt: string | null } })
-        .structuredContent?.completedAt,
-    ).toEqual(expect.any(String));
-
-    await client.close();
-  });
-
-  it("get_pulse returns the dashboard metrics", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const res = await client.callTool({
-      name: "get_pulse",
-    });
-
-    expect(res.isError).toBeFalsy();
-    const pulse = (
-      res as { structuredContent?: { metrics: { totalActive: number } } }
-    ).structuredContent;
-    expect(pulse?.metrics.totalActive).toBeGreaterThan(0);
-
-    await client.close();
-  });
-
-  it("list_tags, list_lists, and add_to_list", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const [listId] = seedA.listIds;
-
-    const tagsRes = await client.callTool({ name: "list_tags" });
-    expect(tagsRes.isError).toBeFalsy();
-    // The seed tags nobody.
-    expect(
-      (tagsRes as { structuredContent?: { tags: unknown[] } }).structuredContent
-        ?.tags,
-    ).toEqual([]);
-
-    const added = await client.callTool({
-      name: "add_to_list",
-      arguments: { listId, contactIds: [seedA.contactIds[0]] },
-    });
-    expect(added.isError).toBeFalsy();
-    expect(
-      (added as { structuredContent?: { listId: string; addedCount: number } })
-        .structuredContent,
-    ).toMatchObject({ listId, addedCount: 1 });
-
-    const listsRes = await client.callTool({ name: "list_lists" });
-    expect(listsRes.isError).toBeFalsy();
-    expect(
-      (
-        listsRes as {
-          structuredContent?: {
-            lists: { id: string; name: string; memberCount: number }[];
-          };
-        }
-      ).structuredContent?.lists,
-    ).toEqual([
-      expect.objectContaining({
-        id: listId,
-        name: "alice List 0",
-        memberCount: 1,
-      }),
-    ]);
-
-    await client.close();
-  });
-
-  it("multi-tenant isolation: Account B token cannot get Account A's contact", async () => {
-    const client = await makeConnectedClient(tokenB);
-
-    const contactA = seedA.contactIds[0];
-
-    try {
-      await client.callTool({
-        name: "get_contact",
-        arguments: { id: contactA },
-      });
-      expect.fail(
-        "Expected get_contact on foreign contact to throw a JSON-RPC error",
-      );
-    } catch (err: unknown) {
-      const mcpErr = err as { code?: number; data?: { code?: string } };
-      expect(mcpErr.data?.code).toBe("NOT_FOUND");
+    for (const tool of MCP_TOOLS) {
+      const listed = tools.find((t) => t.name === tool.name)!;
+      expect(listed.title).toBe(tool.title);
+      expect(listed.annotations).toEqual(mcpToolAnnotations(tool));
     }
-
-    await client.close();
-  });
-
-  it("returns 401 when unauthenticated", async () => {
-    const res = await request(server)
-      .post("/api/mcp")
-      .set("Accept", "application/json, text/event-stream")
-      .send({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/list",
-      });
-
-    expect(res.status).toBe(401);
-  });
-
-  it("rate limiter: 120/min per account, 121st call returns 429", async () => {
-    __resetMcpRateLimit();
-
-    // 120 calls succeed
-    for (let i = 0; i < 120; i++) {
-      const res = await request(server)
-        .post("/api/mcp")
-        .set("Authorization", `Bearer ${tokenA}`)
-        .set("Accept", "application/json, text/event-stream")
-        .send({
-          jsonrpc: "2.0",
-          id: i,
-          method: "tools/list",
-        });
-      expect(res.status).toBe(200);
-    }
-
-    // 121st call must be rate limited
-    const limitedRes = await request(server)
-      .post("/api/mcp")
-      .set("Authorization", `Bearer ${tokenA}`)
-      .set("Accept", "application/json, text/event-stream")
-      .send({
-        jsonrpc: "2.0",
-        id: 121,
-        method: "tools/list",
-      });
-
-    expect(limitedRes.status).toBe(429);
-    expect(limitedRes.headers["retry-after"]).toBeDefined();
-
-    __resetMcpRateLimit();
-  });
-
-  it("reads resources: contrack://pulse and contrack://contacts/{id}", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const pulseRes = await client.readResource({ uri: "contrack://pulse" });
-    expect(pulseRes.contents).toHaveLength(1);
-    const pulseItem = pulseRes.contents[0] as { text: string };
-    const pulseJson = JSON.parse(pulseItem.text);
-    expect(pulseJson.metrics).toBeDefined();
-
-    const contactId = seedA.contactIds[0];
-    const contactRes = await client.readResource({
-      uri: `contrack://contacts/${contactId}`,
+    expect(a.getServerVersion()).toMatchObject({
+      name: "contrack",
+      title: "Contrack",
     });
-    expect(contactRes.contents).toHaveLength(1);
-    const contactItem = contactRes.contents[0] as { text: string };
-    const contactJson = JSON.parse(contactItem.text);
-    expect(contactJson.id).toBe(contactId);
-    // This contact is untracked, so the key is there with no score in it.
-    expect(contactJson.scoreExplanation).toBeNull();
-
-    await client.close();
   });
-
-  it("retrieves prompts: catch_me_up and weekly_review", async () => {
-    const client = await makeConnectedClient(tokenA);
-
-    const contactId = seedA.contactIds[0];
-    const catchPrompt = await client.getPrompt({
-      name: "catch_me_up",
-      arguments: { contactId },
-    });
-    expect(catchPrompt.messages.length).toBeGreaterThan(0);
-
-    const weeklyPrompt = await client.getPrompt({
-      name: "weekly_review",
-    });
-    expect(weeklyPrompt.messages.length).toBeGreaterThan(0);
-
-    await client.close();
-  });
-
-  /** What the tests below read from a tool's structured result. */
-  type Result = {
-    id: string;
-    dueAt: string;
-    removedCount: number;
-    contacts: { id: string }[];
-    emails: { email: string; isPrimary: boolean }[];
-    tags: { tag: string }[];
-    timeline: { title: string }[];
-  };
-
-  /** Call a tool and return its result. A tool error rejects, as an app error does. */
-  async function call(
-    client: Client,
-    name: string,
-    args: Record<string, unknown>,
-  ): Promise<Result> {
-    const res = await client.callTool({ name, arguments: args });
-    if (res.isError) throw new Error(JSON.stringify(res.content));
-    return res.structuredContent as Result;
-  }
 
   it("a read-only token lists only the read tools, and REST refuses its writes", async () => {
-    const token = createToken(
-      getUserById(actorA.user.id)!,
-      { name: "Reader", readOnly: true },
-      "127.0.0.1",
-    ).token;
-    const client = await makeConnectedClient(token);
-    const names = (await client.listTools()).tools.map((t) => t.name).sort();
+    const token = tokenFor(actorA, true);
+    const reader = await connect(token);
+    const names = (await reader.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      MCP_TOOLS.filter((t) => t.readOnly)
+      MCP_TOOLS.filter((t) => t.effect === "read")
         .map((t) => t.name)
         .sort(),
     );
-    expect(client.getInstructions()).toContain("read-only");
-    await client.close();
+    expect(reader.getInstructions()).toContain("read-only");
+    await reader.close();
 
-    const bearer = `Bearer ${token}`;
-    const read = await request(server)
-      .get("/api/contacts")
-      .set("Authorization", bearer);
-    expect(read.status).toBe(200);
     const write = await request(server)
       .post("/api/lists")
-      .set("Authorization", bearer)
+      .set("Authorization", `Bearer ${token}`)
       .send({ name: "Not allowed" });
-    expect(write.status).toBe(403);
     expect(write.body.error.code).toBe("TOKEN_READ_ONLY");
   });
 
-  it("create_contact refuses a known email or phone, and list_contacts finds both", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const rowan = await call(client, "create_contact", {
+  it("search_people and get_contact send summaries and profiles without internal columns", async () => {
+    const search = await call(a, "search_people", { query: "alice" });
+    expect(search.isError).toBe(false);
+    expect(search.data.matches.length).toBeGreaterThan(0);
+    // The text block carries the same JSON after its one-line summary.
+    expect(JSON.parse(search.text.split("\n\n")[1])).toEqual(search.data);
+    for (const match of search.data.matches) {
+      expect(Object.keys(match)).not.toContain("aiResearch");
+      for (const key of INTERNAL) expect(match).not.toHaveProperty(key);
+    }
+
+    const contactId = seedA.contactIds[1];
+    const snapshot = () =>
+      sqlite
+        .prepare(`SELECT scoreDirty, updatedAt FROM contacts WHERE id = ?`)
+        .get(contactId);
+    const before = snapshot();
+    const profile = await ok("get_contact", { id: contactId });
+    expect(profile.contact).toMatchObject({ id: contactId, isTracked: false });
+    for (const key of [...INTERNAL, "aiResearch", "lat"]) {
+      expect(profile.contact).not.toHaveProperty(key);
+    }
+    expect(profile.scoreExplanation).toBeNull();
+    expect(snapshot()).toEqual(before);
+
+    // Tracked, the profile explains its score, and the filter finds it.
+    const tracked = await ok("update_contact", {
+      id: contactId,
+      fields: { isTracked: true, cadenceDays: 30 },
+    });
+    expect(tracked).toMatchObject({ isTracked: true, cadenceDays: 30 });
+    const explained = await ok("get_contact", { id: contactId });
+    expect(explained.scoreExplanation).toHaveProperty("score");
+    const onlyTracked = await ok("list_contacts", { tracked: true });
+    expect(onlyTracked.contacts.map((c) => c.id)).toEqual([contactId]);
+    await ok("update_contact", { id: contactId, fields: { isTracked: false } });
+  });
+
+  it("list_contacts, get_timeline and list_action_items page with a cursor", async () => {
+    const first = await ok("list_contacts", { limit: 2 });
+    const second = await ok("list_contacts", {
+      limit: 2,
+      cursor: first.nextCursor,
+    });
+    expect(second.nextCursor).toBeNull();
+    expect(
+      [...first.contacts, ...second.contacts].map((c) => c.id).sort(),
+    ).toEqual([...seedA.contactIds].sort());
+
+    const contactId = seedA.contactIds[0];
+    const page = await ok("get_timeline", { contactId, limit: 1 });
+    expect(page.timeline).toHaveLength(1);
+    const rest = await ok("get_timeline", {
+      contactId,
+      cursor: page.nextCursor,
+    });
+    expect(rest.timeline.length).toBe(Number(page.total) - 1);
+
+    const items = await ok("list_action_items", { limit: 1 });
+    expect(items.actionItems).toHaveLength(1);
+    expect(items.nextCursor).toBe("1");
+  });
+
+  it("logs a note, links its mentions, finds it, and runs a follow-up through its life", async () => {
+    const [owner, other] = seedA.contactIds;
+    await ok("log_interaction", {
+      contactId: owner,
+      type: "meeting",
+      title: "Q3 Strategic Sync",
+      content: "Went through the deck.",
+      mentionContactIds: [other],
+    });
+    const theirs = await ok("get_timeline", { contactId: other });
+    expect(theirs.timeline.map((i) => i.title)).toContain("Q3 Strategic Sync");
+    const notes = await ok("search_notes", { query: "Strategic" });
+    expect(notes.hits.map((h) => h.title)).toContain("Q3 Strategic Sync");
+
+    const item = await ok("create_action_item", {
+      contactId: owner,
+      title: "Send the deck",
+      dueAt: "2030-01-15",
+    });
+    const moved = await ok("update_action_item", {
+      id: item.id,
+      dueAt: "2030-02-01",
+    });
+    expect(moved.dueAt).toBe("2030-02-01");
+    const listed = await ok("list_action_items", { due: "all" });
+    expect(listed.actionItems.map((i) => i.id)).toContain(item.id);
+    const done = await ok("complete_action_item", { id: item.id });
+    expect(done.completedAt).toEqual(expect.any(String));
+
+    const pulse = await ok("get_pulse");
+    expect(pulse.metrics).toHaveProperty("totalActive");
+  });
+
+  it("edits contacts, tags and lists, and refuses duplicates with their code", async () => {
+    const rowan = await ok("create_contact", {
       name: "Rowan Vale",
       emails: [{ email: "rowan@example.com" }],
       phones: [{ phone: "+1 (415) 555-0100" }],
     });
-
-    for (const contact of [
+    for (const twin of [
       { emails: [{ email: "ROWAN@example.com" }] },
       { phones: [{ phone: "415-555-0100" }] },
     ]) {
-      await expect(
-        call(client, "create_contact", { name: "R. Vale", ...contact }),
-      ).rejects.toMatchObject({ data: { code: "DUPLICATE_CONTACT" } });
+      const refused = await call(a, "create_contact", {
+        name: "R. Vale",
+        ...twin,
+      });
+      expect(refused.isError).toBe(true);
+      expect(refused.data.error.code).toBe("DUPLICATE_CONTACT");
+      expect(refused.text).toContain("Rowan Vale");
     }
-    for (const filter of [
-      { email: "Rowan@Example.com" },
-      { phone: "4155550100" },
-    ]) {
-      const found = await call(client, "list_contacts", filter);
-      expect(found.contacts.map((c) => c.id)).toEqual([rowan.id]);
-    }
+    const found = await ok("list_contacts", { phone: "4155550100" });
+    expect(found.contacts.map((c) => c.id)).toEqual([rowan.id]);
 
-    const twin = await call(client, "create_contact", {
-      name: "Rowan Vale",
-      emails: [{ email: "rowan@example.com" }],
-      allowDuplicate: true,
-    });
-    expect(twin.id).not.toBe(rowan.id);
-    await client.close();
-  });
-
-  it("update_contact edits emails and tags in place, and the list and follow-up tools write", async () => {
-    const client = await makeConnectedClient(tokenA);
     const id = seedA.contactIds[2];
-    await call(client, "update_contact", {
+    await ok("update_contact", {
       id,
       fields: {
         addEmails: ["a@example.com", "b@example.com"],
         addTags: ["Investor"],
       },
     });
-    const edited = await call(client, "update_contact", {
+    const edited = await ok("update_contact", {
       id,
       fields: {
         removeEmails: ["A@example.com"],
@@ -660,63 +316,156 @@ describe("MCP Server (/api/mcp)", () => {
       "Investor",
     ]);
 
-    const list = await call(client, "create_list", { name: "Conference 2026" });
-    await expect(
-      call(client, "create_list", { name: "conference 2026" }),
-    ).rejects.toMatchObject({ data: { code: "DUPLICATE_LIST" } });
-    await call(client, "add_to_list", { listId: list.id, contactIds: [id] });
-    const members = await call(client, "list_contacts", {
+    const list = await ok("create_list", { name: "Conference 2026" });
+    const again = await call(a, "create_list", { name: "conference 2026" });
+    expect(again.data.error.code).toBe("DUPLICATE_LIST");
+    await ok("add_to_list", { listId: list.id, contactIds: [id] });
+    const members = await ok("list_contacts", {
       list: "Conference 2026",
       tag: "advisor",
     });
     expect(members.contacts.map((c) => c.id)).toEqual([id]);
-    const removed = await call(client, "remove_from_list", {
+    const removed = await ok("remove_from_list", {
       listId: list.id,
       contactIds: [id],
     });
     expect(removed.removedCount).toBe(1);
-
-    const item = await call(client, "create_action_item", {
-      contactId: id,
-      title: "Send the deck",
-      dueAt: "2030-01-15",
-    });
-    const moved = await call(client, "update_action_item", {
-      id: item.id,
-      dueAt: "2030-02-01",
-    });
-    expect(moved.dueAt).toBe("2030-02-01");
-    await client.close();
+    const tags = await ok("list_tags");
+    expect(tags.tags).toEqual(expect.arrayContaining(["Advisor", "Investor"]));
   });
 
-  it("refuses bad dates, limits and cadences, and log_interaction links mentionContactIds", async () => {
-    const client = await makeConnectedClient(tokenA);
-    const [owner, other] = seedA.contactIds;
+  it("answers a refusal as an isError result the model can act on", async () => {
+    const b = await connect(tokenB);
+    const foreign = await call(b, "get_contact", { id: seedA.contactIds[0] });
+    await b.close();
+    expect(foreign.isError).toBe(true);
+    expect(foreign.data.error.code).toBe("NOT_FOUND");
+    expect(foreign.text).toContain("Do not guess an ID");
+
+    const owner = seedA.contactIds[0];
+    const badDate = await call(a, "create_action_item", {
+      contactId: owner,
+      title: "Call",
+      dueAt: "next Friday",
+    });
+    expect(badDate.isError).toBe(true);
+    expect(badDate.text).toContain("ISO 8601");
     for (const [name, args] of [
       [
         "log_interaction",
         { contactId: owner, title: "Later", date: "2099-01-01" },
       ],
-      [
-        "create_action_item",
-        { contactId: owner, title: "Call", dueAt: "next Friday" },
-      ],
       ["search_people", { query: "Contact", limit: 31 }],
-      // A tracked contact with no cadence never comes due again.
       ["update_contact", { id: owner, fields: { cadenceDays: null } }],
+      ["list_contacts", { cursor: "page two" }],
     ] as const) {
-      const res = await client.callTool({ name, arguments: args });
-      expect(res.isError, name).toBe(true);
+      expect((await call(a, name, args)).isError, name).toBe(true);
     }
+  });
 
-    await call(client, "log_interaction", {
-      contactId: owner,
-      title: "Board prep",
-      content: "Went through the deck.",
-      mentionContactIds: [other],
+  it("reads resources, and the prompts take a contact's name", async () => {
+    const pulse = await a.readResource({ uri: "contrack://pulse" });
+    expect(
+      JSON.parse((pulse.contents[0] as { text: string }).text),
+    ).toHaveProperty("metrics");
+    const contactId = seedA.contactIds[0];
+    const profile = await a.readResource({
+      uri: `contrack://contacts/${contactId}`,
     });
-    const theirs = await call(client, "get_timeline", { contactId: other });
-    expect(theirs.timeline.map((i) => i.title)).toContain("Board prep");
-    await client.close();
+    const json = JSON.parse((profile.contents[0] as { text: string }).text);
+    expect(json).toMatchObject({ id: contactId, scoreExplanation: null });
+    expect(json).not.toHaveProperty("ownerId");
+
+    const completion = await a.complete({
+      ref: { type: "ref/prompt", name: "catch_me_up" },
+      argument: { name: "contact", value: "alice con" },
+    });
+    expect(completion.completion.values).toHaveLength(3);
+    const byName = await a.getPrompt({
+      name: "catch_me_up",
+      arguments: { contact: "alice Contact 0" },
+    });
+    expect(byName.description).toBe("Catch me up on alice Contact 0");
+    await expect(
+      a.getPrompt({ name: "catch_me_up", arguments: { contact: "alice" } }),
+    ).rejects.toMatchObject({ data: { code: "AMBIGUOUS_CONTACT" } });
+    const weekly = await a.getPrompt({ name: "weekly_review" });
+    expect(weekly.messages.length).toBeGreaterThan(0);
+  });
+
+  it("challenges a missing or refused token, and refuses a foreign Origin", async () => {
+    const none = await mcpPost({ method: "tools/list" });
+    expect(none.status).toBe(401);
+    expect(none.headers["www-authenticate"]).toBe('Bearer realm="contrack"');
+
+    const revoked = await mcpPost({ method: "tools/list" }).set(
+      "Authorization",
+      "Bearer ctk_not_a_real_token",
+    );
+    expect(revoked.status).toBe(401);
+    expect(revoked.headers["www-authenticate"]).toContain(
+      'error="invalid_token"',
+    );
+    expect(revoked.body.error.message).toContain("not valid");
+
+    const foreign = await mcpPost({ method: "tools/list" })
+      .set("Authorization", `Bearer ${tokenA}`)
+      .set("Origin", "https://evil.example");
+    expect(foreign.status).toBe(403);
+    expect(foreign.body.error.code).toBe("ORIGIN_NOT_ALLOWED");
+
+    // An OAuth client probes these first. JSON, never the app's HTML.
+    const wellKnown = await request(server).get(
+      "/.well-known/oauth-protected-resource/api/mcp",
+    );
+    expect(wellKnown.status).toBe(404);
+    expect(wellKnown.type).toBe("application/json");
+  });
+
+  it("rate limits each account to 120 calls a minute", async () => {
+    __resetMcpRateLimit();
+    for (let i = 0; i < 120; i++) {
+      const res = await mcpPost({ method: "tools/list" }).set(
+        "Authorization",
+        `Bearer ${tokenA}`,
+      );
+      expect(res.status).toBe(200);
+    }
+    const limited = await mcpPost({ method: "tools/list" }).set(
+      "Authorization",
+      `Bearer ${tokenA}`,
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers["retry-after"]).toBeDefined();
+    __resetMcpRateLimit();
+  });
+
+  it("while sign-in is off, answers only names a web page cannot own", async () => {
+    process.env.AUTH_REQUIRED = "";
+    process.env.ALLOWED_HOSTS = "crm.example.org, .tail.example";
+    try {
+      const status = (host: string) =>
+        request(server).get("/api/auth/status").set("Host", host);
+      for (const host of [
+        "localhost:3210",
+        "192.168.1.5",
+        "[::1]:3210",
+        "nas",
+        "nas.local",
+        "crm.example.org",
+        "box.tail.example",
+      ]) {
+        expect((await status(host)).status, host).toBe(200);
+      }
+      const rebound = await status("evil.example");
+      expect(rebound.status).toBe(403);
+      expect(rebound.body.error.code).toBe("HOST_NOT_ALLOWED");
+      const page = await request(server).get("/").set("Host", "evil.example");
+      expect(page.status).toBe(403);
+      expect(page.text).toContain("ALLOWED_HOSTS");
+    } finally {
+      process.env.AUTH_REQUIRED = "true";
+      delete process.env.ALLOWED_HOSTS;
+    }
   });
 });

@@ -143,6 +143,31 @@ export const mcpService = {
    * on its digits through `normalizePhone`, as a connector matches one, so
    * "+1 (415) 555-0100" finds "415-555-0100". One row for each match.
    */
+  /**
+   * Contacts whose name holds `text`, the names that start with it first.
+   * The MCP prompts take a name, and a client completes it from this.
+   */
+  findByName(
+    scope: Scope,
+    text: string,
+    limit: number,
+  ): { id: string; name: string; company: string | null }[] {
+    const escaped = text.trim().replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    return sqlite
+      .prepare(
+        `SELECT c.id, c.name, c.company FROM contacts c
+          WHERE c.ownerId = ? AND ${IN_NETWORK}
+            AND c.name LIKE ? ESCAPE '\\'
+          ORDER BY (c.name LIKE ? ESCAPE '\\') DESC, c.name COLLATE NOCASE
+          LIMIT ?`,
+      )
+      .all(scope.ownerId, `%${escaped}%`, `${escaped}%`, limit) as {
+      id: string;
+      name: string;
+      company: string | null;
+    }[];
+  },
+
   findByEmailOrPhone(
     scope: Scope,
     emails: string[],

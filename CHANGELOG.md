@@ -45,6 +45,9 @@ search, Pulse, the map, research and the contact page.
   connectors.
 - Docker Compose publishes the port on `127.0.0.1` only, and the CSV export
   neutralizes spreadsheet formulas.
+- While sign-in is off, the server answers only local host names, the
+  `PUBLIC_URL` host and `ALLOWED_HOSTS`, so a web page cannot reach it through
+  DNS rebinding. `/api/mcp` refuses a request from another site's page.
 
 ### Search and Ask Contrack
 
@@ -114,6 +117,12 @@ search, Pulse, the map, research and the contact page.
 - The built-in MCP server (`POST /api/mcp`) offers 18 tools, two prompts and
   resources to Claude, Cursor and other clients. A read-only token sees only
   the 9 read-only tools.
+- **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS
+  Code, Codex and Gemini CLI. It makes a token for the client and fills in
+  the command, the config or a one-press install link.
+- Each tool has a title and hints that say whether it reads, adds, or can
+  overwrite. Results leave out the fields only the server reads, and a
+  refused call answers with its code and what to do next.
 - The routes for contacts, notes, follow-ups, lists, tags and tokens share
   one contract with the app and the MCP tools. `docs/openapi.json` describes
   them in OpenAPI 3.1.

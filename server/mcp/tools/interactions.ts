@@ -9,100 +9,86 @@
  */
 
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Scope } from "../../tenancy/scope.ts";
+import type { McpToolContext } from "../../modules/module.ts";
 import { contactService } from "../../services/contactService.ts";
 import { interactionService } from "../../services/interactionService.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
 import { interactionRoutes } from "../../../shared/contracts/interactions.ts";
-import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
-import { trackedTool, type ErrorTracker } from "../errors.ts";
+import { answer, count, cursorInput, pageOf } from "../tool.ts";
+import { publicRecord } from "../views.ts";
 
 // The REST body of the same write. A logged interaction is checked exactly as
 // `POST /api/contacts/:id/interactions` checks one.
 const logBody = interactionRoutes.create.body.shape;
 
-export function registerInteractionTools(
-  server: McpServer,
-  scope: Scope,
-  onError: ErrorTracker,
-): void {
-  server.registerTool(
+export function registerInteractionTools({
+  tool,
+  scope,
+}: McpToolContext): void {
+  tool(
     "get_timeline",
     {
-      description: MCP_TOOL_DESCRIPTIONS.get_timeline,
-      inputSchema: {
-        contactId: z.string().min(1).describe("Contact ID"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(100)
-          .default(50)
-          .optional()
-          .describe("Maximum entries to return (default 50, max 100)"),
-      },
-      annotations: {
-        readOnlyHint: true,
-      },
+      contactId: z.string().min(1).describe("Contact ID"),
+      cursor: cursorInput,
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(50)
+        .optional()
+        .describe("Maximum entries to return (default 50, max 100)"),
     },
-    trackedTool(onError, async ({ contactId, limit }) => {
+    ({ contactId, cursor, limit }) => {
       const contact = contactService.getContactById(scope, contactId);
       if (!contact) {
         throw new NotFoundError("Contact", contactId);
       }
-      const rawTimeline = interactionService.getTimeline(scope, contactId);
-      const timeline = rawTimeline.slice(0, limit ?? 50);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Timeline for ${contact.name}: ${timeline.length} entries`,
-          },
-        ],
-        structuredContent: {
+      const all = interactionService.getTimeline(scope, contactId);
+      const { page, nextCursor } = pageOf(all, cursor, limit ?? 50);
+      return answer(
+        `Timeline for ${contact.name}: ${count(page.length, "entry", "entries")} of ${all.length}`,
+        {
           contactId,
           contactName: contact.name,
-          timeline,
+          timeline: page.map(publicRecord),
+          total: all.length,
+          nextCursor,
         },
-      };
-    }),
+      );
+    },
   );
 
-  server.registerTool(
+  tool(
     "log_interaction",
     {
-      description: MCP_TOOL_DESCRIPTIONS.log_interaction,
-      inputSchema: {
-        contactId: z
-          .string()
-          .min(1)
-          .describe("ID of the contact this interaction is with"),
-        type: logBody.type
-          .default("note")
-          .describe(
-            "Interaction type (e.g. note, meeting, email, call, message)",
-          ),
-        title: logBody.title.describe("Summary title of the interaction"),
-        content: logBody.content.describe(
-          "Notes, discussion details, or email body",
+      contactId: z
+        .string()
+        .min(1)
+        .describe("ID of the contact this interaction is with"),
+      type: logBody.type
+        .default("note")
+        .describe(
+          "Interaction type (e.g. note, meeting, email, call, message)",
         ),
-        // The REST route's rule: an interaction has happened. A future date
-        // would make the contact look caught up with until that day.
-        date: logBody.date.describe(
-          "When it happened, in ISO 8601: a day (2026-09-14) or a date and time. Not in the future. Defaults to now",
+      title: logBody.title.describe("Summary title of the interaction"),
+      content: logBody.content.describe(
+        "Notes, discussion details, or email body",
+      ),
+      // The REST route's rule: an interaction has happened. A future date
+      // would make the contact look caught up with until that day.
+      date: logBody.date.describe(
+        "When it happened, in ISO 8601: a day (2026-09-14) or a date and time. Not in the future. Defaults to now",
+      ),
+      mentionContactIds: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          "The IDs of the other contacts in it. Each one shows it on their timeline. When given, no AI reads the text for names",
         ),
-        mentionContactIds: z
-          .array(z.string().min(1))
-          .optional()
-          .describe(
-            "The IDs of the other contacts in it. Each one shows it on their timeline. When given, no AI reads the text for names",
-          ),
-      },
     },
-    trackedTool(onError, async (body) => {
+    (body) => {
       // Every ID must be a contact in the account, or nothing is logged. The
       // service drops an unknown ID quietly, as the note editor wants, and a
       // client should hear about a wrong ID instead.
@@ -130,16 +116,10 @@ export function registerInteractionTools(
           mentionContactIds: mentionIds.length ? mentionIds : undefined,
         },
       );
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Logged interaction "${created.title}" on contact ${body.contactId}`,
-          },
-        ],
-        structuredContent: created,
-      };
-    }),
+      return answer(
+        `Logged "${created.title}" on contact ${body.contactId}`,
+        publicRecord(created),
+      );
+    },
   );
 }

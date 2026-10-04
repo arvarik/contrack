@@ -81,6 +81,8 @@ interface AuthContextValue {
   isAdmin: boolean;
   /** The deprecated environment `API_TOKEN` is still set on the server. */
   legacyTokenConfigured: boolean;
+  /** The address people open (`PUBLIC_URL`), or null when it is not set. */
+  publicUrl: string | null;
   /**
    * What this instance calls itself, or "" when nobody has named it.
    *
@@ -113,6 +115,7 @@ const AuthContext = createContext<AuthContextValue>({
   authRequired: false,
   isAdmin: false,
   legacyTokenConfigured: false,
+  publicUrl: null,
   instanceName: "",
   mapStyles: null,
   isResolved: false,
@@ -172,6 +175,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [deviceContacts, setDeviceContacts] = useState(0);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [legacyTokenConfigured, setLegacyTokenConfigured] = useState(false);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [instanceName, setInstanceName] = useState("");
   const [mapStyles, setMapStyles] = useState<MapStyleUrls | null>(null);
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
@@ -242,6 +246,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setDeviceContacts(status.deviceContacts ?? status.existingContacts ?? 0);
     setRegistrationOpen(status.registrationOpen ?? false);
     setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
+    setPublicUrl(status.publicUrl ?? null);
     setInstanceName(status.instanceName ?? "");
     setMapStyles(status.map ?? null);
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
@@ -434,6 +439,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     authRequired: state === "unreachable" ? false : authRequired,
     isAdmin: user?.role === "admin",
     legacyTokenConfigured,
+    publicUrl,
     instanceName,
     mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",

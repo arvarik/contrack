@@ -14,8 +14,5 @@ import { registerTaxonomyTools } from "../../mcp/tools/taxonomy.ts";
 export const taxonomyModule = defineModule({
   id: "taxonomy",
   routers: [{ path: "/api", router: tagsRouter }],
-  mcpTools: [
-    ({ server, scope, onError }) =>
-      registerTaxonomyTools(server, scope, onError),
-  ],
+  mcpTools: [registerTaxonomyTools],
 });

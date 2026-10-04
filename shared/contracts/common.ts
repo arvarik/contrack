@@ -20,7 +20,9 @@ export const stringToBool = z
 
 /** Accept a valid calendar date or ISO timestamp. Normalize timestamps to UTC. */
 export const dateSchema = z
-  .union([z.iso.date(), z.iso.datetime({ offset: true, local: true })])
+  .union([z.iso.date(), z.iso.datetime({ offset: true, local: true })], {
+    error: "Use an ISO 8601 date, such as 2026-11-03 or 2026-11-03T15:00:00Z",
+  })
   .transform((value) =>
     value.length === 10 ? value : new Date(value).toISOString(),
   );
