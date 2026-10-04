@@ -78,7 +78,9 @@ export const AuthShell = ({
   }, [bird, level]);
 
   return (
-    <div className="min-h-dvh bg-surface text-on-surface flex items-center justify-center p-0 sm:p-6">
+    // The status bar and the home indicator, for a screen that fills a
+    // phone outside the app's shell, such as sign-in or an app's consent.
+    <div className="min-h-dvh bg-surface text-on-surface flex items-center justify-center p-0 sm:p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <main className="w-full sm:max-w-md">
         <form
           onSubmit={onSubmit}

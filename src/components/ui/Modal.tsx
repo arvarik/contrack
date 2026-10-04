@@ -115,6 +115,14 @@ export function Modal({
     if (state.dy > CLOSE_DISTANCE || speed > CLOSE_SPEED) {
       sheet.style.setProperty("--sheet-drag", `${state.dy}px`);
       onClose();
+      // A dialog that refused to close, such as one with unsaved work,
+      // springs back rather than staying where the finger left it.
+      requestAnimationFrame(() => {
+        if (sheet.isConnected && sheet.dataset.state === "open") {
+          sheet.style.transform = "";
+          sheet.style.removeProperty("--sheet-drag");
+        }
+      });
     } else {
       sheet.style.transform = "";
     }
@@ -127,7 +135,9 @@ export function Modal({
   };
 
   const position =
-    "inset-x-0 bottom-[var(--keyboard-inset,0px)] rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
+    // Centred from `sm`, it rises by half the keyboard, so a tablet's dialog
+    // keeps its buttons above the keyboard too.
+    "inset-x-0 bottom-[var(--keyboard-inset,0px)] rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-[calc(50%-var(--keyboard-inset,0px)/2)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
   return (
     <Dialog.Root
       open={isOpen}
@@ -145,7 +155,7 @@ export function Modal({
           aria-describedby={undefined}
           // `outline-none`: the dialog itself takes focus when it has no
           // title, and a ring around the whole panel would say nothing.
-          className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem-var(--keyboard-inset,0px))] overflow-hidden outline-none modal-fade`}
+          className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem-var(--keyboard-inset,0px)-var(--viewport-offset,0px))] overflow-hidden outline-none modal-fade`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             (closeButton.current ?? content.current)?.focus({

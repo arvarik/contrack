@@ -1489,7 +1489,10 @@ html[data-text-scale="large"] {
   --keyboard-inset: 0px;
   /* The phone tab bar's height: 3 rem of tab, 0.375 rem above it, and the
      larger of 0.75 rem and the home indicator below (MobileNav.tsx). */
-  --tabbar-space: calc(3.375rem + max(0.75rem, env(safe-area-inset-bottom)));
+  --tabbar-space: calc(
+    3.375rem +
+      max(0.75rem, env(safe-area-max-inset-bottom, env(safe-area-inset-bottom)))
+  );
 }
 /* While a person types, the tab bar steps aside, so the field and its Save
    button have the room above the keyboard. */
@@ -1520,11 +1523,14 @@ html[data-text-scale="large"] {
   }
 }
 
-/* The app scrolls inside its panes. The page itself does not bounce or
-   pull, which on a phone moved the whole app, tab bar and all. */
-html,
-body {
-  overscroll-behavior: none;
+/* The app scrolls inside its panes. On a touch screen the page itself does
+   not bounce or pull, which moved the whole app, tab bar and all. Only the
+   vertical axis, and not with a trackpad, whose sideways swipe is Back. */
+@media (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* =====================================================================

@@ -193,8 +193,13 @@ export const ActionMenu = ({
   );
 
   const close = useCallback(() => change(false), [change]);
-  // Android's Back closes the open list instead of leaving the page.
-  useCloseRequest(open, close);
+  // Android's Back closes the open list instead of leaving the page, and
+  // returns focus to the trigger, as Escape does.
+  const closeByBack = useCallback(() => {
+    close();
+    trigger.current?.focus({ preventScroll: true });
+  }, [close]);
+  useCloseRequest(open, closeByBack);
   const placement = usePanelPlacement({
     open,
     align,

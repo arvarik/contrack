@@ -4,8 +4,8 @@
  *
  * Two things change while a person types on a phone:
  * - `data-typing` on `<html>`, while a field that opens the keyboard has
- *   focus on a touch screen. The tab bar hides then (index.css), so the
- *   field and its Save button get the room.
+ *   focus on a touch screen and the keyboard is up. The tab bar hides then
+ *   (index.css), so the field and its Save button get the room.
  * - `--keyboard-inset`, the height the keyboard covers, from the visual
  *   viewport. Android resizes the page for the keyboard (`interactive-widget`
  *   in index.html), so it stays 0 there. iOS does not, so a sheet and the
@@ -38,30 +38,58 @@ function opensKeyboard(el: Element | null): boolean {
   return el instanceof HTMLInputElement && !NO_KEYBOARD.has(el.type);
 }
 
+/** Less than this is a toolbar settling, not a keyboard. */
+const KEYBOARD_MIN = 120;
+
 export function useSoftKeyboard(): void {
   useEffect(() => {
     const root = document.documentElement;
     const coarse = window.matchMedia?.("(pointer: coarse)");
     const viewport = window.visualViewport;
+    // The page's full height at this width. Android shrinks the page for
+    // the keyboard, so a page well short of it has the keyboard up.
+    let width = window.innerWidth;
+    let tallest = window.innerHeight;
 
     const measure = () => {
+      if (window.innerWidth !== width) {
+        width = window.innerWidth;
+        tallest = window.innerHeight;
+      }
+      tallest = Math.max(tallest, window.innerHeight);
+      // iOS keeps the page and lays the keyboard over it.
+      const covered = viewport
+        ? Math.max(
+            0,
+            Math.round(
+              window.innerHeight - viewport.height - viewport.offsetTop,
+            ),
+          )
+        : 0;
+      const shrunk = tallest - window.innerHeight >= KEYBOARD_MIN;
+      // Typing needs the keyboard up as well as a field in focus: Back on
+      // Android, or the iPad's hide key, puts the keyboard away and leaves
+      // the field focused, and the tab bar must come back then.
       const typing =
-        Boolean(coarse?.matches) && opensKeyboard(document.activeElement);
+        Boolean(coarse?.matches) &&
+        opensKeyboard(document.activeElement) &&
+        (covered >= KEYBOARD_MIN || shrunk);
       root.toggleAttribute("data-typing", typing);
-      const covered =
-        typing && viewport
-          ? Math.max(
-              0,
-              Math.round(
-                window.innerHeight - viewport.height - viewport.offsetTop,
-              ),
-            )
-          : 0;
-      root.style.setProperty("--keyboard-inset", `${covered}px`);
+      root.style.setProperty(
+        "--keyboard-inset",
+        `${typing && covered >= KEYBOARD_MIN ? covered : 0}px`,
+      );
+      // How far iOS has panned the visible part down the page, which a
+      // sheet's height must leave out too.
+      root.style.setProperty(
+        "--viewport-offset",
+        `${typing && viewport ? Math.round(viewport.offsetTop) : 0}px`,
+      );
     };
 
     // While focus moves from one field to the next, the page has none for a
-    // moment. Measuring a frame later keeps the tab bar from flashing back.
+    // moment, and a field can leave the page with no focusout at all.
+    // Measuring a frame later covers both.
     let frame = 0;
     const later = () => {
       cancelAnimationFrame(frame);
@@ -69,9 +97,11 @@ export function useSoftKeyboard(): void {
     };
 
     // Focus moves before the keyboard animates, so measure on focus and
-    // again as the visual viewport settles.
+    // again as the page or the visual viewport settles.
     document.addEventListener("focusin", measure);
     document.addEventListener("focusout", later);
+    document.addEventListener("pointerdown", later);
+    window.addEventListener("resize", measure);
     viewport?.addEventListener("resize", measure);
     viewport?.addEventListener("scroll", measure);
     measure();
@@ -79,10 +109,13 @@ export function useSoftKeyboard(): void {
       cancelAnimationFrame(frame);
       document.removeEventListener("focusin", measure);
       document.removeEventListener("focusout", later);
+      document.removeEventListener("pointerdown", later);
+      window.removeEventListener("resize", measure);
       viewport?.removeEventListener("resize", measure);
       viewport?.removeEventListener("scroll", measure);
       root.removeAttribute("data-typing");
       root.style.removeProperty("--keyboard-inset");
+      root.style.removeProperty("--viewport-offset");
     };
   }, []);
 }

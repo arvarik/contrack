@@ -49,9 +49,14 @@ export async function serveClient(
     express.static(path.join(distPath, "assets"), {
       immutable: true,
       maxAge: "1y",
-      fallthrough: false,
     }),
   );
+  // A file the build no longer has, such as an old chunk an open tab asks
+  // for after a deploy, is a plain 404. Never the app's HTML, which the
+  // browser would try to run as script.
+  app.use("/assets", (_req, res) => {
+    res.status(404).type("text/plain").send("Not found");
+  });
   app.use(express.static(distPath));
   // SPA fallback for navigation only. This used to answer EVERY method —
   // a POST to any unknown path returned index.html with a 200, which reads

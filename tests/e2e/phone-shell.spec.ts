@@ -28,9 +28,12 @@ test.describe("phone shell", () => {
     const editor = page.locator(".ProseMirror").first();
     await editor.click();
     await page.keyboard.type("Lunch with the team");
-    // The height an Android phone leaves the page with its keyboard up.
+    const tabBar = page.locator("nav[data-covers-map='bottom']");
+    // No keyboard yet, so the tab bar stays. Then the height an Android
+    // phone leaves the page with its keyboard up.
+    await expect(tabBar).toBeVisible();
     await page.setViewportSize({ width: 412, height: 420 });
-    await expect(page.locator("nav[data-covers-map='bottom']")).toBeHidden();
+    await expect(tabBar).toBeHidden();
     // In view and on top: nothing covers the middle of Save.
     const save = page.getByRole("button", { name: "Save", exact: true });
     await expect(save).toBeInViewport();
@@ -47,6 +50,11 @@ test.describe("phone shell", () => {
     expect(await editor.evaluate((el) => getComputedStyle(el).fontSize)).toBe(
       "16px",
     );
+    // Back puts the keyboard away and leaves the note focused: the tab bar
+    // comes back.
+    await page.setViewportSize({ width: 412, height: 839 });
+    await expect(tabBar).toBeVisible();
+    await expect(editor).toBeFocused();
   });
 
   test("a sheet drags down to close from its handle", async ({ page }) => {
@@ -108,6 +116,9 @@ test.describe("phone shell", () => {
     expect((await request.get("/")).headers()["cache-control"]).toContain(
       "max-age=0",
     );
+    // An asset the build no longer has is a 404, not the app's HTML.
+    const gone = await request.get("/assets/old-chunk.js");
+    expect(gone.status()).toBe(404);
   });
 });
 
