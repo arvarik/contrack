@@ -30,7 +30,9 @@ export function registerTaxonomyTools({ tool, scope }: McpToolContext): void {
   });
 
   tool("list_lists", {}, () => {
-    const lists = listService.getAllLists(scope).map(publicRecord);
+    const lists = (listService.getAllLists(scope) as object[]).map((list) =>
+      publicRecord(list),
+    );
     return answer(count(lists.length, "list"), { lists, total: lists.length });
   });
 
