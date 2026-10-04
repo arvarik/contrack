@@ -5,9 +5,9 @@
 // link to each other by file and anchor, and to images beside them. A renamed
 // heading or a removed page breaks a link without any other test noticing,
 // and a reader finds it first. This reads every page the index lists, plus
-// the repository README, CONTRIBUTING and the agent notes, and checks each
-// relative link and image: the file exists, and an anchor names a heading in
-// the page it points at.
+// the repository README, CONTRIBUTING, AGENTS, SECURITY and the agent notes,
+// and checks each relative link and image: the file exists, and an anchor
+// names a heading in the page it points at.
 // =============================================================================
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -59,6 +59,8 @@ const CHECKED = [
     ...indexedPages(),
     "README.md",
     "CONTRIBUTING.md",
+    "AGENTS.md",
+    "SECURITY.md",
     "docs/brand/README.md",
     ...readdirSync(path.join(ROOT, ".agent"))
       .filter((name) => name.endsWith(".md"))

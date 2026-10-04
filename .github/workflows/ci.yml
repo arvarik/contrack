@@ -46,6 +46,12 @@ concurrency:
 env:
   ONNXRUNTIME_NODE_INSTALL: skip
 
+# The token every job gets unless the job asks for more. Install scripts from
+# npm run in these jobs, so a job that only tests can read the repository and
+# nothing else. The image and release jobs below name the scopes they need.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     # Fork pull requests carry untrusted code, so they are pinned to
@@ -54,11 +60,13 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # .nvmrc is the one pin for CI and for developers' version managers.
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -96,10 +104,12 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -118,7 +128,7 @@ jobs:
 
       - name: Cache Chromium
         id: browser-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
@@ -139,7 +149,7 @@ jobs:
       # success alike, so a green run can still be inspected.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: playwright-report/
@@ -172,13 +182,15 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -186,7 +198,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -194,6 +206,10 @@ jobs:
           # Cache is scoped per platform so the two jobs don't evict each other.
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          # An SBOM, the list of every package in the image, rides with each
+          # platform's manifest as an attestation. `docker buildx imagetools
+          # inspect <tag> --format '{{ json .SBOM }}'` prints it.
+          sbom: true
 
       - name: Export digest
         run: |
@@ -202,7 +218,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: digest-${{ strategy.job-index }}
           path: /tmp/digests/*
@@ -213,22 +229,28 @@ jobs:
     needs: build-image
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # id-token and attestations sign the provenance record below. The signing
+    # certificate comes from Sigstore, through the workflow's OIDC token.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.index.outputs.digest }}
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/digests
           pattern: digest-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -236,7 +258,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -244,6 +266,7 @@ jobs:
             type=sha,prefix=,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Create multi-arch manifest
         working-directory: /tmp/digests
@@ -267,8 +290,8 @@ jobs:
           # and this step failed every run on a perfectly good image.
           #
           # The `os == "linux"` filter matters too: buildx attaches a
-          # provenance attestation per platform, and those manifests carry
-          # `"architecture": "unknown", "os": "unknown"`.
+          # provenance and SBOM attestation per platform, and those manifests
+          # carry `"architecture": "unknown", "os": "unknown"`.
           RAW=$(docker buildx imagetools inspect "$TAG" --raw)
           for arch in amd64 arm64; do
             echo "$RAW" | jq -e --arg a "$arch" \
@@ -277,6 +300,78 @@ jobs:
               || { echo "::error::$TAG is missing linux/$arch"; exit 1; }
             echo "  ✓ linux/$arch"
           done
+
+      # The digest of the multi-arch index, which every tag above points at.
+      # The provenance record and the scan below name the image by it, so
+      # they describe exactly what was pushed, whatever a tag points at later.
+      - name: Read the image digest
+        id: index
+        run: |
+          TAG=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          DIGEST=$(docker buildx imagetools inspect "$TAG" --format '{{ json .Manifest }}' | jq -r .digest)
+          [[ "$DIGEST" == sha256:* ]] || { echo "::error::No digest for $TAG"; exit 1; }
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "$TAG is $DIGEST"
+
+      # A signed record of which workflow run, commit and repository built the
+      # image, pushed to the registry beside it. Anyone can check it with
+      # `gh attestation verify oci://ghcr.io/arvarik/contrack:<tag> --owner
+      # arvarik`, as SECURITY.md says. A storage record is for organization
+      # artifact pages, which a personal repository does not have.
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+  # ── Image scan ─────────────────────────────────────────────────────────────
+  # Grype reads the pushed image and lists the known vulnerabilities that have
+  # a fixed version, in the packages of the Debian base and in node_modules.
+  # The results go to the Security tab as code scanning alerts. The scan
+  # reports and never fails the run: a new CVE in the base image is a reason
+  # to rebuild, not a reason to hold back a release that is already pushed.
+  #
+  # Grype, not Trivy: in March 2026 an attacker force-pushed most tags of
+  # aquasecurity/trivy-action to malware that stole CI secrets.
+  scan-image:
+    needs: merge-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The package can be private, and Grype pulls with Docker's login.
+      - name: Log in to the Container registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan the image
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ghcr.io/${{ github.repository }}@${{ needs.merge-image.outputs.digest }}
+          fail-build: false
+          only-fixed: true
+          severity-cutoff: high
+          output-format: sarif
+
+      - name: Upload the results to code scanning
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: image-scan
 
   # Version tags (vX.Y.Z) get a GitHub Release. Created only if one doesn't
   # already exist for the tag — publishing via `gh release create` first (to
@@ -290,7 +385,9 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Create GitHub release if missing
         env:

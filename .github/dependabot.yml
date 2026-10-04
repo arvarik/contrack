@@ -1,0 +1,53 @@
+# Dependabot opens update pull requests each Monday. GitHub reads this file
+# from the default branch, so it takes effect when it reaches `main`.
+#
+# `cooldown` waits a week after a release before proposing it. A hijacked
+# package version is usually found and pulled within days, so the wait keeps
+# most of them out of this repository.
+#
+# A security update ignores the cooldown and the schedule. Those come from the
+# "Dependabot security updates" setting, not from this file.
+#
+# The Docker base image is not listed. Its tag, node:26-trixie, names the Node
+# major only, so each image build already takes the latest 26.x. A new major
+# moves with .nvmrc, and tests/unit/repo/nodeVersion.test.ts holds them
+# together.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      # One pull request for every minor and patch update of a dev tool, and
+      # one for the app's own dependencies. A major update gets its own.
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  # Each action is pinned to a commit. Dependabot moves the pin and the
+  # version comment beside it together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The features in .devcontainer/devcontainer.json.
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

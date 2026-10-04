@@ -6,8 +6,8 @@
   `main` holds the 1.5 line. The repository allows squash merges only.
 - `package.json` still says 1.5.5. The release bumps it to 2.0.0 and moves the
   `[Unreleased]` section of `CHANGELOG.md` under that version.
-- `CHANGELOG.md` is the full record of what v2 changed. The summary below is
-  the map.
+- `CHANGELOG.md` summarizes what v2 changes, by area. The pull requests hold
+  the details, and the summary below is the map.
 
 ## What v2 changes
 
@@ -38,7 +38,7 @@
   basemaps.
 - **Connectors.** Calendar (ICS), mailbox (IMAP) and Google, with a
   correspondents review.
-- **MCP.** A built-in MCP server with 15 tools for Claude, Cursor and scripts.
+- **MCP.** A built-in MCP server with 18 tools for Claude, Cursor and scripts.
 - **Settings.** A registry of pages with row search and a two-pane shell.
 - **AI.** Routing by task across Gemini, OpenAI, Anthropic and any
   OpenAI-compatible endpoint. Account and instance switches. The local search
