@@ -87,7 +87,7 @@
     "lucide-react": "^0.546.0",
     "morgan": "^1.10.1",
     "motion": "^12.23.24",
-    "multer": "^2.1.1",
+    "multer": "^2.4.0",
     "openai": "^7.3.0",
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
