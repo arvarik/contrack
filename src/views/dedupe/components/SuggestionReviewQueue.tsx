@@ -23,6 +23,7 @@ import {
   usePendingSuggestions,
   useMergeSuggestion,
   useMergeCluster,
+  useMergeClusters,
   useDismissSuggestion,
 } from "../../../api";
 import { ContactCard } from "./shared/ContactCard";
@@ -213,6 +214,7 @@ export const SuggestionReviewQueue = () => {
   const { data: suggestions = [], isLoading } = usePendingSuggestions();
   const mergeSuggestion = useMergeSuggestion();
   const mergeCluster = useMergeCluster();
+  const mergeClusters = useMergeClusters();
   const dismissSuggestion = useDismissSuggestion();
   const navigate = useNavigate();
   const singleKeys = useSingleKeyShortcuts();
@@ -248,29 +250,29 @@ export const SuggestionReviewQueue = () => {
     [clusters, selected],
   );
 
-  // One merge-cluster call per selected group. The previous version walked
-  // each cluster's pairwise SUGGESTIONS and merged them one by one under the
-  // cluster's primary — but a pair like (B,C) doesn't contain the cluster
-  // primary A, and once B merged into A the next pair referenced a tombstone.
-  // Select-all reliably hit both, aborted the loop, and reported failure.
-  // The cluster endpoint merges members, tolerates per-member errors, and
-  // resolves the satisfied suggestions server-side.
+  // The selected groups go in batches: the server merges each group under
+  // its primary, tolerates per-member errors, and resolves the satisfied
+  // suggestions. Merging pair by pair failed, because a pair like (B,C) has
+  // no primary A, and once B merged into A the next pair named a tombstone.
+  // A batch reloads the contacts once, not once per group. A group holds at
+  // most 10 duplicates and a request at most 250 merges, so 25 groups fit.
   const handleBatchMerge = useCallback(async () => {
     if (isBatchProcessing || selectedClusters.length === 0) return;
     setIsBatchProcessing(true);
-    let groups = 0;
-    let failedMembers = 0;
     try {
-      for (const cluster of selectedClusters) {
-        const result = await mergeCluster.mutateAsync({
-          primaryId: cluster.bestPrimaryId,
-          duplicateIds: cluster.contacts
-            .map((c) => c.id)
-            .filter((id) => id !== cluster.bestPrimaryId),
-        });
-        if (result.merged > 0) groups++;
-        failedMembers += result.failed;
+      const payload = selectedClusters.map((cluster) => ({
+        primaryId: cluster.bestPrimaryId,
+        duplicateIds: cluster.contacts
+          .map((c) => c.id)
+          .filter((id) => id !== cluster.bestPrimaryId),
+      }));
+      const results = [];
+      for (let i = 0; i < payload.length; i += 25) {
+        const batch = await mergeClusters.mutateAsync(payload.slice(i, i + 25));
+        results.push(...batch.results);
       }
+      const groups = results.filter((r) => r.merged > 0).length;
+      const failedMembers = results.reduce((n, r) => n + r.failed, 0);
       if (failedMembers === 0) {
         toast.success(`Merged ${groups} group${groups !== 1 ? "s" : ""}`);
       } else {
@@ -286,7 +288,7 @@ export const SuggestionReviewQueue = () => {
     } finally {
       setIsBatchProcessing(false);
     }
-  }, [selectedClusters, mergeCluster, isBatchProcessing]);
+  }, [selectedClusters, mergeClusters, isBatchProcessing]);
 
   const handleBatchDismiss = useCallback(async () => {
     if (isBatchProcessing || selectedClusters.length === 0) return;

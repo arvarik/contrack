@@ -1,4 +1,8 @@
-import { invalidateContactViews } from "./contactCache";
+import {
+  invalidateContactViews,
+  patchContactCaches,
+  refreshContact,
+} from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { listRoutes } from "../../shared/contracts/lists";
 /**
@@ -10,7 +14,12 @@ import { listRoutes } from "../../shared/contracts/lists";
  *
  * @module api/lists
  */
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { type Contact, type ContactList } from "../types";
 
@@ -40,8 +49,6 @@ export const useDeleteList = () => {
   return useMutation({
     mutationFn: (id: string) => apiJson(listRoutes.delete, `/lists/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
       invalidateContactViews(queryClient);
     },
   });
@@ -59,8 +66,6 @@ export const useUpdateList = () => {
     }): Promise<ContactList> =>
       apiJson(listRoutes.update, `/lists/${id}`, jsonBody(data)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
       invalidateContactViews(queryClient);
     },
   });
@@ -90,7 +95,21 @@ export const useReorderLists = () => {
   });
 };
 
-export const useAddToList = () => {
+/** The lists one contact is in, from whichever cache holds the contact. */
+function listsOf(client: QueryClient, contactId: string): Contact["lists"] {
+  const contact =
+    client.getQueryData<Contact>(["contacts", contactId]) ??
+    client
+      .getQueryData<Contact[]>(["contacts"])
+      ?.find((c) => c.id === contactId);
+  return contact?.lists ?? [];
+}
+
+/**
+ * Put a contact on a list or take it off. The chip changes at once, in both
+ * caches, with the list's own name. A failed write puts both caches back.
+ */
+function useListMembership(add: boolean) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -100,123 +119,42 @@ export const useAddToList = () => {
       listId: string;
       contactId: string;
     }) =>
-      apiJson(
-        listRoutes.addMember,
-        `/lists/${listId}/members`,
-        jsonBody({ contactId }),
-      ),
+      add
+        ? apiJson(
+            listRoutes.addMember,
+            `/lists/${listId}/members`,
+            jsonBody({ contactId }),
+          )
+        : apiJson(
+            listRoutes.removeMember,
+            `/lists/${listId}/members/${contactId}`,
+          ),
     onMutate: async ({ listId, contactId }) => {
       await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      await queryClient.cancelQueries({ queryKey: ["contacts", contactId] });
-
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-      const previousContact = queryClient.getQueryData<Contact>([
-        "contacts",
-        contactId,
-      ]);
-
-      const tentativeList = {
-        id: listId,
-        name: "...",
-        icon: "list",
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      };
-
-      if (previousContact) {
-        queryClient.setQueryData<Contact>(["contacts", contactId], {
-          ...previousContact,
-          lists: [...(previousContact.lists || []), tentativeList],
-        });
-      }
-
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) =>
-          c.id === contactId
-            ? { ...c, lists: [...(c.lists || []), tentativeList] }
-            : c,
-        ),
+      const list = add
+        ? queryClient
+            .getQueryData<ContactList[]>(["lists"])
+            ?.find((l) => l.id === listId)
+        : undefined;
+      if (add && !list) return undefined;
+      const lists = listsOf(queryClient, contactId).filter(
+        (l) => l.id !== listId,
       );
-
-      return { previousContacts, previousContact };
+      return patchContactCaches(queryClient, contactId, {
+        lists: list
+          ? [...lists, { id: list.id, name: list.name, icon: list.icon }]
+          : lists,
+      });
     },
-    onError: (_err, { contactId }, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-      if (context?.previousContact)
-        queryClient.setQueryData(
-          ["contacts", contactId],
-          context.previousContact,
-        );
-    },
-    onSettled: (_data, _error, { contactId }) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
-    },
+    onError: (_error, _input, rollback) => rollback?.(),
+    onSettled: (_data, _error, { contactId }) =>
+      void refreshContact(queryClient, contactId),
   });
-};
+}
 
-export const useRemoveFromList = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      listId,
-      contactId,
-    }: {
-      listId: string;
-      contactId: string;
-    }) =>
-      apiJson(listRoutes.removeMember, `/lists/${listId}/members/${contactId}`),
-    onMutate: async ({ listId, contactId }) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      await queryClient.cancelQueries({ queryKey: ["contacts", contactId] });
+export const useAddToList = () => useListMembership(true);
 
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-      const previousContact = queryClient.getQueryData<Contact>([
-        "contacts",
-        contactId,
-      ]);
-
-      if (previousContact) {
-        queryClient.setQueryData<Contact>(["contacts", contactId], {
-          ...previousContact,
-          lists: (previousContact.lists || []).filter((l) => l.id !== listId),
-        });
-      }
-
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) =>
-          c.id === contactId
-            ? { ...c, lists: (c.lists || []).filter((l) => l.id !== listId) }
-            : c,
-        ),
-      );
-
-      return { previousContacts, previousContact };
-    },
-    onError: (_err, { contactId }, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-      if (context?.previousContact)
-        queryClient.setQueryData(
-          ["contacts", contactId],
-          context.previousContact,
-        );
-    },
-    onSettled: (_data, _error, { contactId }) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
-    },
-  });
-};
+export const useRemoveFromList = () => useListMembership(false);
 
 export const useBulkAddToList = () => {
   const queryClient = useQueryClient();
@@ -235,8 +173,6 @@ export const useBulkAddToList = () => {
       ),
     onSuccess: () => {
       invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
     },
   });
 };

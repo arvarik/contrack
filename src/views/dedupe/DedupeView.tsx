@@ -191,10 +191,19 @@ export const DedupeView = () => {
     async (primaryId: string, duplicateIds: string[]) => {
       if (!currentCluster || mergeCluster.isPending) return;
       try {
-        await mergeCluster.mutateAsync({ primaryId, duplicateIds });
+        const { merged } = await mergeCluster.mutateAsync({
+          primaryId,
+          duplicateIds,
+        });
+        if (merged === 0) {
+          toast.error(
+            "Nothing was merged. Scan again to see the current groups",
+          );
+          return;
+        }
         setMergedIds((prev) => new Set(prev).add(currentCluster.id));
         removeCluster(currentCluster.id);
-        toast.success(`Merged ${duplicateIds.length + 1} contacts into one`);
+        toast.success(`Merged ${merged + 1} contacts into one`);
       } catch (err: unknown) {
         toast.error(
           `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -665,8 +674,16 @@ export const DedupeView = () => {
               >
                 <EmptyState
                   icon={CheckCircle2}
-                  title="No duplicates found"
-                  body="Run a scan after an import to check again"
+                  title={
+                    scan?.autoMerged
+                      ? "Nothing left to review"
+                      : "No duplicates found"
+                  }
+                  body={
+                    scan?.autoMerged
+                      ? `${scan.autoMerged} merged automatically. Run a scan after an import to check again`
+                      : "Run a scan after an import to check again"
+                  }
                   action={{
                     label: "Scan again",
                     icon: ScanSearch,

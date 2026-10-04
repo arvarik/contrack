@@ -50,6 +50,14 @@ export default defineConfig({
               priority: 10,
             },
             {
+              // TipTap's group would take this as one of its dependencies,
+              // and `InfoTip` uses it on every page, so every page preloaded
+              // the editor. Its own group, ranked above TipTap's, wins it.
+              name: "vendor-floating-ui",
+              test: /\/node_modules\/@floating-ui\//,
+              priority: 5,
+            },
+            {
               name: "vendor-tiptap",
               test: /\/node_modules\/(@tiptap|prosemirror)/,
             },

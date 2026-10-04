@@ -1,4 +1,5 @@
 import { apiJson, jsonBody } from "./client";
+import { invalidateContactViews, refreshContact } from "./contactCache";
 import { corvidReact } from "../lib/corvid";
 import { actionItemRoutes } from "../../shared/contracts/actionItems";
 import type { BodyOf } from "../../shared/contracts/route";
@@ -35,11 +36,7 @@ export const useBulkCreateActionItems = () => {
         "/action-items/bulk",
         jsonBody(body),
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
+    onSuccess: () => invalidateContactViews(queryClient),
   });
 };
 
@@ -54,15 +51,8 @@ export const useUpdateActionItem = () => {
       data: { title?: string; dueAt?: string };
     }): Promise<ActionItem> =>
       apiJson(actionItemRoutes.update, `/action-items/${id}`, jsonBody(data)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: true });
-      queryClient.invalidateQueries({
-        queryKey: ["dashboard", "activity"],
-        exact: true,
-      });
-    },
+    // A trigger keeps the contact's next follow-up date in step.
+    onSuccess: (item) => void refreshContact(queryClient, item.contactId),
   });
 };
 
@@ -71,16 +61,10 @@ export const useCompleteActionItem = () => {
   return useMutation({
     mutationFn: (id: string): Promise<ActionItem> =>
       apiJson(actionItemRoutes.complete, `/action-items/${id}/complete`),
-    onSuccess: () => {
+    onSuccess: (item) => {
       // Done: the corvid on its perch nods.
       corvidReact("nod");
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: true });
-      queryClient.invalidateQueries({
-        queryKey: ["dashboard", "activity"],
-        exact: true,
-      });
+      void refreshContact(queryClient, item.contactId);
     },
   });
 };

@@ -1,4 +1,4 @@
-import { invalidateContactViews } from "./contactCache";
+import { refreshContact } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { INTERACTION_SEARCH_KEY } from "./search";
 import { interactionRoutes } from "../../shared/contracts/interactions";
@@ -63,7 +63,7 @@ export const useAddInteraction = () => {
     onSuccess: () => corvidReact("caw"),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
-      invalidateContactViews(queryClient);
+      void refreshContact(queryClient, contactId);
       invalidateInteractionSearch(queryClient);
     },
   });
@@ -76,7 +76,7 @@ export const useDeleteInteraction = () => {
       apiJson(interactionRoutes.delete, `/interactions/${id}`),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
-      invalidateContactViews(queryClient);
+      void refreshContact(queryClient, contactId);
       invalidateInteractionSearch(queryClient);
     },
   });
@@ -96,7 +96,7 @@ export const useUpdateInteraction = () => {
       apiJson(interactionRoutes.update, `/interactions/${id}`, jsonBody(data)),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
-      invalidateContactViews(queryClient);
+      void refreshContact(queryClient, contactId);
       invalidateInteractionSearch(queryClient);
     },
   });
@@ -122,8 +122,7 @@ export const useAddAttachment = () => {
     },
     onSuccess: (_data, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
-      invalidateContactViews(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
+      void refreshContact(queryClient, contactId);
       invalidateInteractionSearch(queryClient);
     },
   });
@@ -140,9 +139,8 @@ export const useGenerateBriefing = () => {
       return data.points;
     },
     onSuccess: (_, contactId) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
-      invalidateContactViews(queryClient);
+      void refreshContact(queryClient, contactId);
     },
   });
 };
@@ -155,8 +153,8 @@ export const usePromoteGhost = () => {
         interactionRoutes.promote,
         `/contacts/${contactId}/promote`,
       )) as Contact,
-    onSuccess: () => {
-      invalidateContactViews(queryClient);
+    onSuccess: (contact) => {
+      void refreshContact(queryClient, contact);
       queryClient.invalidateQueries({ queryKey: ["timeline"] });
       invalidateInteractionSearch(queryClient);
     },

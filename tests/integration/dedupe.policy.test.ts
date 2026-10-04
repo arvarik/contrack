@@ -547,3 +547,24 @@ describe("a pair marked as different people", () => {
     expect(suggestions()).toHaveLength(0);
   });
 });
+
+describe("a scan's results", () => {
+  it("leave out a pair the scan merged, and the hidden contact cannot be a primary", async () => {
+    const ids = await seed([
+      { name: "Robert Castellanos", phones: ["+34 555 867 5309"] },
+      { name: "Bob Castellanos", phones: ["555-867-5309"] },
+    ]);
+    const { scanId } = dedupeQueue.createScan(scope, "quick");
+    await dedupeService.runScan(scope, scanId, "quick", "test");
+
+    const result = dedupeQueue.getScan(scope, scanId);
+    expect(result?.autoMerged).toBe(1);
+    expect(result?.clusters).toEqual([]);
+
+    const [hidden, live] = anyMerged([ids[0]]) ? ids : [ids[1], ids[0]];
+    expect(() =>
+      dedupeService.mergeContacts(scope, hidden, live, "test"),
+    ).toThrow("already merged");
+    expect(anyMerged([live])).toBe(false);
+  });
+});

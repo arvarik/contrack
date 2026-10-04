@@ -41,6 +41,8 @@ const mockCompleteMutate = vi.fn();
 const mockUpdateMutate = vi.fn();
 const mockSetPreference = vi.fn();
 let mockDashboardData: DashboardPayload | null = null;
+let mockDashboardError = false;
+const mockRefetch = vi.fn();
 const COMPLETED_ITEM = {
   id: "done-1",
   contactId: "c-1",
@@ -77,7 +79,8 @@ vi.mock("../../../../src/api", () => ({
   useDashboard: () => ({
     data: mockDashboardData,
     isLoading: false,
-    isError: false,
+    isError: mockDashboardError,
+    refetch: mockRefetch,
   }),
   useDailyInsight: () => ({
     data: { text: "Strategic networking update.", category: "Strategy" },
@@ -309,6 +312,8 @@ describe("frontend.pulse", () => {
     mockUpdateMutate.mockClear();
     mockSetPreference.mockClear();
     mockDashboardData = createSampleDashboard();
+    mockDashboardError = false;
+    mockRefetch.mockClear();
     mockCompletedItems = [COMPLETED_ITEM];
     mockPreferences = {
       pulseLayout: { hidden: [], order: {} },
@@ -323,6 +328,19 @@ describe("frontend.pulse", () => {
     cleanup();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("keeps a loaded Pulse when a refetch fails, and offers a retry when nothing loaded", () => {
+    mockDashboardError = true;
+    const { unmount } = renderPulseWithContactRoute();
+    expect(screen.queryByText("System disconnected")).toBeNull();
+    expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
+    unmount();
+
+    mockDashboardData = null;
+    renderPulseWithContactRoute();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mockRefetch).toHaveBeenCalledOnce();
   });
 
   it("never completes a row nobody can see: the first D only shows it", () => {

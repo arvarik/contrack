@@ -16,6 +16,7 @@ import { useMapFilter } from "../../../../src/views/map/useMapFilter";
 
 vi.mock("../../../../src/api/geo", () => ({
   searchPlace: vi.fn(async () => ({ lat: 51.5, lng: -0.12 })),
+  GEO_STATUS_KEY: ["geo", "status"],
 }));
 import { searchPlace } from "../../../../src/api/geo";
 

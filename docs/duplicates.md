@@ -80,7 +80,9 @@ contacts in the Trash. When it finishes, its results replace the list in
 **Possible duplicates**.
 
 In a scan, a pair of two contacts at or above your auto-merge sensitivity
-merges by itself. A group of three or more contacts always waits for you.
+merges by itself, and the results leave it out. A group of three or more
+contacts always waits for you. When nothing is left to review, the page says
+how many pairs merged automatically.
 
 > **Note:** The two AI scans need AI to be on. When **Use AI for my account**
 > is off in **Settings → Privacy and AI**, or an admin turned AI off for the

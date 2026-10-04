@@ -1,23 +1,85 @@
-import type { QueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  type InvalidateQueryFilters,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { Contact } from "../types";
+import { STALE_TIMES } from "../lib/queryConfig";
+import { contactRoutes } from "../../shared/contracts/contacts";
 import { apiJson } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
 
-/** Refresh contact lists and the views whose counts depend on them. */
+/** One contact, as the contact page reads it. */
+export const contactQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["contacts", id],
+    queryFn: async ({ signal }): Promise<Contact> =>
+      (await apiJson(contactRoutes.get, `/contacts/${id}`, {
+        signal,
+      })) as Contact,
+    staleTime: STALE_TIMES.contactDetail,
+  });
+
+/**
+ * The views built from many contacts. Only those on screen refetch. The
+ * dashboard keys are exact: the daily insight under it can cost an AI call.
+ */
+const DERIVED_VIEWS: InvalidateQueryFilters[] = [
+  { queryKey: ["lists"] },
+  { queryKey: ["list-contacts"] },
+  { queryKey: ["actionItems"] },
+  { queryKey: ["dashboard"], exact: true },
+  { queryKey: ["dashboard", "activity"], exact: true },
+  { queryKey: ["zeroState"] },
+  { queryKey: GEO_STATUS_KEY },
+];
+
+function invalidateDerivedViews(client: QueryClient): void {
+  for (const filters of DERIVED_VIEWS) void client.invalidateQueries(filters);
+}
+
+/**
+ * Refresh every contact query and the views built from them. For a write
+ * that adds, removes or merges contacts, or changes many at once.
+ */
 export function invalidateContactViews(client: QueryClient): void {
-  for (const key of [
-    "contacts",
-    "lists",
-    "list-contacts",
-    "actionItems",
-    "dashboard",
-    "zeroState",
-    "trash",
-    "relationships",
-  ]) {
-    void client.invalidateQueries({ queryKey: [key] });
+  void client.invalidateQueries({ queryKey: ["contacts"] });
+  void client.invalidateQueries({ queryKey: ["trash"] });
+  invalidateDerivedViews(client);
+}
+
+/** Put the server's copy of a contact on its page and in its list row. */
+export function storeContact(client: QueryClient, contact: Contact): void {
+  client.setQueryData(["contacts", contact.id], contact);
+  client.setQueryData<Contact[]>(["contacts"], (old) =>
+    old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
+  );
+}
+
+/**
+ * Refresh after a write that changed one contact, without the list of every
+ * contact. The server's copy goes into the contact's row, so the other rows
+ * stay as they are. With only an id, the contact is read alone first. If
+ * that read fails, every contact query refreshes, as before.
+ */
+export async function refreshContact(
+  client: QueryClient,
+  contact: Contact | string,
+): Promise<void> {
+  const id = typeof contact === "string" ? contact : contact.id;
+  const fresh =
+    typeof contact === "string"
+      ? await client
+          .fetchQuery({ ...contactQuery(id), staleTime: 0 })
+          .catch(() => null)
+      : contact;
+  if (fresh) {
+    storeContact(client, fresh);
+    void client.invalidateQueries({ queryKey: ["contacts", id, "score"] });
+  } else {
+    void client.invalidateQueries({ queryKey: ["contacts"] });
   }
-  void client.invalidateQueries({ queryKey: GEO_STATUS_KEY });
+  invalidateDerivedViews(client);
 }
 
 const writes = new Map<string, Promise<unknown>>();

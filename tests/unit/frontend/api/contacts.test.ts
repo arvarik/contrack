@@ -106,6 +106,42 @@ describe("contact query identity and saves", () => {
       expect(client.getQueryState([key])?.isInvalidated).toBe(true);
   });
 
+  it("puts a saved contact in its row without reloading every contact", async () => {
+    const { wrapper, client } = setup();
+    const fetch = vi.fn(async (url: string) =>
+      url.includes("view=slim")
+        ? Response.json([
+            { id: "a", name: "Alice" },
+            { id: "b", name: "Bob" },
+          ])
+        : Response.json({ id: "a", name: "Alicia" }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { result } = renderHook(
+      () => ({ list: useContactNames(), save: useUpdateContact() }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.list.data).toHaveLength(2));
+    await act(async () => {
+      await result.current.save.mutateAsync({
+        id: "a",
+        data: { name: "Alicia" },
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.list.data?.map((c) => c.name)).toEqual([
+        "Alicia",
+        "Bob",
+      ]),
+    );
+    expect(client.getQueryData(["contacts", "a"])).toEqual({
+      id: "a",
+      name: "Alicia",
+    });
+    const reads = fetch.mock.calls.filter(([url]) => url.includes("view=slim"));
+    expect(reads).toHaveLength(1);
+  });
+
   it("serializes edits for one contact and continues after a failed edit", async () => {
     let reject!: (error: Error) => void;
     const first = writeContactInOrder(

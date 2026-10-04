@@ -78,6 +78,7 @@ async function run<T>(
 
 describe("the moments the corvid answers", () => {
   it("nods when a follow-up is done", async () => {
+    vi.stubGlobal("fetch", answer(200, { id: "a1", contactId: "c1" }));
     await run(useCompleteActionItem, "a1");
     expect(reactions).toEqual(["nod"]);
   });
