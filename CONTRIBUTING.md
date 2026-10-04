@@ -22,6 +22,10 @@ npm run dev            # http://localhost:3210, with hot reload
 
 - Node runs the TypeScript itself. `npm run dev` is `node server.ts`, with
   Vite as middleware on the same port.
+- A dev container does all of this for you. Open the repository in a GitHub
+  Codespace, or in VS Code with the Dev Containers extension.
+  `.devcontainer/devcontainer.json` installs the Node version in `.nvmrc`,
+  runs `npm ci` and `npm run db:seed`, and forwards port 3210.
 - Copy `.env.example` to `.env` only to change a default or add a key. The
   [Configuration reference](docs/configuration.md) lists every variable.
 - Your data is `curator.db` in the project root. For a second, test instance,
@@ -69,8 +73,10 @@ A pre-commit hook runs Oxlint and Prettier on the staged files.
 2. Keep one change per pull request.
 3. Add or change tests with the code. A bug fix comes with a test that fails
    without it.
-4. Update the docs page the change affects, and add a line under
-   `[Unreleased]` in `CHANGELOG.md`.
+4. Update the docs page the change affects. When users or operators notice
+   the change, add one short line under `[Unreleased]` in `CHANGELOG.md`.
+   Say what changes for them, not how the code does it. The pull request
+   holds the details.
 5. Run `npm run lint`, `npm run format:check` and `npm test`. After a change to
    a page, a dialog, a form or sign-in, also run
    `npm run build && npm run test:e2e`.
@@ -215,9 +221,18 @@ pushes to them, on `v*` tags, and by hand.
 - `browser-a11y`: the Playwright suite. Its report is uploaded on every run.
 - `build-image` and `merge-image`: on a push to `main` or a `v*` tag, one
   image for linux/amd64 and linux/arm64 at `ghcr.io/arvarik/contrack`. `main`
-  is tagged `latest` and the short SHA, a release its version and
-  `major.minor`.
+  is tagged `latest` and the short SHA, and a release its version, its
+  `major.minor` and its `major`. Each image carries an SBOM, and a signed
+  provenance record that `gh attestation verify` checks.
+- `scan-image`: Grype scans the pushed image, and its findings go to the
+  Security tab. The scan never fails the run.
 - `release`: on a `v*` tag, a GitHub release, unless one exists already.
+
+Every job gets a read-only token unless it names more. Every action is pinned
+to a commit, with its version in a comment. Dependabot
+(`.github/dependabot.yml`) proposes npm, action and dev container updates each
+Monday, a week after their release. `.github/workflows/scorecard.yml` runs
+OpenSSF Scorecard on `main` each week and feeds the README badge.
 
 A manual run can use the `hppc` self-hosted runner when the hosted pool is
 slow. Pull requests from forks never reach it.
@@ -233,12 +248,18 @@ slow. Pull requests from forks never reach it.
 
 ## Report a problem
 
-Open an issue with the steps, what you expected, what happened, your Node
-version and OS, and the log lines around the error. Every error response has
-a request id that the server log repeats.
+Open an [issue](https://github.com/arvarik/contrack/issues/new/choose). The bug
+form asks for the steps, what you expected, what happened, your version and
+install, and the log lines around the error. Every error response has a
+request id that the server log repeats. Questions go to
+[Discussions](https://github.com/arvarik/contrack/discussions/categories/q-a),
+and you can email the maintainer at
+[arvind.arikatla@gmail.com](mailto:arvind.arikatla@gmail.com).
 
-For a security problem, post no details in public. Open an issue that asks
-for a private channel, and the maintainer will reply.
+For a security problem, post no details in public. [SECURITY.md](SECURITY.md)
+says how to report it privately.
+
+Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

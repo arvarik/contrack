@@ -7,17 +7,20 @@
   </h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Node.js Version](https://img.shields.io/badge/Node.js-22+-success)](https://nodejs.org/)
-[![SQLite WAL](https://img.shields.io/badge/Database-SQLite3_WAL-003B57?logo=sqlite)](https://sqlite.org/)
-[![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
-[![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
-[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-1695_passing-brightgreen)](https://vitest.dev/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![CI](https://github.com/arvarik/contrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arvarik/contrack/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/arvarik/contrack)](https://github.com/arvarik/contrack/releases)
+[![Docker image](https://img.shields.io/badge/image-ghcr.io%2Farvarik%2Fcontrack-2496ED?logo=docker&logoColor=white)](https://github.com/arvarik/contrack/pkgs/container/contrack)
+[![Node.js 26.10+](https://img.shields.io/badge/Node.js-26.10%2B-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/arvarik/contrack/badge)](https://scorecard.dev/viewer/?uri=github.com/arvarik/contrack)
+
 </div>
 
 <br/>
+
+<p align="center">
+  <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
+</p>
 
 Relationships are your most valuable asset, but they're also the hardest thing to keep track of. Contacts scattered across Apple, Google, and LinkedIn. Names you recognize but can't quite place. Introductions you meant to follow up on but never did. **Contrack fixes that.**
 
@@ -56,7 +59,7 @@ A GitHub-style command center featuring faceted filters (`role:`, `company:`, `t
 </td>
 <td width="70%">
 
-<img src="docs/screenshots/command-pallette.png" alt="Command Palette" width="100%" />
+<img src="docs/screenshots/command-palette.png" alt="Command Palette" width="100%" />
 
 </td>
 </tr>
@@ -83,7 +86,7 @@ The day is the headline: one sentence says what is due, and a field under it ask
 
 Visualize your network geographically to plan trips or coordinate local meetups. See exactly where your connections are clustered around the globe at a glance.
 
-Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Switch between pins, heat maps, and relationship health rings. Save custom views, select contacts with box or lasso tools, search places, and filter by facets.
+Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Switch between pins and a heat map, save views, select contacts with box or lasso tools, search places, and filter by facets. The People pane lists everyone in view, and the overdue come first.
 
 </td>
 <td width="70%">
@@ -128,10 +131,10 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ### More Capabilities
 
-- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 15 tools, prompts (`catch_me_up`, `weekly_review`), and resources for Claude Code, Claude Desktop, and Cursor integration
+- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 18 tools, prompts (`catch_me_up`, `weekly_review`), and resources for Claude Code, Claude Desktop, and Cursor integration. A read-only token sees only the read-only tools
 - **Add from text** — Paste unstructured text, AI extracts a structured contact
 - **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
-- **Smart Router** — Automatic Gemini model selection (Lite/Flash/Pro) per use case
+- **Automatic model choice** — With one key, every task runs on a fitting model from that provider. Pin a model per task when you want to
 - **Batch Enrichment** — AI-powered web research to hydrate contact profiles
 - **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership
 - **Note Search** — "Who discussed hiring last month?" answered from your own notes, locally: the person, the date and the passage, with date phrases read in your time zone
@@ -201,6 +204,12 @@ The first start downloads the two search models (28 MB) from Hugging Face. To ke
 
 > **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
 
+### Option 4: GitHub Codespaces (try it in the browser)
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/arvarik/contrack?quickstart=1)
+
+The Codespace installs Node.js 26.10, the dependencies and about 30 fictional demo contacts. Run `npm run dev` in its terminal, and the browser opens Contrack. The same setup works in VS Code with the Dev Containers extension, from [`.devcontainer/`](.devcontainer/devcontainer.json).
+
 ---
 
 ## 🛠️ Technology Stack
@@ -213,7 +222,7 @@ The first start downloads the two search models (28 MB) from Hugging Face. To ke
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
 | **Mapping**  | MapLibre GL JS + OpenFreeMap tiles, Nominatim geocoding               |
-| **Testing**  | Vitest — 1,695 unit, integration and eval tests, no API keys needed   |
+| **Testing**  | Vitest unit, integration and eval tests, Playwright, no API keys      |
 
 ---
 
@@ -248,27 +257,16 @@ Full documentation lives in the [`docs/`](docs/README.md) directory:
 
 ---
 
-## 🔐 Environment Variables
+## 🔐 Configuration
 
-| Variable                | Description                                                                                                                                       | Default      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `AI_PROVIDER`           | Preferred provider for capabilities set to Auto                                                                                                   | `gemini`     |
-| `GEMINI_API_KEY`        | Gemini API key                                                                                                                                    | —            |
-| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                    | —            |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                 | —            |
-| `PORT`                  | Express listening port                                                                                                                            | `3210`       |
-| `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)                                                                                                       | `127.0.0.1`  |
-| `PUBLIC_URL`            | Canonical external origin behind a proxy (e.g. `https://crm.example.com`) for passkeys and invites                                                | — (derived)  |
-| `AUTH_REQUIRED`         | `true` = require sign-in with an account                                                                                                          | `false`      |
-| `SMTP_URL`              | SMTP connection URL (`smtp://` or `smtps://`) for outgoing transactional mail                                                                     | — (off)      |
-| `MAIL_FROM`             | Sender address for outgoing emails                                                                                                                | — (auto)     |
-| `CONTRACK_SECRET_KEY`   | 64-character hex key encrypting database secrets; generated at `DATA_DIR/secret.key` when omitted                                                 | — (auto)     |
-| `API_TOKEN`             | **Deprecated.** Instance-wide machine credential, and setting it gates the instance. Removed in 3.0, use a personal token from Settings → Account | — (off)      |
-| `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache)                                                                                         | project root |
-| `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)                                                                                               | `24`         |
-| `BACKUP_KEEP`           | Rotation depth for automatic snapshots                                                                                                            | `7`          |
+Contrack runs with no configuration. To change a default, set an environment variable in `.env` or in the container. The variables most installs touch:
 
-More variables (per-capability model pins, CORS, trash retention, background-job control) in the [Configuration Guide](docs/configuration.md). A liveness probe lives at `GET /healthz` — always reachable without a credential, used by the Docker `HEALTHCHECK`, and safe to point an uptime monitor at.
+- An AI key: `GEMINI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Each one is optional, and **Settings → Administration → AI** can connect a provider instead.
+- `AUTH_REQUIRED=true` before anything but this machine can reach the port.
+- `PUBLIC_URL` and `TRUST_PROXY_HOPS=1` behind a reverse proxy.
+- `SMTP_URL` and `MAIL_FROM` for invitations, password resets and sign-in links.
+
+The [Configuration reference](docs/configuration.md) lists every variable and its default. A liveness probe lives at `GET /healthz` — always reachable without a credential, used by the Docker `HEALTHCHECK`, and safe to point an uptime monitor at.
 
 ---
 
@@ -310,9 +308,18 @@ graph TD
 
 ---
 
+## 💬 Get help
+
+- Ask a question in [Discussions](https://github.com/arvarik/contrack/discussions/categories/q-a).
+- Report a bug or ask for a feature in [Issues](https://github.com/arvarik/contrack/issues/new/choose).
+- Email the maintainer at [arvind.arikatla@gmail.com](mailto:arvind.arikatla@gmail.com).
+- Report a security problem privately, as the [security policy](SECURITY.md) says.
+
+---
+
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development standards, code style, and PR process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development standards, code style, and PR process. Coding agents start at [AGENTS.md](AGENTS.md). Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Each release is summarized in the [changelog](CHANGELOG.md).
 
 ---
 
