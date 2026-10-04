@@ -187,7 +187,7 @@ When AI is off for your account, or AI could not answer, you get the list that C
 
 ### While AI works
 
-A quick answer shows nothing in between. A longer wait shows "Searching your network…" and "AI is checking who fits your question". The corvid leaves the search box and hunts beside or above the search column, never over the results, until the answer lands. With **Corvid motion** at **Subtle** or **Off** in **Settings → Appearance**, with reduced motion, or in a window with no room beside the column, the bird stays still.
+If you leave Ask while it searches, the search goes on, and the answer is there when you come back. A quick answer shows nothing in between. A longer wait shows "Searching your network…" and "AI is checking who fits your question". The corvid leaves the search box and hunts beside or above the search column, never over the results, until the answer lands. With **Corvid motion** at **Subtle** or **Off** in **Settings → Appearance**, with reduced motion, or in a window with no room beside the column, the bird stays still.
 
 ### The index status line
 

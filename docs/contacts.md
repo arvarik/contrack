@@ -42,9 +42,9 @@ phone, a contact opens over the list.
 | Button                   | What it does                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------- |
 | **Track** or **Untrack** | Tracks the selection at your default cadence, with **Undo**. **Untrack** shows when all are tracked. |
-| **Archive**              | Archives the selection.                                                                              |
+| **Archive**              | Archives the selection, with **Undo**.                                                               |
 | **List**                 | Adds the selection to a list.                                                                        |
-| **Field**                | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them.                    |
+| **Field**                | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.     |
 | **Color**                | Sets the page colour of each contact.                                                                |
 | **CSV**                  | Copies the name, role, company, location, first email and first phone to the clipboard.              |
 | **Delete**               | Moves the selection to the trash, with **Undo**.                                                     |
@@ -277,7 +277,8 @@ and a tag's name opens the Network list filtered to that tag.
 ## Archive and trash
 
 **Archive**, in the actions menu, the bulk bar or a row's menu, hides a
-contact and keeps its history. An archived contact leaves the Network list,
+contact and keeps its history. The toast offers **Undo** for 10 seconds. An
+archived contact leaves the Network list,
 the map, Pulse and Ask Contrack. **Settings → Archived contacts** lists them,
 with **Restore** on each row, and **Select** to restore or delete several.
 

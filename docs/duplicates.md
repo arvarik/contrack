@@ -188,6 +188,8 @@ Keys on **Possible duplicates**:
 | `←` or `H` | Keep them separate |
 | `Space`    | Select the pair    |
 
+A merge with `→` or `L` offers **Undo** in its toast.
+
 ## Merge contacts by hand
 
 1. Open **Settings → Duplicates** and select **Manual merge**.

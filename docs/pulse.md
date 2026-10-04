@@ -148,6 +148,8 @@ On a wider screen, **Up next** scrolls inside its card. When the queue is empty,
 
 The first press of `J`, `K`, `D`, `S` or `L` only shows which row is highlighted. It does nothing else, so `D` never completes a row you cannot see. `D` and `S` work on follow-up rows only.
 
+`D`, or the check on a row, takes the follow-up out of the queue at once. The toast "Follow-up done" offers **Undo** for 10 seconds, and the follow-up is marked done when the toast closes.
+
 You can also press `Tab` to move into the list. Then:
 
 - `↑`/`↓` move between items in Up next.
