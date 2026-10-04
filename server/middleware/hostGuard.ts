@@ -33,28 +33,41 @@ const LOCAL_SUFFIXES = [
 ];
 
 /**
- * The names `ALLOWED_HOSTS` adds, comma-separated. A name that starts with a
- * dot allows every name under it. `*` turns the guard off.
+ * A host name as it is compared: lowercase, no port, no brackets, and no
+ * final dot. `ALLOWED_HOSTS` entries go through it too, so an entry written
+ * as a URL or with a port still matches. Null when it is not a host at all.
+ */
+function normalHost(raw: string): string | null {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value === "*" || value.startsWith(".")) return value.replace(/\.$/, "");
+  try {
+    const host = new URL(value.includes("://") ? value : `http://${value}`)
+      .hostname;
+    return host.replace(/^\[|\]$/g, "").replace(/\.$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The names `ALLOWED_HOSTS` adds, comma-separated, and the `PUBLIC_URL` host.
+ * A name that starts with a dot allows every name under it. `*` turns the
+ * guard off.
  */
 function configuredHosts(): string[] {
-  const hosts = (process.env.ALLOWED_HOSTS ?? "")
-    .split(",")
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean);
-  const publicUrl = process.env.PUBLIC_URL?.trim();
-  if (publicUrl) {
-    try {
-      hosts.push(new URL(publicUrl).hostname.toLowerCase());
-    } catch {
-      // createApp refuses a bad PUBLIC_URL at boot.
-    }
-  }
-  return hosts;
+  return [
+    ...(process.env.ALLOWED_HOSTS ?? "").split(","),
+    process.env.PUBLIC_URL ?? "",
+  ]
+    .map(normalHost)
+    .filter((host): host is string => host !== null);
 }
 
 /** True when a page on the public internet cannot own this name. */
-export function isHostAllowed(hostname: string): boolean {
-  const name = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+export function isHostAllowed(raw: string): boolean {
+  const name = normalHost(raw);
+  if (!name) return false;
   if (net.isIP(name) || !name.includes(".")) return true;
   if (LOCAL_SUFFIXES.some((suffix) => name.endsWith(suffix))) return true;
   return configuredHosts().some(
@@ -71,11 +84,14 @@ export function hostGuard(
   next: NextFunction,
 ): void {
   if (isAuthRequired()) return next();
-  // `req.hostname` reads X-Forwarded-Host only from a trusted proxy hop.
-  const hostname = req.hostname;
-  if (hostname && isHostAllowed(hostname)) return next();
+  // Both names must pass. `req.hostname` reads X-Forwarded-Host from a
+  // trusted proxy hop, and a browser lets a page set that header itself, so
+  // the raw Host header the browser wrote is checked as well.
+  const names = [req.headers.host ?? "", req.hostname ?? ""];
+  const refused = names.find((name) => !isHostAllowed(name));
+  if (refused === undefined) return next();
 
-  const message = `Contrack does not answer to "${hostname}" while sign-in is off. Add the name to ALLOWED_HOSTS, or turn sign-in on with AUTH_REQUIRED=true.`;
+  const message = `Contrack does not answer to "${refused || "a request with no host"}" while sign-in is off. Add the name to ALLOWED_HOSTS, or turn sign-in on with AUTH_REQUIRED=true.`;
   if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
     return next(new AppError(message, 403, { code: "HOST_NOT_ALLOWED" }));
   }

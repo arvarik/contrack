@@ -21,7 +21,6 @@ import {
 } from "../../utils/AppError.ts";
 import { actionItemRoutes } from "../../../shared/contracts/actionItems.ts";
 import { answer, count, cursorInput, pageOf } from "../tool.ts";
-import { publicRecord } from "../views.ts";
 
 // The REST bodies of the same writes. A tool's title and due date are checked
 // exactly as the routes check them.
@@ -71,7 +70,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
       return answer(
         `${count(pending.length, "pending follow-up")} (${filter})`,
         {
-          actionItems: page.map(publicRecord),
+          actionItems: page,
           total: pending.length,
           filter,
           nextCursor,
@@ -97,7 +96,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
       if (!created) throw new AppError("The follow-up was not saved", 500);
       return answer(
         `Created follow-up "${created.title}" due ${dueAt}`,
-        publicRecord(created),
+        created,
       );
     },
   );
@@ -121,7 +120,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
       }
       return answer(
         `Updated follow-up "${updated.title}", due ${updated.dueAt}`,
-        publicRecord(updated),
+        updated,
       );
     },
   );
@@ -136,10 +135,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
       if (!completed) {
         throw new NotFoundError("ActionItem", id);
       }
-      return answer(
-        `Marked follow-up ${id} as completed`,
-        publicRecord(completed),
-      );
+      return answer(`Marked follow-up ${id} as completed`, completed);
     },
   );
 }

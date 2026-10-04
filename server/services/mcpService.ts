@@ -135,15 +135,6 @@ export const mcpService = {
   },
 
   /**
-   * The caller's contacts that hold one of these emails or phones.
-   *
-   * It reads the contacts that list_contacts reads, archived ones included:
-   * a second contact for an archived person is still a duplicate. An email
-   * matches without regard to case or the spaces around it. A phone matches
-   * on its digits through `normalizePhone`, as a connector matches one, so
-   * "+1 (415) 555-0100" finds "415-555-0100". One row for each match.
-   */
-  /**
    * Contacts whose name holds `text`, the names that start with it first.
    * The MCP prompts take a name, and a client completes it from this.
    */
@@ -168,6 +159,15 @@ export const mcpService = {
     }[];
   },
 
+  /**
+   * The caller's contacts that hold one of these emails or phones.
+   *
+   * It reads the contacts that list_contacts reads, archived ones included:
+   * a second contact for an archived person is still a duplicate. An email
+   * matches without regard to case or the spaces around it. A phone matches
+   * on its digits through `normalizePhone`, as a connector matches one, so
+   * "+1 (415) 555-0100" finds "415-555-0100". One row for each match.
+   */
   findByEmailOrPhone(
     scope: Scope,
     emails: string[],

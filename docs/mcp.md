@@ -112,7 +112,9 @@ to `claude_desktop_config.json`:
 ```
 
 The config runs the `mcp-remote` bridge with `npx`, so the machine needs
-Node.js. Restart Claude Desktop after you change the file.
+Node.js. For a plain `http` address on another computer, the settings page
+adds `--allow-http`, because `mcp-remote` refuses one without it. Restart
+Claude Desktop after you change the file.
 
 ### Cursor
 

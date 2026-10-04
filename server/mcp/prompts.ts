@@ -19,7 +19,7 @@ import { dashboardService } from "../services/dashboardService.ts";
 import { mcpService } from "../services/mcpService.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { toMcpError } from "./errors.ts";
-import { contactProfile, publicRecord } from "./views.ts";
+import { contactProfile, lean } from "./views.ts";
 
 /** A contact by ID, or by a name that only one contact holds. */
 function findContact(scope: Scope, nameOrId: string) {
@@ -33,9 +33,9 @@ function findContact(scope: Scope, nameOrId: string) {
   if (pick.length > 1) {
     const names = pick
       .slice(0, 5)
-      .map((c) => (c.company ? `${c.name} (${c.company})` : c.name));
+      .map((c) => `${c.name}${c.company ? `, ${c.company}` : ""} (ID ${c.id})`);
     throw new AppError(
-      `More than one contact matches "${nameOrId}": ${names.join(", ")}. Give the whole name or the contact ID.`,
+      `More than one contact matches "${nameOrId}": ${names.join("; ")}. Give the contact ID.`,
       400,
       { code: "AMBIGUOUS_CONTACT" },
     );
@@ -76,7 +76,7 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
                 text:
                   `Please catch me up on ${contact.name}${work ? ` (${work})` : ""}.\n\n` +
                   `Contact Details:\n${JSON.stringify(contactProfile(contact), null, 2)}\n\n` +
-                  `Recent Timeline (newest first):\n${JSON.stringify(timeline.slice(0, 20).map(publicRecord), null, 2)}\n\n` +
+                  `Recent Timeline (newest first):\n${JSON.stringify(lean(timeline.slice(0, 20)), null, 2)}\n\n` +
                   `Please summarize who they are, our relationship history, recent key discussions, and recommended next steps.`,
               },
             },
@@ -108,12 +108,12 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
                 type: "text" as const,
                 text:
                   `Please conduct a weekly review of my network using the following Pulse data:\n\n` +
-                  `Network Metrics:\n${JSON.stringify(pulse.metrics, null, 2)}\n\n` +
-                  `Overdue Action Items:\n${JSON.stringify(pulse.overdue, null, 2)}\n\n` +
-                  `Action Items Due Today:\n${JSON.stringify(pulse.dueToday, null, 2)}\n\n` +
-                  `Action Items Due This Week:\n${JSON.stringify(pulse.upcoming, null, 2)}\n\n` +
-                  `Tracked Contacts (count, bands, rising, cooling):\n${JSON.stringify(pulse.tracking, null, 2)}\n\n` +
-                  `Catch-ups (tracked contacts past their cadence):\n${JSON.stringify(pulse.catchUp, null, 2)}\n\n` +
+                  `Network Metrics:\n${JSON.stringify(lean(pulse.metrics), null, 2)}\n\n` +
+                  `Overdue Action Items:\n${JSON.stringify(lean(pulse.overdue), null, 2)}\n\n` +
+                  `Action Items Due Today:\n${JSON.stringify(lean(pulse.dueToday), null, 2)}\n\n` +
+                  `Action Items Due This Week:\n${JSON.stringify(lean(pulse.upcoming), null, 2)}\n\n` +
+                  `Tracked Contacts (count, bands, rising, cooling):\n${JSON.stringify(lean(pulse.tracking), null, 2)}\n\n` +
+                  `Catch-ups (tracked contacts past their cadence):\n${JSON.stringify(lean(pulse.catchUp), null, 2)}\n\n` +
                   `Please provide a prioritized action list: who to reach out to first, which follow-ups need immediate attention, and recommended focus areas for this week.`,
               },
             },

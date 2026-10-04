@@ -16,7 +16,6 @@ import { contactRepo } from "../../repositories/contactRepository.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
 import { interactionRoutes } from "../../../shared/contracts/interactions.ts";
 import { answer, count, cursorInput, pageOf } from "../tool.ts";
-import { publicRecord } from "../views.ts";
 
 // The REST body of the same write. A logged interaction is checked exactly as
 // `POST /api/contacts/:id/interactions` checks one.
@@ -52,7 +51,7 @@ export function registerInteractionTools({
         {
           contactId,
           contactName: contact.name,
-          timeline: page.map(publicRecord),
+          timeline: page,
           total: all.length,
           nextCursor,
         },
@@ -118,7 +117,7 @@ export function registerInteractionTools({
       );
       return answer(
         `Logged "${created.title}" on contact ${body.contactId}`,
-        publicRecord(created),
+        created,
       );
     },
   );

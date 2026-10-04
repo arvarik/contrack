@@ -18,7 +18,6 @@ import { listService } from "../../services/listService.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { listRoutes } from "../../../shared/contracts/lists.ts";
 import { answer, count } from "../tool.ts";
-import { publicRecord } from "../views.ts";
 
 export function registerTaxonomyTools({ tool, scope }: McpToolContext): void {
   tool("list_tags", {}, () => {
@@ -30,9 +29,7 @@ export function registerTaxonomyTools({ tool, scope }: McpToolContext): void {
   });
 
   tool("list_lists", {}, () => {
-    const lists = (listService.getAllLists(scope) as object[]).map((list) =>
-      publicRecord(list),
-    );
+    const lists = listService.getAllLists(scope);
     return answer(count(lists.length, "list"), { lists, total: lists.length });
   });
 
@@ -58,10 +55,7 @@ export function registerTaxonomyTools({ tool, scope }: McpToolContext): void {
         );
       }
       const list = listService.createList(scope, name);
-      return answer(
-        `Created list "${list.name}" (${list.id})`,
-        publicRecord(list),
-      );
+      return answer(`Created list "${list.name}" (${list.id})`, list);
     },
   );
 

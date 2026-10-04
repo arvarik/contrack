@@ -29,6 +29,7 @@ import {
   type McpToolName,
 } from "../../shared/mcpTools.ts";
 import { toolFailure } from "./errors.ts";
+import { lean } from "./views.ts";
 
 /** Registers one tool for this request. */
 export type DefineTool = <Shape extends ZodRawShapeCompat>(
@@ -42,13 +43,13 @@ export type DefineTool = <Shape extends ZodRawShapeCompat>(
  * JSON. The spec asks a tool with structured content to send that JSON as
  * text too, because some clients pass only the text to their model.
  */
-export function answer(
-  summary: string,
-  data: Record<string, unknown>,
-): CallToolResult {
+export function answer(summary: string, data: object): CallToolResult {
+  const structured = lean(data) as Record<string, unknown>;
   return {
-    content: [{ type: "text", text: `${summary}\n\n${JSON.stringify(data)}` }],
-    structuredContent: data,
+    content: [
+      { type: "text", text: `${summary}\n\n${JSON.stringify(structured)}` },
+    ],
+    structuredContent: structured,
   };
 }
 
@@ -60,7 +61,7 @@ export function count(n: number, noun: string, plural = `${noun}s`): string {
 /** The input of a paged tool: the `nextCursor` its last page gave. */
 export const cursorInput = z
   .string()
-  .regex(/^\d+$/, "Pass the nextCursor of the previous page, unchanged")
+  .regex(/^\d{1,9}$/, "Pass the nextCursor of the previous page, unchanged")
   .optional()
   .describe(
     "The nextCursor of the previous page. Leave it out for the first page",

@@ -60,23 +60,31 @@ export const CONTACT_SUMMARY_FIELDS = [
   "updatedAt",
 ] as const;
 
-function omit(
-  row: object,
-  ...sets: ReadonlySet<string>[]
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(row).filter(([key]) => !sets.some((set) => set.has(key))),
-  );
-}
+/** Every key no answer sends, at any depth. `highlights` are UI offsets. */
+const STRIPPED = new Set([...INTERNAL, ...DRAWING, "highlights"]);
 
-/** Any row without the columns only the server or the app reads. */
-export function publicRecord(row: object): Record<string, unknown> {
-  return omit(row, INTERNAL, DRAWING);
+/**
+ * A value without the fields only the server or the app reads, at every
+ * depth: a follow-up inside the Pulse, a note's contact. `answer()` sends
+ * everything through this, and so do the resources and the prompts.
+ */
+export function lean(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(lean);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !STRIPPED.has(key))
+      .map(([key, inner]) => [key, lean(inner)]),
+  );
 }
 
 /** A contact's whole profile, as get_contact and the resource send it. */
 export function contactProfile(contact: object): Record<string, unknown> {
-  return omit(contact, INTERNAL, DRAWING, BOOKKEEPING);
+  return Object.fromEntries(
+    Object.entries(lean(contact) as Record<string, unknown>).filter(
+      ([key]) => !BOOKKEEPING.has(key),
+    ),
+  );
 }
 
 /** A contact as a search hit: the summary, and why it matched. */

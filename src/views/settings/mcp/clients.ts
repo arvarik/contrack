@@ -43,6 +43,10 @@ const headers = (token: string | null) =>
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
+/** Base64 of the UTF-8 text, which `btoa` alone refuses past Latin-1. */
+const base64 = (text: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+
 export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "claude-code",
@@ -71,6 +75,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
               "-y",
               "mcp-remote",
               url,
+              // mcp-remote refuses plain http unless the host is this
+              // computer, or this flag says the address is meant.
+              ...(isPlainHttpElsewhere(url) ? ["--allow-http"] : []),
               ...(token ? ["--header", `Authorization: Bearer ${token}`] : []),
             ],
           },
@@ -90,7 +97,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
         code: json({ mcpServers: { [NAME]: server } }),
         install: {
           label: "Add to Cursor",
-          href: `cursor://anysphere.cursor-deeplink/mcp/install?name=${NAME}&config=${encodeURIComponent(btoa(JSON.stringify(server)))}`,
+          href: `cursor://anysphere.cursor-deeplink/mcp/install?name=${NAME}&config=${encodeURIComponent(base64(JSON.stringify(server)))}`,
         },
       };
     },
@@ -155,6 +162,12 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     }),
   },
 ];
+
+/** An http address on another machine, which mcp-remote needs told about. */
+function isPlainHttpElsewhere(url: string): boolean {
+  const parsed = new URL(url);
+  return parsed.protocol === "http:" && !isLoopbackHost(parsed.hostname);
+}
 
 /** True when only this computer can reach the address. */
 export function isLoopbackHost(hostname: string): boolean {

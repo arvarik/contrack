@@ -13,30 +13,47 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 
-/** What to do next, for the failures a model can recover from. */
-const NEXT_STEP: Record<string, string> = {
-  NOT_FOUND:
-    "Look the ID up again with search_people, list_contacts or list_action_items. Do not guess an ID.",
+/** Where a model finds a real ID, by the kind of thing it did not find. */
+const LOOK_UP: Record<string, string> = {
+  Contact: "search_people or list_contacts",
+  ActionItem: "list_action_items",
+  List: "list_lists",
 };
+
+/** What to do next, for a failure a model can recover from. */
+function nextStep(err: AppError): string {
+  if (err.code !== "NOT_FOUND") return "";
+  const entity = (err.details as { entity?: string } | undefined)?.entity;
+  const tools =
+    (entity && LOOK_UP[entity]) ??
+    "search_people, list_contacts or list_action_items";
+  return ` Look the ID up again with ${tools}. Do not guess an ID.`;
+}
 
 export function toMcpError(err: unknown): unknown {
   if (err instanceof McpError) {
     return err;
   }
-  if (err instanceof AppError) {
+  // A fault in the server can hold internals, such as SQL. The client gets
+  // a plain message, and the log gets the cause.
+  if (!(err instanceof AppError) || err.statusCode >= 500) {
+    log.error("MCP", "A prompt or a resource failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return new McpError(
-      err.statusCode === 400
-        ? ErrorCode.InvalidParams
-        : ErrorCode.InvalidRequest,
-      err.message,
-      {
-        code: err.code,
-        statusCode: err.statusCode,
-        ...(err.details !== undefined ? { details: err.details } : {}),
-      },
+      ErrorCode.InternalError,
+      "Contrack could not finish this. The server log has the cause.",
     );
   }
-  return err;
+  return new McpError(
+    err.statusCode === 400 ? ErrorCode.InvalidParams : ErrorCode.InvalidRequest,
+    err.message,
+    {
+      code: err.code,
+      statusCode: err.statusCode,
+      ...(err.details !== undefined ? { details: err.details } : {}),
+    },
+  );
 }
 
 /**
@@ -51,14 +68,10 @@ export function toolFailure(
   requestId: string,
 ): CallToolResult {
   if (err instanceof AppError && err.statusCode < 500) {
-    const next = NEXT_STEP[err.code];
     return {
       isError: true,
       content: [
-        {
-          type: "text",
-          text: `${err.message} (${err.code}).${next ? ` ${next}` : ""}`,
-        },
+        { type: "text", text: `${err.message} (${err.code}).${nextStep(err)}` },
       ],
       structuredContent: {
         error: {

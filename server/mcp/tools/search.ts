@@ -11,7 +11,10 @@
 import { z } from "zod";
 import type { McpToolContext } from "../../modules/module.ts";
 import { PHASE1_LIMIT, searchService } from "../../services/searchService.ts";
-import { searchInteractions } from "../../services/interactionSearchService.ts";
+import {
+  MAX_OFFSET,
+  searchInteractions,
+} from "../../services/interactionSearchService.ts";
 import {
   matchesFacet,
   type FacetContact,
@@ -19,7 +22,7 @@ import {
 import { queryRoutes } from "../../../shared/contracts/query.ts";
 import { aiAllowedFor } from "../../middleware/aiAllowed.ts";
 import { answer, count, cursorInput, offsetOf } from "../tool.ts";
-import { contactSummary, publicRecord } from "../views.ts";
+import { contactSummary } from "../views.ts";
 
 // The query of `GET /api/interactions/search`, the REST twin of search_notes.
 // The tool's dates, type and limit are checked exactly as that route checks
@@ -132,13 +135,18 @@ export function registerSearchTools({
         limit: limit ?? 20,
         offset,
       });
-      const end = offset + res.hits.length;
+      // The search starts no later than MAX_OFFSET, so a cursor past it would
+      // read the same page again. Paging ends there.
+      const end = res.offset + res.hits.length;
       return answer(
         `Found ${count(res.hits.length, "note")} of ${res.total} for "${query}"`,
         {
-          hits: res.hits.map(publicRecord),
+          hits: res.hits,
           total: res.total,
-          nextCursor: end < res.total ? String(end) : null,
+          nextCursor:
+            res.hits.length > 0 && end < res.total && end <= MAX_OFFSET
+              ? String(end)
+              : null,
         },
       );
     },

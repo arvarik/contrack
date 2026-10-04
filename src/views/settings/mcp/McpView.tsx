@@ -68,6 +68,9 @@ const STEP_HEADING = "text-sm font-bold text-on-surface";
 /** How long a token made here lasts. Account settings offers the others. */
 const TOKEN_DAYS = 90;
 
+/** A whole personal token, as Account shows it once. */
+const TOKEN_SHAPE = /^ctk_[A-Za-z0-9_-]{20,}$/;
+
 /** Copy, and "Copied" for two seconds after. */
 const CopyButton = ({
   text,
@@ -166,6 +169,8 @@ const TokenStep = ({
   const [access, setAccess] = useState<TokenAccess>("write");
   const [madeFor, setMadeFor] = useState<string | null>(null);
   const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const pastedWrong = pasted !== "" && !TOKEN_SHAPE.test(pasted);
 
   const create = useMutation({
     mutationFn: () =>
@@ -186,6 +191,7 @@ const TokenStep = ({
     onToken("");
     setMadeFor(null);
     setPasting(false);
+    setPasted("");
   };
 
   if (madeFor) {
@@ -197,7 +203,7 @@ const TokenStep = ({
         />
         <p className="flex-1 min-w-48 text-sm text-on-surface text-pretty">
           A token named “{madeFor}” is in the setup below. This page shows it
-          once. Revoke it any time in{" "}
+          once, and it works until you revoke it in{" "}
           <Link
             to="/settings/account#tokens"
             className="font-semibold text-primary hover:underline"
@@ -212,7 +218,7 @@ const TokenStep = ({
             onClick={reset}
             className="btn-secondary btn-sm"
           >
-            Start over
+            Use another token
           </button>
         </div>
       </div>
@@ -231,10 +237,17 @@ const TokenStep = ({
             type="password"
             autoComplete="off"
             spellCheck="false"
-            value={token}
-            onChange={(e) => onToken(e.target.value.trim())}
+            value={pasted}
+            onChange={(e) => {
+              const value = e.target.value.trim();
+              setPasted(value);
+              // Only a whole token reaches the setup, so a half paste or a
+              // stray character never makes an install link that fails.
+              onToken(TOKEN_SHAPE.test(value) ? value : "");
+            }}
             placeholder="ctk_…"
             aria-describedby="mcp-token-hint"
+            aria-invalid={pastedWrong || undefined}
             // The person pressed "Use a token I have" to type here.
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
@@ -246,9 +259,14 @@ const TokenStep = ({
         </div>
         <p
           id="mcp-token-hint"
-          className="text-xs text-on-surface-variant text-pretty"
+          className={cn(
+            "text-xs text-pretty",
+            pastedWrong ? "text-error" : "text-on-surface-variant",
+          )}
         >
-          It stays on this page and goes only into the setup below
+          {pastedWrong
+            ? "A Contrack token starts with ctk_ and has no spaces"
+            : "It stays on this page and goes only into the setup below"}
         </p>
       </div>
     );
@@ -347,6 +365,8 @@ export const McpView: React.FC = () => {
                 Only an assistant on this computer can reach this address. For
                 one on another device, open Contrack by its network name, or set
                 PUBLIC_URL
+                {!authRequired &&
+                  ". While sign-in is off, add that name to ALLOWED_HOSTS"}
               </p>
             )}
           </div>

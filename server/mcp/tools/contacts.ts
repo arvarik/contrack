@@ -159,8 +159,9 @@ export function registerContactTools({ tool, scope }: McpToolContext): void {
     async (params) => {
       const limit = params.limit ?? 50;
       const offset = offsetOf(params.cursor);
-      const contacts = mcpService.queryContacts(scope, {
-        limit,
+      // One more than the page, to know whether another page follows.
+      const rows = mcpService.queryContacts(scope, {
+        limit: limit + 1,
         offset,
         fields: LIST_FIELDS,
         role: params.role,
@@ -174,8 +175,14 @@ export function registerContactTools({ tool, scope }: McpToolContext): void {
         email: params.email,
         phone: params.phone,
       });
-      const nextCursor =
-        contacts.length === limit ? String(offset + contacts.length) : null;
+      const nextCursor = rows.length > limit ? String(offset + limit) : null;
+      // The query reads the flags as SQLite's 0 and 1. Every other tool sends
+      // them as booleans.
+      const contacts = rows.slice(0, limit).map((row) => ({
+        ...row,
+        isTracked: row.isTracked === 1,
+        isArchived: row.isArchived === 1,
+      }));
       return answer(count(contacts.length, "contact"), {
         contacts,
         nextCursor,

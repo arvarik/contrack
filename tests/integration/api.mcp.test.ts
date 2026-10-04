@@ -15,7 +15,8 @@
  * @module tests/integration/api.mcp.test
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import type { Request, Response } from "express";
 import type http from "http";
 import { type AddressInfo } from "net";
 import request from "supertest";
@@ -34,6 +35,7 @@ import { createToken } from "../../server/services/apiTokenService.ts";
 import { getUserById } from "../../server/services/authService.ts";
 import { MCP_TOOLS, mcpToolAnnotations } from "../../shared/mcpTools.ts";
 import { __resetMcpRateLimit } from "../../server/routes/mcp.ts";
+import { hostGuard } from "../../server/middleware/hostGuard.ts";
 
 /** What the tests read from a tool's structured result. */
 type Data = Record<string, unknown> & {
@@ -42,7 +44,7 @@ type Data = Record<string, unknown> & {
   nextCursor: string | null;
   removedCount: number;
   contact: Record<string, unknown>;
-  contacts: { id: string }[];
+  contacts: { id: string; isTracked: unknown }[];
   matches: Record<string, unknown>[];
   emails: { email: string; isPrimary: boolean }[];
   tags: { tag: string }[];
@@ -220,6 +222,11 @@ describe("MCP Server (/api/mcp)", () => {
       cursor: first.nextCursor,
     });
     expect(second.nextCursor).toBeNull();
+    // A page that ends exactly at the last contact says so, and flags are
+    // booleans as in every other tool.
+    const whole = await ok("list_contacts", { limit: 3 });
+    expect(whole.nextCursor).toBeNull();
+    expect(typeof whole.contacts[0].isTracked).toBe("boolean");
     expect(
       [...first.contacts, ...second.contacts].map((c) => c.id).sort(),
     ).toEqual([...seedA.contactIds].sort());
@@ -267,8 +274,12 @@ describe("MCP Server (/api/mcp)", () => {
     const done = await ok("complete_action_item", { id: item.id });
     expect(done.completedAt).toEqual(expect.any(String));
 
-    const pulse = await ok("get_pulse");
-    expect(pulse.metrics).toHaveProperty("totalActive");
+    const pulse = await call(a, "get_pulse");
+    expect(pulse.data.metrics).toHaveProperty("totalActive");
+    // Nested rows lose the internal and drawing fields too.
+    for (const key of ["ownerId", "avatarUrl", "highlights"]) {
+      expect(pulse.text + JSON.stringify(notes)).not.toContain(`"${key}"`);
+    }
   });
 
   it("edits contacts, tags and lists, and refuses duplicates with their code", async () => {
@@ -388,7 +399,10 @@ describe("MCP Server (/api/mcp)", () => {
     expect(byName.description).toBe("Catch me up on alice Contact 0");
     await expect(
       a.getPrompt({ name: "catch_me_up", arguments: { contact: "alice" } }),
-    ).rejects.toMatchObject({ data: { code: "AMBIGUOUS_CONTACT" } });
+    ).rejects.toMatchObject({
+      message: expect.stringContaining(`(ID ${seedA.contactIds[0]})`),
+      data: { code: "AMBIGUOUS_CONTACT" },
+    });
     const weekly = await a.getPrompt({ name: "weekly_review" });
     expect(weekly.messages.length).toBeGreaterThan(0);
   });
@@ -413,6 +427,10 @@ describe("MCP Server (/api/mcp)", () => {
       .set("Origin", "https://evil.example");
     expect(foreign.status).toBe(403);
     expect(foreign.body.error.code).toBe("ORIGIN_NOT_ALLOWED");
+    const own = await mcpPost({ method: "tools/list" })
+      .set("Authorization", `Bearer ${tokenA}`)
+      .set("Origin", endpoint.origin);
+    expect(own.status).toBe(200);
 
     // An OAuth client probes these first. JSON, never the app's HTML.
     const wellKnown = await request(server).get(
@@ -452,6 +470,7 @@ describe("MCP Server (/api/mcp)", () => {
         "[::1]:3210",
         "nas",
         "nas.local",
+        "localhost.",
         "crm.example.org",
         "box.tail.example",
       ]) {
@@ -463,6 +482,20 @@ describe("MCP Server (/api/mcp)", () => {
       const page = await request(server).get("/").set("Host", "evil.example");
       expect(page.status).toBe(403);
       expect(page.text).toContain("ALLOWED_HOSTS");
+
+      // Behind a trusted proxy `req.hostname` is the forwarded name, which a
+      // page can set itself. The Host the browser wrote must pass as well.
+      const next = vi.fn();
+      hostGuard(
+        {
+          headers: { host: "evil.example" },
+          hostname: "localhost",
+          path: "/api/contacts",
+        } as unknown as Request,
+        {} as Response,
+        next,
+      );
+      expect(next.mock.calls[0][0]).toMatchObject({ code: "HOST_NOT_ALLOWED" });
     } finally {
       process.env.AUTH_REQUIRED = "true";
       delete process.env.ALLOWED_HOSTS;
