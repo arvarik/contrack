@@ -37,6 +37,7 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { makeTestApp } from "./helpers.ts";
+import { sqlite } from "../../server/db.ts";
 import {
   asUser,
   createActor,
@@ -228,6 +229,8 @@ describe("OAuth for MCP clients", () => {
         kind: "oauth",
         name: "Test Assistant",
         readOnly: true,
+        // A registered client is shown by where it sends the browser back.
+        tokenPrefix: "this computer",
       }),
     );
     // An access token reaches the MCP endpoint and nothing else.
@@ -277,6 +280,20 @@ describe("OAuth for MCP clients", () => {
     });
     expect(rotated.status).toBe(200);
     expect((await mcp(rotated.body.access_token)).status).toBe(200);
+    // A second process with the same login, within a minute: a fresh pair.
+    const twin = await tokenCall({
+      grant_type: "refresh_token",
+      refresh_token: first.body.refresh_token,
+      client_id: DOCUMENT_CLIENT,
+    });
+    expect(twin.status).toBe(200);
+    // Later, the old token is someone else's, and the grant ends.
+    sqlite
+      .prepare(
+        `UPDATE oauth_tokens SET usedAt = datetime('now', '-2 minutes')
+          WHERE usedAt IS NOT NULL AND kind = 'refresh'`,
+      )
+      .run();
     const reused = await tokenCall({
       grant_type: "refresh_token",
       refresh_token: first.body.refresh_token,
@@ -328,6 +345,13 @@ describe("OAuth for MCP clients", () => {
       [
         "/oauth/authorize?client_id=ctc_nobody&redirect_uri=x",
         "unknown_client",
+      ],
+      [
+        documentAuthorize(challenge).replace(
+          "state=s1",
+          `state=${"s".repeat(600)}`,
+        ),
+        "bad_request",
       ],
     ]) {
       const res = await request(server).get(query);
@@ -403,6 +427,14 @@ describe("OAuth for MCP clients", () => {
         `&code_challenge=${challenge}&code_challenge_method=S256`,
     );
     expect(loopback.headers.location).toMatch(/^\/oauth\/consent\?request=/);
+    // A registered client's bad request stays here: it could be anyone's, and
+    // an error redirect would send the browser wherever it registered.
+    const wrongType = await request(server).get(
+      `/oauth/authorize?response_type=token&client_id=${cli.body.client_id}` +
+        `&redirect_uri=${encodeURIComponent("http://localhost:51234/cb")}` +
+        `&code_challenge=${challenge}&code_challenge_method=S256`,
+    );
+    expect(wrongType.headers.location).toBe("/oauth/consent?error=bad_request");
 
     // Off without PUBLIC_URL: 404s, and a 401 with no metadata to follow.
     delete process.env.PUBLIC_URL;

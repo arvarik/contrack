@@ -24,6 +24,7 @@ import {
 import { createRateLimiter } from "../middleware/rateLimit.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { AppError } from "../utils/AppError.ts";
+import { log } from "../utils/logger.ts";
 import { validateBody } from "../utils/validators.ts";
 import { oauthRoutes } from "../../shared/contracts/oauth.ts";
 import {
@@ -68,6 +69,10 @@ function openToAnyOrigin(req: Request, res: Response, next: NextFunction) {
     "Authorization, Content-Type, MCP-Protocol-Version",
   );
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "WWW-Authenticate, Retry-After",
+  );
   if (req.method === "OPTIONS") {
     res.sendStatus(204);
     return;
@@ -77,6 +82,11 @@ function openToAnyOrigin(req: Request, res: Response, next: NextFunction) {
 
 /** An OAuth error as RFC 6749 §5.2 writes it, never as the app's envelope. */
 function sendOAuthError(res: Response, err: unknown): void {
+  if (!(err instanceof OAuthError)) {
+    log.error("OAuth", "An OAuth endpoint failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   const known =
     err instanceof OAuthError
       ? err
@@ -222,7 +232,7 @@ router.post(
     try {
       await assertClientKnown(body.client_id);
       if (body.grant_type === "authorization_code") {
-        res.json(exchangeCode(issuer()!, body));
+        res.json(exchangeCode(issuer()!, body, req.ip ?? null));
       } else if (body.grant_type === "refresh_token") {
         res.json(refreshGrant(issuer()!, body, req.ip ?? null));
       } else {
@@ -248,9 +258,40 @@ router.post("/oauth/register", requireOAuth, registerLimit, (req, res) => {
 
 /** RFC 7009: answers 200 whether or not the token was known. */
 router.post("/oauth/revoke", requireOAuth, revokeLimit, form, (req, res) => {
-  revokeOAuthToken((req.body as Record<string, unknown> | undefined)?.token);
+  revokeOAuthToken(
+    (req.body as Record<string, unknown> | undefined)?.token,
+    req.ip ?? null,
+  );
   res.json({});
 });
+
+/**
+ * What fails before a handler runs, such as a rate limit or a body that does
+ * not parse, still answers in OAuth's words, which is all a client reads.
+ */
+router.use(
+  ["/oauth/token", "/oauth/register", "/oauth/revoke"],
+  (err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
+    if (err instanceof AppError && err.statusCode === 429) {
+      const wait = (err.details as { retryAfterSeconds?: number } | undefined)
+        ?.retryAfterSeconds;
+      if (wait) res.setHeader("Retry-After", String(wait));
+      return sendOAuthError(
+        res,
+        new OAuthError("temporarily_unavailable", err.message, 429),
+      );
+    }
+    const status = (err as { status?: number }).status;
+    if (status && status >= 400 && status < 500) {
+      return sendOAuthError(
+        res,
+        new OAuthError("invalid_request", "The request body did not parse."),
+      );
+    }
+    sendOAuthError(res, err);
+  },
+);
 
 export const oauthRouter = router;
 

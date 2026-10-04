@@ -12,8 +12,9 @@
 // - A grant is an api_tokens row with `kind = 'oauth'`. The token list shows
 //   it, and revoking it ends every token it issued.
 // - oauth_tokens: the access and refresh tokens of a grant, as SHA-256.
-//   `parentHash` links a refresh token to the one it replaced, which is how a
-//   reused refresh token is told from a lost answer.
+//   `parentHash` links a refresh token to the one it replaced, and
+//   `childUsedAt` marks a refresh token once a token it issued is used,
+//   which is how a reused refresh token is told from a lost answer.
 // =============================================================================
 
 import type Database from "better-sqlite3";
@@ -57,6 +58,7 @@ export function up(db: Database.Database): void {
       parentHash TEXT,
       expiresAt TEXT NOT NULL,
       usedAt TEXT,
+      childUsedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
     );
     CREATE INDEX idx_oauth_tokens_grant ON oauth_tokens(grantId);

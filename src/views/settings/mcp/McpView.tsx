@@ -156,20 +156,40 @@ const ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
  * after the client, lasts 90 days, and is shown on this page only, inside
  * the setup below. A person who has a token pastes it instead.
  */
+/**
+ * The token step's state. It lives in the page, not in the step: the step
+ * leaves the page while another client or browser sign-in is picked, and a
+ * token made a moment ago must still be there when the person comes back.
+ */
+interface TokenDraft {
+  /** The token that fills the setup, made here or pasted whole. */
+  token: string;
+  /** The client a token was made for here, or null. */
+  madeFor: string | null;
+  pasting: boolean;
+  /** What is in the paste field, whole or not. */
+  pasted: string;
+}
+
+const NO_TOKEN: TokenDraft = {
+  token: "",
+  madeFor: null,
+  pasting: false,
+  pasted: "",
+};
+
 const TokenStep = ({
   client,
-  token,
-  onToken,
+  draft,
+  onDraft,
 }: {
   client: McpClient;
-  token: string;
-  onToken: (token: string) => void;
+  draft: TokenDraft;
+  onDraft: (change: Partial<TokenDraft>) => void;
 }) => {
   const queryClient = useQueryClient();
   const [access, setAccess] = useState<TokenAccess>("write");
-  const [madeFor, setMadeFor] = useState<string | null>(null);
-  const [pasting, setPasting] = useState(false);
-  const [pasted, setPasted] = useState("");
+  const { token, madeFor, pasting, pasted } = draft;
   const pastedWrong = pasted !== "" && !TOKEN_SHAPE.test(pasted);
 
   const create = useMutation({
@@ -180,19 +200,13 @@ const TokenStep = ({
         readOnly: access === "read",
       }),
     onSuccess: (created) => {
-      onToken(created.token);
-      setMadeFor(client.label);
+      onDraft({ token: created.token, madeFor: client.label });
       void queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const reset = () => {
-    onToken("");
-    setMadeFor(null);
-    setPasting(false);
-    setPasted("");
-  };
+  const reset = () => onDraft(NO_TOKEN);
 
   if (madeFor) {
     return (
@@ -240,10 +254,12 @@ const TokenStep = ({
             value={pasted}
             onChange={(e) => {
               const value = e.target.value.trim();
-              setPasted(value);
               // Only a whole token reaches the setup, so a half paste or a
               // stray character never makes an install link that fails.
-              onToken(TOKEN_SHAPE.test(value) ? value : "");
+              onDraft({
+                pasted: value,
+                token: TOKEN_SHAPE.test(value) ? value : "",
+              });
             }}
             placeholder="ctk_…"
             aria-describedby="mcp-token-hint"
@@ -304,7 +320,7 @@ const TokenStep = ({
           : "Read and write: it can also add contacts, notes, follow-ups and lists. "}
         <button
           type="button"
-          onClick={() => setPasting(true)}
+          onClick={() => onDraft({ pasting: true })}
           className="font-semibold text-primary hover:underline"
         >
           Use a token I have
@@ -324,7 +340,8 @@ const METHOD_OPTIONS: readonly SegmentedOption<SignInMethod>[] = [
 export const McpView: React.FC = () => {
   const { authRequired, publicUrl, mcpOAuth } = useAuth();
   const [clientId, setClientId] = useState<McpClientId>("claude-code");
-  const [token, setToken] = useState("");
+  const [draft, setDraft] = useState<TokenDraft>(NO_TOKEN);
+  const token = draft.token;
   const [method, setMethod] = useState<SignInMethod>("browser");
 
   const origin =
@@ -452,8 +469,10 @@ export const McpView: React.FC = () => {
                   ) : (
                     <TokenStep
                       client={client}
-                      token={token}
-                      onToken={setToken}
+                      draft={draft}
+                      onDraft={(change) =>
+                        setDraft((prev) => ({ ...prev, ...change }))
+                      }
                     />
                   )}
                 </div>

@@ -26,6 +26,7 @@ import {
 } from "../../components/auth/AuthShell";
 import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
 import { decideConsent, fetchConsentRequest } from "../../api/oauth";
+import { ApiError } from "../../api/client";
 import type { OAuthConsentRequest } from "../../../shared/contracts/oauth";
 
 type Access = "read" | "write";
@@ -38,6 +39,8 @@ const PROBLEMS: Record<string, string> = {
     "The app asked to send you to an address it did not register, so Contrack stopped here. Go back to the app and connect again",
   client_unavailable:
     "Contrack could not read the app's details. Check that this server can reach the internet, then connect again from the app",
+  bad_request:
+    "The app asked in a way Contrack does not accept, so it stopped here. Go back to the app and connect again",
 };
 
 /** Where the browser goes after the answer, in words. */
@@ -53,14 +56,24 @@ function destination(redirect: OAuthConsentRequest["redirect"]): string {
 const Returning = ({
   request,
   href,
+  allowed,
 }: {
   request: OAuthConsentRequest;
   href: string;
+  allowed: boolean;
 }) => (
   <AuthShell
     icon={<Check className="w-7 h-7" aria-hidden="true" />}
-    title={`Return to ${request.client.name}`}
-    subtitle="You can close this tab"
+    title={
+      allowed
+        ? `Return to ${request.client.name}`
+        : `${request.client.name} was not allowed`
+    }
+    subtitle={
+      allowed
+        ? "You can close this tab"
+        : "It has no access to your Contrack. You can close this tab"
+    }
     onSubmit={(e) => e.preventDefault()}
   >
     {request.redirect.kind !== "web" && (
@@ -88,27 +101,38 @@ export default function OAuthConsent() {
     staleTime: Infinity,
   });
   const [access, setAccess] = useState<Access | null>(null);
-  const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [returnTo, setReturnTo] = useState<{
+    href: string;
+    allowed: boolean;
+  } | null>(null);
   // What the app asked for, until the person picks.
   const chosen: Access = access ?? (request.data?.canWrite ? "write" : "read");
 
   const decide = useMutation({
     mutationFn: (decision: "allow" | "deny") =>
       decideConsent(requestId!, decision, chosen),
-    onSuccess: ({ redirectTo }) => {
-      setReturnTo(redirectTo);
+    onSuccess: ({ redirectTo }, decision) => {
+      setReturnTo({ href: redirectTo, allowed: decision === "allow" });
       window.location.assign(redirectTo);
     },
   });
 
-  if (problem || !requestId || request.isError) {
+  // A request that is gone is a 404. Anything else is a failure to load,
+  // which a reload may fix, and says so.
+  const gone =
+    problem ||
+    !requestId ||
+    (request.error instanceof ApiError && request.error.status === 404);
+  if (gone || request.isError) {
     return (
       <AuthShell
         icon={<Unlink className="w-7 h-7" aria-hidden="true" />}
-        title="This link does not work"
+        title={gone ? "This link does not work" : "This page did not load"}
         subtitle={
-          PROBLEMS[problem ?? ""] ??
-          "It expired or was already used. Go back to the app and connect again"
+          gone
+            ? (PROBLEMS[problem ?? ""] ??
+              "It expired or was already used. Go back to the app and connect again")
+            : "Contrack could not load this sign-in. Check your connection, and reload the page"
         }
         onSubmit={(e) => e.preventDefault()}
       >
@@ -116,10 +140,28 @@ export default function OAuthConsent() {
       </AuthShell>
     );
   }
-  if (!request.data) return null;
+  if (!request.data) {
+    return (
+      <AuthShell
+        title="Connect an app"
+        subtitle="Loading the app's request…"
+        onSubmit={(e) => e.preventDefault()}
+      >
+        {null}
+      </AuthShell>
+    );
+  }
 
   const shown = request.data;
-  if (returnTo) return <Returning request={shown} href={returnTo} />;
+  if (returnTo) {
+    return (
+      <Returning
+        request={shown}
+        href={returnTo.href}
+        allowed={returnTo.allowed}
+      />
+    );
+  }
 
   const options: Choice<Access>[] = [
     {
@@ -139,7 +181,13 @@ export default function OAuthConsent() {
 
   return (
     <AuthShell
-      title={`Allow ${shown.client.name} to use your Contrack?`}
+      // An app known by its document carries its host in the title, which
+      // a name alone cannot fake.
+      title={
+        shown.client.verified
+          ? `Allow ${shown.client.name} (${shown.client.host}) to use your Contrack?`
+          : `Allow ${shown.client.name} to use your Contrack?`
+      }
       subtitle={
         shown.client.verified
           ? `Its details come from ${shown.client.host}`

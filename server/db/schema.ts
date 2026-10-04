@@ -165,6 +165,8 @@ export const oauthTokens = sqliteTable(
     parentHash: text("parentHash"),
     expiresAt: text("expiresAt").notNull(),
     usedAt: text("usedAt"),
+    /** A token this refresh token issued has been used. */
+    childUsedAt: text("childUsedAt"),
     createdAt: text("createdAt")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),
