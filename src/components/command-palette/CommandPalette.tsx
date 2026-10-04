@@ -261,10 +261,13 @@ export const CommandPalette = () => {
     aiFilterKey,
   ]);
 
-  // Reset mutation state when mode changes away from AI
+  // Reset mutation state when mode changes away from AI. Closing the palette
+  // (Escape, the backdrop, ⌘K) leaves a question running, so the server
+  // finishes the answer and caches it: asking again here or on Ask is
+  // answered at once. Leaving AI mode while open cancels it.
   useEffect(() => {
     if (!open || mode !== "ai" || aiQuery.length < 3) {
-      resetSemanticSearch();
+      resetSemanticSearch(open);
       prevAiQueryRef.current = "";
     }
   }, [open, mode, aiQuery, resetSemanticSearch]);
@@ -339,7 +342,6 @@ export const CommandPalette = () => {
   const handleClose = useCallback(() => {
     setOpen(false);
     setSearch("");
-    resetSemanticSearch();
     prevAiQueryRef.current = "";
     lastRecordedAiRef.current = "";
     resetNavigation();
@@ -347,7 +349,7 @@ export const CommandPalette = () => {
     setSubMenuContactId(null);
     setSubMenuContactName("");
     setSubMenuContactAvatar(null);
-  }, [clearFilters, resetSemanticSearch, resetNavigation]);
+  }, [clearFilters, resetNavigation]);
 
   const handleCreateContact = async () => {
     if (!search.trim()) return;

@@ -30,17 +30,16 @@ import { SessionProvider } from "../../../../src/contexts/SessionContext";
 import { PreferencesProvider } from "../../../../src/contexts/PreferencesContext";
 import { SearchView } from "../../../../src/views/SearchView";
 
-// The view reads one hook off the `api` barrel, and the barrel pulls in every
-// API module in the app. Coverage instruments what is imported, so loading
-// twenty modules this file never exercises dragged the project totals under
-// their floors. The hook stays real, from its own file. The contact card and
+// The page reads its search hooks off the `api` barrel, and the barrel pulls
+// in every API module in the app. Coverage instruments what is imported, so
+// loading twenty modules this file never exercises dragged the project
+// totals under their floors. The hooks stay real, from their own file. The contact card and
 // the result cards are stubbed for the same reason: what is under test is
 // which question the server receives, and a card that shows a name is
 // enough to see the results arrive.
 vi.mock("../../../../src/api", async () => {
   const search = await import("../../../../src/api/search");
   return {
-    useSemanticSearch: search.useSemanticSearch,
     useSearchCoverage: search.useSearchCoverage,
     useRefreshSearchIndex: search.useRefreshSearchIndex,
     useStarterQuestions: search.useStarterQuestions,
@@ -288,6 +287,27 @@ function renderView(path = "/search") {
   );
 }
 
+/** The Ask page under one session, which a test can leave and come back to. */
+function leavablePage(path = "/search") {
+  const queryClient = client();
+  const Harness = ({ mounted }: { mounted: boolean }) => (
+    <QueryClientProvider client={queryClient}>
+      <PreferencesProvider>
+        <SessionProvider>
+          <MemoryRouter initialEntries={[path]}>
+            {mounted && <SearchView />}
+          </MemoryRouter>
+        </SessionProvider>
+      </PreferencesProvider>
+    </QueryClientProvider>
+  );
+  const view = render(<Harness mounted />);
+  return {
+    leave: () => view.rerender(<Harness mounted={false} />),
+    back: () => view.rerender(<Harness mounted />),
+  };
+}
+
 const input = () =>
   screen.getByLabelText("Ask anything about your network") as HTMLInputElement;
 
@@ -439,30 +459,31 @@ describe("the question the results belong to", () => {
 
   it("records the question a ?q= link asked, so the view restores it", async () => {
     stubFetch();
-    const queryClient = client();
-    const Harness = ({ mounted }: { mounted: boolean }) => (
-      <QueryClientProvider client={queryClient}>
-        <PreferencesProvider>
-          <SessionProvider>
-            <MemoryRouter
-              initialEntries={[`/search?q=${encodeURIComponent(QUESTION)}`]}
-            >
-              {mounted && <SearchView />}
-            </MemoryRouter>
-          </SessionProvider>
-        </PreferencesProvider>
-      </QueryClientProvider>
-    );
-
-    const view = render(<Harness mounted />);
+    const page = leavablePage(`/search?q=${encodeURIComponent(QUESTION)}`);
     await screen.findByText("Ada Lovelace");
 
     // Leave the page and come back. The session keeps the results, and it
     // must keep the question that produced them beside them.
-    view.rerender(<Harness mounted={false} />);
-    view.rerender(<Harness mounted />);
+    page.leave();
+    page.back();
     expect(input().value).toBe(QUESTION);
     expect(screen.getByText("Ada Lovelace")).toBeTruthy();
+  });
+
+  it("keeps answering a question after the page is left, and shows the answer on return", async () => {
+    const answer = stream();
+    stubFetch((s) =>
+      s.url.endsWith("/search/semantic") ? answer.response : undefined,
+    );
+    const page = leavablePage();
+    ask(QUESTION);
+    page.leave();
+    await act(async () => {
+      answer.push(complete());
+      answer.end();
+    });
+    page.back();
+    expect(await screen.findByText("Ada Lovelace")).toBeTruthy();
   });
 });
 

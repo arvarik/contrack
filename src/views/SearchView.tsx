@@ -10,7 +10,6 @@ import {
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch } from "../api";
 import { useStarterDraw } from "../hooks/useStarterDraw";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
@@ -65,14 +64,8 @@ const MODES: readonly { value: SearchMode; label: string }[] = [
 // ─── Main SearchView Component ────────────────────────────────────────────────
 
 export const SearchView = () => {
-  const {
-    lastAISearchQuery,
-    setLastAISearchQuery,
-    lastAISearchData,
-    setLastAISearchData,
-    lastAISearchPhase,
-    setLastAISearchPhase,
-  } = useAISearchSession();
+  const { lastAISearchQuery, setLastAISearchQuery, semanticSearch } =
+    useAISearchSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
   /**
@@ -84,12 +77,6 @@ export const SearchView = () => {
    */
   const [query, setQuery] = useState(lastAISearchQuery);
 
-  const semanticSearch = useSemanticSearch({
-    data: lastAISearchData,
-    setData: setLastAISearchData,
-    phase: lastAISearchPhase,
-    setPhase: setLastAISearchPhase,
-  });
   const { submittedQuery, isPending, mutate, reset } = semanticSearch;
 
   const [floatingContactId, setFloatingContactId] = useState<string | null>(

@@ -33,17 +33,6 @@ const mockCoverage = vi.hoisted(() => ({
 vi.mock("../../../../src/api", async () => {
   const actual = await import("../../../../src/api/search");
   return {
-    useSemanticSearch: () => ({
-      data: null,
-      submittedQuery: "",
-      isPending: false,
-      isSuccess: false,
-      isError: false,
-      error: null,
-      phase: "idle",
-      mutate: vi.fn(),
-      reset: vi.fn(),
-    }),
     useSearchCoverage: () => ({
       data: mockCoverage.data,
       isLoading: false,

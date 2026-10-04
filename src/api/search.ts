@@ -11,14 +11,7 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import type { StarterQuestionsResponse } from "../../shared/starterQuestions";
-import {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { useState, useCallback, useRef } from "react";
 import type {
   Contact,
   InteractionSearchResult,
@@ -53,25 +46,16 @@ export const useSearchContacts = (q: string, filters: FacetFilter[] = []) => {
 
 /**
  * Two-phase streaming semantic search hook.
+ *
+ * Leaving the component does not cancel a question. The Ask page reads this
+ * hook from `SessionContext`, so its answer lands while the reader is on
+ * another page, and the server keeps a finished answer in its cache.
  */
-export const useSemanticSearch = (externalState?: {
-  data: SemanticSearchResult | null;
-  setData: Dispatch<SetStateAction<SemanticSearchResult | null>>;
-  phase: "idle" | "instant" | "enriching" | "done";
-  setPhase: Dispatch<SetStateAction<"idle" | "instant" | "enriching" | "done">>;
-}) => {
-  const [internalData, setInternalData] = useState<SemanticSearchResult | null>(
-    null,
+export const useSemanticSearch = () => {
+  const [data, setData] = useState<SemanticSearchResult | null>(null);
+  const [phase, setPhase] = useState<"idle" | "instant" | "enriching" | "done">(
+    "idle",
   );
-  const [internalPhase, setInternalPhase] = useState<
-    "idle" | "instant" | "enriching" | "done"
-  >("idle");
-
-  const data = externalState ? externalState.data : internalData;
-  const setData = externalState ? externalState.setData : setInternalData;
-  const phase = externalState ? externalState.phase : internalPhase;
-  const setPhase = externalState ? externalState.setPhase : setInternalPhase;
-
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -83,19 +67,6 @@ export const useSemanticSearch = (externalState?: {
    */
   const [askedQuery, setAskedQuery] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(
-    () => () => {
-      const pending = abortRef.current;
-      pending?.abort();
-      abortRef.current = null;
-      if (pending) {
-        setData(null);
-        setPhase("idle");
-      }
-    },
-    [setData, setPhase],
-  );
   /**
    * Ask a question. `filters` are the palette's facet pills. The server also
    * reads facets typed into the question, and counts a facet sent both ways
@@ -154,8 +125,7 @@ export const useSemanticSearch = (externalState?: {
         if (current()) {
           setError(cause instanceof Error ? cause : new Error("Search failed"));
           setIsSuccess(false);
-          // A partial answer is not a completed result. Discard it from
-          // the shared session too, so leaving and returning cannot show it.
+          // A partial answer is not a completed result.
           setData(null);
         }
       } finally {
@@ -166,11 +136,16 @@ export const useSemanticSearch = (externalState?: {
         }
       }
     },
-    [setData, setPhase],
+    [],
   );
 
-  const reset = useCallback(() => {
-    abortRef.current?.abort();
+  /**
+   * Forget the question. With `cancel` false its request keeps running and
+   * its answer is dropped here, but the server finishes it and keeps it in
+   * its cache, so asking the same question again is answered at once.
+   */
+  const reset = useCallback((cancel = true) => {
+    if (cancel) abortRef.current?.abort();
     abortRef.current = null;
     setData(null);
     setPhase("idle");
@@ -178,16 +153,10 @@ export const useSemanticSearch = (externalState?: {
     setError(null);
     setIsSuccess(false);
     setAskedQuery(null);
-  }, [setData, setPhase]);
+  }, []);
 
-  /**
-   * The question this search is about, or "" when there is none.
-   *
-   * The one this hook asked, while it is pending or failed. Otherwise the one
-   * stamped on the results, which is how a view that remounts over results
-   * the session kept still knows what they answer.
-   */
-  const submittedQuery = askedQuery ?? data?.query ?? "";
+  /** The question this search is about, or "" when there is none. */
+  const submittedQuery = askedQuery ?? "";
 
   return {
     data,
