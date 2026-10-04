@@ -674,7 +674,11 @@ export const DedupeView = () => {
               >
                 <EmptyState
                   icon={CheckCircle2}
-                  title="No duplicates found"
+                  title={
+                    scan?.autoMerged
+                      ? "Nothing left to review"
+                      : "No duplicates found"
+                  }
                   body={
                     scan?.autoMerged
                       ? `${scan.autoMerged} merged automatically. Run a scan after an import to check again`
