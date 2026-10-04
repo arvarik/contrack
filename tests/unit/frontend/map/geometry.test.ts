@@ -225,6 +225,18 @@ describe("toVisibleFeatures", () => {
     expect(features.map((f) => f.key)).toEqual(["point:c1", "cluster:7"]);
   });
 
+  it("stacks the people on one spot, which no zoom splits", () => {
+    const [stack, alone] = toVisibleFeatures([
+      pointFeature("c1", 1, 2),
+      pointFeature("c2", 1, 2),
+      pointFeature("c1", 1, 2),
+      pointFeature("c3", 1.0001, 2),
+    ]);
+    expect(stack).toMatchObject({ key: "stack:1,2", ids: ["c1", "c2"] });
+    expect(stack).toMatchObject({ kind: "cluster", count: 2 });
+    expect(alone).toMatchObject({ kind: "point", id: "c3" });
+  });
+
   it("skips anything without a point and an id", () => {
     expect(
       toVisibleFeatures([

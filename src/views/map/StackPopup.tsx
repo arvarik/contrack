@@ -1,6 +1,6 @@
 /**
  * The list that opens over a stack of pins: people the geocoder put on one
- * point, which no zoom can split. Each has a button, the open one marked.
+ * spot, which no zoom can split. Each has a button, the open one marked.
  *
  * @module views/map/StackPopup
  */
@@ -13,7 +13,8 @@ import { cn } from "../../lib/utils";
 import { PIN_CLEARANCE } from "./MapHoverCard";
 
 export interface ContactStack {
-  clusterId: number;
+  /** The key of the cluster or stack it opened from. */
+  key: string;
   longitude: number;
   latitude: number;
   /** Everyone in the cluster, up to {@link STACK_LIMIT}. */
@@ -48,7 +49,8 @@ export const StackPopup = ({
       offset={PIN_CLEARANCE}
       padding={stack.padding}
       closeButton={false}
-      closeOnClick
+      // The click that opens it reaches the map too. ContactMap closes it.
+      closeOnClick={false}
       onClose={onClose}
       maxWidth="280px"
       className="contact-popup"

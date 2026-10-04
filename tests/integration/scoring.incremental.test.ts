@@ -24,6 +24,8 @@ import {
   contactEditColumns,
 } from "../../server/db.ts";
 import { relationshipService } from "../../server/services/relationshipService.ts";
+import { contactService } from "../../server/services/contactService.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { setPreferences } from "../../server/services/userPreferencesService.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, type Actor } from "./tenancy/helpers.ts";
@@ -201,19 +203,23 @@ describe("the updatedAt trigger fires on edits and nothing else", () => {
     });
   });
 
-  it("stamps updatedAt when a field of the contact is written", () => {
+  it("stamps updatedAt for an edit, and for a pin a person moved", () => {
     const id = addContact(A.user.id);
-    sqlite
-      .prepare(
-        "UPDATE contacts SET updatedAt = '2020-01-01T00:00:00.000Z' WHERE id = ?",
-      )
-      .run(id);
+    const old = "2020-01-01T00:00:00.000Z";
+    const age = () =>
+      sqlite
+        .prepare("UPDATE contacts SET updatedAt = ? WHERE id = ?")
+        .run(old, id);
 
+    age();
     sqlite
       .prepare("UPDATE contacts SET company = 'Globex' WHERE id = ?")
       .run(id);
+    expect(readRow(id).updatedAt).not.toBe(old);
 
-    expect(readRow(id).updatedAt).not.toBe("2020-01-01T00:00:00.000Z");
+    age();
+    contactService.setLocation(scopeForOwnerId(A.user.id), id, 51.5, -0.12);
+    expect(readRow(id).updatedAt).not.toBe(old);
   });
 
   it("leaves the whole corpus untouched across a full sweep", async () => {

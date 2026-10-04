@@ -102,8 +102,8 @@ test("a search result opens a contact dialog that returns focus to the result", 
   // earlier spec on the shared instance, is never the button this presses.
   const result = page.getByRole("button", { name: /^Ada Lovelace/ });
   await expect(result).toBeVisible();
-  await result.focus();
-  await page.keyboard.press("Enter");
+  // One action: a separate focus and key press left a gap under load.
+  await result.press("Enter");
 
   const dialog = page.getByRole("dialog", { name: "Contact details" });
   await expect(dialog).toBeVisible();

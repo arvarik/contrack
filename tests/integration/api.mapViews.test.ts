@@ -57,35 +57,37 @@ describe("Map Views API (/api/map/views)", () => {
     });
   });
 
-  it("GET /api/map/views returns views sorted by sortOrder ASC, name ASC", async () => {
-    await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "B View",
-          query: "tag:vip",
-          layer: "pins",
-          bounds: [-10, 40, 10, 60],
-        }),
-    );
-    await asUser(alice)(
-      request(app)
-        .post("/api/map/views")
-        .send({
-          name: "A View",
-          query: "near:Paris",
-          layer: "heat",
-          bounds: [2, 48, 3, 49],
-        }),
-    );
+  it("lists views in their order, and a PATCH of sortOrder moves one there", async () => {
+    const make = (name: string) =>
+      asUser(alice)(
+        request(app)
+          .post("/api/map/views")
+          .send({ name, bounds: [-10, 40, 10, 60] }),
+      );
+    await make("B View");
+    await make("A View");
+    const last = await make("C View");
+    const order = async () =>
+      (await asUser(alice)(request(app).get("/api/map/views"))).body.views.map(
+        (v: { name: string; sortOrder: number }) => [v.name, v.sortOrder],
+      );
+    expect(await order()).toEqual([
+      ["B View", 0],
+      ["A View", 1],
+      ["C View", 2],
+    ]);
 
-    const res = await asUser(alice)(request(app).get("/api/map/views"));
-    expect(res.status).toBe(200);
-    expect(res.body.views).toHaveLength(2);
-    expect(res.body.views[0].name).toBe("B View");
-    expect(res.body.views[0].sortOrder).toBe(0);
-    expect(res.body.views[1].name).toBe("A View");
-    expect(res.body.views[1].sortOrder).toBe(1);
+    // The others keep their order around the view that moved.
+    await asUser(alice)(
+      request(app)
+        .patch(`/api/map/views/${last.body.id}`)
+        .send({ sortOrder: 0 }),
+    );
+    expect(await order()).toEqual([
+      ["C View", 0],
+      ["B View", 1],
+      ["A View", 2],
+    ]);
   });
 
   it("PATCH /api/map/views/:id updates allowed fields", async () => {

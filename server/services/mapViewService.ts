@@ -161,20 +161,29 @@ export const mapViewService = {
       values.push(JSON.stringify(patch.bounds));
     }
 
-    if (patch.sortOrder !== undefined) {
-      updates.push("sortOrder = ?");
-      values.push(patch.sortOrder);
-    }
-
-    if (updates.length > 0) {
-      updates.push("updatedAt = CURRENT_TIMESTAMP");
-      values.push(id, scope.ownerId);
-      sqlite
-        .prepare(
-          `UPDATE map_views SET ${updates.join(", ")} WHERE id = ? AND ownerId = ?`,
-        )
-        .run(...values);
-    }
+    sqlite.transaction(() => {
+      if (updates.length > 0) {
+        updates.push("updatedAt = CURRENT_TIMESTAMP");
+        values.push(id, scope.ownerId);
+        sqlite
+          .prepare(
+            `UPDATE map_views SET ${updates.join(", ")} WHERE id = ? AND ownerId = ?`,
+          )
+          .run(...values);
+      }
+      // `sortOrder` is a place in the list. The view moves there, and the
+      // others keep their order around it.
+      if (patch.sortOrder !== undefined) {
+        const ids = this.listMapViews(scope)
+          .map((view) => view.id)
+          .filter((other) => other !== id);
+        ids.splice(patch.sortOrder, 0, id);
+        const place = sqlite.prepare(
+          "UPDATE map_views SET sortOrder = ? WHERE id = ? AND ownerId = ?",
+        );
+        ids.forEach((viewId, i) => place.run(i, viewId, scope.ownerId));
+      }
+    })();
 
     return this.getMapView(scope, id);
   },

@@ -11,6 +11,8 @@ interface SaveViewModalProps {
   currentLayer: MapLayer;
   /** The overdue filter is on. A view does not save it, so the dialog says so. */
   overdueOnly?: boolean;
+  /** The map shows only the people from Ask, which a view does not save. */
+  fromAsk?: boolean;
 }
 
 export const SaveViewModal: React.FC<SaveViewModalProps> = ({
@@ -20,6 +22,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
   currentQuery = "",
   currentLayer,
   overdueOnly = false,
+  fromAsk = false,
 }) => {
   const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -116,6 +119,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
             <span className="font-medium text-on-surface">{layerLabel}</span>
           </div>
           {overdueOnly && <p>The overdue filter is not saved with the view</p>}
+          {fromAsk && <p>The people from Ask are not saved with the view</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2">

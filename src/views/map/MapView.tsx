@@ -40,6 +40,7 @@ import {
   useMapViews,
   useCreateMapView,
   useUpdateMapView,
+  useMoveMapView,
   useDeleteMapView,
   type MapLayer,
   type MapView as MapViewType,
@@ -114,6 +115,21 @@ const placedBounds = (people: readonly MapContact[]) =>
       .map((c) => ({ lat: c.lat, lng: c.lng })),
   );
 
+/** The map's box as a view keeps it: inside the world, to six decimals. */
+function currentBounds(map: MapLibreMap): MapBounds {
+  const b = map.getBounds();
+  const clamp = (value: number, limit: number) =>
+    Math.max(-limit, Math.min(limit, value));
+  const north = clamp(b.getNorth(), 85);
+  const box = [
+    clamp(b.getWest(), 180),
+    Math.min(clamp(b.getSouth(), 85), north - 0.01),
+    clamp(b.getEast(), 180),
+    north,
+  ];
+  return box.map((edge) => Number(edge.toFixed(6))) as MapBounds;
+}
+
 export const MapView = () => {
   const {
     data: contacts = [],
@@ -173,7 +189,11 @@ export const MapView = () => {
     null;
   const createMapView = useCreateMapView();
   const updateMapView = useUpdateMapView();
+  const moveMapView = useMoveMapView();
   const deleteMapView = useDeleteMapView();
+  // The view applied or saved last, which Update writes the map into.
+  const [lastViewId, setLastViewId] = useState(urlViewId);
+  const lastView = mapViews.find((v) => v.id === lastViewId) ?? null;
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [renameTargetView, setRenameTargetView] = useState<MapViewType | null>(
@@ -231,6 +251,7 @@ export const MapView = () => {
   const { setOverdueOnly } = filter;
   const applyView = useCallback(
     (view: MapViewType, instant = false) => {
+      setLastViewId(view.id);
       setOverdueOnly(false);
       setLayerState(view.layer);
       setPreference("mapLayer", view.layer);
@@ -265,51 +286,59 @@ export const MapView = () => {
     }
   }, [loadedViews, map, applyView, setSearchParams]);
 
-  const handleSaveView = useCallback(
-    async (name: string) => {
-      if (!map) throw new Error("Map not ready");
-      const b = map.getBounds();
-      const rawWest = b.getWest();
-      const rawEast = b.getEast();
-      const rawSouth = b.getSouth();
-      const rawNorth = b.getNorth();
-
-      let west = Math.max(-180, Math.min(180, rawWest));
-      let east = Math.max(-180, Math.min(180, rawEast));
-      let south = Math.max(-85, Math.min(85, rawSouth));
-      const north = Math.max(-85, Math.min(85, rawNorth));
-
-      if (rawWest <= -180 && rawEast >= 180) {
-        west = -180;
-        east = 180;
-      }
-      if (south >= north) {
-        south = Math.max(-85, north - 0.01);
-      }
-
-      const bounds: MapBounds = [
-        Number(west.toFixed(6)),
-        Number(south.toFixed(6)),
-        Number(east.toFixed(6)),
-        Number(north.toFixed(6)),
-      ];
-      const created = await createMapView.mutateAsync({
-        name,
-        query: filter.rawInput.trim(),
-        layer,
-        bounds,
-      });
-      toast.success(`View "${created.name}" saved`);
+  /** The URL names the view the map now shows. */
+  const showView = useCallback(
+    (id: string) => {
+      setLastViewId(id);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          next.set("view", created.id);
+          next.set("view", id);
           return next;
         },
         { replace: true },
       );
     },
-    [map, createMapView, filter.rawInput, layer, setSearchParams],
+    [setSearchParams],
+  );
+
+  const handleSaveView = useCallback(
+    async (name: string) => {
+      if (!map) throw new Error("Map not ready");
+      const created = await createMapView.mutateAsync({
+        name,
+        query: filter.rawInput.trim(),
+        layer,
+        bounds: currentBounds(map),
+      });
+      toast.success(`View "${created.name}" saved`);
+      showView(created.id);
+    },
+    [map, createMapView, filter.rawInput, layer, showView],
+  );
+
+  // Update writes the filter, the layer and the box into a saved view.
+  const handleUpdateView = useCallback(
+    (view: MapViewType) => {
+      if (!map) return;
+      const data = {
+        query: filter.rawInput.trim(),
+        layer,
+        bounds: currentBounds(map),
+      };
+      updateMapView.mutate(
+        { id: view.id, data },
+        {
+          onSuccess: () => {
+            toast.success(`View "${view.name}" now shows this map`);
+            showView(view.id);
+          },
+          onError: (err) =>
+            toast.error(`Could not update "${view.name}": ${err.message}`),
+        },
+      );
+    },
+    [map, filter.rawInput, layer, updateMapView, showView],
   );
 
   const handleRenameView = useCallback(
@@ -525,6 +554,17 @@ export const MapView = () => {
     );
   }, [fitTo, filter.filteredContacts, map, openId]);
 
+  // A link that names who to show, such as Ask's "Show on map", lands on them.
+  const fitOnArrival = useRef(
+    !urlViewId && (searchParams.has("people") || searchParams.has("q")),
+  );
+  const resolving = filter.effectiveFilters.some((f) => f.resolving);
+  useEffect(() => {
+    if (!fitOnArrival.current || !map || isPending || resolving) return;
+    fitOnArrival.current = false;
+    handleFitAll();
+  }, [map, isPending, resolving, handleFitAll]);
+
   // A People row points at its pin, and a press shows the pin's card.
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [cardRequest, setCardRequest] = useState<{ id: string } | null>(null);
@@ -731,6 +771,11 @@ export const MapView = () => {
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onStartRename={(v) => setRenameTargetView(v)}
           onDeleteView={handleDeleteView}
+          viewEdits={{
+            lastView,
+            onUpdateView: handleUpdateView,
+            onMoveView: (view, to) => moveMapView.mutate({ view, to }),
+          }}
           inputRef={inputRef}
           room={room}
           onFitAll={handleFitAll}
@@ -924,6 +969,7 @@ export const MapView = () => {
           currentQuery={filter.rawInput}
           currentLayer={layer}
           overdueOnly={filter.overdueOnly}
+          fromAsk={!!filter.people}
         />
 
         {adjusting && (

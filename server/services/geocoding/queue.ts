@@ -11,17 +11,17 @@ import {
 } from "./cache.ts";
 import { geocodeWithFallback } from "./provider.ts";
 
-/** No answer: wait 30 s, twice as long for each in a row, up to 15 min. */
+/**
+ * No answer: wait 30 s, twice as long for each in a row, up to 15 min. The
+ * task stays queued until an answer, so "Waiting for the geocoder" is true.
+ */
 const RETRY_FIRST_MS = 30_000;
 const RETRY_MAX_MS = 15 * 60_000;
-/** After this many tries with no answer, a task waits for the next boot. */
-const MAX_TRIES = 5;
 
 interface GeoTask {
   contactId: string;
   location: string;
   normalizedKey: string;
-  tries?: number;
 }
 
 const geocodeQueue: GeoTask[] = [];
@@ -87,8 +87,7 @@ async function processGeocodeQueue(): Promise<void> {
 
     if (result.status === "error") {
       // No answer is not "nothing found": cache nothing, and ask again later.
-      const tries = (task.tries ?? 0) + 1;
-      if (tries < MAX_TRIES) geocodeQueue.push({ ...task, tries });
+      geocodeQueue.push(task);
       const wait = Math.min(RETRY_FIRST_MS * 2 ** noAnswers, RETRY_MAX_MS);
       noAnswers++;
       log.warn(

@@ -48,6 +48,7 @@ import type {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { toFeatureCollection, type MapContact } from "../../../shared/geo";
+import { isPastDay } from "../../../shared/dates";
 import { useAuth } from "../../components/auth/AuthGate";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { usePreferences } from "../../contexts/PreferencesContext";
@@ -86,10 +87,6 @@ import { useClusterFeatures, type ClusterFeature } from "./useClusterFeatures";
 registerPmtilesProtocol();
 
 export const CONTACTS_SOURCE_ID = "contacts";
-
-// The source's last zoom, clustered too, so its overzoomed tiles keep people
-// on one point a stack at every zoom. MapLibre warns about it once.
-const CLUSTER_MAX_ZOOM = 18;
 
 /** Pins closer than this many pixels join one cluster. */
 const CLUSTER_RADIUS = 50;
@@ -415,9 +412,9 @@ export const ContactMap = ({
   const [stack, setStack] = useState<ContactStack | null>(null);
 
   // Each cluster's people, and whether it is a stack that no zoom splits.
-  const clusterLeavesCache = useRef<Map<number, ClusterPeople>>(new Map());
+  const clusterLeavesCache = useRef<Map<string, ClusterPeople>>(new Map());
   const [clusterLeaves, setClusterLeaves] = useState<
-    Map<number, ClusterPeople>
+    Map<string, ClusterPeople>
   >(new Map());
 
   useEffect(() => {
@@ -425,41 +422,56 @@ export const ContactMap = ({
     if (!map || !source) return;
 
     let isMounted = true;
-    const clusters = features.filter(
-      (f): f is ClusterFeature => f.kind === "cluster",
+    const missing = features.filter(
+      (f): f is ClusterFeature & { clusterId: number } =>
+        f.kind === "cluster" &&
+        f.clusterId !== undefined &&
+        !clusterLeavesCache.current.has(f.key),
     );
-    const missing = clusters.filter(
-      (c) => !clusterLeavesCache.current.has(c.clusterId),
-    );
-
     if (missing.length === 0) return;
 
     Promise.all(
       missing.map(async (c) => {
         try {
-          const [leaves, zoom] = await Promise.all([
-            source.getClusterLeaves(c.clusterId, Infinity, 0),
-            source.getClusterExpansionZoom(c.clusterId),
-          ]);
+          const leaves = await source.getClusterLeaves(
+            c.clusterId,
+            Infinity,
+            0,
+          );
           const ids = leaves
             .map((l) => l.properties?.id)
             .filter((id): id is string => typeof id === "string");
-          const people = { ids, stack: zoom > CLUSTER_MAX_ZOOM };
-          clusterLeavesCache.current.set(c.clusterId, people);
-          return people;
+          const spots = new Set(leaves.map((l) => JSON.stringify(l.geometry)));
+          clusterLeavesCache.current.set(c.key, {
+            ids,
+            stack: spots.size === 1,
+          });
         } catch {
-          return null;
+          // New data replaced the cluster, and the next read asks again.
         }
       }),
     ).then(() => {
-      if (!isMounted) return;
-      setClusterLeaves(new Map(clusterLeavesCache.current));
+      if (isMounted) setClusterLeaves(new Map(clusterLeavesCache.current));
     });
 
     return () => {
       isMounted = false;
     };
   }, [map, features]);
+
+  // A stack carries its people. A cluster's arrive from MapLibre once asked.
+  const peopleOf = useCallback(
+    (f: ClusterFeature): ClusterPeople | undefined =>
+      f.ids ? { ids: f.ids, stack: true } : clusterLeaves.get(f.key),
+    [clusterLeaves],
+  );
+  const overdueIds = useMemo(
+    () =>
+      new Set(
+        contacts.filter((c) => isPastDay(c.nextFollowUpAt)).map((c) => c.id),
+      ),
+    [contacts],
+  );
 
   // New data makes a stack's list, a card and the cluster ids stale: MapLibre
   // can give an old id to a new group.
@@ -493,10 +505,7 @@ export const ContactMap = ({
     handleCloseCard();
   }, [drawPins, handleCloseCard]);
   useEffect(() => {
-    if (
-      stack &&
-      !features.some((f) => f.key === `cluster:${stack.clusterId}`)
-    ) {
+    if (stack && !features.some((f) => f.key === stack.key)) {
       setStack(null);
     }
   }, [features, stack]);
@@ -547,6 +556,7 @@ export const ContactMap = ({
       const target = event.originalEvent.target as Element | null;
       if (target?.closest?.(".maplibregl-marker, .maplibregl-popup")) return;
       handleCloseCard();
+      setStack(null);
       onMapClick?.({
         longitude: event.lngLat.lng,
         latitude: event.lngLat.lat,
@@ -560,41 +570,36 @@ export const ContactMap = ({
       const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
       if (!map || !source) return;
       setCard(null);
-      const zoom = await source.getClusterExpansionZoom(cluster.clusterId);
-      if (zoom <= CLUSTER_MAX_ZOOM) {
+      const people = peopleOf(cluster);
+      if (!people?.stack && cluster.clusterId !== undefined) {
         map.easeTo({
           center: [cluster.longitude, cluster.latitude],
-          zoom,
+          zoom: await source.getClusterExpansionZoom(cluster.clusterId),
           duration: prefersReducedMotion() ? 0 : 500,
         });
         return;
       }
-      // Past the cluster zoom these people stay on one point. List them.
-      const leaves = await source.getClusterLeaves(
-        cluster.clusterId,
-        STACK_LIMIT,
-        0,
-      );
-      const listed = leaves
-        .map((leaf) => byId.get(String(leaf.properties?.id)))
+      // Everyone is on one spot, which no zoom splits. List them.
+      const listed = (people?.ids ?? [])
+        .map((id) => byId.get(id))
         .filter((c): c is MapContact => Boolean(c))
         .sort((a, b) => a.name.localeCompare(b.name));
       setStack({
-        clusterId: cluster.clusterId,
+        key: cluster.key,
         longitude: cluster.longitude,
         latitude: cluster.latitude,
-        contacts: listed,
+        contacts: listed.slice(0, STACK_LIMIT),
         total: cluster.count,
         padding: room(),
       });
     },
-    [map, byId, setCard, room],
+    [map, byId, peopleOf, setCard, room],
   );
 
   // The cluster's people for its preview, the ones with the most history first.
   const clusterMembers = useMemo(() => {
     if (card?.kind !== "cluster") return [];
-    return (clusterLeaves.get(card.cluster.clusterId)?.ids ?? [])
+    return (peopleOf(card.cluster)?.ids ?? [])
       .map((id) => byId.get(id))
       .filter((c): c is MapContact => Boolean(c))
       .sort(
@@ -602,7 +607,7 @@ export const ContactMap = ({
           (b.interactionCount ?? 0) - (a.interactionCount ?? 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [card, clusterLeaves, byId]);
+  }, [card, peopleOf, byId]);
 
   // The open contact's pin wears a halo, and so do a card's and a list row's.
   // While the open contact is on the map, the other pins step back.
@@ -690,8 +695,6 @@ export const ContactMap = ({
             data={collection}
             cluster
             clusterRadius={CLUSTER_RADIUS}
-            maxzoom={CLUSTER_MAX_ZOOM}
-            clusterMaxZoom={CLUSTER_MAX_ZOOM}
           >
             <Layer {...PRESENCE_LAYER} />
           </Source>
@@ -713,7 +716,7 @@ export const ContactMap = ({
           {drawPins &&
             features.map((feature) => {
               if (feature.kind === "cluster") {
-                const known = clusterLeaves.get(feature.clusterId);
+                const known = peopleOf(feature);
                 const leaves = known?.ids ?? [];
                 const selectedInCluster = selectedIds
                   ? leaves.filter((id) => selectedIds.has(id)).length
@@ -731,9 +734,10 @@ export const ContactMap = ({
                     onCard={hoverCard ? onCluster : undefined}
                     described={
                       card?.kind === "cluster" &&
-                      card.cluster.clusterId === feature.clusterId
+                      card.cluster.key === feature.key
                     }
                     stacked={known?.stack}
+                    overdue={leaves.filter((id) => overdueIds.has(id)).length}
                     halo={halo}
                     dimmed={
                       dimming && !!known && !halo && selectedInCluster === 0
@@ -787,12 +791,10 @@ export const ContactMap = ({
           )}
           {card?.kind === "cluster" && (
             <ClusterPreview
-              key={card.cluster.clusterId}
+              key={card.cluster.key}
               cluster={card.cluster}
               members={clusterMembers}
-              stacked={
-                clusterLeaves.get(card.cluster.clusterId)?.stack ?? false
-              }
+              stacked={peopleOf(card.cluster)?.stack ?? false}
               padding={card.padding}
             />
           )}

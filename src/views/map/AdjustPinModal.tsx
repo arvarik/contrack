@@ -20,7 +20,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { isValidLatLng } from "../../../shared/geo";
-import { useSetContactLocation } from "../../api";
+import { useContact, useSetContactLocation } from "../../api";
 import { searchPlace } from "../../api/geo";
 import { Modal } from "../../components/ui/Modal";
 import { FORM_INPUT } from "../../lib/styles";
@@ -70,7 +70,7 @@ const noSelect = () => {};
 
 interface AdjustPinModalProps {
   contact: MiniMapContact;
-  /** True when the contact has address text. Left out, `location` decides. */
+  /** True when the contact has address text. Left out, the dialog reads it. */
   hasAddress?: boolean;
   isOpen: boolean;
   onClose: () => void;
@@ -78,10 +78,19 @@ interface AdjustPinModalProps {
 
 export const AdjustPinModal = ({
   contact,
-  hasAddress = Boolean(contact.location?.trim()),
+  hasAddress: known,
   isOpen,
   onClose,
 }: AdjustPinModalProps) => {
+  // The map's rows carry no address rows, so the contact itself is read.
+  const { data: detail } = useContact(
+    known === undefined ? contact.id : undefined,
+  );
+  const hasAddress =
+    known ??
+    [detail?.location, ...(detail?.addresses ?? []).map((a) => a.address)].some(
+      (text) => text?.trim(),
+    );
   const placed = isValidLatLng(contact.lat, contact.lng);
   const start: PinPosition | null = placed
     ? { latitude: contact.lat as number, longitude: contact.lng as number }

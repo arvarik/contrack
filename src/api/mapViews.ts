@@ -101,6 +101,24 @@ export function useUpdateMapView() {
   });
 }
 
+/** Move a view to a place in the list: on screen at once, then on the server. */
+export function useMoveMapView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ view, to }: { view: MapView; to: number }) =>
+      updateMapView(view.id, { sortOrder: to }),
+    onMutate: ({ view, to }) =>
+      queryClient.setQueryData<MapView[]>(["map-views"], (views) => {
+        const rest = views?.filter((v) => v.id !== view.id) ?? [];
+        rest.splice(to, 0, view);
+        return rest;
+      }),
+    onError: (err, { view }) =>
+      toast.error(`Could not move "${view.name}": ${err.message}`),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["map-views"] }),
+  });
+}
+
 /** Delete a view. The toast's Undo saves it again: name, query, layer and box. */
 export function useDeleteMapView() {
   const queryClient = useQueryClient();

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
   Bookmark,
   ChevronDown,
@@ -6,6 +6,7 @@ import {
   Pencil,
   Trash2,
   BookmarkPlus,
+  RefreshCw,
 } from "lucide-react";
 import type { MapView } from "../../api/mapViews";
 import { cn } from "../../lib/utils";
@@ -20,13 +21,18 @@ import {
   SELECTED_TINT,
 } from "../../lib/styles";
 
-interface ViewsMenuProps {
+export interface ViewsMenuProps {
   views: MapView[];
   activeViewId: string | null;
   onSelectView: (view: MapView) => void;
   onOpenSaveModal: () => void;
   onStartRename: (view: MapView) => void;
   onDeleteView: (view: MapView) => void;
+  /** The last view applied or saved, which Update writes this map into. */
+  lastView?: MapView | null;
+  onUpdateView?: (view: MapView) => void;
+  /** Move a view to a place in the list, by a drag or Alt and an arrow. */
+  onMoveView?: (view: MapView, to: number) => void;
   isMobile?: boolean;
 }
 
@@ -35,7 +41,7 @@ interface ViewsMenuProps {
  * three buttons (select, rename, delete), and an `ActionMenu` row is one
  * item. It paints the same panel and rows, and it keeps the promise
  * `role="menu"` makes: the arrows move between the items and wrap, and
- * Escape goes back to the button.
+ * Escape goes back to the button. A drag, or Alt and an arrow, moves a view.
  */
 export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   views,
@@ -44,11 +50,24 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   onOpenSaveModal,
   onStartRename,
   onDeleteView,
+  lastView = null,
+  onUpdateView,
+  onMoveView,
   isMobile = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [dragged, setDragged] = useState<MapView | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // A moved row can lose the focus as the list reorders, so it takes it back.
+  const moved = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!moved.current) return;
+    containerRef.current
+      ?.querySelector<HTMLElement>(`[data-view-id="${moved.current}"] button`)
+      ?.focus();
+    moved.current = null;
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -126,12 +145,14 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
           aria-label="Saved views"
           className={cn(
             MENU_PANEL,
-            "absolute mt-1 z-50 min-w-[14rem] max-w-[20rem]",
-            isMobile ? "left-0" : "right-0 lg:left-0",
+            "absolute z-50 w-max min-w-[14rem] max-w-[20rem]",
+            // On a phone the button ends the sheet's last row: open up and in.
+            isMobile ? "right-0 bottom-full mb-1" : "mt-1 right-0 lg:left-0",
           )}
         >
           <div role="presentation" className={MENU_HEADING}>
             Saved views
+            {onMoveView && views.length > 1 && " · drag to reorder"}
           </div>
 
           <div className="max-h-60 overflow-y-auto">
@@ -140,20 +161,52 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                 No saved views yet
               </div>
             ) : (
-              views.map((view) => {
+              views.map((view, index) => {
                 const isActive = view.id === activeViewId;
+                const move = (to: number) => {
+                  if (!onMoveView || to < 0 || to >= views.length) return;
+                  moved.current = view.id;
+                  onMoveView(view, to);
+                };
                 return (
                   <div
                     key={view.id}
+                    data-view-id={view.id}
+                    draggable={!!onMoveView}
+                    onDragStart={(e) => {
+                      setDragged(view);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", view.name);
+                    }}
+                    onDragOver={(e) => dragged && e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragged && dragged.id !== view.id)
+                        onMoveView?.(dragged, index);
+                      setDragged(null);
+                    }}
+                    onDragEnd={() => setDragged(null)}
                     className={cn(
                       "group flex items-center rounded-md",
                       isActive && MENU_ITEM_SELECTED,
+                      dragged?.id === view.id && "opacity-50",
                     )}
                   >
                     <button
                       type="button"
                       role="menuitem"
+                      aria-keyshortcuts={
+                        onMoveView ? "Alt+ArrowUp Alt+ArrowDown" : undefined
+                      }
                       onPointerMove={focusOnPointer}
+                      onKeyDown={(e) => {
+                        if (!e.altKey) return;
+                        if (e.key !== "ArrowUp" && e.key !== "ArrowDown")
+                          return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        move(index + (e.key === "ArrowUp" ? -1 : 1));
+                      }}
                       onClick={() => {
                         onSelectView(view);
                         setIsOpen(false);
@@ -238,6 +291,23 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
             />
             <span>Save current view…</span>
           </button>
+          {lastView && onUpdateView && (
+            <button
+              type="button"
+              role="menuitem"
+              onPointerMove={focusOnPointer}
+              onClick={() => {
+                setIsOpen(false);
+                onUpdateView(lastView);
+              }}
+              className={MENU_ITEM}
+            >
+              <RefreshCw aria-hidden="true" className={MENU_ICON} />
+              <span className="truncate">
+                Update “{lastView.name}” to this map
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>

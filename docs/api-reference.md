@@ -973,7 +973,7 @@ snapshots exist.
 | `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
 | `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
 | `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
-| `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer`, `bounds` or `sortOrder`.                                                                                                                        | your data            |
+| `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer` or `bounds`. `sortOrder` moves the view to that place in the list (0 is first), and the others keep their order.                                 | your data            |
 | `DELETE /api/map/views/:id` | Delete a saved view.                                                                                                                                                             | your data            |
 
 In `bounds`, west must be less than east, and south less than north. The Map

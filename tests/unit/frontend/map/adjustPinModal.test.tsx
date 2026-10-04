@@ -113,7 +113,12 @@ function stubFetch() {
   return requests;
 }
 
-function mount(contact: typeof ADA, onClose = vi.fn(), hasAddress?: boolean) {
+/** `hasAddress` null leaves it out, so the dialog reads the contact. */
+function mount(
+  contact: typeof ADA,
+  onClose = vi.fn(),
+  hasAddress: boolean | null = true,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -121,7 +126,7 @@ function mount(contact: typeof ADA, onClose = vi.fn(), hasAddress?: boolean) {
     <QueryClientProvider client={client}>
       <AdjustPinModal
         contact={contact}
-        hasAddress={hasAddress}
+        hasAddress={hasAddress ?? undefined}
         isOpen
         onClose={onClose}
       />
@@ -279,18 +284,22 @@ describe("AdjustPinModal", () => {
     expect(client.getQueryData(["contacts", "c1"])).toMatchObject(geocoded);
   });
 
-  it("offers Use address again only when there is an address to read", () => {
-    stubFetch();
-    mount({ ...ADA, location: null });
+  it("offers Use address again only when there is an address to read", async () => {
+    mount({ ...ADA, location: null }, vi.fn(), false);
     expect(
       screen.queryByRole("button", { name: "Use address again" }),
     ).toBeNull();
     cleanup();
 
-    // The contact page knows about address rows the `location` field lacks.
-    mount({ ...ADA, location: null }, vi.fn(), true);
+    // The map's rows lack the address rows, so the dialog reads the contact.
+    const address = { address: "10 Downing St, London" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ...ADA, addresses: [address] })),
+    );
+    mount({ ...ADA, location: null }, vi.fn(), null);
     expect(
-      screen.getByRole("button", { name: "Use address again" }),
+      await screen.findByRole("button", { name: "Use address again" }),
     ).toBeTruthy();
   });
 

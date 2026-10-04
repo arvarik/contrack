@@ -64,6 +64,16 @@ interface ContactMarkerProps {
   described?: boolean;
 }
 
+/** The red dot of an overdue follow-up, and what a screen reader hears. */
+export const OverdueDot = ({ id, label }: { id: string; label: string }) => (
+  <span
+    id={id}
+    className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-error ring-2 ring-surface-container-lowest"
+  >
+    <span className="sr-only">{label}</span>
+  </span>
+);
+
 export const ContactMarker = memo(function ContactMarker({
   contact,
   selected,
@@ -163,14 +173,7 @@ export const ContactMarker = memo(function ContactMarker({
           onError={() => setBroken(true)}
           className="w-full h-full rounded-full object-cover"
         />
-        {overdue && (
-          <span
-            id={overdueId}
-            className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-error ring-2 ring-surface-container-lowest"
-          >
-            <span className="sr-only">Follow-up overdue</span>
-          </span>
-        )}
+        {overdue && <OverdueDot id={overdueId} label="Follow-up overdue" />}
       </button>
     </Marker>
   );

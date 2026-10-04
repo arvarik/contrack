@@ -164,7 +164,11 @@ function loadedMap(zoom = 1, source?: unknown) {
 
 /** A contacts source whose one cluster holds these contacts. */
 const sourceWith = (ids: string[]) => ({
-  getClusterLeaves: async () => ids.map((id) => ({ properties: { id } })),
+  getClusterLeaves: async () =>
+    ids.map((id, i) => ({
+      properties: { id },
+      geometry: { type: "Point", coordinates: [i, 0] },
+    })),
   getClusterExpansionZoom: async () => 12,
 });
 
@@ -384,10 +388,19 @@ describe("ContactMap", () => {
     expect(pin("Alan Turing, NPL").dataset.dimmed).toBeUndefined();
   });
 
-  it("marks an overdue follow-up with a dot that the pin's description names", () => {
-    const late = { ...PEOPLE[0], nextFollowUpAt: "2020-01-01" };
-    visible.mockReturnValue([point(late), point(PEOPLE[1])]);
-    render(<ContactMap contacts={[late, PEOPLE[1]]} onSelect={() => {}} />);
+  it("marks an overdue follow-up with a dot that the description names", async () => {
+    const late = (c: MapContact) => ({ ...c, nextFollowUpAt: "2020-01-01" });
+    const people = [late(PEOPLE[0]), PEOPLE[1], late(PEOPLE[2])];
+    visible.mockReturnValue([
+      point(people[0]),
+      point(people[1]),
+      cluster(7, 2),
+    ]);
+    render(<ContactMap contacts={people} onSelect={() => {}} />);
+    await screen.findByTestId("map");
+    act(() =>
+      createdWith().onLoad({ target: loadedMap(1, sourceWith(["c2", "c3"])) }),
+    );
     expect(
       screen.getByRole("button", {
         name: "Ada Lovelace, Babbage & Co",
@@ -399,17 +412,13 @@ describe("ContactMap", () => {
         .getByRole("button", { name: "Grace Hopper, US Navy" })
         .hasAttribute("aria-describedby"),
     ).toBe(false);
-  });
-
-  it("clusters the source's last zoom, so people on one point stay one stack", async () => {
-    // Past the last clustered zoom, people on one point were pins on top of
-    // each other, and only the top one could be clicked.
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
-    await screen.findByTestId("map");
-    const source = sourceProps.mock.calls
-      .map(([props]) => props)
-      .find((props) => props.id === "contacts");
-    expect(source).toMatchObject({ maxzoom: 18, clusterMaxZoom: 18 });
+    // A cluster counts its people's overdue follow-ups.
+    expect(
+      await screen.findByRole("button", {
+        name: "2 contacts, zoom in",
+        description: "1 follow-up overdue",
+      }),
+    ).toBeTruthy();
   });
 
   it("says the contacts are loading while they load", () => {

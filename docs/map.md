@@ -19,8 +19,8 @@ A contact is on the map when it has a pin. Contrack places the pin from the cont
 ## Pins, clusters and stacks
 
 - **A pin** is the contact's picture. Select it to open the contact over the right side of the map. Select the map, or press `Esc`, to close the contact. A red dot on a pin means that the contact's follow-up is overdue.
-- **A cluster** is a circle with a number. It holds contacts that are too close to tell apart at this zoom. Point at it to see up to five of its people, the ones with the most logged interactions first. Select it to zoom in until it splits.
-- **A stack** is a cluster that never splits, because its people share one place, such as a city, or are a few metres apart. It stays a stack at every zoom, and its name says, for example, "12 contacts at one place, list them". Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. The list marks the open contact and stays open, so you can go through the people. `Esc` closes the list.
+- **A cluster** is a circle with a number. It holds contacts that are too close to tell apart at this zoom. Point at it to see up to five of its people, the ones with the most logged interactions first. Select it to zoom in until it splits. A red dot means that some of its people have an overdue follow-up, and its name says how many.
+- **A stack** is a cluster that never splits, because its people have the same point, such as a city. It stays a stack at every zoom, and its name says, for example, "12 contacts at one place, list them". People a few metres apart split at the closest zooms. Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. The list marks the open contact and stays open, so you can go through the people. `Esc` closes the list.
 
 When the map opens a contact, it moves the pin to the middle of the part of the map that you can still see. The open contact's pin gets a halo, and the other pins fade until you point at one.
 
@@ -96,7 +96,15 @@ A saved view keeps the map's position, zoom, filter and layer under a name.
 
 To go back to a view, open **Views** and choose it. While a view is active, the menu shows its name. Each view in the menu has a rename button and a delete button. After a delete, **Undo** in the message saves the view again for 10 seconds. You can keep up to 100 views.
 
-The overdue filter is not part of a view. When it is on, the save dialog says so.
+To change a view, choose it, change the map, and choose **Update "name" to this map** in **Views**. The view takes the filter, the layer and the box that the map shows now. The item names the view that you chose or saved last.
+
+To put the views in a new order, drag a view in the menu. With the keyboard, press `⌥ ↑` or `⌥ ↓` on a view.
+
+The overdue filter and the people from Ask are not part of a view. When one of them is on, the save dialog says so.
+
+## Show Ask results on the map
+
+On the Ask page, **Show on map** above the results opens the map on the people that Ask found. A pill such as **12 people from Ask** says that the map shows only them, and selecting it removes that filter. When the question is a list of facets, such as `tag:investor`, the map gets the facets instead and shows every match. The map fits itself to the people when it opens from such a link.
 
 A view has its own link, so you can bookmark it. When you change the filter or the layer, the map leaves the view. A link to a view that was deleted opens the map without it, and says so.
 
@@ -217,7 +225,7 @@ Contrack finds the place for an address with Nominatim, the OpenStreetMap geocod
 
 - The lookups run in the background. Every call to Nominatim, from these lookups and from **Go to**, keeps to one a second.
 - Contrack keeps every answer, and it does not try an address that found nothing again for seven days.
-- When Nominatim does not answer, Contrack does not remember that as "nothing found". It tries again after 30 seconds, then waits twice as long each time, up to 15 minutes. After five tries, the address waits for the next server start.
+- When Nominatim does not answer, Contrack does not remember that as "nothing found". It tries again after 30 seconds, then waits twice as long each time, up to 15 minutes, until Nominatim answers.
 - When the server starts, it queues every contact that has an address or a location and no pin.
 
 ## Automate it

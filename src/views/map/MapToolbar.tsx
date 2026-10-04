@@ -39,12 +39,12 @@ import {
 } from "../../components/ui/ActionMenu";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
-import { ViewsMenu } from "./ViewsMenu";
+import { ViewsMenu, type ViewsMenuProps } from "./ViewsMenu";
 import type { MapFilter } from "./useMapFilter";
 import { prefersReducedMotion } from "./flyTo";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
-import { SELECTED_TINT } from "../../lib/styles";
+import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -71,6 +71,8 @@ interface MapToolbarProps {
   onOpenSaveModal?: () => void;
   onStartRename?: (view: MapView) => void;
   onDeleteView?: (view: MapView) => void;
+  /** Update and move, for the Views menu. */
+  viewEdits?: Pick<ViewsMenuProps, "lastView" | "onUpdateView" | "onMoveView">;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   /**
    * How much map an open contact leaves at the toolbar's left, in px. Null
@@ -96,6 +98,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onOpenSaveModal,
   onStartRename,
   onDeleteView,
+  viewEdits,
   inputRef: externalInputRef,
   room = null,
   onFitAll,
@@ -309,6 +312,20 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               filters={filter.effectiveFilters}
               onRemove={filter.removeFacet}
             />
+            {filter.people && (
+              <button
+                type="button"
+                onClick={filter.clearPeople}
+                aria-label="Remove filter: the people from Ask"
+                className={cn(
+                  "hit-area state-layer group mx-4 mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold cursor-pointer",
+                  TONE_WASH.primary,
+                )}
+              >
+                {filter.people.size} people from Ask
+                <X className="w-3 h-3 opacity-40 group-hover:opacity-100" />
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -361,6 +378,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 onOpenSaveModal={onOpenSaveModal}
                 onStartRename={onStartRename ?? (() => {})}
                 onDeleteView={onDeleteView ?? (() => {})}
+                {...viewEdits}
               />
             )}
 
@@ -420,6 +438,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             }}
             onStartRename={onStartRename ?? (() => {})}
             onDeleteView={onDeleteView ?? (() => {})}
+            {...viewEdits}
           />
         </div>
       )}
