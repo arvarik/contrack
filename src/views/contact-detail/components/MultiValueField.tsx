@@ -61,6 +61,7 @@ import {
 } from "../../../components/ui/ActionMenu";
 import { cn } from "../../../lib/utils";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { EditableField, INPUT_KIND } from "./EditableField";
 import { AddButton, FIELD_VALUE, showUndoToast } from "./Field";
 
@@ -169,6 +170,9 @@ const SortableRow = ({
   const { listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.sortId });
   const [menuOpen, setMenuOpen] = useState(false);
+  // "Message" hands the number to the phone's messages app. With a mouse
+  // there is often no app for `sms:`, and the item would do nothing.
+  const touch = useMediaQuery("(pointer: coarse)");
   /**
    * True from a press on the handle until the press ends. The press that
    * grabs the handle is also a press outside the open kebab, so the kebab
@@ -194,7 +198,7 @@ const SortableRow = ({
   const actions: ActionMenuItem[] = [];
   // A text to the number, first: the value itself calls, and it is what a
   // person opens this menu for most.
-  const sms = kind === "phone" ? smsHref(item.value) : null;
+  const sms = kind === "phone" && touch ? smsHref(item.value) : null;
   if (sms) {
     actions.push({
       id: "message",

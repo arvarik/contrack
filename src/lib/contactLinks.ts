@@ -17,12 +17,17 @@ const EXTENSION = /\s*(?:ext(?:ension)?\.?|x)\s*(\d+)\s*$/i;
  * The number as a dialler reads it: a leading "+", the digits, and the marks
  * "*", "#" and ",". Spaces, brackets, dots and dashes go. An extension
  * follows a "," (a pause), which every phone dials after the call connects.
- * Null when the text holds no digit.
+ * The trunk "(0)" after a country code goes too: "+44 (0) 20" is dialled as
+ * "+4420". Null when the text holds no digit, or a letter, such as
+ * "1-800-FLOWERS": dropping the letters would dial a wrong, short number.
  */
 function dialString(phone: string): string | null {
   const trimmed = phone.trim();
   const extension = trimmed.match(EXTENSION);
-  const main = extension ? trimmed.slice(0, extension.index) : trimmed;
+  const main = (
+    extension ? trimmed.slice(0, extension.index) : trimmed
+  ).replace(/^(\+\d{1,3})\s*\(0\)/, "$1");
+  if (/\p{L}/u.test(main)) return null;
   const digits = main.replace(/[^0-9*#,]/g, "");
   if (!/\d/.test(digits)) return null;
   const plus = main.startsWith("+") ? "+" : "";
@@ -93,6 +98,9 @@ function escapeText(value: string): string {
     .replace(/;/g, "\\;");
 }
 
+/** A last word that is a suffix, not a family name: "Jr.", "III", "PhD". */
+const SUFFIX = /^(?:jr|sr|ii|iii|iv|v|phd|md|esq)\.?$/i;
+
 /** Bytes per line before a fold, as RFC 2425 asks. */
 const FOLD_OCTETS = 75;
 
@@ -146,7 +154,9 @@ function vCardDate(birthday: string): string | null {
  * desktop address books all import.
  *
  * 1. The name, as FN, and as N split at its last space: "Ada Lovelace" is
- *    the family name "Lovelace" and the given name "Ada".
+ *    the family name "Lovelace" and the given name "Ada". A suffix such as
+ *    "Jr." stays a suffix. A contact with no name is named by its company
+ *    or its email, because an importer refuses an empty FN.
  * 2. The company and the role, as ORG and TITLE.
  * 3. Each email, phone and address, in the contact's order, with its label
  *    as a TYPE. The first of each kind is the preferred one (PREF), as it is
@@ -157,15 +167,23 @@ function vCardDate(birthday: string): string | null {
  * Lines end in CRLF and fold at 75 octets.
  */
 export function buildVCard(contact: VCardSource): string {
-  const name = contact.name.trim();
-  const space = name.lastIndexOf(" ");
-  const family = space > 0 ? name.slice(space + 1) : "";
-  const given = space > 0 ? name.slice(0, space) : name;
+  const name =
+    contact.name.trim() ||
+    contact.company?.trim() ||
+    contact.emails?.[0]?.email.trim() ||
+    "Unnamed contact";
+  const words = contact.name.trim().split(/\s+/).filter(Boolean);
+  const suffix =
+    words.length > 2 && SUFFIX.test(words[words.length - 1])
+      ? words.pop()!
+      : "";
+  const family = words.length > 1 ? words.pop()! : "";
+  const given = words.join(" ");
 
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
-    `N:${escapeText(family)};${escapeText(given)};;;`,
+    `N:${escapeText(family)};${escapeText(given)};;;${escapeText(suffix)}`,
     `FN:${escapeText(name)}`,
   ];
   if (contact.company?.trim())
@@ -200,7 +218,10 @@ export function buildVCard(contact: VCardSource): string {
     contact.website,
     ...(contact.socialLinks ?? []).map((link) => link.url),
   ].filter((url): url is string => !!url?.trim());
-  for (const url of new Set(urls)) lines.push(`URL:${escapeText(url.trim())}`);
+  // A URL is a URI value, which vCard 3.0 writes as it is, with no text
+  // escaping (RFC 2426, 3.6.8). Only a line break could break the card.
+  for (const url of new Set(urls))
+    lines.push(`URL:${url.trim().replace(/[\r\n]/g, "")}`);
 
   lines.push("END:VCARD");
   return lines.map(fold).join("\r\n") + "\r\n";
@@ -208,12 +229,19 @@ export function buildVCard(contact: VCardSource): string {
 
 /**
  * The card's file name: the contact's name with the characters a file
- * system refuses taken out, and ".vcf". "contact.vcf" when nothing is left.
+ * system refuses taken out, at most 80 characters, with no dot or space at
+ * the end (which Windows refuses), and ".vcf". "contact.vcf" when nothing is
+ * left.
  */
 export function vCardFileName(name: string): string {
-  const safe = name
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\p{Cc}/gu, "")
-    .trim();
+  const safe = [
+    ...name
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\p{Cc}/gu, "")
+      .trim(),
+  ]
+    .slice(0, 80)
+    .join("")
+    .replace(/[.\s]+$/u, "");
   return `${safe || "contact"}.vcf`;
 }

@@ -69,9 +69,17 @@ describe("onFastConnection", () => {
     ["4g", { effectiveType: "4g" }, true],
     ["3g", { effectiveType: "3g" }, false],
     ["4g that saves data", { effectiveType: "4g", saveData: true }, false],
-    ["a browser that cannot say", undefined, false],
   ])("answers %s", (_name, connection, fast) => {
     vi.stubGlobal("navigator", { connection });
     expect(onFastConnection()).toBe(fast);
+  });
+
+  it.each([
+    ["a desktop", true],
+    ["a phone", false],
+  ])("answers %s that cannot say by its pointer", (_name, mouse) => {
+    vi.stubGlobal("navigator", { connection: undefined });
+    vi.stubGlobal("matchMedia", () => ({ matches: mouse }));
+    expect(onFastConnection()).toBe(mouse);
   });
 });

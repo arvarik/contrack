@@ -40,12 +40,14 @@ function savesData(): boolean {
  * A page warmed in an idle moment costs a slow phone the bandwidth its
  * first page needs: the map, Pulse and Ask Contrack are about 1 MB. A
  * browser with no Network Information API (Safari, Firefox) cannot say how
- * fast it is, and this answers false. A link still warms its page when a
- * person points at it or presses it.
+ * fast it is. With a mouse it is a desktop, which is almost always on a
+ * fast line, and it warms. A phone that cannot say waits. A link still
+ * warms its page when a person points at it or presses it.
  */
 export function onFastConnection(): boolean {
   const info = connection();
-  return info?.effectiveType === "4g" && info.saveData !== true;
+  if (info) return info.effectiveType === "4g" && info.saveData !== true;
+  return globalThis.matchMedia?.("(pointer: fine)").matches === true;
 }
 
 /** How long a task waits, at most, for an idle moment that never comes. */

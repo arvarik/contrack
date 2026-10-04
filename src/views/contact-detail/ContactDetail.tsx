@@ -27,7 +27,11 @@ export const ContactDetail = () => {
    */
   const slide = useSlideNavigate();
   const handleClose = () =>
-    isOverlayActive ? navigate(back.to) : slide(back.to, "back");
+    // The slide waits for the page it goes to, and only the list and the
+    // Settings pages finish one. Any other target navigates.
+    isOverlayActive || !(back.to === "/" || back.to.startsWith("/settings"))
+      ? navigate(back.to)
+      : slide(back.to, "back");
   useLayoutEffect(() => {
     if (!isOverlayActive) settleSlide(location.pathname);
   }, [isOverlayActive, location.pathname]);

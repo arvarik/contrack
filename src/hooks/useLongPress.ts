@@ -57,6 +57,10 @@ interface LongPressCoords {
 function swallowNextClick(): (ms: number) => void {
   let timer = window.setTimeout(() => disarm(), MAX_WAIT_MS);
   const swallow = (event: MouseEvent) => {
+    // Only a click a finger made. A screen reader's double tap, a switch, or
+    // a click from code sends no touch pointer, and must go through.
+    const pointer = (event as PointerEvent).pointerType;
+    if (pointer !== undefined && pointer !== "touch") return;
     event.preventDefault();
     event.stopPropagation();
     disarm();

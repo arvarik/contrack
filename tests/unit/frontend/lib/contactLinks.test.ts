@@ -16,7 +16,11 @@ describe("contact links", () => {
     ["+1 (555) 010-2030", "tel:+15550102030"],
     ["020 7946 0018 ext. 42", "tel:02079460018,42"],
     ["555.010.2030 x7", "tel:5550102030,7"],
+    // The trunk zero after a country code is not dialled.
+    ["+44 (0) 20 7946 0018", "tel:+442079460018"],
     ["no number", null],
+    // Letters would dial a short, wrong number, so there is no link.
+    ["1-800-FLOWERS", null],
   ])("dials %s as %s", (phone, href) => {
     expect(telHref(phone)).toBe(href);
   });
@@ -98,8 +102,20 @@ describe("buildVCard", () => {
     expect(folded.join("").trimEnd()).toBe(`TITLE:${"é".repeat(60)}`);
   });
 
-  it("names the file after the contact", () => {
+  it("names the file after the contact, short and with no dot at the end", () => {
     expect(vCardFileName("Ada: Lovelace / CEO")).toBe("Ada Lovelace  CEO.vcf");
     expect(vCardFileName('***"')).toBe("contact.vcf");
+    expect(vCardFileName("A".repeat(300))).toBe(`${"A".repeat(80)}.vcf`);
+    expect(vCardFileName("Ada Inc.")).toBe("Ada Inc.vcf");
+  });
+
+  it("keeps a suffix, writes a URL as it is, and names a card with no name", () => {
+    const card = buildVCard({
+      name: "Martin Luther King Jr.",
+      website: "https://x.example/a,b;c",
+    });
+    expect(card).toContain("N:King;Martin Luther;;;Jr.");
+    expect(card).toContain("URL:https://x.example/a,b;c");
+    expect(buildVCard({ name: " ", company: "Acme" })).toContain("FN:Acme");
   });
 });

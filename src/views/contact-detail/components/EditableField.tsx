@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Check, Loader2, Pencil } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 
 /**
  * The pencil after an editable value.
@@ -74,6 +75,10 @@ export function EditableField({
   href?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
+  // A link only on a touch screen. With a mouse a click on the value edits
+  // it, as it always has: a desktop's handler for `tel:` can be a softphone
+  // prompt, or nothing at all.
+  const touch = useMediaQuery("(pointer: coarse)");
   const [draft, setDraft] = useState(value ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -187,12 +192,14 @@ export function EditableField({
         )}
       </span>
     );
-  if (href && value)
+  if (href && value && touch)
     return (
       <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
         {/* A link looks like a link: the primary ink, underlined on hover. */}
         <a
           href={href}
+          // What the tap does, not only the number.
+          aria-label={`${href.startsWith("mailto:") ? "Email" : "Call"} ${value}`}
           className={cn(
             "hit-area min-w-0 rounded underline-offset-2 hover:underline",
             className,
