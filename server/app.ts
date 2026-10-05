@@ -26,6 +26,7 @@ import {
   attachPrincipal,
   guardReadOnlyToken,
   isAuthRequired,
+  refuseCrossSiteWrites,
   requireAdmin,
   requireAuth,
   requirePasswordCurrent,
@@ -214,6 +215,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // know even for callers that are nobody.
   app.use(attachPrincipal);
 
+  // A write that the session cookie signs must come from this server's own
+  // pages. SameSite=Strict lets a sibling subdomain's page send the cookie,
+  // so this checks Origin and Sec-Fetch-Site (auth.ts). Before every router
+  // that writes, the auth router included.
+  app.use(["/api", "/uploads"], refuseCrossSiteWrites);
+
   // Carry who is asking through the async call tree, so an insert can stamp
   // ownerId without threading a parameter through every signature. Mounted
   // after attachPrincipal because it reads req.principal. Attribution only:
@@ -244,7 +251,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —
-  // is gated when AUTH_REQUIRED or API_TOKEN is configured.
+  // is gated when sign-in is required.
   app.use("/api/auth", authRouter);
   app.use(["/api", "/uploads"], requireAuth);
 

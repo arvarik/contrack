@@ -14,7 +14,11 @@ import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import express from "express";
-import { serveClient, type CloseClient } from "../../server/serveClient.ts";
+import {
+  assertDevHost,
+  serveClient,
+  type CloseClient,
+} from "../../server/serveClient.ts";
 
 const started: { server: http.Server; close: CloseClient }[] = [];
 
@@ -84,4 +88,37 @@ describe("in development", () => {
     socket.close();
     expect(JSON.parse(first)).toMatchObject({ type: "connected" });
   }, 60_000);
+
+  it("refuses the data files that a data folder in the project holds", async () => {
+    // DATA_DIR defaults to the project folder, and Vite serves the files
+    // under it: `GET /curator.db` sent the whole database.
+    const root = process.cwd();
+    const dir = fs.mkdtempSync(path.join(root, "node_modules", "deny-"));
+    const data = ["curator.db", "curator.db-wal", "secret.key"];
+    data.push("backups/old.db", "uploads/u/x/avatars/a.png");
+    try {
+      for (const file of [...data, "notes.txt"]) {
+        fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+        fs.writeFileSync(path.join(dir, file), "private");
+      }
+      const host = await start({ production: false });
+      const url = (file: string) =>
+        `http://${host}/${path.relative(root, dir)}/${file}`;
+      for (const file of data) {
+        expect((await fetch(url(file))).status, file).toBe(403);
+      }
+      // The folder is served, so each refusal is the deny list's.
+      expect(await (await fetch(url("notes.txt"))).text()).toBe("private");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("refuses to listen beyond this machine", () => {
+    for (const host of ["127.0.0.1", "::1", "localhost"]) {
+      expect(() => assertDevHost(host, false)).not.toThrow();
+    }
+    expect(() => assertDevHost("0.0.0.0", false)).toThrow(/production build/);
+    expect(() => assertDevHost("0.0.0.0", true)).not.toThrow();
+  });
 });

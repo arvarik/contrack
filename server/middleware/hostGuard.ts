@@ -23,7 +23,7 @@ import type { NextFunction, Request, Response } from "express";
 import { isAuthRequired } from "./auth.ts";
 import { countPasswordAccounts } from "../services/authService.ts";
 import { AppError } from "../utils/AppError.ts";
-import { publicOrigin } from "../utils/publicOrigin.ts";
+import { isOwnOrigin } from "../utils/publicOrigin.ts";
 
 /** Suffixes that public DNS never serves. */
 const LOCAL_SUFFIXES = [
@@ -141,17 +141,9 @@ export function mcpOriginGuard(
 ): void {
   const origin = req.headers.origin;
   if (!origin) return next();
-  let host: string | null = null;
-  try {
-    host = new URL(origin).host;
-  } catch {
-    host = null;
+  if (isOwnOrigin(req, origin) || origin === process.env.CORS_ORIGIN) {
+    return next();
   }
-  const known =
-    (host !== null && host === req.host) ||
-    origin === publicOrigin(req) ||
-    origin === process.env.CORS_ORIGIN;
-  if (known) return next();
   next(
     new AppError(
       `The MCP server does not accept requests from the web page at ${origin}. Set CORS_ORIGIN to that origin to allow it.`,

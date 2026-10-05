@@ -37,7 +37,6 @@ import {
   ShieldOff,
   Terminal,
   AppWindow,
-  TriangleAlert,
   Upload,
   UserRound,
 } from "lucide-react";
@@ -848,7 +847,6 @@ const CreateTokenModal = ({
 
 const ApiTokensCard = () => {
   const queryClient = useQueryClient();
-  const { legacyTokenConfigured } = useAuth();
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<ApiTokenSummary | null>(null);
 
@@ -885,24 +883,6 @@ const ApiTokensCard = () => {
             <span className="sm:hidden">New</span>
           </button>
         </div>
-
-        {/*
-          The instance-wide environment token is a single credential that acts
-          as the first admin for anybody who has it, and it is on its way out.
-          Saying so here, next to the thing that replaces it, is the only place
-          the operator will read it.
-        */}
-        {legacyTokenConfigured && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-warning/10 p-3">
-            <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-            <p className="text-xs text-on-surface text-pretty">
-              This instance still uses the environment{" "}
-              <code className="font-mono">API_TOKEN</code>, which acts as the
-              first administrator for anyone who holds it. Create a personal
-              token, point your scripts at it, and remove the variable
-            </p>
-          </div>
-        )}
       </div>
 
       {isLoading ? (

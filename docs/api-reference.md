@@ -26,10 +26,9 @@ Requests and responses are JSON unless an endpoint says otherwise. Send
 Sign-in is off by default. Every request then acts as the local owner, and you
 need no credential.
 
-Sign-in is on when `AUTH_REQUIRED=true` is set, or when the deprecated
-`API_TOKEN` is set. The server also turns it on by itself when an account with
-a password exists. Every `/api` and `/uploads` request then needs one of two
-credentials:
+Sign-in is on when `AUTH_REQUIRED=true` is set. The server also turns it on by
+itself when an account with a password exists. Every `/api` and `/uploads`
+request then needs one of two credentials:
 
 - **A personal token.** Send `Authorization: Bearer ctk_...`. Create one in
   **Settings → Account**, or with `POST /api/auth/tokens`. A token acts as
@@ -39,11 +38,13 @@ credentials:
   Google sign-in at `/api/connectors/google/`, which adds a connector.
 - **The session cookie.** The browser gets `contrack_session` when it signs in.
   The cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when the
-  request arrived over HTTPS.
+  request arrived over HTTPS. A `POST`, `PUT`, `PATCH` or `DELETE` with the
+  cookie must come from this server's own pages. It gets
+  `403 CROSS_SITE_REQUEST` when its `Origin` names another host than the
+  request's own or `PUBLIC_URL`, or, with no `Origin`, when `Sec-Fetch-Site`
+  is `cross-site` or `same-site`.
 
-The environment `API_TOKEN` still works as a bearer token. It belongs to no
-account, acts as the first admin, and is removed in 3.0. A request with no
-valid credential gets `401 UNAUTHORIZED`.
+A request with no valid credential gets `401 UNAUTHORIZED`.
 
 An account whose password an admin set gets `403 PASSWORD_CHANGE_REQUIRED` on
 every route until it sets its own password. Six routes stay open for that
@@ -60,7 +61,7 @@ manifest, `server/tenancy/routeManifest.ts`.
 | public               | Anyone who can reach the port. No credential.                                                                                                                                                  |
 | your session         | You, for your own account. It needs the session cookie: a personal token gets `403 SESSION_REQUIRED`. With sign-in off, the local owner passes. The three preference routes also take a token. |
 | your data            | You, for the data your account owns. An id that belongs to another account answers `404` with the same body as an id that does not exist.                                                      |
-| admin                | An account with the admin role. Other accounts get `403 ADMIN_REQUIRED`. A personal token of an admin account works.                                                                           |
+| admin                | An account with the admin role, signed in. Other accounts get `403 ADMIN_REQUIRED`. A token gets `403 SESSION_REQUIRED`, an admin's too. With sign-in off, the local owner passes.             |
 | any signed-in caller | Any caller with a valid credential. The route reads no owned data.                                                                                                                             |
 | dev only             | Registered only when `NODE_ENV` is not `production`.                                                                                                                                           |
 
@@ -98,6 +99,7 @@ Every error uses one envelope:
 | `UNSUPPORTED_FILE_TYPE`    | 400    | The attachment type is not allowed.                              |
 | `UNAUTHORIZED`             | 401    | No valid credential.                                             |
 | `SESSION_REQUIRED`         | 403    | The route needs the session cookie, not a token.                 |
+| `CROSS_SITE_REQUEST`       | 403    | A change with the session cookie came from another site's page.  |
 | `ADMIN_REQUIRED`           | 403    | The route needs an admin account.                                |
 | `PASSWORD_CHANGE_REQUIRED` | 403    | Set your own password first.                                     |
 | `TOKEN_READ_ONLY`          | 403    | A read-only token sent a request that changes data.              |
@@ -254,7 +256,7 @@ works. Each route then checks what it needs.
 
 | Endpoint                                 | What it does                                                                                                                                                                                                                                                                                                                                         | Access |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `legacyTokenConfigured`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                             | public |
+| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                                                      | public |
 | `POST /api/auth/setup`                   | Create the first account: `email`, `username`, `password`, `displayName`. The account is an admin and is signed in (`201 { user }`). On a used instance it takes over the local owner and keeps its data. `409 SETUP_COMPLETE` once an account with a password exists.                                                                               | public |
 | `POST /api/auth/login`                   | Sign in with `identifier` (username or email) and `password`. `remember: false` sets a cookie that ends with the browser. Answers `{ user }`. `401 INVALID_CREDENTIALS` for a wrong password and for an unknown account alike. `403 ACCOUNT_DISABLED` for a disabled account. With sign-in off it answers `{ "authRequired": false, "user": null }`. | public |
 | `POST /api/auth/logout`                  | End this session and clear the cookie.                                                                                                                                                                                                                                                                                                               | public |
@@ -1106,7 +1108,7 @@ audit entry with the setting name, never its value.
 | Endpoint                         | What it does                                                                                                                                                                | Access               |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/ai/instance`           | Whether AI is off for the instance: `{ aiOff, lockedByEnv }`.                                                                                                               | any signed-in caller |
-| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives the whole instance.                            | your data            |
+| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives a signed-in admin the whole instance.          | your data            |
 | `GET /api/ai/stats/feed`         | Your AI calls, newest first: `offset`, `limit`, `operation` (a comma list), `cached` (`true` or `false`) and `sort` (`newest` or `oldest`). An admin can send `?scope=all`. | your data            |
 | `GET /api/ai/diagnostics`        | What `quick`, `deep` and `research` resolve to, Gemini's usage meter and the paused Gemini models.                                                                          | admin                |
 | `GET /api/ai/grounding-capacity` | Whether contact research can run now: `{ hasCapacity, provider, researchRuns24h }`.                                                                                         | admin                |

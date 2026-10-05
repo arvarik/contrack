@@ -11,7 +11,7 @@ import http from "node:http";
 import { log } from "./server/utils/logger.ts";
 import { sqlite } from "./server/db.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
-import { serveClient } from "./server/serveClient.ts";
+import { assertDevHost, serveClient } from "./server/serveClient.ts";
 import { isAuthRequired } from "./server/middleware/auth.ts";
 import { countUsers } from "./server/services/authService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
@@ -101,6 +101,8 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
 // Bind localhost by default — this app has no authentication, so exposing it
 // on all interfaces should be an explicit choice (HOST=0.0.0.0, set in Docker).
 const HOST = process.env.HOST ?? "127.0.0.1";
+// The development server serves the project folder, so it stays on loopback.
+assertDevHost(HOST, process.env.NODE_ENV === "production");
 
 async function startServer() {
   // ── Events and jobs ─────────────────────────────────────────────────────
@@ -128,7 +130,7 @@ async function startServer() {
   } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
     log.warn(
       "Auth",
-      `Server binds ${HOST} with NO authentication — set AUTH_REQUIRED=true to require sign-in, or API_TOKEN for script access`,
+      `Server binds ${HOST} with NO authentication — set AUTH_REQUIRED=true to require sign-in`,
     );
   }
 

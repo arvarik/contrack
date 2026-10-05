@@ -76,11 +76,15 @@ Open `http://localhost:3210`.
   huggingface.co. The script reads `.env`, so a `DATA_DIR` or `MODEL_DIR` set
   there moves the folder for the script and the server together.
 - `npm run dev` runs the server in development mode, with the Vite dev server.
+  It listens on this machine only, and it refuses to start when `HOST` is not
+  `127.0.0.1`, `::1` or `localhost`. For other machines, run the production
+  build below.
 - To change a setting, run `cp .env.example .env` and edit `.env`. The server
   reads it from the folder you start it in. A variable set in the shell wins.
 
-For production, build the app and start it in production mode. Run it under a
-service manager, such as systemd, that stops it with SIGTERM.
+For production, or to serve other machines, build the app and start it in
+production mode. Run it under a service manager, such as systemd, that stops
+it with SIGTERM.
 
 ```bash
 npm run build
@@ -134,9 +138,10 @@ access. Turn on sign-in before other devices can reach Contrack.
 
 1. Set `AUTH_REQUIRED=true` and restart Contrack. Create the admin account on
    the first visit (see [Turn on sign-in](accounts.md#turn-on-sign-in)).
-2. Open the port. Without Docker, set `HOST=0.0.0.0`. With `docker run`,
-   publish `-p 3210:3210`. With Compose, change `"127.0.0.1:3210:3210"` to
-   `"3210:3210"` in `docker-compose.yml`.
+2. Open the port. Without Docker, run the production build (see
+   [Install without Docker](#install-without-docker)) and set `HOST=0.0.0.0`.
+   With `docker run`, publish `-p 3210:3210`. With Compose, change
+   `"127.0.0.1:3210:3210"` to `"3210:3210"` in `docker-compose.yml`.
 3. From outside your network, use HTTPS through a reverse proxy, or a private
    network such as a VPN. Contrack itself serves plain HTTP.
 
@@ -159,6 +164,9 @@ PUBLIC_URL=https://crm.example.com
 - `PUBLIC_URL` is the address people open, with no path. Passkeys, invitation
   links and the Google connector use it. Mail sends no sign-in, reset or
   invitation link without it (see [Outgoing mail](accounts.md#outgoing-mail)).
+- A signed-in change must come from a page at this server's own address: the
+  `Host` header the proxy forwards, or `PUBLIC_URL`. Otherwise it gets
+  `403 CROSS_SITE_REQUEST`.
 
 With the proxy on the same host, keep the port on `127.0.0.1`. Caddy gets a
 certificate and sends the forwarded headers by itself:
@@ -364,8 +372,6 @@ lists the folders and the order in which the server reads them.
   user.
 - Leave `CONNECTORS_ALLOW_PRIVATE_HOSTS` off when the internet can reach
   Contrack.
-- Replace `API_TOKEN` with personal tokens (see
-  [Create a token](mcp.md#create-a-token)).
 - Use a Gemini key from a Cloud project with billing (see
   [Privacy](ai.md#privacy)).
 - Pull new images. A rebuilt image takes the latest Node 26 security release.

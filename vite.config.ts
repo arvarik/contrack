@@ -16,6 +16,27 @@ export default defineConfig({
     // DISABLE_HMR=true turns hot reload off. The reload socket shares the
     // app's own port (`serveClient`), so a second dev server works either way.
     hmr: process.env.DISABLE_HMR !== "true",
+    fs: {
+      // The dev server serves any file under the project folder, which is
+      // also the data folder when DATA_DIR is unset: `GET /curator.db` sent
+      // the whole database. A list here replaces Vite's own, so the first
+      // six are Vite 8's defaults. A pattern with a slash is matched against
+      // the whole path, hence the leading `**/`.
+      deny: [
+        ".env",
+        ".env.*",
+        "*.{crt,pem,key,p12,pfx,cer,der}",
+        ".npmrc",
+        ".yarnrc.yml",
+        "**/.git/**",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm",
+        "secret.key",
+        "**/backups/**",
+        "**/uploads/**",
+      ],
+    },
   },
   // MapLibre's worker is an ES module (`maplibreWorker.ts` bundles it with
   // `?worker&url`), and MapLibre starts it as a module worker.

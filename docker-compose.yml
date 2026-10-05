@@ -28,10 +28,6 @@ services:
       # set AUTH_REQUIRED=true — the first visit walks you through creating an
       # account, and everything already in the database is assigned to it.
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
-      # Deprecated machine credential for scripts and MCP clients. Setting it
-      # also gates the instance. A personal token from Settings, Account, API
-      # tokens replaces it, and it is removed in 3.0.
-      - API_TOKEN=${API_TOKEN:-}
       # The address people open, when a reverse proxy sits in front. Passkeys,
       # invitation links and the Google connector need it, and mail sends no
       # sign-in, reset or invitation link without it.

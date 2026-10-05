@@ -35,8 +35,7 @@ Until the first account exists, Contrack refuses every request for data.
 After that, a person signs in, and a script uses a personal token. Only the
 health check and the app's own page load without either. Once an account with
 a password exists, sign-in stays on, even if `AUTH_REQUIRED` is false. The
-server log says so at start. The deprecated `API_TOKEN` variable also turns
-sign-in on, see [MCP and API tokens](mcp.md#keep-your-tokens-safe).
+server log says so at start.
 
 ## First setup
 
@@ -260,6 +259,8 @@ Contrack deletes an entry after 90 days.
   another account first.
 - An admin cannot reset the password of, disable, or delete their own
   account. Ask another admin.
+- Administration needs you signed in. An API token or an MCP client cannot
+  use it, even an admin's.
 
 ## Outgoing mail
 

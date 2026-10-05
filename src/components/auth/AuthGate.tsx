@@ -88,8 +88,6 @@ interface AuthContextValue {
   authRequired: boolean;
   /** True when this account may reach the administration area. */
   isAdmin: boolean;
-  /** The deprecated environment `API_TOKEN` is still set on the server. */
-  legacyTokenConfigured: boolean;
   /** The address people open (`PUBLIC_URL`), or null when it is not set. */
   publicUrl: string | null;
   /** An MCP client can sign in here with OAuth instead of a token. */
@@ -125,7 +123,6 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   authRequired: false,
   isAdmin: false,
-  legacyTokenConfigured: false,
   publicUrl: null,
   mcpOAuth: false,
   instanceName: "",
@@ -186,7 +183,6 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [authRequired, setAuthRequired] = useState(false);
   const [deviceContacts, setDeviceContacts] = useState(0);
   const [registrationOpen, setRegistrationOpen] = useState(false);
-  const [legacyTokenConfigured, setLegacyTokenConfigured] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [mcpOAuth, setMcpOAuth] = useState(false);
   const [instanceName, setInstanceName] = useState("");
@@ -258,7 +254,6 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setUser(status.user);
     setDeviceContacts(status.deviceContacts ?? 0);
     setRegistrationOpen(status.registrationOpen ?? false);
-    setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
     setPublicUrl(status.publicUrl ?? null);
     setMcpOAuth(status.mcpOAuth ?? false);
     setInstanceName(status.instanceName ?? "");
@@ -452,7 +447,6 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     // re-entered.
     authRequired: state === "unreachable" ? false : authRequired,
     isAdmin: user?.role === "admin",
-    legacyTokenConfigured,
     publicUrl,
     mcpOAuth,
     instanceName,

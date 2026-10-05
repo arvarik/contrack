@@ -30,7 +30,11 @@ export type RouteClass =
   | "session-self"
   /** Reads or writes owned data for the caller's scope. */
   | "scoped"
-  /** requireAdmin. */
+  /**
+   * requireAdmin: an admin account with a signed-in session. A token is
+   * refused, an admin's included. The implicit local owner passes while
+   * sign-in is off.
+   */
   | "admin"
   /** Any authenticated caller, no owned data: /api/avatar/:style. */
   | "instance-read"

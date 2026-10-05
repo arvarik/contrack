@@ -230,7 +230,7 @@ export const OWNED_TABLES = [
 ] as const;
 
 /**
- * The admin that machine credentials and instance-wide work act as.
+ * The admin that instance-wide work acts as.
  *
  * Throws only if called before ensureLocalOwner has ever run, which the boot
  * order makes impossible.
