@@ -26,8 +26,8 @@ with an empty `DATA_DIR`.
 - Admins invite people, give the member or admin role, and read an audit log.
   The **Instance health** page shows the database, the last backup, the
   queues, the models and the background jobs.
-- Each account makes its own API tokens, and a token can be read-only.
-  `API_TOKEN` still works but is deprecated, and 3.0 removes it.
+- Each account makes its own API tokens, and a token can be read-only. They
+  replace the one instance-wide token of version 1.
 - Each device's session can be signed out on its own. Theme, accent, list
   density and search history follow the account to every device.
 - Outgoing mail (`SMTP_URL`) sends invitations, password resets and sign-in
@@ -52,6 +52,11 @@ with an empty `DATA_DIR`.
 - While sign-in is off, the server answers only local host names, the
   `PUBLIC_URL` host and `ALLOWED_HOSTS`, so a web page cannot reach it through
   DNS rebinding. `/api/mcp` refuses a request from another site's page.
+- A signed-in change from another site's page is refused, a sibling
+  subdomain's included. Instance administration needs a signed-in admin, and
+  an API token cannot use it.
+- `npm run dev` listens on this machine only and does not serve the data
+  files. To serve other machines, run the production build.
 
 ### Search and Ask Contrack
 

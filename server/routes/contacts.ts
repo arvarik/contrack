@@ -4,9 +4,18 @@ import {
 } from "../services/aiSearch/contactSnapshot.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { requireContact } from "../services/contactGuard.ts";
-import { Router, type Request } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import multer from "multer";
-import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
+import {
+  ensureDir,
+  ownerUploadDir,
+  resolveOwnUploadPath,
+} from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
@@ -76,6 +85,44 @@ const uploadAvatar = multer({
     );
   },
 });
+
+/**
+ * Refuse an `avatarUrl` under `/uploads/` that is outside the caller's own
+ * folder, `uploads/u/<ownerId>/`.
+ *
+ * The client writes `avatarUrl` for a picked face or a photo on the web. A
+ * value under `/uploads/` names a file on this server, though, and the code
+ * that replaces a contact's photo deletes the old one. Another account's
+ * file, a shared logo, and a `..` path out of the folder are refused here,
+ * and `updateAvatar` deletes only from the owner's own avatars folder.
+ *
+ * After `validateBody`, so the body has its contract's shape: one contact,
+ * an array of them for an import, or `{ ids, data }` for a bulk edit.
+ */
+function refuseForeignUploads(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const ownerId = scopeOf(req).ownerId;
+  const body = req.body as { data?: unknown };
+  const rows = (Array.isArray(body) ? body : [body.data ?? body]) as {
+    avatarUrl?: string | null;
+  }[];
+  const foreign = rows.findIndex(
+    ({ avatarUrl }) =>
+      typeof avatarUrl === "string" &&
+      avatarUrl.startsWith("/uploads/") &&
+      resolveOwnUploadPath(ownerId, avatarUrl) === null,
+  );
+  if (foreign === -1) return next();
+  const row = Array.isArray(body) ? `Contact ${foreign + 1}: ` : "";
+  next(
+    new ValidationError(
+      `${row}avatarUrl names a file outside your own uploads. Upload the photo instead.`,
+    ),
+  );
+}
 
 /**
  * How long the non-stream import waits before its dedupe sweep.
@@ -180,6 +227,7 @@ router.get(
 router.post(
   "/contacts",
   validateBody(contactRoutes.create.body),
+  refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
@@ -234,6 +282,7 @@ function doneFrame(record: ImportRecord, repeated: boolean) {
 router.post(
   "/contacts/bulk",
   validateBody(contactRoutes.bulkCreate.body),
+  refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     // Captured once, before the SSE stream starts and before any background
@@ -448,6 +497,7 @@ router.post(
 router.put(
   "/contacts/bulk-update",
   validateBody(contactRoutes.bulkUpdate.body),
+  refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const scope = scopeOf(req);
@@ -472,6 +522,7 @@ router.put(
 router.put(
   "/contacts/:id",
   validateBody(contactRoutes.replace.body),
+  refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = contactService.updateContact(
@@ -491,6 +542,7 @@ router.put(
 router.patch(
   "/contacts/:id",
   validateBody(contactRoutes.patch.body),
+  refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const childKeys = [

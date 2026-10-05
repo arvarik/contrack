@@ -76,7 +76,7 @@ COPY scripts/reset-password.ts ./scripts/
 # exposed beyond the host, turn auth on:
 #   -e AUTH_REQUIRED=true      require sign-in; first visit creates the account
 # Scripts and MCP clients then use a personal token from Settings → Account →
-# API tokens. The older -e API_TOKEN=<secret> still works, and is deprecated.
+# API tokens.
 # The server logs a warning at startup whenever it binds a non-loopback address
 # with auth off.
 ENV NODE_ENV=production \

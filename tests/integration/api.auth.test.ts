@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
+import type { AddressInfo } from "node:net";
 import { makeTestApp } from "./helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
@@ -120,8 +121,6 @@ beforeAll(() => {
 
 afterAll(() => {
   process.env.AUTH_REQUIRED = "";
-  delete process.env.API_TOKEN;
-  delete process.env.AUTH_TOKEN;
   wipeAccounts();
 });
 
@@ -378,11 +377,14 @@ describe("gating", () => {
     expect(res.status).toBe(200);
   });
 
-  it("rejects a forged session cookie", async () => {
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Cookie", ["contrack_session=made-up-value"]);
-    expect(res.status).toBe(401);
+  it("rejects a forged session cookie, and one that does not decode", async () => {
+    // `%E0%A4%A` made decodeURIComponent throw, and every route answered 500.
+    for (const value of ["made-up-value", "%E0%A4%A"]) {
+      const res = await request(app)
+        .get("/api/contacts")
+        .set("Cookie", [`contrack_session=${value}`]);
+      expect(res.status, value).toBe(401);
+    }
   });
 
   it("leaves everything open when AUTH_REQUIRED is off, as the local owner", async () => {
@@ -422,72 +424,11 @@ describe("gating", () => {
 
 // =============================================================================
 
-describe("API token", () => {
-  const TOKEN = "integration-test-api-token-12345";
-
-  beforeEach(() => {
-    wipeAccounts();
-    process.env.API_TOKEN = TOKEN;
-    __resetAuthRateLimits();
-  });
-
-  afterAll(() => {
-    delete process.env.API_TOKEN;
-  });
-
-  it("admits a bearer token, acting as the primary admin", async () => {
-    // Before Phase 1 the env token was a `service` principal with no account
-    // behind it. There is always an account now, so it resolves to the admin
-    // with the earliest createdAt, which on a fresh instance is the local
-    // owner. That is what gives its writes an owner.
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(res.status).toBe(200);
-
-    const status = await request(app)
-      .get("/api/auth/status")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(status.body.user.id).toBe(localOwner().id);
-  });
-
-  it("rejects a wrong bearer token", async () => {
-    const res = await request(app)
-      .get("/api/contacts")
-      .set("Authorization", "Bearer wrong-token");
-    expect(res.status).toBe(401);
-  });
-
-  it("enforces auth on its own, without AUTH_REQUIRED", async () => {
-    process.env.AUTH_REQUIRED = "";
-    try {
-      const res = await request(app).get("/api/contacts");
-      expect(res.status).toBe(401);
-    } finally {
-      process.env.AUTH_REQUIRED = "true";
-    }
-  });
-
-  it("cannot reach account endpoints — a token is not a session", async () => {
-    // The account exists now, so the refusal is about the credential rather
-    // than the account: a token must not be able to change the password that
-    // would revoke it. USER_REQUIRED became SESSION_REQUIRED in Phase 1.
-    const res = await request(app)
-      .get("/api/auth/me")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("SESSION_REQUIRED");
-  });
-});
-
-// =============================================================================
-
 describe("the signed-in account", () => {
   let cookie: string[];
 
   beforeEach(async () => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     const created = await setupAccount();
     cookie = created.cookie;
     __resetAuthRateLimits();
@@ -574,7 +515,6 @@ describe("sessions", () => {
 
   beforeEach(async () => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     const created = await setupAccount();
     cookie = created.cookie;
     __resetAuthRateLimits();
@@ -598,6 +538,32 @@ describe("sessions", () => {
 
     const after = await request(app).get("/api/contacts").set("Cookie", cookie);
     expect(after.status).toBe(401);
+  });
+
+  // SameSite=Strict lets a page on a sibling subdomain send the cookie, and
+  // a text/plain POST from one disabled an account.
+  it.each<[string, string, string, number]>([
+    ["another site", "Origin", "https://x.example.com", 403],
+    ["a sibling subdomain", "Sec-Fetch-Site", "same-site", 403],
+    ["this server", "Origin", "own", 200],
+    ["the address bar", "Sec-Fetch-Site", "none", 200],
+    ["a script", "", "", 200],
+  ])("answers a cookie write from %s", async (_from, header, value, status) => {
+    const own = `http://127.0.0.1:${(app.address() as AddressInfo).port}`;
+    const sent = request(app)
+      .post("/api/auth/logout")
+      .set("Cookie", cookie)
+      .set("Content-Type", "text/plain");
+    if (header) sent.set(header, value === "own" ? own : value);
+    const res = await sent.send("{}");
+    expect(res.status, JSON.stringify(res.body)).toBe(status);
+    expect(res.body.error?.code).toBe(
+      status === 403 ? "CROSS_SITE_REQUEST" : undefined,
+    );
+
+    // A refused sign-out leaves the session as it was.
+    const after = await request(app).get("/api/contacts").set("Cookie", cookie);
+    expect(after.status).toBe(status === 403 ? 200 : 401);
   });
 
   it("stores only the hash of the session secret, never the secret", async () => {
@@ -700,7 +666,6 @@ describe("a personal API token", () => {
   // api.tokens.test.ts, on tokens the real endpoint issued.
   beforeEach(async () => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     __resetAuthRateLimits();
     await setupAccount();
   });
@@ -718,7 +683,6 @@ describe("a personal API token", () => {
 describe("a disabled account", () => {
   beforeEach(() => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     __resetAuthRateLimits();
   });
 
@@ -766,7 +730,6 @@ describe("a disabled account", () => {
 describe("auth off with a real account", () => {
   beforeEach(() => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     __resetAuthRateLimits();
   });
 
@@ -819,7 +782,6 @@ describe("auth off with a real account", () => {
 describe("data ownership", () => {
   beforeEach(() => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     __resetAuthRateLimits();
   });
 
@@ -896,7 +858,6 @@ describe("session lifetime", () => {
 
   beforeEach(async () => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     sqlite.exec("DELETE FROM app_settings WHERE key = 'auth.sessionTtlDays'");
     clearSettingsCache();
     const created = await setupAccount();
@@ -958,7 +919,6 @@ describe("session lifetime", () => {
 describe("setup reports what is waiting", () => {
   beforeEach(() => {
     wipeAccounts();
-    delete process.env.API_TOKEN;
     __resetAuthRateLimits();
   });
 

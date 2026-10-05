@@ -28,6 +28,7 @@ import { log } from "../utils/logger.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 import { validatePublicUrl } from "../utils/publicOrigin.ts";
 import { readBytesCapped, safeFetch } from "../utils/urlSafety.ts";
+import { trimTrailingSlashes } from "../utils/urlPath.ts";
 import { auditService } from "./auditService.ts";
 import { getUserById, type User } from "./authService.ts";
 
@@ -152,7 +153,7 @@ function checkResource(issuer: string, resource: string | undefined): void {
   try {
     const url = new URL(resource);
     if (!url.search && !url.hash) {
-      named = url.origin + url.pathname.replace(/\/+$/, "");
+      named = url.origin + trimTrailingSlashes(url.pathname);
     }
   } catch {
     // Not a URL, so it names nothing here.

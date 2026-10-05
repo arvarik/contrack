@@ -102,7 +102,6 @@ export class ContrackInstance {
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",
         AI_EMBEDDINGS_MODEL: "",
-        API_TOKEN: "",
         CORS_ORIGIN: "",
         DISABLE_BACKGROUND_JOBS: "true",
         // The local embedding model would otherwise be fetched into the

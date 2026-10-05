@@ -658,6 +658,37 @@ describe("POST /api/contacts/:id/avatar", () => {
     expect(res.status).toBe(404);
     expect(snapshotRow("contacts", target)).toEqual(before);
   });
+
+  it("never deletes another owner's file through a contact's avatarUrl", async () => {
+    // B pointed its own contact's photo at A's file, and B's next photo
+    // upload deleted it. The write is refused, and a stored value is not
+    // followed out of B's own folder.
+    const target = seedB.contactIds[0];
+    const fileA = path.join(UPLOADS_DIR, avatarUrlA.slice("/uploads/".length));
+    for (const avatarUrl of [
+      avatarUrlA,
+      `/uploads/u/${B.user.id}/avatars/../../${A.user.id}/avatars/${path.basename(avatarUrlA)}`,
+    ]) {
+      const res = await asUser(B)(
+        request(app).patch(`/api/contacts/${target}`).send({ avatarUrl }),
+      );
+      expect(res.status, avatarUrl).toBe(400);
+    }
+
+    sqlite
+      .prepare("UPDATE contacts SET avatarUrl = ? WHERE id = ?")
+      .run(avatarUrlA, target);
+    const res = await asUser(B)(
+      request(app)
+        .post(`/api/contacts/${target}/avatar`)
+        .attach("avatar", PNG_1X1, {
+          filename: "bob.png",
+          contentType: "image/png",
+        }),
+    );
+    expect(res.status).toBe(200);
+    expect(fs.existsSync(fileA)).toBe(true);
+  });
 });
 
 describe("POST /api/contacts/:id/enrich", () => {

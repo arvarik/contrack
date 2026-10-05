@@ -107,8 +107,9 @@ SQL, and tests prove it.
   data. `POST /api/auth/setup` turns that owner into the first admin in place.
   Sessions are server-side rows keyed by the SHA-256 of the cookie secret.
   Personal API tokens start with `ctk_`. Passkeys use
-  `@simplewebauthn/server`. Mailed links need `PUBLIC_URL`. `API_TOKEN` is
-  deprecated.
+  `@simplewebauthn/server`. Mailed links need `PUBLIC_URL`. An admin route
+  needs a session: a token is refused, an admin's included. A cookie write
+  from another site's page is refused (`refuseCrossSiteWrites`).
 
 ## 5. Data
 
@@ -226,8 +227,9 @@ measured in CI without keys.
 ## 9. Rules that are easy to break
 
 - Resolve a stored `/uploads/...` path with `resolveUploadPath()` before any
-  file read or delete. `guardUploads` serves `/uploads/u/<ownerId>/` to that
-  owner only.
+  file read, and with `resolveOwnUploadPath()` before a delete, so a value a
+  client wrote cannot name another account's file. `guardUploads` serves
+  `/uploads/u/<ownerId>/` to that owner only.
 - Fetch outside URLs (link previews, images, feeds) through `safeFetch`
   (`server/utils/urlSafety.ts`), which blocks private addresses at connect
   time.

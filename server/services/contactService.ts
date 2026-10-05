@@ -1,7 +1,7 @@
 import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
-import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
+import { ownerUploadUrl, resolveOwnUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import { and, eq } from "drizzle-orm";
@@ -788,15 +788,13 @@ export const contactService = {
 
     const existing = contactRepo.requireOwned(scope, id);
     const previousUrl = existing.avatarUrl as string | null;
-    // Matches both layouts: `/uploads/avatars/...` from before Phase 1 and
-    // `/uploads/u/<owner>/avatars/...` after it. Never `/uploads/logos/`,
-    // which is shared and must not be deleted with a contact's avatar.
-    if (previousUrl?.includes("/avatars/")) {
-      // avatarUrl is user-writable via the update endpoints — resolve it
-      // through the containment check so `..` segments can't escape uploads/.
-      const oldPath = resolveUploadPath(previousUrl);
-      if (oldPath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
+    // The old photo goes only when it is in this owner's own avatars folder.
+    // avatarUrl is user-writable through the update endpoints, so it may name
+    // another account's file, a shared logo, or a `..` path to either.
+    const oldPath = previousUrl
+      ? resolveOwnUploadPath(scope.ownerId, previousUrl, "avatars")
+      : null;
+    if (oldPath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
 
     sqlite.transaction(() => {
       db.update(schema.contacts)

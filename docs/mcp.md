@@ -354,8 +354,8 @@ And two prompts, which a client can offer you as commands:
 - A token acts as your account. Anyone who holds it can read your data. A
   token with read and write access can also change your contacts, notes,
   lists, and follow-ups. Give a client that only reads a read-only token.
-- A token has your role. An admin's token can also use the administration
-  API.
+- A token cannot use the administration API, even an admin's. Those routes
+  need you signed in.
 - A token cannot change your password, create tokens, or manage passkeys and
   devices. Those need you signed in.
 - Give each client its own token. Then you can revoke one without the others.
@@ -363,12 +363,6 @@ And two prompts, which a client can offer you as commands:
 - A password reset stops every token of the account. Changing your own
   password in **Settings → Account** does not.
 - Disabling an account stops its tokens until an admin enables it again.
-
-> **Note:** The `API_TOKEN` environment variable is an older,
-> instance-wide token. It acts as the first administrator for anyone who
-> holds it, and it goes away in 3.0. Create a personal token, point your
-> scripts at it, and remove the variable. **API tokens** shows a warning while
-> the variable is set.
 
 The same tokens work for the REST API, see the
 [REST API reference](api-reference.md#authentication).

@@ -30,7 +30,6 @@ import {
   listTokens,
   revokeToken,
 } from "../services/apiTokenService.ts";
-import { resolveApiToken } from "../middleware/auth.ts";
 import {
   createRegistrationOptions,
   verifyRegistration,
@@ -232,9 +231,6 @@ router.get("/status", (req, res) => {
     // True while this instance has never been secured, so its data belongs to
     // an account nobody can sign in to.
     localOwnerPresent: hasLocalOwner(),
-    // The deprecated instance-wide environment token. The admin UI shows a
-    // banner asking the operator to replace it with a personal one.
-    legacyTokenConfigured: resolveApiToken() !== null,
     // The address people open (PUBLIC_URL), or null when it is not set. The
     // MCP settings page builds the address a client connects to from it, so
     // a client on another machine gets the public name, not localhost.

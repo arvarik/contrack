@@ -66,6 +66,28 @@ export function publicOrigin(req: Request): string {
 }
 
 /**
+ * True when an `Origin` header names this server: the host the request was
+ * sent to, or `PUBLIC_URL`.
+ *
+ * The host is compared without the scheme. Behind a proxy that does not say
+ * the request was HTTPS, the page's `https://` origin still names this host.
+ */
+export function isOwnOrigin(req: Request, origin: string): boolean {
+  let host: string;
+  try {
+    host = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  // PUBLIC_URL itself, not `publicOrigin`, whose fallback for a Host of an
+  // odd shape is `localhost`, which a page there could then claim.
+  return (
+    host === (req.host ?? "").toLowerCase() ||
+    origin === validatePublicUrl(process.env.PUBLIC_URL)
+  );
+}
+
+/**
  * The origin of a link the server sends by mail, or null when `PUBLIC_URL` is
  * not set.
  *

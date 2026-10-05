@@ -79,8 +79,6 @@ interface AuthStatus {
    * account nobody can sign in to. The setup screen says so in as many words.
    */
   localOwnerPresent: boolean;
-  /** The deprecated instance-wide `API_TOKEN` is still set on the server. */
-  legacyTokenConfigured: boolean;
   /** PUBLIC_URL's origin, or null when the operator has not set it. */
   publicUrl?: string | null;
   /** An MCP client can sign in with OAuth here. */
