@@ -1,3 +1,5 @@
+
+
 <div align="center">
   <h1>🤝 Contrack</h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
@@ -243,7 +245,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `PORT`                  | Express listening port                                    | `3210`       |
 | `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)               | `127.0.0.1`  |
 | `AUTH_REQUIRED`         | `true` = require sign-in with an account                  | `false`      |
-| `API_TOKEN`             | Machine credential for scripts/MCP (`Bearer`); also gates | — (off)      |
+| `API_TOKEN`             | Machine credential for scripts/MCP (`Bearer`); also gates API access | — (off)      |
 | `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache) | project root |
 | `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)              | —            |
 | `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)       | `24`         |
