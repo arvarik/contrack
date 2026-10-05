@@ -41,10 +41,14 @@ const contact: MapContact = {
   ],
 };
 
-const renderCard = (mode: "focus" | "hover", onAction = vi.fn()) =>
+const renderCard = (
+  mode: "focus" | "hover",
+  onAction = vi.fn(),
+  person: MapContact = contact,
+) =>
   render(
     <MapHoverCard
-      contact={contact}
+      contact={person}
       mode={mode}
       onAction={onAction}
       onPointerEnter={() => {}}
@@ -77,5 +81,19 @@ describe("MapHoverCard", () => {
       "list",
       "adjust",
     ]);
+    // No number, so no Call.
+    expect(screen.queryByRole("link", { name: "Call" })).toBeNull();
+  });
+
+  it("calls the primary phone, after Open", () => {
+    renderCard("hover", vi.fn(), {
+      ...contact,
+      phones: [{ phone: "+1 (555) 010-2030" }, { phone: "555 0199" }],
+    });
+    const call = screen.getByRole("link", { name: "Call" });
+    expect(call.getAttribute("href")).toBe("tel:+15550102030");
+    expect(call.previousElementSibling?.getAttribute("aria-label")).toBe(
+      "Open contact",
+    );
   });
 });

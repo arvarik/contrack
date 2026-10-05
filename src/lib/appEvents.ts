@@ -25,6 +25,12 @@ export const OPEN_SHORTCUTS_EVENT = "contrack:open-shortcuts";
 /** Someone asked for the quick interaction modal. Owned by App. */
 export const OPEN_QUICK_NOTE_EVENT = "contrack:open-quick-note";
 
+/**
+ * Someone asked for the command palette without the keyboard: the Network
+ * header's button on a touch screen. Owned by the palette.
+ */
+export const OPEN_PALETTE_EVENT = "contrack:open-palette";
+
 export interface OpenQuickNoteDetail {
   contactId?: string;
 }
@@ -110,6 +116,14 @@ export const emitPasswordChangeRequired = (): void => {
 /** Ask the gate to re-read `/api/auth/status`. */
 export const emitAuthStatusStale = (): void => {
   window.dispatchEvent(new Event(AUTH_STATUS_STALE_EVENT));
+};
+
+/**
+ * Open the command palette from anywhere. ⌘K (Ctrl+K) opens it from the
+ * keyboard, and this is the same door for a finger.
+ */
+export const openCommandPalette = (): void => {
+  window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
 };
 
 /** Ask App to open the quick note modal, optionally pre-selecting a contact. */

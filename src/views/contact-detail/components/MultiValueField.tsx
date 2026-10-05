@@ -6,10 +6,13 @@
  *
  * 1. The value edits in place (`EditableField`). A save replaces that one row
  *    and saves the whole list, because the server keeps the list in order.
+ *    An email or a phone (`kind`) is a link instead: a tap writes or calls,
+ *    and the pencil after it opens the input, which asks the phone for the
+ *    right keyboard.
  * 2. The label chip is a `Select` in its chip form (`CustomSelect`).
- * 3. The kebab holds "Make primary", "Show on map" (addresses) and "Remove".
- *    The first row is the primary one, so it has no "Make primary". For
- *    addresses the primary one places the map pin.
+ * 3. The kebab holds "Make primary", "Message" (phones), "Show on map"
+ *    (addresses) and "Remove". The first row is the primary one, so it has no
+ *    "Make primary". For addresses the primary one places the map pin.
  * 4. Order. A drag handle shows while the row's kebab is open, and dnd-kit
  *    drags it by pointer or touch. From the keyboard, Alt+ArrowUp and
  *    Alt+ArrowDown move the row that has focus, and a polite live region says
@@ -27,7 +30,14 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { scrollBehavior } from "../../../lib/a11y";
 import { toast } from "sonner";
-import { Check, GripVertical, MapPin, Star, Trash2 } from "lucide-react";
+import {
+  Check,
+  GripVertical,
+  MapPin,
+  MessageCircle,
+  Star,
+  Trash2,
+} from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -50,7 +60,9 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { cn } from "../../../lib/utils";
-import { EditableField } from "./EditableField";
+import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { EditableField, INPUT_KIND } from "./EditableField";
 import { AddButton, FIELD_VALUE, showUndoToast } from "./Field";
 
 export interface MultiValueItem {
@@ -62,6 +74,21 @@ export interface MultiValueItem {
 export const EMAIL_LABELS = ["work", "personal", "other"] as const;
 export const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
 export const ADDR_LABELS = ["home", "work", "other"] as const;
+
+/** A value a tap can act on: an email writes, a phone calls. */
+type ValueKind = "email" | "phone";
+
+/** The input hints of each kind (`INPUT_KIND`). */
+const INPUT_OF: Record<ValueKind, keyof typeof INPUT_KIND> = {
+  email: "email",
+  phone: "tel",
+};
+
+/** Where a tap on a value of each kind goes. */
+const HREF_OF: Record<ValueKind, (value: string) => string | null> = {
+  email: mailtoHref,
+  phone: telHref,
+};
 
 /**
  * The label chip: `CustomSelect` draws it as a 32 px chip with a 44 px tap
@@ -112,6 +139,7 @@ interface RowProps {
   noun: string;
   labelOptions: readonly string[];
   isAddress: boolean;
+  kind?: ValueKind;
   mapHref?: string;
   /** True after Alt+Arrow placed this row, until focus leaves it. */
   moved: boolean;
@@ -130,6 +158,7 @@ const SortableRow = ({
   noun,
   labelOptions,
   isAddress,
+  kind,
   mapHref,
   moved,
   onEdit,
@@ -141,6 +170,9 @@ const SortableRow = ({
   const { listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.sortId });
   const [menuOpen, setMenuOpen] = useState(false);
+  // "Message" hands the number to the phone's messages app. With a mouse
+  // there is often no app for `sms:`, and the item would do nothing.
+  const touch = useMediaQuery("(pointer: coarse)");
   /**
    * True from a press on the handle until the press ends. The press that
    * grabs the handle is also a press outside the open kebab, so the kebab
@@ -164,6 +196,17 @@ const SortableRow = ({
   const showHandle = count > 1 && (menuOpen || grabbed || isDragging || moved);
 
   const actions: ActionMenuItem[] = [];
+  // A text to the number, first: the value itself calls, and it is what a
+  // person opens this menu for most.
+  const sms = kind === "phone" && touch ? smsHref(item.value) : null;
+  if (sms) {
+    actions.push({
+      id: "message",
+      label: "Message",
+      icon: MessageCircle,
+      onSelect: () => window.location.assign(sms),
+    });
+  }
   if (index > 0) {
     actions.push({
       id: "primary",
@@ -223,6 +266,8 @@ const SortableRow = ({
           onSave={(next) => onEdit(index, next)}
           placeholder={`Add ${noun}`}
           inputLabel={`Edit ${noun}`}
+          kind={kind && INPUT_OF[kind]}
+          href={kind && HREF_OF[kind](item.value)}
           // An email or a phone number has no spaces to wrap at.
           className={cn(FIELD_VALUE, "max-w-full", !isAddress && "break-all")}
         />
@@ -290,6 +335,11 @@ interface MultiValueFieldProps {
   inputPlaceholder: string;
   isAddress?: boolean;
   /**
+   * An email or a phone. Each value is then a `mailto:` or a `tel:` link,
+   * and the inputs open the email or the phone keyboard.
+   */
+  kind?: ValueKind;
+  /**
    * Where an address row's "Show on map" item goes. Left out when the
    * contact has no coordinates, and the rows then offer no map item and no
    * "Map pin" status.
@@ -321,6 +371,7 @@ export const MultiValueField = ({
   addLabel,
   inputPlaceholder,
   isAddress = false,
+  kind,
   mapHref,
   afterRows,
   openRequest,
@@ -569,6 +620,7 @@ export const MultiValueField = ({
                 noun={noun}
                 labelOptions={labelOptions}
                 isAddress={isAddress}
+                kind={kind}
                 mapHref={mapHref}
                 moved={movedRow === index}
                 onEdit={edit}
@@ -606,6 +658,7 @@ export const MultiValueField = ({
             className={LABEL_CHIP}
           />
           <input
+            {...(kind && INPUT_KIND[INPUT_OF[kind]])}
             aria-label={`New ${noun}`}
             // Appears only after the person pressed "+ Add".
             // eslint-disable-next-line jsx-a11y/no-autofocus

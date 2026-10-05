@@ -45,6 +45,7 @@ import { prefersReducedMotion } from "./flyTo";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -115,6 +116,11 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const [gotoLoading, setGotoLoading] = useState(false);
   const [gotoError, setGotoError] = useState<string | null>(null);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
+  /**
+   * "/" focuses the filter, and the placeholder says so where a key can be
+   * pressed: under a mouse or a trackpad. A touch screen does not show it.
+   */
+  const keyHint = useMediaQuery("(pointer: fine)");
 
   // `ActionMenu` owns the Select menu. This mirrors its open state so the
   // trigger keeps its active look while the menu is open.
@@ -199,7 +205,9 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                     filter.commit();
                   }
                 }}
-                placeholder="Filter contacts… (/)"
+                placeholder={
+                  keyHint ? "Filter contacts… (/)" : "Filter contacts…"
+                }
                 aria-label="Filter contacts"
                 className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />

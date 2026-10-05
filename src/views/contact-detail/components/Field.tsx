@@ -12,7 +12,9 @@
  * 1. A label in sentence case at 12 px (`FIELD_LABEL`). It also names the
  *    group, so a screen reader says "Email" before the rows.
  * 2. The value. A click or Enter edits it in place, and a pencil marks it on
- *    touch and on keyboard focus (`EditableField`, `EditHint`).
+ *    touch and on keyboard focus (`EditableField`, `EditHint`). An email or
+ *    a phone is a link that writes or calls, and its pencil is the button
+ *    that edits it.
  * 3. One "+ Add" button. It is a real button in primary text with a 44 px
  *    tap box (`ADD_BUTTON`).
  *

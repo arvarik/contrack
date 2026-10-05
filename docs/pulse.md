@@ -131,7 +131,7 @@ Each row shows the name, the chip, what to do, and "Last spoke 12 days ago" when
 - On a birthday ("Wish Ada Lovelace a happy birthday"), the cake opens a note to log.
 - On a catch-up ("Check in with Ada Lovelace"), the button opens a note to log.
 
-A follow-up row also has a snooze button. It opens **Snooze until** with **Tomorrow**, **In 3 days**, **Next week** and **Next month**. On a computer, the button shows when you point at the row or focus it. On a phone, it always shows. Birthday and catch-up rows have no snooze.
+A follow-up row also has a snooze button. It opens **Snooze until** with **Tomorrow**, **In 3 days**, **Next week** and **Next month**. On a computer, the button shows when you point at the row or focus it. On a touch screen, it always shows. Birthday and catch-up rows have no snooze.
 
 On a wider screen, **Up next** scrolls inside its card. When the queue is empty, it says "Nothing due today" and offers **Log note**. To add follow-ups, see [Follow-ups](contacts.md#follow-ups).
 

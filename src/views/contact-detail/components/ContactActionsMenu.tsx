@@ -11,8 +11,12 @@
  *    the web at the Standard or the Deep depth. Each row's hint is the time
  *    a contact takes.
  * 3. Copy basic details and Copy full details.
- * 4. Archive or Unarchive.
- * 5. Delete, last and on its own surface tone.
+ * 4. Share contact, which hands the contact's card (a vCard) to the phone's
+ *    share sheet, so it goes to Messages, Mail or the address book. A
+ *    browser with no share sheet calls it Save contact card and downloads
+ *    the card (`shareContactCard`).
+ * 5. Archive or Unarchive.
+ * 6. Delete, last and on its own surface tone.
  *
  * The enrich rows start the same background run as the Enrichment settings
  * page, for one contact (`startSearch` in `AISearchContext`). They ask for
@@ -36,7 +40,9 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
+  Download,
   Palette,
+  Share2,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -47,6 +53,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { buildVCard, vCardFileName } from "../../../lib/contactLinks";
 import { isEnriching, useAISearch } from "../../../contexts/AISearchContext";
 import { depthTime } from "../../../lib/researchDepth";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
@@ -81,6 +88,62 @@ function fullDetailsText(contact: Contact): string {
     textChunks.push(`Location: ${contact.location}`);
   }
   return textChunks.join("\n");
+}
+
+/** True when the browser has a share sheet. Most desktops have none. */
+const hasShareSheet = () => typeof navigator.share === "function";
+
+/** The card as text: the name, then each phone and each email, by line. */
+function cardText(contact: Contact): string {
+  return [
+    contact.name,
+    ...(contact.phones ?? []).map((p) => p.phone),
+    ...(contact.emails ?? []).map((e) => e.email),
+  ]
+    .filter((line) => line.trim())
+    .join("\n");
+}
+
+/**
+ * Shares the contact, or saves its card.
+ *
+ * 1. The share sheet takes the vCard file where the browser says it can
+ *    (`navigator.canShare` with `files`), as Safari on an iPhone does.
+ * 2. Chrome on Android has a share sheet, but its list of file types has
+ *    no `.vcf`, so the sheet gets the card as text (`cardText`).
+ * 3. With no share sheet the menu item says Save contact card, and the
+ *    file downloads.
+ *
+ * The menu runs this in the tap's own handler, so the browser still counts
+ * the tap as the reason for the sheet. A closed sheet is a choice and does
+ * nothing more. Another refusal downloads the file.
+ */
+async function shareContactCard(contact: Contact): Promise<void> {
+  const file = new File([buildVCard(contact)], vCardFileName(contact.name), {
+    type: "text/vcard",
+  });
+  if (hasShareSheet()) {
+    try {
+      await navigator.share(
+        navigator.canShare?.({ files: [file] })
+          ? { files: [file], title: contact.name }
+          : { text: cardText(contact), title: contact.name },
+      );
+      return;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Later, not now: Safari reads the file after the click handler returns.
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  toast.success("Contact card downloaded");
 }
 
 type ContactActionsMenuProps = Pick<
@@ -132,6 +195,8 @@ export const ContactActionsMenu = ({
     }
   };
 
+  // The share row says what the browser can do: share, or only save a file.
+  const shareSheet = hasShareSheet();
   const items: ActionMenuItem[] = [
     {
       id: "colour",
@@ -188,6 +253,12 @@ export const ContactActionsMenu = ({
       label: "Copy full details",
       icon: Copy,
       onSelect: () => copy(fullDetailsText(contact), "All details copied"),
+    },
+    {
+      id: "share",
+      label: shareSheet ? "Share contact" : "Save contact card",
+      icon: shareSheet ? Share2 : Download,
+      onSelect: () => void shareContactCard(contact),
     },
     {
       id: "archive",

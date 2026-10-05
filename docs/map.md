@@ -33,7 +33,7 @@ Point at a pin to see its card after a moment. The next pin's card opens at once
 - the most urgent fact: a follow-up that is overdue or due this week, else the last contact, for example "Last contact 3 weeks ago"
 - up to three tags and the first list, and how many more there are
 
-Move the pointer into the card to use its buttons: **Open contact**, **Log interaction**, **Add follow-up**, **Add to list** and **Adjust pin**. A button closes the card. The card closes a moment after the pointer leaves it.
+Move the pointer into the card to use its buttons: **Open contact**, **Call** (when the contact has a phone), **Log interaction**, **Add follow-up**, **Add to list** and **Adjust pin**. A button closes the card. The card closes a moment after the pointer leaves it.
 
 The card stays inside the part of the map that you can see. It opens away from the toolbar, the bottom line, the open contact and **Map insights**, and it changes side when the map moves. The pin of an open card has a halo.
 
@@ -216,6 +216,7 @@ The map opens where you left it in this browser, also after a reload. This posit
 - The toolbar becomes three buttons: **Filters**, **Fit all** and **Insights**. **Filters** opens a sheet with the filter, **Go to**, the **Map layer** switch, **Saved views** and **Select all in view**.
 - A tap on a pin shows its card at the bottom, and its pin gets a halo. A second tap opens the contact over the whole map. When you close the contact, its pin is in the middle of the map.
 - A tap on a person in **Insights** → **People** closes the panel, flies to the pin and shows the card at the bottom.
+- The card's **Call** calls the contact's first phone.
 - Pinch to zoom. The map does not rotate.
 - Box and lasso selection do not work with a finger. Use **Select all in view**.
 

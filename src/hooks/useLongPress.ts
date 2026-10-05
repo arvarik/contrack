@@ -14,15 +14,76 @@
  * - preventDefault() is NOT called (would break scrolling)
  * - The callback receives the touch coordinates for positioning a context menu
  * - Cleans up timer on unmount via empty-dep useEffect
+ *
+ * What the finger does after the press belongs to the press:
+ *
+ * 1. The lift sends a click. It goes to whatever is under the finger then,
+ *    which is not always the element pressed: a press that starts select
+ *    mode can move the rows. So the next click anywhere in the page is
+ *    swallowed (`swallowNextClick`). A new touch, or a short wait after the
+ *    lift, ends the wait, so a later tap is never lost.
+ * 2. Android answers a long press with `contextmenu`, and iOS with its own
+ *    link preview. The press is the touch's menu, so a `contextmenu` from a
+ *    touch is refused here (`onContextMenuCapture`): the desktop menu and
+ *    the browser's menu stay shut. A right click and the menu key still
+ *    open it. The element sets `-webkit-touch-callout: none` for iOS.
  */
 import React, { useRef, useCallback, useEffect } from "react";
 
 const DEFAULT_DELAY_MS = 500;
 const MOVE_THRESHOLD_PX = 10; // px of movement that cancels the press
 
+/** How long after the lift a click still counts as the press's own. */
+const LIFT_CLICK_MS = 400;
+
+/** The longest the swallow waits for a lift that never comes. */
+const MAX_WAIT_MS = 5_000;
+
+/**
+ * How long after a touch a `contextmenu` is the touch's. Android sends it
+ * while the finger is still down, and a browser can send it just after.
+ */
+const TOUCH_MENU_MS = 800;
+
 interface LongPressCoords {
   clientX: number;
   clientY: number;
+}
+
+/**
+ * Swallows the next click in the page, in the capture phase, before any
+ * handler sees it. Returns a function that stops the wait `ms` from now.
+ *
+ * While the finger is down, only a click from a touch pointer is the
+ * press's: a screen reader, a switch or code clicks with no touch pointer,
+ * and that click goes through. After the lift, the next click in the wait
+ * is the lift's own, whatever its `pointerType`: iOS Safari reports a
+ * finger's click as "mouse" (WebKit bug 282988).
+ */
+function swallowNextClick(): (ms: number) => void {
+  let timer = window.setTimeout(() => disarm(), MAX_WAIT_MS);
+  let lifted = false;
+  const swallow = (event: MouseEvent) => {
+    const pointer = (event as PointerEvent).pointerType;
+    if (!lifted && pointer !== undefined && pointer !== "touch") return;
+    event.preventDefault();
+    event.stopPropagation();
+    disarm();
+  };
+  function disarm() {
+    window.clearTimeout(timer);
+    window.removeEventListener("click", swallow, true);
+    window.removeEventListener("touchstart", disarm, true);
+  }
+  window.addEventListener("click", swallow, true);
+  // A new touch means the lift sent no click: Android sends none after a
+  // long press that it answered with `contextmenu`.
+  window.addEventListener("touchstart", disarm, true);
+  return (ms) => {
+    lifted = true;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(disarm, ms);
+  };
 }
 
 export const useLongPress = (
@@ -30,8 +91,13 @@ export const useLongPress = (
   delay: number = DEFAULT_DELAY_MS,
 ) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const consumed = useRef(false);
   const startCoordsRef = useRef<LongPressCoords | null>(null);
+  /** Ends the click swallow once the finger lifts, after a press fired. */
+  const endSwallow = useRef<((ms: number) => void) | null>(null);
+  /** True while a finger is down on the element. */
+  const touching = useRef(false);
+  /** When a finger last touched the element or left it. */
+  const lastTouch = useRef(0);
 
   // Clean up on unmount
   useEffect(() => {
@@ -51,7 +117,8 @@ export const useLongPress = (
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       cancel();
-      consumed.current = false;
+      touching.current = true;
+      lastTouch.current = Date.now();
       if (e.touches.length !== 1) return;
       const touch = e.touches[0];
       startCoordsRef.current = {
@@ -65,7 +132,7 @@ export const useLongPress = (
 
         const coords = startCoordsRef.current;
         if (coords) {
-          consumed.current = true;
+          endSwallow.current = swallowNextClick();
           callback(coords);
         }
 
@@ -94,17 +161,30 @@ export const useLongPress = (
     [cancel],
   );
 
+  const onTouchEnd = useCallback(() => {
+    cancel();
+    touching.current = false;
+    lastTouch.current = Date.now();
+    endSwallow.current?.(LIFT_CLICK_MS);
+    endSwallow.current = null;
+  }, [cancel]);
+
+  const onContextMenuCapture = useCallback((event: React.MouseEvent) => {
+    const pointer = (event.nativeEvent as Partial<PointerEvent>).pointerType;
+    const byTouch =
+      pointer === "touch" ||
+      touching.current ||
+      Date.now() - lastTouch.current < TOUCH_MENU_MS;
+    if (!byTouch) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
   return {
-    onClickCapture: (event: React.MouseEvent) => {
-      if (consumed.current) {
-        consumed.current = false;
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    },
     onTouchStart,
     onTouchMove,
-    onTouchEnd: cancel,
-    onTouchCancel: cancel,
+    onTouchEnd,
+    onTouchCancel: onTouchEnd,
+    onContextMenuCapture,
   };
 };

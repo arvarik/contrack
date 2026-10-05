@@ -25,6 +25,12 @@
  * browser without the API, and a door out of Settings (Tracked contacts)
  * navigate at once, with no picture and no wait.
  *
+ * The Network list and a contact take turns on a phone's screen in the same
+ * way, so they slide the same way: a row slides its contact in, and the
+ * contact's Back slides it out. Their roots carry the `settings-stage` class
+ * too, which names the picture (`ContactList`, `ContactDetail`), and each
+ * calls `settleSlide` once it has drawn.
+ *
  * @module views/settings/slide
  */
 import React, { useCallback } from "react";
@@ -82,6 +88,15 @@ function wantsSlide(doc: ViewTransitionDocument): boolean {
   if (window.matchMedia?.(WIDE_QUERY).matches) return false;
   if (doc.documentElement.dataset.motion === "reduced") return false;
   return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * True when a move would slide now: below `lg`, with motion, in a browser
+ * with the API. A link checks it before it hands its click to the slide,
+ * and otherwise keeps its own click.
+ */
+export function canSlide(): boolean {
+  return wantsSlide(document as ViewTransitionDocument);
 }
 
 /**

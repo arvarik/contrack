@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { KBD, KBD_SM, SECTION_BG, TONE_WASH } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
+import { OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
   aiResultsHeading,
@@ -328,6 +329,8 @@ export const CommandPalette = () => {
   // Global ⌘K / Ctrl+K listener.
   // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
   // Power-users can press ↑ to recall prior queries from history.
+  // A touch screen has no ⌘K: the Network header's button sends
+  // `OPEN_PALETTE_EVENT` (`openCommandPalette`), which only opens.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -335,8 +338,13 @@ export const CommandPalette = () => {
         setOpen((prev) => !prev);
       }
     };
+    const openByEvent = () => setOpen(true);
     document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    window.addEventListener(OPEN_PALETTE_EVENT, openByEvent);
+    return () => {
+      document.removeEventListener("keydown", down);
+      window.removeEventListener(OPEN_PALETTE_EVENT, openByEvent);
+    };
   }, []);
 
   const handleClose = useCallback(() => {
@@ -765,7 +773,8 @@ export const CommandPalette = () => {
                 }
                 className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
               />
-              <div className="flex items-center gap-1.5 opacity-50">
+              {/* A touch screen has no Esc key: a tap outside closes. */}
+              <div className="flex items-center gap-1.5 opacity-50 pointer-coarse:hidden">
                 <kbd className={KBD}>ESC</kbd>
               </div>
             </div>
@@ -1174,7 +1183,7 @@ export const CommandPalette = () => {
                               }
                             />
                           </div>
-                          {/* → action button: always visible on mobile (touch), hover-reveal on desktop */}
+                          {/* → action button: always visible on a touch screen, hover-reveal under a mouse from sm */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1183,7 +1192,7 @@ export const CommandPalette = () => {
                               setSubMenuContactAvatar(contact.avatarUrl);
                             }}
                             onMouseDown={(e) => e.preventDefault()}
-                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
+                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
                             aria-label={`Actions for ${contact.name}`}
                           >
                             <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />

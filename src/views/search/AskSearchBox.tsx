@@ -93,6 +93,8 @@ export const AskSearchBox = ({
     <input
       ref={inputRef}
       type="text"
+      // A phone's Enter key reads "Search", the thing it does here.
+      enterKeyHint="search"
       value={value}
       onChange={(event) => onChange(event.target.value)}
       // Enter is answered here rather than by the form's own submit, so a

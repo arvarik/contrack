@@ -17,6 +17,7 @@
  * (avatar 56) Thomas Walker                                  ◎ ▾  ⋮
  *          ✎  UX Researcher · Umbrella Corp
  *             Sydney · 2:45 AM AEST · in ↗  +
+ * [ Call ]  [ Message ]  [ Email ]  [ Log note ]
  * ```
  *
  * 1. The name is the page's h1 and takes focus when a contact opens.
@@ -27,15 +28,20 @@
  *    are plain, and links look like links, with ↗ because they open a new
  *    tab. "+ link" ends the line with no dot before it, because it is an
  *    action and not a fact (`AddLink`).
- * 4. The header has no primary button. Colour, enrichment, copy, archive and
- *    delete sit in the kebab, and the pencil on the avatar changes the
- *    avatar. A note starts in the composer under the tabs, which is the
- *    first thing in the Timeline column, so a button for it here said the
- *    same thing twice. Track is the one control beside the kebab: a menu
- *    that says the cadence while the contact is tracked (`TrackButton`).
- * 5. The narrow header keeps to about 140 px. The headline, the summary and
+ * 4. The header has no primary button. Colour, enrichment, copy, share,
+ *    archive and delete sit in the kebab, and the pencil on the avatar
+ *    changes the avatar. Wide, a note starts in the composer under the
+ *    tabs, which is the first thing in the Timeline column, so a button for
+ *    it here said the same thing twice. Track is the one control beside the
+ *    kebab: a menu that says the cadence while the contact is tracked
+ *    (`TrackButton`).
+ * 5. The narrow header keeps to about 200 px. The headline, the summary and
  *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
  *    the weather stays off.
+ * 6. Narrow, a row of quick actions ends the header (`QuickActions`): Call,
+ *    Message and Email for the primary phone and email, and Log note. A
+ *    person with a phone in hand opens a contact to reach them, so each of
+ *    these is one tap from any tab.
  *
  * The briefing lives in the Dossier tab, not here.
  */
@@ -48,8 +54,13 @@ import {
   ArrowUpRight,
   CalendarClock,
   Copy,
+  Mail,
+  MessageCircle,
   Pencil,
+  PenLine,
+  Phone,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
@@ -60,8 +71,10 @@ import type {
   ContactUpdateData,
 } from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
-import { META_LINE, TONE_WASH } from "../../../lib/styles";
+import { TONE_WASH } from "../../../lib/styles";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
+import { openQuickNote } from "../../../lib/appEvents";
 
 import {
   LocalTimeWeather,
@@ -69,7 +82,7 @@ import {
 } from "../../../components/LocalTimeWeather";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
-import { MetaDot } from "../../../components/ui/MetaDot";
+import { DotLine } from "../../../components/ui/MetaDot";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { AnimatedSkeleton } from "../../../components/ui/AnimatedSkeleton";
 import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
@@ -183,7 +196,7 @@ function socialLinkName(sl: ContactSocialLink): string {
   return displayName;
 }
 
-/** One item on the meta line, with the dot before it. */
+/** The meta line's last item and "+ link" after it, as one item. */
 const META_ITEM = "inline-flex items-center gap-x-2 min-w-0 max-w-full";
 
 /** The host of a website, without "www.". */
@@ -353,6 +366,72 @@ const SocialLink = ({
     )}
   </span>
 );
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QuickActions: Call, Message, Email and Log note, under a phone's header
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * One tile: a link out of the app, or a button that opens the note sheet.
+ * At most 144 px wide, so a lone Log note on a tablet is a tile, not a bar.
+ */
+const QUICK_ACTION =
+  "state-layer flex-1 basis-0 min-w-0 max-w-36 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
+
+/**
+ * The narrow header's last row: what a person with a phone in hand opens a
+ * contact for.
+ *
+ * 1. Call and Message use the primary phone, the first in Details. Email
+ *    uses the primary email. A tile shows only when the contact has the
+ *    value, so no tile leads nowhere.
+ * 2. Log note opens the quick note sheet for this contact (`openQuickNote`).
+ *    The composer is on the Timeline tab, and this works from every tab.
+ *    A ghost has no row: its one step is Promote to contact.
+ * 3. The tiles share the row equally, on the page's primary wash, so they
+ *    take the contact's own colour. Each is at least 52 px tall.
+ */
+const QuickActions = ({ contact }: { contact: Contact }) => {
+  const phone = contact.phones?.[0]?.phone;
+  const email = contact.emails?.[0]?.email;
+  const links: { label: string; href: string | null; Icon: LucideIcon }[] = [
+    { label: "Call", href: phone ? telHref(phone) : null, Icon: Phone },
+    {
+      label: "Message",
+      href: phone ? smsHref(phone) : null,
+      Icon: MessageCircle,
+    },
+    { label: "Email", href: email ? mailtoHref(email) : null, Icon: Mail },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Quick actions"
+      className="mt-3 flex items-stretch gap-2"
+    >
+      {links.map(({ label, href, Icon }) =>
+        href ? (
+          <a
+            key={label}
+            href={href}
+            className={cn(QUICK_ACTION, TONE_WASH.primary)}
+          >
+            <Icon aria-hidden="true" className="w-5 h-5" />
+            {label}
+          </a>
+        ) : null,
+      )}
+      <button
+        type="button"
+        onClick={() => openQuickNote(contact.id)}
+        className={cn(QUICK_ACTION, TONE_WASH.primary)}
+      >
+        <PenLine aria-hidden="true" className="w-5 h-5" />
+        Log note
+      </button>
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ContactIntro: the headline and the AI summary
@@ -690,6 +769,20 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       ),
     });
   }
+  const roleField = (
+    <EditableField
+      value={contact.role}
+      onSave={(val) => onUpdate("role", val)}
+      placeholder="Role / title"
+    />
+  );
+  const companyField = (
+    <EditableField
+      value={contact.company}
+      onSave={(val) => onUpdate("company", val)}
+      placeholder="Company"
+    />
+  );
   // What a new link must not repeat: the links, and the website beside them.
   const knownLinks = [
     ...(contact.socialLinks || []).map((sl) => sl.url),
@@ -848,10 +941,13 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   narrow ? "text-2xl" : "text-4xl",
                 )}
               >
+                {/* A long name wraps inside its own box, at any letter if
+                    it must, and never runs under Track at 375 px. */}
                 <EditableField
                   value={contact.name}
                   onSave={(val) => onUpdate("name", val)}
                   placeholder="Contact name"
+                  className="min-w-0 max-w-full"
                 />
                 {contact.pronouns && (
                   <span
@@ -900,25 +996,23 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </div>
             </div>
 
-            {/* Role at company. Narrow, a dot joins them, as in the meta line. */}
-            <div
-              className={cn(
-                "font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5",
-                narrow ? "text-sm" : "mt-1 text-lg",
-              )}
-            >
-              <EditableField
-                value={contact.role}
-                onSave={(val) => onUpdate("role", val)}
-                placeholder="Role / title"
+            {/* Role at company. Narrow, a dot joins them, as in the meta
+                line, and a wrapped line neither starts nor ends with it. */}
+            {narrow ? (
+              <DotLine
+                className="font-medium text-on-surface-variant text-sm"
+                items={[
+                  { key: "role", node: roleField },
+                  { key: "company", node: companyField },
+                ]}
               />
-              {narrow ? <MetaDot /> : <span>at</span>}
-              <EditableField
-                value={contact.company}
-                onSave={(val) => onUpdate("company", val)}
-                placeholder="Company"
-              />
-            </div>
+            ) : (
+              <div className="font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5 mt-1 text-lg">
+                {roleField}
+                <span>at</span>
+                {companyField}
+              </div>
+            )}
 
             {!narrow && (
               <ContactIntro
@@ -931,35 +1025,38 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             {/* Meta line: facts as text, links as links, and "+ link" at
                 the end. The line always shows, so "+ link" is always there,
                 even for a contact with no facts yet. */}
-            <div className={cn(META_LINE, narrow ? "mt-1" : "mt-3")}>
-              {/* Each dot stays with the item after it, so a line that
-                  wraps never ends on a dot. */}
-              {metaItems.slice(0, -1).map((item, index) => (
-                <span key={item.key} className={META_ITEM}>
-                  {index > 0 && <MetaDot />}
-                  {item.node}
-                </span>
-              ))}
-              {/*
-                The last item and "+ link" wrap as one: on a phone the plus
-                on a line of its own read as a stray bullet. No dot before
-                it: an action, not a fact. The pair is one element whatever
-                the last item is, so "+ link" is the same element after a
-                save, and focus stays on it while the new link arrives in
-                front of it.
-              */}
-              <span key="last" className={META_ITEM}>
-                {metaItems.length > 1 && <MetaDot />}
-                {metaItems.at(-1)?.node}
-                <AddLink
-                  links={knownLinks}
-                  onAdd={addSocialLink}
-                  iconOnly={narrow}
-                  openRequest={linkRequest}
-                  onOpenRequestDone={onLinkRequestDone}
-                />
-              </span>
-            </div>
+            {/*
+              A wrapped line neither starts nor ends with a dot (`DotLine`).
+              The last item and "+ link" wrap as one: on a phone the plus on
+              a line of its own read as a stray bullet. No dot before it: an
+              action, not a fact. The pair is one element whatever the last
+              item is, so "+ link" is the same element after a save, and
+              focus stays on it while the new link arrives in front of it.
+            */}
+            <DotLine
+              className={cn(
+                "text-sm text-on-surface-variant",
+                narrow ? "mt-1" : "mt-3",
+              )}
+              items={[
+                ...metaItems.slice(0, -1),
+                {
+                  key: "last",
+                  node: (
+                    <span className={META_ITEM}>
+                      {metaItems.at(-1)?.node}
+                      <AddLink
+                        links={knownLinks}
+                        onAdd={addSocialLink}
+                        iconOnly={narrow}
+                        openRequest={linkRequest}
+                        onOpenRequestDone={onLinkRequestDone}
+                      />
+                    </span>
+                  ),
+                },
+              ]}
+            />
 
             {/* Tags, then lists. Narrow, they open the Details tab. */}
             {!narrow && (
@@ -1005,6 +1102,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             )}
           </div>
         </section>
+        {narrow && !contact.isGhost && <QuickActions contact={contact} />}
       </div>
     </>
   );

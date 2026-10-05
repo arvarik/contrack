@@ -12,8 +12,9 @@
  * 1. Each page is a `preloadable` (`lib/preloadable`): once its code is here
  *    it renders at once, with no Suspense on the way.
  * 2. The app loads the code of all three in idle moments, one page per idle
- *    moment, the map first because it is the largest (`useWarmPages`). A
- *    browser told to save data is left alone (`lib/idle`).
+ *    moment, the map first because it is the largest (`useWarmPages`). Only
+ *    on a fast connection: on a slow phone the 1 MB competed with the first
+ *    page for the line (`onFastConnection` in `lib/idle`).
  * 3. A link to a page warms it when a person points at, focuses or presses
  *    it (`usePageLinkWarm`): its code, and for Pulse its first data.
  *
@@ -26,7 +27,7 @@
 import { useContext, useMemo, useEffect } from "react";
 import { QueryClientContext, type QueryClient } from "@tanstack/react-query";
 import { prefetchPulse } from "../api/dashboard";
-import { whenIdle } from "../lib/idle";
+import { onFastConnection, whenIdle } from "../lib/idle";
 import { preloadable, type Preloadable } from "../lib/preloadable";
 
 export const mapPage = preloadable(() =>
@@ -93,9 +94,12 @@ export function warmPages(
   };
 }
 
-/** The app's warm-up: the code of every lazy page, in idle moments. */
+/**
+ * The app's warm-up: the code of every lazy page, in idle moments, on a
+ * fast connection. Elsewhere a page waits for its link (`pageLinkWarm`).
+ */
 export function useWarmPages(): void {
-  useEffect(() => warmPages(), []);
+  useEffect(() => (onFastConnection() ? warmPages() : undefined), []);
 }
 
 /** The handlers a link to a page spreads to warm that page. */
