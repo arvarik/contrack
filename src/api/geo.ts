@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PlaceSearchResult } from "../../shared/geo";
 import { geoRoutes } from "../../shared/contracts/geo";
-import { apiJson } from "./client";
+import { apiJson, jsonBody } from "./client";
 
 export async function searchPlace(
   q: string,
@@ -23,3 +23,27 @@ export const useGeoStatus = () =>
     queryFn: async ({ signal }) =>
       (await apiJson(geoRoutes.status, "/geo/status", { signal })).contacts,
   });
+
+const LOOKUPS_KEY = ["geo", "lookups"] as const;
+
+/** Whether the server sends addresses to Nominatim. Admins only. */
+export const useAddressLookups = () =>
+  useQuery({
+    queryKey: LOOKUPS_KEY,
+    queryFn: ({ signal }) =>
+      apiJson(geoRoutes.lookups, "/geo/lookups", { signal }),
+  });
+
+/** Turn address lookups off (true) or on (false) for every account. */
+export const useSetAddressLookups = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (off: boolean) =>
+      apiJson(geoRoutes.setLookups, "/geo/lookups", jsonBody({ off })),
+    onSuccess: (state) => {
+      qc.setQueryData(LOOKUPS_KEY, state);
+      // The not-on-the-map list says why a contact has no pin.
+      void qc.invalidateQueries({ queryKey: GEO_STATUS_KEY });
+    },
+  });
+};

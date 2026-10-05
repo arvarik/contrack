@@ -123,6 +123,23 @@ with an empty `DATA_DIR`.
 - A pair marked as different people is never merged, and a quick scan runs
   with AI off.
 
+### Privacy
+
+- **Delete forever** also removes the contacts merged into the contact, their
+  merge records, and their photos, attachments and link-preview images. A
+  daily sweep removes uploaded files that nothing uses.
+- A merge can be undone for 90 days. After that, the merged-away contact and
+  its merge record are deleted.
+- An admin can turn off address lookups for the map, or point them at a
+  self-hosted Nominatim (`GEOCODING_DISABLED`, `NOMINATIM_URL`). Cached
+  addresses that no contact uses are deleted daily.
+- A contact's website icon comes from your server, never from Google. OpenAI
+  calls ask OpenAI not to store the answer. A failed sign-in no longer records
+  the name typed.
+- Signing out removes note drafts and the map's last view from the browser.
+- A new [Privacy](docs/privacy.md) page lists what leaves the server, how long
+  each kind of data stays, and what a delete removes.
+
 ### MCP and API
 
 - The built-in MCP server (`POST /api/mcp`) offers 18 tools, two prompts and

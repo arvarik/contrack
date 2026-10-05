@@ -23,6 +23,11 @@ services:
       # self-host the basemap.
       - MAP_STYLE_LIGHT=${MAP_STYLE_LIGHT:-}
       - MAP_STYLE_DARK=${MAP_STYLE_DARK:-}
+      # Addresses go to OpenStreetMap's public Nominatim to place pins.
+      # NOMINATIM_URL points them at your own, and GEOCODING_DISABLED=true
+      # keeps every address on this server.
+      - NOMINATIM_URL=${NOMINATIM_URL:-}
+      - GEOCODING_DISABLED=${GEOCODING_DISABLED:-}
       # Auth is OFF by default. The published port is reachable by anything
       # that can route to this host, so if that is more than the host itself,
       # set AUTH_REQUIRED=true — the first visit walks you through creating an

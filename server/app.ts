@@ -52,6 +52,7 @@ import {
 } from "./middleware/rateLimit.ts";
 import { requireAiAllowed } from "./middleware/aiAllowed.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
+import { NotFoundError } from "./utils/AppError.ts";
 import { redactUrlForLog } from "./utils/helpers.ts";
 
 /** File extensions browsers may render inline; everything else downloads. */
@@ -280,6 +281,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       },
     }),
   );
+  // A file that is not there answers 404, the same answer as another
+  // account's file, rather than falling through to the app's index.html.
+  app.use("/uploads", (_req, _res, next) => next(new NotFoundError("File")));
 
   // Every feature's routers, in the order of server/modules/index.ts.
   // Express matches in mount order, so that list's order is part of the

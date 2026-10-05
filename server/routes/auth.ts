@@ -65,6 +65,7 @@ import {
   clearSessionCookie,
 } from "../middleware/auth.ts";
 import {
+  accountIdForIdentifier,
   createUser,
   verifyCredentials,
   updateUser,
@@ -365,13 +366,17 @@ router.post(
 
     const user = await verifyCredentials(identifier, password);
     if (!user) {
-      // The audit row records what was typed into the identifier field and
-      // nothing else. A failed sign-in is the one event worth keeping for an
-      // account that may not exist, which is why the actor is null.
+      // The audit row says whether the typed name matched an account, and
+      // which one, never the text: a password typed into the name field
+      // would stay in the log. The actor is null, since nobody proved who
+      // they are.
+      const matched = accountIdForIdentifier(identifier);
       auditService.record({
         actorUserId: null,
         action: "auth.login.failed",
-        details: { identifier: identifier.slice(0, 100) },
+        targetType: matched ? "user" : undefined,
+        targetId: matched,
+        details: { matched: matched !== null },
         ip: ipOf(req),
       });
       // One message for both "no such account" and "wrong password" — telling
@@ -392,7 +397,7 @@ router.post(
         action: "auth.login.failed",
         targetType: "user",
         targetId: user.id,
-        details: { identifier: identifier.slice(0, 100), reason: "disabled" },
+        details: { matched: true, reason: "disabled" },
         ip: ipOf(req),
       });
       throw new AppError(

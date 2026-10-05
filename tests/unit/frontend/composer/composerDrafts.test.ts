@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  clearAccountDrafts,
   draftKey,
   isEmptyDraft,
   readDraft,
@@ -100,6 +101,16 @@ describe("reading and writing a draft", () => {
     expect(readDraft(key, written + month - 1)).toMatchObject(draft);
     expect(readDraft(key, written + month + 1)).toBeNull();
     expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it("are all removed at the account's sign-out, and another account's stay", () => {
+    writeDraft(draftKey("user-a", "contact-1"), draft);
+    writeDraft(draftKey("user-a", "quick:contact-2"), draft);
+    writeDraft(draftKey("user-ab", "contact-1"), draft);
+    clearAccountDrafts("user-a");
+    expect(Object.keys(localStorage)).toEqual([
+      draftKey("user-ab", "contact-1"),
+    ]);
   });
 
   it("survives storage that throws", () => {

@@ -275,10 +275,24 @@ describe("sign in", () => {
     expect(cookie.join(";")).toContain("SameSite=Strict");
   });
 
-  it("rejects the wrong password", async () => {
+  it("rejects the wrong password, and its audit row keeps no typed text", async () => {
     const { res } = await signIn("theowner", "not the password");
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
+    // A password typed into the name field must not reach the log.
+    await signIn("hunter2-in-the-name-field", "x");
+    const rows = sqlite
+      .prepare(
+        `SELECT targetId, details FROM audit_log
+          WHERE action = 'auth.login.failed' ORDER BY rowid DESC LIMIT 2`,
+      )
+      .all() as { targetId: string | null; details: string }[];
+    expect(rows.map((row) => JSON.parse(row.details))).toEqual([
+      { matched: false },
+      { matched: true },
+    ]);
+    expect(rows[1].targetId).toBeTruthy();
+    expect(JSON.stringify(rows)).not.toContain("hunter2");
   });
 
   it("gives the same answer for an unknown account, so accounts can't be enumerated", async () => {

@@ -361,6 +361,16 @@ function findUserRowByIdentifier(identifier: string): UserRow | undefined {
 }
 
 /**
+ * The id of the account a sign-in name or email names, or null. For the
+ * audit row of a failed sign-in, which records whether the typed name matched
+ * an account and never the name itself: a password typed into the wrong
+ * field would otherwise sit in the log for 90 days.
+ */
+export function accountIdForIdentifier(identifier: string): string | null {
+  return findUserRowByIdentifier(identifier)?.id ?? null;
+}
+
+/**
  * Drop the hash on the way out.
  *
  * Written as an explicit field list rather than a rest-destructure so that a

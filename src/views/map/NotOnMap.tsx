@@ -13,6 +13,7 @@ import { cn } from "../../lib/utils";
 const REASON: Record<NotOnMapContact["reason"], string> = {
   pending: "Waiting for the geocoder",
   "not-found": "The geocoder found no place for this address",
+  off: "Address lookups are off on this instance",
 };
 
 interface NotOnMapProps {

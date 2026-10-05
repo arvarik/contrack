@@ -341,7 +341,8 @@ lists the folders and the order in which the server reads them.
   provider for each task, and the AI cache. It refreshes every 15 seconds.
   - Its **Background jobs** card lists each recurring job (the connector
     sync, the score sweeps, the backup, the daily sweep, the trash purge, the
-    model lists and the planner statistics) with its last run, its result
+    expired merges, the unused files, the address cache, the model lists and
+    the planner statistics) with its last run, its result
     and its next run, and the jobs that failed in the last 24 hours with
     their errors. `JOB_CONCURRENCY` sets how many jobs run at once.
 - The server writes its log to standard output: the terminal, or

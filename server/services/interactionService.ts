@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { emailText } from "../utils/emailText.ts";
+import { ownerUploadUrls, removeUploads } from "./uploadCleanup.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
@@ -758,6 +759,12 @@ export const interactionService = {
         );
       }
     }
+    // The note's link-preview images go with it. Another note can show the
+    // same file, and removeUploads keeps a file that any row still names.
+    removeUploads(
+      scope.ownerId,
+      ownerUploadUrls(scope.ownerId, existing.content),
+    );
     return true;
   },
 

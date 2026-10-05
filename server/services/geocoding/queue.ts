@@ -2,6 +2,7 @@ import { db } from "../../db.ts";
 import * as schema from "../../db/schema.ts";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   normalizeLocationKey,
   getCachedGeocode,
@@ -10,6 +11,7 @@ import {
   FAILURE_TTL_DAYS,
 } from "./cache.ts";
 import { geocodeWithFallback } from "./provider.ts";
+import { isGeocodingOff } from "./switch.ts";
 
 /**
  * No answer: wait 30 s, twice as long for each in a row, up to 15 min. The
@@ -28,6 +30,13 @@ const geocodeQueue: GeoTask[] = [];
 let isGeocoding = false;
 let noAnswers = 0;
 
+/**
+ * Place a contact's pin from the cache, or queue its address for Nominatim.
+ *
+ * With address lookups off (switch.ts) a cached answer still places the pin,
+ * since nothing leaves the server for it, and nothing is queued. The log
+ * lines name the contact, never the address.
+ */
 export function queueGeocode(contactId: string, location: string): void {
   // Integration tests set this to keep background fetches off the network.
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
@@ -38,20 +47,19 @@ export function queueGeocode(contactId: string, location: string): void {
   const cached = getCachedGeocode(key);
   if (cached) {
     writeGeocoded(contactId, cached.lat, cached.lng);
-    log.debug(
-      "Geocode",
-      `Cache hit for "${location}" → ${cached.lat}, ${cached.lng}`,
-    );
+    log.debug("Geocode", `Cache hit for contact ${contactId}`);
     return;
   }
 
   if (isRecentFailure(key)) {
     log.debug(
       "Geocode",
-      `Skipping "${location}" — cached failure, retry in <${FAILURE_TTL_DAYS}d`,
+      `Skipping contact ${contactId}: no place found, retry in <${FAILURE_TTL_DAYS}d`,
     );
     return;
   }
+
+  if (isGeocodingOff()) return;
 
   const existing = geocodeQueue.find((t) => t.normalizedKey === key);
   if (existing) {
@@ -68,8 +76,28 @@ export function queueGeocode(contactId: string, location: string): void {
 async function processGeocodeQueue(): Promise<void> {
   if (isGeocoding || geocodeQueue.length === 0) return;
   isGeocoding = true;
+  // A throw anywhere below must not leave the flag set, or no address would
+  // ever be looked up again until a restart.
+  try {
+    await drainQueue();
+  } catch (err) {
+    log.error("Geocode", `The lookup queue stopped: ${getErrorMessage(err)}`);
+  } finally {
+    isGeocoding = false;
+  }
+}
 
+async function drainQueue(): Promise<void> {
   while (geocodeQueue.length > 0) {
+    // Turned off while addresses waited: they stay on this server.
+    if (isGeocodingOff()) {
+      log.info(
+        "Geocode",
+        `Address lookups are off, dropped ${geocodeQueue.length} queued lookup(s)`,
+      );
+      geocodeQueue.length = 0;
+      return;
+    }
     const task = geocodeQueue.shift()!;
 
     const cached = getCachedGeocode(task.normalizedKey);
@@ -92,7 +120,7 @@ async function processGeocodeQueue(): Promise<void> {
       noAnswers++;
       log.warn(
         "Geocode",
-        `No answer for "${task.location}", next lookup in ${wait / 1000}s`,
+        `No answer for contact ${task.contactId}, next lookup in ${wait / 1000}s`,
       );
       await new Promise((r) => setTimeout(r, wait));
       continue;
@@ -116,18 +144,16 @@ async function processGeocodeQueue(): Promise<void> {
       );
       log.info(
         "Geocode",
-        `[${result.provider}] "${task.location}" → ${result.lat}, ${result.lng}`,
+        `[${result.provider}] Placed contact ${task.contactId}`,
       );
     } else {
       cacheGeocode(task.normalizedKey, null, null, "none", false);
       log.warn(
         "Geocode",
-        `No results for "${task.location}" — cached as failure for ${FAILURE_TTL_DAYS}d`,
+        `No place found for contact ${task.contactId}, asking again in ${FAILURE_TTL_DAYS}d`,
       );
     }
   }
-
-  isGeocoding = false;
 }
 
 /**

@@ -924,6 +924,20 @@ export const SETTINGS_PAGES: SettingsPage[] = [
         keywords: ["backup", "snapshots", "keep", "retention", "admin"],
       },
       {
+        id: "address-lookups",
+        label: "Look up addresses for the map",
+        keywords: [
+          "geocoding",
+          "nominatim",
+          "openstreetmap",
+          "address",
+          "map",
+          "privacy",
+          "integrations",
+          "admin",
+        ],
+      },
+      {
         id: "google-oauth",
         label: "Google OAuth client",
         keywords: [

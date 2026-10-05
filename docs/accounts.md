@@ -249,8 +249,10 @@ The same page holds the Trash, backup, and Google settings, see
 **Settings → Administration → Audit log** lists every administrative action
 and every sign-in, newest first. Filter it with **Everything**, **Accounts**,
 **Invitations**, **Sign-in**, or **Tokens**. **Load more** shows older
-entries. The log never holds a password, a token, or an invitation secret.
-Contrack deletes an entry after 90 days.
+entries. The log never holds a password, a token, or an invitation secret. A
+failed sign-in records whether the name typed matched an account, and which
+account, never the text typed, so a password typed into the wrong field does
+not reach the log. Contrack deletes an entry after 90 days.
 
 ### What keeps an instance administrable
 

@@ -14,7 +14,7 @@ A contact is on the map when it has a pin. Contrack places the pin from the cont
 - Archived contacts, contacts in the trash, merged duplicates and ghosts are not on the map.
 - A contact with an address but no pin shows "Not on the map yet" on its page. See [Move a pin by hand](#move-a-pin-by-hand).
 - A new pin can take a few seconds to appear, because Contrack looks up addresses in the background (see [How Contrack places pins](#how-contrack-places-pins)). The map and the contact page show it without a reload.
-- The bottom line shows, for example, **6 not on the map** when some contacts have an address and no pin. Select it to see each person, the address and the reason: "Waiting for the geocoder" or "The geocoder found no place for this address". **Set location** opens the pin dialog.
+- The bottom line shows, for example, **6 not on the map** when some contacts have an address and no pin. Select it to see each person, the address and the reason: "Waiting for the geocoder", "The geocoder found no place for this address" or "Address lookups are off on this instance". **Set location** opens the pin dialog.
 
 ## Pins, clusters and stacks
 
@@ -225,9 +225,10 @@ The map opens where you left it in this browser, also after a reload. This posit
 Contrack finds the place for an address with Nominatim, the OpenStreetMap geocoder. Nominatim needs no key, and Contrack sends it only the address text. The first address places the pin, and the location places it when there is no address.
 
 - The lookups run in the background. Every call to Nominatim, from these lookups and from **Go to**, keeps to one a second.
-- Contrack keeps every answer, and it does not try an address that found nothing again for seven days.
+- Contrack keeps each answer while a contact uses that address, and it does not try an address that found nothing again for seven days.
 - When Nominatim does not answer, Contrack does not remember that as "nothing found". It tries again after 30 seconds, then waits twice as long each time, up to 15 minutes, until Nominatim answers.
 - When the server starts, it queues every contact that has an address or a location and no pin.
+- An admin can turn the lookups off in **Settings → Administration → General**, with **Look up addresses for the map**, or point them at a Nominatim of your own. Then no address leaves the server: a pin comes from an earlier answer or by hand, and **Go to** finds only places looked up before. See [Geocoding](configuration.md#geocoding).
 
 ## Automate it
 

@@ -278,11 +278,17 @@ only, never another account's on the instance.
 | ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | **vCard (.vcf)**       | Your contacts, archived ones included. Not the Trash, ghosts, or contacts merged into another            | Apple Contacts, Google Contacts, Outlook, a phone, or an import back into Contrack |
 | **Spreadsheet (.csv)** | The same contacts as the vCard file, one row each. Emails, phones, and tags are joined into single cells | A spreadsheet                                                                      |
-| **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A complete copy of your data                                                       |
+| **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A record of your contacts and notes                                                |
 
 The CSV has the columns Name, First Name, Last Name, Company, Role, Location,
 Industry, Website, Emails, Phones, and Tags. Then come Archived, Tracked,
 Cadence Days, Tracked At, Added At, and Last Contacted At.
+
+The JSON file holds your contacts with every field, their notes and
+interactions, your lists and who is on them, your follow-ups, and the merges
+you can still undo. It does not hold your search history, saved map views,
+settings, connectors, imports, AI usage, or API tokens. Attached files and
+photos appear as their addresses on the server, not as the files.
 
 vCard is the only format that Contrack imports again. The JSON file is a
 record to keep, not a restore: to restore an instance, use a backup. An admin
