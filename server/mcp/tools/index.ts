@@ -9,21 +9,11 @@
  * @module server/mcp/tools
  */
 
-import type { Request } from "express";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Scope } from "../../tenancy/scope.ts";
-import type { ErrorTracker } from "../errors.ts";
+import type { McpToolContext } from "../../modules/module.ts";
 import { MODULES } from "../../modules/index.ts";
 
-export function registerAllTools(
-  server: McpServer,
-  scope: Scope,
-  req: Request,
-  onError: ErrorTracker,
-): void {
+export function registerAllTools(context: McpToolContext): void {
   for (const feature of MODULES) {
-    for (const register of feature.mcpTools) {
-      register({ server, scope, req, onError });
-    }
+    for (const register of feature.mcpTools) register(context);
   }
 }

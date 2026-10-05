@@ -11,7 +11,5 @@ import { registerPulseTools } from "../../mcp/tools/pulse.ts";
 export const dashboardModule = defineModule({
   id: "dashboard",
   routers: [{ path: "/api", router: dashboardRouter }],
-  mcpTools: [
-    ({ server, scope, onError }) => registerPulseTools(server, scope, onError),
-  ],
+  mcpTools: [registerPulseTools],
 });

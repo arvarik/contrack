@@ -3394,8 +3394,8 @@ describe("the MCP surface answers for the caller's own account", () => {
     expect(res.status).toBe(200);
     const dataLine = res.text.split("\n").find((l) => l.startsWith("data: "));
     const payload = dataLine ? JSON.parse(dataLine.slice(6)) : res.body;
-    expect(payload.error).toBeDefined();
-    expect(payload.error.data?.code).toBe("NOT_FOUND");
+    expect(payload.result.isError).toBe(true);
+    expect(payload.result.structuredContent.error.code).toBe("NOT_FOUND");
   });
 
   it("answers a personal token for that token's own account", async () => {

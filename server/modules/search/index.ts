@@ -14,9 +14,6 @@ import { startSearch } from "./start.ts";
 export const searchModule = defineModule({
   id: "search",
   routers: [{ path: "/api/search", router: searchRouter }],
-  mcpTools: [
-    ({ server, scope, req, onError }) =>
-      registerSearchTools(server, scope, req, onError),
-  ],
+  mcpTools: [registerSearchTools],
   onStart: startSearch,
 });

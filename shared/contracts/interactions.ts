@@ -52,10 +52,12 @@ const interactionUpdateSchema = z
   });
 
 /** A calendar date, or an instant with its zone. */
-const dayOrInstantSchema = z.union([
-  z.iso.date(),
-  z.iso.datetime({ offset: true }),
-]);
+const dayOrInstantSchema = z.union(
+  [z.iso.date(), z.iso.datetime({ offset: true })],
+  {
+    error: "Use an ISO 8601 date, such as 2026-11-03 or 2026-11-03T15:00:00Z",
+  },
+);
 
 /**
  * The query string of a note search.

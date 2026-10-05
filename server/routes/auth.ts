@@ -243,6 +243,10 @@ router.get("/status", (req, res) => {
     // The deprecated instance-wide environment token. The admin UI shows a
     // banner asking the operator to replace it with a personal one.
     legacyTokenConfigured: resolveApiToken() !== null,
+    // The address people open (PUBLIC_URL), or null when it is not set. The
+    // MCP settings page builds the address a client connects to from it, so
+    // a client on another machine gets the public name, not localhost.
+    publicUrl: mailLinkOrigin(),
     // What this instance calls itself, or "" when nobody has named it.
     //
     // Read-only here and unauthenticated on purpose: it has to reach the

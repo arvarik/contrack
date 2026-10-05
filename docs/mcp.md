@@ -4,7 +4,7 @@ Contrack has an MCP server, so an AI assistant such as Claude or Cursor can
 use your CRM. This page covers personal API tokens, how to connect a client,
 and the tools, resources, and prompts the server offers.
 
-![Settings, MCP and API: the endpoint URL, the token field, the client snippets, and the tools table](images/mcp.png)
+![Settings, MCP and API: the server address, the client picker, the token step, the setup to copy, and the tools table](images/mcp.png)
 
 ## What MCP gives an assistant
 
@@ -13,15 +13,25 @@ assistants to other apps. With Contrack connected, an assistant can search
 your contacts, read a timeline, log a note, and add a follow-up while you
 talk to it. It works as your account and sees only your data.
 
-**Settings → MCP and API** has everything a client needs:
+**Settings → MCP and API** sets up a client step by step:
 
-- **MCP endpoint URL**, the one address every client uses. It is your
-  Contrack's address with `/api/mcp` after it, such as
-  `http://localhost:3210/api/mcp`.
-- **Personal API token**, a field where you paste a token. The token stays on
-  the page. It is never saved or sent, only put into the snippets.
-- Snippets to copy for Claude Code, Claude Desktop and Cursor, and curl.
-- **Tools**, the table of every tool a client can call.
+1. **Server address**, the one address every client uses. It is your
+   Contrack's address with `/api/mcp` after it, such as
+   `http://localhost:3210/api/mcp`. When `PUBLIC_URL` is set, the page uses
+   it. When the address works only on this computer, the page says so.
+2. **Where do you use it?**: Claude Code, Claude Desktop, Cursor, VS Code,
+   Codex, Gemini CLI, or another client.
+3. **Give it access**, when your Contrack asks people to sign in. Select
+   **Create a token for** the client, as **Read and write** or **Read only**.
+   The token lasts 90 days and is named after the client. It fills in the
+   setup, and the page shows it only once. **Use a token I have** takes a
+   token you made before. The page never saves a token.
+4. **Add it** shows the command or the config for that client, with the
+   address and the token in it, and **Copy**. For Cursor and VS Code, **Add
+   to Cursor** and **Add to VS Code** add the server in one press. Copy and
+   the install button wait until the setup has a token.
+
+**Tools** lists every tool a client can call.
 
 The server speaks MCP over streamable HTTP. Each request stands alone, with no
 session to keep open.
@@ -32,7 +42,7 @@ A client needs a personal API token when your Contrack asks people to sign
 in.
 
 1. Open **Settings → Account** and go to **API tokens**. The **MCP and API**
-   page links there too, with **Create a token in Account**.
+   page also makes one for the client you set up, as above.
 2. Select **Create token**.
 3. In **What is it for**, name the machine or the script, such as "Claude
    Desktop on the laptop".
@@ -63,25 +73,27 @@ token, and **Settings → Account** is not shown. See
 
 ## Connect a client
 
-Copy the snippet for your client from **Settings → MCP and API**. Paste your
-token into **Personal API token** first, and the snippets fill it in. The
-examples below use `http://localhost:3210`. Use your own address instead.
-When your Contrack does not ask anyone to sign in, leave out the
-`Authorization` header.
+**Settings → MCP and API** builds each of these for you. The examples below
+use `http://localhost:3210` and `<your-token>`. Use your own address and
+token instead. When your Contrack does not ask anyone to sign in, leave out
+the token and the `Authorization` header.
 
 ### Claude Code
 
 Run this in a terminal:
 
 ```bash
-claude mcp add --transport http contrack http://localhost:3210/api/mcp --header "Authorization: Bearer <your-token>"
+claude mcp add --transport http --scope user contrack http://localhost:3210/api/mcp --header "Authorization: Bearer <your-token>"
 ```
 
-`contrack` is the name the server gets in Claude Code.
+`--scope user` adds Contrack to every project on the computer. Without it,
+Claude Code adds it to the current project only. `/mcp` in Claude Code lists
+it.
 
-### Claude Desktop and Cursor
+### Claude Desktop
 
-Add this to the `mcpServers` part of the client's config file:
+In Claude Desktop, open **Settings → Developer → Edit Config**. In
+`claude_desktop_config.json`, add the `contrack` entry inside `mcpServers`:
 
 ```json
 {
@@ -93,17 +105,72 @@ Add this to the `mcpServers` part of the client's config file:
         "mcp-remote",
         "http://localhost:3210/api/mcp",
         "--header",
-        "Authorization: Bearer <your-token>"
-      ]
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": { "AUTH_HEADER": "Bearer <your-token>" }
     }
   }
 }
 ```
 
 The config runs the `mcp-remote` bridge with `npx`, so the machine needs
-Node.js. Claude Desktop keeps its config in `claude_desktop_config.json`.
-Cursor reads `.cursor/mcp.json` in a project, or `~/.cursor/mcp.json` for every
-project. Restart the client after you change the file.
+Node.js. For a plain `http` address on another computer, the settings page
+adds `--allow-http`, because `mcp-remote` refuses one without it. The token
+goes in `env`, because Claude Desktop on Windows passes each argument to
+`npx` without quotes, and a space would split it. Restart Claude Desktop
+after you change the file.
+
+### Cursor
+
+Select **Add to Cursor** on the settings page. Or add the `contrack` entry
+inside `mcpServers` in `~/.cursor/mcp.json` for every project, or in
+`.cursor/mcp.json` in one project:
+
+```json
+{
+  "mcpServers": {
+    "contrack": {
+      "url": "http://localhost:3210/api/mcp",
+      "headers": { "Authorization": "Bearer <your-token>" }
+    }
+  }
+}
+```
+
+### VS Code
+
+Select **Add to VS Code** on the settings page. Or run **MCP: Open User
+Configuration** from the Command Palette, and add the `contrack` entry inside
+`servers`. Keep a token out of a project's `.vscode/mcp.json`, which is often
+committed and shared:
+
+```json
+{
+  "servers": {
+    "contrack": {
+      "type": "http",
+      "url": "http://localhost:3210/api/mcp",
+      "headers": { "Authorization": "Bearer <your-token>" }
+    }
+  }
+}
+```
+
+### Codex
+
+Codex reads the token from an environment variable. Run this in a terminal,
+and put the `export` line in your shell profile too:
+
+```bash
+export CONTRACK_TOKEN=<your-token>
+codex mcp add contrack --url http://localhost:3210/api/mcp --bearer-token-env-var CONTRACK_TOKEN
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add --transport http --scope user --header "Authorization: Bearer <your-token>" contrack http://localhost:3210/api/mcp
+```
 
 ### Other clients
 
@@ -119,16 +186,28 @@ curl -X POST http://localhost:3210/api/mcp \
   -H "Authorization: Bearer <your-token>" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
 ```
 
 A working endpoint answers with the server's details, which include
 `"name":"contrack"`. The endpoint takes `POST` only.
 
+### A client on another computer
+
+An address such as `http://localhost:3210` works only on the computer that
+runs Contrack. A client on another computer needs an address it can reach,
+such as the server's name on your network or a `PUBLIC_URL` behind a reverse
+proxy. While sign-in is off, Contrack answers only local names, so add any
+other name to `ALLOWED_HOSTS`. See
+[Configuration](configuration.md#environment-variables).
+
 ## Tools
 
 The server offers 18 tools. A read-only tool changes nothing. A read-only
-token sees only the read-only tools.
+token sees only the read-only tools. Each tool has a title, such as "Search
+people", and hints that tell a client whether it reads, only adds, or can
+overwrite or remove. A client may ask you before it runs a tool that can
+overwrite: `update_contact`, `update_action_item`, and `remove_from_list`.
 
 | Tool                   | What it does                                                                                                                                                                  | Access         |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -152,9 +231,15 @@ token sees only the read-only tools.
 | `remove_from_list`     | Removes one or more contacts from a list                                                                                                                                      | Read and write |
 
 `search_people` returns up to 30 results, and `search_notes` up to 50.
-`list_contacts` and `get_timeline` return up to 100 entries at a time.
-`list_contacts` returns the main profile fields of each contact, and
-`get_contact` returns the whole profile.
+`list_contacts`, `get_timeline`, and `list_action_items` return up to 100
+entries at a time. A result with more has a `nextCursor`. Pass it as `cursor`
+for the next page. `search_notes` pages the same way.
+
+`search_people` and `list_contacts` return the main profile fields of each
+contact, and `get_contact` returns the whole profile. No tool returns the
+fields only the server reads, such as the search index and the research
+record. Each result has one line for a person to read, then the same data as
+JSON.
 
 Dates are ISO 8601: a day, such as `2026-11-03`, or a date and time.
 `log_interaction` refuses a date in the future, because an interaction has
@@ -168,7 +253,8 @@ offset, for `from` and `to`.
 
 When a client connects, the server also sends instructions for its model.
 They say where contact IDs come from, to check for a contact with
-`list_contacts` before `create_contact`, and how to write dates.
+`list_contacts` before `create_contact`, how to write dates, and how to get
+the next page.
 
 With AI off for your account or for the instance, `search_people` answers from
 the local index, as Ask Contrack does. **Enrich new contacts automatically**
@@ -185,8 +271,10 @@ The server also offers two resources, each as JSON:
 
 And two prompts, which a client can offer you as commands:
 
-- `catch_me_up`: a briefing on one contact. It takes the contact's ID and
-  includes the profile and the latest 20 timeline entries.
+- `catch_me_up`: a briefing on one contact. It takes the contact's name or
+  ID, and a client completes the name as you type. It includes the profile
+  and the latest 20 timeline entries. A name that more than one contact holds
+  gets a list of them, so you can give the whole name.
 - `weekly_review`: a weekly review of overdue follow-ups, follow-ups due this
   week, and the tracked contacts to catch up with.
 
@@ -194,15 +282,24 @@ And two prompts, which a client can offer you as commands:
 
 - Each account can send 120 requests a minute. Past that, the server answers
   `429` with a `Retry-After` header that says how many seconds to wait.
-- A request with no valid token, on a Contrack that asks people to sign in,
-  gets `401`.
-- A tool that fails returns an MCP error. Its data holds Contrack's error
-  code and HTTP status, such as `NOT_FOUND` for a contact that is not in your
-  account. `create_contact` answers `DUPLICATE_CONTACT`, and `create_list`
-  answers `DUPLICATE_LIST`. The message names the contact or the list that
-  already exists.
+- A request with no token, on a Contrack that asks people to sign in, gets
+  `401` with `WWW-Authenticate: Bearer`. A token that is revoked or expired
+  gets `401` with `error="invalid_token"` and a message that says so.
+- A request from a web page gets `403` unless the page is Contrack itself or
+  `CORS_ORIGIN`. An MCP client sends no `Origin` header, so this never
+  stops one.
+- A tool that refuses returns a result with `isError` set. Its text says why
+  and, where it can, what to do next. Its `structuredContent.error` holds
+  Contrack's error code, such as `NOT_FOUND` for a contact that is not in
+  your account. `create_contact` answers `DUPLICATE_CONTACT`, and
+  `create_list` answers `DUPLICATE_LIST`. The message names the contact or
+  the list that already exists.
 - A tool called with arguments that break its rules, such as a date in the
-  future, returns a result with `isError` set and the reason in its text.
+  future, also returns `isError`, with the field and the rule in its text.
+- A fault in the server returns `isError` with the request ID. The server
+  log has the cause.
+- A prompt that cannot find its contact returns an MCP error with the code in
+  its data.
 
 ## Keep your tokens safe
 

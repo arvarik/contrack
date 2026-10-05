@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
@@ -85,6 +92,13 @@ describe("API: Password reset and magic links", () => {
     it("points a reset link at PUBLIC_URL whatever host the request claims", async () => {
       mailService.__useJsonTransport(true);
       const admin = await freshAdmin("victim@example.com");
+      // Sign-in is off here, so the Host guard would refuse the name before
+      // the route runs. Let it through: even a name the guard allows never
+      // reaches a mailed link.
+      process.env.ALLOWED_HOSTS = "evil.example.net";
+      onTestFinished(() => {
+        delete process.env.ALLOWED_HOSTS;
+      });
 
       const res = await request(app)
         .post("/api/auth/password-reset/request")
