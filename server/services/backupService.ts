@@ -257,6 +257,22 @@ function rotateBackups(): void {
 
 let activeBackupPromise: Promise<BackupInfo> | null = null;
 
+/** The suffix of a snapshot that is still being written. */
+const PARTIAL = ".partial";
+
+/**
+ * Remove what an earlier snapshot left half written. Only one snapshot runs
+ * at a time, so a partial file found before one starts is from a process
+ * that stopped during its copy.
+ */
+function removePartials(): void {
+  for (const name of fs.readdirSync(BACKUPS_DIR)) {
+    if (name.startsWith("curator-") && name.endsWith(PARTIAL)) {
+      fs.rmSync(path.join(BACKUPS_DIR, name), { force: true });
+    }
+  }
+}
+
 /**
  * Take a snapshot now. Uses the online backup API — consistent even with
  * concurrent writers, and runs incrementally without blocking the event loop.
@@ -273,15 +289,29 @@ export async function runBackup(): Promise<BackupInfo> {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = `curator-${stamp}.db`;
       const dest = path.join(BACKUPS_DIR, filename);
+      // Written under a name the listing does not read, and renamed once it
+      // is whole and checked. A stop during the copy used to leave a partial
+      // file under the final name: the newest snapshot, kept by rotation,
+      // and the one a restore would reach for first.
+      const partial = `${dest}${PARTIAL}`;
+      removePartials();
 
       const startMs = Date.now();
-      await sqlite.backup(dest);
-      const stat = fs.statSync(dest);
+      let stat: fs.Stats;
+      let verification: BackupVerification;
+      try {
+        await sqlite.backup(partial);
+        stat = fs.statSync(partial);
+        // Opened again immediately. The check is worth almost nothing a week
+        // later and everything now, because now is when the snapshot can be
+        // taken again.
+        verification = verifyBackup(partial);
+        fs.renameSync(partial, dest);
+      } catch (err) {
+        fs.rmSync(partial, { force: true });
+        throw err;
+      }
       const writtenMs = Date.now() - startMs;
-
-      // Opened again immediately. The check is worth almost nothing a week later
-      // and everything now, because now is when the snapshot can be taken again.
-      const verification = verifyBackup(dest);
       try {
         fs.writeFileSync(
           sidecarPath(dest),

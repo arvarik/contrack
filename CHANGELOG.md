@@ -73,7 +73,8 @@ with an empty `DATA_DIR`.
   tracked people get a relationship score.
 - Pulse is one morning page: what is due today, **Up next** with **Catch up**,
   **Keeping up**, **Activity**, **Inbox** and **Coming up**. You can move and
-  hide its cards.
+  hide its cards. Overdue and Today follow your own time zone, not the
+  server's.
 
 ### Contacts
 
@@ -116,6 +117,10 @@ with an empty `DATA_DIR`.
 - Connectors sync a calendar (ICS), a mailbox (IMAP) and Google Contacts,
   Gmail and Calendar. Meetings and email appear on each person's timeline.
 - An import survives a dropped connection and never imports a row twice.
+  It saves in batches, so the server keeps answering while a large file
+  goes in.
+- A Google, mailbox or calendar call that stops answering times out, so one
+  stuck sync no longer holds up every connector.
 
 ### Duplicates
 

@@ -89,6 +89,22 @@ export function isAuthError(err: unknown): boolean {
 }
 
 /**
+ * How long one call to Google may take, from the request to the last byte.
+ *
+ * gaxios sets no timeout unless asked, so a connection that went half-open
+ * held a sync for ever: its scheduler slot and its owner's slot stayed taken
+ * until a restart, and two such syncs stopped every connector. Every call
+ * carries this timeout and the sync's signal, and the OAuth client gives the
+ * same timeout to the token refresh, which no call site makes itself.
+ */
+export const GOOGLE_CALL_TIMEOUT_MS = 60_000;
+
+/** The options every Google call takes: the timeout and the sync's signal. */
+function callOptions(signal?: AbortSignal) {
+  return { timeout: GOOGLE_CALL_TIMEOUT_MS, signal };
+}
+
+/**
  * Creates an OAuth2 client configured with instance credentials and user refresh tokens.
  */
 export function createOAuth2Client(secret: GoogleSecret) {
@@ -97,10 +113,11 @@ export function createOAuth2Client(secret: GoogleSecret) {
     throw new ConnectorConfigError("Google OAuth client is not configured");
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    creds.clientId,
-    creds.clientSecret,
-  );
+  const oauth2Client = new google.auth.OAuth2({
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
+    transporterOptions: { timeout: GOOGLE_CALL_TIMEOUT_MS },
+  });
 
   oauth2Client.setCredentials({
     refresh_token: secret.refreshToken,
@@ -184,7 +201,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     try {
       // Test credentials by fetching user info
       const oauth2 = google.oauth2({ version: "v2", auth });
-      const res = await oauth2.userinfo.get();
+      const res = await oauth2.userinfo.get({}, callOptions());
       const email = res.data.email || secret.email || "user";
       return {
         ok: true as const,
@@ -259,7 +276,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
           let res;
           try {
-            res = await people.people.connections.list(params);
+            res = await people.people.connections.list(
+              params,
+              callOptions(signal),
+            );
           } catch (err: unknown) {
             const code =
               (err as { code?: number; status?: number })?.code ??
@@ -268,7 +288,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               // Sync token expired: reset and perform full pull
               contactsSyncToken = undefined;
               delete params.syncToken;
-              res = await people.people.connections.list(params);
+              res = await people.people.connections.list(
+                params,
+                callOptions(signal),
+              );
             } else {
               throw err;
             }
@@ -360,12 +383,15 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             let pageToken: string | undefined;
             do {
               signal.throwIfAborted();
-              const res = await gmail.users.history.list({
-                userId: "me",
-                startHistoryId: gmailHistoryId,
-                historyTypes: ["messageAdded"],
-                pageToken,
-              });
+              const res = await gmail.users.history.list(
+                {
+                  userId: "me",
+                  startHistoryId: gmailHistoryId,
+                  historyTypes: ["messageAdded"],
+                  pageToken,
+                },
+                callOptions(signal),
+              );
 
               const histories = res.data.history || [];
               for (const h of histories) {
@@ -396,12 +422,15 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           let pageToken: string | undefined;
           do {
             signal.throwIfAborted();
-            const res = await gmail.users.messages.list({
-              userId: "me",
-              q: `after:${sinceSeconds}`,
-              maxResults: Math.min(100, maxMessages - messageIds.length),
-              pageToken,
-            });
+            const res = await gmail.users.messages.list(
+              {
+                userId: "me",
+                q: `after:${sinceSeconds}`,
+                maxResults: Math.min(100, maxMessages - messageIds.length),
+                pageToken,
+              },
+              callOptions(signal),
+            );
 
             const msgs = res.data.messages || [];
             for (const m of msgs) {
@@ -411,7 +440,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           } while (pageToken && messageIds.length < maxMessages);
 
           try {
-            const profile = await gmail.users.getProfile({ userId: "me" });
+            const profile = await gmail.users.getProfile(
+              { userId: "me" },
+              callOptions(signal),
+            );
             if (profile.data.historyId) {
               newHistoryId = profile.data.historyId;
             }
@@ -433,20 +465,23 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
           let meta;
           try {
-            meta = await gmail.users.messages.get({
-              userId: "me",
-              id: msgId,
-              format: "metadata",
-              metadataHeaders: [
-                "From",
-                "To",
-                "Cc",
-                "Subject",
-                "Date",
-                "Message-ID",
-                "In-Reply-To",
-              ],
-            });
+            meta = await gmail.users.messages.get(
+              {
+                userId: "me",
+                id: msgId,
+                format: "metadata",
+                metadataHeaders: [
+                  "From",
+                  "To",
+                  "Cc",
+                  "Subject",
+                  "Date",
+                  "Message-ID",
+                  "In-Reply-To",
+                ],
+              },
+              callOptions(signal),
+            );
           } catch (msgErr) {
             ctx.log(
               `Could not fetch metadata for Google message ${msgId}: ${(msgErr as Error).message}`,
@@ -501,11 +536,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             summariesAllowed(ctx.accountId)
           ) {
             try {
-              const full = await gmail.users.messages.get({
-                userId: "me",
-                id: msgId,
-                format: "full",
-              });
+              const full = await gmail.users.messages.get(
+                { userId: "me", id: msgId, format: "full" },
+                callOptions(signal),
+              );
               const bodyText = extractGmailBody(full.data.payload);
               if (bodyText) {
                 const summary = await summarizeEmail(norm.subject, bodyText, {
@@ -579,7 +613,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
           let res;
           try {
-            res = await calendar.events.list(params);
+            res = await calendar.events.list(params, callOptions(signal));
           } catch (err: unknown) {
             const code =
               (err as { code?: number; status?: number })?.code ??
@@ -589,7 +623,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               calendarSyncToken = undefined;
               delete params.syncToken;
               params.timeMin = new Date(ctx.since).toISOString();
-              res = await calendar.events.list(params);
+              res = await calendar.events.list(params, callOptions(signal));
             } else {
               throw err;
             }

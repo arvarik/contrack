@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
+import type Database from "better-sqlite3";
 import * as schema from "../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import {
@@ -68,6 +69,13 @@ function changedFields(
 }
 
 /**
+ * Rows an import writes in one transaction. The event loop runs between two
+ * batches, so other requests wait for one batch, about 0.1 s at 10,000
+ * contacts, and not for the whole file.
+ */
+const IMPORT_BATCH_ROWS = 250;
+
+/**
  * Dispatch the events of a write that touched many contacts with the AI
  * cache in batch mode, so the invalidations collapse into one per tier.
  */
@@ -77,6 +85,93 @@ function dispatchAsBatch(): void {
     dispatchEvents();
   } finally {
     aiCache.exitBatchMode();
+  }
+}
+
+/** The statements of `followUpTo`, prepared once, on first use. */
+let followUpPrepared: {
+  open: Database.Statement;
+  complete: Database.Statement;
+  move: Database.Statement;
+  add: Database.Statement;
+} | null = null;
+
+function followUpStatements() {
+  followUpPrepared ??= {
+    open: sqlite.prepare(
+      `SELECT id, dueAt FROM action_items
+        WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+        ORDER BY dueAt IS NULL, dueAt ASC`,
+    ),
+    complete: sqlite.prepare(
+      `UPDATE action_items
+          SET completedAt = datetime('now'), updatedAt = datetime('now')
+        WHERE id = ? AND ownerId = ?`,
+    ),
+    move: sqlite.prepare(
+      `UPDATE action_items SET dueAt = ?, updatedAt = datetime('now')
+        WHERE id = ? AND ownerId = ?`,
+    ),
+    add: sqlite.prepare(
+      `INSERT INTO action_items (id, contactId, ownerId, title, dueAt)
+       VALUES (?, ?, ?, 'Follow up', ?)`,
+    ),
+  };
+  return followUpPrepared;
+}
+
+/**
+ * A follow-up date in a contact write, as the follow-up task it stands for.
+ *
+ * `contacts.nextFollowUpAt` is a cache. The `action_items_sync_*` triggers
+ * hold it at the earliest due date of the contact's open follow-ups. A write
+ * to the column alone showed a follow-up that no list of tasks had, and the
+ * next task change put the column back. So a write never sets the column:
+ *
+ * - A date moves the contact's earliest open follow-up to that date, or
+ *   adds a "Follow up" task when it has none. The same date again changes
+ *   nothing, so a contact read and written back keeps its tasks.
+ * - Null completes the contact's open follow-ups, so it has none left.
+ *
+ * The trigger then sets the column from the tasks. Runs inside the
+ * caller's transaction.
+ */
+function followUpTo(
+  scope: Scope,
+  contactIds: readonly string[],
+  value: unknown,
+): void {
+  if (value === undefined || contactIds.length === 0) return;
+  const { open, complete, move, add } = followUpStatements();
+  for (const contactId of contactIds) {
+    const tasks = open.all(contactId, scope.ownerId) as {
+      id: string;
+      dueAt: string | null;
+    }[];
+    if (value === null) {
+      for (const task of tasks) {
+        complete.run(task.id, scope.ownerId);
+        recordEvent(scope, "action_item.completed", task.id, { contactId });
+      }
+      continue;
+    }
+    if (typeof value !== "string") continue;
+    const earliest = tasks[0]?.dueAt != null ? tasks[0] : undefined;
+    if (earliest?.dueAt === value) continue;
+    if (earliest) {
+      move.run(value, earliest.id, scope.ownerId);
+      recordEvent(scope, "action_item.updated", earliest.id, {
+        contactId,
+        changed: ["dueAt"],
+      });
+    } else {
+      const id = crypto.randomUUID();
+      add.run(id, contactId, scope.ownerId, value);
+      recordEvent(scope, "action_item.created", id, {
+        contactId,
+        interactionId: null,
+      });
+    }
   }
 }
 
@@ -133,7 +228,8 @@ function buildInsertValues(
     isGhost: body.isGhost ? 1 : 0,
     isArchived: body.isArchived ? 1 : 0,
     isTracked: isTracked ? 1 : 0,
-    nextFollowUpAt: body.nextFollowUpAt ?? null,
+    // Set from the follow-up task that `followUpTo` makes, by the trigger.
+    nextFollowUpAt: null,
     aiSummary: body.aiSummary ?? null,
     aiBackground: body.aiBackground ?? null,
     aiBriefing: body.aiBriefing ?? null,
@@ -361,6 +457,7 @@ export const contactService = {
         .values({ ...values, ownerId: scope.ownerId })
         .run();
       contactRepo.insertChildRecords(id, body, source);
+      followUpTo(scope, [id], body.nextFollowUpAt);
       recordEvent(scope, "contact.created", id, {
         origin: source === "manual" ? "manual" : "connector",
         autoEnrich: options.autoEnrich === true,
@@ -375,18 +472,25 @@ export const contactService = {
   },
 
   /**
-   * Write a batch of contacts in one transaction.
+   * Write many contacts.
    *
-   * With an `importId`, every row is written under a savepoint of its own and
-   * a row that throws is recorded as failed, with its payload, while the rest
-   * of the batch commits. The import's status moves to `imported` inside the
-   * same transaction, so the record can never say the contacts are there
-   * when they are not. `rowIndexes` gives each row its line in the import,
-   * which a retry uses to land a row back where it was.
+   * With an `importId`, the rows are written in batches of
+   * `IMPORT_BATCH_ROWS`, one transaction each, and the event loop runs
+   * between two batches. One transaction for a whole file held the database
+   * for seconds, and every other request on the instance waited: 3,000 rows
+   * kept `/healthz` waiting 2.9 s. A fresh run first records every row as
+   * `pending` with its payload. In a batch, every row is written under a
+   * savepoint of its own, and a row that throws is recorded as failed, with
+   * its payload, while the rest of the batch commits. The import's status
+   * moves to `imported` inside the last batch's transaction, so the record
+   * never says the contacts are there when they are not. A run that stops
+   * part way is settled by `importService` from its rows. `rowIndexes` gives
+   * each row its line in the import, which a retry uses to land a row back
+   * where it was.
    *
-   * Without an `importId` the batch is all or nothing, as it always was. The
-   * eval harness and the tests seed corpora through this path, and a partial
-   * corpus would be worse than a thrown one.
+   * Without an `importId` the write is one transaction, all or nothing, as
+   * it always was. The eval harness and the tests seed corpora through this
+   * path, and a partial corpus would be worse than a thrown one.
    */
   async bulkCreateContacts(
     scope: Scope,
@@ -408,11 +512,10 @@ export const contactService = {
       onProgress?.(i + 1, total, "Processing images");
     }
 
-    // Phase 2: Insert all contacts into SQLite in a single transaction
-    // Batch mode: defer all cache invalidations until the transaction completes.
-    // Without this, each contact insert triggers a full cache flush (N flushes
-    // for N contacts). With batch mode, exactly 1 flush after all inserts.
-    aiCache.enterBatchMode();
+    // Phase 2: write the contacts. The events of every transaction that
+    // commits are dispatched once at the end, in the cache's batch mode, so
+    // the invalidations are one per tier and not one per contact. Batch mode
+    // is not held across the batches' yields, where other requests run.
     let count = 0;
     let failed = 0;
     const createdIds: string[] = [];
@@ -432,6 +535,7 @@ export const contactService = {
           .values({ ...values, ownerId: scope.ownerId })
           .run();
         contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
+        followUpTo(scope, [id], c.nextFollowUpAt);
         // Under the row's savepoint, so a row that fails takes its event
         // with it.
         recordEvent(scope, "contact.created", id, {
@@ -441,8 +545,9 @@ export const contactService = {
         return id;
       });
 
-      const txn = sqlite.transaction(() => {
-        for (let i = 0; i < validContacts.length; i++) {
+      /** Rows `start` to `end` in one transaction. */
+      const txn = sqlite.transaction((start: number, end: number) => {
+        for (let i = start; i < end; i++) {
           const c = validContacts[i];
           const index = rowIndexes?.[i] ?? i;
           let id: string;
@@ -466,17 +571,35 @@ export const contactService = {
           if (importId)
             importService.rowDone(scope, importId, index, id, c.name);
         }
-        // Inside the transaction on purpose. The status and the contacts
-        // commit together or not at all.
-        if (importId) importService.markImported(scope, importId);
+        // Inside the transaction on purpose. The status and the last
+        // contacts commit together or not at all.
+        if (importId && end === total)
+          importService.markImported(scope, importId);
       });
-      txn();
-      // Inside the cache's batch mode, so the rows' invalidations are one.
-      dispatchEvents();
-      onProgress?.(total, total, "Complete");
+
+      if (!importId) {
+        txn(0, total);
+      } else {
+        if (!rowIndexes) {
+          importService.recordPending(
+            scope,
+            importId,
+            validContacts.map((payload, index) => ({ index, payload })),
+          );
+        }
+        // At least one batch, so an empty import is marked imported too.
+        let start = 0;
+        do {
+          if (start > 0) await new Promise<void>((done) => setImmediate(done));
+          const end = Math.min(start + IMPORT_BATCH_ROWS, total);
+          txn(start, end);
+          start = end;
+        } while (start < total);
+      }
     } finally {
-      aiCache.exitBatchMode();
+      dispatchAsBatch();
     }
+    onProgress?.(total, total, "Complete");
     return { count, createdIds, failed };
   },
 
@@ -552,6 +675,7 @@ export const contactService = {
             }
           }
         }
+        followUpTo(scope, changedIds, data.nextFollowUpAt);
       });
       updateFn();
       dispatchEvents();
@@ -596,6 +720,7 @@ export const contactService = {
         }
       }
 
+      followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
       if (changed.length > 0) {
         recordEvent(scope, "contact.updated", id, {
@@ -639,6 +764,7 @@ export const contactService = {
           ),
         )
         .run();
+      followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
       if (changed.length > 0) {
         recordEvent(scope, "contact.updated", id, {

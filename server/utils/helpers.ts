@@ -36,7 +36,8 @@ const UPDATABLE_CONTACT_FIELDS = [
   "avatarUrl",
   "cadenceDays",
   "lastContactedAt",
-  "nextFollowUpAt",
+  // `nextFollowUpAt` is deliberately absent: the follow-up tasks set it, and
+  // a date in a write becomes a task (`followUpTo` in contactService).
   "themeColor",
   "about",
   "pronouns",

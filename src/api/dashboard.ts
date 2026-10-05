@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { browserTimeZone } from "./search";
 import {
   queryOptions,
   useQuery,
@@ -88,7 +89,10 @@ export interface DailyInsight {
 const dashboardQuery = queryOptions({
   queryKey: ["dashboard"],
   queryFn: async ({ signal }): Promise<DashboardPayload> => {
-    const res = await apiFetch(`/dashboard`, { signal });
+    // The browser's zone, so Overdue and Today are the reader's days.
+    const tz = browserTimeZone();
+    const query = tz ? `?tz=${encodeURIComponent(tz)}` : "";
+    const res = await apiFetch(`/dashboard${query}`, { signal });
     if (!res.ok) throw new Error("Failed to fetch dashboard payload");
     return res.json();
   },

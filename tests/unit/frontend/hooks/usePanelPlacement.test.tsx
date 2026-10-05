@@ -260,4 +260,18 @@ describe("usePanelPlacement", () => {
     window.innerWidth = innerWidth;
     window.innerHeight = innerHeight;
   });
+
+  it("follows its trigger a frame after the height alone changes", async () => {
+    const panel = mount();
+    expect(panel.style.top).toBe("134px");
+    // The keyboard goes away, and the sheet with the trigger in it moves down.
+    triggerBox = { ...triggerBox, top: 458 };
+    act(() => {
+      window.innerHeight = 900;
+      fireEvent(window, new Event("resize"));
+    });
+    expect(panel.style.top).toBe("134px");
+    await act(() => new Promise((done) => requestAnimationFrame(done)));
+    expect(panel.style.top).toBe("492px");
+  });
 });

@@ -8,9 +8,12 @@
  * - Restricts to at most one connector per owner per tick
  * - Runs each sync inside runWithContext with owner scope
  * - Respects shutdown via AbortSignal
+ * - Gives each sync a deadline, after which its slots are free again
  *
  * A tick starts the syncs and returns. They run on, under these limits, and
- * stopConnectorScheduler aborts them at shutdown.
+ * stopConnectorScheduler aborts them at shutdown. A sync a person starts by
+ * hand (`POST /api/connectors/:id/sync`) takes the same lock through
+ * `startSync`, so a connector never runs twice at once.
  *
  * @module server/connectors/scheduler
  */
@@ -18,15 +21,84 @@
 import crypto from "node:crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
-import { scopeForOwnerId } from "../tenancy/scope.ts";
+import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { runNow } from "./service.ts";
 
+/**
+ * The longest one sync may run. Past it the sync's signal aborts, which ends
+ * every Google call and IMAP command it is waiting on. Every call has its own
+ * timeout too, so this is the floor under a sync that hangs some other way.
+ * A first sync of a large mailbox can take most of an hour.
+ */
+const SYNC_DEADLINE_MS = 2 * 60 * 60_000;
+
+/**
+ * How long an aborted sync may still hold its slots. A sync that does not
+ * end when it is aborted gives them back anyway, so it cannot stop every
+ * other connector until a restart.
+ */
+const ABORT_GRACE_MS = 30_000;
+
 let abortController: AbortController | null = null;
 
+/** The connectors syncing now. */
 const activeRuns = new Set<string>();
-const activeOwners = new Set<string>();
+/** The owners with a sync running, and how many. */
+const activeOwners = new Map<string, number>();
 const runningPromises = new Set<Promise<void>>();
+
+type RunResult = Awaited<ReturnType<typeof runNow>>;
+
+/**
+ * Run one connector's sync under the scheduler's rules.
+ *
+ * The connector is locked while it runs, and its owner counts as busy, so a
+ * tick starts nothing else for that owner. The sync stops at shutdown and at
+ * its deadline. The slots are free when the sync ends, or `ABORT_GRACE_MS`
+ * after its deadline if it does not end.
+ *
+ * @returns The run, or null when the connector is syncing already.
+ */
+export function startSync(
+  scope: Scope,
+  connector: { id: string; ownerId: string },
+  trigger: "schedule" | "manual",
+): Promise<RunResult> | null {
+  if (activeRuns.has(connector.id)) return null;
+  activeRuns.add(connector.id);
+  activeOwners.set(
+    connector.ownerId,
+    (activeOwners.get(connector.ownerId) ?? 0) + 1,
+  );
+
+  abortController ??= new AbortController();
+  const deadline = new AbortController();
+  const signal = AbortSignal.any([abortController.signal, deadline.signal]);
+
+  let freed = false;
+  const free = () => {
+    if (freed) return;
+    freed = true;
+    clearTimeout(timer);
+    activeRuns.delete(connector.id);
+    const owners = (activeOwners.get(connector.ownerId) ?? 1) - 1;
+    if (owners > 0) activeOwners.set(connector.ownerId, owners);
+    else activeOwners.delete(connector.ownerId);
+  };
+  const timer = setTimeout(() => {
+    log.warn("Connectors", `Sync of ${connector.id} passed its deadline`);
+    deadline.abort(new Error("The sync ran past its deadline and stopped."));
+    setTimeout(free, ABORT_GRACE_MS).unref();
+  }, SYNC_DEADLINE_MS);
+  timer.unref();
+
+  const run = runNow(scope, connector.id, trigger, signal);
+  const task = run.then(free, free);
+  runningPromises.add(task);
+  void task.finally(() => runningPromises.delete(task));
+  return run;
+}
 
 /**
  * `running` is true from the first tick until stopConnectorScheduler, the
@@ -97,35 +169,17 @@ export async function tickScheduler(): Promise<void> {
   }
 
   for (const candidate of candidates) {
-    activeRuns.add(candidate.id);
-    activeOwners.add(candidate.ownerId);
-
     const scope = scopeForOwnerId(candidate.ownerId);
     const rid = crypto.randomUUID().slice(0, 8);
-    const signal = abortController?.signal;
 
-    const task = runWithContext(
+    runWithContext(
       { requestId: `conn-sync-${rid}`, principal: null, scope },
-      async () => {
-        try {
-          await runNow(scope, candidate.id, "schedule", signal);
-        } catch (err: unknown) {
-          log.error(
-            "Connectors",
-            `Scheduler run failed for ${candidate.name}`,
-            {
-              error: err,
-            },
-          );
-        } finally {
-          activeRuns.delete(candidate.id);
-          activeOwners.delete(candidate.ownerId);
-        }
-      },
-    );
-
-    runningPromises.add(task);
-    task.finally(() => runningPromises.delete(task));
+      () => startSync(scope, candidate, "schedule"),
+    )?.catch((err: unknown) => {
+      log.error("Connectors", `Scheduler run failed for ${candidate.name}`, {
+        error: err,
+      });
+    });
   }
 }
 

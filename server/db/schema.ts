@@ -799,6 +799,8 @@ export const dedupeSuggestions = sqliteTable(
   },
   (t) => ({
     unq: unique().on(t.contactIdA, t.contactIdB),
+    // 0005: the UNIQUE index finds a pair by contactIdA, this one by contactIdB.
+    byContactB: index("idx_dedupe_sugg_contact_b").on(t.contactIdB),
   }),
 );
 

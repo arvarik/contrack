@@ -12,6 +12,7 @@ import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { normalizePhone } from "../utils/nlp/phone.ts";
+import { DUE_WHERE } from "./catchUp.ts";
 
 /** A contact the app shows: not a ghost, not in the trash, not merged away. */
 const IN_NETWORK =
@@ -215,25 +216,20 @@ export const mcpService = {
     return matches;
   },
 
-  /** The caller's contacts that are due for follow-up. */
+  /**
+   * The caller's contacts that are due for contact, by the rule in
+   * catchUp.ts that Pulse uses: a follow-up date that has come, or a
+   * tracked contact past its cadence. Trashed, merged, archived and ghost
+   * contacts are never due.
+   */
   getActionItems(scope: Scope) {
-    const now = new Date().toISOString();
     const rows = sqlite
       .prepare(
-        `
-      SELECT * FROM contacts
-      WHERE ownerId = ?
-        AND (
-          nextFollowUpAt <= ?
-          OR (
-             isTracked = 1 AND cadenceDays > 0 AND
-             datetime(COALESCE(lastContactedAt, trackedAt), '+' || cadenceDays || ' days') <= ?
-          )
-        )
-      ORDER BY lastContactedAt ASC
-    `,
+        `SELECT c.* FROM contacts c
+          WHERE c.ownerId = ? AND ${DUE_WHERE}
+          ORDER BY c.lastContactedAt ASC`,
       )
-      .all(scope.ownerId, now, now);
+      .all(scope.ownerId);
 
     return contactRepo.hydrateMany(rows);
   },

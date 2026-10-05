@@ -58,6 +58,46 @@ export function isPastDay(
   return due !== null && calendarDaysBetween(now, due) < 0;
 }
 
+/**
+ * The calendar day a timestamp falls on in a time zone, as `YYYY-MM-DD`.
+ *
+ * A date with no time (`2026-09-23`) is a day already and comes back as it
+ * is, in every zone. An instant is read as `parseServerTime` reads it and
+ * placed on the zone's calendar. With no zone, or one Intl does not know,
+ * the runtime's own. Returns null for a value that is not a date.
+ */
+export function dayInZone(
+  value: string | Date,
+  timeZone?: string,
+): string | null {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+  const date = typeof value === "string" ? parseServerTime(value) : value;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const parts = (zone?: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+  let found: Intl.DateTimeFormatPart[];
+  try {
+    found = parts(timeZone);
+  } catch {
+    found = parts();
+  }
+  const part = (type: string) => found.find((p) => p.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/** The day `days` after a `YYYY-MM-DD` day, on the same calendar. */
+export function addCalendarDays(day: string, days: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
 export type WeekStartPref = "monday" | "sunday";
 
 /**

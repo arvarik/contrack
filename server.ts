@@ -25,6 +25,7 @@ import { DATA_DIR } from "./server/utils/paths.ts";
 import { mailService } from "./server/services/mailService.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
 import { stopConnectorScheduler } from "./server/connectors/scheduler.ts";
+import { stopCpuWorker } from "./server/workers/cpuHost.ts";
 import { dispatchEvents, registerSubscribers } from "./server/events/index.ts";
 import {
   moduleJobs,
@@ -228,19 +229,17 @@ function registerShutdownHandlers(server: import("http").Server): void {
 
     // Start no more jobs, and abort the connector syncs in flight. A job
     // still running when the process exits is queued again at the next boot.
-    stopJobRunner().catch((err) => {
+    const jobsStopped = stopJobRunner().catch((err) => {
       log.warn("Server", `Job runner shutdown error: ${getErrorMessage(err)}`);
     });
-    stopConnectorScheduler().catch((err) => {
+    const syncsStopped = stopConnectorScheduler().catch((err) => {
       log.warn(
         "Server",
         `Connector scheduler shutdown error: ${getErrorMessage(err)}`,
       );
     });
 
-    // Refuse new connections, let in-flight requests finish, drop idle
-    // keep-alive sockets so they can't hold the close open for 65 seconds.
-    server.close(() => {
+    const closeDatabase = () => {
       try {
         // SQLite's own recommendation for long-lived connections: run
         // `optimize` on close so query-planner statistics reflect the
@@ -252,6 +251,23 @@ function registerShutdownHandlers(server: import("http").Server): void {
         log.warn("Server", `Database close failed: ${getErrorMessage(err)}`);
       }
       process.exit(0);
+    };
+
+    // Refuse new connections, let in-flight requests finish, drop idle
+    // keep-alive sockets so they can't hold the close open for 65 seconds.
+    // The database closes last: the jobs and the syncs write to it, and the
+    // CPU worker answers them, so all three stop first. The database used to
+    // close while a job or a snapshot could still be writing.
+    server.close(() => {
+      void Promise.all([jobsStopped, syncsStopped])
+        .then(() => stopCpuWorker())
+        .catch((err: unknown) => {
+          log.warn(
+            "Server",
+            `CPU worker shutdown error: ${getErrorMessage(err)}`,
+          );
+        })
+        .finally(closeDatabase);
     });
     server.closeIdleConnections();
 

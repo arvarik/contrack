@@ -116,7 +116,7 @@ router.post(
       );
       createdIds = result.createdIds;
     } catch (err) {
-      importService.releaseRetry(scope, id);
+      importService.releaseRetry(scope, id, getErrorMessage(err));
       throw err;
     }
 

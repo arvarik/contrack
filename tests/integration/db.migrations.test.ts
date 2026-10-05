@@ -58,6 +58,8 @@ const ADDED_SINCE_FIXTURE = [
   "oauth_tokens",
   "idx_oauth_tokens_grant",
   "api_tokens",
+  // 0005_dedupe_pair_index
+  "idx_dedupe_sugg_contact_b",
 ];
 
 interface MasterRow {

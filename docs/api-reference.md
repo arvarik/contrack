@@ -539,6 +539,9 @@ How an import behaves:
   `409 IMPORT_ID_IN_USE` when another account used the id.
 - **A failed row.** The other rows save. The row keeps its error, and
   `POST /api/imports/:id/retry` runs it again.
+- **A stop part way.** Rows save in batches of 250. An import that stops
+  after a batch keeps what it saved. Its other rows become failed rows that a
+  retry runs, and its status is `imported`.
 - **Duplicates.** When your `dedupeOnImport` preference is on (the default), a
   check compares the new contacts with your contacts and with the rest of the
   file. Pairs at or above your sensitivity preset merge at once. The rest
@@ -679,6 +682,10 @@ curl -X PATCH http://localhost:3210/api/action-items/52b907e9-6f64-478a-8ec0-d16
 
 The answer is the follow-up with `completedAt` set. A contact's
 `nextFollowUpAt` always holds the earliest due date of its open follow-ups.
+A contact write (`POST`, `PUT`, `PATCH` or a bulk update) that sends
+`nextFollowUpAt` changes the follow-ups, and the field follows them. A date
+moves the earliest open follow-up to that date, or adds a "Follow up" when
+there is none. `null` completes the open follow-ups.
 
 ## Lists
 
@@ -977,12 +984,12 @@ with `details.queued`. The merge routes for two or more contacts are in
 
 ## Pulse
 
-| Endpoint                              | What it does                                                                                                                                                                                         | Access    |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. | your data |
-| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` and `prevWeekTotals`, `streak`, `today` and `thisWeek`, in the server's time zone.                                                                       | your data |
-| `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                   | your data |
-| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs.                                                                         | your data |
+| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                           | Access    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. `tz` is your IANA time zone, for the days of `overdue`, `dueToday` and `upcoming`. Without it, the server's zone. | your data |
+| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` and `prevWeekTotals`, `streak`, `today` and `thisWeek`, in the server's time zone.                                                                                                                                                                                         | your data |
+| `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                                                                                                                                     | your data |
+| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs.                                                                                                                                                                                           | your data |
 
 In `GET /api/dashboard`, `catchUp` lists up to ten tracked contacts past their
 cadence, the furthest first. `tracking` holds `count`, the score `bands`,
@@ -1126,7 +1133,7 @@ tools, see [Connect a client](mcp.md#connect-a-client).
 | `GET /api/mcp`                   | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
 | `DELETE /api/mcp`                | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
 | `GET /api/query/contacts`        | Your contacts as raw rows, newest first. Filters `role` and `company` (contains) and `industry` (exact). `fields` is a comma list of columns to keep. `limit` and `offset`. Trashed, merged and ghost contacts are left out. | your data |
-| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence. Answers full contacts.                                                                                        | your data |
+| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence, by the rule Pulse uses. Archived, trashed, merged and ghost contacts are left out. Answers full contacts.     | your data |
 
 An MCP client and a script share the token rules: a token reads and writes the
 data of the account that created it.

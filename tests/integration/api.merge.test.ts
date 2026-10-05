@@ -7,6 +7,8 @@ import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
+import { dedupeService } from "../../server/services/dedupe/index.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 
 /**
  * Every merge runs through the route. Since #56 the manual and the automatic
@@ -162,12 +164,24 @@ describe("merge → audit log → undo", () => {
     expect(duplicateTasks[0].completedAt).toBeNull();
   });
 
-  it("recomputes follow-up task caches on both survivor and duplicate upon undo", async () => {
+  it("recomputes the follow-up and last-contacted caches on both sides, on merge and on undo", async () => {
     const primaryId = await createContact({ name: "Cache Primary" });
     const duplicateId = await createContact({ name: "Cache Duplicate" });
 
     await createTask(primaryId, "Later task", "2027-08-01T00:00:00.000Z");
     await createTask(duplicateId, "Earlier task", "2027-04-01T00:00:00.000Z");
+    // Only the duplicate has a history.
+    const call = "2026-10-03T12:00:00.000Z";
+    await request(app)
+      .post(`/api/contacts/${duplicateId}/interactions`)
+      .send({ type: "call", title: "Call", date: call })
+      .expect(201);
+    const lastContactedOf = (id: string) =>
+      (
+        sqlite
+          .prepare("SELECT lastContactedAt FROM contacts WHERE id = ?")
+          .get(id) as { lastContactedAt: string | null }
+      ).lastContactedAt;
 
     expect(nextFollowUpOf(primaryId)).toBe("2027-08-01T00:00:00.000Z");
     expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
@@ -179,6 +193,8 @@ describe("merge → audit log → undo", () => {
 
     expect(nextFollowUpOf(primaryId)).toBe("2027-04-01T00:00:00.000Z");
     expect(nextFollowUpOf(duplicateId)).toBeNull();
+    expect(lastContactedOf(primaryId)).toBe(call);
+    expect(lastContactedOf(duplicateId)).toBeNull();
 
     const logRes = await request(app).get("/api/dedupe/merge-log");
     const entry = logRes.body.entries.find(
@@ -195,6 +211,8 @@ describe("merge → audit log → undo", () => {
     // Caches are restored on both contacts!
     expect(nextFollowUpOf(primaryId)).toBe("2027-08-01T00:00:00.000Z");
     expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
+    expect(lastContactedOf(primaryId)).toBeNull();
+    expect(lastContactedOf(duplicateId)).toBe(call);
   });
 
   it("rejects self-merge and missing ids", async () => {
@@ -209,6 +227,16 @@ describe("merge → audit log → undo", () => {
       .post("/api/contacts/merge")
       .send({ primaryId: id });
     expect(missing.status).toBe(400);
+
+    // The batch route used to answer "merged 1" and hide the contact.
+    const batch = await request(app)
+      .post("/api/contacts/merge-clusters")
+      .send({ clusters: [{ primaryId: id, duplicateIds: [id] }] });
+    expect(batch.status).toBe(400);
+    expect(() =>
+      dedupeService.mergeContacts(scopeForOwnerId(localOwnerId()), id, id, "t"),
+    ).toThrow("Cannot merge a contact with itself");
+    expect((await slimContacts()).some((c) => c.id === id)).toBe(true);
   });
 });
 
