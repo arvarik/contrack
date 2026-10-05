@@ -58,6 +58,7 @@ import {
   sameItem,
   sameLabel,
   sameOrg,
+  sameSchool,
   textKey,
 } from "./normalize.ts";
 import {
@@ -1188,7 +1189,8 @@ function degreeWithoutField(
  *   date calls an old job current; the records come from the person's own
  *   profile.
  * - What carries no information goes, and nothing else: a profile that is a
- *   site's front page ("https://medium.com"), a general mailbox
+ *   profile site's front page ("https://medium.com", never a person's own
+ *   site such as "https://rowanvale.example"), a general mailbox
  *   ("info@"), a list item that says nothing was found, an item that
  *   repeats another, and a hometown that is the location. On 20 contacts
  *   the owner checked, 3 of 25 wrong facts were front pages (2026-10-05).
@@ -1262,7 +1264,9 @@ export function tidyExtraction(
     ...(website &&
       !(isFrontPage(website) && isPlatform(website)) && { website }),
     ...(data.socialLinks && {
-      socialLinks: data.socialLinks.filter((link) => !isFrontPage(link.url)),
+      socialLinks: data.socialLinks.filter(
+        (link) => !(isFrontPage(link.url) && isPlatform(link.url)),
+      ),
     }),
     ...(data.emails && {
       emails: data.emails.filter(
@@ -1322,16 +1326,21 @@ function isPlatform(url: string): boolean {
 
 /**
  * True when two places are one: the same city and region, or the same city
- * when one names only the city. "Seattle, Washington" is "Seattle,
- * Washington, United States", and "Portland, Maine" is not "Portland,
- * Oregon".
+ * when one names only the city. A region may be its two-letter code. "Seattle,
+ * Washington" is "Seattle, Washington, United States", "Boston, MA" is
+ * "Boston, Massachusetts", and "Portland, Maine" is not "Portland, Oregon".
  */
 function samePlace(a: string, b: string): boolean {
   const x = a.split(",").map(textKey).filter(Boolean);
   const y = b.split(",").map(textKey).filter(Boolean);
-  if (x.length === 0 || y.length === 0) return false;
-  const parts = Math.min(x.length, y.length, 2);
-  return x.slice(0, parts).join("|") === y.slice(0, parts).join("|");
+  if (x.length === 0 || y.length === 0 || x[0] !== y[0]) return false;
+  if (x.length === 1 || y.length === 1) return true;
+  const [p, q] = [x[1], y[1]];
+  return (
+    p === q ||
+    (p.length === 2 && q.startsWith(p[0])) ||
+    (q.length === 2 && p.startsWith(q[0]))
+  );
 }
 
 /**
@@ -1340,21 +1349,32 @@ function samePlace(a: string, b: string): boolean {
  * Given nothing but the records' role and company, the extraction still
  * writes a headline, an industry, tags and a job row from them. Saved, a
  * run that found nothing read as "added 4" (in 7 of 15 runs of one
- * prompt, 2026-10-05). Those fields, and a job that only repeats the
- * records' current one, are no find. Everything else is.
+ * prompt, 2026-10-05). Those fields are no find, and neither is what the
+ * plain ask told the model and its answer repeats: the records' current
+ * job, a school, the city or a profile they have. Everything else is.
  *
  * @param data - The extraction, after `tidyExtraction`.
  * @param contact - The records the prompt was given.
  */
 export function hasNewFacts(
   data: AISearchOutput,
-  contact: Pick<HydratedContact, "company" | "role" | "socialLinks">,
+  contact: Pick<HydratedContact, "company" | "role" | "socialLinks"> &
+    Partial<Pick<HydratedContact, "education" | "location" | "addresses">>,
 ): boolean {
+  /** A profile address as the records compare it: no scheme, no "www.". */
+  const link = (url: string) =>
+    linkedInHandle(url) ??
+    url
+      .toLowerCase()
+      .replace(/^https?:\/\/(www\.)?/, "")
+      .replace(/\/$/, "");
   const own = new Set(
-    (contact.socialLinks ?? []).map((link) =>
-      link.url.toLowerCase().replace(/\/$/, ""),
-    ),
+    (contact.socialLinks ?? []).map((entry) => link(entry.url)),
   );
+  const place = researchPlace({
+    location: contact.location ?? null,
+    addresses: contact.addresses ?? [],
+  });
   const recordsJob = (job: NonNullable<AISearchOutput["experience"]>[number]) =>
     !!contact.company &&
     sameOrg(job.company, contact.company) &&
@@ -1365,19 +1385,22 @@ export function hasNewFacts(
   return (
     !!(data.company && !contact.company) ||
     !!(data.role && !contact.role) ||
-    !!data.location ||
+    !!(data.location && !(place && samePlace(data.location, place))) ||
     !!data.website ||
     !!data.birthday ||
     !!data.pronouns ||
-    !!data.education?.length ||
+    !!data.education?.some(
+      (entry) =>
+        !(contact.education ?? []).some((known) =>
+          sameSchool(known.school, entry.school),
+        ),
+    ) ||
     !!data.emails?.length ||
     !!data.phones?.length ||
     !!data.addresses?.length ||
     !!data.interests?.length ||
     !!data.attributes?.length ||
-    !!data.socialLinks?.some(
-      (link) => !own.has(link.url.toLowerCase().replace(/\/$/, "")),
-    ) ||
+    !!data.socialLinks?.some((entry) => !own.has(link(entry.url))) ||
     !!data.experience?.some((job) => !recordsJob(job))
   );
 }

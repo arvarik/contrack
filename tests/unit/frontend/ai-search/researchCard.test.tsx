@@ -224,6 +224,16 @@ describe("when the latest research found little", () => {
     ).toBeTruthy();
   });
 
+  it("does not call a run that found nothing new thin", () => {
+    render(
+      <ResearchCard
+        contact={researched({ outcome: "nothing-new", sourceCount: 3 })}
+        onAddDetail={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("region", { name: /found little/ })).toBeNull();
+  });
+
   it("offers Search again once a detail was added on the page", () => {
     const contact = researched({});
     const view = render(
@@ -349,6 +359,33 @@ describe("Not this person", () => {
     expect(
       screen.getByText("Someone else with this name, taken back"),
     ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /^Search of .*, actions$/ }),
+    ).toBeNull();
+  });
+
+  it("is not offered for a run from before runs named what they added, nor on an archived contact", () => {
+    const legacy = JSON.parse(found().aiResearch!);
+    legacy.addedEntries = legacy.addedEntries.map(
+      ({ at: _at, ...entry }: { at: string }) => entry,
+    );
+    const { unmount } = render(
+      <ResearchCard
+        contact={{ ...found(), aiResearch: JSON.stringify(legacy) }}
+        onAddDetail={vi.fn()}
+      />,
+    );
+    // It could not take back what it added, so it is not offered.
+    expect(
+      screen.queryByRole("button", { name: /^Search of .*, actions$/ }),
+    ).toBeNull();
+    unmount();
+    render(
+      <ResearchCard
+        contact={{ ...found(), isArchived: true } as Contact}
+        onAddDetail={vi.fn()}
+      />,
+    );
     expect(
       screen.queryByRole("button", { name: /^Search of .*, actions$/ }),
     ).toBeNull();

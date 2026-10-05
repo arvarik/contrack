@@ -167,7 +167,8 @@ export function detailsAdded(run: ResearchRun): number {
  *
  * - `no-page`: the search found no page about the person.
  * - `rejected`: the person said the search found someone else.
- * - `thin`: it found two details or fewer.
+ * - `thin`: it added two details or fewer. A run that found nothing new is
+ *   not thin: the records may hold all there is.
  */
 export type NextStepReason = "no-page" | "rejected" | "thin";
 
@@ -179,7 +180,7 @@ export function nextStepReason(
   if (!last || last.models.length === 0) return null;
   if (last.rejected) return "rejected";
   if (last.outcome === "no-public-info") return "no-page";
-  return detailsAdded(last) <= 2 ? "thin" : null;
+  return last.outcome === "added" && detailsAdded(last) <= 2 ? "thin" : null;
 }
 
 /**

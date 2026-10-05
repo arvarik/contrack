@@ -171,15 +171,17 @@ describe("enrichment integrity", () => {
 });
 
 describe("batch research lifecycle", () => {
-  it("records no public information, once, for a search that read nothing", async () => {
-    // It searched, so asking again would pay twice for the same pages.
+  it("asks once more when a search returned no words, then says it had no answer", async () => {
+    // A search with no words is a call that failed, not a page that said
+    // nothing about the person.
     vi.mocked(generateFor).mockResolvedValue(reply(""));
-    const result = await researchWith("provider-search", {
-      scope: scope(),
-      contact: enrichmentContact(scope(), id),
-    });
-    expect(result.outcome).toBe("no-public-info");
-    expect(generateFor).toHaveBeenCalledTimes(1);
+    await expect(
+      researchWith("provider-search", {
+        scope: scope(),
+        contact: enrichmentContact(scope(), id),
+      }),
+    ).rejects.toMatchObject({ code: "AI_NO_ANSWER" });
+    expect(generateFor).toHaveBeenCalledTimes(2);
   });
   it("stops before extraction when the provider runs no search", async () => {
     vi.mocked(generateFor).mockResolvedValue({

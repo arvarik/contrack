@@ -53,6 +53,7 @@ import {
   sameLabel,
   sameOrg,
   sameSchool,
+  sameTitle,
 } from "../../../../server/services/aiSearch/normalize.ts";
 import { resolveRedirects } from "../../../../server/ai/citations.ts";
 import {
@@ -1057,16 +1058,21 @@ describe("tidyExtraction", () => {
     expect(tidy.attributes).toEqual([
       { name: "Publications", value: "Tidal Patterns in Harbor Sediment" },
     ]);
-    // A person's own site, and a hometown that is not the location, stay.
+    // A person's own site, as a website or as a profile, and a hometown that
+    // is not the location, stay.
     const kept = tidyExtraction(
       parseExtraction({
         website: "https://rowanvale.example",
+        socialLinks: [
+          { platform: "substack", url: "https://rowan.substack.com" },
+        ],
         location: "Portland, Oregon",
         attributes: [{ name: "Hometown", value: "Portland, Maine" }],
       }).data,
       { company: null },
     );
     expect(kept.website).toBe("https://rowanvale.example");
+    expect(kept.socialLinks).toHaveLength(1);
     expect(kept.attributes).toEqual([
       { name: "Hometown", value: "Portland, Maine" },
     ]);
@@ -1105,6 +1111,32 @@ describe("hasNewFacts", () => {
           ],
         }),
         records,
+      ),
+    ).toBe(false);
+  });
+
+  it("reads what the plain ask sent and the answer repeats as no find", () => {
+    const known = contact({
+      location: "Boston, MA",
+      education: [
+        { school: "University of Example" },
+      ] as HydratedContact["education"],
+      socialLinks: [
+        { platform: "linkedin", url: "https://www.linkedin.com/in/rowanv" },
+      ] as HydratedContact["socialLinks"],
+    });
+    expect(
+      hasNewFacts(
+        facts({
+          location: "Boston, Massachusetts, United States",
+          education: [
+            { school: "Harbor School of Engineering at University of Example" },
+          ],
+          socialLinks: [
+            { platform: "linkedin", url: "https://linkedin.com/in/rowanv" },
+          ],
+        }),
+        known,
       ),
     ).toBe(false);
   });
@@ -1176,7 +1208,18 @@ describe("one organization, however it is written", () => {
     expect(sameLabel("Track and field", "Cross country running")).toBe(false);
   });
 
-  it("reads a job title worded two ways as one, and two roles as two", () => {
+  it("reads a job title worded two ways as one, and two roles or a promotion as two", () => {
+    expect(sameTitle("Editor, Writer", "Editor and Writer")).toBe(true);
+    expect(sameTitle("Researcher", "Department of Surgery Researcher")).toBe(
+      true,
+    );
+    for (const [a, b] of [
+      ["Analyst", "Senior Analyst"],
+      ["Professor", "Assistant Professor"],
+      ["Engineer", "Engineering Manager"],
+      ["Graduate Research Assistant", "Graduate Teaching Assistant"],
+    ])
+      expect(sameTitle(a, b), `${a} / ${b}`).toBe(false);
     expect(sameLabel("Editor, Writer", "Editor and Writer")).toBe(true);
     expect(
       sameLabel(
@@ -1215,6 +1258,8 @@ describe("one organization, however it is written", () => {
     ["University of Example at Austin", "University of Example at Dallas"],
     ["School of Engineering, Example Tech", "School of Engineering, Northwind"],
     ["Example College", "Example University"],
+    ["University of Example", "Example State University"],
+    ["Business School", "Northwind Business School"],
   ])("reads %s and %s as two schools", (a, b) => {
     expect(sameSchool(a, b)).toBe(false);
   });

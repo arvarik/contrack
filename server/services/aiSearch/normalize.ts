@@ -7,7 +7,8 @@
 //   orgKey / sameOrg  one employer or school, however a page writes it
 //   textKey           text compared without case or punctuation
 //   degreeLevel       one degree, however a page names it: "AB" is a "BA"
-//   sameLabel         one interest, tag or job title, however a page words it
+//   sameLabel         one interest or tag, however a page words it
+//   sameTitle         one job title worded two ways, never a promotion
 //   sameSchool        one school, however a page names its parts
 //   listItems / sameItem  the items of a list value, and one item however
 //                     a page cuts or numbers it
@@ -138,10 +139,13 @@ function schoolParts(value: string): string[] {
 
 /**
  * True when two school names are one school: one name, as `sameOrg` reads
- * it, or every part of the name with fewer parts in the other. Pages name a
- * school with or without its unit: "Example University" and "Harbor
- * School of Engineering at Example University" are one, and two
- * campuses, "University of Example - Riverside" and "- Lakeside", are two.
+ * it, or every part of the name with fewer parts in the other, at least one
+ * of them the same name. Pages name a school with or without its unit:
+ * "Example University" and "Harbor School of Engineering at Example
+ * University" are one, and so are two wordings of one unit beside the same
+ * university. Two campuses, "University of Example - Riverside" and "-
+ * Lakeside", are two, and so are "University of Example" and "Example State
+ * University": a unit may be worded two ways, a university may not.
  */
 export function sameSchool(
   a: string | null | undefined,
@@ -152,8 +156,57 @@ export function sameSchool(
   const y = schoolParts(b ?? "");
   if (x.length === 0 || y.length === 0) return false;
   const [fewer, more] = x.length <= y.length ? [x, y] : [y, x];
-  return fewer.every((part) =>
-    more.some((other) => sameOrg(part, other) || sameLabel(part, other)),
+  const unit = (part: string) => SCHOOL_UNIT.test(part);
+  return (
+    fewer.some((part) => more.some((other) => sameOrg(part, other))) &&
+    fewer.every((part) =>
+      more.some(
+        (other) =>
+          sameOrg(part, other) ||
+          (unit(part) && unit(other) && sameLabel(part, other)),
+      ),
+    )
+  );
+}
+
+/** Words of rank in a job title: the step from one job to the next. */
+const RANK_STEMS = new Set(
+  [
+    "senior",
+    "sr",
+    "junior",
+    "jr",
+    "lead",
+    "principal",
+    "staff",
+    "chief",
+    "head",
+    "assistant",
+    "associate",
+    "deputy",
+    "vice",
+    "executive",
+    "manager",
+    "director",
+    "intern",
+    "trainee",
+  ].map((word) => word.slice(0, 5)),
+);
+
+/**
+ * True when two job titles are one title worded two ways: every word of one
+ * is in the other (`sameLabel`), and no word between them is a rank.
+ * "Editor, Writer" and "Editor and Writer" are one, and so are
+ * "Researcher" and "Department of Surgery Researcher". "Analyst" and
+ * "Senior Analyst" are a promotion, and so are "Engineer" and "Engineering
+ * Manager".
+ */
+export function sameTitle(a: string, b: string): boolean {
+  if (!sameLabel(a, b)) return false;
+  const x = labelStems(a);
+  const y = labelStems(b);
+  return ![...x, ...y].some(
+    (stem) => !(x.has(stem) && y.has(stem)) && RANK_STEMS.has(stem),
   );
 }
 

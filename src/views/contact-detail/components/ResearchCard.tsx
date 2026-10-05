@@ -574,7 +574,9 @@ export function ResearchCard({
   const [allFindings, setAllFindings] = useState(false);
   const [allSources, setAllSources] = useState(false);
   const [rejecting, setRejecting] = useState<ResearchRun | null>(null);
-  const [justRejected, setJustRejected] = useState(false);
+  // The run just taken back, for focus: its menu is gone.
+  const [takenBack, setTakenBack] = useState<string | null>(null);
+  const historyHeading = useRef<HTMLHeadingElement>(null);
   const reject = useRejectResearchRun();
   const first = contact.firstName || contact.name.split(" ")[0];
 
@@ -607,10 +609,15 @@ export function ResearchCard({
     (record?.addedEntries ?? []).filter((entry) => entry.at === run.at).length;
   const pagesOf = (run: ResearchRun) =>
     sources.filter((source) => source.firstSeenAt === run.at).length;
+  // A run from before research tied what it added to the run cannot take
+  // it back, so it is not offered. A run that added nothing can still have
+  // its pages left out. Archived contacts and ghosts are not researched.
   const canReject = (run: ResearchRun) =>
     !run.rejected &&
     run.models.length > 0 &&
-    (addedBy(run) > 0 || pagesOf(run) > 0);
+    !contact.isArchived &&
+    !contact.isGhost &&
+    (addedBy(run) > 0 || (run.added.length === 0 && pagesOf(run) > 0));
   const reason = nextStepReason(runs);
   const lastRun = runs.at(-1);
   const showNextSteps =
@@ -670,14 +677,16 @@ export function ResearchCard({
           contact={contact}
           lastRun={lastRun}
           reason={reason}
-          focusHeading={justRejected && reason === "rejected"}
+          focusHeading={takenBack === lastRun.at}
           onAddDetail={onAddDetail}
         />
       )}
 
       {runs.length > 0 && (
         <div className="mt-5">
-          <h3 className={FIELD_LABEL}>History</h3>
+          <h3 ref={historyHeading} tabIndex={-1} className={FIELD_LABEL}>
+            History
+          </h3>
           <ol className="mt-2 space-y-2">
             {[...runs].reverse().map((run, index) => (
               <li
@@ -858,7 +867,11 @@ export function ResearchCard({
             {
               onSuccess: ({ removed }) => {
                 setRejecting(null);
-                setJustRejected(true);
+                setTakenBack(rejecting.at);
+                // The latest run's panel takes focus. An earlier run's menu
+                // is gone, so focus goes to the history it was in.
+                if (rejecting.at !== lastRun?.at)
+                  requestAnimationFrame(() => historyHeading.current?.focus());
                 toast.success(
                   removed > 0
                     ? `Took back ${removed} detail${removed === 1 ? "" : "s"}`

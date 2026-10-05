@@ -24,9 +24,10 @@
 //
 // Whether an ask searched is read from the search metadata (the searches it
 // reports, or the pages it cites), never from its words: without a search, a reply still says "no matching pages were found
-// in the search results". When no ask searched, the plain one is asked once
-// more. When none searched then either, the run fails as AI_NO_SEARCH and
-// records nothing. When an ask searched and its pages hold nothing about the
+// in the search results". When no ask searched, or one searched and said
+// nothing, the plain one is asked once more. When none searched then
+// either, the run fails as AI_NO_SEARCH, or AI_NO_ANSWER when nothing was
+// said, and records nothing. When an ask searched and its pages hold nothing about the
 // person, the run records no public information.
 //
 // Before the extraction, pages that can only mislead are left out, with the
@@ -98,7 +99,14 @@ function isJobPosting(url: string): boolean {
   }
 }
 
-/** The answer without the passages that only left-out pages back. */
+/** A passage this short could be words inside another passage. */
+const MIN_PASSAGE_CHARS = 20;
+
+/**
+ * The answer without the passages that only left-out pages back. Each
+ * passage is cut once, where it stands: the same words elsewhere, backed by
+ * a page that counts, stay.
+ */
 function withoutPassages(
   text: string,
   supports: AIGenerateResult["supports"],
@@ -106,7 +114,8 @@ function withoutPassages(
 ): string {
   let kept = text;
   for (const support of supports ?? [])
-    if (support.uris.every(leftOut)) kept = kept.split(support.text).join("");
+    if (support.text.length >= MIN_PASSAGE_CHARS && support.uris.every(leftOut))
+      kept = kept.replace(support.text, "");
   return kept.trim();
 }
 
@@ -133,6 +142,9 @@ async function searchWithProvider(
    */
   const searched = (answer: AIGenerateResult) =>
     (answer.searchQueries?.length ?? 0) > 0 || sourcesOf(answer).length > 0;
+  /** The ask searched and said something: an answer to read. */
+  const answered = (answer: AIGenerateResult) =>
+    searched(answer) && !!answer.text.trim();
   // Every ask is a paid call, so every ask is counted in AI usage, and one
   // that ran no search is counted apart, so the usage page shows it.
   // Thinking counts against the token budget, and a person with a long
@@ -179,10 +191,12 @@ async function searchWithProvider(
   // Every first ask failed at the provider: its error says why.
   if (answers.length === 0)
     return failed((firstRound[0] as PromiseRejectedResult).reason);
-  if (!answers.some(searched)) {
+  // No search, or a search and no words: Gemini sometimes spends a whole
+  // call thinking and returns nothing, and a later try can succeed.
+  if (!answers.some(answered)) {
     log.info(
       "ProviderSearch",
-      `${answers[0].model} ran no search for ${contact.id}; asking once more`,
+      `${answers[0].model} ${answers.some(searched) ? "returned no answer" : "ran no search"} for ${contact.id}; asking once more`,
     );
     const again = await ask([plain]);
     signal?.throwIfAborted();
@@ -192,9 +206,9 @@ async function searchWithProvider(
       return failed((again[0] as PromiseRejectedResult).reason);
     answers = [...answers, ...retried];
   }
-  if (!answers.some(searched))
+  if (!answers.some(answered))
     return failed(
-      answers.some((answer) => answer.text.trim())
+      !answers.some(searched) && answers.some((answer) => answer.text.trim())
         ? new AppError(
             "The web search model did not run a web search for this contact. No contact fields changed. Try again, or choose another web search model in Settings → Administration → AI.",
             502,
@@ -209,7 +223,7 @@ async function searchWithProvider(
 
   // Real addresses for Gemini's redirect links, before anything is stored,
   // and each fact's own page from the passages the provider matched.
-  const searchedAnswers = answers.filter(searched);
+  const searchedAnswers = answers.filter(answered);
   const queries = [
     ...new Set(searchedAnswers.flatMap((answer) => answer.searchQueries ?? [])),
   ];

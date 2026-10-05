@@ -38,6 +38,7 @@ import {
   sameLabel,
   sameOrg,
   sameSchool,
+  sameTitle,
   textKey,
 } from "./normalize.ts";
 import {
@@ -47,6 +48,8 @@ import {
 } from "./contactSnapshot.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
+import { pinState } from "../geocoding/index.ts";
+import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import {
   MAX_ADDED_ENTRIES,
@@ -216,6 +219,10 @@ function recordRun(
     ),
     sources: sources.slice(-MAX_RESEARCH_SOURCES),
     ...(entries.length > 0 && { addedEntries: entries }),
+    // The pages of runs taken back stay left out, run after run.
+    ...(history?.rejectedSources?.length && {
+      rejectedSources: history.rejectedSources,
+    }),
   };
 }
 
@@ -334,7 +341,12 @@ export function mergeSearchResult(
         rejectedRuns.has(entry.at) &&
         entry.value === value.slice(0, 300),
     );
-  const runAt = new Date().toISOString();
+  // A run is named by when it ran, and "Not this person" finds it by that:
+  // two runs never share one.
+  const lastAt = history?.runs.at(-1)?.at;
+  let runAt = new Date().toISOString();
+  if (lastAt && runAt <= lastAt)
+    runAt = new Date(Date.parse(lastAt) + 1).toISOString();
 
   let fieldsUpdated = 0;
   const added: ResearchAddition[] = [];
@@ -473,13 +485,15 @@ export function mergeSearchResult(
     // One employer however it is written ("Kestrel" and "Kestrel Securities
     // International, Inc."), and either the same start month, however the
     // title is worded, or one title worded two ways ("Editor, Writer" and
-    // "Editor and Writer": every word of one in the other, `sameLabel`)
-    // with the same start year when both sides have one. A second round
+    // "Editor and Writer": every word of one in the other, and no rank
+    // between them, `sameTitle`) with the same start year when both sides
+    // have one. A second round
     // wrote "Associate" for a saved "Associate, Restructuring Group" that
     // started the same month (2026-09-26), and of 2,646 simulated second
     // rounds, 0.66 a round added a reworded title again (2026-10-05).
-    // "Research Assistant" and "Teaching Assistant" stay two, and so do two
-    // titles with different start years.
+    // "Research Assistant" and "Teaching Assistant" stay two, and so do
+    // "Analyst" and "Senior Analyst", and two titles with different start
+    // years.
     const month = (d?: string | null) =>
       d && d.length >= 7 ? d.slice(0, 7) : "";
     const sameJob = (a: JobEntry, b: JobEntry) =>
@@ -487,7 +501,7 @@ export function mergeSearchResult(
       ((month(a.startDate) !== "" &&
         month(a.startDate) === month(b.startDate)) ||
         ((textKey(a.role) === textKey(b.role) ||
-          sameLabel(a.role ?? "", b.role ?? "")) &&
+          sameTitle(a.role ?? "", b.role ?? "")) &&
           (!a.startDate ||
             !b.startDate ||
             getYear(a.startDate) === getYear(b.startDate))));
@@ -571,28 +585,45 @@ export function mergeSearchResult(
     Array.isArray(searchResult.attributes) &&
     searchResult.attributes.length > 0
   ) {
-    const kindsAdded = new Set(
-      before("attributes").map((e) => e.value.toLowerCase()),
+    const kind = (name: string) => name.toLowerCase();
+    // Every kind research made, and the ones a run not taken back made: a
+    // kind the person deleted stays deleted, and one taken back as someone
+    // else's may come again with the right person's items.
+    const kindsMade = new Set(before("attributes").map((e) => kind(e.value)));
+    const kindsKept = new Set(
+      before("attributes")
+        .filter((e) => !e.at || !rejectedRuns.has(e.at))
+        .map((e) => kind(e.value)),
     );
+    // The items research added to a kind, from the list it made and one by
+    // one, that the contact does not have now: removed, or taken back.
+    const goneItems = (name: string, have: string[]) =>
+      [
+        ...before("attributes")
+          .filter((e) => kind(e.value) === kind(name))
+          .flatMap((e) => listItems(e.detail)),
+        ...before("attributeItems")
+          .filter((e) => kind(e.value) === kind(name) && !!e.detail)
+          .map((e) => e.detail!),
+      ].filter((item) => !have.some((other) => sameItem(other, item)));
     const kept: NonNullable<typeof searchResult.attributes> = [];
     for (const attribute of searchResult.attributes) {
       const saved = existing.attributes.find(
-        (entry) => entry.name.toLowerCase() === attribute.name.toLowerCase(),
+        (entry) => kind(entry.name) === kind(attribute.name),
       );
       if (!saved) {
-        if (!kindsAdded.has(attribute.name.toLowerCase())) kept.push(attribute);
+        if (kindsKept.has(kind(attribute.name))) continue;
+        const gone = goneItems(attribute.name, []);
+        const items = listItems(attribute.value).filter(
+          (item) => !gone.some((other) => sameItem(other, item)),
+        );
+        if (items.length > 0)
+          kept.push({ ...attribute, value: items.join("; ") });
         continue;
       }
-      if (!kindsAdded.has(saved.name.toLowerCase())) continue;
+      if (!kindsMade.has(kind(saved.name))) continue;
       const have = listItems(saved.value);
-      const removedItems = before("attributeItems")
-        .filter(
-          (entry) =>
-            entry.value.toLowerCase() === saved.name.toLowerCase() &&
-            !!entry.detail &&
-            !have.some((item) => sameItem(item, entry.detail!)),
-        )
-        .map((entry) => entry.detail!);
+      const removedItems = goneItems(saved.name, have);
       const fresh = listItems(attribute.value).filter(
         (item) =>
           !have.some((other) => sameItem(other, item)) &&
@@ -860,7 +891,8 @@ function rowsFor(
  * @param runAt - The run, by its `at`.
  * @returns How many fields, entries and list items were taken back.
  * @throws AppError 404 when the contact has no such run, or it was marked
- *   already, and 409 while research runs for the contact.
+ *   already. 409 while research runs for the contact, or for a run from
+ *   before entries named their run (`RESEARCH_RUN_UNTRACKED`).
  */
 export function rejectResearchRun(
   scope: Scope,
@@ -879,6 +911,14 @@ export function rejectResearchRun(
     const entries = (record.addedEntries ?? []).filter(
       (entry) => entry.at === runAt,
     );
+    // A run from before entries named their run: what it added cannot be
+    // told from what other runs added, so nothing would go but its pages.
+    if (run.added.length > 0 && entries.length === 0)
+      throw new AppError(
+        "This search is from before research recorded what each search added, so it cannot be taken back. Remove its details by hand.",
+        409,
+        { code: "RESEARCH_RUN_UNTRACKED" },
+      );
 
     const rows: Array<{ table: string; id: string }> = [];
     const attributeValues = new Map<string, string | null>();
@@ -943,7 +983,22 @@ export function rejectResearchRun(
     const checked = researchRecordSchema.parse(next);
 
     const removed = rows.length + attributeValues.size + new Set(cleared).size;
+    const fields = [...new Set(cleared)];
+    // What changed, in the words a person's edit uses, so the search index,
+    // the caches and the geocoder react the same way.
+    const changed = [
+      ...fields,
+      ...new Set(
+        rows.map(({ table }) =>
+          Object.keys(ENTRY_TABLES).find(
+            (field) => ENTRY_TABLES[field] === table,
+          )!,
+        ),
+      ),
+      ...(attributeValues.size > 0 ? ["attributes"] : []),
+    ];
     const write = sqlite.transaction(() => {
+      const pinBefore = pinState(scope.ownerId, contactId);
       for (const { table, id } of rows)
         sqlite
           .prepare(`DELETE FROM ${table} WHERE id = ? AND contactId = ?`)
@@ -961,31 +1016,43 @@ export function rejectResearchRun(
               "UPDATE contact_attributes SET value = ? WHERE id = ? AND contactId = ?",
             )
             .run(value, id, contactId);
-      // A pin the geocoder placed from a location that goes, goes with it.
-      // One a person dragged into place stays.
-      const fields = [...new Set(cleared)].map((field) => `${field} = NULL`);
-      if (cleared.includes("location"))
-        fields.push(
-          "lat = CASE WHEN geoSource = 'manual' THEN lat END",
-          "lng = CASE WHEN geoSource = 'manual' THEN lng END",
-        );
+      const sets = [
+        ...fields.map((field) => `${field} = NULL`),
+        "aiResearch = ?",
+        "updatedAt = ?",
+      ].join(", ");
       sqlite
-        .prepare(
-          `UPDATE contacts SET ${[...fields, "aiResearch = ?", "updatedAt = ?"].join(", ")}
-             WHERE id = ? AND ownerId = ?`,
-        )
+        .prepare(`UPDATE contacts SET ${sets} WHERE id = ? AND ownerId = ?`)
         .run(
           JSON.stringify(checked),
           new Date().toISOString(),
           contactId,
           scope.ownerId,
         );
+      // The pin follows its text, as after a person's edit: a pin for text
+      // that changed goes back to the geocoder, which the event below asks
+      // to place it again, and a pin with no text left goes.
+      const pinAfter = pinState(scope.ownerId, contactId);
+      if (pinAfter.shown !== pinBefore.shown)
+        sqlite
+          .prepare(
+            `UPDATE contacts SET geoSource = NULL${pinAfter.shown ? "" : ", lat = NULL, lng = NULL"}
+               WHERE id = ? AND ownerId = ?`,
+          )
+          .run(contactId, scope.ownerId);
+      if (changed.length > 0)
+        recordEvent(scope, "contact.updated", contactId, {
+          changed,
+          bulk: false,
+        });
     });
     write();
+    dispatchEvents();
 
     aiCache.invalidateForOwner("rerank", scope.ownerId);
     aiCache.invalidateForOwner("synthesis", scope.ownerId);
     aiCache.invalidate("briefing", ownerKey(scope, contactId));
+    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     scheduleSearchIndex(contactId);
     log.info(
       "MergeEngine",

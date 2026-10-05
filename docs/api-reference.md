@@ -976,6 +976,8 @@ someone else with the same name. It answers
   add the run's values again.
 - `404 RESEARCH_RUN_NOT_FOUND` when the contact has no such run, or it was
   taken back already. `409` while research runs for the contact.
+  `409 RESEARCH_RUN_UNTRACKED` for a run recorded before each added entry
+  named its run: what it added cannot be told apart, so remove it by hand.
 
 ## Duplicates
 

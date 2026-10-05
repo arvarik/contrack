@@ -489,6 +489,23 @@ describe("a second round, worded another way", () => {
     expect(contact.education).toHaveLength(1);
   });
 
+  it("keeps a promotion and a second university apart, even with no dates", () => {
+    merge({
+      experience: [{ company: "Juniper Review", role: "Analyst" }],
+      education: [{ school: "University of Example" }],
+    });
+    merge({
+      experience: [{ company: "Juniper Review", role: "Senior Analyst" }],
+      education: [{ school: "Example State University" }],
+    });
+    const contact = enrichmentContact(scope(), id);
+    expect(contact.experience.map((job) => job.role).sort()).toEqual([
+      "Analyst",
+      "Senior Analyst",
+    ]);
+    expect(contact.education).toHaveLength(2);
+  });
+
   it("adds new items to a list an earlier run made, and leaves the person's own list alone", async () => {
     await request(app)
       .put(`/api/contacts/${id}`)
@@ -542,10 +559,10 @@ describe("a second round, worded another way", () => {
         },
       ],
     });
-    // Example Prize came with the run that made the list, so its item is not
-    // on record: only Fellowship of Note, added as an item, stays out.
+    // Both items the person removed stay out: the one in the list the first
+    // run made, and the one a later run added.
     expect(enrichmentContact(scope(), id).attributes[0].value).toBe(
-      "Dean's List; Example Prize; New Medal",
+      "Dean's List; New Medal",
     );
   });
 });
@@ -631,6 +648,79 @@ describe("Not this person", () => {
         value: "Salt Marsh Survey",
       }),
     ]);
+  });
+
+  it("keeps a taken-back run's pages and items out of every later run", async () => {
+    merge(
+      {
+        attributes: [
+          { name: "Publications", value: "Tidal Patterns in Harbor Sediment" },
+        ],
+      },
+      { citations: [finra] },
+    );
+    await reject(record().runs[0].at);
+    // Two later runs: the pages stay left out after the first.
+    merge({ location: "Boston, MA" }, { citations: [fellows] });
+    merge({
+      attributes: [
+        {
+          name: "Publications",
+          value: "Tidal Patterns in Harbor Sediment; Salt Marsh Survey",
+        },
+      ],
+    });
+    expect(record().rejectedSources).toEqual([finra.uri]);
+    // The kind may come again with the right person's items, not the
+    // stranger's.
+    expect(enrichmentContact(scope(), id).attributes).toEqual([
+      expect.objectContaining({
+        name: "Publications",
+        value: "Salt Marsh Survey",
+      }),
+    ]);
+  });
+
+  it("moves the map pin with its text, and leaves a pin the person's own address placed", async () => {
+    const pin = () =>
+      sqlite.prepare("SELECT lat, lng FROM contacts WHERE id = ?").get(id) as {
+        lat: number | null;
+        lng: number | null;
+      };
+    const placed = () =>
+      sqlite
+        .prepare(
+          "UPDATE contacts SET lat = 42.36, lng = -71.06, geoSource = 'geocoder' WHERE id = ?",
+        )
+        .run(id);
+    // The location research wrote placed the pin: it goes with it.
+    merge({ location: "Boston, MA" });
+    placed();
+    await reject(record().runs[0].at);
+    expect(pin()).toEqual({ lat: null, lng: null });
+
+    // The person's own address placed the pin: it stays.
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ addresses: [{ address: "Denver, CO", isPrimary: true }] });
+    merge({ location: "Boston, MA" });
+    placed();
+    await reject(record().runs.at(-1)!.at);
+    expect(pin()).toEqual({ lat: 42.36, lng: -71.06 });
+  });
+
+  it("refuses a run that added details before entries named their run", async () => {
+    merge({ location: "Boston, MA" });
+    const old = record();
+    old.addedEntries = old.addedEntries?.map(({ at: _at, ...entry }) => entry);
+    sqlite
+      .prepare("UPDATE contacts SET aiResearch = ? WHERE id = ?")
+      .run(JSON.stringify(old), id);
+    const response = await reject(old.runs[0].at);
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("RESEARCH_RUN_UNTRACKED");
+    expect(enrichmentContact(scope(), id).location).toBe("Boston, MA");
+    expect(record().runs[0].rejected).toBeUndefined();
   });
 
   it("refuses while research runs for the contact", async () => {
