@@ -53,6 +53,8 @@ also enforces the coverage floor.
 ## Rules that agents break most
 
 - Branch from `main`, and target `main` with the pull request.
+- A package that only the browser uses goes in `devDependencies`, so the
+  Docker image does not ship it (`tests/unit/repo/dockerRuntime.test.ts`).
 - A function that touches owned data takes a `Scope`, and every route has a
   row in `server/tenancy/routeManifest.ts`.
 - AI calls go through `server/ai/gateway.ts`. Outside URLs go through

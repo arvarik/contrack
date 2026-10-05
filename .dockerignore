@@ -41,10 +41,11 @@ playwright-report
 docs
 tests
 scripts
-# The documented password recovery, which the image runs, and the model
-# download, which the build stage runs.
+# The documented password recovery, which the image runs, the model download,
+# which the build stage runs, and the model check, which the image runs.
 !scripts/reset-password.ts
 !scripts/fetch-models.ts
+!scripts/model-smoke.ts
 Dockerfile
 docker-compose.yml
 .dockerignore

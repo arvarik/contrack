@@ -9,7 +9,10 @@
 // such import fails here instead of in somebody's container.
 //
 // The same walk checks packages. The image installs with --omit=dev, so a
-// package the server loads must be in dependencies, not devDependencies.
+// package the server loads must be in dependencies, not devDependencies. And
+// the reverse: a package the server never loads, such as React, which the
+// build bundles into dist/, belongs in devDependencies, or it ships in the
+// image for nothing.
 // =============================================================================
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -70,12 +73,14 @@ function packageOf(specifier: string): string {
 }
 
 /**
- * The files the image runs: the server, and the password recovery that
- * docs/configuration.md tells a container's operator to run.
+ * The files the image runs: the server, the password recovery that
+ * docs/configuration.md tells a container's operator to run, and the model
+ * check the build runs.
  */
 const ENTRIES = [
   path.join(ROOT, "server.ts"),
   path.join(ROOT, "scripts/reset-password.ts"),
+  path.join(ROOT, "scripts/model-smoke.ts"),
 ];
 
 /**
@@ -144,6 +149,17 @@ describe("the runtime image", () => {
       .filter(([name]) => !production.has(name) && !devOnly.has(name))
       .map(([name, file]) => `${name} (from ${file})`);
     expect(missing).toEqual([]);
+  });
+
+  it("installs no package the server never loads", () => {
+    const pkg = JSON.parse(
+      readFileSync(path.join(ROOT, "package.json"), "utf8"),
+    );
+    const loaded = serverPackages();
+    const unused = Object.keys(pkg.dependencies ?? {}).filter(
+      (name) => !loaded.has(name),
+    );
+    expect(unused).toEqual([]);
   });
 
   it("starts the server with Node alone, with no TypeScript loader", () => {

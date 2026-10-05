@@ -178,7 +178,9 @@ with an empty `DATA_DIR`.
 - Node.js 26.10 or later is required. Node runs the TypeScript itself, so the
   server has no build step.
 - The Docker image holds the local search models, so a container downloads
-  nothing at start.
+  nothing at start. It is half the size of the first 2.0 builds, about 160 MB
+  to download, because it carries only its own platform's model runtime and
+  none of the browser's packages.
 - The database changes through numbered migrations. `/healthz` reports the
   last one, and a build refuses to open a database that a newer build changed.
 - Background work runs as jobs that **Instance health** lists, and
