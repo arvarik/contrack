@@ -438,6 +438,70 @@ describe("a row that fails", () => {
 });
 
 // ---------------------------------------------------------------------------
+// An import that stops between two batches
+// ---------------------------------------------------------------------------
+
+describe("an import that stops part way", () => {
+  it("keeps the batches it saved, and the rows it never reached can be retried", async () => {
+    // A batch is 250 rows. The second one throws outside any row, the way a
+    // full disk would, after the first one committed.
+    const real = importService.rowDone.bind(importService);
+    const broken = vi
+      .spyOn(importService, "rowDone")
+      .mockImplementation((s, importId, index, contactId, name) => {
+        if (index === 255) throw new Error("simulated disk failure");
+        real(s, importId, index, contactId, name);
+      });
+    const id = crypto.randomUUID();
+    const rows = Array.from({ length: 260 }, (_, i) => ({ name: `Row ${i}` }));
+    const { frames } = await stream(rows, id);
+    expect(frames.some((f) => f.done)).toBe(false);
+    expect(contactCount()).toBe(250);
+    broken.mockRestore();
+
+    // The record says what was saved and keeps the rest, with the error.
+    const rec = await until(id, "complete");
+    expect(rec).toMatchObject({ imported: 250, failed: 10 });
+    const failed = await request(app).get(`/api/imports/${id}/rows`);
+    expect(failed.body.rows).toHaveLength(10);
+    expect(failed.body.rows[0]).toMatchObject({
+      index: 250,
+      error: "simulated disk failure",
+    });
+
+    const retry = await request(app).post(`/api/imports/${id}/retry`);
+    expect(retry.body).toMatchObject({ retried: 10, imported: 260, failed: 0 });
+    expect(contactCount()).toBe(260);
+  });
+
+  it("settles a run whose process died between batches, and imports nothing twice", async () => {
+    const saved = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Saved" });
+    const id = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO imports (id, ownerId, status, phase, total) VALUES (?, ?, 'running', 'importing', 2)`,
+      )
+      .run(id, owner);
+    const row = sqlite.prepare(
+      `INSERT INTO import_rows (importId, rowIndex, status, contactId, name, payload) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    row.run(id, 0, "done", saved.body.id, "Saved", null);
+    row.run(id, 1, "pending", null, "Unsaved", '{"name":"Unsaved"}');
+
+    expect(await until(id, "complete")).toMatchObject({
+      imported: 1,
+      failed: 1,
+    });
+    const again = await json([{ name: "Saved" }, { name: "Unsaved" }], id);
+    expect(again.body).toMatchObject({ repeated: true, count: 1, failed: 1 });
+    await request(app).post(`/api/imports/${id}/retry`).expect(200);
+    expect(namesOf()).toEqual(["Saved", "Unsaved"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // A check that never finished
 // ---------------------------------------------------------------------------
 

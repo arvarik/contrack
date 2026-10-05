@@ -74,12 +74,21 @@ async function readCappedBody(
 }
 
 /**
+ * The whole feed, from the request to the last byte. The 15 s timers below
+ * end at the headers, and a server that then sent the body slowly, or not at
+ * all, held the sync until shutdown.
+ */
+const ICS_FETCH_DEADLINE_MS = 60_000;
+
+/**
  * Fetches calendar feed content respecting urlSafety and CONNECTORS_ALLOW_PRIVATE_HOSTS.
  */
 export async function fetchIcsContent(
   urlStr: string,
-  signal?: AbortSignal,
+  sync?: AbortSignal,
 ): Promise<string> {
+  const deadline = AbortSignal.timeout(ICS_FETCH_DEADLINE_MS);
+  const signal = sync ? AbortSignal.any([sync, deadline]) : deadline;
   const allowPrivate = process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true";
   let res: globalThis.Response;
 
@@ -88,9 +97,7 @@ export async function fetchIcsContent(
     const timer = setTimeout(() => controller.abort(), 15_000);
     try {
       res = await fetch(urlStr, {
-        signal: signal
-          ? AbortSignal.any([controller.signal, signal])
-          : controller.signal,
+        signal: AbortSignal.any([controller.signal, signal]),
         redirect: "follow",
       });
     } catch (err: unknown) {

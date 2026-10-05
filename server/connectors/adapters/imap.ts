@@ -206,6 +206,11 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
     await assertSafeImapHost(config.host);
 
     const client = createImapClient(config, secret);
+    // ImapFlow times out a connection, a greeting and five quiet minutes on
+    // its own. An abort, at the sync's deadline or at shutdown, closes the
+    // socket too, so a command that is still waiting ends at once.
+    const closeOnAbort = () => client.close();
+    signal.addEventListener("abort", closeOnAbort, { once: true });
 
     try {
       await client.connect();
@@ -458,6 +463,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
         lastSyncAt: new Date().toISOString(),
       };
     } finally {
+      signal.removeEventListener("abort", closeOnAbort);
       await client.logout();
     }
   },

@@ -743,10 +743,22 @@ export const contactRepo = {
     }
 
     // ── Tags ────────────────────────────────────────────────────────────
+    // One row per tag whatever its case: "dup", "dup" and "Dup" are one tag,
+    // spelled as it came first. A unique index would first need the rows
+    // that already repeat cleaned up, so the write dedupes instead.
     if (Array.isArray(body.tags)) {
+      const seen = new Set(
+        (
+          sqlite
+            .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+            .pluck()
+            .all(contactId) as string[]
+        ).map((tag) => tag.toLowerCase()),
+      );
       for (const tag of body.tags) {
         const val = (typeof tag === "string" ? tag : tag.tag)?.trim();
-        if (!val) continue;
+        if (!val || seen.has(val.toLowerCase())) continue;
+        seen.add(val.toLowerCase());
         db.insert(schema.contactTags)
           .values({
             id: crypto.randomUUID(),

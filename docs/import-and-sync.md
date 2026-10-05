@@ -66,7 +66,8 @@ If the connection drops, the import goes on, and nothing is imported twice.
 Contrack shows **Reconnecting to your import**, or **Lost contact with the
 server** with **Check again**. If you leave the page, open the import again to
 see where it got to. If nothing could be saved, the panel shows **Import did
-not finish**, with **Try again**.
+not finish**, with **Try again**. If the import stopped part way, the
+contacts it saved stay, and the rest wait for **Retry failed rows**.
 
 ### Retry failed rows
 

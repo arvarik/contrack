@@ -207,8 +207,17 @@ describe("rotation", () => {
     }
   }, 20_000);
 
-  it("leaves no WAL companions beside a snapshot it opened", async () => {
+  it("leaves no WAL companions and no partial copy beside a snapshot", async () => {
+    // What a stop during a copy leaves: the copy, under its partial name.
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    const cut = path.join(
+      BACKUPS_DIR,
+      "curator-2026-01-01T00-00-00.db.partial",
+    );
+    fs.writeFileSync(cut, "half a snapshot");
     const backup = await runBackup();
+    expect(fs.existsSync(cut)).toBe(false);
+    expect(listBackups().map((b) => b.filename)).toEqual([backup.filename]);
 
     // Reading a snapshot builds its shared memory index beside it, and a read
     // only connection cannot take it away again on close. Left alone, the

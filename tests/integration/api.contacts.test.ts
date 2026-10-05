@@ -136,6 +136,37 @@ describe("PATCH /api/contacts/:id", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
+
+  it("turns a follow-up date into the task it stands for, and keeps the two in step", async () => {
+    // The column used to be written alone: no task until the next restart.
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Follow Me", nextFollowUpAt: "2027-05-01" });
+    const id = created.body.id as string;
+    const tasks = async () =>
+      (await request(app).get(`/api/contacts/${id}/action-items`)).body as {
+        title: string;
+        dueAt: string;
+        completedAt: string | null;
+      }[];
+    expect(await tasks()).toMatchObject([
+      { title: "Follow up", dueAt: "2027-05-01", completedAt: null },
+    ]);
+
+    // A new date moves that task, and the contact says so.
+    const moved = await request(app)
+      .patch(`/api/contacts/${id}`)
+      .send({ nextFollowUpAt: "2027-06-01" });
+    expect(moved.body.nextFollowUpAt).toBe("2027-06-01");
+    expect(await tasks()).toMatchObject([{ dueAt: "2027-06-01" }]);
+
+    // Null completes it, so no open task is left behind the empty field.
+    const cleared = await request(app)
+      .patch(`/api/contacts/${id}`)
+      .send({ nextFollowUpAt: null });
+    expect(cleared.body.nextFollowUpAt).toBeNull();
+    expect((await tasks())[0].completedAt).not.toBeNull();
+  });
 });
 
 /**

@@ -17,6 +17,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 import { sqlite } from "../../server/db.ts";
 import { registerAdapter } from "../../server/connectors/registry.ts";
@@ -24,7 +25,9 @@ import {
   tickScheduler,
   stopConnectorScheduler,
   getSchedulerState,
+  startSync,
 } from "../../server/connectors/scheduler.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import type {
   ConnectorAdapter,
   SyncContext,
@@ -38,6 +41,7 @@ describe("Connectors Scheduler", () => {
   const executedConnectorIds: string[] = [];
   let signalReceivedAbort = false;
   let _slowSyncResolver: (() => void) | null = null;
+  let hungResolver: (() => void) | null = null;
 
   const mockAdapter: ConnectorAdapter<Record<string, unknown>, unknown> = {
     kind: mockKind as unknown as ConnectorKind,
@@ -53,6 +57,13 @@ describe("Connectors Scheduler", () => {
       ctx: SyncContext<Record<string, unknown>, unknown>,
     ): AsyncGenerator<SyncEvent, unknown, void> {
       executedConnectorIds.push((ctx.config?.connId as string) || "unknown");
+
+      if (ctx.config?.hangs) {
+        // A call that never answers and never hears the abort.
+        await new Promise<void>((resolve) => {
+          hungResolver = resolve;
+        });
+      }
 
       if (ctx.config?.isSlow) {
         // Wait until signaled or aborted
@@ -130,52 +141,45 @@ describe("Connectors Scheduler", () => {
     await stopConnectorScheduler();
   });
 
+  /** A connector of the mock kind. Due a minute ago unless told otherwise. */
+  function connector(
+    config: Record<string, unknown> = {},
+    {
+      owner = owner1,
+      status = "active",
+      nextRunAt = new Date(Date.now() - 60_000).toISOString(),
+    } = {},
+  ): string {
+    const id = "conn-" + crypto.randomUUID().slice(0, 8);
+    sqlite
+      .prepare(
+        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
+         VALUES (?, ?, ?, 'Conn', ?, ?, ?, datetime('now'), datetime('now'))`,
+      )
+      .run(
+        id,
+        owner,
+        mockKind,
+        status,
+        JSON.stringify({ connId: id, ...config }),
+        nextRunAt,
+      );
+    return id;
+  }
+
   it("due selection: selects active connectors due for sync and ignores future or paused connectors", async () => {
-    const dueId = "conn-due-" + crypto.randomUUID().slice(0, 8);
-    const futureId = "conn-future-" + crypto.randomUUID().slice(0, 8);
-    const pausedId = "conn-paused-" + crypto.randomUUID().slice(0, 8);
-
-    const now = Date.now();
-    const pastIso = new Date(now - 10 * 60 * 1000).toISOString();
-    const futureIso = new Date(now + 60 * 60 * 1000).toISOString();
-
-    // 1. Due active connector
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Due Connector', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(dueId, owner1, mockKind, JSON.stringify({ connId: dueId }), pastIso);
-
-    // 2. Future active connector (not due)
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Future Connector', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(
-        futureId,
-        owner2,
-        mockKind,
-        JSON.stringify({ connId: futureId }),
-        futureIso,
-      );
-
-    // 3. Paused connector (past nextRunAt, but status is paused). It belongs
-    // to owner2, whose only other connector is not due: under owner1 the
-    // one-per-owner rule would skip it even without the status check.
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Paused Connector', 'paused', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(
-        pausedId,
-        owner2,
-        mockKind,
-        JSON.stringify({ connId: pausedId }),
-        pastIso,
-      );
+    const dueId = connector();
+    const futureId = connector(
+      {},
+      {
+        owner: owner2,
+        nextRunAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      },
+    );
+    // Paused, and due. It belongs to owner2, whose only other connector is
+    // not due: under owner1 the one-per-owner rule would skip it even
+    // without the status check.
+    const pausedId = connector({}, { owner: owner2, status: "paused" });
 
     await tickScheduler();
 
@@ -188,25 +192,8 @@ describe("Connectors Scheduler", () => {
   });
 
   it("one per owner per tick: throttles multiple due connectors for the same owner", async () => {
-    const connA = "conn-a-" + crypto.randomUUID().slice(0, 8);
-    const connB = "conn-b-" + crypto.randomUUID().slice(0, 8);
-
-    const pastIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-    // Insert two due connectors for owner1
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Conn A', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(connA, owner1, mockKind, JSON.stringify({ connId: connA }), pastIso);
-
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Conn B', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(connB, owner1, mockKind, JSON.stringify({ connId: connB }), pastIso);
+    const connA = connector();
+    const connB = connector();
 
     // Tick 1
     await tickScheduler();
@@ -227,27 +214,8 @@ describe("Connectors Scheduler", () => {
 
   it("concurrency cap: respects CONNECTOR_SYNC_CONCURRENCY", async () => {
     process.env.CONNECTOR_SYNC_CONCURRENCY = "1";
-
-    const conn1 = "conn-owner1-" + crypto.randomUUID().slice(0, 8);
-    const conn2 = "conn-owner2-" + crypto.randomUUID().slice(0, 8);
-
-    const pastIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-    // Owner 1 connector
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Owner 1 Conn', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(conn1, owner1, mockKind, JSON.stringify({ connId: conn1 }), pastIso);
-
-    // Owner 2 connector
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Owner 2 Conn', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(conn2, owner2, mockKind, JSON.stringify({ connId: conn2 }), pastIso);
+    connector();
+    connector({}, { owner: owner2 });
 
     await tickScheduler();
     await new Promise((r) => setTimeout(r, 100));
@@ -257,21 +225,7 @@ describe("Connectors Scheduler", () => {
   });
 
   it("shutdown: aborts in-flight sync passes when scheduler is stopped", async () => {
-    const slowConn = "conn-slow-" + crypto.randomUUID().slice(0, 8);
-    const pastIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-    sqlite
-      .prepare(
-        `INSERT INTO connectors (id, ownerId, kind, name, status, config, nextRunAt, createdAt, updatedAt)
-         VALUES (?, ?, ?, 'Slow Conn', 'active', ?, ?, datetime('now'), datetime('now'))`,
-      )
-      .run(
-        slowConn,
-        owner1,
-        mockKind,
-        JSON.stringify({ connId: slowConn, isSlow: true }),
-        pastIso,
-      );
+    const slowConn = connector({ isSlow: true });
 
     // Launch scheduler
     await tickScheduler();
@@ -285,5 +239,37 @@ describe("Connectors Scheduler", () => {
 
     expect(signalReceivedAbort).toBe(true);
     expect(getSchedulerState().running).toBe(false);
+  });
+
+  it("a sync that hangs past its deadline gives its slots back", async () => {
+    connector({ hangs: true });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await tickScheduler();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getSchedulerState().activeRunsCount).toBe(1);
+      // Two hours, then thirty seconds of grace.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000 + 30_000);
+      expect(getSchedulerState()).toMatchObject({
+        activeRunsCount: 0,
+        activeOwnersCount: 0,
+      });
+    } finally {
+      vi.useRealTimers();
+      hungResolver?.();
+    }
+  });
+
+  it("a sync started by hand holds the lock, so a second start or a tick waits", async () => {
+    const id = connector({ isSlow: true });
+    const scope = scopeForOwnerId(owner1);
+    const first = startSync(scope, { id, ownerId: owner1 }, "manual");
+    expect(first).not.toBeNull();
+    expect(startSync(scope, { id, ownerId: owner1 }, "manual")).toBeNull();
+    await tickScheduler();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(executedConnectorIds).toEqual([id]);
+    _slowSyncResolver?.();
+    await first;
   });
 });

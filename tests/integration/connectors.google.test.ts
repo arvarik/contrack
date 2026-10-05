@@ -23,12 +23,16 @@ import {
   expect,
   it,
   vi,
+  type Mock,
 } from "vitest";
 import { google } from "../../server/connectors/googleApis.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, resetAccounts, type Actor } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";
-import { googleAdapter } from "../../server/connectors/adapters/google.ts";
+import {
+  GOOGLE_CALL_TIMEOUT_MS,
+  googleAdapter,
+} from "../../server/connectors/adapters/google.ts";
 import {
   setGoogleOAuthCredentials,
   getGoogleOAuthCredentials,
@@ -559,6 +563,24 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       const upcoming = events.filter((e) => e.kind === "upcoming");
       expect(upcoming).toHaveLength(1);
       expect(upcoming[0].title).toBe("Future Site Inspection");
+
+      // Every call carries a timeout and the sync's signal. With neither, a
+      // half-open connection held the sync and its slots until a restart.
+      const options = (fn: unknown) =>
+        (fn as Mock).mock.calls.map((call: unknown[]) => call[1]);
+      const sent = [
+        ...options(google.people("v1").people.connections.list),
+        ...options(google.gmail("v1").users.messages.list),
+        ...options(google.gmail("v1").users.messages.get),
+        ...options(google.calendar("v3").events.list),
+      ];
+      expect(sent).toHaveLength(5);
+      for (const option of sent) {
+        expect(option).toEqual({
+          timeout: GOOGLE_CALL_TIMEOUT_MS,
+          signal: ctx.signal,
+        });
+      }
     });
   });
 

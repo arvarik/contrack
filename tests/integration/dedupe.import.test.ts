@@ -413,15 +413,19 @@ describe("POST /api/contacts/bulk with a stream", () => {
   it("reports the duplicates the shared scan found", async () => {
     await seed([{ name: "Margaret Ellington", emails: ["peggy@example.com"] }]);
 
+    // The last two are a pair inside the file: one suggestion, counted once,
+    // found from either of its sides.
     const summary = await streamImport([
       { name: "Peggy Ellington", emails: ["peggy@example.com"] },
       { name: "Somebody Else" },
+      { name: "Jun Park", company: "Northwind Logistics" },
+      { name: "Jun Park", company: "Meridian Health Trust" },
     ]);
 
     expect(summary).toEqual({
-      imported: 2,
+      imported: 4,
       autoMerged: 1,
-      needsReview: 0,
+      needsReview: 1,
       newUnique: 1,
       failed: 0,
     });
