@@ -13,6 +13,7 @@
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import type { ContrackInstance } from "./fixtures/instance";
+import { failPeopleSearch } from "./fixtures/search";
 
 /** What the current test wrote, as the API path that deletes it. */
 const created: { instance: ContrackInstance; path: string }[] = [];
@@ -279,6 +280,33 @@ test("without AI, an answer by rules is an Answer, not an AI answer", async ({
   await expect(palette.getByText("AI answer")).toHaveCount(0);
 });
 
+test("a facet value the palette cannot read stays in the box", async ({
+  page,
+}) => {
+  // It left the box empty, with no pill, when the typed facets went out.
+  const palette = await openPalette(page);
+  await page.keyboard.type("score:high ");
+  await expect(palette.getByRole("combobox")).toHaveValue("score:high ");
+});
+
+test("Settings pages come up after the word settings", async ({ page }) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("settings privacy");
+  await expect(
+    palette.getByRole("option", { name: "Settings: Privacy and AI" }),
+  ).toBeVisible();
+});
+
+test("a failed question offers to ask again", async ({ page }) => {
+  await failPeopleSearch(page, "The search failed");
+  const palette = await openPalette(page);
+  await page.keyboard.type("? who likes espresso");
+  await page.keyboard.press("Enter");
+  await expect(palette.getByRole("alert")).toHaveText("The search failed");
+  // There was no row, so Enter did nothing after "Try again".
+  await expect(highlighted(palette)).toHaveText('Ask: "who likes espresso"');
+});
+
 test("> Log keeps words that start like a kind as the name", async ({
   page,
 }) => {
@@ -289,6 +317,14 @@ test("> Log keeps words that start like a kind as the name", async ({
   await expect(palette.getByText('Log for "cal"')).toBeVisible();
   await expect(
     palette.getByRole("option", { name: /Log a note/ }),
+  ).toBeVisible();
+
+  // Only while those words stand: "> cal" typed later is a kind.
+  await page.keyboard.press("Escape");
+  await page.keyboard.type("> cal");
+  await expect(palette.getByRole("option")).toHaveCount(1);
+  await expect(
+    palette.getByRole("option", { name: /Log a call/ }),
   ).toBeVisible();
 });
 

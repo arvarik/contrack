@@ -203,8 +203,13 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
             handleKeyDown(e);
             // The text area's own keys: Enter makes a new line and the
             // arrows move the caret. cmdk's handler on the palette took
-            // them for its list. Escape still reaches the palette.
-            if (e.key !== "Escape") e.stopPropagation();
+            // them for its list. Escape and ⌘K still reach the palette.
+            if (
+              !e.metaKey &&
+              !e.ctrlKey &&
+              ["Enter", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)
+            )
+              e.stopPropagation();
           }}
           placeholder={placeholder}
           className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px]"

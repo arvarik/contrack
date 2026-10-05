@@ -451,3 +451,52 @@ test("the facet values say which value the arrows are on", async ({ page }) => {
     palette.getByRole("status", { name: "Palette status" }),
   ).toHaveText("");
 });
+
+test("the focus stays in the box when its button goes away", async ({
+  page,
+}) => {
+  // Back to results and a pill's × went away with their focus, and the
+  // focus went to the dialog: the arrows and the letters did nothing.
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("Grace");
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await palette.getByRole("button", { name: "Back to results" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(input).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.type("company:Acme ");
+  await palette.getByRole("button", { name: /Remove filter company/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(input).toBeFocused();
+});
+
+test("⌘K closes the palette from the note composer too", async ({ page }) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("Grace");
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("n");
+  await expect(palette.locator("textarea")).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toHaveCount(0);
+});
+
+test("leaving for a page does not send the focus back to the opener", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  const pulse = page.getByRole("link", { name: "Pulse" }).first();
+  await pulse.focus();
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.type("Grace");
+  await expect(
+    page.getByRole("option", { name: /^Grace Hopper/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/contact\//);
+  await expect(pulse).not.toBeFocused();
+});

@@ -213,27 +213,33 @@ function tally(rows: readonly { value: string; n: number }[]): Tally[] {
   );
 }
 
-/** "a" or "an" before a role, by how its first word is said. */
 /** The last word of a team, not a title: "Engineering", "Sales". */
 const FIELD_WORD =
   /(ing|ment)$|^(sales|finance|operations|product|design|legal|hr|research|support|security|data|it|admin|people|growth|strategy|partnerships|communications|success)$/i;
 
+/** A first word that makes a title of a team: "VP Engineering". */
+const RANK_WORD =
+  /^(vp|svp|evp|avp|director|head|chief|lead|manager|senior|principal|staff)$/i;
+
 /**
  * The starter question for a role. A role is a title or a team: "Who works
  * as a CTO?", but "Who works in Engineering?". The palette asked "Who works
- * as an Engineering?". A title with "of" names a person: "Head of Sales".
+ * as an Engineering?". A title with "of", or a rank before the team, names
+ * a person: "Head of Sales", "VP Engineering".
  */
 export function roleQuestion(role: string): string {
   const words = role.trim().split(/\s+/);
   const team =
     words.length <= 2 &&
     !/\bof\b/i.test(role) &&
+    !RANK_WORD.test(words[0]?.replace(/\W+$/, "") ?? "") &&
     FIELD_WORD.test(words[words.length - 1] ?? "");
   return team
     ? `Who works in ${role}?`
     : `Who works as ${article(role)} ${role}?`;
 }
 
+/** "a" or "an" before a role, by how its first word is said. */
 export function article(role: string): "a" | "an" {
   const word = role.split(/\s+/)[0] ?? "";
   // An initialism is said letter by letter: an SVP, an MBA, a CTO.

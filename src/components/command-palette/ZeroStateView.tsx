@@ -331,6 +331,13 @@ export const GoToGroup = ({
   const destinations = typed
     ? NAV_ITEMS.filter((item) => matchesDestination(typed, item.label))
     : NAV_ITEMS;
+  // "settings privacy": the rows say "Settings: …", so people type the
+  // word. It names the group, not the page, so the rest is matched.
+  const [first = "", ...others] = typed.toLowerCase().split(/\s+/);
+  const pageWords =
+    others.length > 0 && first.length >= 3 && "settings".startsWith(first)
+      ? others.join(" ")
+      : typed;
   const settingsPages = typed
     ? SETTINGS_PAGES.filter((page) => {
         if (page.admin && !isAdmin) return false;
@@ -339,7 +346,7 @@ export const GoToGroup = ({
         // Three characters for these: they are many, and below the people.
         // The title and keywords, not the word "Settings" every row
         // starts with: "set" listed all 26 pages.
-        return matchesDestination(typed, page.title, page.keywords, 3);
+        return matchesDestination(pageWords, page.title, page.keywords, 3);
       }).slice(0, 5)
     : [];
   if (destinations.length === 0 && settingsPages.length === 0) return null;

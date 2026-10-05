@@ -237,7 +237,8 @@ export const AiMode = (props: AiModeProps) => {
         </>
       );
     }
-    if (props.pending) {
+    // Also after a failed ask: Enter tries again.
+    if (props.pending || props.error) {
       return (
         <>
           <Command.Group heading="Ask AI" className={GROUP_HEADING_PRIMARY}>

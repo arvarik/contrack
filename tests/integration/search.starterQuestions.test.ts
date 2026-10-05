@@ -425,6 +425,9 @@ describe("article", () => {
     );
     expect(roleQuestion("Head of Sales")).toBe("Who works as a Head of Sales?");
     expect(roleQuestion("Engineer")).toBe("Who works as an Engineer?");
+    expect(roleQuestion("VP Engineering")).toBe(
+      "Who works as a VP Engineering?",
+    );
   });
 
   it("says a role the way it is spoken", () => {

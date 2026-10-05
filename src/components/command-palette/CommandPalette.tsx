@@ -112,7 +112,7 @@ export const CommandPalette = () => {
   const movedHighlightRef = useRef(false);
   /** The pointer, not a key, moved it last: the list does not scroll. */
   const pointerMovedRef = useRef(false);
-  const navigate = useNavigate();
+  const routerNavigate = useNavigate();
 
   // ── Mode detection ──
   const mode = getMode(search);
@@ -268,6 +268,9 @@ export const CommandPalette = () => {
     mode === "ai" &&
     aiQuery.length >= 3 &&
     `${aiQuery}\u0000${aiFilterKey}` !== askedKey;
+  // The question on screen failed. Its error shows with an Ask row to try
+  // again: there was no row, so Enter did nothing after "Try again".
+  const askFailed = mode === "ai" && !aiPending && semanticSearch.isError;
 
   // Leaving AI mode while open cancels the question. Closing the palette
   // (Escape, the backdrop, ⌘K) leaves it running, so the server finishes
@@ -304,6 +307,15 @@ export const CommandPalette = () => {
   // What had the focus before the palette opened, to give it back on close.
   // It went to the page's body, and a keyboard user lost their place.
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  // Leaving for another page: the opener belongs to the page left behind,
+  // so the focus does not go back to it.
+  const navigate = useCallback(
+    (path: string) => {
+      returnFocusRef.current = null;
+      routerNavigate(path);
+    },
+    [routerNavigate],
+  );
   const openRef = useRef(open);
   openRef.current = open;
   // The latest `handleClose`, for the key listener below, which binds once.
@@ -366,6 +378,9 @@ export const CommandPalette = () => {
       setActiveRow(subMenuRowRef.current);
       subMenuRowRef.current = "";
     }
+    // "Back to results" goes away with the menu: the focus it held went to
+    // the dialog, where the arrows and the letters did nothing.
+    inputRef.current?.focus();
   }, []);
 
   const handleClose = useCallback(() => {
@@ -376,6 +391,7 @@ export const CommandPalette = () => {
     setFacetPicker(false);
     setDiscardArmed(false);
     setLogComposer(null);
+    setLogNameHint("");
     setPeekVisible(false);
     lastRecordedAiRef.current = "";
     clearFilters();
@@ -428,6 +444,7 @@ export const CommandPalette = () => {
       clearFilters();
       setFacetMenuDismissed(false);
       setDiscardArmed(false);
+      setLogNameHint("");
       // Back to the box: from a chip Tab reached, the next words went
       // nowhere.
       inputRef.current?.focus();
@@ -665,6 +682,7 @@ export const CommandPalette = () => {
       setFacetMenuDismissed(false);
       setFacetPicker(false);
       setDiscardArmed(false);
+      setLogNameHint("");
       // Typing again closes the actions menu, for the new results.
       if (subMenuContactId) {
         subMenuRowRef.current = "";
@@ -885,7 +903,7 @@ export const CommandPalette = () => {
     pending: aiPending,
     loading: aiQuery.length >= 3 && isAiLoading && !aiPending,
     answered: semanticSearch.isSuccess,
-    error: semanticSearch.isError
+    error: askFailed
       ? semanticSearch.error?.message || "Search failed. Try again"
       : null,
     results: aiResults,
@@ -1018,7 +1036,12 @@ export const CommandPalette = () => {
                   {/* ── Facet pills (Feature 5) ── */}
                   <FacetPills
                     filters={parsed.filters}
-                    onRemove={removeFilter}
+                    // The × goes with its pill: the focus goes back to the
+                    // box, not to the dialog.
+                    onRemove={(index) => {
+                      removeFilter(index);
+                      inputRef.current?.focus();
+                    }}
                   />
 
                   {/*

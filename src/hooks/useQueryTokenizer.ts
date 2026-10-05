@@ -69,16 +69,21 @@ export function parseQuery(
 ): ParsedQuery {
   const filters = [...locked];
   let remaining = rawInput;
+  // The input less the facets that became pills. A facet the parser
+  // rejects, such as `score:high`, stays in the box for the person to fix:
+  // taking it out with the rest left nothing, not even a pill.
+  let rest = rawInput;
   for (const [full, field, value] of rawInput.matchAll(COMPLETED_FACET_REGEX)) {
     const filter = parseFilterValue(field.toLowerCase() as FacetField, value);
     if (filter && !filters.some((f) => sameValue(f, filter)))
       filters.push(filter);
+    if (filter) rest = rest.replace(full, "");
     remaining = remaining.replace(full, "");
   }
   const active = remaining.match(ACTIVE_PREFIX_REGEX);
   return {
     filters,
-    rest: remaining,
+    rest,
     freeText: remaining.replace(ACTIVE_PREFIX_REGEX, "").trim(),
     activePrefix: active
       ? {

@@ -69,6 +69,8 @@ describe("useQueryTokenizer", () => {
   it("takes a typed facet out of the box once it is a pill", () => {
     const result = setup("tag:vc jane role:", true);
     expect(result.current.raw).toBe("jane role:");
+    // A value it cannot read stays, to be fixed: it left the box empty.
+    expect(setup("score:high ", true).current.raw).toBe("score:high ");
     expect(result.current.tokenizer.parsed.filters).toEqual([
       { field: "tag", value: "vc" },
     ]);
