@@ -42,7 +42,7 @@ export function registerResources(server: McpServer, scope: Scope): void {
           ],
         };
       } catch (err) {
-        throw toMcpError(err);
+        throw toMcpError(err, "resource");
       }
     },
   );
@@ -76,7 +76,7 @@ export function registerResources(server: McpServer, scope: Scope): void {
           ],
         };
       } catch (err) {
-        throw toMcpError(err);
+        throw toMcpError(err, "resource");
       }
     },
   );

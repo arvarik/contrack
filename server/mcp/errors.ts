@@ -30,30 +30,47 @@ function nextStep(err: AppError): string {
   return ` Look the ID up again with ${tools}. Do not guess an ID.`;
 }
 
-export function toMcpError(err: unknown): unknown {
+/** The spec's code for a resource that does not exist. */
+const RESOURCE_NOT_FOUND = -32002;
+
+/**
+ * A JSON-RPC error as the SDK sends it: `code`, `message` and `data`. Not an
+ * `McpError`, whose message already starts "MCP error -32600:", which the
+ * client then puts in front a second time.
+ */
+function rpcError(code: number, message: string, data?: unknown): Error {
+  return Object.assign(new Error(message), { code, data });
+}
+
+export function toMcpError(
+  err: unknown,
+  from: "prompt" | "resource" = "prompt",
+): unknown {
   if (err instanceof McpError) {
     return err;
   }
   // A fault in the server can hold internals, such as SQL. The client gets
   // a plain message, and the log gets the cause.
   if (!(err instanceof AppError) || err.statusCode >= 500) {
-    log.error("MCP", "A prompt or a resource failed", {
+    log.error("MCP", `A ${from} failed`, {
       error: err instanceof Error ? err.message : String(err),
     });
-    return new McpError(
+    return rpcError(
       ErrorCode.InternalError,
       "Contrack could not finish this. The server log has the cause.",
     );
   }
-  return new McpError(
-    err.statusCode === 400 ? ErrorCode.InvalidParams : ErrorCode.InvalidRequest,
-    err.message,
-    {
-      code: err.code,
-      statusCode: err.statusCode,
-      ...(err.details !== undefined ? { details: err.details } : {}),
-    },
-  );
+  const code =
+    from === "resource" && err.code === "NOT_FOUND"
+      ? RESOURCE_NOT_FOUND
+      : err.statusCode === 400
+        ? ErrorCode.InvalidParams
+        : ErrorCode.InvalidRequest;
+  return rpcError(code, err.message, {
+    code: err.code,
+    statusCode: err.statusCode,
+    ...(err.details !== undefined ? { details: err.details } : {}),
+  });
 }
 
 /**
@@ -71,7 +88,12 @@ export function toolFailure(
     return {
       isError: true,
       content: [
-        { type: "text", text: `${err.message} (${err.code}).${nextStep(err)}` },
+        {
+          type: "text",
+          // "Not found (NOT_FOUND).", with no second period after a message
+          // that already ends in one.
+          text: `${err.message.replace(/\.$/, "")} (${err.code}).${nextStep(err)}`,
+        },
       ],
       structuredContent: {
         error: {

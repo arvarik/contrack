@@ -60,7 +60,7 @@ import {
 
 /** A value or a snippet, on the card's wash, in the code face. */
 const CODE_BOX =
-  "rounded-xl bg-surface-container-highest px-3 py-2.5 font-mono text-xs text-on-surface whitespace-pre-wrap break-all";
+  "rounded-xl bg-surface-container-highest px-3 py-2.5 font-mono text-xs text-on-surface whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 /** A step's heading inside the card. */
 const STEP_HEADING = "text-sm font-bold text-on-surface";
@@ -76,12 +76,15 @@ const CopyButton = ({
   text,
   label,
   what,
+  disabled,
 }: {
   text: string;
   /** The accessible name: "Copy Claude Code command". */
   label: string;
   /** What the toast says was copied. */
   what: string;
+  /** Off while the text still has a part to fill in. */
+  disabled?: boolean;
 }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -98,6 +101,7 @@ const CopyButton = ({
     <button
       type="button"
       onClick={handleCopy}
+      disabled={disabled}
       aria-label={label}
       className="btn-secondary btn-sm shrink-0"
     >
@@ -164,8 +168,8 @@ const ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
 interface TokenDraft {
   /** The token that fills the setup, made here or pasted whole. */
   token: string;
-  /** The client a token was made for here, or null. */
-  madeFor: string | null;
+  /** The client and access of a token made here, or null. */
+  madeFor: { client: string; access: TokenAccess } | null;
   pasting: boolean;
   /** What is in the paste field, whole or not. */
   pasted: string;
@@ -200,7 +204,10 @@ const TokenStep = ({
         readOnly: access === "read",
       }),
     onSuccess: (created) => {
-      onDraft({ token: created.token, madeFor: client.label });
+      onDraft({
+        token: created.token,
+        madeFor: { client: client.label, access },
+      });
       void queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -216,8 +223,9 @@ const TokenStep = ({
           aria-hidden="true"
         />
         <p className="flex-1 min-w-48 text-sm text-on-surface text-pretty">
-          A token named “{madeFor}” is in the setup below. This page shows it
-          once, and it works until you revoke it in{" "}
+          A {madeFor.access === "read" ? "read-only " : ""}token named “
+          {madeFor.client}” is in the setup below. This page shows it once. It
+          works for {TOKEN_DAYS} days, or until you revoke it in{" "}
           <Link
             to="/settings/account#tokens"
             className="font-semibold text-primary hover:underline"
@@ -281,7 +289,7 @@ const TokenStep = ({
           )}
         >
           {pastedWrong
-            ? "A Contrack token starts with ctk_ and has no spaces"
+            ? "A Contrack token is ctk_ and then at least 20 letters, digits, dashes or underscores, with no spaces"
             : "It stays on this page and goes only into the setup below"}
         </p>
       </div>
@@ -481,7 +489,11 @@ export const McpView: React.FC = () => {
               <div id="setup" className="space-y-3 scroll-mt-20">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h3 className={STEP_HEADING}>Add it to {client.label}</h3>
+                    <h3 className={STEP_HEADING}>
+                      {client.id === "other"
+                        ? "Connect another client"
+                        : `Add it to ${client.label}`}
+                    </h3>
                     <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
                       {steps}
                       {missingToken && ". Create a token above to fill it in"}
@@ -491,6 +503,7 @@ export const McpView: React.FC = () => {
                     text={setup.code}
                     label={`Copy ${codeName}`}
                     what={codeName}
+                    disabled={missingToken}
                   />
                 </div>
                 {setup.install &&

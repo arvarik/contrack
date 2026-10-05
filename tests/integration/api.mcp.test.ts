@@ -386,6 +386,12 @@ describe("MCP Server (/api/mcp)", () => {
     const json = JSON.parse((profile.contents[0] as { text: string }).text);
     expect(json).toMatchObject({ id: contactId, scoreExplanation: null });
     expect(json).not.toHaveProperty("ownerId");
+    // The spec's code for a missing resource, and the SDK's prefix only once.
+    const missing = await a
+      .readResource({ uri: "contrack://contacts/nobody" })
+      .catch((error: Error & { code: number }) => error);
+    expect(missing).toMatchObject({ code: -32002 });
+    expect((missing as Error).message).toMatch(/^MCP error -32002: (?!MCP)/);
 
     const completion = await a.complete({
       ref: { type: "ref/prompt", name: "catch_me_up" },
@@ -483,19 +489,28 @@ describe("MCP Server (/api/mcp)", () => {
       expect(page.status).toBe(403);
       expect(page.text).toContain("ALLOWED_HOSTS");
 
-      // Behind a trusted proxy `req.hostname` is the forwarded name, which a
-      // page can set itself. The Host the browser wrote must pass as well.
-      const next = vi.fn();
-      hostGuard(
-        {
-          headers: { host: "evil.example" },
-          hostname: "localhost",
-          path: "/api/contacts",
-        } as unknown as Request,
-        {} as Response,
-        next,
-      );
-      expect(next.mock.calls[0][0]).toMatchObject({ code: "HOST_NOT_ALLOWED" });
+      // Behind a trusted proxy `req.hostname` is the first forwarded name,
+      // which a page can set itself. The Host the browser wrote, and every
+      // name a proxy added after it, must pass as well.
+      for (const headers of [
+        { host: "evil.example" },
+        { host: "localhost", "x-forwarded-host": "localhost, evil.example" },
+      ]) {
+        const next = vi.fn();
+        hostGuard(
+          {
+            headers,
+            hostname: "localhost",
+            path: "/api/contacts",
+            app: { get: () => 1 },
+          } as unknown as Request,
+          {} as Response,
+          next,
+        );
+        expect(next.mock.calls[0][0]).toMatchObject({
+          code: "HOST_NOT_ALLOWED",
+        });
+      }
     } finally {
       process.env.AUTH_REQUIRED = "true";
       delete process.env.ALLOWED_HOSTS;

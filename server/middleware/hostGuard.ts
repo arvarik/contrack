@@ -8,11 +8,12 @@
  * page's name in the Host header. So while sign-in is off, the server answers
  * only the names a public DNS name cannot be:
  * - an IP address, `localhost`, or a name with no dot (`nas`);
- * - a name under `.localhost`, `.local`, `.lan`, `.home.arpa` or `.internal`;
+ * - a name under a suffix public DNS does not serve (`LOCAL_SUFFIXES`);
  * - the host of `PUBLIC_URL`, and the names in `ALLOWED_HOSTS`.
  *
  * With sign-in on, a rebinding page has no session and no token, so the
- * guard steps aside.
+ * guard steps aside. It stays until the first account exists, though: until
+ * then the setup form is open, and a rebinding page could claim the instance.
  *
  * @module server/middleware/hostGuard
  */
@@ -20,6 +21,7 @@
 import net from "node:net";
 import type { NextFunction, Request, Response } from "express";
 import { isAuthRequired } from "./auth.ts";
+import { countPasswordAccounts } from "../services/authService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { publicOrigin } from "../utils/publicOrigin.ts";
 
@@ -30,6 +32,10 @@ const LOCAL_SUFFIXES = [
   ".lan",
   ".home.arpa",
   ".internal",
+  ".localdomain",
+  // Names ICANN keeps out of the root for their use on private networks.
+  ".home",
+  ".corp",
 ];
 
 /**
@@ -78,20 +84,44 @@ export function isHostAllowed(raw: string): boolean {
   );
 }
 
+/** Set once an account exists. Accounts never all go, so it stays set. */
+let claimed = false;
+
+/** True while sign-in protects nothing: it is off, or no account exists. */
+function isOpen(): boolean {
+  if (!isAuthRequired()) return true;
+  if (!claimed) claimed = countPasswordAccounts() > 0;
+  return !claimed;
+}
+
+/** Test seam: forget that an account was seen. */
+export function __resetHostGuard(): void {
+  claimed = false;
+}
+
 export function hostGuard(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  if (isAuthRequired()) return next();
-  // Both names must pass. `req.hostname` reads X-Forwarded-Host from a
-  // trusted proxy hop, and a browser lets a page set that header itself, so
-  // the raw Host header the browser wrote is checked as well.
-  const names = [req.headers.host ?? "", req.hostname ?? ""];
+  if (!isOpen()) return next();
+  // Every name must pass. `req.hostname` reads only the first entry of
+  // X-Forwarded-Host from a trusted proxy hop, and a page can write that
+  // header itself. So the raw Host header is checked, and so is every entry a
+  // proxy may have added after the page's own.
+  const forwarded = req.app?.get("trust proxy")
+    ? String(req.headers["x-forwarded-host"] ?? "")
+        .split(",")
+        .filter((name) => name.trim())
+    : [];
+  const names = [req.headers.host ?? "", req.hostname ?? "", ...forwarded];
   const refused = names.find((name) => !isHostAllowed(name));
   if (refused === undefined) return next();
 
-  const message = `Contrack does not answer to "${refused || "a request with no host"}" while sign-in is off. Add the name to ALLOWED_HOSTS, or turn sign-in on with AUTH_REQUIRED=true.`;
+  const name = refused || "a request with no host";
+  const message = isAuthRequired()
+    ? `Contrack does not answer to "${name}" until its first account exists. Open it by its IP address or localhost to create the account, or add the name to ALLOWED_HOSTS.`
+    : `Contrack does not answer to "${name}" while sign-in is off. Add the name to ALLOWED_HOSTS, or turn sign-in on with AUTH_REQUIRED=true.`;
   if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
     return next(new AppError(message, 403, { code: "HOST_NOT_ALLOWED" }));
   }

@@ -49,13 +49,19 @@ export function buildMcpServer(scope: Scope, req: Request): McpServer {
       title: "Contrack",
       version: "2.0.0",
       websiteUrl: "https://github.com/arvarik/contrack",
-      icons: [
-        {
-          src: `${origin}/icon-192.png`,
-          mimeType: "image/png",
-          sizes: ["192x192"],
-        },
-      ],
+      // A client may load an icon only from https or a data: URI, so an
+      // instance on plain http sends none.
+      ...(origin.startsWith("https:")
+        ? {
+            icons: [
+              {
+                src: `${origin}/icon-192.png`,
+                mimeType: "image/png",
+                sizes: ["192x192"],
+              },
+            ],
+          }
+        : {}),
     },
     {
       instructions: readOnly ? INSTRUCTIONS + READ_ONLY_NOTE : INSTRUCTIONS,
