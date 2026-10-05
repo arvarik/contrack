@@ -2,9 +2,10 @@
  * The palette's search for people, pages and new contacts, once words or
  * pills are typed.
  *
- * Rows, in order: a page named exactly, the people, "Show all in Network",
- * then the pages the words match, "Create contact" and "Ask AI". When the
- * words read as a question, "Ask AI" comes before the pages.
+ * Rows, in one order that does not change between keys: a page named
+ * exactly, the people, "Show all in Network", the pages the words match,
+ * "Create contact" (not for a question) and "Ask AI". A question moved
+ * "Ask AI" up, so the rows changed places as the words did.
  *
  * It renders in two parts, as `AiMode` does: `notes` above the list and
  * `rows` inside it. A row holds no control of its own: the → mark at its
@@ -31,10 +32,6 @@ import {
 
 type Person = Contact | SlimSearchContact;
 
-/** Words that start a question, so "Ask AI" goes first. */
-const QUESTION =
-  /^(who|whom|whose|what|which|where|when|why|how|list|find|show)\b|\?$/i;
-
 const ROW =
   "flex items-center gap-3 px-3 py-2 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors text-sm text-on-surface";
 
@@ -50,6 +47,7 @@ export interface PeopleModeProps {
   loading: boolean;
   /** The facet values are open: what to pick, not a search that failed. */
   facetMenuOpen: boolean;
+  /** A pill narrows the people. A `near:` pill does not, in the palette. */
   hasFilters: boolean;
   /** The words, without the pills. */
   words: string;
@@ -101,7 +99,6 @@ export const PeopleMode = (props: PeopleModeProps) => {
       </Command.Item>
     </Command.Group>
   );
-  const askFirst = QUESTION.test(typed);
 
   return (
     <>
@@ -158,7 +155,6 @@ export const PeopleMode = (props: PeopleModeProps) => {
         </Command.Group>
       )}
 
-      {askFirst && askRow}
       {!props.exactPage && pages}
 
       {/* Last, and only when nobody has the name: an approximate match hid
@@ -181,7 +177,7 @@ export const PeopleMode = (props: PeopleModeProps) => {
         </Command.Group>
       )}
 
-      {!askFirst && askRow}
+      {askRow}
     </>
   );
 };

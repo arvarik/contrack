@@ -27,6 +27,8 @@ describe("the palette's rules", () => {
   it("says how many a cut AI list holds", () => {
     expect(aiResultsHeading(false, 30, 1501)).toBe("AI answer · 30 of 1,501");
     expect(aiResultsHeading(true, 3, 3)).toBe("Not verified by AI");
+    // Without AI set up, rules answered: no "AI" in the heading.
+    expect(aiResultsHeading(false, 3, 3, false)).toBe("Answer");
   });
 
   it("matches a page by the start of each word, with enough letters", () => {

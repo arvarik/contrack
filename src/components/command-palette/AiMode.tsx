@@ -59,13 +59,21 @@ export function useAiSetup(enabled: boolean, aiAllowed: boolean) {
     if (!settings) return null;
     const status = featureStatus(ASK, settings, { accountAiOn: true });
     if (status.state === "ready") return null;
+    // With no provider at all, a model cannot be chosen yet: connecting one
+    // comes first. The row said "Choose a Fast model" with nothing to choose.
+    const noProvider =
+      settings.providers.length === 0 && settings.customEndpoints.length === 0;
+    const fix =
+      !settings.instance.aiOff && noProvider
+        ? { label: "Connect a provider", anchor: "providers" }
+        : status.fix;
     return {
       why: settings.instance.aiOff ? "instance" : "model",
       fix:
-        isAdmin && status.fix
+        isAdmin && fix
           ? {
-              label: `${status.fix.label} on Administration → AI`,
-              path: `/settings/admin/ai#${status.fix.anchor}`,
+              label: `${fix.label} on Administration → AI`,
+              path: `/settings/admin/ai#${fix.anchor}`,
             }
           : undefined,
     };
@@ -88,8 +96,8 @@ export interface AiModeProps {
   part: "notes" | "rows" | "after";
   /** The question, without the `?`. */
   question: string;
-  /** Typed, and the palette waits for the typing to stop. */
-  waiting: boolean;
+  /** Typed, or the pills changed, since the last question: Enter asks. */
+  pending: boolean;
   loading: boolean;
   /** The answer arrived, perhaps with nobody in it. */
   answered: boolean;
@@ -100,6 +108,8 @@ export interface AiModeProps {
   /** The question the answer is for: the brief reads it. */
   answeredQuery: string;
   setup: AiSetup | null;
+  /** Ask the typed question. */
+  onAsk: () => void;
   onPickStarter: (question: string) => void;
   onOpenContact: (id: string) => void;
   onNavigate: (path: string) => void;
@@ -108,7 +118,10 @@ export interface AiModeProps {
 export const AiMode = (props: AiModeProps) => {
   const { part, question, setup, results, fallback } = props;
   const showResults =
-    question.length >= 3 && !props.loading && results.length > 0;
+    question.length >= 3 &&
+    !props.loading &&
+    !props.pending &&
+    results.length > 0;
   const setupLine = setup
     ? [SETUP_WORDS[setup.why].state, !setup.fix && SETUP_WORDS[setup.why].ask]
         .filter(Boolean)
@@ -156,38 +169,49 @@ export const AiMode = (props: AiModeProps) => {
         </div>
       );
     }
-    if (props.waiting) {
-      return <p className={CENTERED}>Asks when you stop typing…</p>;
+    if (props.pending) {
+      // Nothing is asked until Enter, on the row below.
+      return setupLine ? (
+        <p className="px-3 pt-2 text-xs text-warning">
+          {setupLine}. The answer uses keyword and meaning search only
+        </p>
+      ) : null;
     }
     if (props.answered && results.length === 0) {
       return (
         <div className={CENTERED}>
           <p className="font-bold text-on-surface mb-1">No matches found</p>
           <p className="text-xs">
-            Try other words, or search people without the ?
+            {setupLine ? `${setupLine}. ` : ""}Try other words, or search people
+            without the ?
           </p>
         </div>
       );
     }
     if (showResults && fallback) {
+      // Without a model the list is the nearest by words and meaning, and
+      // a question nobody fits still lists people: say so plainly.
       return (
         <p className="flex items-start gap-1.5 px-3 pt-2 text-xs text-warning">
           <HelpCircle
             className="w-3.5 h-3.5 mt-px shrink-0"
             aria-hidden="true"
           />
-          {setupLine ?? "AI could not check these people this time"}. They match
-          your words or their meaning
+          {setupLine
+            ? `${setupLine}. These are the closest matches to your words, and may not fit`
+            : "AI could not check these people this time. They match your words or their meaning"}
         </p>
       );
     }
     return null;
   }
 
-  // A row to the page that turns AI on: under the intro, and under an
-  // answer AI did not check.
+  // A row to the page that turns AI on: under the intro, under an answer AI
+  // did not check, and under an answer with nobody in it.
   const setupRow = setup?.fix &&
-    (question.length === 0 || (showResults && fallback)) && (
+    (question.length === 0 ||
+      (showResults && fallback) ||
+      (props.answered && !props.pending && results.length === 0)) && (
       <Command.Group heading="Set up AI" className={GROUP_HEADING_DEFAULT}>
         <Command.Item
           value={`setup_${setup.why}`}
@@ -213,11 +237,38 @@ export const AiMode = (props: AiModeProps) => {
         </>
       );
     }
-    if (!showResults) return null;
+    if (props.pending) {
+      return (
+        <>
+          <Command.Group heading="Ask AI" className={GROUP_HEADING_PRIMARY}>
+            <Command.Item
+              value={`askai_${question}`}
+              onSelect={props.onAsk}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors text-sm text-on-surface",
+                ITEM_CURRENT,
+              )}
+            >
+              <Sparkles className="w-4 h-4 shrink-0 text-primary" />
+              <span className="truncate">
+                Ask: <span className="font-bold">"{question}"</span>
+              </span>
+            </Command.Item>
+          </Command.Group>
+          {setupRow}
+        </>
+      );
+    }
+    if (!showResults) return setupRow || null;
     return (
       <>
         <Command.Group
-          heading={aiResultsHeading(fallback, results.length, props.total)}
+          heading={aiResultsHeading(
+            fallback,
+            results.length,
+            props.total,
+            !setup,
+          )}
           className={GROUP_HEADING_PRIMARY}
         >
           {results.map((match, i) => (
@@ -226,6 +277,7 @@ export const AiMode = (props: AiModeProps) => {
               match={match}
               index={i}
               isFallback={fallback}
+              ai={!setup}
               onSelect={() => props.onOpenContact(match.id)}
             />
           ))}

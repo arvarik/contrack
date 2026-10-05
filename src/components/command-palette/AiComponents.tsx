@@ -32,6 +32,11 @@ interface AIResultCardProps {
   onSelect: () => void;
   /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
+  /**
+   * AI is set up. Without it the reason under the name comes from rules
+   * only, and it takes the plain ink, not the AI colour and its sparkle.
+   */
+  ai?: boolean;
 }
 
 export const AIResultCard = ({
@@ -39,6 +44,7 @@ export const AIResultCard = ({
   index,
   onSelect,
   isFallback,
+  ai = true,
 }: AIResultCardProps) => (
   <Command.Item
     key={match.id}
@@ -69,7 +75,7 @@ export const AIResultCard = ({
       />
 
       <ContactRowBody contact={match}>
-        {/* AI reason: a model wrote this line, so it wears the AI colour. */}
+        {/* The reason: the AI colour while AI answers, plain without it. */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}
@@ -79,9 +85,12 @@ export const AIResultCard = ({
               duration: DURATION.slow,
               ease: EASE,
             }}
-            className="text-xs text-ai italic flex items-center gap-1 mt-0.5"
+            className={cn(
+              "text-xs italic flex items-center gap-1 mt-0.5",
+              ai ? "text-ai" : "text-on-surface-variant",
+            )}
           >
-            <Sparkles className="w-3 h-3 text-ai shrink-0" />
+            {ai && <Sparkles className="w-3 h-3 text-ai shrink-0" />}
             {match.aiReason}
           </motion.span>
         )}

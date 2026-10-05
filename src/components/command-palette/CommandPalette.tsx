@@ -17,7 +17,6 @@ import {
   useSemanticSearch,
   useZeroState,
 } from "../../api";
-import { useDebounce } from "../../hooks/useDebounce";
 import { useRecentContacts } from "../../hooks/useRecentContacts";
 import { useSearchHistory } from "../../hooks/useSearchHistory";
 import { useInstantSearch } from "../../hooks/useInstantSearch";
@@ -34,7 +33,7 @@ import { cn } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import { formatFacet } from "../../../shared/facetQuery";
-import { getMode, insightPath } from "./utils";
+import { getMode, insightPath, looksLikeQuestion } from "./utils";
 import { AiMode, useAiSetup } from "./AiMode";
 import { NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
 import { LogMode } from "./LogMode";
@@ -101,6 +100,8 @@ export const CommandPalette = () => {
   const [facetPicker, setFacetPicker] = useState(false);
   // Escape once on a typed `>` note: the next one discards it.
   const [discardArmed, setDiscardArmed] = useState(false);
+  // The words the `> Log` chip carried over, read as a name (`LogMode`).
+  const [logNameHint, setLogNameHint] = useState("");
   // `>` on a touch screen: the composer for the contact it picked.
   const [logComposer, setLogComposer] = useState<{
     kind: LogKind;
@@ -115,12 +116,6 @@ export const CommandPalette = () => {
 
   // ── Mode detection ──
   const mode = getMode(search);
-  // AI debounce is intentionally longer than FTS. AI calls cost real money and
-  // produce worse results for partial queries ("Who lives in Ame" is a
-  // qualitatively different question than "Who lives in America"). 900ms is
-  // roughly the median inter-key gap a user produces at the end of a thought,
-  // so this fires when they've stopped composing rather than mid-word.
-  const debouncedSearch = useDebounce(search, mode === "ai" ? 900 : 200);
 
   // ── Faceted filter tokenizer (Feature 5) ──
   const {
@@ -196,22 +191,15 @@ export const CommandPalette = () => {
       }));
   }, [recentIds, allContacts]);
 
-  // Track last fired query to prevent duplicate calls
-  const prevAiQueryRef = useRef<string>("");
+  // The question and the pills last asked, as one key. The answer shown is
+  // for this, and a different question waits for Enter.
+  const [askedKey, setAskedKey] = useState("");
 
-  // Track if a successful AI search was recorded for the current debounced query.
-  // Without this, the recording effect re-fires on every keystroke while
-  // `semanticSearch.isSuccess` stays true, leaving a trail of prefix entries
-  // in "Recent searches" (e.g. "vent", "ventu", "ventur", "venture").
+  // The question already saved to Recent, so an answer is saved once.
   const lastRecordedAiRef = useRef<string>("");
 
   // Derive the raw NL query from the ? prefix
   const aiQuery = mode === "ai" ? search.replace(/^\?+\s*/, "").trim() : "";
-
-  // Debounced counterpart — used as the canonical "settled" query for
-  // recording into history, so we only persist queries the user paused on.
-  const debouncedAiQuery =
-    mode === "ai" ? debouncedSearch.replace(/^\?+\s*/, "").trim() : "";
 
   // Derive AI results directly from mutation data (reactive, no extra
   // useState). Memoized so downstream memos/effects see a stable identity —
@@ -259,94 +247,95 @@ export const CommandPalette = () => {
   const aiFilters = mode === "ai" ? parsed.filters : NO_FILTERS;
   const aiFilterKey = JSON.stringify(aiFilters);
 
-  // Fire semantic search only when the *debounced* AI query settles.
-  // Previously this read the live `aiQuery` but listed `debouncedSearch` as a
-  // dependency, so the effect re-ran per keystroke and the debounce was a
-  // no-op — every prefix the user typed hit the AI endpoint. Now the effect
-  // genuinely waits for the user to pause before issuing a request, which
-  // both reduces cost and dramatically improves answer quality (partial
-  // queries embed/rerank poorly compared to fully-formed questions).
-  useEffect(() => {
-    if (
-      !open ||
-      mode !== "ai" ||
-      debouncedAiQuery.length < 3 ||
-      aiQuery !== debouncedAiQuery
-    )
-      return;
-    const asked = `${debouncedAiQuery}\u0000${aiFilterKey}`;
-    if (asked === prevAiQueryRef.current) return;
-    prevAiQueryRef.current = asked;
-    runSemanticSearch(debouncedAiQuery, aiFilters);
-  }, [
-    open,
-    mode,
-    aiQuery,
-    debouncedAiQuery,
-    runSemanticSearch,
-    aiFilters,
-    aiFilterKey,
-  ]);
+  /**
+   * Ask AI, on purpose: Enter on the "Ask AI" row, a starter, a recent
+   * question, or the people search's "Ask AI" row. It used to ask by itself
+   * 900 ms after the typing stopped, so a pause mid-question sent half a
+   * question, which costs money and answers worse, and saved it to Recent.
+   */
+  const askAi = useCallback(
+    (question: string, filters: FacetFilter[]) => {
+      const q = question.trim();
+      if (q.length < 3) return;
+      setAskedKey(`${q}\u0000${JSON.stringify(filters)}`);
+      runSemanticSearch(q, filters);
+    },
+    [runSemanticSearch],
+  );
 
-  // Reset mutation state when mode changes away from AI. Closing the palette
-  // (Escape, the backdrop, ⌘K) leaves a question running, so the server
-  // finishes the answer and caches it: asking again here or on Ask is
-  // answered at once. Leaving AI mode while open cancels it.
+  // Typed, or the pills changed, since the last question: Enter asks.
+  const aiPending =
+    mode === "ai" &&
+    aiQuery.length >= 3 &&
+    `${aiQuery}\u0000${aiFilterKey}` !== askedKey;
+
+  // Leaving AI mode while open cancels the question. Closing the palette
+  // (Escape, the backdrop, ⌘K) leaves it running, so the server finishes
+  // and caches the answer: asking again here or on Ask is answered at once.
   useEffect(() => {
     if (!open || mode !== "ai" || aiQuery.length < 3) {
       resetSemanticSearch(open);
-      prevAiQueryRef.current = "";
+      setAskedKey("");
     }
   }, [open, mode, aiQuery, resetSemanticSearch]);
 
-  // Note: normal (FTS) searches are intentionally NOT recorded on debounce.
-  // Debounced recording inevitably leaks prefixes ("Ri", "Ric", "Rich"...) as
-  // the user types past each settled state. Instead we record the *committed*
-  // query inside the contact result `onSelect` handler — matching the
-  // industry-standard "save on selection" pattern (Google, Spotlight, Linear).
-  // AI is different: an AI response is itself valuable even without a click,
-  // so AI searches are recorded once the debounced query settles successfully.
-
-  // Record successful AI searches to history.
-  // Gated on the *debounced* query and a dedup ref so we record once per
-  // settled query, not once per keystroke during typing.
+  // Save an answered question to Recent, once. Normal searches are saved
+  // only when a person picks a result (`handleSelectFtsContact`).
   useEffect(() => {
+    const answered = semanticSearch.data?.query ?? "";
     if (
       mode === "ai" &&
       semanticSearch.isSuccess &&
       aiResults.length > 0 &&
-      debouncedAiQuery.length >= 3 &&
-      debouncedAiQuery !== lastRecordedAiRef.current
+      answered &&
+      answered !== lastRecordedAiRef.current
     ) {
-      lastRecordedAiRef.current = debouncedAiQuery;
-      addEntry(`? ${debouncedAiQuery}`, "ai");
+      lastRecordedAiRef.current = answered;
+      addEntry(`? ${answered}`, "ai");
     }
   }, [
     semanticSearch.isSuccess,
+    semanticSearch.data?.query,
     aiResults.length,
-    debouncedAiQuery,
     mode,
     addEntry,
   ]);
 
-  // Global ⌘K / Ctrl+K listener.
-  // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
-  // The empty palette lists the recent searches, to pick from.
-  // A touch screen has no ⌘K: the Network header's button sends
-  // `OPEN_PALETTE_EVENT` (`openCommandPalette`), which only opens.
+  // What had the focus before the palette opened, to give it back on close.
+  // It went to the page's body, and a keyboard user lost their place.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  // The latest `handleClose`, for the key listener below, which binds once.
+  const closeRef = useRef<() => void>(() => {});
+
+  // Global ⌘K / Ctrl+K listener. It opens with an empty box, as Spotlight,
+  // Linear and Raycast do, and closes the way Escape does on an empty box:
+  // ⌘K used to hide the palette with its text, answer and menu, and bring
+  // them all back on the next ⌘K. A touch screen has no ⌘K: each page
+  // header's button sends `OPEN_PALETTE_EVENT` (`openCommandPalette`).
   useEffect(() => {
+    const openPalette = () => {
+      if (openRef.current) return;
+      const focused = document.activeElement;
+      returnFocusRef.current =
+        focused instanceof HTMLElement && focused !== document.body
+          ? focused
+          : null;
+      setOpen(true);
+    };
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        if (openRef.current) closeRef.current();
+        else openPalette();
       }
     };
-    const openByEvent = () => setOpen(true);
     document.addEventListener("keydown", down);
-    window.addEventListener(OPEN_PALETTE_EVENT, openByEvent);
+    window.addEventListener(OPEN_PALETTE_EVENT, openPalette);
     return () => {
       document.removeEventListener("keydown", down);
-      window.removeEventListener(OPEN_PALETTE_EVENT, openByEvent);
+      window.removeEventListener(OPEN_PALETTE_EVENT, openPalette);
     };
   }, []);
 
@@ -388,12 +377,13 @@ export const CommandPalette = () => {
     setDiscardArmed(false);
     setLogComposer(null);
     setPeekVisible(false);
-    prevAiQueryRef.current = "";
     lastRecordedAiRef.current = "";
     clearFilters();
     subMenuRowRef.current = "";
     closeSubMenu();
   }, [clearFilters, closeSubMenu]);
+
+  closeRef.current = handleClose;
 
   // Another shortcut that opens a dialog of its own closes the palette
   // first (`closeCommandPalette`). It used to send an Escape, which now
@@ -438,9 +428,28 @@ export const CommandPalette = () => {
       clearFilters();
       setFacetMenuDismissed(false);
       setDiscardArmed(false);
+      // Back to the box: from a chip Tab reached, the next words went
+      // nowhere.
+      inputRef.current?.focus();
       return true;
     }
     return false;
+  };
+
+  /**
+   * cmdk takes Enter from everything inside the palette and runs the
+   * highlighted row. A focused button (a mode chip, a pill's ×, a link
+   * under the answer, an action Tab reached) ran the highlighted contact
+   * instead of itself. Now it runs itself: cmdk skips a prevented key.
+   */
+  const handleRootKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" || e.target === inputRef.current) return;
+    const control = (e.target as HTMLElement).closest<HTMLElement>(
+      "button, a[href], [role='button']",
+    );
+    if (!control || control.hasAttribute("cmdk-item")) return;
+    e.preventDefault();
+    control.click();
   };
 
   // Radix asks here before it closes the dialog: a prevented Escape keeps
@@ -524,8 +533,11 @@ export const CommandPalette = () => {
         return;
       }
       setSearch(query);
+      // A question picked again is asked again.
+      if (query.trim().startsWith("?"))
+        askAi(query.replace(/^\s*\?\s*/, ""), []);
     },
-    [navigate, handleClose],
+    [navigate, handleClose, askAi],
   );
 
   // Commit-on-selection recording for normal-mode contact picks.
@@ -610,6 +622,8 @@ export const CommandPalette = () => {
   const canCreate =
     typedWords.length > 0 &&
     !hasFilters &&
+    // Nobody is called "who works at Stripe".
+    !looksLikeQuestion(typedWords) &&
     !instantSearch.results.some(
       (c) => c.name?.trim().toLowerCase() === typedWords,
     ) &&
@@ -676,6 +690,7 @@ export const CommandPalette = () => {
           ? `> ${words}`
           : words,
     );
+    setLogNameHint(target === "action" ? words.trim() : "");
     setFacetMenuDismissed(false);
     setDiscardArmed(false);
     setFacetPicker(target === "filter" ? !facetPicker : false);
@@ -745,16 +760,30 @@ export const CommandPalette = () => {
   useLayoutEffect(() => {
     const input = inputRef.current;
     const list = listRef.current;
-    if (!input || !list) return;
+    const root = list?.closest<HTMLElement>("[cmdk-root]");
+    if (!input || !list || !root) return;
+    const point = (attribute: string, id: string | undefined) => {
+      if (!id) input.removeAttribute(attribute);
+      else if (input.getAttribute(attribute) !== id) {
+        input.setAttribute(attribute, id);
+      }
+    };
     const sync = () => {
-      const row = list.querySelector('[cmdk-item][aria-selected="true"]');
-      if (!row?.id) {
-        input.removeAttribute("aria-activedescendant");
+      // The actions menu, the list picker and the facet values are lists of
+      // their own: while one shows, the input points at it and its row.
+      const popup = root.querySelector<HTMLElement>("[data-palette-popup]");
+      if (popup) {
+        point("aria-controls", popup.id);
+        point(
+          "aria-activedescendant",
+          popup.querySelector('[role="option"][aria-selected="true"]')?.id,
+        );
         return;
       }
-      if (input.getAttribute("aria-activedescendant") !== row.id) {
-        input.setAttribute("aria-activedescendant", row.id);
-      }
+      point("aria-controls", list.id);
+      const row = list.querySelector('[cmdk-item][aria-selected="true"]');
+      point("aria-activedescendant", row?.id);
+      if (!row) return;
       // And in view: cmdk scrolls to the row it last chose, which can be
       // one the highlight has already left. The top row shows its heading.
       // Not for the pointer, as cmdk does not: a row half in view would
@@ -766,12 +795,14 @@ export const CommandPalette = () => {
     };
     sync();
     const observer = new MutationObserver(sync);
-    observer.observe(list, {
+    observer.observe(root, {
       subtree: true,
       childList: true,
       attributeFilter: ["aria-selected"],
     });
-    observer.observe(input, { attributeFilter: ["aria-activedescendant"] });
+    observer.observe(input, {
+      attributeFilter: ["aria-activedescendant", "aria-controls"],
+    });
     return () => observer.disconnect();
   });
 
@@ -788,21 +819,25 @@ export const CommandPalette = () => {
   const listSettled =
     !parsed.freeText.trim() ||
     (!instantSearch.isInstant && !instantSearch.isFtsLoading);
+  // The actions menu says whose actions they are. Under the open facet
+  // values, a people count would describe a list nobody is picking from.
   const statusText = subMenuContactId
-    ? ""
-    : mode === "ai"
-      ? aiQuery.length < 3
-        ? ""
-        : isAiLoading
-          ? "Asking AI"
-          : semanticSearch.isSuccess
-            ? aiResults.length === 0
-              ? "No matches found"
-              : peopleCount(aiResults.length)
-            : ""
-      : mode === "normal" && !isEmptyInput && listSettled
-        ? peopleCount(instantSearch.results.length)
-        : "";
+    ? `Actions for ${subMenuContactName}`
+    : facetMenuOpen
+      ? ""
+      : mode === "ai"
+        ? aiQuery.length < 3 || aiPending
+          ? ""
+          : isAiLoading
+            ? "Asking AI"
+            : semanticSearch.isSuccess
+              ? aiResults.length === 0
+                ? "No matches found"
+                : peopleCount(aiResults.length)
+              : ""
+        : mode === "normal" && !isEmptyInput && listSettled
+          ? peopleCount(instantSearch.results.length)
+          : "";
 
   // Shift-to-peek.
   // We originally bound this to Space, but the input always has focus inside
@@ -847,12 +882,8 @@ export const CommandPalette = () => {
   // for `?`, the links below it.
   const aiModeProps = {
     question: aiQuery,
-    waiting:
-      aiQuery.length >= 3 &&
-      !isAiLoading &&
-      !semanticSearch.isSuccess &&
-      !semanticSearch.isError,
-    loading: aiQuery.length >= 3 && isAiLoading,
+    pending: aiPending,
+    loading: aiQuery.length >= 3 && isAiLoading && !aiPending,
     answered: semanticSearch.isSuccess,
     error: semanticSearch.isError
       ? semanticSearch.error?.message || "Search failed. Try again"
@@ -862,7 +893,11 @@ export const CommandPalette = () => {
     fallback: aiFallback,
     answeredQuery: aiAnsweredQuery,
     setup: aiSetup,
-    onPickStarter: (question: string) => setSearch(`? ${question}`),
+    onAsk: () => askAi(aiQuery, aiFilters),
+    onPickStarter: (question: string) => {
+      setSearch(`? ${question}`);
+      askAi(question, aiFilters);
+    },
     onOpenContact: handleSelectContact,
     onNavigate: handleNavigate,
   };
@@ -871,6 +906,7 @@ export const CommandPalette = () => {
     contacts: allContacts,
     recentContacts,
     discardArmed,
+    nameHint: logNameHint,
     onFill: (text: string) => {
       setSearch(text);
       setDiscardArmed(false);
@@ -882,7 +918,7 @@ export const CommandPalette = () => {
     results: instantSearch.results,
     loading: instantSearch.isFtsLoading,
     facetMenuOpen,
-    hasFilters,
+    hasFilters: parsed.filters.some((filter) => filter.field !== "near"),
     words: parsed.freeText,
     query: fullQuery,
     exactPage,
@@ -894,7 +930,11 @@ export const CommandPalette = () => {
       avatarUrl?: string | null;
     }) => openSubMenu(person),
     onCreate: handleCreateContact,
-    onAsk: () => setSearch(`? ${parsed.freeText.trim()}`),
+    // The pills go with the question.
+    onAsk: () => {
+      setSearch(`? ${parsed.freeText.trim()}`);
+      askAi(parsed.freeText, parsed.filters);
+    },
     onNavigate: handleNavigate,
   };
 
@@ -916,11 +956,18 @@ export const CommandPalette = () => {
               aria-label="Global command palette"
               cmdk-dialog=""
               onEscapeKeyDown={handleEscape}
+              onCloseAutoFocus={(e) => {
+                const target = returnFocusRef.current;
+                if (!target?.isConnected) return;
+                e.preventDefault();
+                target.focus({ preventScroll: true });
+              }}
             >
               <Command
                 label="Global command palette"
                 value={activeRow}
                 onValueChange={setActiveRow}
+                onKeyDown={handleRootKeyDown}
                 // Every row arrives filtered: the people by the instant filter
                 // or the server, the rest by this component. cmdk's own fuzzy
                 // filter scores only a row's value against the whole input. It
@@ -992,7 +1039,7 @@ export const CommandPalette = () => {
                         </motion.div>
                       ) : mode === "action" ? (
                         <motion.div key="action-icon" {...ICON_SWAP}>
-                          <Zap className="w-5 h-5 text-success animate-pulse" />
+                          <Zap className="w-5 h-5 text-success" />
                         </motion.div>
                       ) : (
                         <motion.div key="search-icon" {...ICON_SWAP}>
@@ -1016,9 +1063,15 @@ export const CommandPalette = () => {
                           ? "Add more filters or search…"
                           : "Search people and pages…"
                       }
-                      aria-describedby={modeChipsId}
+                      aria-describedby={`${modeChipsId}-hint`}
                       className="flex-1 min-w-0 min-h-[44px] pointer-fine:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
                     />
+                    {/* What a screen reader hears after the box's name. It
+                        read out the chips: "Search ? Ask AI > Log Filter". */}
+                    <span id={`${modeChipsId}-hint`} className="sr-only">
+                      Type ? to ask AI, or &gt; to log a note, a call, a meeting
+                      or an email
+                    </span>
                     {/* Full ink: at half opacity it failed contrast. */}
                     <kbd className={cn(KBD, "pointer-coarse:hidden")}>Esc</kbd>
                     {/* A touch screen has no Esc key. */}
@@ -1208,26 +1261,38 @@ export const CommandPalette = () => {
                   {/* ── Footer: the keys that work on this row ── */}
                   <PaletteFooter
                     enter={
-                      subMenuContactId || logComposer
-                        ? null
-                        : enterActionFor(activeRow)
+                      facetMenuOpen
+                        ? "pick"
+                        : subMenuContactId
+                          ? "pick"
+                          : logComposer
+                            ? null
+                            : enterActionFor(activeRow)
                     }
-                    canAct={!subMenuContactId && !logComposer && !!peekContact}
-                    canPeek={!subMenuContactId && !logComposer && !!peekContact}
+                    canAct={
+                      !subMenuContactId &&
+                      !logComposer &&
+                      !facetMenuOpen &&
+                      !!peekContact
+                    }
+                    canPeek={
+                      !subMenuContactId &&
+                      !logComposer &&
+                      !facetMenuOpen &&
+                      !!peekContact
+                    }
                     escape={
-                      subMenuContactId || logComposer || facetPicker
-                        ? "back"
-                        : search !== "" || hasFilters
-                          ? "clear"
-                          : "close"
-                    }
-                    tip={
-                      isEmptyInput && mode === "normal" && !facetPicker ? (
-                        <span>
-                          Filter with <code>tag:</code>, <code>role:</code> or{" "}
-                          <code>company:</code>
-                        </span>
-                      ) : undefined
+                      facetMenuOpen
+                        ? "hide"
+                        : subMenuContactId || logComposer || facetPicker
+                          ? "back"
+                          : mode === "action" &&
+                              parseLogInput(search).step === "text" &&
+                              /:\s*\S/.test(search)
+                            ? "discard"
+                            : search !== "" || hasFilters
+                              ? "clear"
+                              : "close"
                     }
                   />
                 </motion.div>

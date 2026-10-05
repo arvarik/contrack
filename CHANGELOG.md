@@ -72,9 +72,9 @@ with an empty `DATA_DIR`.
 - Search history is shared with the command palette, and "Try asking" offers
   questions built from your own contacts.
 - The command palette's arrow keys move the highlight and `Esc` steps back one
-  layer at a time. It finds pages, lists the facets under **Filter**, leads
-  `>` logging a step at a time, says when AI is not set up, and opens from
-  every page on a phone, above the on-screen keyboard.
+  layer at a time. It asks AI only on `Enter`, finds pages, lists the facets
+  under **Filter**, leads `>` logging a step at a time, says when AI is not
+  set up, and opens from every page on a phone, above the on-screen keyboard.
 
 ### Pulse and tracking
 

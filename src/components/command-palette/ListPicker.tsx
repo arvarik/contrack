@@ -6,7 +6,7 @@
  *
  * @module components/command-palette/ListPicker
  */
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,7 +16,7 @@ import {
   useRemoveFromList,
   useContacts,
 } from "../../api";
-import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
+import { ICON_BTN, SELECTED_ROW } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { ListIcon } from "../../views/contact-list/CreateListModal";
@@ -41,6 +41,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
   const addToList = useAddToList();
   const removeFromList = useRemoveFromList();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const listboxId = useId();
   const [pendingListId, setPendingListId] = useState<string | null>(null);
 
   // ── Get current list memberships for this contact ───────────────────────
@@ -78,10 +79,23 @@ export const ListPicker: React.FC<ListPickerProps> = ({
   // ── Keyboard navigation ─────────────────────────────────────────────────
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // The palette's search box keeps the focus while the picker shows, so
+      // its keys are the picker's. The picker skipped every input, so it took
+      // no key at all. Another field, or a focused button, keeps its own.
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target &&
+        !target.hasAttribute("cmdk-input") &&
+        target.closest("input, textarea, select, button, a[href]")
+      )
+        return;
 
       switch (e.key) {
+        case "Home":
+        case "End":
+          e.preventDefault();
+          setSelectedIndex(e.key === "Home" ? 0 : lists.length - 1);
+          break;
         case "ArrowDown":
           e.preventDefault();
           setSelectedIndex((prev) => (prev + 1) % lists.length);
@@ -145,7 +159,16 @@ export const ListPicker: React.FC<ListPickerProps> = ({
           <p className="text-xs">Create a list from the Settings page first</p>
         </div>
       ) : (
-        <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
+        // A listbox the palette's input names the current row of
+        // (`aria-activedescendant`, synced in CommandPalette), so a screen
+        // reader hears the arrows. The rows are not Tab stops.
+        <div
+          role="listbox"
+          id={listboxId}
+          aria-label={`Lists for ${contactName}`}
+          data-palette-popup=""
+          className="space-y-0.5 max-h-[240px] overflow-y-auto"
+        >
           {lists.map((list, i) => {
             const isMember = memberListIds.has(list.id);
             const isPending = pendingListId === list.id;
@@ -153,6 +176,12 @@ export const ListPicker: React.FC<ListPickerProps> = ({
             return (
               <button
                 key={list.id}
+                type="button"
+                role="option"
+                id={`${listboxId}-${i}`}
+                aria-selected={i === selectedIndex}
+                aria-checked={isMember}
+                tabIndex={-1}
                 onClick={() => handleToggle(list.id)}
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={isPending}
@@ -189,13 +218,6 @@ export const ListPicker: React.FC<ListPickerProps> = ({
           })}
         </div>
       )}
-
-      {/* Footer hint */}
-      <div className="hidden pointer-fine:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
-        <kbd className={KBD_SM}>↵</kbd> toggle
-        <span>·</span>
-        <kbd className={KBD_SM}>ESC</kbd> back
-      </div>
     </motion.div>
   );
 };

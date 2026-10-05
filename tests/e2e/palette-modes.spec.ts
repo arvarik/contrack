@@ -213,7 +213,8 @@ test("? says that no AI model is set up, and leads to where it is chosen", async
     palette.getByText(/No AI model is set up\. Answers use keyword/),
   ).toBeVisible();
   // First, before the starters: without it they get a local answer.
-  await expect(highlighted(palette)).toHaveText(/Choose a Fast model/);
+  // With no provider at all, connecting one comes first.
+  await expect(highlighted(palette)).toHaveText(/Connect a provider/);
   await page.keyboard.press("Enter");
   await expect(palette).toHaveCount(0);
   await expect(page).toHaveURL(/\/settings\/admin\/ai#/);
@@ -235,6 +236,60 @@ test("a question in the search box offers to ask AI, and people show all in Netw
     .getByRole("option", { name: 'Ask AI: "who works at NASA"' })
     .click();
   await expect(input).toHaveValue("? who works at NASA");
+});
+
+test("a question offers no new contact by its words", async ({ page }) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("who works at NASA");
+  await expect(
+    palette.getByRole("option", { name: /^Ask AI: / }),
+  ).toBeVisible();
+  await expect(
+    palette.getByRole("option", { name: /^Create contact/ }),
+  ).toHaveCount(0);
+});
+
+test("? asks on Enter, not when the typing stops", async ({ page }) => {
+  let asked = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/api/search/semantic")) asked += 1;
+  });
+  const palette = await openPalette(page);
+  await page.keyboard.type("? who likes espresso");
+  // It asked 900 ms after the typing stopped: half a question, at a cost.
+  await page.waitForTimeout(1500);
+  expect(asked).toBe(0);
+  await expect(highlighted(palette)).toHaveText('Ask: "who likes espresso"');
+  await page.keyboard.press("Enter");
+  await expect.poll(() => asked).toBe(1);
+});
+
+test("without AI, an answer by rules is an Answer, not an AI answer", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("? Ada Lovelace");
+  await page.keyboard.press("Enter");
+  await expect(
+    palette.getByRole("option", { name: /^Ada Lovelace/ }),
+  ).toBeVisible();
+  await expect(
+    palette.locator("[cmdk-group-heading]", { hasText: /^Answer$/ }),
+  ).toBeVisible();
+  await expect(palette.getByText("AI answer")).toHaveCount(0);
+});
+
+test("> Log keeps words that start like a kind as the name", async ({
+  page,
+}) => {
+  // "cal" for Calvin offered only "Log a call", and lost the name.
+  const palette = await openPalette(page);
+  await page.keyboard.type("cal");
+  await palette.getByRole("button", { name: "> Log" }).click();
+  await expect(palette.getByText('Log for "cal"')).toBeVisible();
+  await expect(
+    palette.getByRole("option", { name: /Log a note/ }),
+  ).toBeVisible();
 });
 
 test("the Filter chip lists the facets, and a pick opens its values", async ({
@@ -296,6 +351,40 @@ test.describe("on a phone", () => {
     );
     expect(logged).toBeDefined();
     created.push({ instance, path: `/interactions/${logged!.id}` });
+  });
+
+  test("the map has the palette's button too", async ({ page }) => {
+    await page.goto("/map");
+    await expect(
+      page.getByRole("button", { name: "Command palette" }),
+    ).toBeVisible();
+  });
+
+  test("keeps the composer's Save in view above the keyboard", async ({
+    page,
+  }) => {
+    await page.goto("/pulse");
+    await page.getByRole("button", { name: "Command palette" }).tap();
+    const palette = page.getByRole("dialog");
+    await palette.getByRole("button", { name: "> Log" }).tap();
+    await palette.getByRole("option", { name: /Log a note/ }).tap();
+    await page.keyboard.type("eds");
+    await palette.getByRole("option", { name: "Edsger Dijkstra" }).tap();
+    await expect(palette.getByRole("textbox", { name: "Note" })).toBeVisible();
+    await page.evaluate(() =>
+      document.documentElement.style.setProperty("--keyboard-inset", "420px"),
+    );
+    // It sat under the keyboard, below the scroll area's visible part.
+    await expect(
+      palette.getByRole("button", { name: "Save" }),
+    ).toBeInViewport();
+    await expect
+      .poll(() =>
+        palette
+          .getByRole("button", { name: "Save" })
+          .evaluate((button) => button.getBoundingClientRect().bottom),
+      )
+      .toBeLessThanOrEqual(844 - 420);
   });
 
   test("stays above the on-screen keyboard, with no key hints", async ({

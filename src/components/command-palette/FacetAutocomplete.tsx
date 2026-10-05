@@ -6,7 +6,7 @@
  *
  * @module components/command-palette/FacetAutocomplete
  */
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useSlimContactsForSearch } from "../../api/contacts";
 import type { FacetField, FacetFilter } from "../../hooks/useQueryTokenizer";
@@ -81,6 +81,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
 }) => {
   const { data: slimContacts } = useSlimContactsForSearch();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const listboxId = useId();
 
   // ── Build suggestions from slim cache ───────────────────────────────────
   const suggestions = useMemo(() => {
@@ -266,11 +267,27 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         // taken off.
         className={cn(MENU_PANEL, "menu-enter-none mx-4 mb-1 min-w-0")}
       >
-        <div className={MENU_HEADING}>{field} values</div>
-        <div className="max-h-[200px] overflow-y-auto">
+        <div className={MENU_HEADING} aria-hidden="true">
+          {field} values
+        </div>
+        {/* A listbox the palette's input names the current value of
+            (`aria-activedescendant`, synced in CommandPalette): a screen
+            reader heard nothing while a value was picked. */}
+        <div
+          role="listbox"
+          id={listboxId}
+          aria-label={`${field} values`}
+          data-palette-popup=""
+          className="max-h-[200px] overflow-y-auto"
+        >
           {suggestions.map((s, i) => (
             <button
               key={`${s.filter.field}-${s.filter.value}-${i}`}
+              type="button"
+              role="option"
+              id={`${listboxId}-${i}`}
+              aria-selected={i === selectedIndex}
+              tabIndex={-1}
               onClick={() => onSelect(s.filter)}
               onMouseDown={(e) => e.preventDefault()}
               className={cn(

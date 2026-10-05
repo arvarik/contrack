@@ -43,33 +43,35 @@ export function enterActionFor(row: string): EnterAction {
   );
 }
 
+const ESCAPE_WORDS = {
+  back: "go back",
+  clear: "clear",
+  close: "close",
+  hide: "hide the values",
+  discard: "discard",
+} as const;
+
 export const PaletteFooter = ({
   enter,
   canAct,
   canPeek,
   escape,
-  tip,
 }: {
   enter: EnterAction;
   /** The row is a person `→` opens actions for. */
   canAct: boolean;
   /** Shift shows a card for the row. */
   canPeek: boolean;
-  /** What Escape does next. */
-  escape: "back" | "clear" | "close";
-  /** A line for the left side, in place of the arrow keys. */
-  tip?: React.ReactNode;
+  /** What Escape does next: "hide" closes the facet values, "discard" asks
+   * before it throws away a typed note. */
+  escape: "back" | "clear" | "close" | "hide" | "discard";
 }) => (
   <div
     className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden pointer-fine:flex items-center justify-between gap-4`}
   >
     <span className="flex items-center gap-1.5 min-w-0 truncate">
-      {tip ?? (
-        <>
-          <kbd className={KBD_SM}>↑</kbd>
-          <kbd className={KBD_SM}>↓</kbd> to move
-        </>
-      )}
+      <kbd className={KBD_SM}>↑</kbd>
+      <kbd className={KBD_SM}>↓</kbd> to move
     </span>
     <span className="flex items-center gap-3 shrink-0">
       {canAct && (
@@ -88,8 +90,7 @@ export const PaletteFooter = ({
         </span>
       )}
       <span>
-        <kbd className={KBD_SM}>Esc</kbd> to{" "}
-        {escape === "back" ? "go back" : escape}
+        <kbd className={KBD_SM}>Esc</kbd> to {ESCAPE_WORDS[escape]}
       </span>
     </span>
   </div>

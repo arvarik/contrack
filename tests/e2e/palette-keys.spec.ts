@@ -282,7 +282,13 @@ test("Escape in the note composer goes back to the actions, with the input focus
   await page.keyboard.press("ArrowRight");
   await expect(palette.getByText("Log note")).toBeVisible();
   await page.keyboard.press("n");
-  await expect(palette.locator("textarea")).toBeFocused();
+  const note = palette.locator("textarea");
+  await expect(note).toBeFocused();
+  // Its own keys: cmdk took Enter, so a note had one line.
+  await page.keyboard.type("met");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("again");
+  await expect(note).toHaveValue("met\nagain");
 
   await page.keyboard.press("Escape");
   await expect(palette.getByText("Log note")).toBeVisible();
@@ -346,4 +352,102 @@ test("Home and End move the caret when the box holds text", async ({
     .poll(() => input.evaluate((el: HTMLInputElement) => el.selectionStart))
     .toBe(1);
   expect(await highlightIndex(page)).toBe(1);
+});
+
+test("Enter on a focused button runs it, not the highlighted row", async ({
+  page,
+}) => {
+  // cmdk took Enter from every button in the palette and opened the
+  // highlighted contact: here, Grace Hopper.
+  const palette = await openPalette(page);
+  await page.keyboard.type("Grace");
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await palette.getByRole("button", { name: "? Ask AI" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(palette.getByRole("combobox")).toHaveValue("? Grace");
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("closing gives the focus back, and ⌘K closes the palette empty", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  const pulse = page.getByRole("link", { name: "Pulse" }).first();
+  await pulse.focus();
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog");
+  await page.keyboard.type("Grace");
+  // ⌘K hid the palette with its text, and brought it back next time.
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toHaveCount(0);
+  await expect(pulse).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette.getByRole("combobox")).toHaveValue("");
+  await page.keyboard.press("Escape");
+  await expect(pulse).toBeFocused();
+});
+
+test("the actions and the list picker work by keyboard, and say where they are", async ({
+  page,
+  instance,
+}) => {
+  const { id } = await instance.api<{ id: string }>("POST", "/lists", {
+    name: "zz palette list",
+    icon: "star",
+  });
+  created.push({ instance, path: `/lists/${id}` });
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  const points = async (label: string, row: RegExp) => {
+    await expect(input).toHaveAttribute(
+      "aria-controls",
+      (await palette.getByRole("listbox", { name: label }).getAttribute("id"))!,
+    );
+    const current = palette.getByRole("option", { name: row });
+    await expect(input).toHaveAttribute(
+      "aria-activedescendant",
+      (await current.getAttribute("id"))!,
+    );
+  };
+  await page.keyboard.type("Grace");
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+
+  // A screen reader heard nothing in the actions: they were plain buttons.
+  await page.keyboard.press("ArrowRight");
+  await points("Actions for Grace Hopper", /^View profile/);
+  await expect(
+    palette.getByRole("status", { name: "Palette status" }),
+  ).toHaveText("Actions for Grace Hopper");
+  await page.keyboard.press("ArrowDown");
+  await points("Actions for Grace Hopper", /^Log note/);
+
+  // The picker skipped every key from the search box, which has the focus.
+  await page.keyboard.press("l");
+  const list = palette.getByRole("option", { name: /zz palette list/ });
+  await expect(list).toBeVisible();
+  for (let i = 0; i < 20; i++) {
+    if ((await list.getAttribute("aria-selected")) === "true") break;
+    await page.keyboard.press("ArrowDown");
+  }
+  await points("Lists for Grace Hopper", /zz palette list/);
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByText('Added Grace Hopper to "zz palette list"'),
+  ).toBeVisible();
+});
+
+test("the facet values say which value the arrows are on", async ({ page }) => {
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("contacted:");
+  const first = palette.getByRole("option", { name: /Within 30 days/ });
+  await expect(input).toHaveAttribute(
+    "aria-activedescendant",
+    (await first.getAttribute("id"))!,
+  );
+  // Not "No people found" while a value is picked.
+  await expect(
+    palette.getByRole("status", { name: "Palette status" }),
+  ).toHaveText("");
 });

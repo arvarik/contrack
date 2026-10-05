@@ -21,6 +21,7 @@ import { contactService } from "../../server/services/contactService.ts";
 import { searchService } from "../../server/services/searchService.ts";
 import {
   article,
+  roleQuestion,
   buildStarterQuestions,
   resetStarterQuestions,
   scheduleStarterQuestions,
@@ -417,6 +418,15 @@ describe("the general questions in the pool", () => {
 });
 
 describe("article", () => {
+  it("asks for a team in it, and for a title as one", () => {
+    expect(roleQuestion("Engineering")).toBe("Who works in Engineering?");
+    expect(roleQuestion("Customer Success")).toBe(
+      "Who works in Customer Success?",
+    );
+    expect(roleQuestion("Head of Sales")).toBe("Who works as a Head of Sales?");
+    expect(roleQuestion("Engineer")).toBe("Who works as an Engineer?");
+  });
+
   it("says a role the way it is spoken", () => {
     expect(article("Product Designer")).toBe("a");
     expect(article("Engineer")).toBe("an");

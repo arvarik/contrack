@@ -199,15 +199,22 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
               type,
             });
           }}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            handleKeyDown(e);
+            // The text area's own keys: Enter makes a new line and the
+            // arrows move the caret. cmdk's handler on the palette took
+            // them for its list. Escape still reaches the palette.
+            if (e.key !== "Escape") e.stopPropagation();
+          }}
           placeholder={placeholder}
           className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px]"
           rows={3}
         />
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-3 pt-2 pb-1">
+      {/* Footer. It sticks to the bottom of the palette's scroll area: with
+          a phone's keyboard up, Save sat below the visible part. */}
+      <div className="sticky bottom-0 z-10 flex items-center justify-between px-3 pt-2 pb-1 bg-surface-container-lowest">
         {/* `-ml-2` keeps the text in line with the note above it. */}
         <button onClick={onBack} className={cn(BTN_QUIET, "-ml-2")}>
           <kbd className={`${KBD_SM} hidden pointer-fine:inline-flex`}>ESC</kbd>

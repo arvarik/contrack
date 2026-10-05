@@ -16,6 +16,7 @@
 import React, {
   useEffect,
   useCallback,
+  useId,
   useMemo,
   useState,
   useRef,
@@ -94,6 +95,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     previousModeRef.current = mode;
   }, [mode, onReturnFocus]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const listboxId = useId();
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // ── Track ───────────────────────────────────────────────────────────────
@@ -229,10 +231,14 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       // menu shows, its keys belong to the menu. Before, B typed a "b" into
       // the box, and the typing closed the menu. A key the menu does not use
       // still types, and a new search closes the menu.
-      const target = e.target as HTMLElement;
-      const isField =
-        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
-      if (isField && !target.hasAttribute("cmdk-input")) return;
+      // A focused button, such as Back, keeps Enter and Space as well.
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target &&
+        !target.hasAttribute("cmdk-input") &&
+        target.closest("input, textarea, select, button, a[href]")
+      )
+        return;
       // ⌘C in the search box copies. It must not open Log call.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -241,6 +247,11 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           e.preventDefault();
           e.stopPropagation();
           onBack();
+          break;
+        case "Home":
+        case "End":
+          e.preventDefault();
+          setSelectedIndex(e.key === "Home" ? 0 : actions.length - 1);
           break;
         case "ArrowDown":
           e.preventDefault();
@@ -378,11 +389,25 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         </div>
       </div>
 
-      {/* Action items. The one the arrow keys are on is the selected row. */}
-      <div className="space-y-0.5">
+      {/* Action items. The one the arrow keys are on is the selected row.
+          A listbox the palette's input names the current row of
+          (`aria-activedescendant`, synced in CommandPalette): a screen
+          reader heard nothing here. The rows are not Tab stops. */}
+      <div
+        role="listbox"
+        id={listboxId}
+        aria-label={`Actions for ${contactName}`}
+        data-palette-popup=""
+        className="space-y-0.5"
+      >
         {actions.map((action, i) => (
           <button
             key={action.id}
+            type="button"
+            role="option"
+            id={`${listboxId}-${action.id}`}
+            aria-selected={i === selectedIndex}
+            tabIndex={-1}
             onClick={action.handler}
             onMouseDown={(e) => e.preventDefault()}
             className={cn(
@@ -410,15 +435,6 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
             </kbd>
           </button>
         ))}
-      </div>
-
-      {/* Footer hint */}
-      <div className="hidden pointer-fine:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
-        <kbd className={KBD_SM}>↑↓</kbd> navigate
-        <span>·</span>
-        <kbd className={KBD_SM}>←</kbd> back
-        <span>·</span>
-        letter to quick-select
       </div>
     </motion.div>
   );

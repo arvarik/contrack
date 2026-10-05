@@ -23,7 +23,7 @@ function wrapper({ children }: { children: ReactNode }) {
 /** The labels, without the field name each row starts with. */
 const labels = () =>
   screen
-    .getAllByRole("button")
+    .getAllByRole("option")
     .map((button) => button.textContent?.replace(/^contacted:/, ""));
 
 function show(partial: string) {
@@ -54,7 +54,7 @@ describe("contacted: in the facet autocomplete", () => {
 
     const onSelect = show("nev");
     expect(labels()).toEqual(["Over 90 days ago, or never", "Never"]);
-    fireEvent.click(screen.getByRole("button", { name: "contacted:Never" }));
+    fireEvent.click(screen.getByRole("option", { name: "contacted:Never" }));
     expect(onSelect).toHaveBeenCalledWith({
       field: "contacted",
       value: "never",

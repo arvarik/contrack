@@ -111,7 +111,7 @@ describe("the actions for one contact", () => {
     vi.clearAllMocks();
 
     const ghost = mount({ ...ADA, isGhost: true });
-    expect(screen.queryByRole("button", { name: /Track/ })).toBeNull();
+    expect(screen.queryByRole("option", { name: /Track/ })).toBeNull();
     press("t");
     expect(ghost.onClose).not.toHaveBeenCalled();
   });
@@ -134,7 +134,7 @@ describe("the actions for one contact", () => {
   it("keeps a note's text when the palette closes, and forgets it once saved", async () => {
     const note = () => screen.getByLabelText("Note") as HTMLTextAreaElement;
     const openNote = () =>
-      fireEvent.click(screen.getByRole("button", { name: /Log note/ }));
+      fireEvent.click(screen.getByRole("option", { name: /Log note/ }));
     mount();
     openNote();
     fireEvent.change(note(), { target: { value: "Met at the café" } });

@@ -63,6 +63,7 @@ export const LogMode = ({
   contacts,
   recentContacts,
   discardArmed,
+  nameHint,
   onFill,
   onLog,
   onCompose,
@@ -75,6 +76,11 @@ export const LogMode = ({
   recentContacts: readonly LogContact[];
   /** Escape was pressed once on a typed note: the next one discards it. */
   discardArmed: boolean;
+  /**
+   * The words the `> Log` chip carried over: a name, even when it starts
+   * like a kind. "cal" for Calvin offered only "Log a call" and lost him.
+   */
+  nameHint: string;
   /** Puts this text in the input: the next step. */
   onFill: (text: string) => void;
   onLog: (log: { kind: LogKind; contact: LogContact; text: string }) => void;
@@ -93,8 +99,10 @@ export const LogMode = ({
   if (step.step === "kind") {
     const typed = step.partial.toLowerCase();
     const kinds = LOG_KINDS.filter((kind) => kind.startsWith(typed));
-    // No kind starts with the words: they are a name.
-    const name = kinds.length === 0 ? step.partial : "";
+    // No kind starts with the words, or the chip brought them: a name.
+    const fromChip =
+      !!nameHint && step.partial.toLowerCase() === nameHint.toLowerCase();
+    const name = kinds.length === 0 || fromChip ? step.partial : "";
     if (part === "notes") {
       return name ? null : (
         <Hint>

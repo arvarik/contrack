@@ -2,8 +2,9 @@
  * ZeroStateView — Intelligent zero-state for the Cmd+K command palette.
  *
  * Rendered when the search input is empty and mode is 'normal'. Shows:
- *   1. Recently viewed contacts (from useRecentContacts hook)
- *   2. Search history (from useSearchHistory hook)
+ *   1. Start here, until there is anything recent: ask AI, or log
+ *   2. Recent: the contacts last opened, then the last searches, six rows
+ *      at most (useRecentContacts, useSearchHistory)
  *   3. CRM intelligence insights (from useZeroState API hook)
  *   4. The five destinations (`GoToGroup`, which also lists the pages a
  *      typed word matches)
@@ -27,7 +28,6 @@ import {
   Satellite,
   RefreshCw,
   FileText,
-  ListFilter,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -56,13 +56,14 @@ interface ZeroStateViewProps {
   onSelectHistory: (query: string, mode?: string) => void;
   onSelectInsight: (insight: ZeroStateInsight) => void;
   onNavigate: (path: string) => void;
-  /** A "Start here" row: ask AI, log, or pick a filter. */
-  onStart: (what: "ai" | "log" | "filter") => void;
+  /** A "Start here" row: ask AI or log. */
+  onStart: (what: "ai" | "log") => void;
 }
 
 /**
- * For a person with nothing recent yet: the three things the palette does
- * besides finding people, as rows. The mode chips say the same, smaller.
+ * For a person with nothing recent yet: the two things the palette does
+ * besides finding people, as rows a keyboard reaches. Filters are taught
+ * in one place, the Filter chip: a row and a footer tip said it again.
  */
 const START_ROWS = [
   { what: "ai", label: "Ask AI about your network", icon: Sparkles, hint: "?" },
@@ -72,13 +73,21 @@ const START_ROWS = [
     icon: Zap,
     hint: ">",
   },
-  {
-    what: "filter",
-    label: "Filter by tag, role or company",
-    icon: ListFilter,
-    hint: "tag:",
-  },
 ] as const;
+
+/** Recent contacts and searches, together, as one short group. */
+const RECENT_ROWS = 6;
+
+/**
+ * A recent search as it reads in the list. A question keeps its `?` and a
+ * notes search says so: the three kinds only differed by a 12 px icon.
+ */
+const historyLabel = (entry: SearchHistoryEntry) =>
+  entry.mode === "ai"
+    ? `? ${stripModePrefix(entry.query)}`
+    : entry.mode === "notes"
+      ? `Notes: ${stripModePrefix(entry.query)}`
+      : stripModePrefix(entry.query);
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -206,15 +215,11 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── Recently Viewed ── */}
-      {hasRecent && (
-        <Command.Group
-          heading="Recently viewed"
-          className={GROUP_HEADING_DEFAULT}
-        >
-          {/* Rows, as everywhere else in the list. They were chips in one
-              line, and `↓` moved sideways along them. */}
-          {recentContacts.map((c) => (
+      {/* ── Recent: contacts, then searches, six rows at most. They were
+          two groups of up to eight rows. ── */}
+      {(hasRecent || hasHistory) && (
+        <Command.Group heading="Recent" className={GROUP_HEADING_DEFAULT}>
+          {recentContacts.slice(0, RECENT_ROWS).map((c) => (
             <Command.Item
               key={`recent_${c.id}`}
               value={`recent_${c.id}_${c.name}`}
@@ -229,34 +234,28 @@ export const ZeroStateView = ({
               <span className="text-sm truncate flex-1">{c.name}</span>
             </Command.Item>
           ))}
-        </Command.Group>
-      )}
-
-      {/* ── Search History ── */}
-      {hasHistory && (
-        <Command.Group
-          heading="Recent searches"
-          className={GROUP_HEADING_DEFAULT}
-        >
-          {historyEntries.map((entry, i) => (
-            <Command.Item
-              key={`history_${i}_${entry.timestamp}`}
-              // With the mode: a people search and a notes search can hold
-              // the same words, and two rows with one value are both
-              // highlighted at once, which stops the arrow keys between them.
-              value={`history_${entry.mode}_${entry.query}`}
-              onSelect={() => onSelectHistory(entry.query, entry.mode)}
-              className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
-            >
-              <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
-                {modeIcon(entry.mode)}
-              </div>
-              <span className="text-sm truncate flex-1">
-                {stripModePrefix(entry.query)}
-              </span>
-              <Clock className="w-3 h-3 text-on-surface-variant shrink-0" />
-            </Command.Item>
-          ))}
+          {historyEntries
+            .slice(0, Math.max(0, RECENT_ROWS - recentContacts.length))
+            .map((entry, i) => (
+              <Command.Item
+                key={`history_${i}_${entry.timestamp}`}
+                // With the mode: a people search and a notes search can hold
+                // the same words, and two rows with one value are both
+                // highlighted at once, which stops the arrow keys between
+                // them.
+                value={`history_${entry.mode}_${entry.query}`}
+                onSelect={() => onSelectHistory(entry.query, entry.mode)}
+                className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
+              >
+                <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
+                  {modeIcon(entry.mode)}
+                </div>
+                <span className="text-sm truncate flex-1">
+                  {historyLabel(entry)}
+                </span>
+                <Clock className="w-3 h-3 text-on-surface-variant shrink-0" />
+              </Command.Item>
+            ))}
         </Command.Group>
       )}
 
@@ -338,13 +337,10 @@ export const GoToGroup = ({
         if (page.needsAccount && !authRequired) return false;
         if (page.id === "ai-usage" && isAdmin) return false;
         // Three characters for these: they are many, and below the people.
-        return matchesDestination(
-          typed,
-          `Settings ${page.title}`,
-          page.keywords,
-          3,
-        );
-      })
+        // The title and keywords, not the word "Settings" every row
+        // starts with: "set" listed all 26 pages.
+        return matchesDestination(typed, page.title, page.keywords, 3);
+      }).slice(0, 5)
     : [];
   if (destinations.length === 0 && settingsPages.length === 0) return null;
 

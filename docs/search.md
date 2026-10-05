@@ -24,7 +24,7 @@ The box reads facets too, except `near:`. The page address keeps your search, so
 
 Press `Cmd+K` on any page to open the palette. Press it again to close it. `Esc` steps back one layer at a time: it closes the facet values, the actions or **Filter by**, asks once before it discards a typed note, then clears the box and its pills, and on an empty box it closes the palette. The palette opens with an empty box each time.
 
-On a touch screen, press **Command palette**, the search button at the top of every page, or the top right of an open contact. Android's Back steps back as `Esc` does. The palette sits at the top of the screen, and its list stops above the on-screen keyboard.
+On a touch screen, press **Command palette**, the search button at the top of every page: in the page header, at the top right of an open contact, and in the top bar of the map. Android's Back steps back as `Esc` does. The palette sits at the top of the screen, and its list stops above the on-screen keyboard.
 
 The first character you type sets the mode. The chips under the box show the mode, and a click or a tap on one switches to it and keeps the words you typed. **Filter** lists the facets.
 
@@ -52,11 +52,13 @@ Use `↑`/`↓` to move and `Enter` to open the contact. While the box holds tex
 
 **Show all in Network**, under the people, opens the Network list with the same words and pills.
 
-The words also find pages: "pulse" lists **Pulse**, and "backup" lists the Settings page for export. Each word must start a word of the page's name. When the words are a page's whole name, that page comes first.
+The words also find pages: "pulse" lists **Pulse**, and "backup" lists the Settings page for export. Each word must start a word of the page's name or of a word it is known by, and a Settings page needs three letters. At most five Settings pages show. When the words are a page's whole name, that page comes first.
 
-**Create contact** makes a contact with the name you typed. It is not there when a contact already has that name, or when pills are set.
+**Create contact** makes a contact with the name you typed. It is not there when a contact already has that name, when pills are set, or when the words read as a question, such as "who works at Stripe".
 
-**Ask AI** asks the words as a question (see [Ask from the palette](#ask-from-the-palette)). It comes before the pages when the words start with who, what, where, which or a similar word, and last otherwise. It is not there for a name a contact already has.
+**Ask AI**, last, asks the words as a question with the pills (see [Ask from the palette](#ask-from-the-palette)). It is not there for a name a contact already has.
+
+The groups keep this order as you type: the people, **Show all in Network**, the pages, **Create contact** and **Ask AI**.
 
 ### Act on a result
 
@@ -100,19 +102,18 @@ For the name, the palette takes the contact with that whole name, then the first
 
 With the box empty, the palette shows these groups:
 
-- **Start here**, until you have opened a contact or searched: rows to ask AI, to log an interaction and to filter.
-- **Recently viewed**: the last three contacts you opened.
-- **Recent searches**: your five latest searches from the palette and from Ask Contrack. Select one to search again.
+- **Start here**, until you have opened a contact or searched: rows to ask AI and to log an interaction. **Filter**, beside the mode chips, lists the facets.
+- **Recent**: the last contacts you opened, then your latest searches from the palette and from Ask Contrack, six rows at most. A question shows its `?`, and a notes search starts with "Notes:". Select a search to run it again.
 - **Insights**: the follow-ups that are due, and the two tracked contacts furthest past their cadence. It also names a person you mention often who is not in your network, and it counts the contacts with stale data and the possible duplicates.
 - **Go to**: the five destinations. Type a word to find a page in Settings.
 
 ### Ask from the palette
 
-Type `?` and a question of three characters or more, or press `↓` to a question under **Try asking** and press `Enter`. The palette asks when you stop typing, and it shows "Asking AI…" while it waits. The answer is the same as on the [Ask Contrack](#ask-contrack) page, under **AI answer**. When AI did not check the list, the heading reads **Not verified by AI**, with one line that says why.
+Type `?` and a question of three characters or more, then press `Enter` on the **Ask** row, or press `↓` to a question under **Try asking** and press `Enter`. The palette asks only when you press `Enter`, never while you type, and it shows "Asking AI…" while it waits. The answer is the same as on the [Ask Contrack](#ask-contrack) page, under **AI answer**. When AI did not check the list, the heading reads **Not verified by AI**, with one line that says why.
 
-Until you stop typing, the palette shows "Asks when you stop typing…". When no AI model is set up, or AI is off for the instance or your account, the palette says so, and the answer comes from keyword and meaning search only. For an administrator, and for your own AI switch, a **Set up AI** row opens the page that turns it on. Without AI, the palette offers no brief.
+When no AI model is set up, or AI is off for the instance or your account, the palette says so, and the answer comes from keyword and meaning search only: the closest matches to your words, which may not fit. Its heading then reads **Answer**, not **AI answer**. For an administrator, and for your own AI switch, a **Set up AI** row opens the page that turns it on, **Connect a provider** first when none is connected. Without AI, the palette offers no brief.
 
-Facet pills go with the question. When you add or remove a pill, the palette asks again. Under the answer, **Search notes** opens the same words in Notes mode, and **Open in Ask Contrack** opens the Ask Contrack page.
+Facet pills go with the question. When you add or remove a pill, press `Enter` to ask again. Under the answer, **Search notes** opens the same words in Notes mode, and **Open in Ask Contrack** opens the Ask Contrack page.
 
 ## Facets
 
@@ -299,7 +300,7 @@ Ask Contrack keeps the questions you ask. It keeps them on your account, so they
 - **Filter questions** narrows the list by words. **All**, **People** and **Notes** narrow it by mode.
 - **Clear** deletes every question in the mode you chose, after you confirm. You cannot undo it.
 
-The command palette shares this history. A palette search goes into the history when you open a result from it, and it shows under **All**. A question you ask with `?` in the palette shows as a People question. Your Ask Contrack questions show in the palette under **Recent searches**.
+The command palette shares this history. A palette search goes into the history when you open a result from it, and it shows under **All**. A question you ask with `?` in the palette shows as a People question. Your Ask Contrack questions show in the palette under **Recent**.
 
 To delete the whole history, open **Settings → Privacy and AI** and select **Clear history** under **Search history**.
 
