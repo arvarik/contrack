@@ -91,6 +91,8 @@ export function Modal({
   // or springs it back.
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" || !content.current) return;
+    // From `sm` it is a centred dialog, not a sheet, and does not drag.
+    if (window.matchMedia?.("(min-width: 640px)").matches) return;
     if ((event.target as HTMLElement).closest("button, a, input")) return;
     drag.current = { y: event.clientY, at: event.timeStamp, dy: 0 };
     try {
@@ -155,7 +157,9 @@ export function Modal({
           aria-describedby={undefined}
           // `outline-none`: the dialog itself takes focus when it has no
           // title, and a ring around the whole panel would say nothing.
-          className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem-var(--keyboard-inset,0px)-var(--viewport-offset,0px))] overflow-hidden outline-none modal-fade`}
+          // The height leaves out the status bar's inset, so a tall sheet's
+          // title stays clear of it.
+          className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-max(2rem,env(safe-area-inset-top)+0.5rem)-var(--keyboard-inset,0px)-var(--viewport-offset,0px))] overflow-hidden outline-none modal-fade`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             (closeButton.current ?? content.current)?.focus({

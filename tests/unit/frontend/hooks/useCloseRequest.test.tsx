@@ -9,7 +9,7 @@
  * closes every overlay there.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { useCloseRequest } from "../../../../src/hooks/useCloseRequest";
 
 const watchers: { onclose: (() => void) | null; destroy: () => void }[] = [];
@@ -42,10 +42,13 @@ describe("useCloseRequest", () => {
       { initialProps: { open: true } },
     );
     expect(watchers).toHaveLength(1);
-    watchers[0].onclose?.();
+    act(() => watchers[0].onclose?.());
     expect(onClose).toHaveBeenCalledOnce();
+    // Still open (a dialog that is saving refused): a new watcher, so the
+    // next Back closes it too and does not leave the page.
+    expect(watchers).toHaveLength(2);
     rerender({ open: false });
-    expect(watchers[0].destroy).toHaveBeenCalled();
+    expect(watchers[1].destroy).toHaveBeenCalled();
   });
 
   it("makes no watcher with a mouse, where Escape already closes", () => {

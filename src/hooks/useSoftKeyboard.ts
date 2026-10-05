@@ -46,27 +46,28 @@ export function useSoftKeyboard(): void {
     const root = document.documentElement;
     const coarse = window.matchMedia?.("(pointer: coarse)");
     const viewport = window.visualViewport;
-    // The page's full height at this width. Android shrinks the page for
-    // the keyboard, so a page well short of it has the keyboard up.
-    let width = window.innerWidth;
-    let tallest = window.innerHeight;
+    // The page's full height at each width it has had. Android shrinks the
+    // page for the keyboard, so a page well short of it has the keyboard up.
+    // One per width, so a phone turned back with the keyboard up still knows
+    // its full height.
+    const tallest = new Map<number, number>();
 
     const measure = () => {
-      if (window.innerWidth !== width) {
-        width = window.innerWidth;
-        tallest = window.innerHeight;
-      }
-      tallest = Math.max(tallest, window.innerHeight);
-      // iOS keeps the page and lays the keyboard over it.
-      const covered = viewport
+      const full = Math.max(
+        tallest.get(window.innerWidth) ?? 0,
+        window.innerHeight,
+      );
+      tallest.set(window.innerWidth, full);
+      // iOS keeps the page and lays the keyboard over it. A pinch zoom also
+      // makes the visible part smaller and pans it, and that is no keyboard.
+      const visible = viewport && viewport.scale <= 1.01 ? viewport : null;
+      const covered = visible
         ? Math.max(
             0,
-            Math.round(
-              window.innerHeight - viewport.height - viewport.offsetTop,
-            ),
+            Math.round(window.innerHeight - visible.height - visible.offsetTop),
           )
         : 0;
-      const shrunk = tallest - window.innerHeight >= KEYBOARD_MIN;
+      const shrunk = full - window.innerHeight >= KEYBOARD_MIN;
       // Typing needs the keyboard up as well as a field in focus: Back on
       // Android, or the iPad's hide key, puts the keyboard away and leaves
       // the field focused, and the tab bar must come back then.
@@ -83,7 +84,7 @@ export function useSoftKeyboard(): void {
       // sheet's height must leave out too.
       root.style.setProperty(
         "--viewport-offset",
-        `${typing && viewport ? Math.round(viewport.offsetTop) : 0}px`,
+        `${typing && visible ? Math.round(visible.offsetTop) : 0}px`,
       );
     };
 
@@ -97,13 +98,14 @@ export function useSoftKeyboard(): void {
     };
 
     // Focus moves before the keyboard animates, so measure on focus and
-    // again as the page or the visual viewport settles.
+    // again as the page or the visual viewport settles. The visual viewport
+    // fires on every frame of a pan, and one measure per frame is enough.
     document.addEventListener("focusin", measure);
     document.addEventListener("focusout", later);
     document.addEventListener("pointerdown", later);
     window.addEventListener("resize", measure);
-    viewport?.addEventListener("resize", measure);
-    viewport?.addEventListener("scroll", measure);
+    viewport?.addEventListener("resize", later);
+    viewport?.addEventListener("scroll", later);
     measure();
     return () => {
       cancelAnimationFrame(frame);
@@ -111,8 +113,8 @@ export function useSoftKeyboard(): void {
       document.removeEventListener("focusout", later);
       document.removeEventListener("pointerdown", later);
       window.removeEventListener("resize", measure);
-      viewport?.removeEventListener("resize", measure);
-      viewport?.removeEventListener("scroll", measure);
+      viewport?.removeEventListener("resize", later);
+      viewport?.removeEventListener("scroll", later);
       root.removeAttribute("data-typing");
       root.style.removeProperty("--keyboard-inset");
       root.style.removeProperty("--viewport-offset");

@@ -41,13 +41,13 @@ export const ComposerPlaceholder = ({
       aria-busy="true"
       aria-label="Loading the note composer"
     >
-      <div className="px-5 py-3">
-        {/* The variant ink, as the expanded placeholder has it, and no
-            fade: text on screen must pass contrast, unlike the editor's own
-            placeholder, which is a decoration. */}
-        <p className="custom-tiptap text-on-surface-variant">
-          Write a quick note...
-        </p>
+      {/* The editor's own type and paragraph margins, so the line is as tall
+          as the loaded composer's (`composer-line`: 16 px on a touch screen,
+          as index.css makes the editor). The variant ink and no fade: text
+          on screen must pass contrast, unlike the editor's own placeholder,
+          which is a decoration. */}
+      <div className="composer-line px-5 py-3 prose prose-sm max-w-none text-base sm:text-sm prose-p:my-1">
+        <p className="text-on-surface-variant">Write a quick note...</p>
       </div>
     </div>
   ) : (

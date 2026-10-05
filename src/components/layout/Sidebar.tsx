@@ -167,10 +167,11 @@ export const Sidebar = () => {
       className={cn(
         SECTION_BG,
         // The height its parent leaves, which pads for the status bar, and
-        // a scroll of its own where the window is short: a phone on its
-        // side is 393 px tall, and Settings sat below it. Only there, since
-        // a scroll box clips the labels that stand out to its right.
-        "w-16 h-full min-h-0 [@media(max-height:40rem)]:overflow-y-auto scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
+        // a scroll of its own on a short touch screen: a phone on its side
+        // is 393 px tall, and Settings sat below it. Only there, since a
+        // scroll box clips the labels that stand out to its right, and a
+        // short laptop window needs them.
+        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/*

@@ -1503,6 +1503,11 @@ html[data-text-scale="large"] {
   :root[data-typing] .mobile-tabbar {
     display: none;
   }
+  /* The contact pane keeps the line being typed above the composer's
+     sticky Save bar (and above the keyboard on iOS), not under them. */
+  :root[data-typing] .contact-scroller {
+    scroll-padding-bottom: calc(6rem + var(--keyboard-inset));
+  }
 }
 
 /* iOS zooms the page into a field whose text is under 16 px, and does not
@@ -1512,7 +1517,8 @@ html[data-text-scale="large"] {
 @media (pointer: coarse) {
   :is(input, textarea, select)[class*="text-xs"],
   :is(input, textarea, select)[class*="text-sm"],
-  .ProseMirror {
+  .ProseMirror,
+  .composer-line {
     font-size: 16px;
   }
   /* A field that takes its parent's size, such as a contact's phone being

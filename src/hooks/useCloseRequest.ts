@@ -15,7 +15,7 @@
  * @module hooks/useCloseRequest
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Watcher {
   onclose: (() => void) | null;
@@ -29,6 +29,10 @@ export function useCloseRequest(open: boolean, onClose: () => void): void {
   useEffect(() => {
     latest.current = onClose;
   }, [onClose]);
+  // A watcher is spent by its close request. An overlay that refused to
+  // close, such as a dialog that is saving, gets a new one, or the next Back
+  // would leave the page under it.
+  const [spent, setSpent] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +47,10 @@ export function useCloseRequest(open: boolean, onClose: () => void): void {
       // every other way.
       return;
     }
-    watcher.onclose = () => latest.current();
+    watcher.onclose = () => {
+      latest.current();
+      setSpent((count) => count + 1);
+    };
     return () => watcher.destroy();
-  }, [open]);
+  }, [open, spent]);
 }

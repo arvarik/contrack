@@ -50,6 +50,15 @@ test.describe("phone shell", () => {
     expect(await editor.evaluate((el) => getComputedStyle(el).fontSize)).toBe(
       "16px",
     );
+    // A long note: the line being typed stays above the Save bar.
+    for (let i = 0; i < 8; i++) await page.keyboard.press("Enter");
+    await page.keyboard.type("The last line");
+    const bar = save.locator(
+      "xpath=ancestor::div[contains(@class,'sticky')][1]",
+    );
+    const barTop = (await bar.boundingBox())!.y;
+    const line = (await editor.locator("p").last().boundingBox())!;
+    expect(line.y + line.height).toBeLessThanOrEqual(barTop);
     // Back puts the keyboard away and leaves the note focused: the tab bar
     // comes back.
     await page.setViewportSize({ width: 412, height: 839 });
