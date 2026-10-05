@@ -416,6 +416,11 @@ the fix. Search keeps working on keywords. Run `npm run models:fetch`, with
 the folder when `.env` sets `DATA_DIR` or `MODEL_DIR`. Or set
 `MODEL_DOWNLOADS=true` for one start.
 
+To check that both models load and run, use `npm run models:smoke`, or
+`docker exec contrack node scripts/model-smoke.ts` in a container. It embeds
+one sentence and scores one pair, and fails with the reason when a model or
+its runtime is missing.
+
 ### Passkeys fail on an IP address
 
 Passkeys need a domain name or `localhost`. On an address such as

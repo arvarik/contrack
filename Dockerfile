@@ -42,11 +42,28 @@ FROM node:26-trixie-slim AS runtime
 WORKDIR /app
 
 # Install production dependencies. Node runs the TypeScript itself, so there
-# is no TypeScript loader to install.
+# is no TypeScript loader to install, and the browser's packages are
+# devDependencies, which the build stage bundled into dist/.
+#
+# The same step removes what this image can never load. It has to be the same
+# step: a file removed in a later step still ships in this layer.
+# - onnxruntime-node carries its native library for macOS, Windows and Linux
+#   on both CPUs, and loads bin/napi-v6/<platform>/<arch> when it starts. A
+#   container is always Linux, even under Docker Desktop on a Mac or a
+#   Windows PC, and each image is built for one CPU, so only linux/<this CPU>
+#   stays. The step fails if that folder is missing.
+# - onnxruntime-web is the browser runtime. @huggingface/transformers lists
+#   it, but its Node build loads onnxruntime-node and never imports it.
 COPY package.json package-lock.json ./
 RUN npm pkg delete scripts.prepare \
     && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev \
-    && npm cache clean --force
+    && npm cache clean --force \
+    && ort=node_modules/onnxruntime-node/bin/napi-v6 \
+    && keep="linux/$(node -p process.arch)" \
+    && test -f "$ort/$keep/onnxruntime_binding.node" \
+    && find "$ort" -mindepth 2 -maxdepth 2 -type d ! -path "$ort/$keep" -exec rm -rf {} + \
+    && find "$ort" -mindepth 1 -maxdepth 1 -type d -empty -delete \
+    && rm -rf node_modules/onnxruntime-web
 
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
@@ -65,6 +82,8 @@ COPY server.ts ./
 # scripts/reset-password.ts <username>`, runs this file. The image had no
 # scripts/, so the command could not work in a container.
 COPY scripts/reset-password.ts ./scripts/
+# Loads both search models and uses each once (see below).
+COPY scripts/model-smoke.ts ./scripts/
 
 # Configure environment variables
 # AUTH_REQUIRED defaults to false: the common deployment is a container reached
@@ -87,8 +106,18 @@ ENV NODE_ENV=production \
     MODEL_DIR=/app/models \
     MODEL_DOWNLOADS=false
 
-# Create the data directory and drop root privileges
-RUN mkdir -p /app/data && chown -R node:node /app/data
+# Prove the trimmed image still runs its search models, on the CPU it is for.
+# The model library's cache goes to a temporary folder, so the check leaves
+# nothing in the image.
+RUN TRANSFORMERS_CACHE=/tmp/model-smoke node scripts/model-smoke.ts \
+    && rm -rf /tmp/model-smoke
+
+# Create the data directory and drop root privileges. npm and npx built the
+# dependencies above and nothing runs them after that. Their files stay in
+# the base image's layer, so removing them saves no space, but it takes them,
+# and the findings an image scan reports inside them, out of the container.
+RUN mkdir -p /app/data && chown -R node:node /app/data \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER node
 
 EXPOSE 3210

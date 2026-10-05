@@ -98,6 +98,11 @@ the full lists.
   `server/ai/gateway.ts`. Only `server/ai/adapters/` imports a provider SDK.
 - **Outside data is untrusted.** Fetch URLs through `safeFetch`, and resolve
   stored upload paths with `resolveUploadPath()`.
+- **The image ships only what the server loads.** A package that only the
+  browser uses goes in `devDependencies`, as the build bundles it into
+  `dist/`. `tests/unit/repo/dockerRuntime.test.ts` fails on a dependency the
+  server never loads, and on a package the server loads that the image would
+  not install.
 - **Imports name their file.** A relative import in `server/`, `shared/` or
   `scripts/` carries the extension, such as `./geo.ts`.
 - **The app fetches with React Query.** Use the hooks in `src/api/`, never a
