@@ -33,6 +33,7 @@ import { dataLifecycleModule } from "./data-lifecycle/index.ts";
 import { aiModule } from "./ai/index.ts";
 import { logosModule } from "./logos/index.ts";
 import { mapModule } from "./map/index.ts";
+import { oauthModule } from "./oauth/index.ts";
 
 export const MODULES: readonly ContrackModule[] = [
   adminModule,
@@ -54,6 +55,7 @@ export const MODULES: readonly ContrackModule[] = [
   aiModule,
   logosModule,
   mapModule,
+  oauthModule,
 ];
 
 /** Mount every module's routers on the app, in list order. */

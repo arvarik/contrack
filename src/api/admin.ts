@@ -621,7 +621,13 @@ export const AUDIT_GROUPS = [
   {
     key: "tokens",
     label: "Tokens",
-    actions: ["auth.token.created", "auth.token.revoked"],
+    actions: [
+      "auth.token.created",
+      "auth.token.revoked",
+      "auth.oauth.granted",
+      "auth.oauth.denied",
+      "auth.oauth.refresh_reused",
+    ],
   },
   {
     key: "instance",

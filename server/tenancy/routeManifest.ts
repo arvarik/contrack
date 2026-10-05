@@ -49,6 +49,43 @@ export interface RouteEntry {
 }
 
 export const ROUTE_MANIFEST: readonly RouteEntry[] = [
+  // OAuth sign-in for MCP clients (server/routes/oauth.ts). Other programs
+  // call these with no session, and each answers 404 while OAuth is off.
+  {
+    method: "GET",
+    path: "/.well-known/oauth-protected-resource/api/mcp",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/.well-known/oauth-protected-resource",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/.well-known/oauth-authorization-server",
+    class: "public",
+    isolated: false,
+  },
+  { method: "GET", path: "/oauth/authorize", class: "public", isolated: false },
+  { method: "POST", path: "/oauth/token", class: "public", isolated: false },
+  { method: "POST", path: "/oauth/register", class: "public", isolated: false },
+  { method: "POST", path: "/oauth/revoke", class: "public", isolated: false },
+  // The consent page answers for the signed-in person only.
+  {
+    method: "GET",
+    path: "/api/auth/oauth/requests/:id",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/oauth/requests/:id",
+    class: "session-self",
+    isolated: false,
+  },
   {
     method: "GET",
     path: "/api/action-items",

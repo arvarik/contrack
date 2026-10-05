@@ -36,6 +36,8 @@
  * that reason.
  */
 import React, {
+  Suspense,
+  lazy,
   createContext,
   useCallback,
   useContext,
@@ -72,6 +74,13 @@ import { ForgotPassword } from "./ForgotPassword";
 import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 
+/**
+ * Where an app's OAuth sign-in asks the person to approve it. It stands
+ * apart from the app's routes, outside the shell, and loads only there.
+ */
+const OAuthConsent = lazy(() => import("../../views/oauth/OAuthConsent"));
+const isConsentPage = () => window.location.pathname === "/oauth/consent";
+
 interface AuthContextValue {
   /** The signed-in account, or null when nobody is signed in. */
   user: AccountUser | null;
@@ -83,6 +92,8 @@ interface AuthContextValue {
   legacyTokenConfigured: boolean;
   /** The address people open (`PUBLIC_URL`), or null when it is not set. */
   publicUrl: string | null;
+  /** An MCP client can sign in here with OAuth instead of a token. */
+  mcpOAuth: boolean;
   /**
    * What this instance calls itself, or "" when nobody has named it.
    *
@@ -116,6 +127,7 @@ const AuthContext = createContext<AuthContextValue>({
   isAdmin: false,
   legacyTokenConfigured: false,
   publicUrl: null,
+  mcpOAuth: false,
   instanceName: "",
   mapStyles: null,
   isResolved: false,
@@ -176,6 +188,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [legacyTokenConfigured, setLegacyTokenConfigured] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [mcpOAuth, setMcpOAuth] = useState(false);
   const [instanceName, setInstanceName] = useState("");
   const [mapStyles, setMapStyles] = useState<MapStyleUrls | null>(null);
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
@@ -247,6 +260,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setRegistrationOpen(status.registrationOpen ?? false);
     setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
     setPublicUrl(status.publicUrl ?? null);
+    setMcpOAuth(status.mcpOAuth ?? false);
     setInstanceName(status.instanceName ?? "");
     setMapStyles(status.map ?? null);
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
@@ -440,6 +454,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     isAdmin: user?.role === "admin",
     legacyTokenConfigured,
     publicUrl,
+    mcpOAuth,
     instanceName,
     mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",
@@ -531,7 +546,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             canRegister={registrationOpen}
             onRegister={() => setState("register")}
             mailConfigured={mailConfigured}
-            magicLinkSignIn={magicLinkSignIn}
+            // A mailed link opens in another browser, where an app's
+            // sign-in in progress is not, so the consent page offers none.
+            magicLinkSignIn={magicLinkSignIn && !isConsentPage()}
           />
         );
       default:
@@ -540,7 +557,15 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         // the previous account's component state.
         return (
           <AppScope key={user?.id ?? "anon"}>
-            <PreferencesProvider>{children}</PreferencesProvider>
+            <PreferencesProvider>
+              {isConsentPage() ? (
+                <Suspense fallback={null}>
+                  <OAuthConsent />
+                </Suspense>
+              ) : (
+                children
+              )}
+            </PreferencesProvider>
           </AppScope>
         );
     }
