@@ -83,6 +83,7 @@ test("> leads from the kind to the contact to the text, and logs it", async ({
   await expect(input).toHaveValue("> note ");
 
   await page.keyboard.type("eds");
+  await expect(palette.getByText("Log a note for…")).toBeVisible();
   await expect(highlighted(palette)).toHaveText("Edsger Dijkstra");
   await page.keyboard.press("Enter");
   await expect(input).toHaveValue("> note Edsger Dijkstra: ");
@@ -102,6 +103,12 @@ test("> leads from the kind to the contact to the text, and logs it", async ({
   );
   expect(logged).toBeDefined();
   created.push({ instance, path: `/interactions/${logged!.id}` });
+});
+
+test("> names the kind with its article", async ({ page }) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("> email ");
+  await expect(palette.getByText("Log an email for…")).toBeVisible();
 });
 
 test("> says when no contact has the name", async ({ page }) => {

@@ -196,6 +196,10 @@ test("Escape closes a facet's suggestions, then clears, then closes", async ({
   await page.keyboard.press("Escape");
   await expect(suggestions).toBeHidden();
   await expect(input).toHaveValue("contacted:");
+  // No page rows under a half-typed facet: Enter here went to Network.
+  await page.keyboard.press("Enter");
+  await expect(palette).toHaveCount(1);
+  await expect(page).toHaveURL(/\/$/);
 
   // Typing more brings them back.
   await page.keyboard.type("n");

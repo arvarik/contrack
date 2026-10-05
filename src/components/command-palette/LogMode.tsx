@@ -170,7 +170,8 @@ export const LogMode = ({
   }
   return (
     <Command.Group
-      heading={`Log a ${noun} for…`}
+      // "Log an email for…": the label carries the article.
+      heading={`${LOG_KIND_LOOK[step.kind].label} for…`}
       className={GROUP_HEADING_EMERALD}
     >
       {suggestions.map((person) => (
