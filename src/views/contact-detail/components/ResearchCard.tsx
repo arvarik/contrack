@@ -12,28 +12,55 @@
  *   - the facts the latest one reported, each beside the page it came from
  *   - every page the research cited, by site and address
  *
- * Enrich again opens the two research depths (`EnrichMenu`). When the
- * latest research found no page about the person, the card says what it
- * searched with and offers the details that would help it (`NoPageNextSteps`).
+ * Enrich again opens the two research depths (`EnrichMenu`). Each run in
+ * the history has a menu with "Not {name}", for a search that found
+ * someone else with the same name: it takes back what the run added and
+ * leaves its pages out of later runs (`rejectResearchRun`). When the latest
+ * research found no page, found little, or was taken back, the card says
+ * what it searched with and offers the details that would help it, a
+ * school and a former name typed right here (`ResearchNextSteps`).
  * It reads `contact.aiResearch` (shared/researchRecord.ts), which only the
- * enrichment merge writes.
+ * enrichment merge and "Not this person" write.
  */
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ExternalLink,
   Globe,
+  GraduationCap,
   Link as LinkIcon,
+  Loader2,
   Mail,
   MapPin,
+  MoreHorizontal,
+  Search,
   SearchX,
+  Sparkles,
+  UserRound,
+  UserSearch,
+  UserX,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
 
 import type { Contact } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
-import { CARD, FIELD_LABEL, SECTION_HEADING_SPACED } from "../../../lib/styles";
+import {
+  CARD,
+  FIELD_LABEL,
+  FORM_INPUT,
+  FORM_LABEL,
+  SECTION_HEADING_SPACED,
+} from "../../../lib/styles";
+import { ActionMenu } from "../../../components/ui/ActionMenu";
+import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
+import { useRejectResearchRun, useUpdateContact } from "../../../api/contacts";
+import {
+  isEnriching,
+  useOptionalAISearch,
+} from "../../../contexts/AISearchContext";
+import { FORMER_NAME_ATTRIBUTE } from "../../../../shared/researchIdentity";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { EnrichMenu, useCanEnrich } from "./EnrichMenu";
 import {
@@ -43,12 +70,15 @@ import {
   type ResearchSource,
 } from "../../../../shared/researchRecord";
 import {
+  addedInWords,
   listInWords,
   missingAnchors,
   modelName,
+  nextStepReason,
   researchedWith,
   runSummary,
   sourceDisplay,
+  type NextStepReason,
   type ResearchAnchor,
 } from "../../../lib/research";
 
@@ -147,96 +177,378 @@ function ShowAll({
   );
 }
 
-/**
- * Each detail's button: its words and its glyph. A contact with a LinkedIn
- * profile only is offered another link, since it has one already.
- */
+/** Each detail's button: its words and its glyph. */
 const ANCHOR_BUTTONS: Record<
   ResearchAnchor,
   { label: string; another?: string; icon: LucideIcon }
 > = {
+  school: { label: "Add a school", icon: GraduationCap },
   city: { label: "Add a city", icon: MapPin },
+  formerName: { label: "Add a former name", icon: UserRound },
   workEmail: { label: "Add a work email", icon: Mail },
   link: { label: "Add a link", another: "Add another link", icon: LinkIcon },
 };
 
 /**
- * The latest research found no page about the person: what it searched with,
- * and the details that would help it, each a button that opens the field
- * for it on this page (`onAddDetail`). A page counts only when it names the
- * person with a detail the records have, so one more detail is what a retry
- * needs. Deep is offered when the run was Standard.
- *
- * It offers only what the page can take. A city and a work email go in
- * Details, and a link in the header. Schools and past jobs would help as
- * much, but the page has no field for them, so they are not offered.
+ * The details the card takes itself, because the page has no field for
+ * them, and their field's words. The rest open their field on the page.
  */
-function NoPageNextSteps({
+const INLINE_FIELDS = {
+  school: {
+    label: "School",
+    placeholder: "University of Example",
+    hint: "A school they went to, as pages would name it",
+  },
+  formerName: {
+    label: "Former name",
+    placeholder: "Rowan Ellis",
+    hint: "A name they went by before, such as a maiden name",
+  },
+} as const;
+
+type InlineAnchor = keyof typeof INLINE_FIELDS;
+
+const isInline = (anchor: ResearchAnchor): anchor is InlineAnchor =>
+  anchor in INLINE_FIELDS;
+
+/**
+ * Detail buttons shown at once: one row in the dossier's column. The next
+ * one shows as one is filled.
+ */
+const ANCHORS_SHOWN = 3;
+
+/** Each reason's heading and glyph. */
+const REASONS: Record<
+  NextStepReason,
+  { title: (first: string) => string; icon: LucideIcon }
+> = {
+  "no-page": {
+    title: (first) => `No web page matched ${first}`,
+    icon: SearchX,
+  },
+  thin: {
+    title: (first) => `Research found little about ${first}`,
+    icon: Search,
+  },
+  rejected: {
+    title: (first) => `Help research find the right ${first}`,
+    icon: UserSearch,
+  },
+};
+
+/**
+ * One detail, typed in the card: a school or a former name. Enter saves,
+ * and Escape closes the field and gives focus back to its button.
+ */
+function DetailForm({
+  anchor,
+  busy,
+  searches,
+  onSave,
+  onCancel,
+}: {
+  anchor: InlineAnchor;
+  busy: boolean;
+  /** Saving starts a search too, and the button says so. */
+  searches: boolean;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const inputId = useId();
+  const hintId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState("");
+  const field = INLINE_FIELDS[anchor];
+  const text = value.trim();
+  useEffect(() => input.current?.focus(), []);
+  return (
+    <form
+      className="mt-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (text && !busy) onSave(text);
+      }}
+    >
+      <label htmlFor={inputId} className={FORM_LABEL}>
+        {field.label}
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div className="sm:flex-1">
+          <input
+            ref={input}
+            id={inputId}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || busy) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onCancel();
+            }}
+            maxLength={100}
+            autoComplete="off"
+            placeholder={field.placeholder}
+            aria-describedby={hintId}
+            disabled={busy}
+            className={FORM_INPUT}
+          />
+          <p id={hintId} className="mt-1.5 text-xs text-on-surface-variant">
+            {field.hint}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={!text || busy}
+            className="btn-primary flex-1 sm:flex-none"
+          >
+            {busy && (
+              <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
+            )}
+            {searches ? "Save and search" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * What to do when the latest research came back empty, came back thin, or
+ * found someone else (`nextStepReason`): what it searched with, and the
+ * details that would help it, each a button.
+ *
+ * A page counts only when it names the person with a detail the records
+ * have, so one more detail is what a retry needs. A school and a former
+ * name are typed here, and saving one searches again at once, at the depth
+ * the last search ran. A city, a work email and a link open their field on
+ * the page (`onAddDetail`), and once one is added, Search again appears
+ * here. After "Not this person", Search again is offered at once: later
+ * searches leave out the pages it took back.
+ *
+ * While research runs for the contact, the panel says so instead.
+ */
+function ResearchNextSteps({
   contact,
   lastRun,
+  reason,
+  focusHeading,
   onAddDetail,
 }: {
   contact: Contact;
   lastRun: ResearchRun;
+  reason: NextStepReason;
+  /** Take focus on arrival: the run whose menu had it was just taken back. */
+  focusHeading: boolean;
   onAddDetail?: (anchor: ResearchAnchor) => void;
 }) {
   const headingId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const chips = useRef<Partial<Record<ResearchAnchor, HTMLButtonElement>>>({});
   const first = contact.firstName || contact.name.split(" ")[0];
   const used = researchedWith(contact);
-  const missing = onAddDetail ? missingAnchors(contact) : [];
+  const missing = missingAnchors(contact).filter(
+    (anchor) => isInline(anchor) || !!onAddDetail,
+  );
+  // What was missing when this run's panel first showed: a detail added
+  // since is one the next search has and this one did not. The card keys
+  // the panel by run, so a new run starts over.
+  const [missingAtFirst] = useState(missing);
+  const added = missingAtFirst.some((anchor) => !missing.includes(anchor));
+  const search = useOptionalAISearch();
+  const canEnrich = useCanEnrich(contact);
+  const enriching = !!search && isEnriching(search, contact.id);
+  const update = useUpdateContact();
+  const [form, setForm] = useState<InlineAnchor | null>(null);
   const deepNext = lastRun.depth !== "deep";
   const hasLink = (contact.socialLinks?.length ?? 0) > 0;
-  // With research off, or for a ghost, there is no Enrich again to name.
-  const canEnrich = useCanEnrich(contact);
+  const { title, icon: Icon } = REASONS[reason];
+
+  useEffect(() => {
+    if (focusHeading) heading.current?.focus();
+  }, [focusHeading]);
+
+  const searchAgain = () =>
+    search?.startSearch([contact.id], {
+      limitAs: "toast",
+      depth: lastRun.depth ?? "standard",
+    });
+  const closeForm = (anchor: InlineAnchor) => {
+    setForm(null);
+    // Back to the button that opened the field, after it renders again.
+    requestAnimationFrame(() => chips.current[anchor]?.focus());
+  };
+  const save = (anchor: InlineAnchor, text: string) =>
+    update.mutate(
+      {
+        id: contact.id,
+        data:
+          anchor === "school"
+            ? {
+                education: [
+                  ...(contact.education ?? []).map(
+                    ({
+                      school,
+                      degree,
+                      fieldOfStudy,
+                      startDate,
+                      endDate,
+                      description,
+                    }) => ({
+                      school,
+                      degree,
+                      fieldOfStudy,
+                      startDate,
+                      endDate,
+                      description,
+                    }),
+                  ),
+                  { school: text },
+                ],
+              }
+            : {
+                attributes: [
+                  ...(contact.attributes ?? []).map(({ name, value }) => ({
+                    name,
+                    value,
+                  })),
+                  { name: FORMER_NAME_ATTRIBUTE, value: text },
+                ],
+              },
+      },
+      {
+        onSuccess: () => {
+          setForm(null);
+          if (canEnrich) searchAgain();
+          else
+            toast.success(
+              anchor === "school"
+                ? "Added the school"
+                : "Added the former name",
+            );
+        },
+      },
+    );
+
+  // With nothing to add, a no-match still says what would help.
   const closing =
-    missing.length > 0
-      ? canEnrich
-        ? `Then choose Enrich again${deepNext ? ". Deep runs a longer search" : ""}`
-        : null
-      : deepNext && canEnrich
+    reason === "no-page" && missing.length === 0
+      ? deepNext && canEnrich
         ? "Choose Enrich again, then Deep, for a longer search"
-        : "A page about them may not exist yet";
+        : "A page about them may not exist yet"
+      : null;
+  const offerSearch = canEnrich && !form && (reason === "rejected" || added);
+
   return (
     <section
       aria-labelledby={headingId}
       className="mt-5 rounded-xl bg-surface-container-low p-4"
     >
       <h3
+        ref={heading}
         id={headingId}
+        tabIndex={-1}
         className="flex items-center gap-2 text-sm font-bold text-on-surface"
       >
-        <SearchX
+        <Icon
           aria-hidden="true"
           className="w-4 h-4 shrink-0 text-on-surface-variant"
         />
-        No web page matched {first}
+        {title(first)}
       </h3>
       <p className="mt-1 text-sm text-on-surface-variant text-pretty">
-        {used.length > 0
-          ? `Research searched with ${listInWords([`${first}’s name`, ...used])}`
-          : `Research searched with ${first}’s name alone`}
+        {reason === "rejected"
+          ? "Later searches leave out the pages of the search you took back"
+          : used.length > 0
+            ? `Research searched with ${listInWords([`${first}’s name`, ...used])}`
+            : `Research searched with ${first}’s name alone`}
       </p>
-      {missing.length > 0 && (
+
+      {enriching ? (
+        <p
+          role="status"
+          className="mt-3 flex items-center gap-2 text-sm font-medium text-on-surface"
+        >
+          <Loader2
+            aria-hidden="true"
+            className="w-4 h-4 shrink-0 animate-spin text-primary"
+          />
+          Searching again
+        </p>
+      ) : (
         <>
-          <p className="mt-3 text-sm text-on-surface text-pretty">
-            One more detail helps it find the right person
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {missing.map((anchor) => {
-              const { label, another, icon: Icon } = ANCHOR_BUTTONS[anchor];
-              return (
-                <button
-                  key={anchor}
-                  type="button"
-                  onClick={() => onAddDetail?.(anchor)}
-                  className="btn-secondary btn-sm"
-                >
-                  <Icon aria-hidden="true" className="w-3.5 h-3.5" />
-                  {another && hasLink ? another : label}
-                </button>
-              );
-            })}
-          </div>
+          {offerSearch && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <button
+                type="button"
+                onClick={searchAgain}
+                className="btn-primary btn-sm"
+              >
+                <Sparkles aria-hidden="true" className="w-3.5 h-3.5" />
+                Search again
+              </button>
+              <span className="text-xs text-on-surface-variant text-pretty">
+                {added
+                  ? "With the details you added"
+                  : "Without the pages you took back"}
+              </span>
+            </div>
+          )}
+          {form ? (
+            <DetailForm
+              anchor={form}
+              busy={update.isPending}
+              searches={canEnrich}
+              onSave={(text) => save(form, text)}
+              onCancel={() => closeForm(form)}
+            />
+          ) : (
+            missing.length > 0 && (
+              <>
+                <p className="mt-3 text-sm text-on-surface text-pretty">
+                  One more detail helps it find the right person
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {missing.slice(0, ANCHORS_SHOWN).map((anchor) => {
+                    const {
+                      label,
+                      another,
+                      icon: AnchorIcon,
+                    } = ANCHOR_BUTTONS[anchor];
+                    return (
+                      <button
+                        key={anchor}
+                        ref={(element) => {
+                          if (element) chips.current[anchor] = element;
+                        }}
+                        type="button"
+                        onClick={() =>
+                          isInline(anchor)
+                            ? setForm(anchor)
+                            : onAddDetail?.(anchor)
+                        }
+                        className="btn-secondary btn-sm"
+                      >
+                        <AnchorIcon
+                          aria-hidden="true"
+                          className="w-3.5 h-3.5"
+                        />
+                        {another && hasLink ? another : label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )
+          )}
         </>
       )}
       {closing && (
@@ -261,6 +573,10 @@ export function ResearchCard({
   const sourcesId = useId();
   const [allFindings, setAllFindings] = useState(false);
   const [allSources, setAllSources] = useState(false);
+  const [rejecting, setRejecting] = useState<ResearchRun | null>(null);
+  const [justRejected, setJustRejected] = useState(false);
+  const reject = useRejectResearchRun();
+  const first = contact.firstName || contact.name.split(" ")[0];
 
   const record = useMemo(
     () => parseResearchRecord(contact.aiResearch),
@@ -286,6 +602,25 @@ export function ResearchCard({
     );
   }, [record]);
   const researched = runs.length > 0 || !!contact.aiHydratedAt;
+  /** What a run added that the record ties to it, and the pages it found. */
+  const addedBy = (run: ResearchRun) =>
+    (record?.addedEntries ?? []).filter((entry) => entry.at === run.at).length;
+  const pagesOf = (run: ResearchRun) =>
+    sources.filter((source) => source.firstSeenAt === run.at).length;
+  const canReject = (run: ResearchRun) =>
+    !run.rejected &&
+    run.models.length > 0 &&
+    (addedBy(run) > 0 || pagesOf(run) > 0);
+  const reason = nextStepReason(runs);
+  const lastRun = runs.at(-1);
+  const showNextSteps =
+    !!lastRun &&
+    !!reason &&
+    (reason !== "thin" ||
+      missingAnchors(contact).some(
+        (anchor) =>
+          anchor === "school" || anchor === "formerName" || !!onAddDetail,
+      ));
 
   if (!researched && !notes) return null;
 
@@ -329,10 +664,13 @@ export function ResearchCard({
         />
       </div>
 
-      {runs.at(-1)?.outcome === "no-public-info" && (
-        <NoPageNextSteps
+      {showNextSteps && (
+        <ResearchNextSteps
+          key={lastRun.at}
           contact={contact}
-          lastRun={runs.at(-1)!}
+          lastRun={lastRun}
+          reason={reason}
+          focusHeading={justRejected && reason === "rejected"}
           onAddDetail={onAddDetail}
         />
       )}
@@ -344,31 +682,62 @@ export function ResearchCard({
             {[...runs].reverse().map((run, index) => (
               <li
                 key={`${run.at}-${index}`}
-                className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 text-sm"
+                className="flex items-start gap-2 text-sm"
               >
-                {/* When, how deep and with what, in one column; what it
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-4">
+                  {/* When, how deep and with what, in one column; what it
                     did beside. */}
-                <span className="shrink-0 sm:w-48">
-                  <time
-                    dateTime={run.at}
-                    className="block tabular-nums text-on-surface-variant"
+                  <span className="shrink-0 sm:w-48">
+                    <time
+                      dateTime={run.at}
+                      className="block tabular-nums text-on-surface-variant"
+                    >
+                      {when(run.at)}
+                    </time>
+                    {(run.depth || run.models[0]) && (
+                      <span className="block text-xs text-on-surface-variant">
+                        {[
+                          run.depth && DEPTH_WORDS[run.depth].name,
+                          run.models[0] && modelName(run.models[0]),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      "min-w-0",
+                      run.rejected
+                        ? "text-on-surface-variant"
+                        : "text-on-surface",
+                    )}
                   >
-                    {when(run.at)}
-                  </time>
-                  {(run.depth || run.models[0]) && (
-                    <span className="block text-xs text-on-surface-variant">
-                      {[
-                        run.depth && DEPTH_WORDS[run.depth].name,
-                        run.models[0] && modelName(run.models[0]),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  )}
-                </span>
-                <span className="min-w-0 text-on-surface">
-                  {runSummary(run)}
-                </span>
+                    {run.rejected && (
+                      <UserX
+                        aria-hidden="true"
+                        className="mr-1.5 -mt-0.5 inline w-3.5 h-3.5"
+                      />
+                    )}
+                    {runSummary(run)}
+                  </span>
+                </div>
+                {canReject(run) && (
+                  <ActionMenu
+                    label={`Search of ${when(run.at)}, actions`}
+                    icon={MoreHorizontal}
+                    iconClassName="w-4 h-4"
+                    className="-my-1.5 -mr-2 shrink-0"
+                    items={[
+                      {
+                        id: "reject",
+                        label: `Not ${first}`,
+                        icon: UserX,
+                        onSelect: () => setRejecting(run),
+                      },
+                    ]}
+                  />
+                )}
               </li>
             ))}
           </ol>
@@ -469,6 +838,56 @@ export function ResearchCard({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!rejecting}
+        onClose={() => {
+          if (!reject.isPending) setRejecting(null);
+        }}
+        busy={reject.isPending}
+        title="Take back this search?"
+        confirmLabel={
+          rejecting && addedBy(rejecting) > 0
+            ? `Take back ${addedBy(rejecting)} detail${addedBy(rejecting) === 1 ? "" : "s"}`
+            : "Take back search"
+        }
+        onConfirm={() => {
+          if (!rejecting) return;
+          reject.mutate(
+            { id: contact.id, runAt: rejecting.at },
+            {
+              onSuccess: ({ removed }) => {
+                setRejecting(null);
+                setJustRejected(true);
+                toast.success(
+                  removed > 0
+                    ? `Took back ${removed} detail${removed === 1 ? "" : "s"}`
+                    : "Took back the search",
+                );
+              },
+            },
+          );
+        }}
+        description={
+          rejecting && (
+            <>
+              <p>
+                Do this when the search of {when(rejecting.at)} found someone
+                else named {contact.name}
+                {addedBy(rejecting) > 0 &&
+                  `. What it added goes: ${addedInWords(rejecting)}. A detail you changed since stays`}
+              </p>
+              {pagesOf(rejecting) > 0 && (
+                <p>
+                  Its {pagesOf(rejecting)} page
+                  {pagesOf(rejecting) === 1 ? " stays" : "s stay"} out of later
+                  searches, and what it found is not added again
+                </p>
+              )}
+            </>
+          )
+        }
+      />
 
       {notes && (
         <details className="mt-5">

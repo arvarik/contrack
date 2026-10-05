@@ -660,6 +660,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    method: "POST",
+    path: "/api/contacts/:id/research/reject",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "PATCH",
     path: "/api/contacts/:id/location",
     class: "scoped",

@@ -8,7 +8,10 @@
 //   1. The request's technique finds facts (`Technique.run`), with the web
 //      search the request chose.
 //   2. The one extraction reads the facts into fields (`extractFacts`).
-//   3. The result has the same fields for every technique.
+//   3. A run whose fields only restate the records found nothing: it
+//      records no public information, with no fields and no pages
+//      (`hasNewFacts`).
+//   4. The result has the same fields for every technique.
 //
 // Every model call and every web search asks the AI switches first: the
 // instance switch, the account's own switch, and research that an admin
@@ -30,6 +33,10 @@ import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { getPreferences } from "../userPreferencesService.ts";
 import type { ResearchDepth } from "../../../shared/researchDepth.ts";
+import {
+  hasNewFacts,
+  type AISearchOutput,
+} from "../aiSearch/promptTemplate.ts";
 import { createMeter, foundResult, noMatchResult } from "./evidence.ts";
 import { extractFacts } from "./extract.ts";
 import { chooseResearch } from "./choice.ts";
@@ -160,6 +167,23 @@ export async function research(
       if (outcome.kind === "no-match")
         return noMatchResult(outcome, meter, depth, startMs);
       const read = await extractFacts(run, outcome.facts, ctx, technique.name);
+      if (!hasNewFacts(read.data as AISearchOutput, request.contact)) {
+        log.info(
+          "Research",
+          `${request.contact.id} (${technique.name}, ${depth}): the pages said nothing beyond the records`,
+        );
+        return noMatchResult(
+          {
+            kind: "no-match",
+            queries: outcome.queries,
+            models: outcome.models,
+            text: "",
+          },
+          meter,
+          depth,
+          startMs,
+        );
+      }
       log.info(
         "Research",
         `${request.contact.id} (${technique.name}, ${depth}): read by ${read.model} in ${read.latencyMs}ms; ${meter.usage.calls} calls, ${meter.usage.searches} searches`,

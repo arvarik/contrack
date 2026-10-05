@@ -120,8 +120,8 @@ describe("a research call that waits in the AI work queue", () => {
   });
 
   it("ends the run with the instance switch's refusal, not a finding of no public information", async () => {
-    // The first ask runs and answers a no-match. The two asks after it wait
-    // behind calls that take both slots while it runs.
+    // The first ask runs and answers without a search. The ask after it
+    // waits behind calls that take both slots while it runs.
     const holding: Array<Promise<unknown>> = [];
     vi.mocked(provider.generate).mockImplementationOnce(async () => {
       holding.push(hold(), hold());
@@ -129,12 +129,11 @@ describe("a research call that waits in the AI work queue", () => {
         text: NO_MATCHING_PAGES,
         model: "m-research",
         latencyMs: 1,
-        searchQueries: ['"Rowan Vale"'],
       };
     });
     const run = researched();
     run.catch(() => {});
-    await vi.waitFor(() => expect(getAIQueueSnapshot().waiting).toBe(2));
+    await vi.waitFor(() => expect(getAIQueueSnapshot().waiting).toBe(1));
     setAiOffForInstance(true);
     open();
     await Promise.all(holding);

@@ -27,12 +27,12 @@ describe("research cost estimates", () => {
   });
 
   it("prices Claude and OpenAI research from the same searches and tokens", () => {
-    // Standard: 8 searches at $10 per 1,000 is $0.08, and 25,000 tokens at the
-    // blended $4 per million is $0.10. Deep: 18 searches is $0.18, and 45,000
-    // tokens is $0.18.
+    // Standard: 5 searches at $10 per 1,000 is $0.05, and 5,300 tokens at
+    // $6 per million (half input at $2, half output at $10) is $0.0318.
+    // Deep: 7 searches is $0.07, and 13,000 tokens is $0.078.
     for (const provider of ["anthropic", "openai"] as const) {
-      expect(estimateCostUsd(provider, "standard")).toBeCloseTo(0.18, 6);
-      expect(estimateCostUsd(provider, "deep")).toBeCloseTo(0.36, 6);
+      expect(estimateCostUsd(provider, "standard")).toBeCloseTo(0.0818, 6);
+      expect(estimateCostUsd(provider, "deep")).toBeCloseTo(0.148, 6);
     }
   });
 

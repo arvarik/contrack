@@ -37,6 +37,7 @@ import type { NewContactPayload } from "../repositories/types.ts";
 import { providerIdFor } from "../ai/gateway.ts";
 import {
   mergeSearchResult,
+  rejectResearchRun,
   researchHistory,
 } from "../services/aiSearch/mergeEngine.ts";
 import {
@@ -737,6 +738,31 @@ router.post(
       release();
       res.off("close", onClose);
     }
+  }),
+);
+
+/**
+ * POST /api/contacts/:id/research/reject
+ *
+ * "Not this person": take back what one research run added, as research
+ * wrote it, and leave the run's pages out of later runs
+ * (`rejectResearchRun`). Answers the contact as it is now.
+ */
+router.post(
+  "/contacts/:id/research/reject",
+  requireContact,
+  validateBody(contactRoutes.rejectResearchRun.body),
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const id = String(req.params.id);
+    const { removed } = rejectResearchRun(scope, id, req.body.runAt);
+    const contact = contactService.getContactById(scope, id);
+    if (!contact) throw new NotFoundError("Contact");
+    log.info(
+      "API",
+      `[${req.requestId}] POST /api/contacts/${id}/research/reject → ${removed} taken back`,
+    );
+    res.json({ success: true, removed, contact });
   }),
 );
 

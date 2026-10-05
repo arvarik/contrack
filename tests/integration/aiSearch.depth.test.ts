@@ -1,9 +1,11 @@
 // =============================================================================
 // Integration: the two research depths, from the API to the research record
 // =============================================================================
-// Standard asks once, at thinking "medium". Deep asks the same, and beside
-// it, at "high", for a complete profile, and keeps what both cite. Both keep
-// what they spent.
+// Standard asks the plain sentence once, at thinking "medium". Deep asks
+// the long prompt beside it, at "medium" too, and keeps what both cite.
+// Whether an ask searched comes from its search metadata: none searched is
+// one more plain ask and then AI_NO_SEARCH, and a search with nothing about
+// the person is no public information. Both depths keep what they spent.
 // =============================================================================
 
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
@@ -34,6 +36,7 @@ import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { parseResearchRecord } from "../../shared/researchRecord.ts";
 import {
+  buildQuickSearchPrompt,
   buildSearchPrompt,
   NO_MATCHING_PAGES,
 } from "../../server/services/aiSearch/promptTemplate.ts";
@@ -71,7 +74,7 @@ const noPages = (text: string): AIGenerateResult => ({
   citations: [],
   searchQueries: [],
 });
-/** The no-match reply, after the searches it names, or after none. */
+/** A reply that finds nobody, after the searches it names, or after none. */
 const noMatch = (searchQueries: string[] = []): AIGenerateResult => ({
   ...noPages(NO_MATCHING_PAGES),
   searchQueries,
@@ -113,6 +116,9 @@ describe("Standard", () => {
       ["research", "medium"],
       ["quick", undefined],
     ]);
+    expect(calls()[0].prompt).toBe(
+      buildQuickSearchPrompt(enrichmentContact(scope(), id)),
+    );
     expect(result.depth).toBe("standard");
     expect(result.usage).toEqual({
       calls: 2,
@@ -124,7 +130,7 @@ describe("Standard", () => {
 });
 
 describe("Deep", () => {
-  it("asks for the main facts at medium and a complete profile at high, at once, and extracts both", async () => {
+  it("asks the plain sentence and the long prompt at once, both at medium, and extracts both", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
       .mockResolvedValueOnce(
@@ -140,17 +146,16 @@ describe("Deep", () => {
       contact: enrichmentContact(scope(), id),
       depth: "deep",
     });
-    const [plain, complete, read] = calls();
-    expect(plain.prompt).toBe(
-      buildSearchPrompt(enrichmentContact(scope(), id)),
-    );
-    expect(complete.prompt).toContain("Aim for a complete profile");
+    const [plain, long, read] = calls();
+    const contact = enrichmentContact(scope(), id);
+    expect(plain.prompt).toBe(buildQuickSearchPrompt(contact));
+    expect(long.prompt).toBe(buildSearchPrompt(contact));
     expect(calls().map((call) => call.thinkingLevel)).toEqual([
       "medium",
-      "high",
+      "medium",
       undefined,
     ]);
-    // The extraction reads both answers' lines.
+    // The extraction reads both answers.
     expect(read.prompt).toContain("Analyst, Acme");
     expect(read.prompt).toContain("Fellow, Example School");
     expect(result.citations?.map((citation) => citation.uri)).toEqual([
@@ -168,7 +173,7 @@ describe("Deep", () => {
     expect(result.usage?.calls).toBe(3);
   });
 
-  it("keeps the medium answer when the high one comes back empty", async () => {
+  it("keeps the plain answer when the long one comes back empty", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
       .mockResolvedValueOnce(noPages(""))
@@ -186,48 +191,43 @@ describe("Deep", () => {
       "quick",
     ]);
   });
+});
 
-  it("asks twice more, at medium, when neither first ask cites a page", async () => {
+describe("whether the model searched", () => {
+  it("asks the plain sentence once more when no first ask searched, and uses that answer", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(noPages(""))
       .mockResolvedValueOnce(noPages("From memory"))
       .mockResolvedValueOnce(found("- Past role: Analyst, Acme [example.com]"))
-      .mockResolvedValueOnce(noPages("From memory again"))
-      .mockResolvedValueOnce(extraction("{}"));
-    await researchWith("provider-search", {
+      .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
+    const result = await researchWith("provider-search", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
       depth: "deep",
     });
     expect(calls().map((call) => call.thinkingLevel)).toEqual([
       "medium",
-      "high",
       "medium",
       "medium",
       undefined,
     ]);
-    expect(calls()[2].prompt).toMatch(
-      /^Before anything else, run these Google searches/,
+    expect(calls()[2].prompt).toBe(
+      buildQuickSearchPrompt(enrichmentContact(scope(), id)),
     );
-    expect(calls()[3].prompt).toMatch(/^Run Google searches about one person/);
+    expect(result.outcome).toBe("found");
+    // The answers from memory cite nothing and reach no extraction.
+    expect(calls()[3].prompt).not.toContain("From memory");
   });
-});
 
-describe("the no-match reply", () => {
-  it("records no public information when the reply ran a search", async () => {
-    vi.mocked(generateFor)
-      .mockResolvedValueOnce(noMatch(['"Test Person" Test Company']))
-      .mockResolvedValueOnce(noMatch())
-      .mockResolvedValueOnce(noMatch());
+  it("records no public information when an ask searched and cited nothing", async () => {
+    vi.mocked(generateFor).mockResolvedValueOnce(
+      noMatch(['"Test Person" Test Company']),
+    );
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
     expect(response.body.outcome).toBe("no-public-info");
-    // Three asks and no extraction: there is nothing to read.
-    expect(calls().map((call) => call.capability)).toEqual([
-      "research",
-      "research",
-      "research",
-    ]);
+    // One ask and no extraction: it searched, and there is nothing to read.
+    expect(calls().map((call) => call.capability)).toEqual(["research"]);
     const run = parseResearchRecord(enrichmentContact(scope(), id).aiResearch)!
       .runs[0];
     expect(run).toMatchObject({
@@ -236,15 +236,16 @@ describe("the no-match reply", () => {
     });
   });
 
-  it("records nothing, and says the model did not search, when no reply ran a search", async () => {
-    vi.mocked(generateFor).mockResolvedValue(noMatch());
+  it("records nothing, and says the model did not search, when neither ask searched", async () => {
+    // A reply can say it searched without having searched.
+    vi.mocked(generateFor).mockResolvedValue(
+      noPages("No matching pages were found in the search results."),
+    );
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe("AI_NO_SEARCH");
-    expect(response.body.error.message).toContain(
-      "did not report a web search",
-    );
-    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(response.body.error.message).toContain("did not run a web search");
+    expect(generateFor).toHaveBeenCalledTimes(2);
     const after = enrichmentContact(scope(), id);
     expect(after.aiHydratedAt).toBeNull();
     expect(after.aiResearch).toBeNull();
@@ -260,12 +261,12 @@ describe("the no-match reply", () => {
       status: "error",
       errorType: "validation",
     });
-    expect(batch.jobs[0].error).toContain("did not report a web search");
+    expect(batch.jobs[0].error).toContain("did not run a web search");
     expect(batch.jobs[0].outcome).toBeUndefined();
     expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
   });
 
-  it("reports the provider's error when the further asks fail after a no-match with no search", async () => {
+  it("reports the provider's error when the second ask fails", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(noMatch())
       .mockRejectedValue(new Error("Network 500"));
@@ -276,17 +277,112 @@ describe("the no-match reply", () => {
       }),
     ).rejects.toThrow("Network 500");
   });
+});
 
-  it("keeps a no-match that ran a search when the further asks fail", async () => {
+describe("what the pages said", () => {
+  it("leaves out the pages of a run marked Not this person, and what only they back", async () => {
+    const namesake = "https://athletics.example/roster/test-person";
+    sqlite.prepare("UPDATE contacts SET aiResearch = ? WHERE id = ?").run(
+      JSON.stringify({
+        version: 1,
+        runs: [
+          {
+            at: "2026-10-04T10:00:00.000Z",
+            models: ["mock-flash"],
+            outcome: "added",
+            added: [],
+            sourceCount: 1,
+            queries: [],
+            findings: [],
+            rejected: true,
+          },
+        ],
+        sources: [],
+        rejectedSources: [namesake],
+      }),
+      id,
+    );
     vi.mocked(generateFor)
-      .mockResolvedValueOnce(noMatch(['"Test Person" Test Company']))
-      .mockRejectedValue(new Error("Network 500"));
+      .mockResolvedValueOnce({
+        ...found(
+          "- Past role: Analyst, Acme [example.com]\n- Award: Conference champion, 800 m [athletics.example]",
+        ),
+        citations: [
+          { title: "example.com", uri: "https://example.com/profile" },
+          { title: "athletics.example", uri: namesake },
+        ],
+        supports: [
+          {
+            text: "- Award: Conference champion, 800 m [athletics.example]",
+            uris: [namesake],
+          },
+        ],
+      })
+      .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
+    const result = await researchWith("provider-search", {
+      scope: scope(),
+      contact: enrichmentContact(scope(), id),
+      history: parseResearchRecord(enrichmentContact(scope(), id).aiResearch),
+    });
+    expect(result.citations?.map((citation) => citation.uri)).toEqual([
+      "https://example.com/profile",
+    ]);
+    expect(calls()[1].prompt).not.toContain("Conference champion");
+    expect(result.findings?.map((finding) => finding.topic)).toEqual([
+      "Past role",
+    ]);
+  });
+
+  it("records no public information, with no fields and no pages, when the facts only restate the records", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce(found("- Current role: Analyst, Test Company"))
+      .mockResolvedValueOnce(
+        extraction(
+          JSON.stringify({
+            headline: "Analyst at Test Company",
+            industry: "Software",
+            tags: [{ tag: "analytics" }],
+            experience: [{ company: "Test Company", isCurrent: true }],
+          }),
+        ),
+      );
+    const response = await request(app).post(`/api/contacts/${id}/enrich`);
+    expect(response.body.outcome).toBe("no-public-info");
+    const after = enrichmentContact(scope(), id);
+    expect(after.headline).toBeNull();
+    expect(after.experience).toEqual([]);
+    const record = parseResearchRecord(after.aiResearch)!;
+    expect(record.sources).toEqual([]);
+    expect(record.runs[0].added).toEqual([]);
+  });
+
+  it("leaves out job postings and the passages only they back", async () => {
+    vi.mocked(generateFor)
+      .mockResolvedValueOnce({
+        ...found(
+          "- Past role: Analyst, Acme [example.com]\n- Duty: Builds dashboards for the sales team [indeed.com]",
+        ),
+        citations: [
+          { title: "example.com", uri: "https://example.com/profile" },
+          { title: "indeed.com", uri: "https://www.indeed.com/viewjob?jk=1" },
+        ],
+        supports: [
+          {
+            text: "- Duty: Builds dashboards for the sales team [indeed.com]",
+            uris: ["https://www.indeed.com/viewjob?jk=1"],
+          },
+        ],
+      })
+      .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
     const result = await researchWith("provider-search", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
     });
-    expect(result.outcome).toBe("no-public-info");
-    expect(result.searchQueries).toEqual(['"Test Person" Test Company']);
+    expect(result.citations?.map((citation) => citation.uri)).toEqual([
+      "https://example.com/profile",
+    ]);
+    expect(calls()[1].prompt).toContain("Analyst, Acme");
+    expect(calls()[1].prompt).not.toContain("Builds dashboards");
   });
 });
 
@@ -311,7 +407,7 @@ describe("the facts of several asks", () => {
           "https://fellows.example.org/people/test",
         ),
       )
-      .mockResolvedValueOnce(extraction("{}"));
+      .mockResolvedValueOnce(extraction('{"location":"New York, NY"}'));
     const result = await researchWith("provider-search", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
@@ -372,7 +468,8 @@ describe("the depth through the API", () => {
       .post(`/api/contacts/${id}/enrich`)
       .send({ depth: "deep" });
     expect(response.status).toBe(200);
-    expect(calls()[1].thinkingLevel).toBe("high");
+    // The long prompt, beside the plain one.
+    expect(calls()[1].prompt).toContain("Run four to six searches.");
     const run = parseResearchRecord(enrichmentContact(scope(), id).aiResearch)!
       .runs[0];
     expect(run.depth).toBe("deep");

@@ -28,16 +28,23 @@ import type {
   HydratedContact,
   ChildRecordsPayload,
 } from "../../repositories/types.ts";
-import { aiSearchOutputSchema } from "./promptTemplate.ts";
+import { aiSearchOutputSchema, clipList } from "./promptTemplate.ts";
 import {
   degreeLevel,
   linkedInHandle,
+  listItems,
   orgKey,
+  sameItem,
   sameLabel,
   sameOrg,
+  sameSchool,
   textKey,
 } from "./normalize.ts";
-import { contactFingerprint, enrichmentContact } from "./contactSnapshot.ts";
+import {
+  contactFingerprint,
+  enrichmentContact,
+  lockEnrichment,
+} from "./contactSnapshot.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import type { Scope } from "../../tenancy/scope.ts";
@@ -78,6 +85,19 @@ const ALLOWED_SCALAR_FIELDS = new Set([
   "aiBackground",
   "aiResearch",
 ]);
+
+/** The fields research fills, and "Not this person" may clear. */
+const RESEARCH_SCALARS = [
+  "role",
+  "company",
+  "headline",
+  "about",
+  "industry",
+  "website",
+  "location",
+  "pronouns",
+  "birthday",
+] as const;
 
 /** Runs that keep their fact lines. Older runs keep their summary only. */
 const RUNS_WITH_FINDINGS = 2;
@@ -216,7 +236,11 @@ function addedEntry(
   return {
     field,
     value: value.slice(0, 300),
-    ...(detail && { detail: detail.slice(0, 200) }),
+    // A list a run made is kept whole, so "Not this person" takes back
+    // each of its items.
+    ...(detail && {
+      detail: detail.slice(0, field === "attributes" ? 2_000 : 200),
+    }),
     ...(date && { date: date.slice(0, 20) }),
   };
 }
@@ -298,6 +322,19 @@ export function mergeSearchResult(
   const history = researchHistory(existing);
   const before = (field: string) =>
     (history?.addedEntries ?? []).filter((entry) => entry.field === field);
+  // What runs the person marked "Not this person" wrote. A list entry of
+  // theirs is filtered as a removed one; a field's value is checked here.
+  const rejectedRuns = new Set(
+    (history?.runs ?? []).filter((run) => run.rejected).map((run) => run.at),
+  );
+  const rejectedValue = (field: string, value: string) =>
+    before(field).some(
+      (entry) =>
+        !!entry.at &&
+        rejectedRuns.has(entry.at) &&
+        entry.value === value.slice(0, 300),
+    );
+  const runAt = new Date().toISOString();
 
   let fieldsUpdated = 0;
   const added: ResearchAddition[] = [];
@@ -307,19 +344,7 @@ export function mergeSearchResult(
   const scalarUpdate: Record<string, unknown> = {};
 
   // 1. Scalar fields — only fill if currently null/empty
-  const scalarFields = [
-    "role",
-    "company",
-    "headline",
-    "about",
-    "industry",
-    "website",
-    "location",
-    "pronouns",
-    "birthday",
-  ] as const;
-
-  for (const field of scalarFields) {
+  for (const field of RESEARCH_SCALARS) {
     const newVal = searchResult[field];
     const existingVal = existing[field as keyof HydratedContact];
     if (newVal && !existingVal) {
@@ -329,7 +354,7 @@ export function mergeSearchResult(
         String(newVal),
         field === "about" ? 4_000 : 500,
       );
-      if (safeVal === null) continue;
+      if (safeVal === null || rejectedValue(field, safeVal)) continue;
       scalarUpdate[field] = safeVal;
       fieldsUpdated++;
       note(field, 1);
@@ -404,15 +429,18 @@ export function mergeSearchResult(
   // ── Education: one school and one degree, however a page writes them ──
   // A second round found "The University of Example", "AB", 2017, for the
   // "University of Example" "BA" of 2013 to 2017, and a school's short name
-  // for its long one (2026-09-26). A degree missing on either side matches
-  // any: a roster names the school, a profile the degree. End years more
-  // than a year apart are two entries.
+  // for its long one (2026-09-26). It also wrote "Harbor School of
+  // Engineering at Example University" for a saved "Example University"
+  // (2026-10-05): a school is one however a page names its
+  // parts (`sameSchool`). A degree missing on either side matches any: a
+  // roster names the school, a profile the degree. End years more than a
+  // year apart are two entries.
   if (
     Array.isArray(searchResult.education) &&
     searchResult.education.length > 0
   ) {
     const sameEntry = (a: SchoolEntry, b: SchoolEntry) =>
-      sameOrg(a.school, b.school) &&
+      sameSchool(a.school, b.school) &&
       (!a.degree ||
         !b.degree ||
         degreeLevel(a.degree) === degreeLevel(b.degree)) &&
@@ -444,17 +472,22 @@ export function mergeSearchResult(
     const getYear = (d?: string | null) => (d ? d.slice(0, 4) : "");
     // One employer however it is written ("Kestrel" and "Kestrel Securities
     // International, Inc."), and either the same start month, however the
-    // title is worded, or the same role and the same start year when both
-    // sides have one. A second round wrote "Associate" for a saved
-    // "Associate, Restructuring Group" that started the same month
-    // (2026-09-26).
+    // title is worded, or one title worded two ways ("Editor, Writer" and
+    // "Editor and Writer": every word of one in the other, `sameLabel`)
+    // with the same start year when both sides have one. A second round
+    // wrote "Associate" for a saved "Associate, Restructuring Group" that
+    // started the same month (2026-09-26), and of 2,646 simulated second
+    // rounds, 0.66 a round added a reworded title again (2026-10-05).
+    // "Research Assistant" and "Teaching Assistant" stay two, and so do two
+    // titles with different start years.
     const month = (d?: string | null) =>
       d && d.length >= 7 ? d.slice(0, 7) : "";
     const sameJob = (a: JobEntry, b: JobEntry) =>
       sameOrg(a.company, b.company) &&
       ((month(a.startDate) !== "" &&
         month(a.startDate) === month(b.startDate)) ||
-        (textKey(a.role) === textKey(b.role) &&
+        ((textKey(a.role) === textKey(b.role) ||
+          sameLabel(a.role ?? "", b.role ?? "")) &&
           (!a.startDate ||
             !b.startDate ||
             getYear(a.startDate) === getYear(b.startDate))));
@@ -525,21 +558,53 @@ export function mergeSearchResult(
     }));
   }
 
-  // ── Attributes: upsert via ON CONFLICT (handled by insertChildRecords) ──
+  // ── Attributes: one entry per kind, and research's own kind gains items ──
+  // An attribute holds a list of one kind ("Publications": "A; B"). A
+  // second round used to skip a kind the contact had, list and all: 2.1 new
+  // items a round were lost (2026-10-05). Now a kind an earlier run added
+  // gains the items it lacks, each once (`sameItem`), through the upsert in
+  // insertChildRecords. A kind the person wrote is theirs, and stays as it
+  // is. A kind or an item research added and the person removed is not
+  // added back.
+  const appendedItems = new Map<string, string[]>();
   if (
     Array.isArray(searchResult.attributes) &&
     searchResult.attributes.length > 0
   ) {
-    const removed = new Set(
+    const kindsAdded = new Set(
       before("attributes").map((e) => e.value.toLowerCase()),
     );
-    childData.attributes = searchResult.attributes.filter(
-      (attribute) =>
-        !removed.has(attribute.name.toLowerCase()) &&
-        !existing.attributes.some(
-          (saved) => saved.name.toLowerCase() === attribute.name.toLowerCase(),
-        ),
-    );
+    const kept: NonNullable<typeof searchResult.attributes> = [];
+    for (const attribute of searchResult.attributes) {
+      const saved = existing.attributes.find(
+        (entry) => entry.name.toLowerCase() === attribute.name.toLowerCase(),
+      );
+      if (!saved) {
+        if (!kindsAdded.has(attribute.name.toLowerCase())) kept.push(attribute);
+        continue;
+      }
+      if (!kindsAdded.has(saved.name.toLowerCase())) continue;
+      const have = listItems(saved.value);
+      const removedItems = before("attributeItems")
+        .filter(
+          (entry) =>
+            entry.value.toLowerCase() === saved.name.toLowerCase() &&
+            !!entry.detail &&
+            !have.some((item) => sameItem(item, entry.detail!)),
+        )
+        .map((entry) => entry.detail!);
+      const fresh = listItems(attribute.value).filter(
+        (item) =>
+          !have.some((other) => sameItem(other, item)) &&
+          !removedItems.some((gone) => sameItem(gone, item)),
+      );
+      const value = clipList([...have, ...fresh].join("; "));
+      const fits = fresh.filter((item) => listItems(value).includes(item));
+      if (fits.length === 0) continue;
+      kept.push({ name: saved.name, value });
+      appendedItems.set(saved.name, fits);
+    }
+    childData.attributes = kept;
   }
 
   // ── Addresses: deduplicate by address string (case-insensitive) ──
@@ -587,13 +652,23 @@ export function mergeSearchResult(
     ...(childData.interests ?? []).map((i) =>
       addedEntry("interests", entryText(i, "interest")),
     ),
-    ...(childData.attributes ?? []).map((a) =>
-      addedEntry("attributes", a.name),
+    ...(childData.attributes ?? []).flatMap((a) =>
+      appendedItems.has(a.name)
+        ? appendedItems
+            .get(a.name)!
+            .map((item) => addedEntry("attributeItems", a.name, item))
+        : [addedEntry("attributes", a.name, a.value)],
     ),
     ...(childData.addresses ?? []).map((a) =>
       addedEntry("addresses", entryText(a, "address")),
     ),
-  ].filter((entry) => entry.value);
+    // A field's value too, so "Not this person" can take it back.
+    ...Object.entries(scalarUpdate).map(([field, value]) =>
+      addedEntry(field, String(value)),
+    ),
+  ]
+    .filter((entry) => entry.value)
+    .map((entry) => ({ ...entry, at: runAt }));
 
   // 3. The research record — every run, whatever it found
   const outcome: ResearchOutcome =
@@ -610,7 +685,7 @@ export function mergeSearchResult(
   const record = recordRun(
     history,
     {
-      at: new Date().toISOString(),
+      at: runAt,
       models: (provenance.models ?? []).slice(0, 4),
       ...(provenance.depth && { depth: provenance.depth }),
       ...(provenance.usage && { usage: provenance.usage }),
@@ -689,4 +764,235 @@ export function mergeSearchResult(
     `Contact ${contactId}: ${fieldsUpdated} field(s) merged (${outcome}; ${added.map((a) => `${a.field} ${a.count}`).join(", ") || "none"})`,
   );
   return fieldsUpdated;
+}
+
+// =============================================================================
+// Not this person
+// =============================================================================
+
+/** The child tables a run's entries can live in, by field. */
+const ENTRY_TABLES: Record<string, string> = {
+  emails: "contact_emails",
+  phones: "contact_phones",
+  socialLinks: "contact_social_links",
+  education: "contact_education",
+  experience: "contact_experience",
+  tags: "contact_tags",
+  interests: "contact_interests",
+  addresses: "contact_addresses",
+};
+
+/** Text compared as research wrote it: trimmed, without case. */
+const sameText = (a?: string | null, b?: string | null) =>
+  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+
+/**
+ * The saved rows an entry names, as research wrote them. A row the person
+ * edited since reads differently, and is not one of them.
+ */
+function rowsFor(
+  contact: HydratedContact,
+  entry: ResearchAddedEntry,
+): string[] {
+  const digits = (value: string) => value.replace(/\D/g, "");
+  const url = (value: string) => value.toLowerCase().replace(/\/$/, "");
+  const date = (value?: string | null) => (value ?? "").slice(0, 20);
+  switch (entry.field) {
+    case "emails":
+      return contact.emails
+        .filter((row) => sameText(row.email, entry.value))
+        .map((row) => row.id);
+    case "phones":
+      return contact.phones
+        .filter((row) => digits(row.phone) === digits(entry.value))
+        .map((row) => row.id);
+    case "socialLinks":
+      return contact.socialLinks
+        .filter((row) => url(row.url) === url(entry.value))
+        .map((row) => row.id);
+    case "education":
+      return contact.education
+        .filter(
+          (row) =>
+            sameText(row.school.slice(0, 300), entry.value) &&
+            sameText(row.degree?.slice(0, 200), entry.detail) &&
+            date(row.endDate) === date(entry.date),
+        )
+        .map((row) => row.id);
+    case "experience":
+      return contact.experience
+        .filter(
+          (row) =>
+            sameText(row.company.slice(0, 300), entry.value) &&
+            sameText(row.role?.slice(0, 200), entry.detail) &&
+            date(row.startDate) === date(entry.date),
+        )
+        .map((row) => row.id);
+    case "tags":
+      return contact.tags
+        .filter((row) => sameText(row.tag, entry.value))
+        .map((row) => row.id);
+    case "interests":
+      return contact.interests
+        .filter((row) => sameText(row.interest, entry.value))
+        .map((row) => row.id);
+    case "addresses":
+      return contact.addresses
+        .filter((row) => sameText(row.address.slice(0, 300), entry.value))
+        .map((row) => row.id);
+    default:
+      return [];
+  }
+}
+
+/**
+ * Take back what one research run added, because it found someone else.
+ *
+ * Every entry the run added that the contact still has as research wrote it
+ * goes: a row or a field the person edited since reads differently and
+ * stays, and so does anything they added themselves. The run is marked
+ * `rejected`, its fact lines go, and its pages move to `rejectedSources`,
+ * which later runs leave out with the passages they back. The run's entries
+ * stay in the record, so research never adds them back.
+ *
+ * @param scope - The account that owns the contact.
+ * @param contactId - The contact researched.
+ * @param runAt - The run, by its `at`.
+ * @returns How many fields, entries and list items were taken back.
+ * @throws AppError 404 when the contact has no such run, or it was marked
+ *   already, and 409 while research runs for the contact.
+ */
+export function rejectResearchRun(
+  scope: Scope,
+  contactId: string,
+  runAt: string,
+): { removed: number } {
+  const release = lockEnrichment(contactId);
+  try {
+    const contact = enrichmentContact(scope, contactId);
+    const record = parseResearchRecord(contact.aiResearch);
+    const run = record?.runs.find((entry) => entry.at === runAt);
+    if (!record || !run || run.rejected)
+      throw new AppError("That research run is not on this contact.", 404, {
+        code: "RESEARCH_RUN_NOT_FOUND",
+      });
+    const entries = (record.addedEntries ?? []).filter(
+      (entry) => entry.at === runAt,
+    );
+
+    const rows: Array<{ table: string; id: string }> = [];
+    const attributeValues = new Map<string, string | null>();
+    const cleared: string[] = [];
+    for (const entry of entries) {
+      const table = ENTRY_TABLES[entry.field];
+      if (table) {
+        for (const id of rowsFor(contact, entry)) rows.push({ table, id });
+        continue;
+      }
+      if (entry.field === "attributes" || entry.field === "attributeItems") {
+        const saved = contact.attributes.find((row) =>
+          sameText(row.name, entry.value),
+        );
+        if (!saved || !entry.detail) continue;
+        const current = attributeValues.has(saved.id)
+          ? attributeValues.get(saved.id)
+          : saved.value;
+        if (current == null) continue;
+        // The items this run wrote: the list it made, or one item it added.
+        // An item another run added, or one the person changed, stays.
+        const gone =
+          entry.field === "attributes"
+            ? listItems(entry.detail)
+            : [entry.detail];
+        const items = listItems(current);
+        const left = items.filter(
+          (item) => !gone.some((other) => sameItem(other, item)),
+        );
+        if (left.length < items.length)
+          attributeValues.set(
+            saved.id,
+            left.length > 0 ? left.join("; ") : null,
+          );
+        continue;
+      }
+      const value = contact[entry.field as keyof HydratedContact];
+      if (
+        (RESEARCH_SCALARS as readonly string[]).includes(entry.field) &&
+        typeof value === "string" &&
+        value.slice(0, 300) === entry.value
+      )
+        cleared.push(entry.field);
+    }
+
+    const pages = record.sources.filter(
+      (source) => source.firstSeenAt === runAt,
+    );
+    const next: ResearchRecord = {
+      ...record,
+      runs: record.runs.map((entry) =>
+        entry.at === runAt ? { ...entry, rejected: true, findings: [] } : entry,
+      ),
+      sources: record.sources.filter((source) => source.firstSeenAt !== runAt),
+      rejectedSources: [
+        ...new Set([
+          ...(record.rejectedSources ?? []),
+          ...pages.map((source) => source.url),
+        ]),
+      ].slice(-MAX_RESEARCH_SOURCES),
+    };
+    const checked = researchRecordSchema.parse(next);
+
+    const removed = rows.length + attributeValues.size + new Set(cleared).size;
+    const write = sqlite.transaction(() => {
+      for (const { table, id } of rows)
+        sqlite
+          .prepare(`DELETE FROM ${table} WHERE id = ? AND contactId = ?`)
+          .run(id, contactId);
+      for (const [id, value] of attributeValues)
+        if (value === null)
+          sqlite
+            .prepare(
+              "DELETE FROM contact_attributes WHERE id = ? AND contactId = ?",
+            )
+            .run(id, contactId);
+        else
+          sqlite
+            .prepare(
+              "UPDATE contact_attributes SET value = ? WHERE id = ? AND contactId = ?",
+            )
+            .run(value, id, contactId);
+      // A pin the geocoder placed from a location that goes, goes with it.
+      // One a person dragged into place stays.
+      const fields = [...new Set(cleared)].map((field) => `${field} = NULL`);
+      if (cleared.includes("location"))
+        fields.push(
+          "lat = CASE WHEN geoSource = 'manual' THEN lat END",
+          "lng = CASE WHEN geoSource = 'manual' THEN lng END",
+        );
+      sqlite
+        .prepare(
+          `UPDATE contacts SET ${[...fields, "aiResearch = ?", "updatedAt = ?"].join(", ")}
+             WHERE id = ? AND ownerId = ?`,
+        )
+        .run(
+          JSON.stringify(checked),
+          new Date().toISOString(),
+          contactId,
+          scope.ownerId,
+        );
+    });
+    write();
+
+    aiCache.invalidateForOwner("rerank", scope.ownerId);
+    aiCache.invalidateForOwner("synthesis", scope.ownerId);
+    aiCache.invalidate("briefing", ownerKey(scope, contactId));
+    scheduleSearchIndex(contactId);
+    log.info(
+      "MergeEngine",
+      `Contact ${contactId}: run ${runAt} marked as someone else; ${removed} taken back, ${pages.length} pages left out from now on`,
+    );
+    return { removed };
+  } finally {
+    release();
+  }
 }

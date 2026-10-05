@@ -7,7 +7,10 @@
 //   orgKey / sameOrg  one employer or school, however a page writes it
 //   textKey           text compared without case or punctuation
 //   degreeLevel       one degree, however a page names it: "AB" is a "BA"
-//   sameLabel         one interest or tag, however a page words it
+//   sameLabel         one interest, tag or job title, however a page words it
+//   sameSchool        one school, however a page names its parts
+//   listItems / sameItem  the items of a list value, and one item however
+//                     a page cuts or numbers it
 //   researchDate      a date as the dossier stores it: "YYYY" or "YYYY-MM"
 //   linkedInHandle    the profile a LinkedIn address names
 // =============================================================================
@@ -92,9 +95,11 @@ function labelStems(value: string): Set<string> {
 }
 
 /**
- * True when two interests or tags say one thing: every word of the shorter
- * one is in the longer. "Distance running" and "Distance running coach" are
- * one interest; "Machine learning" and "Machine vision" are two.
+ * True when two interests, tags or job titles say one thing: every word of
+ * the shorter one is in the longer. "Distance running" and "Distance running
+ * coach" are one interest, and "Editor, Writer" and "Editor and Writer"
+ * one title. "Machine learning" and "Machine vision" are two, and so are
+ * "Research Assistant" and "Teaching Assistant".
  */
 export function sameLabel(a: string, b: string): boolean {
   const x = labelStems(a);
@@ -102,6 +107,54 @@ export function sameLabel(a: string, b: string): boolean {
   if (x.size === 0 || y.size === 0) return false;
   const [shorter, longer] = x.size <= y.size ? [x, y] : [y, x];
   return [...shorter].every((stem) => longer.has(stem));
+}
+
+/** A part that names a field, not a school: "School of Engineering". */
+const GENERIC_SCHOOL_PART =
+  /^(?:the\s+)?(?:graduate\s+)?(?:school|college|faculty|department|division|institute)\s+of\b/i;
+
+/** A unit inside a school, before " at ": "Harbor School of Engineering". */
+const SCHOOL_UNIT =
+  /\b(?:school|college|faculty|department|division|cent(?:er|re))\b/i;
+
+/**
+ * The parts of a school's name. "Harbor School of Engineering at Example
+ * University" is its unit and its university, and so is "University of
+ * Example - Vale School of Business". A name such as
+ * "University of Texas at Austin" is one part: " at " splits only after a
+ * unit. A part that names only a field is left out, since many schools have
+ * one.
+ */
+function schoolParts(value: string): string[] {
+  return value
+    .split(/\s+[-–—|/]\s+|\s*,\s*/)
+    .flatMap((part) => {
+      const at = part.split(/\s+at\s+/i);
+      return at.length === 2 && SCHOOL_UNIT.test(at[0]) ? at : [part];
+    })
+    .map((part) => part.trim())
+    .filter((part) => part && !GENERIC_SCHOOL_PART.test(part));
+}
+
+/**
+ * True when two school names are one school: one name, as `sameOrg` reads
+ * it, or every part of the name with fewer parts in the other. Pages name a
+ * school with or without its unit: "Example University" and "Harbor
+ * School of Engineering at Example University" are one, and two
+ * campuses, "University of Example - Riverside" and "- Lakeside", are two.
+ */
+export function sameSchool(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (sameOrg(a, b)) return true;
+  const x = schoolParts(a ?? "");
+  const y = schoolParts(b ?? "");
+  if (x.length === 0 || y.length === 0) return false;
+  const [fewer, more] = x.length <= y.length ? [x, y] : [y, x];
+  return fewer.every((part) =>
+    more.some((other) => sameOrg(part, other) || sameLabel(part, other)),
+  );
 }
 
 const MONTHS: Record<string, number> = {
@@ -178,4 +231,33 @@ export function linkedInHandle(url: string | null | undefined): string | null {
   } catch {
     return match[1].toLowerCase();
   }
+}
+
+/** The items of a list value: "Paper A; Paper B" is two. */
+export function listItems(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .split(/\s*;\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+/** An item as `sameItem` compares it: no quotes, no leading number. */
+function itemKey(item: string): string {
+  return textKey(item.replace(/^\s*\d+\s+(?=\D)/, ""));
+}
+
+/**
+ * True when two items of a list value are one: the same words, or one a
+ * cut-off copy of the other. A page wrote "572 Tidal Patterns in Harbor
+ * Sediment" for "Tidal Patterns in Harbor Sediment", and another cut a title
+ * short (2026-10-05). Short items must match whole, so "Award" and "Awards
+ * dinner" stay two.
+ */
+export function sameItem(a: string, b: string): boolean {
+  const x = itemKey(a);
+  const y = itemKey(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [shorter, longer] = x.length <= y.length ? [x, y] : [y, x];
+  return shorter.length >= 24 && longer.startsWith(shorter);
 }

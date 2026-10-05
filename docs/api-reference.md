@@ -358,30 +358,31 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 `socialLinks`, `education`, `experience`, `sources`, `tags`, `interests` and
 `attributes`. It also carries `lists` and `interactionCount`.
 
-| Endpoint                              | What it does                                                                                                                                                              | Access               |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/contacts`                   | Every contact that is not archived, trashed or merged, ghosts included, newest first. `?view=slim` returns lighter rows for caches and pickers.                           | your data            |
-| `POST /api/contacts`                  | Create a contact. `201` with the contact.                                                                                                                                 | your data            |
-| `GET /api/contacts/:id`               | One contact with all its child records. Archived contacts are included. A trashed contact answers `404`.                                                                  | your data            |
-| `PATCH /api/contacts/:id`             | Change scalar fields, such as `company`, `role` or `isTracked`. Child arrays answer `400`: use `PUT`.                                                                     | your data            |
-| `PUT /api/contacts/:id`               | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                | your data            |
-| `DELETE /api/contacts/:id`            | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                         | your data            |
-| `GET /api/contacts/archived`          | Archived contacts, most recently changed first.                                                                                                                           | your data            |
-| `GET /api/contacts/map`               | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out. | your data            |
-| `PATCH /api/contacts/:id/location`    | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.            | your data            |
-| `POST /api/contacts/:id/avatar`       | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                        | your data            |
-| `GET /api/contacts/:id/score`         | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                   | your data            |
-| `GET /api/contacts/:id/relationships` | Contacts linked to this one by @mentions. `limit` 1 to 200, default 50.                                                                                                   | your data            |
-| `POST /api/contacts/:id/promote`      | Turn a ghost into a full contact. Answers the contact.                                                                                                                    | your data            |
-| `POST /api/contacts/:id/briefing`     | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                | your data            |
-| `POST /api/contacts/:id/enrich`       | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                   | your data            |
-| `POST /api/contacts/bulk`             | Import many contacts. See [Imports](#imports).                                                                                                                            | your data            |
-| `POST /api/contacts/bulk-delete`      | Move many contacts to the trash: `{ ids }`. Answers `{ success, count, retentionDays }`.                                                                                  | your data            |
-| `PUT /api/contacts/bulk-update`       | Set the same scalar fields on many contacts: `{ ids, data }`. Child arrays are refused. Answers `{ success, count }`.                                                     | your data            |
-| `POST /api/contacts/merge`            | Merge two contacts: `{ primaryId, duplicateId }`. Answers `{ success, contact }`.                                                                                         | your data            |
-| `POST /api/contacts/merge-cluster`    | Merge up to 10 contacts into one: `{ primaryId, duplicateIds }`. Answers `{ success, merged, failed, contact }`.                                                          | your data            |
-| `POST /api/contacts/merge-clusters`   | Merge many clusters: `{ clusters: [{ primaryId, duplicateIds }] }`, 250 merges at most.                                                                                   | your data            |
-| `POST /api/parse-contact`             | Read a contact out of free text with AI: `{ text }`. Answers the parsed fields and saves nothing.                                                                         | any signed-in caller |
+| Endpoint                                 | What it does                                                                                                                                                              | Access               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET /api/contacts`                      | Every contact that is not archived, trashed or merged, ghosts included, newest first. `?view=slim` returns lighter rows for caches and pickers.                           | your data            |
+| `POST /api/contacts`                     | Create a contact. `201` with the contact.                                                                                                                                 | your data            |
+| `GET /api/contacts/:id`                  | One contact with all its child records. Archived contacts are included. A trashed contact answers `404`.                                                                  | your data            |
+| `PATCH /api/contacts/:id`                | Change scalar fields, such as `company`, `role` or `isTracked`. Child arrays answer `400`: use `PUT`.                                                                     | your data            |
+| `PUT /api/contacts/:id`                  | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                | your data            |
+| `DELETE /api/contacts/:id`               | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                         | your data            |
+| `GET /api/contacts/archived`             | Archived contacts, most recently changed first.                                                                                                                           | your data            |
+| `GET /api/contacts/map`                  | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out. | your data            |
+| `PATCH /api/contacts/:id/location`       | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.            | your data            |
+| `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                        | your data            |
+| `GET /api/contacts/:id/score`            | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                   | your data            |
+| `GET /api/contacts/:id/relationships`    | Contacts linked to this one by @mentions. `limit` 1 to 200, default 50.                                                                                                   | your data            |
+| `POST /api/contacts/:id/promote`         | Turn a ghost into a full contact. Answers the contact.                                                                                                                    | your data            |
+| `POST /api/contacts/:id/briefing`        | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                | your data            |
+| `POST /api/contacts/:id/enrich`          | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                   | your data            |
+| `POST /api/contacts/:id/research/reject` | Not this person: take back what one research run added. Body `{ "runAt": "<the run's at>" }`. See [Contact enrichment](#contact-enrichment).                              | your data            |
+| `POST /api/contacts/bulk`                | Import many contacts. See [Imports](#imports).                                                                                                                            | your data            |
+| `POST /api/contacts/bulk-delete`         | Move many contacts to the trash: `{ ids }`. Answers `{ success, count, retentionDays }`.                                                                                  | your data            |
+| `PUT /api/contacts/bulk-update`          | Set the same scalar fields on many contacts: `{ ids, data }`. Child arrays are refused. Answers `{ success, count }`.                                                     | your data            |
+| `POST /api/contacts/merge`               | Merge two contacts: `{ primaryId, duplicateId }`. Answers `{ success, contact }`.                                                                                         | your data            |
+| `POST /api/contacts/merge-cluster`       | Merge up to 10 contacts into one: `{ primaryId, duplicateIds }`. Answers `{ success, merged, failed, contact }`.                                                          | your data            |
+| `POST /api/contacts/merge-clusters`      | Merge many clusters: `{ clusters: [{ primaryId, duplicateIds }] }`, 250 merges at most.                                                                                   | your data            |
+| `POST /api/parse-contact`                | Read a contact out of free text with AI: `{ text }`. Answers the parsed fields and saves nothing.                                                                         | any signed-in caller |
 
 The timeline, follow-up and attachment routes under `/api/contacts/:id/` are in
 [Timeline and notes](#timeline-and-notes) and [Follow-ups](#follow-ups).
@@ -955,11 +956,26 @@ not started yet fails with the same reason, and the batch is `complete`.
 - `403 AI_OFF_FOR_ACCOUNT`, `503 AI_OFF_FOR_INSTANCE` or `503 RESEARCH_OFF`
   when a switch turns off during the run.
 - `409` when research on the contact is already running, or the contact
-  changed. `502 AI_GROUNDING_MISSING` when no search cited a page.
-  `502 AI_NO_ANSWER` when no search answered. `503` when no engine can run,
-  and `503 RESEARCH_OFF` while an admin has web search off.
+  changed. `502 AI_NO_SEARCH` when the web search model ran no search, after
+  one more ask. `502 AI_NO_ANSWER` when it answered nothing. `503` when no
+  engine can run, and `503 RESEARCH_OFF` while an admin has web search off.
+- `no-public-info` means the model searched and no page said anything the
+  contact does not already have. The run then saves no fields and no pages.
 - Research fills empty fields and adds missing child records. It never
   overwrites what you wrote.
+
+`POST /api/contacts/:id/research/reject` with `{ "runAt" }`, the `at` of a
+run in the contact's `aiResearch` record, takes that run back when it found
+someone else with the same name. It answers
+`{ success, removed, contact }`:
+
+- Each field, entry and list item the run added goes, while the contact still
+  has it as research wrote it. One you changed since stays.
+- The run is marked `rejected`, its facts go, and its pages move from
+  `sources` to `rejectedSources`. Later runs leave those pages out, and never
+  add the run's values again.
+- `404 RESEARCH_RUN_NOT_FOUND` when the contact has no such run, or it was
+  taken back already. `409` while research runs for the contact.
 
 ## Duplicates
 

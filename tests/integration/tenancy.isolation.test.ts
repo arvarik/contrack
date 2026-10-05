@@ -218,6 +218,7 @@ const COVERED = [
   "POST /api/contacts/:id/enrich",
   "POST /api/contacts/:id/interactions",
   "POST /api/contacts/:id/promote",
+  "POST /api/contacts/:id/research/reject",
   "POST /api/contacts/bulk",
   "POST /api/contacts/bulk-delete",
   "POST /api/contacts/merge",
@@ -707,6 +708,30 @@ describe("POST /api/contacts/:id/enrich", () => {
       request(app).post(`/api/contacts/${seedB.contactIds[0]}/enrich`),
     );
     expect(res.status).not.toBe(404);
+  });
+});
+
+describe("POST /api/contacts/:id/research/reject", () => {
+  it("refuses a foreign contact before reading its research", async () => {
+    const res = await asUser(B)(
+      request(app)
+        .post(`/api/contacts/${seedA.contactIds[6]}/research/reject`)
+        .send({ runAt: "2026-10-05T00:00:00.000Z" }),
+    );
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("gets past the ownership check for its own contact", async () => {
+    // The contact has no research, so the run is not found: a 404 of its
+    // own code, not the ownership guard's.
+    const res = await asUser(B)(
+      request(app)
+        .post(`/api/contacts/${seedB.contactIds[0]}/research/reject`)
+        .send({ runAt: "2026-10-05T00:00:00.000Z" }),
+    );
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("RESEARCH_RUN_NOT_FOUND");
   });
 });
 

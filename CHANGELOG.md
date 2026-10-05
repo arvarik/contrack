@@ -110,6 +110,13 @@ with an empty `DATA_DIR`.
   for their account. Contact management and search keep working.
 - Research has two depths, cites its sources, and records what each run found
   and cost. It can search with the AI provider, with SearXNG, or with both.
+- Research searches far more often: its first ask is one plain sentence, and
+  it no longer offers the model a way to answer without searching. It keeps
+  only the person's own contact details, skips front pages, mailboxes and job
+  posts, and adds a job or a school worded two ways once.
+- **Not this person** takes back a search that found someone else, and later
+  searches leave out its pages. When research finds little, the Research card
+  asks for a school, a city or a former name and searches again.
 - The usage page shows what each provider costs.
 
 ### Map

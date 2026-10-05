@@ -45,6 +45,7 @@ export const AI_OPERATIONS = [
   "connectorSummary",
   "bulkParse",
   "aiSearchGrounding",
+  "aiSearchNoSearch",
   "aiSearchExtraction",
   "aiSearchReading",
   "aiSearchSinglePass",
@@ -116,7 +117,7 @@ const costBreakdownStmt = sqlite.prepare(`
 const researchRunsStmt = sqlite.prepare(
   // tenant-lint: allow instance sweep
   `SELECT COUNT(*) AS n FROM ai_invocations
-    WHERE operation IN ('aiSearchGrounding', 'aiSearchSinglePass')
+    WHERE operation IN ('aiSearchGrounding', 'aiSearchNoSearch', 'aiSearchSinglePass')
       AND cached = 0
       AND createdAt >= datetime('now', '-1 day')`,
 );

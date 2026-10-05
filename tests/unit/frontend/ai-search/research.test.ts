@@ -4,9 +4,11 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  detailsAdded,
   listInWords,
   missingAnchors,
   modelName,
+  nextStepReason,
   researchedWith,
   runSummary,
   sourceDisplay,
@@ -171,8 +173,14 @@ describe("what research searched with, and what would help it", () => {
     ).toEqual([]);
   });
 
-  it("asks for a city, a work email and a link of their own, when the records lack them", () => {
-    expect(missingAnchors(person())).toEqual(["city", "workEmail", "link"]);
+  it("asks for a school, a city, a former name, a work email and a link of their own, when the records lack them", () => {
+    expect(missingAnchors(person())).toEqual([
+      "school",
+      "city",
+      "formerName",
+      "workEmail",
+      "link",
+    ]);
     // A street address is not read as a city, and a free mailbox is not a
     // work email. A LinkedIn profile is not a link research can read.
     expect(
@@ -184,7 +192,7 @@ describe("what research searched with, and what would help it", () => {
           emails: [{ email: "rowan@gmail.com" }],
         }),
       ),
-    ).toEqual(["city", "workEmail", "link"]);
+    ).toEqual(["school", "city", "formerName", "workEmail", "link"]);
     // A city added after the street counts, as research reads it.
     expect(
       missingAnchors(
@@ -195,7 +203,7 @@ describe("what research searched with, and what would help it", () => {
           ],
         }),
       ),
-    ).toEqual(["workEmail", "link"]);
+    ).toEqual(["school", "formerName", "workEmail", "link"]);
     expect(
       missingAnchors(
         person({
@@ -204,9 +212,53 @@ describe("what research searched with, and what would help it", () => {
           socialLinks: [
             { platform: "github", url: "https://github.com/rowanv" },
           ],
+          education: [{ school: "University of Example" }],
+          attributes: [{ name: "Maiden name", value: "Rowan Ellis" }],
         }),
       ),
     ).toEqual([]);
+    // A former name is one more detail research searched with.
+    expect(
+      researchedWith(
+        person({ attributes: [{ name: "Former name", value: "Rowan Ellis" }] }),
+      ),
+    ).toContain("former name");
+  });
+
+  it("says why the card asks for one more detail, from the latest run", () => {
+    const run = (fields: Record<string, unknown>) =>
+      ({
+        at: "2026-10-05T10:00:00.000Z",
+        models: ["gemini-3.8-flash"],
+        outcome: "added",
+        added: [],
+        sourceCount: 2,
+        queries: [],
+        findings: [],
+        ...fields,
+      }) as Parameters<typeof runSummary>[0];
+    expect(nextStepReason([])).toBeNull();
+    expect(nextStepReason([run({ outcome: "no-public-info" })])).toBe(
+      "no-page",
+    );
+    expect(nextStepReason([run({ rejected: true })])).toBe("rejected");
+    // A headline and tags are no find of their own: two details or fewer is
+    // thin.
+    const thin = run({
+      added: [
+        { field: "headline", count: 1 },
+        { field: "tags", count: 4 },
+        { field: "education", count: 2 },
+      ],
+    });
+    expect(detailsAdded(thin)).toBe(2);
+    expect(nextStepReason([thin])).toBe("thin");
+    expect(
+      nextStepReason([run({ added: [{ field: "experience", count: 3 }] })]),
+    ).toBeNull();
+    expect(runSummary(run({ rejected: true }))).toBe(
+      "Someone else with this name, taken back",
+    );
   });
 
   it("joins a list the way a sentence does", () => {

@@ -1,11 +1,13 @@
 // =============================================================================
 // AI Search — Prompt Template & Output Schema
 // =============================================================================
-// Builds the two prompts contact research runs, and the schema its answer is
+// Builds the prompts contact research runs, and the schema its answer is
 // read into.
 //
-//   buildSearchPrompt      pass 1: search the web, report facts one per line,
-//                          each with the site it came from
+//   buildQuickSearchPrompt pass 1, every depth: one plain sentence that asks
+//                          the model to search
+//   buildSearchPrompt      pass 1, deep beside it: the records, the searches
+//                          to run and the fact-line form
 //   buildExtractionPrompt  pass 2: read those lines into the JSON schema
 //   parseFindings          the fact lines, kept for the dossier's Research card
 //
@@ -28,7 +30,16 @@
 //   were true.
 // - A search budget. Google bills each search Gemini runs, and one pass ran
 //   7 to 20 of them on the same prompt (2026-09-26). The main facts take
-//   four to six. A deep run also asks, beside it, for a complete profile.
+//   four to six.
+// - No reply for "nobody found". The prompt used to end "If no page is about
+//   this person, reply with exactly: NO MATCHING PAGES", and Gemini 3.8 Flash
+//   took that exit without searching for 10 of 16 thin LinkedIn contacts
+//   (2026-10-05). Without the sentence it searched for 12 of 16. Whether a
+//   run searched is read from the search metadata, never from the words.
+// - The plainest ask searches most. "Tell me everything you know about
+//   <name> (<role> at <company>, <profile>) and search online for results"
+//   searched for 19 of 20 contacts on its first ask, and every sentence added
+//   to it lowered that (2026-10-05). It is every run's first ask.
 // =============================================================================
 
 import { z } from "zod";
@@ -40,8 +51,17 @@ import {
   type ResearchFinding,
   type ResearchRecord,
 } from "../../../shared/researchRecord.ts";
-import { linkedInHandle, researchDate, sameOrg } from "./normalize.ts";
 import {
+  linkedInHandle,
+  listItems,
+  researchDate,
+  sameItem,
+  sameLabel,
+  sameOrg,
+  textKey,
+} from "./normalize.ts";
+import {
+  formerNames,
   placeFromAddresses,
   workEmailDomain,
 } from "../../../shared/researchIdentity.ts";
@@ -50,10 +70,14 @@ import {
 // Prompt Builder
 // =============================================================================
 
-/** What the search pass answers when no page is about this person. */
+/**
+ * What the reading of SearXNG's pages answers when no page is about this
+ * person. The search asks have no such reply: a model offered one took it
+ * without searching (2026-10-05).
+ */
 export const NO_MATCHING_PAGES = "NO MATCHING PAGES";
 
-/** True when an answer is the prompt's reply for nobody found. */
+/** True when a reading answer is the reply for nobody found. */
 export const isNoMatch = (text: string) =>
   text.toUpperCase().includes(NO_MATCHING_PAGES);
 
@@ -63,30 +87,6 @@ export const isNoMatch = (text: string) =>
 // 15 imported contacts, a prompt without those rules found facts for 6, and
 // one with them for 7 (2026-10-01): they limited what was kept, not what was
 // found. The owner chose to keep everything a page about the person states.
-
-/** The topics a fact line may name, in the order the prompt lists them. */
-export const FINDING_TOPICS = [
-  "Current role",
-  "Past role",
-  "Education",
-  "Location",
-  "Hometown",
-  "Address",
-  "Profile",
-  "Website",
-  "Email",
-  "Phone",
-  "Publication",
-  "Talk",
-  "Patent",
-  "Award",
-  "Board role",
-  "Volunteer role",
-  "Skill",
-  "Language",
-  "Interest",
-  "Other",
-] as const;
 
 /**
  * Where the person is, for research: the records' location, else an address
@@ -317,17 +317,19 @@ export function nameFromHandle(
 
 /**
  * The name's other forms that pages may use, for the prompt to accept: the
- * surname from the profile handle, the name without credentials, and the
- * name without its middle initial. Each differs from the records' name.
+ * surname from the profile handle, the name without credentials, the name
+ * without its middle initial, and a former name the person added. Each
+ * differs from the records' name.
  */
 export function otherNameForms(
-  contact: Pick<HydratedContact, "name" | "socialLinks">,
+  contact: Pick<HydratedContact, "name" | "socialLinks" | "attributes">,
 ): string[] {
   const clean = searchName(contact.name);
   const forms = [
     nameFromHandle(clean, contact.socialLinks ?? []),
     clean,
     nameWithoutMiddleInitial(clean),
+    ...formerNames(contact.attributes),
   ];
   return [
     ...new Set(
@@ -397,6 +399,10 @@ export function suggestedSearches(contact: HydratedContact): string[] {
       primary === clean ? null : clean,
     ])
       if (form) searches.push(`"${form}" ${detail}`);
+  // A former name, with the detail when there is one: the pages from before
+  // a change of name use it.
+  for (const former of formerNames(contact.attributes))
+    searches.push(detail ? `"${former}" ${detail}` : `"${former}"`);
   if (company && contact.role) searches.push(`${name} ${contact.role}`);
   for (const school of (contact.education ?? []).slice(0, 2))
     searches.push(`${name} ${school.school}`);
@@ -438,19 +444,15 @@ export function missingTopics(contact: HydratedContact): string[] {
 }
 
 /**
- * The search budgets, in the prompt's words. Every ask gets the main facts;
- * a deep run also asks for a complete profile, beside it. Four probes at
- * thinking "medium" ran 7 to 20 searches when told "at least five"
- * (2026-09-26), and each one is billed.
+ * The search budget, in the prompt's words. Four probes at thinking
+ * "medium" ran 7 to 20 searches when told "at least five" (2026-09-26), and
+ * each one is billed. A deep run used to ask beside it for a complete
+ * profile at thinking "high": that ask came back empty for 13 of 64
+ * contacts, and it was the one that wrote a namesake's school and races
+ * into three contacts (2026-10-05).
  */
-const SEARCH_BUDGET = {
-  main: "Find the main facts: current and past roles, education, location and public profiles. Run four to six searches. Start with:",
-  complete:
-    "Aim for a complete profile: every role, school, award, publication, talk and interest the pages state. Run at least ten different searches, and more when they lead somewhere. Start with:",
-};
-
-/** How much one search ask looks for. */
-export type SearchBudget = keyof typeof SEARCH_BUDGET;
+const SEARCH_BUDGET =
+  "Find the main facts: current and past roles, education, location and public profiles. Run four to six searches. Start with:";
 
 /** The sites of these pages, each once, for a prompt that says where not to look. */
 function sitesOf(pages: readonly { url: string }[]): string[] {
@@ -497,9 +499,9 @@ Topics:
 - Education: the degree, the field, the school and the years
 - Location: the city they live or work in now
 - Hometown: where they grew up, as a school roster or a local news story gives it
-- Address: a home or office street address a page states, as the page writes it
 - Profile: a profile page of their own, as its full address: LinkedIn, GitHub, X, Google Scholar, a personal site
-- Website, Email, Phone
+- Website: a site of their own
+- Email, Phone, Address: only their own, never an employer's main line, a general mailbox or an office address
 - Publication, Talk, Patent, Award, Board role, Volunteer role
 - Skill: tools, methods or fields a page says they work with
 - Language: languages they speak
@@ -512,23 +514,100 @@ Examples:
 - Profile: https://github.com/example-handle [github.com]
 - Award: Distinguished Fellow, Example Business School [fellows.example.org]
 
-Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address. Report every email address and phone number that a page about them lists.`;
+Give each role, school and profile its own line, with dates when the page has them. Write a profile as its full address.`;
+}
+
+/** One detail for the plain ask: one line, no control characters, capped. */
+function inline(value: string | null | undefined, max: number): string {
+  return (
+    (value ?? "")
+      // oxlint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f<>]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, max)
+  );
 }
 
 /**
- * Pass 1: the research instructions for one contact.
+ * The person as the plain ask names them: "Rowan Vale, formerly Rowan
+ * Ellis (Associate at Northwind Partners, Boston, University of Example,
+ * https://www.linkedin.com/in/rowanvale)".
+ *
+ * The profile address is the cheapest guard against a namesake. With it the
+ * ask left another person's résumé alone, and without it the same ask saved
+ * 12 of that résumé's facts (2026-10-05). A LinkedIn profile goes first.
+ * Each detail is one capped line: the records come from imports, and a
+ * name or a role is text a stranger wrote.
+ */
+function personForSearch(contact: HydratedContact): string {
+  const name = inline(searchName(contact.name), 100);
+  const former = formerNames(contact.attributes)
+    .map((other) => inline(other, 100))
+    .filter(Boolean);
+  const company = isPlaceholderEmployer(contact.company)
+    ? null
+    : contact.company;
+  const job = [inline(contact.role, 120), inline(company, 120)]
+    .filter(Boolean)
+    .join(" at ");
+  const links = [...(contact.socialLinks ?? [])].sort(
+    (a, b) =>
+      Number(linkedInHandle(b.url) !== null) -
+      Number(linkedInHandle(a.url) !== null),
+  );
+  const details = [
+    job,
+    inline(researchPlace(contact), 80),
+    ...(contact.education ?? [])
+      .slice(0, 2)
+      .map((entry) => inline(entry.school, 100)),
+    inline(links[0]?.url, 200),
+  ].filter(Boolean);
+  const named = former.length
+    ? `${name}, formerly ${former.join(" or ")}`
+    : name;
+  return details.length ? `${named} (${details.join(", ")})` : named;
+}
+
+/**
+ * Pass 1, the first ask of every run: one plain sentence.
+ *
+ * Gemini decides for itself whether to search. On 20 contacts the owner
+ * checked by hand, this ask searched for 19 on its first try, and 128 of
+ * the 129 facts it saved were about the right person. The long prompt
+ * (`buildSearchPrompt`) found facts for 11 to 14 of them (2026-10-05). It
+ * asks for no format, because the extraction reads prose. A later round is
+ * told to look past what the earlier one found.
+ *
+ * @param contact - The contact as the records hold it now.
+ * @param record - Earlier research on this contact, when there was any.
+ */
+export function buildQuickSearchPrompt(
+  contact: HydratedContact,
+  record?: ResearchRecord | null,
+): string {
+  const again =
+    (record?.runs.length ?? 0) > 0
+      ? " We researched them before, so look for anything an earlier search missed."
+      : "";
+  return `Tell me everything you know about ${personForSearch(contact)} and search online for results.${again}`;
+}
+
+/**
+ * Pass 1, deep only: the long instructions for one contact, beside the
+ * plain ask. Once it searches, it reads further: on the contacts both found,
+ * it saved about 40 percent more facts (2026-10-05).
  *
  * @param contact - The contact as the records hold it now.
  * @param record - Earlier research on this contact, when there was any. A
  *   repeat round is told which sites the earlier rounds read and what is
  *   still missing, so it looks somewhere new instead of reporting the same
  *   pages again.
- * @param budget - The main facts, or a complete profile.
  */
 export function buildSearchPrompt(
   contact: HydratedContact,
   record?: ResearchRecord | null,
-  budget: SearchBudget = "main",
 ): string {
   // Every provider decides for itself whether to run a search, and for a name
   // it already knows it often answers from memory, which the source rule then
@@ -557,7 +636,7 @@ ${UNTRUSTED_DATA_RULE}
 ${whoTheyAre(contact)}
 
 ## How to search
-${SEARCH_BUDGET[budget]}
+${SEARCH_BUDGET}
 ${suggestedSearches(contact)
   .map((query) => `- ${query}`)
   .join("\n")}
@@ -569,61 +648,7 @@ ${repeat}
 
 ${reportSection("Report every fact the matching pages state, one per line, in this form:")}
 
-Leave out any topic you found nothing for. Do not write "null", "unknown" or "not found". If no page is about this person, reply with exactly: ${NO_MATCHING_PAGES}
-  `.trim();
-}
-
-/** The person in one line, for the short form: name, role, city, schools, profiles. */
-function personLine(contact: HydratedContact): string {
-  const forms = otherNameForms(contact);
-  return [
-    forms.length
-      ? `${contact.name} (also written ${forms.join(", ")})`
-      : contact.name,
-    [contact.role, contact.company].filter(Boolean).join(" at "),
-    researchPlace(contact),
-    ...(contact.education ?? []).slice(0, 2).map((school) => school.school),
-    ...(contact.socialLinks ?? []).slice(0, 2).map((link) => link.url),
-  ]
-    .filter(Boolean)
-    .join("; ");
-}
-
-/** The short form's report: which results count, the line format, the rules. */
-function reportLines(contact: HydratedContact): string {
-  const stale = contact.company
-    ? ` When a result names a current employer other than ${contact.company}, report that job as a Past role.`
-    : "";
-  return `For every result about this person (the same name, and a detail that matches: an employer, a role, a school or a city), write each fact it states, one per line:
-- <Topic>: <fact> [<site>]
-Topics: ${FINDING_TOPICS.join(", ")}.
-Skip results about other people with this name.${stale} If no result is about this person, reply with exactly: ${NO_MATCHING_PAGES}`;
-}
-
-/**
- * Pass 1, the last ask: the same search in a much shorter form.
- *
- * A model that chose not to search usually chooses the same again when asked
- * the same way. This form is only the task, the person, the searches and the
- * format. For one contact at thinking "low", two versions of the long form
- * each searched one time in five, and this form four times in five (Gemini
- * 3.8 Flash, 2026-09-26).
- */
-export function buildShortSearchPrompt(contact: HydratedContact): string {
-  return `
-Run Google searches about one person and report what the results say.
-
-${UNTRUSTED_DATA_RULE}
-
-${wrapUntrusted("the person, from the user's records", personLine(contact))}
-
-Run each of these searches, then any others the results suggest:
-${suggestedSearches(contact)
-  .slice(0, 6)
-  .map((query) => `- ${query}`)
-  .join("\n")}
-
-${reportLines(contact)}
+Leave out any topic you found nothing for. Do not write "null", "unknown" or "not found".
   `.trim();
 }
 
@@ -685,6 +710,13 @@ export function buildExtractionPrompt(
   const current = contact.company
     ? `\n- The records say this person works at ${contact.company}${contact.role ? ` as ${contact.role}` : ""} now. Only a job there is current. A job at another employer is a past job, with isCurrent false, even when a fact calls it current. Base the headline and the about on the current job.`
     : "";
+  // A namesake's résumé names its own LinkedIn profile (2026-10-05).
+  const handle = (contact.socialLinks ?? [])
+    .map((link) => linkedInHandle(link.url))
+    .find(Boolean);
+  const namesake = handle
+    ? `\n- The records give their LinkedIn profile as linkedin.com/in/${handle}. A résumé, page or profile that gives a different LinkedIn profile is about someone else with this name: leave out its facts.`
+    : "";
   return `
 Below are facts a web research pass reported about one person, ${who}, one fact per line with the site it came from. Put them into the JSON schema.
 
@@ -696,14 +728,15 @@ Rules:${current}
 - location: the city from a Location fact, as "City, State or Region, Country". Never a Hometown. Nothing in parentheses.
 - socialLinks: one entry per profile address a fact gives. platform is lower case: linkedin, github, x, instagram, facebook, youtube, medium, substack, scholar, orcid, or the site's own name.
 - website: the person's own site, when a fact names one.
-- emails and phones: only ones a fact lists.
+- emails and phones: only the person's own, as a fact gives them. Never an employer's main line, a switchboard or a general mailbox such as info@ or contact@. A phone only when a page gives it as the person's own number, never one from an employer's site.
 - headline: a short professional headline from the current role, like "Associate, Restructuring at Northwind Partners".
 - about: two to four sentences on the person's career path, focus and achievements, drawn from the facts. Name the employers, schools and achievements. Write it whenever the facts include a past role, a school or an achievement. Return null only when the facts say nothing beyond the current role. Never write filler such as "is a professional working in". Refer to the person by name, or by pronouns a fact states; otherwise use "they".
 - industry: the industry of the current employer, in two to four words.
 - interests: at most six short labels of one to four words, like "Marathon running", from Interest facts and from sports a fact says they played. One label for each activity: races, marathons and coaching in one sport are one interest.
 - tags: three to eight short lower-case tags about the person's work, like "restructuring" or "quant research".
 - attributes: notable facts that fit no field above, like awards (only prizes, honours, fellowships and scholarships a fact names, never an accomplishment at work), licences, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licences", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
-- addresses: each home or office address an Address fact states, as it is written, labelled "home" or "work".
+- addresses: only a home address a fact gives as the person's, as it is written, labelled "home". Never an employer's office.
+- Leave out what describes the employer, a team, a product or a job posting rather than this person.${namesake}
 Return null or an empty list for anything the facts do not state.
 
 ${UNTRUSTED_DATA_RULE}
@@ -737,6 +770,14 @@ const NOT_A_FACT =
   /^(?:null|none|n\/a|unknown|not found|(?:none|not|nothing) (?:explicitly |clearly )?(?:stated|specified|mentioned|listed|given|provided|available|found))\.?$/i;
 
 /**
+ * A line or a list item that says the search found nothing: "No public
+ * publications identified", "None found in public records". A deep run
+ * wrote both as Publications and Talks (2026-10-05).
+ */
+const NOTHING_FOUND =
+  /^(?:no|none|not|nothing)\b.{0,80}\b(?:found|identified|available|listed|stated|located|known|disclosed|indexed|verified)\b/i;
+
+/**
  * The fact lines in a search pass answer, for the dossier's Research card.
  *
  * Lines that are not "- Topic: fact" are skipped: a heading, a sentence of
@@ -766,7 +807,7 @@ export function parseFindings(text: string): ResearchFinding[] {
         .find((name) => name.length >= 2);
       fact = fact.slice(0, tail.index).trim();
     }
-    if (!fact || NOT_A_FACT.test(fact)) continue;
+    if (!fact || NOT_A_FACT.test(fact) || NOTHING_FOUND.test(fact)) continue;
     const key = `${match[1].toLowerCase()}|${fact.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -1146,14 +1187,20 @@ function degreeWithoutField(
  * - Only a job at the records' company is current. A page that is out of
  *   date calls an old job current; the records come from the person's own
  *   profile.
+ * - What carries no information goes, and nothing else: a profile that is a
+ *   site's front page ("https://medium.com"), a general mailbox
+ *   ("info@"), a list item that says nothing was found, an item that
+ *   repeats another, and a hometown that is the location. On 20 contacts
+ *   the owner checked, 3 of 25 wrong facts were front pages (2026-10-05).
  *
  * @param data - The extraction, as `parseExtraction` returns it.
- * @param contact - The contact's recorded company.
- * @returns The same data with the two rules applied.
+ * @param contact - The contact's recorded company and location.
+ * @returns The same data with these rules applied.
  */
 export function tidyExtraction(
   data: AISearchOutput,
-  contact: Pick<HydratedContact, "company">,
+  contact: Pick<HydratedContact, "company"> &
+    Partial<Pick<HydratedContact, "location">>,
 ): AISearchOutput {
   const registrations: string[] = [];
   const experience = (data.experience ?? []).flatMap((job) => {
@@ -1174,7 +1221,24 @@ export function tidyExtraction(
     const degree = degreeWithoutField(entry.degree, entry.fieldOfStudy);
     return degree === entry.degree ? entry : { ...entry, degree };
   });
-  let attributes = data.attributes ?? [];
+  const place = data.location ?? contact.location ?? null;
+  let attributes = (data.attributes ?? []).flatMap((attribute) => {
+    const items: string[] = [];
+    for (const item of listItems(attribute.value))
+      if (
+        !NOTHING_FOUND.test(item) &&
+        !items.some((kept) => sameItem(kept, item))
+      )
+        items.push(item);
+    if (items.length === 0) return [];
+    if (
+      /^hometown$/i.test(attribute.name.trim()) &&
+      place &&
+      samePlace(items.join(", "), place)
+    )
+      return [];
+    return [{ ...attribute, value: items.join("; ") }];
+  });
   if (registrations.length > 0) {
     const index = attributes.findIndex(
       (attribute) => attribute.name.trim().toLowerCase() === "registrations",
@@ -1192,12 +1256,130 @@ export function tidyExtraction(
           )
         : [...attributes, { name: "Registrations", value }];
   }
+  const { website, ...rest } = data;
   return {
-    ...data,
+    ...rest,
+    ...(website &&
+      !(isFrontPage(website) && isPlatform(website)) && { website }),
+    ...(data.socialLinks && {
+      socialLinks: data.socialLinks.filter((link) => !isFrontPage(link.url)),
+    }),
+    ...(data.emails && {
+      emails: data.emails.filter(
+        (entry) => !GENERAL_MAILBOX.test(entry.email.split("@")[0] ?? ""),
+      ),
+    }),
     ...(data.experience && { experience }),
     ...(data.education && { education }),
     ...((data.attributes || registrations.length > 0) && { attributes }),
   };
+}
+
+/** A mailbox that belongs to an office, not a person: "info", "contact". */
+const GENERAL_MAILBOX =
+  /^(?:info|contact|hello|hi|office|admin|support|sales|team|careers|jobs|press|media|enquiries|inquiries|mail|general|reception|help|hr|marketing|no-?reply|webmaster|privacy|legal|billing)$/i;
+
+/** Sites whose front page is no one's profile. */
+const PLATFORMS = new Set([
+  "about.me",
+  "academia.edu",
+  "behance.net",
+  "dribbble.com",
+  "facebook.com",
+  "github.com",
+  "instagram.com",
+  "linkedin.com",
+  "linktr.ee",
+  "medium.com",
+  "orcid.org",
+  "researchgate.net",
+  "scholar.google.com",
+  "substack.com",
+  "topmate.io",
+  "twitter.com",
+  "x.com",
+  "youtube.com",
+  "500px.com",
+]);
+
+/** The address without a path: a site's front page. */
+function isFrontPage(url: string): boolean {
+  try {
+    return new URL(url).pathname.replace(/\/+$/, "") === "";
+  } catch {
+    return false;
+  }
+}
+
+/** A profile site, whose front page is no one's own. */
+function isPlatform(url: string): boolean {
+  try {
+    return PLATFORMS.has(new URL(url).hostname.replace(/^www\./, ""));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when two places are one: the same city and region, or the same city
+ * when one names only the city. "Seattle, Washington" is "Seattle,
+ * Washington, United States", and "Portland, Maine" is not "Portland,
+ * Oregon".
+ */
+function samePlace(a: string, b: string): boolean {
+  const x = a.split(",").map(textKey).filter(Boolean);
+  const y = b.split(",").map(textKey).filter(Boolean);
+  if (x.length === 0 || y.length === 0) return false;
+  const parts = Math.min(x.length, y.length, 2);
+  return x.slice(0, parts).join("|") === y.slice(0, parts).join("|");
+}
+
+/**
+ * True when the extraction found something the records do not already say.
+ *
+ * Given nothing but the records' role and company, the extraction still
+ * writes a headline, an industry, tags and a job row from them. Saved, a
+ * run that found nothing read as "added 4" (in 7 of 15 runs of one
+ * prompt, 2026-10-05). Those fields, and a job that only repeats the
+ * records' current one, are no find. Everything else is.
+ *
+ * @param data - The extraction, after `tidyExtraction`.
+ * @param contact - The records the prompt was given.
+ */
+export function hasNewFacts(
+  data: AISearchOutput,
+  contact: Pick<HydratedContact, "company" | "role" | "socialLinks">,
+): boolean {
+  const own = new Set(
+    (contact.socialLinks ?? []).map((link) =>
+      link.url.toLowerCase().replace(/\/$/, ""),
+    ),
+  );
+  const recordsJob = (job: NonNullable<AISearchOutput["experience"]>[number]) =>
+    !!contact.company &&
+    sameOrg(job.company, contact.company) &&
+    (!job.role || !contact.role || sameLabel(job.role, contact.role)) &&
+    !job.startDate &&
+    !job.endDate &&
+    !job.description;
+  return (
+    !!(data.company && !contact.company) ||
+    !!(data.role && !contact.role) ||
+    !!data.location ||
+    !!data.website ||
+    !!data.birthday ||
+    !!data.pronouns ||
+    !!data.education?.length ||
+    !!data.emails?.length ||
+    !!data.phones?.length ||
+    !!data.addresses?.length ||
+    !!data.interests?.length ||
+    !!data.attributes?.length ||
+    !!data.socialLinks?.some(
+      (link) => !own.has(link.url.toLowerCase().replace(/\/$/, "")),
+    ) ||
+    !!data.experience?.some((job) => !recordsJob(job))
+  );
 }
 
 // =============================================================================

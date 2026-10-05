@@ -60,3 +60,30 @@ export function placeFromAddresses(
   ].find((entry) => isPlaceText(entry.address));
   return found ? found.address.trim() : null;
 }
+
+/** The attribute a former name is kept in: "Former name". */
+export const FORMER_NAME_ATTRIBUTE = "Former name";
+
+/** Attribute names that hold another name the person went by. */
+const FORMER_NAME_LABEL =
+  /^(?:former|maiden|previous|birth|other) names?$|^(?:also known as|aka|formerly)$/i;
+
+/**
+ * The names a person went by before, from attributes such as "Former name"
+ * or "Maiden name". A surname changed at marriage hides every page written
+ * before it, so research searches both. Several names in one value are
+ * split on commas and semicolons.
+ */
+export function formerNames(
+  attributes: readonly { name: string; value: string }[] | null | undefined,
+): string[] {
+  return [
+    ...new Set(
+      (attributes ?? [])
+        .filter((attribute) => FORMER_NAME_LABEL.test(attribute.name.trim()))
+        .flatMap((attribute) => attribute.value.split(/[;,]/))
+        .map((name) => name.replace(/\s+/g, " ").trim())
+        .filter((name) => name.length >= 2 && name.length <= 100),
+    ),
+  ];
+}
