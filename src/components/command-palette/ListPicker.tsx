@@ -19,6 +19,7 @@ import {
 import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
+import { ListIcon } from "../../views/contact-list/CreateListModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,17 +123,17 @@ export const ListPicker: React.FC<ListPickerProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
+          className={cn(ICON_BTN, "pointer-fine:p-1 -ml-1")}
           aria-label="Back to actions"
         >
-          <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
+          <ArrowLeft className="w-5 h-5 pointer-fine:w-4 pointer-fine:h-4" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-on-surface truncate">
             Lists for {contactName}
           </p>
           <p className="text-[11px] text-on-surface-variant">
-            Toggle membership
+            Pick a list to add or remove
           </p>
         </div>
       </div>
@@ -156,17 +157,19 @@ export const ListPicker: React.FC<ListPickerProps> = ({
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={isPending}
                 className={cn(
-                  "state-layer w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors",
+                  "state-layer w-full min-h-[44px] pointer-fine:min-h-0 flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors",
                   i === selectedIndex
                     ? cn(SELECTED_ROW, "text-on-primary-wash")
                     : "text-on-surface",
                   isPending && "opacity-50",
                 )}
               >
-                {/* List icon */}
-                <span className="text-base w-6 text-center">
-                  {list.icon || "📋"}
-                </span>
+                {/* The list's icon, drawn as the lists page draws it. Its
+                    name, such as "star", used to show as text. */}
+                <ListIcon
+                  icon={list.icon}
+                  className="w-4 h-4 shrink-0 text-on-surface-variant"
+                />
 
                 {/* List name */}
                 <span className="flex-1 text-left font-medium truncate">
@@ -188,7 +191,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
       )}
 
       {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
+      <div className="hidden pointer-fine:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
         <kbd className={KBD_SM}>↵</kbd> toggle
         <span>·</span>
         <kbd className={KBD_SM}>ESC</kbd> back

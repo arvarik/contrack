@@ -19,11 +19,7 @@
  * @module src/hooks/useSearchHistory
  */
 import { useCallback, useMemo } from "react";
-import {
-  useSearchHistoryList,
-  useRecordSearch,
-  useClearHistory,
-} from "../api/searchHistory";
+import { useSearchHistoryList, useRecordSearch } from "../api/searchHistory";
 import { useHiddenPendingIds } from "../lib/pendingDeletes";
 import { parseServerTime } from "../lib/datetime";
 import type { HistoryMode } from "../../shared/searchHistory";
@@ -42,7 +38,6 @@ const MAX_QUERY_LENGTH = 200;
 export const useSearchHistory = () => {
   const { data } = useSearchHistoryList();
   const recordMutation = useRecordSearch();
-  const clearMutation = useClearHistory();
 
   const hiddenIds = useHiddenPendingIds();
 
@@ -106,11 +101,6 @@ export const useSearchHistory = () => {
     [recordMutation],
   );
 
-  /** Clear all search history. */
-  const clearHistory = useCallback(() => {
-    clearMutation.mutate(undefined);
-  }, [clearMutation]);
-
   /** Top N entries for the zero-state display. */
   const recentDisplay = useMemo(() => entries.slice(0, MAX_DISPLAY), [entries]);
 
@@ -118,6 +108,5 @@ export const useSearchHistory = () => {
     entries,
     recentDisplay,
     addEntry,
-    clearHistory,
   };
 };

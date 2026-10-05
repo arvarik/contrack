@@ -10,7 +10,7 @@
  * - The create row comes last, and only when nobody has the name.
  * - A screen reader hears how many people the list holds.
  */
-import type { Page } from "@playwright/test";
+import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import type { ContrackInstance } from "./fixtures/instance";
 
@@ -137,11 +137,12 @@ test("the mode chips switch modes and keep the words", async ({ page }) => {
   await chips.getByRole("button", { name: "Search" }).click();
   await expect(input).toHaveValue("who is in Berlin");
 
+  // > keeps the words, as the name to log for.
   await chips.getByRole("button", { name: "> Log" }).click();
-  await expect(input).toHaveValue("> ");
-  await expect(
-    palette.getByRole("option", { name: /Log a note/ }),
-  ).toBeVisible();
+  await expect(input).toHaveValue("> who is in Berlin");
+  await expect(palette.getByText('Log for "who is in Berlin"')).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(input).toHaveValue("> note who is in Berlin");
 });
 
 test("the create row comes last, and not for a name somebody has", async ({
@@ -149,15 +150,18 @@ test("the create row comes last, and not for a name somebody has", async ({
 }) => {
   const palette = await openPalette(page);
   await page.keyboard.type("Grace Hoppe");
-  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await expect(
+    palette.getByRole("option", { name: /^Grace Hopper/ }),
+  ).toBeVisible();
   const create = palette.getByRole("option", { name: /^Create contact/ });
   await expect(create).toBeVisible();
-  await expect(palette.getByRole("option").last()).toHaveText(
-    /^Create contact/,
-  );
+  // After the people and the pages, before asking AI about a name.
+  await expect(palette.getByRole("option").last()).toHaveText(/^Ask AI/);
 
   await page.keyboard.type("r");
-  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await expect(
+    palette.getByRole("option", { name: /^Grace Hopper/ }),
+  ).toBeVisible();
   await expect(create).toHaveCount(0);
 });
 
@@ -194,6 +198,125 @@ test("pills alone list people, with the top row and its heading in view", async 
     palette.locator("[cmdk-group-heading]").first(),
   ).toBeInViewport();
   expect(
-    await palette.locator("[cmdk-list]").evaluate((list) => list.scrollTop),
+    await palette
+      .locator("[cmdk-list]")
+      .evaluate((list) => list.parentElement!.scrollTop),
   ).toBe(0);
+});
+
+test("? says that no AI model is set up, and leads to where it is chosen", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  await page.keyboard.type("?");
+  await expect(
+    palette.getByText(/No AI model is set up\. Answers use keyword/),
+  ).toBeVisible();
+  // First, before the starters: without it they get a local answer.
+  await expect(highlighted(palette)).toHaveText(/Choose a Fast model/);
+  await page.keyboard.press("Enter");
+  await expect(palette).toHaveCount(0);
+  await expect(page).toHaveURL(/\/settings\/admin\/ai#/);
+});
+
+test("a question in the search box offers to ask AI, and people show all in Network", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("location:London ");
+  await palette.getByRole("option", { name: "Show all in Network" }).click();
+  await expect(palette).toHaveCount(0);
+  await expect(page).toHaveURL(/[?&]q=location%3ALondon/);
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.type("who works at NASA");
+  await palette
+    .getByRole("option", { name: 'Ask AI: "who works at NASA"' })
+    .click();
+  await expect(input).toHaveValue("? who works at NASA");
+});
+
+test("the Filter chip lists the facets, and a pick opens its values", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  await palette.getByRole("button", { name: "Filter" }).click();
+  await expect(palette.getByText("Filter by")).toBeVisible();
+  await palette.getByRole("option", { name: /^contacted:/ }).click();
+  await expect(palette.getByRole("combobox")).toHaveValue("contacted:");
+  await expect(palette.getByText("contacted values")).toBeVisible();
+});
+
+test("Escape asks once before it discards a typed note", async ({ page }) => {
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("> note Edsger: zz half a thought");
+  await page.keyboard.press("Escape");
+  await expect(palette.getByText(/again to discard this note/)).toBeVisible();
+  await expect(input).toHaveValue("> note Edsger: zz half a thought");
+  await page.keyboard.press("Escape");
+  await expect(input).toHaveValue("");
+});
+
+// An iPhone, run in Chromium as the rest of the suite is.
+const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
+
+test.describe("on a phone", () => {
+  test.use({ ...PHONE, viewport: { width: 390, height: 844 } });
+
+  test("opens from any page, and > logs a note in the composer", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    // Only the Network list had the palette's button, and a phone has no ⌘K.
+    await page.goto("/pulse");
+    await page.getByRole("button", { name: "Command palette" }).tap();
+    const palette = page.getByRole("dialog");
+    await expect(palette.getByRole("combobox")).toBeVisible();
+
+    // A one-line box hid a longer note: a contact opens the composer.
+    await palette.getByRole("button", { name: "> Log" }).tap();
+    await palette.getByRole("option", { name: /Log a note/ }).tap();
+    await page.keyboard.type("eds");
+    await palette.getByRole("option", { name: "Edsger Dijkstra" }).tap();
+    const note = palette.getByRole("textbox", { name: "Note" });
+    await expect(note).toBeVisible();
+    await note.fill("zz met at the conference");
+    await palette.getByRole("button", { name: "Save" }).tap();
+    await expect(palette).toHaveCount(0);
+
+    const timeline = await instance.api<{ id: string; content: string }[]>(
+      "GET",
+      `/contacts/${seed.byName("Edsger Dijkstra").id}/timeline`,
+    );
+    const logged = timeline.find(
+      (item) => item.content === "zz met at the conference",
+    );
+    expect(logged).toBeDefined();
+    created.push({ instance, path: `/interactions/${logged!.id}` });
+  });
+
+  test("stays above the on-screen keyboard, with no key hints", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Command palette" }).tap();
+    const palette = page.getByRole("dialog");
+    await expect(palette.getByRole("combobox")).toBeVisible();
+    // useSoftKeyboard sets this from the visual viewport while it is up.
+    await page.evaluate(() =>
+      document.documentElement.style.setProperty("--keyboard-inset", "420px"),
+    );
+    await page.keyboard.type("a");
+    await expect
+      .poll(() =>
+        palette
+          .locator("[cmdk-root] > div")
+          .evaluate((panel) => panel.getBoundingClientRect().bottom),
+      )
+      .toBeLessThanOrEqual(844 - 420);
+    await expect(palette.locator("kbd:visible")).toHaveCount(0);
+  });
 });

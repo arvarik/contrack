@@ -35,6 +35,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { PaletteButton } from "../command-palette/PaletteButton";
 import {
   PAGE_DESCRIPTION,
   PAGE_EYEBROW,
@@ -73,6 +74,11 @@ interface PageHeaderProps {
   label?: string;
   /** Under the title block: a search box, filters or a form. */
   children?: React.ReactNode;
+  /**
+   * The command palette's button before the actions, on a touch screen
+   * (`PaletteButton`). On by default, so a phone opens it from any page.
+   */
+  palette?: boolean;
   className?: string;
 }
 
@@ -97,7 +103,14 @@ export const PageHeader = ({
   label,
   children,
   className,
+  palette = true,
 }: PageHeaderProps) => {
+  const allActions = (palette || actions) && (
+    <>
+      {palette && <PaletteButton />}
+      {actions}
+    </>
+  );
   const backLink = back && (
     // Named "Back to …", like every back control in the app: the sidebar
     // has a link with the parent's bare name too.
@@ -129,9 +142,9 @@ export const PageHeader = ({
             <Title className={TITLE}>{title}</Title>
             {description && <p className={PAGE_DESCRIPTION}>{description}</p>}
           </div>
-          {actions && (
+          {allActions && (
             <div className={cn(ACTIONS, "sm:shrink-0", actionsClassName)}>
-              {actions}
+              {allActions}
             </div>
           )}
         </div>
@@ -149,11 +162,11 @@ export const PageHeader = ({
                 {description}
               </p>
             )}
-            {actions && (
+            {allActions && (
               <div
                 className={cn(ACTIONS, TITLE_GRID_ACTIONS, actionsClassName)}
               >
-                {actions}
+                {allActions}
               </div>
             )}
           </div>

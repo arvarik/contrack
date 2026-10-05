@@ -13,6 +13,14 @@
 
 export type LogKind = "note" | "call" | "meeting" | "email";
 
+/** The title a logged interaction gets, by kind, from the palette. */
+export const LOG_TITLES: Record<LogKind, string> = {
+  note: "Quick Note",
+  call: "Phone Call",
+  meeting: "Meeting summary",
+  email: "Email sent",
+};
+
 /** The kinds, in the order the palette lists them. */
 export const LOG_KINDS: readonly LogKind[] = [
   "note",

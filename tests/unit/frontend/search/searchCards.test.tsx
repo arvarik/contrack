@@ -87,9 +87,6 @@ const CARDS: [string, (m: SemanticMatch, isFallback: boolean) => void][] = [
             index={0}
             onSelect={() => {}}
             isFallback={isFallback}
-            hasGroundingCapacity={false}
-            isEnriching={false}
-            enrichingContactId={null}
           />
         </Command>,
       ),
@@ -218,9 +215,6 @@ describe("the palette's question mark", () => {
           index={0}
           onSelect={() => {}}
           isFallback
-          hasGroundingCapacity={false}
-          isEnriching={false}
-          enrichingContactId={null}
         />
       </Command>,
     );

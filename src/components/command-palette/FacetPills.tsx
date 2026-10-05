@@ -49,19 +49,17 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
   if (filters.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap px-4 pt-3 sm:pt-2 pb-0">
+    <div className="flex items-center gap-1.5 flex-wrap px-4 pt-3 pointer-fine:pt-2 pb-0">
       <AnimatePresence>
         {filters.map((filter, i) => (
-          <motion.button
+          <motion.span
             key={`${filter.field}-${filter.value}-${i}`}
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: DURATION.fast, ease: EASE }}
-            onClick={() => onRemove(i)}
-            aria-label={`Remove filter ${filter.field}: ${pillValue(filter)}`}
             className={cn(
-              "hit-area state-layer inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors group",
+              "inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-[11px] font-bold",
               TONE_WASH[pillTone(filter)],
             )}
           >
@@ -69,8 +67,17 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
                 percent fell under AA on every wash. */}
             <span className="font-medium">{filter.field}:</span>
             <span>{pillValue(filter)}</span>
-            <X className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-          </motion.button>
+            {/* Only the × removes it. The whole pill was the button, so a
+                tap on its words, to read them, took the filter away. */}
+            <button
+              type="button"
+              onClick={() => onRemove(i)}
+              aria-label={`Remove filter ${filter.field}: ${pillValue(filter)}`}
+              className="hit-area state-layer inline-flex items-center justify-center w-4 h-4 rounded"
+            >
+              <X className="w-3 h-3" aria-hidden="true" />
+            </button>
+          </motion.span>
         ))}
       </AnimatePresence>
     </div>

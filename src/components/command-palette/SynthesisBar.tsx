@@ -207,7 +207,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             <button
               onClick={handleSynthesize}
               className={`
-                state-layer w-full ${px} min-h-[44px] sm:min-h-0 rounded-xl flex items-center gap-2
+                state-layer w-full ${px} min-h-[44px] pointer-fine:min-h-0 rounded-xl flex items-center gap-2
                 bg-primary/5 transition-colors group
                 ${textSize} text-primary cursor-pointer
               `}
@@ -270,7 +270,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             {!streaming && (
               <button
                 onClick={handleDismiss}
-                className="hit-area state-layer absolute top-2 right-2 p-1 rounded-lg sm:opacity-0 sm:group-hover:opacity-60 pointer-coarse:opacity-60 hover:!opacity-100 transition-opacity"
+                className="hit-area state-layer absolute top-2 right-2 p-1 rounded-lg pointer-fine:opacity-0 pointer-fine:group-hover:opacity-60 pointer-coarse:opacity-60 hover:!opacity-100 transition-opacity"
                 aria-label="Dismiss synthesis"
               >
                 <X className="w-3 h-3" />

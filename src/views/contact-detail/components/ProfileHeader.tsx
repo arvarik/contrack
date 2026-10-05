@@ -71,6 +71,7 @@ import type {
   ContactUpdateData,
 } from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
+import { PaletteButton } from "../../../components/command-palette/PaletteButton";
 import { TONE_WASH } from "../../../lib/styles";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
@@ -508,7 +509,7 @@ export const BackBar = ({
   onClose,
   backLabel,
 }: Pick<ProfileHeaderProps, "backLabel"> & { onClose: () => void }) => (
-  <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center shrink-0">
+  <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center justify-between shrink-0">
     <button
       type="button"
       onClick={onClose}
@@ -518,6 +519,8 @@ export const BackBar = ({
       <ArrowLeft aria-hidden="true" className="w-5 h-5" />
       {backLabel ?? "Back"}
     </button>
+    {/* A phone has no ⌘K: the way to the next person from this one. */}
+    <PaletteButton className="-mr-2" />
   </div>
 );
 

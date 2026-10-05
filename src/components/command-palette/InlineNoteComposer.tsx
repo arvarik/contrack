@@ -1,8 +1,10 @@
 /**
- * InlineNoteComposer — Compact note/call composer inside the action sub-menu.
+ * InlineNoteComposer — Compact composer for a note, a call, a meeting or an
+ * email, inside the palette: from the action sub-menu (N, C), and from `>`
+ * mode on a touch screen, where a one-line box hid a longer note.
  *
  * Renders directly in the command palette (not a separate modal).
- * Cmd+Enter saves. Escape returns to the action sub-menu.
+ * Cmd+Enter saves. Escape returns to where it opened from.
  *
  * The text is a draft on disk from the first keystroke, so Escape, a click
  * on the backdrop or ⌘K does not lose it. It is read back the next time the
@@ -12,7 +14,15 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
-import { FileText, Phone, ArrowLeft, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  FileText,
+  Loader2,
+  Mail,
+  Phone,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAddInteraction } from "../../api";
 import { BTN_QUIET, ICON_BTN, KBD_SM } from "../../lib/styles";
@@ -26,13 +36,49 @@ import {
   writeDraft,
 } from "../../lib/composerDrafts";
 import { useAuth } from "../auth/AuthGate";
+import { LOG_TITLES, type LogKind } from "./actionMode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** How each kind looks in the composer. */
+const KIND: Record<
+  LogKind,
+  { label: string; icon: LucideIcon; tone: string; placeholder: string }
+> = {
+  note: {
+    label: "Note",
+    icon: FileText,
+    tone: "bg-info/15 text-info",
+    placeholder: "Type your note…",
+  },
+  call: {
+    label: "Call",
+    icon: Phone,
+    tone: "bg-success/15 text-success",
+    placeholder: "Call summary…",
+  },
+  meeting: {
+    label: "Meeting",
+    icon: Calendar,
+    tone: "bg-success/15 text-success",
+    placeholder: "Meeting summary…",
+  },
+  email: {
+    label: "Email",
+    icon: Mail,
+    tone: "bg-info/15 text-info",
+    placeholder: "What the email said…",
+  },
+};
 
 interface InlineNoteComposerProps {
   contactId: string;
   contactName: string;
-  type: "note" | "call";
+  type: LogKind;
+  /** Words already typed for it, in `>` mode. A saved draft wins. */
+  initialText?: string;
+  /** What the back control returns to. */
+  backLabel?: string;
   onBack: () => void;
   onComplete: () => void;
 }
@@ -43,6 +89,8 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
   contactId,
   contactName,
   type,
+  initialText = "",
+  backLabel = "actions",
   onBack,
   onComplete,
 }) => {
@@ -50,7 +98,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
   // Apart from the contact page's draft, which holds the editor's HTML.
   const storageKey = draftKey(user?.id, `quick:${contactId}`);
   const [content, setContent] = useState(
-    () => readDraft(storageKey)?.html ?? "",
+    () => readDraft(storageKey)?.html || initialText,
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const addInteraction = useAddInteraction();
@@ -66,25 +114,18 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
     if (!content.trim()) return;
 
     try {
-      const titleMap = {
-        note: "Quick Note",
-        call: "Phone Call",
-      };
-
       await addInteraction.mutateAsync({
         contactId,
         data: {
           type,
-          title: titleMap[type],
+          title: LOG_TITLES[type],
           content: content.trim(),
           date: new Date().toISOString(),
         },
       });
 
       clearDraft(storageKey);
-      toast.success(
-        `${type === "note" ? "Note" : "Call"} logged for ${contactName}`,
-      );
+      toast.success(`${KIND[type].label} logged for ${contactName}`);
       onComplete();
     } catch (err: unknown) {
       toast.error(
@@ -112,8 +153,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
     [handleSave],
   );
 
-  const isNote = type === "note";
-  const Icon = isNote ? FileText : Phone;
+  const { label, icon: Icon, tone, placeholder } = KIND[type];
 
   return (
     <motion.div
@@ -128,19 +168,19 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
-          aria-label="Back to actions"
+          className={cn(ICON_BTN, "pointer-fine:p-1 -ml-1")}
+          aria-label={`Back to ${backLabel}`}
         >
-          <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
+          <ArrowLeft className="w-5 h-5 pointer-fine:w-4 pointer-fine:h-4" />
         </button>
         <div
-          className={`w-7 h-7 flex items-center justify-center rounded-lg ${isNote ? "bg-info/15 text-info" : "bg-success/15 text-success"}`}
+          className={`w-7 h-7 flex items-center justify-center rounded-lg ${tone}`}
         >
           <Icon className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-on-surface truncate">
-            {isNote ? "Note" : "Call"} for {contactName}
+            {label} for {contactName}
           </p>
         </div>
       </div>
@@ -148,7 +188,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       {/* Textarea */}
       <div className="px-3">
         <textarea
-          aria-label="Note"
+          aria-label={label}
           ref={textareaRef}
           value={content}
           onChange={(e) => {
@@ -160,7 +200,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
             });
           }}
           onKeyDown={handleKeyDown}
-          placeholder={isNote ? "Type your note..." : "Call summary..."}
+          placeholder={placeholder}
           className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px]"
           rows={3}
         />
@@ -170,9 +210,9 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         {/* `-ml-2` keeps the text in line with the note above it. */}
         <button onClick={onBack} className={cn(BTN_QUIET, "-ml-2")}>
-          <kbd className={`${KBD_SM} hidden sm:inline-flex`}>ESC</kbd>
-          <span className="hidden sm:inline">back</span>
-          <span className="sm:hidden">Cancel</span>
+          <kbd className={`${KBD_SM} hidden pointer-fine:inline-flex`}>ESC</kbd>
+          <span className="hidden pointer-fine:inline">back</span>
+          <span className="pointer-fine:hidden">Cancel</span>
         </button>
 
         <button
@@ -185,7 +225,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
           ) : (
             <>
               Save
-              <kbd className={`${KBD_SM} hidden sm:inline-flex`}>
+              <kbd className={`${KBD_SM} hidden pointer-fine:inline-flex`}>
                 {chordLabel([MOD_KEY, "↵"])}
               </kbd>
             </>

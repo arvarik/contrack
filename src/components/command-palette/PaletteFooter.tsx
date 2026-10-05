@@ -15,19 +15,32 @@ import { KBD_SM, SECTION_BG } from "../../lib/styles";
 export type EnterAction =
   "open" | "search" | "go" | "ask" | "log" | "pick" | "create" | null;
 
+/** A row's value starts with its kind. People rows have no prefix. */
+const PREFIX_ACTION: Record<string, EnterAction> = {
+  history_: "search",
+  nav_: "go",
+  setup_: "go",
+  showall_: "go",
+  starter_: "ask",
+  askai_: "ask",
+  action_: "log",
+  logkind_: "pick",
+  logto_: "pick",
+  filter_: "pick",
+  start_: "pick",
+  create_: "create",
+};
+
 /**
  * What Enter does to a row, read from its cmdk value. A people row's value
  * is its id and name, with no prefix, so anything unknown opens.
  */
 export function enterActionFor(row: string): EnterAction {
   if (!row) return null;
-  if (row.startsWith("history_")) return "search";
-  if (row.startsWith("nav_") || row.startsWith("Settings: ")) return "go";
-  if (row.startsWith("starter_")) return "ask";
-  if (row.startsWith("action_")) return "log";
-  if (row.startsWith("logkind_") || row.startsWith("logto_")) return "pick";
-  if (row.startsWith("create_")) return "create";
-  return "open";
+  const prefix = row.slice(0, row.indexOf("_") + 1);
+  return (
+    PREFIX_ACTION[prefix] ?? (row.startsWith("Settings: ") ? "go" : "open")
+  );
 }
 
 export const PaletteFooter = ({
@@ -48,7 +61,7 @@ export const PaletteFooter = ({
   tip?: React.ReactNode;
 }) => (
   <div
-    className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between gap-4`}
+    className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden pointer-fine:flex items-center justify-between gap-4`}
   >
     <span className="flex items-center gap-1.5 min-w-0 truncate">
       {tip ?? (
@@ -75,7 +88,8 @@ export const PaletteFooter = ({
         </span>
       )}
       <span>
-        <kbd className={KBD_SM}>Esc</kbd> to {escape}
+        <kbd className={KBD_SM}>Esc</kbd> to{" "}
+        {escape === "back" ? "go back" : escape}
       </span>
     </span>
   </div>

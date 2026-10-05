@@ -28,6 +28,7 @@ import { DURATION, EASE } from "../../lib/motion";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PeekContact {
+  id: string;
   name: string;
   avatarUrl?: string | null;
   role?: string | null;

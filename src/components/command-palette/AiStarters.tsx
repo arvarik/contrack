@@ -36,7 +36,7 @@ export const AiStarters = ({
           value={`starter_${question}`}
           onSelect={() => onPick(question)}
           className={cn(
-            "flex items-center gap-3 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none transition-colors text-sm text-on-surface",
+            "flex items-center gap-3 px-3 py-2 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors text-sm text-on-surface",
             ITEM_CURRENT,
           )}
         >

@@ -176,6 +176,8 @@ test("Escape clears a facet pill with the text", async ({ page }) => {
   await page.keyboard.type("company:Acme ");
   const pill = palette.getByRole("button", { name: /Remove filter company/ });
   await expect(pill).toBeVisible();
+  // The typed facet left the box once it was a pill.
+  await expect(input).toHaveValue("");
 
   await page.keyboard.press("Escape");
   await expect(pill).toBeHidden();
@@ -307,7 +309,9 @@ test("→ then Escape keeps the highlight on the row the actions opened from", a
   await expect(
     palette.getByRole("status", { name: "Palette status" }),
   ).toHaveText("2 people found");
-  await expect(palette.getByRole("option")).toHaveCount(2);
+  await expect(
+    palette.getByRole("option", { name: /^Zara Quill/ }),
+  ).toHaveCount(2);
   await page.keyboard.press("ArrowDown");
   await expect.poll(() => highlightIndex(page)).toBe(1);
   const [before] = await highlighted(page);

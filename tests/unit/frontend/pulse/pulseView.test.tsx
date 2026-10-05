@@ -1088,11 +1088,12 @@ describe("frontend.pulse", () => {
       expect(visibleText(mastheadLine())).toBe(
         "2 overdue · 3 due today · 1 birthday this week · 5 days in a row",
       );
-      // The only buttons are the two actions and the menu trigger.
+      // The only buttons are the palette's (a touch screen's), the action
+      // and the menu trigger.
       const names = screen
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label") ?? b.textContent?.trim());
-      expect(names).toEqual(["Log note", "More"]);
+      expect(names).toEqual(["Command palette", "Log note", "More"]);
     });
 
     it("keeps Log note as the one primary, with New contact and Customize layout in the More menu", () => {

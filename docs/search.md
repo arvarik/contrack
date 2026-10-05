@@ -22,9 +22,11 @@ The box reads facets too, except `near:`. The page address keeps your search, so
 
 ## Command palette
 
-Press `Cmd+K` on any page to open the palette. Press it again to close it. `Esc` steps back one layer at a time: it closes the facet values or the actions, then clears the box and its pills, and on an empty box it closes the palette. The palette opens with an empty box each time. On a touch screen, press **Command palette**, the first button above the Network list.
+Press `Cmd+K` on any page to open the palette. Press it again to close it. `Esc` steps back one layer at a time: it closes the facet values, the actions or **Filter by**, asks once before it discards a typed note, then clears the box and its pills, and on an empty box it closes the palette. The palette opens with an empty box each time.
 
-The first character you type sets the mode. The chips under the box show the mode, and a click or a tap on one switches to it.
+On a touch screen, press **Command palette**, the search button at the top of every page, or the top right of an open contact. Android's Back steps back as `Esc` does. The palette sits at the top of the screen, and its list stops above the on-screen keyboard.
+
+The first character you type sets the mode. The chips under the box show the mode, and a click or a tap on one switches to it and keeps the words you typed. **Filter** lists the facets.
 
 | You type           | Mode         | What happens                                  |
 | ------------------ | ------------ | --------------------------------------------- |
@@ -32,7 +34,7 @@ The first character you type sets the mode. The chips under the box show the mod
 | `?` and a question | **? Ask AI** | Ask Contrack answers inside the palette       |
 | `>`                | **> Log**    | You log a note, a call, a meeting or an email |
 
-The footer names the keys that work on the highlighted row: what `Enter` does to it, `→` and `Shift` on a contact, and what `Esc` does next.
+The footer names the keys that work on the highlighted row: what `Enter` does to it, `→` and `Shift` on a contact, and what `Esc` does next. A touch screen shows no keys.
 
 With `?` and nothing after it, the palette shows four questions drawn from the same pool as **Try asking** on the Ask Contrack page. Select one to ask it.
 
@@ -44,17 +46,21 @@ Type part of a name, company, role, place, industry or tag. The first results co
 - nicknames, so "Bob Castellanos" finds Robert Castellanos
 - phone numbers in any common form, with or without the country code
 
-Each result shows the name, a dot in the band colour for a tracked contact, the role and company, and how long ago you were last in touch. That time turns red after 60 days. A chip such as "7mo old" marks a contact that nobody has updated in six months or more. With AI on, the chip's refresh button researches the contact on the web (see [Research contacts](ai.md#research-contacts)).
+Each result takes two lines: the name, a dot in the band colour for a tracked contact, then the role, the company and how long ago you were last in touch. That time turns red after 60 days. A chip such as "7mo old" marks a contact that nobody has updated in six months or more. Its actions can refresh it from the web (see [Act on a result](#act-on-a-result)).
 
 Use `↑`/`↓` to move and `Enter` to open the contact. While the box holds text, `Home` and `End` move the cursor in it.
 
-The words also find pages: "pulse" lists **Pulse**, and "backup" lists the Settings page for export. When the words are a page's whole name, that page comes first.
+**Show all in Network**, under the people, opens the Network list with the same words and pills.
 
-Last in the list, **Create contact** makes a contact with the name you typed. It is not there when a contact already has that name, or when pills are set.
+The words also find pages: "pulse" lists **Pulse**, and "backup" lists the Settings page for export. Each word must start a word of the page's name. When the words are a page's whole name, that page comes first.
+
+**Create contact** makes a contact with the name you typed. It is not there when a contact already has that name, or when pills are set.
+
+**Ask AI** asks the words as a question (see [Ask from the palette](#ask-from-the-palette)). It comes before the pages when the words start with who, what, where, which or a similar word, and last otherwise. It is not there for a name a contact already has.
 
 ### Act on a result
 
-Press `→` on a result to open its actions. With a pointer, select the double arrow at the end of the row.
+Press `→` on a result, in the people search or in AI's answer, to open its actions. With a pointer or a finger, select the double arrow at the end of the row.
 
 ![The palette's action menu for one contact, with a key beside each action](images/palette-actions.png)
 
@@ -65,6 +71,7 @@ Press `→` on a result to open its actions. With a pointer, select the double a
 | `C`     | **Log call**             | The same, for a call                                                                                                             |
 | `B`     | **Catch me up**          | Opens the contact on its **Dossier** tab, at the **Briefing** card. With AI on, it writes a briefing when there is no recent one |
 | `L`     | **Add to list**          | Shows your lists, with a check on each list the contact is in. `Enter` adds or removes the contact                               |
+| `R`     | **Refresh from the web** | Researches the contact on the web (see [Research contacts](ai.md#research-contacts)). Only with AI on and lookups left today     |
 | `T`     | **Track** or **Untrack** | Tracks the contact at your default cadence, or untracks it, with **Undo**. A ghost has no Track row                              |
 
 `↑`/`↓` move through the actions. `←` or `Esc` goes back to the results.
@@ -77,9 +84,9 @@ Hold `Shift` while a result is highlighted. A card opens beside the palette. It 
 
 Type `>`, or select the **> Log** chip. The palette leads you one step at a time:
 
-1. It lists the kinds: note, call, meeting and email. Pick one.
-2. It lists your contacts, the recently viewed ones first. Type part of a name to narrow the list, and pick one.
-3. Type the text after the colon. The palette shows a row such as "Log note for Julian Moreau". Press `Enter` to log it.
+1. It lists the kinds: note, call, meeting and email. Pick one. Words you typed before you chose **> Log** become the name.
+2. It lists your contacts, the recently viewed ones first. Type part of a name to narrow the list, and pick one. On a touch screen, this opens a composer with room for a longer note and a **Save** button.
+3. Type the text after the colon. The palette shows a row such as "Log note for Julian Moreau". Press `Enter` to log it. When other contacts also match the name, they are listed under **Or for**.
 
 You can also type the whole line at once:
 
@@ -87,12 +94,13 @@ You can also type the whole line at once:
 > note Julian: Left a voicemail about the Q3 targets
 ```
 
-For the name, the palette takes the contact with that whole name, then the first name that starts with your words, then the first that contains them. The row names the contact, so check it before you press `Enter`. A logged interaction is not kept as a recent search.
+For the name, the palette takes the contact with that whole name, then the first name that starts with your words, then the first that contains them. The row names the contact, so check it before you press `Enter`. `Esc` on a typed note asks you to press it again before it discards the note. A logged interaction is not kept as a recent search.
 
 ### Before you type
 
 With the box empty, the palette shows these groups:
 
+- **Start here**, until you have opened a contact or searched: rows to ask AI, to log an interaction and to filter.
 - **Recently viewed**: the last three contacts you opened.
 - **Recent searches**: your five latest searches from the palette and from Ask Contrack. Select one to search again.
 - **Insights**: the follow-ups that are due, and the two tracked contacts furthest past their cadence. It also names a person you mention often who is not in your network, and it counts the contacts with stale data and the possible duplicates.
@@ -102,11 +110,13 @@ With the box empty, the palette shows these groups:
 
 Type `?` and a question of three characters or more, or press `↓` to a question under **Try asking** and press `Enter`. The palette asks when you stop typing, and it shows "Asking AI…" while it waits. The answer is the same as on the [Ask Contrack](#ask-contrack) page, under **AI answer**. When AI did not check the list, the heading reads **Not verified by AI**, with one line that says why.
 
-Until you stop typing, the palette shows "Asks when you stop typing…". Facet pills go with the question. When you add or remove a pill, the palette asks again. Under the answer, **Search notes** opens the same words in Notes mode, and **Open in Ask Contrack** opens the Ask Contrack page.
+Until you stop typing, the palette shows "Asks when you stop typing…". When no AI model is set up, or AI is off for the instance or your account, the palette says so, and the answer comes from keyword and meaning search only. For an administrator, and for your own AI switch, a **Set up AI** row opens the page that turns it on. Without AI, the palette offers no brief.
+
+Facet pills go with the question. When you add or remove a pill, the palette asks again. Under the answer, **Search notes** opens the same words in Notes mode, and **Open in Ask Contrack** opens the Ask Contrack page.
 
 ## Facets
 
-A facet is a filter that you type as `name:value`. Type a facet and then a space, and it becomes a pill. `Backspace` in an empty box removes the last pill. Select a pill to remove it.
+A facet is a filter that you type as `name:value`. Type a facet and then a space, and it becomes a pill and leaves the box. `Backspace` in an empty box removes the last pill. Select the × on a pill to remove it. **Filter**, beside the mode chips, lists every facet with what it keeps, and a pick types the facet for you.
 
 Type a facet name and its colon to see values to pick. The text facets list the values in your contacts. Use `↑`/`↓` to choose, `Enter` or `Tab` to pick a value, and `Esc` to close the list. Type again to see it again.
 

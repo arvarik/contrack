@@ -27,6 +27,7 @@ import {
   Satellite,
   RefreshCw,
   FileText,
+  ListFilter,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -55,7 +56,29 @@ interface ZeroStateViewProps {
   onSelectHistory: (query: string, mode?: string) => void;
   onSelectInsight: (insight: ZeroStateInsight) => void;
   onNavigate: (path: string) => void;
+  /** A "Start here" row: ask AI, log, or pick a filter. */
+  onStart: (what: "ai" | "log" | "filter") => void;
 }
+
+/**
+ * For a person with nothing recent yet: the three things the palette does
+ * besides finding people, as rows. The mode chips say the same, smaller.
+ */
+const START_ROWS = [
+  { what: "ai", label: "Ask AI about your network", icon: Sparkles, hint: "?" },
+  {
+    what: "log",
+    label: "Log a note, call, meeting or email",
+    icon: Zap,
+    hint: ">",
+  },
+  {
+    what: "filter",
+    label: "Filter by tag, role or company",
+    icon: ListFilter,
+    hint: "tag:",
+  },
+] as const;
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -102,7 +125,7 @@ const insightLook = (type: string): { icon: LucideIcon; tone: Tone } => {
 
 /** A row in the palette's vertical lists. */
 const ROW =
-  "flex items-center gap-3 px-3 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none transition-colors";
+  "flex items-center gap-3 px-3 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors";
 
 /** A destination row: the variant ink, and the wash's ink when current. */
 const NAV_ROW =
@@ -156,6 +179,7 @@ export const ZeroStateView = ({
   onSelectHistory,
   onSelectInsight,
   onNavigate,
+  onStart,
 }: ZeroStateViewProps) => {
   const hasRecent = recentContacts.length > 0;
   const hasHistory = historyEntries.length > 0;
@@ -163,6 +187,25 @@ export const ZeroStateView = ({
 
   return (
     <>
+      {!hasRecent && !hasHistory && (
+        <Command.Group heading="Start here" className={GROUP_HEADING_DEFAULT}>
+          {START_ROWS.map(({ what, label, icon: Icon, hint }) => (
+            <Command.Item
+              key={what}
+              value={`start_${what}`}
+              onSelect={() => onStart(what)}
+              className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
+            >
+              <Icon className="w-4 h-4 shrink-0 text-primary" />
+              <span className="text-sm flex-1 truncate">{label}</span>
+              <kbd className={cn(KBD_SM, "hidden pointer-fine:inline-flex")}>
+                {hint}
+              </kbd>
+            </Command.Item>
+          ))}
+        </Command.Group>
+      )}
+
       {/* ── Recently Viewed ── */}
       {hasRecent && (
         <Command.Group
@@ -253,19 +296,23 @@ export const ZeroStateView = ({
 };
 
 /**
- * Does a destination match the typed words? Each word must be in its name
- * or in one of its keywords. Two characters at least, so one letter does
- * not list every page.
+ * Does a destination match the typed words? Each word must start a word of
+ * its name or of a keyword: "exp" finds Export, and "port" does not. At
+ * least `min` characters, so one letter does not list every page.
  */
 export function matchesDestination(
   query: string,
   label: string,
   keywords: readonly string[] = [],
+  min = 2,
 ): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.join(" ").length < 2) return false;
-  const haystack = [label, ...keywords].join(" ").toLowerCase();
-  return words.every((word) => haystack.includes(word));
+  const typed = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (typed.join(" ").length < min) return false;
+  const words = [label, ...keywords]
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/);
+  return typed.every((part) => words.some((word) => word.startsWith(part)));
 }
 
 /**
@@ -290,10 +337,12 @@ export const GoToGroup = ({
         if (page.admin && !isAdmin) return false;
         if (page.needsAccount && !authRequired) return false;
         if (page.id === "ai-usage" && isAdmin) return false;
+        // Three characters for these: they are many, and below the people.
         return matchesDestination(
           typed,
           `Settings ${page.title}`,
           page.keywords,
+          3,
         );
       })
     : [];
@@ -314,7 +363,7 @@ export const GoToGroup = ({
             <kbd
               className={cn(
                 KBD_SM,
-                "text-on-surface-variant hidden sm:inline-flex",
+                "text-on-surface-variant hidden pointer-fine:inline-flex",
               )}
             >
               {item.shortcut}

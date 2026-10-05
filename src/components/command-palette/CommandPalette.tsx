@@ -25,51 +25,31 @@ import {
   useQueryTokenizer,
   type FacetFilter,
 } from "../../hooks/useQueryTokenizer";
-import {
-  Search,
-  UserPlus,
-  Briefcase,
-  Building,
-  Zap,
-  Sparkles,
-  HelpCircle,
-  ArrowUpRight,
-  ChevronsRight,
-  X,
-} from "lucide-react";
+import { ListFilter, Search, Sparkles, X, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { ICON_BTN, KBD, TONE_WASH } from "../../lib/styles";
+import { ICON_BTN, KBD } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
-import {
-  aiResultsHeading,
-  getMode,
-  GROUP_HEADING_DEFAULT,
-  GROUP_HEADING_PRIMARY,
-  ITEM_CURRENT,
-  MATCH_BADGE,
-  insightPath,
-} from "./utils";
-import { AIShimmerRow, AIResultCard } from "./AiComponents";
-import { AiStarters } from "./AiStarters";
-import { GoToGroup, NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
+import { formatFacet } from "../../../shared/facetQuery";
+import { getMode, insightPath } from "./utils";
+import { AiMode, useAiSetup } from "./AiMode";
+import { NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
 import { LogMode } from "./LogMode";
-import type { LogKind } from "./actionMode";
+import { LOG_TITLES, parseLogInput, type LogKind } from "./actionMode";
+import { InlineNoteComposer } from "./InlineNoteComposer";
 import { PaletteFooter, enterActionFor } from "./PaletteFooter";
-import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
+import { PeopleMode } from "./PeopleMode";
+import { FilterFields } from "./FilterFields";
 import { ResultPeek } from "./ResultPeek";
-import { SynthesisBar } from "./SynthesisBar";
 import type { PeekContact } from "./ResultPeek";
-import { fallbackAvatarUrl } from "../../lib/avatar";
 import { FacetPills } from "./FacetPills";
 import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { NAMES } from "../../lib/names";
+import { useCloseRequest } from "../../hooks/useCloseRequest";
 
 /** The icon at the start of the input, swapped when the mode changes. */
 const ICON_SWAP = {
@@ -78,9 +58,6 @@ const ICON_SWAP = {
   exit: { scale: 0.5, opacity: 0 },
   transition: { duration: DURATION.fast, ease: EASE },
 } as const;
-
-/** The 11 px uppercase type of a badge or a status line in the list. */
-const SMALL_CAPS = "text-[11px] font-bold uppercase tracking-[0.08em]";
 
 /** The mode chips under the input. `active` is the look of the current one. */
 const MODE_CHIPS = [
@@ -120,6 +97,16 @@ export const CommandPalette = () => {
   const [activeRow, setActiveRow] = useState("");
   // Escape hid the facet suggestions. Typing shows them again.
   const [facetMenuDismissed, setFacetMenuDismissed] = useState(false);
+  // "Filter by": the facet fields as rows, from the Filter chip.
+  const [facetPicker, setFacetPicker] = useState(false);
+  // Escape once on a typed `>` note: the next one discards it.
+  const [discardArmed, setDiscardArmed] = useState(false);
+  // `>` on a touch screen: the composer for the contact it picked.
+  const [logComposer, setLogComposer] = useState<{
+    kind: LogKind;
+    contact: { id: string; name: string };
+    text: string;
+  } | null>(null);
   /** The person moved the highlight since the query last changed. */
   const movedHighlightRef = useRef(false);
   /** The pointer, not a key, moved it last: the list does not scroll. */
@@ -143,7 +130,7 @@ export const CommandPalette = () => {
     removeLastFilter,
     clearFilters,
     hasFilters,
-  } = useQueryTokenizer(search, setSearch);
+  } = useQueryTokenizer(search, setSearch, { takeTyped: mode === "normal" });
 
   // ── Instant search (Feature 8) — 0ms client filter + FTS handover ──
   const instantSearch = useInstantSearch(
@@ -151,6 +138,12 @@ export const CommandPalette = () => {
     parsed.filters,
     mode === "normal" && (!!parsed.freeText.trim() || hasFilters),
   );
+
+  // The pills and the words, as one query: what a recent search keeps, and
+  // what "Show all in Network" opens. Typed facets leave the box as pills.
+  const fullQuery = [...parsed.filters.map(formatFacet), parsed.freeText.trim()]
+    .filter(Boolean)
+    .join(" ");
 
   // ── Action Sub-Menu state (Feature 4) ──
   const [subMenuContactId, setSubMenuContactId] = useState<string | null>(null);
@@ -178,27 +171,15 @@ export const CommandPalette = () => {
     semanticSearch;
   const { addEntry } = searchHistory;
 
-  // Enrichment hooks for StaleChip refresh action
-  const { data: groundingCapacity } = useGroundingCapacity();
-  const enrichContact = useEnrichContact();
-  const [enrichingContactId, setEnrichingContactId] = useState<string | null>(
-    null,
-  );
-
-  const handleRefreshContact = useCallback(
-    (contactId: string) => {
-      setEnrichingContactId(contactId);
-      enrichContact.mutate(contactId, {
-        onSettled: () => setEnrichingContactId(null),
-      });
-    },
-    [enrichContact],
-  );
+  // Why AI cannot answer, while the palette is in `?` mode.
+  const aiSetup = useAiSetup(open && mode === "ai", aiAllowed);
 
   // ── Shift-to-peek state ──
   const [peekVisible, setPeekVisible] = useState(false);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // The scroll area: the list, and the notes above and below it.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Resolve recent contact IDs to full contact objects for rendering
@@ -262,6 +243,16 @@ export const CommandPalette = () => {
     }
     return map;
   }, [instantSearch.results, aiResults, mode]);
+
+  // ── The highlighted contact: Shift peeks at it, → opens its actions ──
+  // A people row's value is its id and name, an AI row's `ai_<id>_<name>`.
+  const peekContact = useMemo(() => {
+    if (!open) return null;
+    for (const [id, contact] of resultMap) {
+      if (activeRow.includes(id)) return contact;
+    }
+    return null;
+  }, [open, activeRow, resultMap]);
 
   // The pills go with the question. A pill that is removed, or added from
   // the autocomplete, changes the question the palette asks.
@@ -365,8 +356,11 @@ export const CommandPalette = () => {
   const subMenuRowRef = useRef("");
 
   const openSubMenu = useCallback(
-    (contact: { id: string; name: string; avatarUrl?: string | null }) => {
-      subMenuRowRef.current = `${contact.id}${contact.name}`.trim();
+    (
+      contact: { id: string; name: string; avatarUrl?: string | null },
+      row = `${contact.id}${contact.name}`.trim(),
+    ) => {
+      subMenuRowRef.current = row;
       setSubMenuContactId(contact.id);
       setSubMenuContactName(contact.name);
       setSubMenuContactAvatar(contact.avatarUrl ?? null);
@@ -390,6 +384,9 @@ export const CommandPalette = () => {
     setSearch("");
     setActiveRow("");
     setFacetMenuDismissed(false);
+    setFacetPicker(false);
+    setDiscardArmed(false);
+    setLogComposer(null);
     setPeekVisible(false);
     prevAiQueryRef.current = "";
     lastRecordedAiRef.current = "";
@@ -407,30 +404,62 @@ export const CommandPalette = () => {
   }, [handleClose]);
 
   /**
-   * Escape steps back one layer at a time. The facet suggestions and the
-   * actions menu take their own Escape first. Then Escape clears the text
-   * and the pills, and on an empty palette it closes. Radix asks here
-   * before it closes the dialog, and a prevented Escape keeps it open.
+   * Escape steps back one layer at a time, and so does a phone's Back. The
+   * facet values and the actions menu take their own Escape first. Then it
+   * closes "Filter by", asks once before it discards a typed `>` note,
+   * clears the text and the pills, and says false on an empty palette,
+   * which then closes. Back reaches no key handler, so it closes the facet
+   * values and the actions menu here.
    */
-  const handleEscape = (e: KeyboardEvent) => {
+  const stepBack = (fromBack = false): boolean => {
+    if (fromBack && facetMenuOpen) {
+      setFacetMenuDismissed(true);
+      return true;
+    }
     if (subMenuContactId) {
-      e.preventDefault();
       closeSubMenu();
-      return;
+      return true;
+    }
+    if (logComposer) {
+      setLogComposer(null);
+      return true;
+    }
+    if (facetPicker) {
+      setFacetPicker(false);
+      return true;
+    }
+    const log = mode === "action" ? parseLogInput(search) : null;
+    if (log?.step === "text" && log.text && !discardArmed) {
+      setDiscardArmed(true);
+      return true;
     }
     if (search !== "" || hasFilters) {
-      e.preventDefault();
       setSearch("");
       clearFilters();
       setFacetMenuDismissed(false);
+      setDiscardArmed(false);
+      return true;
     }
+    return false;
   };
 
+  // Radix asks here before it closes the dialog: a prevented Escape keeps
+  // it open.
+  const handleEscape = (e: KeyboardEvent) => {
+    if (stepBack()) e.preventDefault();
+  };
+
+  // Android's Back. It used to leave the page under the open palette.
+  useCloseRequest(open, () => {
+    if (!stepBack(true)) handleClose();
+  });
+
   const handleCreateContact = async () => {
-    if (!search.trim()) return;
+    const name = parsed.freeText.trim();
+    if (!name) return;
     try {
       const newContact = await createContact.mutateAsync({
-        name: search.trim(),
+        name,
         cadenceDays: preferences.defaultCadenceDays,
       });
       recordVisit(newContact.id);
@@ -455,17 +484,11 @@ export const CommandPalette = () => {
     text: string;
   }) => {
     try {
-      const titleMap: Record<LogKind, string> = {
-        note: "Quick Note",
-        call: "Phone Call logged",
-        meeting: "Meeting summary",
-        email: "Email sent",
-      };
       await addInteraction.mutateAsync({
         contactId: contact.id,
         data: {
           type: kind,
-          title: titleMap[kind],
+          title: LOG_TITLES[kind],
           content: text,
           date: new Date().toISOString(),
         },
@@ -510,15 +533,12 @@ export const CommandPalette = () => {
   // debounced auto-record, so the user only sees queries they actually acted on.
   const handleSelectFtsContact = useCallback(
     (contactId: string) => {
-      const trimmed = search.trim();
-      if (trimmed.length >= 2) {
-        searchHistory.addEntry(trimmed, "normal");
-      }
+      if (fullQuery.length >= 2) searchHistory.addEntry(fullQuery, "normal");
       recordVisit(contactId);
       navigate(`/contact/${contactId}`);
       handleClose();
     },
-    [search, searchHistory, recordVisit, navigate, handleClose],
+    [fullQuery, searchHistory, recordVisit, navigate, handleClose],
   );
 
   const handleSelectInsight = useCallback(
@@ -615,35 +635,22 @@ export const CommandPalette = () => {
           return;
         }
       }
-      // Only in normal mode with results showing
-      if (mode !== "normal" || isEmptyInput) return;
-
-      // The highlighted row's value holds its contact's id.
-      for (const contact of instantSearch.results) {
-        if (activeRow.includes(contact.id)) {
-          e.preventDefault();
-          openSubMenu(contact);
-          return;
-        }
-      }
+      // A person's row, in the people search or in AI's answer.
+      if (!peekContact) return;
+      e.preventDefault();
+      openSubMenu(peekContact, activeRow);
     };
 
     window.addEventListener("keydown", handleArrowRight);
     return () => window.removeEventListener("keydown", handleArrowRight);
-  }, [
-    open,
-    subMenuContactId,
-    mode,
-    isEmptyInput,
-    instantSearch.results,
-    activeRow,
-    openSubMenu,
-  ]);
+  }, [open, subMenuContactId, peekContact, activeRow, openSubMenu]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
       setFacetMenuDismissed(false);
+      setFacetPicker(false);
+      setDiscardArmed(false);
       // Typing again closes the actions menu, for the new results.
       if (subMenuContactId) {
         subMenuRowRef.current = "";
@@ -655,18 +662,35 @@ export const CommandPalette = () => {
 
   const modeChipsId = useId();
 
-  /** A mode chip: its sign in front of the words, or none for Search. */
-  const switchMode = (target: (typeof MODE_CHIPS)[number]["id"]) => {
+  /**
+   * A mode chip: its sign in front of the words, or none for Search. `>`
+   * keeps them too, as the name to log for. The Filter chip shows "Filter
+   * by", in Search.
+   */
+  const switchMode = (target: (typeof MODE_CHIPS)[number]["id"] | "filter") => {
     const words = search.replace(/^\s*[?>]\s*/, "");
     setSearch(
-      target === "ai" ? `? ${words}` : target === "action" ? "> " : words,
+      target === "ai"
+        ? `? ${words}`
+        : target === "action"
+          ? `> ${words}`
+          : words,
     );
     setFacetMenuDismissed(false);
+    setDiscardArmed(false);
+    setFacetPicker(target === "filter" ? !facetPicker : false);
     if (subMenuContactId) {
       subMenuRowRef.current = "";
       closeSubMenu();
     }
     inputRef.current?.focus();
+  };
+
+  /** "Filter by" picked a field: type it, and its values open. */
+  const pickFacetField = (field: string) => {
+    setSearch(`${search.trim() ? `${search.trim()} ` : ""}${field}:`);
+    setFacetPicker(false);
+    setFacetMenuDismissed(false);
   };
 
   // A new query puts the highlight back on the top row, as cmdk does.
@@ -702,8 +726,8 @@ export const CommandPalette = () => {
     const keep = movedHighlightRef.current && values.includes(activeRow);
     if (!keep && values[0] && values[0] !== activeRow) {
       setActiveRow(values[0]);
-      // With its group's heading, which sits above it.
-      list.scrollTop = 0;
+      // With its group's heading, and any note above the list.
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
     }
   });
 
@@ -736,8 +760,9 @@ export const CommandPalette = () => {
       // Not for the pointer, as cmdk does not: a row half in view would
       // jump under it.
       if (pointerMovedRef.current) return;
-      if (row === list.querySelector("[cmdk-item]")) list.scrollTop = 0;
-      else row.scrollIntoView({ block: "nearest" });
+      if (row === list.querySelector("[cmdk-item]")) {
+        if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      } else row.scrollIntoView({ block: "nearest" });
     };
     sync();
     const observer = new MutationObserver(sync);
@@ -779,16 +804,6 @@ export const CommandPalette = () => {
         ? peopleCount(instantSearch.results.length)
         : "";
 
-  // ── Shift-to-peek: the highlighted contact ──
-  // A people row's value is its id and name, an AI row's `ai_<id>_<name>`.
-  const peekContact = useMemo(() => {
-    if (!open) return null;
-    for (const [id, contact] of resultMap) {
-      if (activeRow.includes(id)) return contact;
-    }
-    return null;
-  }, [open, activeRow, resultMap]);
-
   // Shift-to-peek.
   // We originally bound this to Space, but the input always has focus inside
   // cmdk and Space is a valid text character, so the gesture could never fire
@@ -827,6 +842,61 @@ export const CommandPalette = () => {
       }
     };
   }, [open, peekContact]);
+
+  // What each mode's parts need: notes above the list, rows in it, and,
+  // for `?`, the links below it.
+  const aiModeProps = {
+    question: aiQuery,
+    waiting:
+      aiQuery.length >= 3 &&
+      !isAiLoading &&
+      !semanticSearch.isSuccess &&
+      !semanticSearch.isError,
+    loading: aiQuery.length >= 3 && isAiLoading,
+    answered: semanticSearch.isSuccess,
+    error: semanticSearch.isError
+      ? semanticSearch.error?.message || "Search failed. Try again"
+      : null,
+    results: aiResults,
+    total: aiTotal,
+    fallback: aiFallback,
+    answeredQuery: aiAnsweredQuery,
+    setup: aiSetup,
+    onPickStarter: (question: string) => setSearch(`? ${question}`),
+    onOpenContact: handleSelectContact,
+    onNavigate: handleNavigate,
+  };
+  const logModeProps = {
+    input: search,
+    contacts: allContacts,
+    recentContacts,
+    discardArmed,
+    onFill: (text: string) => {
+      setSearch(text);
+      setDiscardArmed(false);
+    },
+    onLog: handleLog,
+    onCompose: setLogComposer,
+  };
+  const peopleModeProps = {
+    results: instantSearch.results,
+    loading: instantSearch.isFtsLoading,
+    facetMenuOpen,
+    hasFilters,
+    words: parsed.freeText,
+    query: fullQuery,
+    exactPage,
+    canCreate,
+    onOpen: handleSelectFtsContact,
+    onActions: (person: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+    }) => openSubMenu(person),
+    onCreate: handleCreateContact,
+    onAsk: () => setSearch(`? ${parsed.freeText.trim()}`),
+    onNavigate: handleNavigate,
+  };
 
   return (
     <AnimatePresence>
@@ -867,7 +937,10 @@ export const CommandPalette = () => {
                     handleClose();
                   }
                 }}
-                className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40"
+                // A touch screen pins the panel near the top, clear of the
+                // notch, so the on-screen keyboard leaves room for the list.
+                // A short window, a phone on its side, does the same.
+                className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 pointer-coarse:pt-[max(0.5rem,env(safe-area-inset-top))] pointer-coarse:px-[max(0.75rem,env(safe-area-inset-left),env(safe-area-inset-right))] [@media(max-height:560px)]:pt-2 backdrop-blur-md bg-surface/40"
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -20 }}
@@ -889,7 +962,11 @@ export const CommandPalette = () => {
                       e.preventDefault();
                     }
                   }}
-                  className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
+                  // Never taller than the space above the keyboard
+                  // (`--keyboard-inset`, from `useSoftKeyboard`): the list
+                  // in it scrolls instead. It ended 150 px under a phone's
+                  // keyboard, where the last rows could not be reached.
+                  className="w-full max-w-2xl max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-15vh-1rem)] pointer-coarse:max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-max(0.5rem,env(safe-area-inset-top))-0.5rem)] [@media(max-height:560px)]:max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-1rem)] glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
                 >
                   {/* ── Facet pills (Feature 5) ── */}
                   <FacetPills
@@ -905,7 +982,7 @@ export const CommandPalette = () => {
               go away and would say nothing. Its caret and the open panel say
               where the typing goes.
             */}
-                  <div className="flex items-center px-4 py-2 sm:py-4 bg-surface-container-low gap-3">
+                  <div className="flex items-center px-4 py-2 pointer-fine:py-4 bg-surface-container-low gap-3">
                     <AnimatePresence mode="wait">
                       {mode === "ai" ? (
                         <motion.div key="ai-icon" {...ICON_SWAP}>
@@ -940,7 +1017,7 @@ export const CommandPalette = () => {
                           : "Search people and pages…"
                       }
                       aria-describedby={modeChipsId}
-                      className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
+                      className="flex-1 min-w-0 min-h-[44px] pointer-fine:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
                     />
                     {/* Full ink: at half opacity it failed contrast. */}
                     <kbd className={cn(KBD, "pointer-coarse:hidden")}>Esc</kbd>
@@ -984,11 +1061,27 @@ export const CommandPalette = () => {
                         <Icon className="w-3 h-3" aria-hidden="true" /> {label}
                       </button>
                     ))}
+                    {/* The facets, for a person who does not know them, and
+                        for a phone, which has no footer and hides `:` on a
+                        second keyboard. */}
+                    <button
+                      type="button"
+                      aria-pressed={facetPicker}
+                      onClick={() => switchMode("filter")}
+                      className={cn(
+                        "hit-area state-layer ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors",
+                        facetPicker
+                          ? "bg-surface-container-high text-on-surface font-bold"
+                          : "text-on-surface-variant",
+                      )}
+                    >
+                      <ListFilter className="w-3 h-3" aria-hidden="true" />{" "}
+                      Filter
+                    </button>
                   </div>
 
-                  {/* ── Result list ── */}
                   {/* ── Facet autocomplete dropdown (Feature 5) ── */}
-                  {parsed.activePrefix && !facetMenuDismissed && (
+                  {facetMenuOpen && parsed.activePrefix && (
                     <FacetAutocomplete
                       field={parsed.activePrefix.field}
                       partial={parsed.activePrefix.partial}
@@ -1003,18 +1096,31 @@ export const CommandPalette = () => {
                     />
                   )}
 
-                  <Command.List
-                    ref={listRef}
+                  {/*
+                    The scroll area: notes above the list, the list, and the
+                    links below it. The list is a listbox and holds rows only
+                    (axe's aria-required-children): the actions menu, the
+                    waits, the hints and the links sat inside it before.
+                  */}
+                  <div
+                    ref={scrollRef}
+                    // A Tab stop, so a keyboard can scroll it (axe's
+                    // scrollable-region-focusable): its rows are reached by
+                    // the input's active descendant, and are not focusable.
+                    // The arrows and Enter still work from here.
+                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                    tabIndex={0}
                     // The pointer moved the highlight: the layout effect above
                     // keeps it where the pointer put it.
                     onPointerMove={() => {
                       movedHighlightRef.current = true;
                       pointerMovedRef.current = true;
                     }}
-                    className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide"
+                    // 380 px on a desktop; on a touch screen, the room the
+                    // panel has.
+                    className="min-h-0 max-h-[380px] pointer-coarse:max-h-none overflow-y-auto overscroll-contain p-2 scrollbar-hide"
                   >
-                    {/* ═══════════════ ACTION SUB-MENU (Feature 4) ═══════════════ */}
-                    {subMenuContactId && (
+                    {subMenuContactId ? (
                       <ActionSubMenu
                         contactId={subMenuContactId}
                         contactName={subMenuContactName}
@@ -1032,394 +1138,61 @@ export const CommandPalette = () => {
                         onBack={closeSubMenu}
                         onClose={handleClose}
                         onReturnFocus={() => inputRef.current?.focus()}
+                        aiAllowed={aiAllowed}
                       />
-                    )}
-
-                    {/* ═══════════════ ZERO STATE (empty input, normal mode) ═══════════════ */}
-                    {!subMenuContactId && mode === "normal" && isEmptyInput && (
-                      <ZeroStateView
-                        recentContacts={recentContacts}
-                        historyEntries={searchHistory.recentDisplay}
-                        insights={zeroState?.insights ?? []}
-                        onSelectContact={handleSelectContact}
-                        onSelectHistory={handleSelectHistory}
-                        onSelectInsight={handleSelectInsight}
-                        onNavigate={handleNavigate}
+                    ) : logComposer ? (
+                      <InlineNoteComposer
+                        contactId={logComposer.contact.id}
+                        contactName={logComposer.contact.name}
+                        type={logComposer.kind}
+                        initialText={logComposer.text}
+                        backLabel="contacts"
+                        onBack={() => {
+                          setLogComposer(null);
+                          inputRef.current?.focus();
+                        }}
+                        onComplete={handleClose}
                       />
-                    )}
-
-                    {/* ═══════════════ AI MODE ═══════════════ */}
-                    {!subMenuContactId && mode === "ai" && (
-                      <>
-                        {/* Empty / typing prompt */}
-                        {/* Not `Command.Empty`: the starters are rows, and
-                            cmdk shows an empty state only with no rows. */}
-                        {aiQuery.length === 0 && (
-                          <>
-                            <div className="pt-6 pb-3 text-center text-sm text-on-surface-variant">
-                              <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
-                              <p className="font-bold text-on-surface mb-1">
-                                Ask AI
-                              </p>
-                              <p className="text-xs">
-                                Ask anything about your network in plain English
-                              </p>
-                            </div>
-                            <AiStarters onPick={(q) => setSearch(`? ${q}`)} />
-                          </>
-                        )}
-
-                        {/* Short query — waiting for more input */}
-                        {aiQuery.length > 0 && aiQuery.length < 3 && (
-                          <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                            <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
-                            <p className="text-xs">
-                              Keep typing your question…
-                            </p>
-                          </Command.Empty>
-                        )}
-
-                        {/* Typed, not asked yet. The palette asks when the
-                            typing stops, and the panel was blank until then. */}
-                        {aiQuery.length >= 3 &&
-                          !isAiLoading &&
-                          !semanticSearch.isSuccess &&
-                          !semanticSearch.isError && (
-                            <div className="py-10 text-center text-xs text-on-surface-variant">
-                              <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
-                              Asks when you stop typing…
-                            </div>
-                          )}
-
-                        {/*
-                    Loading shimmer, for the whole wait. The first list the
-                    server streams is a guess AI has not checked yet, so the
-                    palette keeps it back and shows AI's answer only.
-                  */}
-                        {aiQuery.length >= 3 && isAiLoading && (
-                          <div className="px-1 py-2 space-y-1">
-                            <div
-                              className={cn(
-                                SMALL_CAPS,
-                                "px-3 py-2 text-primary flex items-center gap-1.5",
-                              )}
-                            >
-                              <Sparkles className="w-3 h-3 animate-pulse" />{" "}
-                              Asking AI…
-                            </div>
-                            <AIShimmerRow delay={0} />
-                            <AIShimmerRow delay={0.08} />
-                            <AIShimmerRow delay={0.16} />
-                          </div>
-                        )}
-
-                        {/* AI results */}
-                        {aiQuery.length >= 3 &&
-                          !isAiLoading &&
-                          aiResults.length > 0 && (
-                            <Command.Group
-                              heading={aiResultsHeading(
-                                aiFallback,
-                                aiResults.length,
-                                aiTotal,
-                              )}
-                              className={GROUP_HEADING_PRIMARY}
-                            >
-                              {aiFallback && (
-                                <div className="flex items-start gap-1.5 px-3 pb-1 text-xs text-warning">
-                                  <HelpCircle
-                                    className="w-3.5 h-3.5 mt-px shrink-0"
-                                    aria-hidden="true"
-                                  />
-                                  <span>
-                                    {aiAllowed
-                                      ? "AI could not check these people this time. They match your words or their meaning"
-                                      : "AI is off for your account. These people match your words or their meaning"}
-                                  </span>
-                                </div>
-                              )}
-                              {aiResults.map((match, i) => (
-                                <AIResultCard
-                                  key={match.id}
-                                  match={match}
-                                  index={i}
-                                  isFallback={aiFallback}
-                                  onSelect={() => {
-                                    recordVisit(match.id);
-                                    navigate(`/contact/${match.id}`);
-                                    handleClose();
-                                  }}
-                                  hasGroundingCapacity={
-                                    groundingCapacity?.hasCapacity ?? false
-                                  }
-                                  isEnriching={enrichContact.isPending}
-                                  enrichingContactId={enrichingContactId}
-                                  onRefresh={
-                                    aiAllowed ? handleRefreshContact : undefined
-                                  }
-                                />
-                              ))}
-                            </Command.Group>
-                          )}
-
-                        {/* Synthesis executive brief (Feature 6) */}
-                        {aiAllowed &&
-                          aiQuery.length >= 3 &&
-                          !isAiLoading &&
-                          !aiFallback &&
-                          aiResults.length > 0 && (
-                            <SynthesisBar
-                              query={aiAnsweredQuery}
-                              contacts={aiResults}
-                              resultCount={aiResults.length}
-                              compact
-                            />
-                          )}
-
-                        {/* The same question on the Ask Contrack page (Feature 11C) */}
-                        {aiQuery.length >= 3 &&
-                          !isAiLoading &&
-                          aiResults.length > 0 && (
-                            <div className="px-3 py-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
-                              <button
-                                onClick={() => {
-                                  navigate(
-                                    `/search?mode=notes&q=${encodeURIComponent(aiQuery)}`,
-                                  );
-                                  handleClose();
-                                }}
-                                className="hit-area text-xs text-primary flex items-center gap-1 group"
-                              >
-                                Search notes
-                                <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  navigate(
-                                    `/search?q=${encodeURIComponent(aiQuery)}`,
-                                  );
-                                  handleClose();
-                                }}
-                                className="hit-area text-xs text-primary flex items-center gap-1 group"
-                              >
-                                Open in {NAMES.ask.label}
-                                <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                              </button>
-                            </div>
-                          )}
-
-                        {/* No AI matches */}
-                        {semanticSearch.isError && (
-                          <div
-                            role="alert"
-                            className="px-4 py-3 text-sm text-error"
-                          >
-                            {semanticSearch.error?.message ||
-                              "Search failed. Try again"}
-                          </div>
-                        )}
-                        {aiQuery.length >= 3 &&
-                          !isAiLoading &&
-                          aiResults.length === 0 &&
-                          !semanticSearch.isPending &&
-                          semanticSearch.isSuccess && (
-                            <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                              <Sparkles className="w-8 h-8 text-on-surface-variant/20 mx-auto mb-3" />
-                              <p className="font-bold text-on-surface mb-1">
-                                No matches found
-                              </p>
-                              <p className="text-xs">
-                                Try rephrasing your query, or use the regular
-                                search
-                              </p>
-                            </Command.Empty>
-                          )}
-                      </>
-                    )}
-
-                    {/* ═══════════════ LOG MODE (> prefix) ═══════════════ */}
-                    {!subMenuContactId && mode === "action" && (
-                      <LogMode
-                        input={search}
-                        contacts={allContacts}
-                        recentContacts={recentContacts}
-                        onFill={setSearch}
-                        onLog={handleLog}
-                      />
-                    )}
-
-                    {/* ═══════════════ NORMAL MODE (with search text or facets) ═══════════════ */}
-                    {!subMenuContactId &&
-                      mode === "normal" &&
+                    ) : facetPicker ? null : mode === "ai" ? (
+                      <AiMode part="notes" {...aiModeProps} />
+                    ) : mode === "action" ? (
+                      <LogMode part="notes" {...logModeProps} />
+                    ) : (
                       !isEmptyInput && (
-                        <>
-                          {/* Not under the open facet values: they are
-                              what to pick, not a search that found nothing. */}
-                          {!facetMenuOpen && (
-                            <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                              {instantSearch.isFtsLoading
-                                ? "Searching…"
-                                : "No people found"}
-                            </Command.Empty>
-                          )}
+                        <PeopleMode part="notes" {...peopleModeProps} />
+                      )
+                    )}
 
-                          {exactPage && (
-                            <GoToGroup
-                              query={parsed.freeText}
-                              onNavigate={handleNavigate}
-                            />
-                          )}
-
-                          {instantSearch.results.length > 0 && (
-                            <Command.Group
-                              // No "instant" mark: it pulsed on every key,
-                              // and nobody could say what it meant.
-                              heading={
-                                <span className="flex items-center gap-1.5">
-                                  Contacts
-                                  {hasFilters && (
-                                    <span
-                                      className={cn(SMALL_CAPS, "text-primary")}
-                                    >
-                                      filtered
-                                    </span>
-                                  )}
-                                </span>
-                              }
-                              className={GROUP_HEADING_DEFAULT}
-                            >
-                              {instantSearch.results.map((contact) => (
-                                <Command.Item
-                                  key={contact.id}
-                                  value={contact.id + contact.name}
-                                  onSelect={() =>
-                                    handleSelectFtsContact(contact.id)
-                                  }
-                                  className={cn(
-                                    "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:text-on-primary-wash transition-colors text-on-surface group/result",
-                                    ITEM_CURRENT,
-                                  )}
-                                >
-                                  <img
-                                    src={
-                                      contact.avatarUrl ||
-                                      fallbackAvatarUrl(contact.name)
-                                    }
-                                    alt=""
-                                    className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
-                                  />
-                                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-sm truncate">
-                                        {contact.name}
-                                      </span>
-                                      <ScoreDot contact={contact} />
-                                      {contact.approximate && (
-                                        <span
-                                          className={cn(
-                                            TONE_WASH.primary,
-                                            MATCH_BADGE,
-                                          )}
-                                        >
-                                          Approximate
-                                        </span>
-                                      )}
-                                    </div>
-                                    {(contact.role || contact.company) && (
-                                      <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
-                                        {contact.role && (
-                                          <span className="flex items-center gap-1">
-                                            <Briefcase className="w-3 h-3" />
-                                            {contact.role}
-                                          </span>
-                                        )}
-                                        {contact.company && (
-                                          <span className="flex items-center gap-1">
-                                            <Building className="w-3 h-3" />
-                                            {contact.company}
-                                          </span>
-                                        )}
-                                      </span>
-                                    )}
-                                    <LastContactLine
-                                      lastContactedAt={contact.lastContactedAt}
-                                    />
-                                    <StaleChip
-                                      contactId={contact.id}
-                                      updatedAt={contact.updatedAt}
-                                      hasGroundingCapacity={
-                                        groundingCapacity?.hasCapacity ?? false
-                                      }
-                                      isEnriching={enrichContact.isPending}
-                                      enrichingContactId={enrichingContactId}
-                                      onRefresh={
-                                        aiAllowed
-                                          ? handleRefreshContact
-                                          : undefined
-                                      }
-                                    />
-                                  </div>
-                                  {/* → action button: always visible on a touch screen, hover-reveal under a mouse from sm */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openSubMenu(contact);
-                                    }}
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:group-aria-selected/result:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
-                                    aria-label={`Actions for ${contact.name}`}
-                                  >
-                                    <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                                  </button>
-                                </Command.Item>
-                              ))}
-                            </Command.Group>
-                          )}
-
-                          {/* Pages and Settings pages the words name:
-                              "pulse" used to offer only a new contact. A
-                              page named exactly comes before the people. */}
-                          {/* Only for words: with pills alone, or a facet
-                              half typed, it listed all five destinations. */}
-                          {!exactPage && typedWords && (
-                            <GoToGroup
-                              query={parsed.freeText}
-                              onNavigate={handleNavigate}
-                            />
-                          )}
-
-                          {/* Last, and only when nobody has the name: an
-                              approximate match hid it, so "Nancy Drew" could
-                              not be made while "Nancy Drews" was a result.
-                              Never with pills, which it would not keep. */}
-                          {canCreate && (
-                            <Command.Group
-                              heading="Create"
-                              className={GROUP_HEADING_DEFAULT}
-                            >
-                              <Command.Item
-                                value={`create_${search}`}
-                                onSelect={handleCreateContact}
-                                className={cn(
-                                  "flex items-center gap-3 px-3 py-2 rounded-xl cursor-default select-none transition-colors text-on-surface",
-                                  ITEM_CURRENT,
-                                )}
-                              >
-                                <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full shrink-0">
-                                  <UserPlus className="w-4 h-4 text-primary" />
-                                </div>
-                                <span className="text-sm truncate">
-                                  Create contact{" "}
-                                  <span className="font-bold">
-                                    "{parsed.freeText.trim()}"
-                                  </span>
-                                </span>
-                              </Command.Item>
-                            </Command.Group>
-                          )}
-                        </>
+                    <Command.List ref={listRef} label="Results">
+                      {subMenuContactId || logComposer ? null : facetPicker ? (
+                        <FilterFields onPick={pickFacetField} />
+                      ) : mode === "ai" ? (
+                        <AiMode part="rows" {...aiModeProps} />
+                      ) : mode === "action" ? (
+                        <LogMode part="rows" {...logModeProps} />
+                      ) : isEmptyInput ? (
+                        <ZeroStateView
+                          recentContacts={recentContacts}
+                          historyEntries={searchHistory.recentDisplay}
+                          insights={zeroState?.insights ?? []}
+                          onSelectContact={handleSelectContact}
+                          onSelectHistory={handleSelectHistory}
+                          onSelectInsight={handleSelectInsight}
+                          onNavigate={handleNavigate}
+                          onStart={(what) =>
+                            switchMode(what === "log" ? "action" : what)
+                          }
+                        />
+                      ) : (
+                        <PeopleMode part="rows" {...peopleModeProps} />
                       )}
-                  </Command.List>
+                    </Command.List>
+
+                    {!subMenuContactId &&
+                      !logComposer &&
+                      !facetPicker &&
+                      mode === "ai" && <AiMode part="after" {...aiModeProps} />}
+                  </div>
 
                   <div
                     role="status"
@@ -1434,20 +1207,22 @@ export const CommandPalette = () => {
 
                   {/* ── Footer: the keys that work on this row ── */}
                   <PaletteFooter
-                    enter={subMenuContactId ? null : enterActionFor(activeRow)}
-                    canAct={
-                      mode === "normal" && !subMenuContactId && !!peekContact
+                    enter={
+                      subMenuContactId || logComposer
+                        ? null
+                        : enterActionFor(activeRow)
                     }
-                    canPeek={!subMenuContactId && !!peekContact}
+                    canAct={!subMenuContactId && !logComposer && !!peekContact}
+                    canPeek={!subMenuContactId && !logComposer && !!peekContact}
                     escape={
-                      subMenuContactId
+                      subMenuContactId || logComposer || facetPicker
                         ? "back"
                         : search !== "" || hasFilters
                           ? "clear"
                           : "close"
                     }
                     tip={
-                      isEmptyInput && mode === "normal" ? (
+                      isEmptyInput && mode === "normal" && !facetPicker ? (
                         <span>
                           Filter with <code>tag:</code>, <code>role:</code> or{" "}
                           <code>company:</code>

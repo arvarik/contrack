@@ -48,7 +48,7 @@ async function openPalette(page: Page) {
 }
 
 const person = (palette: ReturnType<Page["getByRole"]>, name: string) =>
-  palette.getByRole("option", { name: new RegExp(name) });
+  palette.getByRole("option", { name: new RegExp(`^${name}`) });
 
 /**
  * The scan for the parts this spec covers: the pills, the input, the facet
@@ -127,6 +127,8 @@ test("shows four of the account's own questions in AI mode", async ({
 
   // The starters are rows: ↓ reaches the second, and Enter puts it after
   // the question mark, as typing it would.
+  // The first row sets AI up, as this instance has no model.
+  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");

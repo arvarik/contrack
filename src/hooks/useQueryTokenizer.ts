@@ -20,6 +20,8 @@ export type { FacetField, FacetFilter } from "../../shared/searchFacets";
 interface ParsedQuery {
   /** Locked facet pills */
   filters: FacetFilter[];
+  /** The input without its finished facets: the words, and a facet being typed */
+  rest: string;
   /** Remaining free-text for FTS/vector search */
   freeText: string;
   /** Currently-being-typed filter prefix (no space yet → show autocomplete) */
@@ -76,6 +78,7 @@ export function parseQuery(
   const active = remaining.match(ACTIVE_PREFIX_REGEX);
   return {
     filters,
+    rest: remaining,
     freeText: remaining.replace(ACTIVE_PREFIX_REGEX, "").trim(),
     activePrefix: active
       ? {
@@ -110,10 +113,15 @@ export function withoutFacet(input: string, filter: FacetFilter): string {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-/** The palette's pills: a pill stays until removed, even once its text is gone. */
+/**
+ * The palette's pills: a pill stays until removed, even once its text is
+ * gone. With `takeTyped`, a typed facet leaves the input when it becomes a
+ * pill, as a picked value does. It used to stay, so `tag:vc ` showed twice.
+ */
 export function useQueryTokenizer(
   rawInput: string,
   setRawInput: (value: string) => void,
+  { takeTyped = false } = {},
 ) {
   /** Manually locked filters (from pills the user hasn't removed) */
   const [lockedFilters, setLockedFilters] = useState<FacetFilter[]>([]);
@@ -127,6 +135,10 @@ export function useQueryTokenizer(
   // lengths match, which ends it.
   if (parsed.filters.length !== lockedFilters.length) {
     setLockedFilters(parsed.filters);
+  }
+  // During render, as above: the next render finds no finished facet.
+  if (takeTyped && parsed.rest !== rawInput) {
+    setRawInput(parsed.rest.trimStart());
   }
 
   /** Add a filter manually (from autocomplete selection) */

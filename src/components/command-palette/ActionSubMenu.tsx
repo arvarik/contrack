@@ -4,7 +4,8 @@
  * Activated by pressing `→` on a focused search result.
  * Provides quick actions without leaving the command palette:
  *   👤 View profile (Enter), 📝 Log note (N), 📞 Log call (C),
- *   ✨ Catch me up (B), 📋 Add to list (L), ◎ Track or Untrack (T)
+ *   ✨ Catch me up (B), 📋 Add to list (L), ⟳ Refresh from the web (R, with
+ *   AI on and lookups left), ◎ Track or Untrack (T)
  *
  * Track reads the contact's flag from the contact cache, flips it with the
  * same toast and Undo as the header button, and closes the palette. A
@@ -28,6 +29,7 @@ import {
   ListPlus,
   ArrowLeft,
   Radar,
+  RefreshCw,
 } from "lucide-react";
 import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -35,6 +37,7 @@ import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { useContacts } from "../../api/contacts";
 import { useTrackToggle } from "../../hooks/useTrackToggle";
+import { useEnrichContact, useGroundingCapacity } from "../../api/enrichment";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { ListPicker } from "./ListPicker";
 
@@ -56,6 +59,8 @@ interface ActionSubMenuProps {
    * it, onto the dialog: the next key went nowhere.
    */
   onReturnFocus?: () => void;
+  /** AI is on for the account: the row can refresh from the web. */
+  aiAllowed?: boolean;
 }
 
 interface ActionItem {
@@ -77,6 +82,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   onBack,
   onClose,
   onReturnFocus,
+  aiAllowed = false,
 }) => {
   const [mode, setMode] = useState<SubMenuMode>("actions");
   // Back from a note, a call or a list: the input takes the keys again.
@@ -115,6 +121,19 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     onClose,
   ]);
   const canTrack = !contact?.isGhost;
+
+  // ── Refresh from the web ────────────────────────────────────────────────
+  // It was a button inside a stale row's chip, and a row holds no second
+  // control. Here every contact has it, while the day's web lookups last.
+  const enrich = useEnrichContact();
+  const { data: capacity } = useGroundingCapacity();
+  const canRefresh =
+    aiAllowed && (capacity?.hasCapacity ?? false) && !enrich.isPending;
+  const refresh = useCallback(() => {
+    if (!canRefresh) return;
+    enrich.mutate(contactId);
+    onClose();
+  }, [canRefresh, enrich, contactId, onClose]);
 
   // ── Action items ────────────────────────────────────────────────────────
   // Memoized: this array feeds the keyboard handler's dependency list, and a
@@ -157,6 +176,17 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         shortcut: "L",
         handler: () => setMode("list"),
       },
+      ...(canRefresh
+        ? [
+            {
+              id: "refresh",
+              label: "Refresh from the web",
+              icon: <RefreshCw className="w-4 h-4" />,
+              shortcut: "R",
+              handler: refresh,
+            },
+          ]
+        : []),
       ...(canTrack
         ? [
             {
@@ -169,7 +199,15 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           ]
         : []),
     ],
-    [onViewProfile, onCatchMeUp, canTrack, isTracked, track],
+    [
+      onViewProfile,
+      onCatchMeUp,
+      canTrack,
+      isTracked,
+      track,
+      canRefresh,
+      refresh,
+    ],
   );
 
   // ── Keyboard handling ───────────────────────────────────────────────────
@@ -249,9 +287,25 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           e.preventDefault();
           track();
           break;
+        case "r":
+        case "R":
+          if (!canRefresh) break;
+          e.preventDefault();
+          refresh();
+          break;
       }
     },
-    [mode, selectedIndex, actions, onBack, onCatchMeUp, canTrack, track],
+    [
+      mode,
+      selectedIndex,
+      actions,
+      onBack,
+      onCatchMeUp,
+      canTrack,
+      track,
+      canRefresh,
+      refresh,
+    ],
   );
 
   useEffect(() => {
@@ -304,10 +358,10 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
+          className={cn(ICON_BTN, "pointer-fine:p-1 -ml-1")}
           aria-label="Back to results"
         >
-          <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
+          <ArrowLeft className="w-5 h-5 pointer-fine:w-4 pointer-fine:h-4" />
         </button>
         <img
           src={contactAvatarUrl || fallbackAvatarUrl(contactName)}
@@ -332,7 +386,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
             onClick={action.handler}
             onMouseDown={(e) => e.preventDefault()}
             className={cn(
-              "state-layer w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-xl text-sm transition-colors",
+              "state-layer w-full flex items-center gap-3 px-3 py-3 pointer-fine:py-2.5 rounded-xl text-sm transition-colors",
               i === selectedIndex
                 ? cn(SELECTED_ROW, "text-on-primary-wash")
                 : "text-on-surface",
@@ -351,7 +405,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
               {action.icon}
             </span>
             <span className="flex-1 text-left font-medium">{action.label}</span>
-            <kbd className={`${KBD_SM} hidden sm:inline-flex`}>
+            <kbd className={`${KBD_SM} hidden pointer-fine:inline-flex`}>
               {action.shortcut}
             </kbd>
           </button>
@@ -359,7 +413,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       </div>
 
       {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
+      <div className="hidden pointer-fine:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
         <kbd className={KBD_SM}>↑↓</kbd> navigate
         <span>·</span>
         <kbd className={KBD_SM}>←</kbd> back

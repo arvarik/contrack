@@ -447,9 +447,11 @@ test.describe("a list AI did not check", () => {
       row.getByRole("img", { name: "Not verified by AI" }),
     ).toBeVisible();
     await expect(palette.getByText("Not verified by AI").first()).toBeVisible();
+    // The suite's instance has no AI model: the palette says so, rather
+    // than that AI failed this time.
     await expect(
       palette.getByText(
-        "AI could not check these people this time. They match your words or their meaning",
+        "No AI model is set up. They match your words or their meaning",
       ),
     ).toBeVisible();
   });
